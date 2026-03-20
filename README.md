@@ -2,6 +2,11 @@
 
 > **Work in progress** — actively being built. Not ready for use yet.
 
+
+<img width="1382" height="1004" alt="Screenshot 2026-03-19 at 8 57 13 PM" src="https://github.com/user-attachments/assets/09e936a9-01d2-4774-8381-33ed9c3b3563" />
+
+
+
 A native macOS desktop app for storing and organizing inspiration images. Local-only, no cloud.
 
 Built with SwiftUI, SceneKit, and GRDB.swift.
