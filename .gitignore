@@ -1,0 +1,26 @@
+# Xcode
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+*.xcscmblueprint
+
+# SPM
+.build/
+Muse/.build/
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# Env
+.env
+.env.local
