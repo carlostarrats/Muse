@@ -25,7 +25,7 @@ struct GridView: View {
             let columnCount = columns(for: geometry.size.width)
 
             ScrollView {
-                MasonryLayout(columns: columnCount, spacing: 12) {
+                MasonryLayout(columns: columnCount, spacing: 20) {
                     ForEach(appState.filteredImages) { image in
                         let isSelected = appState.selectedImages.contains(image.id)
                         TileView(
@@ -33,15 +33,24 @@ struct GridView: View {
                             thumbnail: thumbnailCache[image.id],
                             isSelected: isSelected
                         )
-                        .onTapGesture {
+                        .onTapGesture(count: 2) {
+                            // Double click — open preview + detail panel
+                            appState.selectedImages.removeAll()
+                            appState.selectedImage = image
+                            appState.detailPanelVisible = true
+                        }
+                        .onTapGesture(count: 1) {
                             if NSEvent.modifierFlags.contains(.command) {
+                                // Cmd+click — toggle multi-select
                                 appState.selectedImage = nil
                                 appState.toggleImageSelection(image)
                                 appState.detailPanelVisible = !appState.selectedImages.isEmpty
                             } else {
+                                // Single click — just select (highlight)
                                 appState.selectedImages.removeAll()
-                                appState.selectedImage = image
-                                appState.detailPanelVisible = true
+                                appState.selectedImages.insert(image.id)
+                                appState.selectedImage = nil
+                                appState.detailPanelVisible = false
                             }
                         }
                         .onAppear {
@@ -51,23 +60,23 @@ struct GridView: View {
                 }
                 .padding(20)
             }
-            // Global parallax tilt on cursor movement
+            // Global parallax tilt on cursor movement — subtle and smooth
             .rotation3DEffect(
-                .degrees(normalisedCursor.y * 2.5),
+                .degrees(normalisedCursor.y * 1.2),
                 axis: (x: 1, y: 0, z: 0)
             )
             .rotation3DEffect(
-                .degrees(normalisedCursor.x * 2.5),
+                .degrees(normalisedCursor.x * 1.2),
                 axis: (x: 0, y: 1, z: 0)
             )
             .onContinuousHover { phase in
                 switch phase {
                 case .active(let location):
-                    withAnimation(.easeOut(duration: 0.15)) {
+                    withAnimation(.interactiveSpring(response: 0.6, dampingFraction: 0.7)) {
                         normalisedCursor = normalise(location, in: geometry.size)
                     }
                 case .ended:
-                    withAnimation(.easeOut(duration: 0.3)) {
+                    withAnimation(.interactiveSpring(response: 0.8, dampingFraction: 0.6)) {
                         normalisedCursor = .zero
                     }
                 }
@@ -92,7 +101,9 @@ struct GridView: View {
 
     private func loadThumbnail(for image: MuseImage) {
         guard thumbnailCache[image.id] == nil else { return }
-        guard let url = image.resolvedThumbnailURL else { return }
+        // Prefer full-res image for grid quality, fall back to thumbnail
+        let url = image.resolvedStorageURL ?? image.resolvedThumbnailURL
+        guard let url else { return }
 
         Task.detached(priority: .utility) {
             guard let loaded = NSImage(contentsOf: url) else { return }
@@ -115,13 +126,13 @@ private struct TileView: View {
 
     var body: some View {
         tileContent
-            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(
-                // Only show border on multi-selected images
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
             )
-            .shadow(color: .black.opacity(isHovered ? 0.2 : 0.08), radius: isHovered ? 5 : 2, x: 0, y: 1)
+            .shadow(color: .black.opacity(0.12), radius: 6, x: 0, y: 3)
+            .shadow(color: .black.opacity(isHovered ? 0.1 : 0), radius: 10, x: 0, y: 5)
             .scaleEffect(isHovered ? 1.02 : 1.0)
             .animation(.easeOut(duration: 0.18), value: isHovered)
             .onHover { hovering in

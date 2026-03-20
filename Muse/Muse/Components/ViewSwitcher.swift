@@ -31,23 +31,23 @@ struct ViewSwitcher: View {
                 appState.viewMode = .folder
             }
         }
-        .padding(2)
-        .background(Color.gray.opacity(0.15))
-        .cornerRadius(6)
+        .padding(4)
     }
 
     @ViewBuilder
     private func viewButton(icon: String, mode: String, action: @escaping () -> Void) -> some View {
+        let isActive = currentMode == mode
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .medium))
-                .frame(width: 26, height: 22)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(isActive ? Color.accentColor : Color.secondary)
+                .frame(width: 28, height: 22)
                 .background(
-                    currentMode == mode
-                    ? Color.accentColor.opacity(0.25)
-                    : Color.clear
+                    isActive
+                    ? RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.15))
+                    : nil
                 )
-                .cornerRadius(4)
         }
         .buttonStyle(.plain)
     }

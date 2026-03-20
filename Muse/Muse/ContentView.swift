@@ -18,7 +18,7 @@ struct ContentView: View {
     var body: some View {
         ZStack(alignment: .top) {
             // MARK: - Main layout
-            HSplitView {
+            ZStack(alignment: .trailing) {
                 // Main content area — switches based on viewMode
                 ZStack {
                     switch appState.viewMode {
@@ -46,12 +46,11 @@ struct ContentView: View {
                 .animation(.easeInOut(duration: 0.3), value: appState.viewMode)
                 .animation(.easeInOut(duration: 0.25), value: appState.selectedImage?.id)
 
-                // Conditional detail panel — slides in from the trailing edge
+                // Detail panel overlays on top of the grid (doesn't push it)
                 if appState.detailPanelVisible {
                     ImageDetailPanel()
-                        .transition(.move(edge: .trailing).animation(
-                            .spring(response: 0.35, dampingFraction: 0.85)
-                        ))
+                        .shadow(color: .black.opacity(0.15), radius: 12, x: -4, y: 0)
+                        .transition(.move(edge: .trailing))
                 }
             }
             .toolbar {
@@ -68,11 +67,16 @@ struct ContentView: View {
                 }
 
                 ToolbarItem(placement: .principal) {
-                    HStack(spacing: 12) {
+                    HStack(spacing: 10) {
+                        Spacer(minLength: 0)
                         ViewSwitcher()
+                        CollectionFilter()
+                        TagFilter()
                         SearchBar()
-                            .frame(minWidth: 200, idealWidth: 300)
+                            .frame(minWidth: 200, maxWidth: 400)
+                        Spacer(minLength: 0)
                     }
+                    .padding(.vertical, 4)
                 }
 
                 ToolbarItem(placement: .primaryAction) {
@@ -235,42 +239,101 @@ struct ContentView: View {
 
 // MARK: - Image Preview Overlay
 
-/// Shows a large image preview centered in the main content area when an image is selected.
+/// Shows a large image preview with fit-to-window and 100% zoom modes.
+/// When the detail panel is open, the image sits to the left of it.
 struct ImagePreviewOverlay: View {
     @EnvironmentObject var appState: AppState
     let image: MuseImage
     @State private var nsImage: NSImage?
+    @State private var isFullSize = false
+
+    private let panelWidth: CGFloat = 280
 
     var body: some View {
-        ZStack {
-            // Dimmed background — click to dismiss
-            Color.black.opacity(0.7)
-                .onTapGesture {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        appState.selectedImage = nil
-                        appState.detailPanelVisible = false
+        GeometryReader { geo in
+            ZStack {
+                // Dimmed background — click to dismiss
+                Color.black.opacity(0.6)
+                    .onTapGesture {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            appState.selectedImage = nil
+                            appState.detailPanelVisible = false
+                        }
                     }
-                }
 
-            // Large image
-            if let nsImage = nsImage {
-                Image(nsImage: nsImage)
-                    .resizable()
-                    .scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .shadow(color: .black.opacity(0.5), radius: 20, x: 0, y: 10)
-                    .padding(40)
-            } else {
-                ProgressView()
-                    .scaleEffect(1.5)
+                let availableWidth = appState.detailPanelVisible
+                    ? geo.size.width - panelWidth
+                    : geo.size.width
+
+                if let nsImage = nsImage {
+                    if isFullSize {
+                        // 100% zoom — scrollable
+                        ScrollView([.horizontal, .vertical]) {
+                            Image(nsImage: nsImage)
+                                .resizable()
+                                .frame(
+                                    width: nsImage.size.width,
+                                    height: nsImage.size.height
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        }
+                        .frame(width: availableWidth, height: geo.size.height)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        // Fit to window
+                        Image(nsImage: nsImage)
+                            .resizable()
+                            .scaledToFit()
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .shadow(color: .black.opacity(0.4), radius: 20, x: 0, y: 10)
+                            .padding(32)
+                            .frame(width: availableWidth, height: geo.size.height)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    // Zoom toggle button — bottom left of image area
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    isFullSize.toggle()
+                                }
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Image(systemName: isFullSize ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                                        .font(.system(size: 12, weight: .medium))
+                                    Text(isFullSize ? "Fit" : "100%")
+                                        .font(.system(size: 11, weight: .medium))
+                                }
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(.black.opacity(0.5), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .padding(20)
+                            Spacer()
+                        }
+                    }
+                    .frame(width: availableWidth, height: geo.size.height)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    ProgressView()
+                        .scaleEffect(1.5)
+                        .frame(width: availableWidth, height: geo.size.height)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         }
         .onAppear { loadFullImage() }
-        .onChange(of: image.id) { _, _ in loadFullImage() }
+        .onChange(of: image.id) { _, _ in
+            isFullSize = false
+            loadFullImage()
+        }
     }
 
     private func loadFullImage() {
-        // Try full-res first, fall back to thumbnail
         let url = image.resolvedStorageURL ?? image.resolvedThumbnailURL
         guard let url else { return }
         Task.detached(priority: .userInitiated) {

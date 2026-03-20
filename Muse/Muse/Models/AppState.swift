@@ -48,6 +48,18 @@ final class AppState: ObservableObject {
     /// The current view mode (grid, universe, globe, folder).
     @Published var viewMode: ViewMode = .grid
 
+    /// Filter: selected collection ID. Nil means show all.
+    @Published var filterCollectionID: UUID?
+
+    /// Filter: selected tag labels. Empty means no tag filter.
+    @Published var filterTags: Set<String> = []
+
+    /// All unique tag labels available for filtering.
+    @Published var allTagLabels: [String] = []
+
+    /// Image IDs matching the current tag filter (cached).
+    @Published var tagFilteredImageIDs: Set<UUID>?
+
     // MARK: - Dependencies
 
     let databaseManager: DatabaseManager
@@ -80,16 +92,31 @@ final class AppState: ObservableObject {
 
     // MARK: - Computed Properties
 
-    /// Images filtered by `searchQuery`. Matches against `fileName` and `notes`
-    /// case-insensitively. Returns all images when the query is empty.
+    /// Images filtered by search query, collection, and tag filters.
     var filteredImages: [MuseImage] {
-        let query = searchQuery.trimmingCharacters(in: .whitespaces)
-        guard !query.isEmpty else { return images }
-        let lowercased = query.lowercased()
-        return images.filter { image in
-            image.fileName.lowercased().contains(lowercased) ||
-            image.notes.lowercased().contains(lowercased)
+        var result = images
+
+        // Collection filter
+        if let collectionID = filterCollectionID {
+            result = result.filter { $0.collectionID == collectionID }
         }
+
+        // Tag filter
+        if let tagIDs = tagFilteredImageIDs, !filterTags.isEmpty {
+            result = result.filter { tagIDs.contains($0.id) }
+        }
+
+        // Search query
+        let query = searchQuery.trimmingCharacters(in: .whitespaces)
+        if !query.isEmpty {
+            let lowercased = query.lowercased()
+            result = result.filter { image in
+                image.fileName.lowercased().contains(lowercased) ||
+                image.notes.lowercased().contains(lowercased)
+            }
+        }
+
+        return result
     }
 
     // MARK: - Data Loading
@@ -106,6 +133,7 @@ final class AppState: ObservableObject {
         } catch {
             print("[AppState] loadAll failed: \(error)")
         }
+        await loadAllTagLabels()
     }
 
     /// Re-fetches images after an import completes.
@@ -202,6 +230,41 @@ final class AppState: ObservableObject {
             images = try await repo.searchImages(query: query)
         } catch {
             print("[AppState] searchImages failed: \(error)")
+        }
+    }
+
+    // MARK: - Tag Filter
+
+    /// Loads all unique tag labels for the filter UI.
+    func loadAllTagLabels() async {
+        guard let repo = repository else { return }
+        do {
+            let tags = try await repo.fetchAllTags()
+            let unique = Array(Set(tags.map { $0.label })).sorted()
+            allTagLabels = unique
+        } catch {
+            print("[AppState] loadAllTagLabels failed: \(error)")
+        }
+    }
+
+    /// Updates the tag filter and caches matching image IDs.
+    func applyTagFilter() async {
+        guard let repo = repository else { return }
+        if filterTags.isEmpty {
+            tagFilteredImageIDs = nil
+            return
+        }
+        do {
+            let allTags = try await repo.fetchEveryTag()
+            var ids = Set<UUID>()
+            for tag in allTags {
+                if filterTags.contains(tag.label) {
+                    ids.insert(tag.imageID)
+                }
+            }
+            tagFilteredImageIDs = ids
+        } catch {
+            print("[AppState] applyTagFilter failed: \(error)")
         }
     }
 

@@ -125,6 +125,22 @@ final class ImageRepository {
         }
     }
 
+    /// Returns all unique tag labels across all images.
+    func fetchAllTags() async throws -> [Tag] {
+        try await dbQueue.read { db in
+            try Tag
+                .order(Tag.Columns.label.asc)
+                .fetchAll(db)
+        }
+    }
+
+    /// Returns all tags in the database.
+    func fetchEveryTag() async throws -> [Tag] {
+        try await dbQueue.read { db in
+            try Tag.fetchAll(db)
+        }
+    }
+
     // MARK: - Collection Operations
 
     /// Inserts a new collection record. The `collection` parameter is mutated in place so the

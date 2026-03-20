@@ -87,6 +87,13 @@ struct ImageDetailPanel: View {
                 Divider()
                     .padding(.top, 12)
 
+                actionsSection(for: image)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+
+                Divider()
+                    .padding(.top, 12)
+
                 deleteSection(for: image)
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
@@ -157,6 +164,8 @@ struct ImageDetailPanel: View {
 
     // MARK: - Header
 
+    @State private var closeHovered = false
+
     private var header: some View {
         HStack {
             Text(appState.selectedImages.isEmpty ? "Details" : "Batch Edit")
@@ -170,10 +179,16 @@ struct ImageDetailPanel: View {
                 }
             } label: {
                 Image(systemName: "xmark")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(closeHovered ? .primary : .secondary)
+                    .frame(width: 24, height: 24)
+                    .background(
+                        Circle()
+                            .fill(closeHovered ? Color.primary.opacity(0.1) : Color.primary.opacity(0.05))
+                    )
             }
             .buttonStyle(.plain)
+            .onHover { closeHovered = $0 }
         }
     }
 
@@ -230,7 +245,7 @@ struct ImageDetailPanel: View {
 
     @ViewBuilder
     private func tagsSection(for image: MuseImage) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             sectionLabel("Tags")
 
             if !tags.isEmpty {
@@ -243,6 +258,7 @@ struct ImageDetailPanel: View {
                         }
                     }
                 }
+                .padding(.bottom, 2)
             }
 
             HStack(spacing: 6) {
@@ -279,6 +295,58 @@ struct ImageDetailPanel: View {
                         saveNotes(for: image)
                     }
                 }
+        }
+    }
+
+    // MARK: - Actions
+
+    @ViewBuilder
+    private func actionsSection(for image: MuseImage) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionLabel("Actions")
+
+            // Show in Finder
+            Button {
+                if let url = image.resolvedStorageURL {
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                }
+            } label: {
+                Label("Show in Finder", systemImage: "folder")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+
+            // Save As
+            Button {
+                saveImage(image: image)
+            } label: {
+                Label("Save As…", systemImage: "square.and.arrow.down")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+
+            // Share
+            ShareButton(image: image)
+        }
+    }
+
+    private func saveImage(image: MuseImage) {
+        guard let sourceURL = image.resolvedStorageURL else { return }
+
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = image.fileName
+        panel.allowedContentTypes = [.image]
+        panel.canCreateDirectories = true
+
+        panel.begin { response in
+            guard response == .OK, let destination = panel.url else { return }
+            do {
+                try FileManager.default.copyItem(at: sourceURL, to: destination)
+            } catch {
+                print("[ImageDetailPanel] Save failed: \(error)")
+            }
         }
     }
 
@@ -398,6 +466,51 @@ struct ImageDetailPanel: View {
         } else {
             let mb = Double(bytes) / 1_048_576
             return String(format: "%.1f MB", mb)
+        }
+    }
+}
+
+// MARK: - Share Button
+
+/// A button that anchors the NSSharingServicePicker to itself so the share
+/// popover appears at normal size next to the button.
+struct ShareButton: NSViewRepresentable {
+    let image: MuseImage
+
+    func makeNSView(context: Context) -> NSButton {
+        let button = NSButton(frame: .zero)
+        button.bezelStyle = .inline
+        button.isBordered = false
+        button.image = NSImage(systemSymbolName: "square.and.arrow.up", accessibilityDescription: "Share")
+        button.title = " Share…"
+        button.imagePosition = .imageLeading
+        button.target = context.coordinator
+        button.action = #selector(Coordinator.showPicker(_:))
+        button.font = .systemFont(ofSize: NSFont.systemFontSize)
+        button.contentTintColor = .labelColor
+        button.alignment = .left
+        return button
+    }
+
+    func updateNSView(_ nsView: NSButton, context: Context) {
+        context.coordinator.image = image
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(image: image)
+    }
+
+    class Coordinator: NSObject {
+        var image: MuseImage
+
+        init(image: MuseImage) {
+            self.image = image
+        }
+
+        @objc func showPicker(_ sender: NSButton) {
+            guard let url = image.resolvedStorageURL else { return }
+            let picker = NSSharingServicePicker(items: [url])
+            picker.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
         }
     }
 }
