@@ -99,6 +99,7 @@ struct ContentView: View {
                     .zIndex(1)
             }
         }
+        .toolbarBackground(.ultraThinMaterial, for: .windowToolbar)
         // MARK: - Import drop zone overlay
         .overlay {
             ImportDropZone()

@@ -33,26 +33,27 @@ struct GridView: View {
                             thumbnail: thumbnailCache[image.id],
                             isSelected: isSelected
                         )
-                        .onTapGesture(count: 2) {
-                            // Double click — open preview + detail panel
-                            appState.selectedImages.removeAll()
-                            appState.selectedImage = image
-                            appState.detailPanelVisible = true
-                        }
-                        .onTapGesture(count: 1) {
-                            if NSEvent.modifierFlags.contains(.command) {
-                                // Cmd+click — toggle multi-select
-                                appState.selectedImage = nil
-                                appState.toggleImageSelection(image)
-                                appState.detailPanelVisible = !appState.selectedImages.isEmpty
-                            } else {
-                                // Single click — just select (highlight)
-                                appState.selectedImages.removeAll()
-                                appState.selectedImages.insert(image.id)
-                                appState.selectedImage = nil
-                                appState.detailPanelVisible = false
-                            }
-                        }
+                        .overlay(
+                            ClickHandlerView(
+                                onSingleClick: {
+                                    if NSEvent.modifierFlags.contains(.command) {
+                                        appState.selectedImage = nil
+                                        appState.toggleImageSelection(image)
+                                        appState.detailPanelVisible = !appState.selectedImages.isEmpty
+                                    } else {
+                                        appState.selectedImages.removeAll()
+                                        appState.selectedImages.insert(image.id)
+                                        appState.selectedImage = nil
+                                        appState.detailPanelVisible = false
+                                    }
+                                },
+                                onDoubleClick: {
+                                    appState.selectedImages.removeAll()
+                                    appState.selectedImage = image
+                                    appState.detailPanelVisible = true
+                                }
+                            )
+                        )
                         .onAppear {
                             loadThumbnail(for: image)
                         }
@@ -60,6 +61,7 @@ struct GridView: View {
                 }
                 .padding(20)
             }
+            .background(Color(NSColor.windowBackgroundColor))
             // Global parallax tilt on cursor movement — subtle and smooth
             .rotation3DEffect(
                 .degrees(normalisedCursor.y * 1.2),
@@ -124,17 +126,19 @@ private struct TileView: View {
 
     @State private var isHovered = false
 
+    private static let limeGreen = Color(red: 0.2, green: 1.0, blue: 0.0)
+
     var body: some View {
         tileContent
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+                    .stroke(isSelected ? Self.limeGreen : Color.clear, lineWidth: 2)
             )
-            .shadow(color: .black.opacity(0.12), radius: 6, x: 0, y: 3)
+            .shadow(color: isSelected ? Self.limeGreen.opacity(0.6) : .black.opacity(0.12), radius: isSelected ? 12 : 6, x: 0, y: isSelected ? 0 : 3)
             .shadow(color: .black.opacity(isHovered ? 0.1 : 0), radius: 10, x: 0, y: 5)
-            .scaleEffect(isHovered ? 1.02 : 1.0)
             .animation(.easeOut(duration: 0.18), value: isHovered)
+            .animation(.easeOut(duration: 0.18), value: isSelected)
             .onHover { hovering in
                 isHovered = hovering
             }
@@ -146,6 +150,8 @@ private struct TileView: View {
             Image(nsImage: nsImage)
                 .resizable()
                 .scaledToFit()
+                .scaleEffect(isHovered ? 1.08 : 1.0)
+                .animation(.easeOut(duration: 0.3), value: isHovered)
         } else {
             let ratio: CGFloat = {
                 if let w = image.width, let h = image.height, w > 0 {
@@ -156,6 +162,40 @@ private struct TileView: View {
             Color(NSColor.systemGray)
                 .opacity(0.3)
                 .aspectRatio(ratio, contentMode: .fit)
+        }
+    }
+}
+
+// MARK: - ClickHandlerView
+
+/// An NSView-backed click handler that fires single and double clicks instantly
+/// without the SwiftUI gesture disambiguation delay.
+private struct ClickHandlerView: NSViewRepresentable {
+    var onSingleClick: () -> Void
+    var onDoubleClick: () -> Void
+
+    func makeNSView(context: Context) -> ClickNSView {
+        let view = ClickNSView()
+        view.onSingleClick = onSingleClick
+        view.onDoubleClick = onDoubleClick
+        return view
+    }
+
+    func updateNSView(_ nsView: ClickNSView, context: Context) {
+        nsView.onSingleClick = onSingleClick
+        nsView.onDoubleClick = onDoubleClick
+    }
+}
+
+private class ClickNSView: NSView {
+    var onSingleClick: (() -> Void)?
+    var onDoubleClick: (() -> Void)?
+
+    override func mouseDown(with event: NSEvent) {
+        if event.clickCount >= 2 {
+            onDoubleClick?()
+        } else {
+            onSingleClick?()
         }
     }
 }
