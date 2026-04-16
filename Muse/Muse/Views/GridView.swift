@@ -31,7 +31,9 @@ struct GridView: View {
                         TileView(
                             image: image,
                             thumbnail: thumbnailCache[image.id],
-                            isSelected: isSelected
+                            isSelected: isSelected,
+                            dispImage: appState.fluidSim.dispImage,
+                            viewportSize: geometry.size
                         )
                         .overlay(
                             ClickHandlerView(
@@ -74,14 +76,22 @@ struct GridView: View {
             .onContinuousHover { phase in
                 switch phase {
                 case .active(let location):
+                    appState.fluidSim.setMouse(location)
                     withAnimation(.interactiveSpring(response: 0.6, dampingFraction: 0.7)) {
                         normalisedCursor = normalise(location, in: geometry.size)
                     }
                 case .ended:
+                    appState.fluidSim.clearMouse()
                     withAnimation(.interactiveSpring(response: 0.8, dampingFraction: 0.6)) {
                         normalisedCursor = .zero
                     }
                 }
+            }
+            .onChange(of: geometry.size) { _, newSize in
+                appState.fluidSim.viewportSize = newSize
+            }
+            .onAppear {
+                appState.fluidSim.viewportSize = geometry.size
             }
         }
     }
@@ -123,8 +133,11 @@ private struct TileView: View {
     let image: MuseImage
     let thumbnail: NSImage?
     let isSelected: Bool
+    let dispImage: Image
+    let viewportSize: CGSize
 
     @State private var isHovered = false
+    @State private var tileFrame: CGRect = .zero
 
     private static let limeGreen = Color(red: 0.2, green: 1.0, blue: 0.0)
 
@@ -137,6 +150,21 @@ private struct TileView: View {
             )
             .shadow(color: isSelected ? Self.limeGreen.opacity(0.6) : .black.opacity(0.12), radius: isSelected ? 12 : 6, x: 0, y: isSelected ? 0 : 3)
             .shadow(color: .black.opacity(isHovered ? 0.1 : 0), radius: 10, x: 0, y: 5)
+            .layerEffect(
+                ShaderLibrary.fluidDistort(
+                    .image(dispImage),
+                    .float2(Float(tileFrame.minX), Float(tileFrame.minY)),
+                    .float2(Float(viewportSize.width), Float(viewportSize.height))
+                ),
+                maxSampleOffset: CGSize(width: 50, height: 50)
+            )
+            .background(GeometryReader { geo in
+                Color.clear
+                    .onAppear { tileFrame = geo.frame(in: .global) }
+                    .onChange(of: geo.frame(in: .global)) { _, newFrame in
+                        tileFrame = newFrame
+                    }
+            })
             .animation(.easeOut(duration: 0.18), value: isHovered)
             .animation(.easeOut(duration: 0.18), value: isSelected)
             .onHover { hovering in
