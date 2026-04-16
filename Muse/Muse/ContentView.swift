@@ -9,6 +9,24 @@ import SwiftUI
 import UniformTypeIdentifiers
 import AppKit
 
+/// Toolbar logo loaded from the bundled SVG.
+private struct LogoView: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSImageView {
+        let view = NSImageView()
+        if let url = Bundle.main.url(forResource: "muse-logo", withExtension: "svg"),
+           let img = NSImage(contentsOf: url) {
+            view.image = img
+            view.imageScaling = .scaleProportionallyUpOrDown
+        }
+        view.setContentHuggingPriority(.required, for: .horizontal)
+        view.setContentHuggingPriority(.required, for: .vertical)
+        view.widthAnchor.constraint(equalToConstant: 60).isActive = true
+        view.heightAnchor.constraint(equalToConstant: 16).isActive = true
+        return view
+    }
+    func updateNSView(_ nsView: NSImageView, context: Context) {}
+}
+
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
 
@@ -53,9 +71,37 @@ struct ContentView: View {
                         .transition(.move(edge: .trailing))
                 }
             }
+            .navigationTitle("")
+            .onAppear {
+                // Hide the window title text and show the SVG logo instead
+                if let window = NSApplication.shared.windows.first {
+                    window.title = ""
+                    window.titleVisibility = .hidden
+                    // Add logo to the titlebar
+                    if let url = Bundle.main.url(forResource: "muse-logo", withExtension: "svg"),
+                       let img = NSImage(contentsOf: url) {
+                        let imageView = NSImageView()
+                        imageView.image = img
+                        imageView.imageScaling = .scaleProportionallyUpOrDown
+                        let container = NSView(frame: NSRect(x: 0, y: 0, width: 76, height: 38))
+                        imageView.translatesAutoresizingMaskIntoConstraints = false
+                        container.addSubview(imageView)
+                        NSLayoutConstraint.activate([
+                            imageView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+                            imageView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+                            imageView.widthAnchor.constraint(equalToConstant: 55),
+                            imageView.heightAnchor.constraint(equalToConstant: 15)
+                        ])
+                        let accessory = NSTitlebarAccessoryViewController()
+                        accessory.view = container
+                        accessory.fullScreenMinHeight = 38
+                        accessory.layoutAttribute = .leading
+                        window.addTitlebarAccessoryViewController(accessory)
+                    }
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .navigation) {
-                    // Back button for globe view
                     if case .globe = appState.viewMode {
                         Button {
                             appState.viewMode = .universe

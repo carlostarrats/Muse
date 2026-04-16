@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import SwiftUI
 
 // MARK: - View Mode
 
@@ -72,6 +73,10 @@ final class AppState: ObservableObject {
     /// Fluid distortion simulation — shared across all views.
     let fluidSim = FluidSim()
 
+    /// Mirrors fluidSim.dispImage so SwiftUI observes changes.
+    @Published var fluidDispImage: Image = FluidSim.neutralImage
+    private var fluidCancellable: AnyCancellable?
+
     // MARK: - Init
 
     init() {
@@ -91,6 +96,11 @@ final class AppState: ObservableObject {
             repository = nil
             importManager = nil
         }
+
+        // Forward fluid sim displacement image, throttled to 30fps for SwiftUI perf
+        fluidCancellable = fluidSim.$dispImage
+            .throttle(for: .milliseconds(33), scheduler: RunLoop.main, latest: true)
+            .assign(to: \.fluidDispImage, on: self)
     }
 
     // MARK: - Computed Properties

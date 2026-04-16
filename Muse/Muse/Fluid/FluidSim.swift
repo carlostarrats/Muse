@@ -2,22 +2,27 @@
 //  FluidSim.swift
 //  Muse
 //
+//  2D wave equation simulation. Mouse movement disturbs the surface,
+//  waves propagate outward in expanding circles like dragging through water.
+//  The surface gradient is encoded as a displacement map for the shader.
+//
 
 import Foundation
 import SwiftUI
 import AppKit
-import ImageIO
-import UniformTypeIdentifiers
 
 nonisolated(unsafe) final class FluidSim: ObservableObject, @unchecked Sendable {
 
-    static let N = 64
-    private let N = 64
+    static let N = 128
+    private let N = 128
+    private let sz = 130 // N + 2
 
-    private var u:  [Float]
-    private var v:  [Float]
-    private var u0: [Float]
-    private var v0: [Float]
+    // Wave height fields: current and previous frame
+    private var h:     [Float]
+    private var hPrev: [Float]
+
+    // Preallocated pixel buffer
+    private var pixels: [UInt8]
 
     @Published var dispImage: Image = FluidSim.neutralImage
 
@@ -27,10 +32,8 @@ nonisolated(unsafe) final class FluidSim: ObservableObject, @unchecked Sendable 
     private var prevMousePos: CGPoint = CGPoint(x: -1, y: -1)
 
     private var timer: Timer?
-    private var frameCount = 0
-    private var didDebugDump = false
 
-    private static let neutralImage: Image = {
+    static let neutralImage: Image = {
         let img = NSImage(size: NSSize(width: 1, height: 1))
         img.lockFocus()
         NSColor(red: 128.0/255.0, green: 128.0/255.0, blue: 0, alpha: 1).setFill()
@@ -40,23 +43,17 @@ nonisolated(unsafe) final class FluidSim: ObservableObject, @unchecked Sendable 
     }()
 
     init() {
-        let count = (64 + 2) * (64 + 2)
-        u  = [Float](repeating: 0, count: count)
-        v  = [Float](repeating: 0, count: count)
-        u0 = [Float](repeating: 0, count: count)
-        v0 = [Float](repeating: 0, count: count)
+        let count = 130 * 130
+        h     = [Float](repeating: 0, count: count)
+        hPrev = [Float](repeating: 0, count: count)
+        pixels = [UInt8](repeating: 0, count: 128 * 128 * 4)
     }
+
+    // MARK: - Public API
 
     func start() {
         guard timer == nil else { return }
-        let sz = N + 2
-        for j in (N/3)...(2*N/3) {
-            for i in (N/3)...(2*N/3) {
-                u0[j * sz + i] = 3.0
-                v0[j * sz + i] = 2.0
-            }
-        }
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0/60.0, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             self?.step()
         }
     }
@@ -76,20 +73,22 @@ nonisolated(unsafe) final class FluidSim: ObservableObject, @unchecked Sendable 
         prevMousePos = CGPoint(x: -1, y: -1)
     }
 
+    // MARK: - Simulation Step
+
     private func step() {
         let n = N
-        let sz = n + 2
+        let s = sz
 
+        // 1. Inject disturbance at mouse position
         if mousePos.x >= 0 && prevMousePos.x >= 0 {
             let dx = mousePos.x - prevMousePos.x
             let dy = mousePos.y - prevMousePos.y
             let speed = sqrt(dx * dx + dy * dy)
-            if speed > 0.5 {
+            if speed > 0.3 {
                 let gx = Float(mousePos.x / viewportSize.width) * Float(n)
                 let gy = Float(mousePos.y / viewportSize.height) * Float(n)
-                let vx = Float(dx) * 0.3
-                let vy = Float(dy) * 0.3
-                let radius: Float = 6
+                let strength = min(Float(speed) * 0.4, 6.0)
+                let radius: Float = 5
                 let r2 = radius * radius
                 let minI = max(1, Int(gx - radius))
                 let maxI = min(n, Int(gx + radius))
@@ -99,183 +98,82 @@ nonisolated(unsafe) final class FluidSim: ObservableObject, @unchecked Sendable 
                     for i in minI...maxI {
                         let fx = Float(i) - gx
                         let fy = Float(j) - gy
-                        let d2 = fx*fx + fy*fy
+                        let d2 = fx * fx + fy * fy
                         if d2 < r2 {
-                            let w = exp(-d2 / (r2 * 0.25))
-                            u0[j * sz + i] += vx * w
-                            v0[j * sz + i] += vy * w
+                            let w = exp(-d2 / (r2 * 0.3))
+                            h[j * s + i] += strength * w
                         }
                     }
                 }
             }
         }
 
-        diffuse(b: 1, x: &u, x0: u0, diff: 0.0001)
-        diffuse(b: 2, x: &v, x0: v0, diff: 0.0001)
-        project(u: &u, v: &v, p: &u0, div: &v0)
+        // 2. Wave equation: h_next = 2*h - h_prev + c^2 * laplacian(h)
+        //    We compute h_next into hPrev (which we don't need after this)
+        let c2: Float = 0.3  // wave speed squared — controls propagation rate
 
-        let uCopy = u, vCopy = v
-        advect(b: 1, d: &u0, d0: uCopy, ux: uCopy, uy: vCopy)
-        advect(b: 2, d: &v0, d0: vCopy, ux: uCopy, uy: vCopy)
-        swap(&u, &u0)
-        swap(&v, &v0)
-        project(u: &u, v: &v, p: &u0, div: &v0)
+        for j in 1...n {
+            for i in 1...n {
+                let idx = j * s + i
+                let laplacian = h[idx - 1] + h[idx + 1] + h[idx - s] + h[idx + s] - 4.0 * h[idx]
+                let hNext = 2.0 * h[idx] - hPrev[idx] + c2 * laplacian
+                // Smooth damping curve: small amplitudes decay faster than large ones
+                // Uses a continuous function so there's no visible speed-up or snap
+                let absH = abs(hNext)
+                let damping: Float = 0.90 + min(absH, 3.0) * 0.02  // range: 0.90 to 0.96
+                hPrev[idx] = hNext * damping
+            }
+        }
 
-        for i in 0..<u.count { u[i] *= 0.98; v[i] *= 0.98 }
-        for i in 0..<u0.count { u0[i] = 0; v0[i] = 0 }
+        // 3. Swap: hPrev now has the new values, h has the current
+        swap(&h, &hPrev)
+        // Now h = new frame, hPrev = old frame (for next iteration)
 
+        // 4. Boundary: zero at edges
+        for i in 0..<s {
+            h[i] = 0          // top row
+            h[(n + 1) * s + i] = 0  // bottom row
+            h[i * s] = 0      // left column
+            h[i * s + (n + 1)] = 0  // right column
+        }
+
+        // 5. Encode surface gradient as displacement image
         encodeImage()
-
-        frameCount += 1
-        if frameCount == 15 && !didDebugDump {
-            didDebugDump = true
-            debugDump()
-        }
     }
 
-    private func IX(_ i: Int, _ j: Int) -> Int { j * (N + 2) + i }
+    // MARK: - Image Encoding
 
-    private func setBnd(b: Int, x: inout [Float]) {
-        let n = N
-        for i in 1...n {
-            x[IX(0, i)]   = b == 1 ? -x[IX(1, i)] : x[IX(1, i)]
-            x[IX(n+1, i)] = b == 1 ? -x[IX(n, i)] : x[IX(n, i)]
-            x[IX(i, 0)]   = b == 2 ? -x[IX(i, 1)] : x[IX(i, 1)]
-            x[IX(i, n+1)] = b == 2 ? -x[IX(i, n)] : x[IX(i, n)]
-        }
-        x[IX(0, 0)]     = 0.5 * (x[IX(1, 0)]   + x[IX(0, 1)])
-        x[IX(0, n+1)]   = 0.5 * (x[IX(1, n+1)] + x[IX(0, n)])
-        x[IX(n+1, 0)]   = 0.5 * (x[IX(n, 0)]   + x[IX(n+1, 1)])
-        x[IX(n+1, n+1)] = 0.5 * (x[IX(n, n+1)] + x[IX(n+1, n)])
-    }
-
-    private func diffuse(b: Int, x: inout [Float], x0: [Float], diff: Float) {
-        let n = N
-        let a = (1.0/60.0) * diff * Float(n * n)
-        let c = 1.0 + 4.0 * a
-        for _ in 0..<4 {
-            for j in 1...n {
-                for i in 1...n {
-                    x[IX(i,j)] = (x0[IX(i,j)] + a * (
-                        x[IX(i-1,j)] + x[IX(i+1,j)] +
-                        x[IX(i,j-1)] + x[IX(i,j+1)]
-                    )) / c
-                }
-            }
-            setBnd(b: b, x: &x)
-        }
-    }
-
-    private func advect(b: Int, d: inout [Float], d0: [Float], ux: [Float], uy: [Float]) {
-        let n = N
-        let dt0 = (1.0/60.0) * Float(n)
-        for j in 1...n {
-            for i in 1...n {
-                var x = Float(i) - dt0 * ux[IX(i,j)]
-                var y = Float(j) - dt0 * uy[IX(i,j)]
-                x = max(0.5, min(Float(n) + 0.5, x))
-                y = max(0.5, min(Float(n) + 0.5, y))
-                let i0 = Int(x); let i1 = i0 + 1
-                let j0 = Int(y); let j1 = j0 + 1
-                let s1 = x - Float(i0); let s0 = 1.0 - s1
-                let t1 = y - Float(j0); let t0 = 1.0 - t1
-                d[IX(i,j)] = s0*(t0*d0[IX(i0,j0)] + t1*d0[IX(i0,j1)]) +
-                             s1*(t0*d0[IX(i1,j0)] + t1*d0[IX(i1,j1)])
-            }
-        }
-        setBnd(b: b, x: &d)
-    }
-
-    private func project(u: inout [Float], v: inout [Float], p: inout [Float], div: inout [Float]) {
-        let n = N
-        let h: Float = 1.0 / Float(n)
-        for j in 1...n {
-            for i in 1...n {
-                div[IX(i,j)] = -0.5 * h * (u[IX(i+1,j)] - u[IX(i-1,j)] + v[IX(i,j+1)] - v[IX(i,j-1)])
-                p[IX(i,j)] = 0
-            }
-        }
-        setBnd(b: 0, x: &div); setBnd(b: 0, x: &p)
-        for _ in 0..<20 {
-            for j in 1...n {
-                for i in 1...n {
-                    p[IX(i,j)] = (div[IX(i,j)] + p[IX(i-1,j)] + p[IX(i+1,j)] + p[IX(i,j-1)] + p[IX(i,j+1)]) / 4.0
-                }
-            }
-            setBnd(b: 0, x: &p)
-        }
-        for j in 1...n {
-            for i in 1...n {
-                u[IX(i,j)] -= 0.5 * (p[IX(i+1,j)] - p[IX(i-1,j)]) / h
-                v[IX(i,j)] -= 0.5 * (p[IX(i,j+1)] - p[IX(i,j-1)]) / h
-            }
-        }
-        setBnd(b: 1, x: &u); setBnd(b: 2, x: &v)
-    }
+    private let colorSpace = CGColorSpaceCreateDeviceRGB()
+    private let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
 
     private func encodeImage() {
         let n = N
-        let sz = n + 2
-        var pixels = [UInt8](repeating: 0, count: n * n * 4)
-        let scale: Float = 8.0
+        let s = sz
+        // Encode the GRADIENT of the height field as displacement.
+        // Gradient = surface normal, which is what causes light refraction in water.
+        let scale: Float = 35.0
         for j in 0..<n {
             for i in 0..<n {
-                let idx = (j + 1) * sz + (i + 1)
-                let px = j * n + i
-                pixels[px * 4 + 0] = UInt8(clamping: Int(u[idx] * scale + 128))
-                pixels[px * 4 + 1] = UInt8(clamping: Int(v[idx] * scale + 128))
-                pixels[px * 4 + 2] = 0
-                pixels[px * 4 + 3] = 255
+                let idx = (j + 1) * s + (i + 1)
+                // Central difference gradient
+                let dhdx = (h[idx + 1] - h[idx - 1]) * 0.5
+                let dhdy = (h[idx + s] - h[idx - s]) * 0.5
+                let px = (j * n + i) * 4
+                pixels[px]     = UInt8(clamping: Int(dhdx * scale + 128))
+                pixels[px + 1] = UInt8(clamping: Int(dhdy * scale + 128))
+                pixels[px + 2] = 0
+                pixels[px + 3] = 255
             }
         }
         guard let provider = CGDataProvider(data: Data(pixels) as CFData),
               let cgImage = CGImage(
                   width: n, height: n,
                   bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: n * 4,
-                  space: CGColorSpaceCreateDeviceRGB(),
-                  bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                  space: colorSpace, bitmapInfo: bitmapInfo,
                   provider: provider, decode: nil,
                   shouldInterpolate: true, intent: .defaultIntent
               ) else { return }
         let nsImg = NSImage(cgImage: cgImage, size: NSSize(width: n, height: n))
-        DispatchQueue.main.async { [weak self] in
-            self?.dispImage = Image(nsImage: nsImg)
-        }
-    }
-
-    private func debugDump() {
-        let n = N
-        let sz = n + 2
-        var maxVal: Float = 0
-        for j in 1...n { for i in 1...n { maxVal = max(maxVal, abs(u[IX(i,j)]), abs(v[IX(i,j)])) } }
-
-        var pixels = [UInt8](repeating: 0, count: n * n * 4)
-        let s: Float = maxVal > 0 ? 127.0 / maxVal : 1.0
-        for j in 0..<n {
-            for i in 0..<n {
-                let idx = (j+1)*sz + (i+1)
-                let px = j*n + i
-                pixels[px*4+0] = UInt8(clamping: Int(u[idx]*s + 128))
-                pixels[px*4+1] = UInt8(clamping: Int(v[idx]*s + 128))
-                pixels[px*4+2] = UInt8(clamping: Int(sqrt(u[idx]*u[idx]+v[idx]*v[idx])*s))
-                pixels[px*4+3] = 255
-            }
-        }
-        guard let prov = CGDataProvider(data: Data(pixels) as CFData),
-              let img = CGImage(width: n, height: n, bitsPerComponent: 8, bitsPerPixel: 32,
-                                bytesPerRow: n*4, space: CGColorSpaceCreateDeviceRGB(),
-                                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
-                                provider: prov, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
-        else { return }
-
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("Muse")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let url = dir.appendingPathComponent("fluid_debug.png")
-        if let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) {
-            CGImageDestinationAddImage(dest, img, nil)
-            CGImageDestinationFinalize(dest)
-        }
-        NSLog("[FluidSim] debug: maxVel=%.4f frames=%d path=%@", maxVal, frameCount, url.path)
+        dispImage = Image(nsImage: nsImg)
     }
 }

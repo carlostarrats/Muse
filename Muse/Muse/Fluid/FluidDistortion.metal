@@ -16,8 +16,8 @@ half4 fluidDistort(float2 position,
     half4 d = dispMap.sample(s, uv);
 
     float2 displacement;
-    displacement.x = (float(d.r) - 0.5h) * 2.0 * 40.0;
-    displacement.y = (float(d.g) - 0.5h) * 2.0 * 40.0;
+    displacement.x = (float(d.r) - 0.5h) * 2.0 * 100.0;
+    displacement.y = (float(d.g) - 0.5h) * 2.0 * 100.0;
 
     return layer.sample(position + displacement);
 }

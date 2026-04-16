@@ -32,7 +32,7 @@ struct GridView: View {
                             image: image,
                             thumbnail: thumbnailCache[image.id],
                             isSelected: isSelected,
-                            dispImage: appState.fluidSim.dispImage,
+                            dispImage: appState.fluidDispImage,
                             viewportSize: geometry.size
                         )
                         .overlay(
@@ -93,6 +93,7 @@ struct GridView: View {
             .onAppear {
                 appState.fluidSim.viewportSize = geometry.size
             }
+            .coordinateSpace(name: "gridViewport")
         }
     }
 
@@ -160,8 +161,8 @@ private struct TileView: View {
             )
             .background(GeometryReader { geo in
                 Color.clear
-                    .onAppear { tileFrame = geo.frame(in: .global) }
-                    .onChange(of: geo.frame(in: .global)) { _, newFrame in
+                    .onAppear { tileFrame = geo.frame(in: .named("gridViewport")) }
+                    .onChange(of: geo.frame(in: .named("gridViewport"))) { _, newFrame in
                         tileFrame = newFrame
                     }
             })
