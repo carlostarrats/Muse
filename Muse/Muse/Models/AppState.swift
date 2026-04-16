@@ -69,6 +69,9 @@ final class AppState: ObservableObject {
     /// Keeps the Combine subscription alive for the lifetime of AppState.
     private var importCancellable: AnyCancellable?
 
+    /// Fluid distortion simulation — shared across all views.
+    let fluidSim = FluidSim()
+
     // MARK: - Init
 
     init() {

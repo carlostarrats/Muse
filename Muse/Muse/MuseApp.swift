@@ -16,6 +16,7 @@ struct MuseApp: App {
             ContentView()
                 .environmentObject(appState)
                 .task {
+                    appState.fluidSim.start()
                     await appState.loadAll()
                 }
         }
