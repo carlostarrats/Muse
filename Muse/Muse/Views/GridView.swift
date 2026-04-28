@@ -33,7 +33,8 @@ struct GridView: View {
                             thumbnail: thumbnailCache[image.id],
                             isSelected: isSelected,
                             dispImage: appState.fluidDispImage,
-                            viewportSize: geometry.size
+                            viewportSize: geometry.size,
+                            fluidEnabled: appState.fluidEnabled
                         )
                         .overlay(
                             ClickHandlerView(
@@ -76,7 +77,9 @@ struct GridView: View {
             .onContinuousHover { phase in
                 switch phase {
                 case .active(let location):
-                    appState.fluidSim.setMouse(location)
+                    if appState.fluidEnabled {
+                        appState.fluidSim.setMouse(location)
+                    }
                     withAnimation(.interactiveSpring(response: 0.6, dampingFraction: 0.7)) {
                         normalisedCursor = normalise(location, in: geometry.size)
                     }
@@ -136,6 +139,7 @@ private struct TileView: View {
     let isSelected: Bool
     let dispImage: Image
     let viewportSize: CGSize
+    let fluidEnabled: Bool
 
     @State private var isHovered = false
     @State private var tileFrame: CGRect = .zero
@@ -151,14 +155,16 @@ private struct TileView: View {
             )
             .shadow(color: isSelected ? Self.limeGreen.opacity(0.6) : .black.opacity(0.12), radius: isSelected ? 12 : 6, x: 0, y: isSelected ? 0 : 3)
             .shadow(color: .black.opacity(isHovered ? 0.1 : 0), radius: 10, x: 0, y: 5)
-            .layerEffect(
-                ShaderLibrary.fluidDistort(
-                    .image(dispImage),
-                    .float2(Float(tileFrame.minX), Float(tileFrame.minY)),
-                    .float2(Float(viewportSize.width), Float(viewportSize.height))
-                ),
-                maxSampleOffset: CGSize(width: 50, height: 50)
-            )
+            .applyIf(fluidEnabled) { view in
+                view.layerEffect(
+                    ShaderLibrary.fluidDistort(
+                        .image(dispImage),
+                        .float2(Float(tileFrame.minX), Float(tileFrame.minY)),
+                        .float2(Float(viewportSize.width), Float(viewportSize.height))
+                    ),
+                    maxSampleOffset: CGSize(width: 50, height: 50)
+                )
+            }
             .background(GeometryReader { geo in
                 Color.clear
                     .onAppear { tileFrame = geo.frame(in: .named("gridViewport")) }
@@ -226,5 +232,14 @@ private class ClickNSView: NSView {
         } else {
             onSingleClick?()
         }
+    }
+}
+
+// MARK: - View Helper
+
+private extension View {
+    @ViewBuilder
+    func applyIf<Result: View>(_ condition: Bool, transform: (Self) -> Result) -> some View {
+        if condition { transform(self) } else { self }
     }
 }

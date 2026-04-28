@@ -77,6 +77,9 @@ final class AppState: ObservableObject {
     @Published var fluidDispImage: Image = FluidSim.neutralImage
     private var fluidCancellable: AnyCancellable?
 
+    /// Whether the water-ripple fluid distortion effect is enabled.
+    @Published var fluidEnabled: Bool = false
+
     // MARK: - Init
 
     init() {

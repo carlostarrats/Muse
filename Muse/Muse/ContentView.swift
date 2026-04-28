@@ -127,6 +127,16 @@ struct ContentView: View {
 
                 ToolbarItem(placement: .primaryAction) {
                     Button {
+                        appState.fluidEnabled.toggle()
+                    } label: {
+                        Image(systemName: "drop.fill")
+                            .foregroundStyle(appState.fluidEnabled ? Color.blue : Color.primary)
+                    }
+                    .help(appState.fluidEnabled ? "Disable Water Effect" : "Enable Water Effect")
+                }
+
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
                         openImportPanel()
                     } label: {
                         Image(systemName: "plus")
@@ -144,6 +154,7 @@ struct ContentView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .zIndex(1)
             }
+
         }
         .toolbarBackground(.ultraThinMaterial, for: .windowToolbar)
         // MARK: - Import drop zone overlay
