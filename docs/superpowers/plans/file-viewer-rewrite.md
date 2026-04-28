@@ -53,9 +53,14 @@ Muse pivots from an **import-based image inspiration vault** to a **filesystem-n
 | Q20 | Sidebar contents | Just the folder tree. Tags / starred / saved searches live elsewhere in the UI (TBD). |
 | Q21 | Search scope | Default = current folder. Toggle in search bar for "search everywhere" (entire indexed library). |
 | Q22 | DB migration | Wipe & start fresh. Existing user-data file at `~/Library/Application Support/Muse/` left untouched on disk for now (new app simply doesn't read it). |
-| Q23 | Distribution | **OPEN — see §8.** App Store (sandbox + bookmark friction) vs. direct + notarization (Bridge's path). Affects everything from filesystem access to update mechanism. |
-| Q24 | Primary user persona | **OPEN — see §8.** Designers (mood-board curation), photographers (shoot culling), or generalists (Downloads-folder triage). Defaults & dedup heuristics will tune to this. |
-| Q25 | Globe & water shader | **OPEN — see §8.** Differentiator (lean in, polish them) or vestigial from old identity (cut clean). |
+| Q23 | Distribution | **Mac App Store**, sandboxed, free forever. Apple Developer account already in place. Auto-updates via App Store. |
+| Q24 | Primary user persona | **Generalist** — managing a Downloads folder, Documents, miscellaneous archives. Defaults bend toward fast Quick Look + Open With; AI features available but not the front door. |
+| Q25 | Globe & water shader | **Keep both. Polish later.** Globe view reworked for current-folder content. Water shader stays as alt visualization for image folders. |
+| Q23a | Pricing | **Free.** No purchase, no subscriptions, no in-app purchases, no ads, no analytics, no crash reporting that leaves the device. Privacy nutrition label: zero data collected. |
+| Q23b | MCP (consequence of App Store) | **Dropped from v1.** Sandbox blocks Unix-socket IPC to external agents (Claude Desktop, Comet, Cursor). Replaced by **App Intents** for Shortcuts/Siri/Spotlight automation. If MCP becomes load-bearing later, it requires a direct-distribution build (Q23 reopens). |
+| Q23c | iCloud Drive support | **Yes — best practice.** A root can be `~/Library/Mobile Documents/com~apple~CloudDocs/…`. Honor `NSURLUbiquitousItemDownloadingStatusKey`; auto-trigger downloads on file access; show "downloading from iCloud" state in grid for `NSURLUbiquitousItemIsDownloadingKey`. |
+| Q23d | Sandbox entitlements | `com.apple.security.app-sandbox`, `com.apple.security.files.user-selected.read-only`, `com.apple.security.files.bookmarks.app-scope`. **Read-only on user files in v1.** Read-write requested in Phase 4 when dedup-to-Trash ships, with rationale in App Review notes. |
+| Q23e | Onboarding flow | **TBD — design separately before Phase 0.5 implementation.** Generalist users need a clear first-folder-pick moment + brief explanation of what Muse does. Flow spec lives in a sibling plan doc. |
 | Q26 | Multi-root | **Multi-root, Finder-favorites style.** Sidebar shows roots as top-level groups; each independently navigable; starred folders pinned across all roots in their own section above. |
 | Q27 | Identity reconciliation | Byte-identical files at different paths = **one** `files` row with multiple `paths` children. **Tags shared across all paths of the same content.** Deliberate; documented for users. See §4 for the full decision matrix. |
 | Q28 | Captions | Captions come from **Vision**, not the LLM. Object/scene labels + OCR text + dominant color, concatenated and stored on `files.caption` for FTS indexing. (Foundation Models was wrong API for this.) |
@@ -153,17 +158,13 @@ Muse/
       SmartSorter.swift           (color, object, face, has-text, semantic-cluster modes)
 
   Agents/
-    MCP/                          (in-process registry — wire format & job orchestration)
-      MuseTools.swift             (search, list, getMetadata, addTag, etc.)
-      Manifest.swift              (advertised tool schemas)
-      JobStore.swift              (long-running scans: jobId, progress, results)
-      ResourceProvider.swift      (binary content via MCP resources, not JSON)
-      SocketServer.swift          (Unix domain socket listener — accepts the muse-mcp CLI)
     AppIntents/
-      MuseAppIntents.swift        (Shortcuts/Siri integration)
-
-  ../muse-mcp/                    (separate target — small CLI binary)
-    main.swift                    (stdio JSON-RPC ↔ Unix socket bridge to Muse.app)
+      OpenFolderIntent.swift      (open a specific folder by path)
+      FindDuplicatesIntent.swift  (run dedup scan in current folder)
+      AnalyzeFolderIntent.swift   (run Vision pipeline on a folder)
+      SearchLibraryIntent.swift   (FTS5 over indexed library, returns FileSummary[])
+      TagFileIntent.swift         (add/remove tag; runs only while Muse is foregrounded)
+      AppShortcutsProvider.swift  (registers all intents with the system)
 
   Editing/                        (REMOVED — see §6 — kept slot for future)
 
@@ -373,92 +374,58 @@ Asset detection is by extension first, content sniffing (magic bytes / UTType) a
 
 - **"Find Duplicates"** runs three clusterers in parallel and merges results into `DuplicateGroup`s with `reason` annotated.
 
-- **Smart Sort** dropdown applies:
-  - Dominant color (sort by HSV hue)
-  - Object/scene category (group by top-confidence tag)
-  - Face count (descending)
-  - Has-text (group by OCR-text presence)
-  - Visual cluster (k-means or DBSCAN over feature prints; group label = cluster id)
+- **Sort dropdown** options, in the order the generalist persona expects:
+  - **Date Modified (descending)** — default; what 90% of users want when triaging Downloads
+  - Date Created
+  - Name (A-Z)
+  - Size (largest first)
+  - Kind (group by AssetKind)
+  - *Smart Sort group:*
+    - Dominant color (HSV hue)
+    - Object/scene category (top-confidence tag)
+    - Face count (descending)
+    - Has-text (OCR presence)
+    - Visual cluster (k-means/DBSCAN over feature prints)
 
-### MCP server
+- **Default dedup priority** (generalist):
+  1. Byte-exact (rock-solid, primary)
+  2. Filename + size (close-second, fast)
+  3. Visual similarity (opt-in, slowest)
 
-**Transport architecture.** Claude Desktop and other MCP clients launch their own server processes over stdio. Muse.app is a long-running GUI; clients can't launch it. So:
+### MCP server — *cut from v1, see Q23b*
 
-```
-   ┌─────────────────────┐     spawns      ┌────────────────────┐
-   │  Claude Desktop /   │ ───────────────▶│   muse-mcp (CLI)   │
-   │  Perplexity Comet / │   stdin/stdout  │ small Swift binary │
-   │  Cursor / etc.      │ ◀──────────────▶│  bundled with app  │
-   └─────────────────────┘                 └─────────┬──────────┘
-                                                     │
-                                            Unix domain socket
-                                            (~/Library/Application
-                                            Support/Muse/mcp.sock)
-                                                     │
-                                                     ▼
-                                          ┌────────────────────┐
-                                          │     Muse.app       │
-                                          │  SocketServer +    │
-                                          │  MuseTools         │
-                                          └────────────────────┘
-```
+The originally-spec'd MCP server (Unix-socket bridge → external `muse-mcp` CLI) is incompatible with Mac App Store sandbox: sandboxed apps cannot accept connections from arbitrary external processes via Unix sockets in the user home. This was an explicit trade made when distribution was locked to App Store (Q23). External-agent integration (Claude Desktop, Comet, Cursor) is **not in v1**. A direct-distribution build with MCP remains a future option but requires reopening Q23.
 
-- The `muse-mcp` CLI is a thin bridge: speaks MCP stdio JSON-RPC outbound, forwards everything to Muse.app over a Unix socket. ~200 lines of Swift. Bundled inside `Muse.app/Contents/MacOS/`.
-- Users add Muse to Claude Desktop's config the same way as any other MCP server, pointing at the bundled CLI binary.
-- **If Muse.app isn't running, `muse-mcp` auto-launches it** via `NSWorkspace.openApplication(at:)` and waits up to 5 seconds for the socket to come up before failing. Documented for users: agent activity can wake Muse. (Returning errors instead would push platform awareness onto every MCP client; clients shouldn't need to know that Muse's tools live behind a GUI process.)
-- **Q23 interaction:** sandboxed App Store builds may not be able to expose Unix sockets readable by external processes. This is one of the strongest arguments for direct distribution. If App Store is chosen, MCP becomes a stretch goal or moves to a separate CLI-only build.
+### App Intents — primary automation surface
 
-**Long-running tools** use a job pattern:
-- `runDuplicateScan(scope) → { jobId }` returns immediately
-- `getJobStatus(jobId) → { progress: 0..1, state: pending|running|complete|failed }`
-- `getJobResult(jobId) → DuplicateGroup[]` once `state = complete`
-- Server emits MCP progress notifications between status calls so well-behaved clients see live progress
-- Same pattern for `runAnalyze(scope)` (Vision pipeline over a folder)
+App Intents is the App Store-blessed automation path. Exposes Muse to **Shortcuts**, **Siri**, **Spotlight**, **Focus Filters**, and any system-level invocation point Apple opens up. Intents shipped:
 
-**Binary content** (thumbnails, full images) is exposed as MCP **resources** (`muse://thumbnail/{id}/{size}`, `muse://file/{id}`), not stuffed into JSON-RPC responses as base64.
+- `OpenFolderIntent(path: URL)` — navigate Muse to a specific folder; runs in background or foreground.
+- `FindDuplicatesIntent(scope: FolderRef)` — kicks off dedup scan; returns once cached results land.
+- `AnalyzeFolderIntent(scope: FolderRef)` — runs the Vision pipeline.
+- `SearchLibraryIntent(query: String, scope: SearchScope)` → `[FileSummaryEntity]` — FTS5 search.
+- `TagFileIntent(file: FileEntity, label: String, action: add|remove)` — runs only while Muse is foregrounded (App Store rule for write actions on user content).
+- `StarFolderIntent(path: URL)` / `UnstarFolderIntent(path: URL)` — manage starred folders.
 
-Exposes the following tools:
-
-**Reads (synchronous, fast)**
-- `searchFiles(query, scope, limit, kinds?, tags?)` → `[FileSummary]`
-- `listFolder(path, kinds?, sortBy?)` → `[FileSummary]`
-- `getFile(id)` → `FileDetail` (includes paths, tags, caption, dominant color)
-- `getTextContent(id)` → text/markdown/code content
-- `findSimilar(id, scope=current_folder, limit)` → visual neighbors via feature print (current-folder default per §4)
-- `listRoots()` → `[Root]`
-- `listTags()` → `[String]`
-
-**Reads (binary, via resources)**
-- `muse://thumbnail/{id}/{size}` — `image/png` resource
-- `muse://file/{id}` — original bytes, mime-typed
-
-**Reads (long-running, jobified)**
-- `runDuplicateScan(scope) → { jobId }`
-- `runAnalyze(scope) → { jobId }`
-- `getJobStatus(jobId)` / `getJobResult(jobId)` / `cancelJob(jobId)`
-
-**Writes (Muse DB only — never disk)**
-- `addTag(fileId, label)`
-- `removeTag(fileId, label)`
-- `starFolder(path)` / `unstarFolder(path)`
-- `saveSmartSearch(name, query)` / `deleteSmartSearch(id)`
-- `markDuplicateKeeper(groupId, fileId)` (record user's choice; doesn't delete)
-
-**Never:** moveFile, renameFile, deleteFile, editFile, createFolder, etc. Agents wanting file ops use the OS directly.
+`AppShortcutsProvider` registers all of the above as system-level shortcuts so they appear in Spotlight without Shortcuts.app configuration.
 
 ### Chat panel (optional, hideable, capability-gated)
 
 - A collapsible panel for natural-language search.
 - Backend: `FoundationModelService` only. **Hidden entirely on Macs without Apple Intelligence.**
-- Function-calls into the same tools the MCP server exposes (read-only set + tag writes).
+- Function-calls into the same internal tool registry that App Intents uses (read-only set + tag writes).
 - Strict on-device. No network. No bundled-model fallback in v1 (would likely disappoint at small model sizes; revisit if Apple's models materially improve or user demand justifies).
 
-### App Intents
+### iCloud Drive support
 
-- "Open Muse to folder X" (Shortcut)
-- "Find duplicates in current folder" (Shortcut)
-- "Tag selected file as Y" (Shortcut, runs while Muse is foregrounded)
-- Used by Siri / Spotlight / Shortcuts.
+Roots may live under `~/Library/Mobile Documents/com~apple~CloudDocs/`. Indexer policy:
+
+- `URLResourceKey.ubiquitousItemDownloadingStatusKey` checked before opening any iCloud file.
+- If `current` (downloaded), index normally.
+- If `downloaded` but stale, trigger `FileManager.startDownloadingUbiquitousItem(at:)` and re-check on the next pass.
+- If `notDownloaded`, the grid renders a placeholder + cloud icon; hashing/Vision deferred until download completes.
+- `ubiquitousItemIsDownloadingKey` drives a download-progress badge in the grid tile.
+- Hashing iCloud-only files is skipped to avoid surprise multi-GB downloads; user explicitly clicking "Analyze" or opening the file triggers download.
 
 ---
 
@@ -506,65 +473,42 @@ The smallest possible Muse that proves the new direction is right. Ship and use 
 - Current-folder vs everywhere toggle
 - Saved smart searches
 
-**Phase 6 — Agent integration**
-- App Intents (Shortcuts/Siri)
-- MCP server with tool manifest
-- Preferences toggle to enable/disable
-- Documentation for connecting Claude Desktop / Perplexity Comet
+**Phase 6 — App Intents automation**
+- All intents listed in §6 (App Intents subsection)
+- `AppShortcutsProvider` registration for Spotlight
+- Documentation for users on Shortcuts integration
 
 **Phase 7 — Chat panel (capability-gated)**
 - Foundation Models on Apple Intelligence-capable Macs only
-- Tool routing through the same MCP tool registry
+- Tool routing through the internal tool registry shared with App Intents
 - Hidden on incapable Macs, no error, no nag
 
-**Phase 8 — Polish & visualizations** (gated on Q25 outcome)
-- If "differentiator": Globe view rework (current-folder content) + water shader as alt-visualization toggle for image folders
-- If "vestigial": cut both, replace with a simpler "view as cards / list / details" trio
+**Phase 8 — Polish & visualizations**
+- Globe view rework (current-folder content)
+- Water shader polish — alt-visualization toggle for image folders
 - (Future) Globe depicting subfolders
 
 ---
 
-## 8. Open questions (still need user decision)
+## 8. Deferred design work (not blocking Phase 0.5)
 
-### Q23 — Distribution channel
-**Mac App Store** vs **direct download + notarization** (Bridge's path).
+### Onboarding flow
+First-run UX needs its own design pass. Generalists landing on Muse should understand "this is a folder viewer + smart features" within the first 30 seconds. Likely beats:
+1. Welcome panel naming what Muse is
+2. Pick your first folder (NSOpenPanel, store as security-scoped bookmark)
+3. Brief "tap a file to preview, right-click to open elsewhere" hint
+4. Skip / "I know what I'm doing" path
 
-| Factor | App Store | Direct + notarized |
-|---|---|---|
-| Filesystem access | Strict sandbox; security-scoped bookmarks for *every* folder; refresh pain | No sandbox; arbitrary disk access; simpler |
-| MCP server (child process) | Restricted/forbidden under sandbox | Trivial |
-| Discovery | App Store search | Manual / website |
-| Updates | App Store auto-update | Sparkle or similar |
-| Revenue | 15-30% cut, paid-up-front or subscription | DIY (Paddle, FastSpring) |
+Lives in a sibling plan doc when designed.
 
-The MCP server alone is a strong nudge toward direct distribution — running a child JSON-RPC process from a sandboxed app is painful at best. Bridge, Photo Mechanic, and Eagle all distribute direct.
+### Settings / Preferences scope (Phase 6)
+Will need: roots management, "show subfolders" default, AI on/off master kill, default sort, default view mode, chat panel visibility (when capable), thumbnail cache size, hidden-files toggle, dedup thresholds.
 
-### Q24 — Primary user persona
-Pick one. Defaults, dedup heuristics, the "first 5 minutes" UX, and the marketing all bend to whichever you pick.
-
-| Persona | Bias |
-|---|---|
-| **Designer / mood-boarder** | Default sort = visual cluster. Smart sort emphasizes color/scene. Dedup is gentle (lots of "almost the same" reference shots are valuable). Hero use case: "find me everything blue and minimal." |
-| **Photographer (culling shoots)** | Default sort = date taken. Dedup is aggressive on byte-exact and resolution dupes. Star-rating + reject workflow matters. Hero: "rate these 800 RAWs in 20 minutes." |
-| **Generalist (Downloads triage)** | Default sort = date modified. Dedup is mainly byte-exact + filename. Quick Look fidelity matters more than smart features. Hero: "what's in this 50GB Downloads folder?" |
-
-You can serve all three eventually, but v1 should be opinionated about one.
-
-### Q25 — Globe view & water shader: keep or cut?
-Bridge has nothing like them. They're load-bearing for old-Muse's identity but vestigial for the new direction. Honest options:
-
-- **Keep + lean in** — they become Muse's "this is the one I'd remember" features. Polish, document, market around them.
-- **Cut clean** — remove both, replace Globe with traditional grid/list/details view-mode triad. Saves ~2 weeks of Phase 8 work.
-- **Hide, don't cut** — keep code, ship disabled-by-default, decide later. (Usually a trap — disabled features rot.)
-
-### Q26 — Settings/Preferences scope (lower priority)
-Will need: roots management, dedup thresholds, "show subfolders" default, AI on/off (master kill switch), MCP server enable/disable, default sort, default view mode, chat panel visibility (when capable). Spec when we get to Phase 6.
-
-### Q27 — Chat panel placement
+### Chat panel placement (Phase 7)
 Collapsible right panel, separate window, or Cmd+K command-palette overlay? Defer to Phase 7 design.
 
-### Q28 — Branding / look-and-feel survival
-Current app has lime-green selection, parallax tilt, water shader, masonry grid, custom titlebar logo. What survives? Tied to Q25. Suggestion: keep typography + parallax + lime-green selection regardless; tie water shader and globe to Q25 outcome.
+### Branding / look-and-feel
+Keep: typography + masonry-style grid + parallax tilt + lime-green selection + custom titlebar logo + water shader (polished as alt visualization). The visual character of the existing app survives.
 
 ## 9. Performance budgets (preliminary)
 
@@ -584,13 +528,17 @@ Current app has lime-green selection, parallax tilt, water shader, masonry grid,
 
 ---
 
-## 10. Out of scope
+## 10. Out of scope (v1)
 
 - Editing of any kind (image, PDF, text, video) — delegated to specialist apps via Open With
 - Cloud sync / cross-device — local-only, no exceptions
 - Direct integration with Apple Photos.app — not technically possible for files outside its library
-- iCloud Drive smarts beyond what the OS gives us automatically
 - iOS/iPadOS — macOS only
+- **MCP server** — incompatible with App Store sandbox; reopens only if distribution channel changes
+- External AI agent integration (Claude Desktop, Comet, Cursor) — same reason
+- Pricing / monetization — free forever, no IAPs, no subscriptions, no ads, no analytics, no paid tier
+- Persistent jobs across launches — quitting Muse cancels in-flight scans
+- HNSW / LSH approximate nearest neighbor — scope-by-default + prefilter is enough for v1
 
 ---
 
