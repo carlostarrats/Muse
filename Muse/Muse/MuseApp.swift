@@ -17,7 +17,6 @@ struct MuseApp: App {
                 .environmentObject(appState)
                 .task {
                     appState.fluidSim.start()
-                    await appState.loadAll()
                 }
         }
 
