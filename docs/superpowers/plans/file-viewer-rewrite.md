@@ -90,7 +90,7 @@ Muse/
   Filesystem/
     FolderTree.swift              (hierarchical tree built lazily from disk)
     FolderWatcher.swift           (FSEvents-backed live watcher; supports recursive mode)
-    ThumbnailCache.swift          (QLThumbnailGenerator + on-disk cache, keyed by file_id)
+    ThumbnailCache.swift          (QLThumbnailGenerator + on-disk cache, keyed by file_id; LRU eviction with 2GB default cap, user-configurable in Preferences)
     BookmarkStore.swift           (security-scoped bookmarks for sandbox-safe folder access)
     PathResolver.swift            (path ↔ hash reconciliation)
 
@@ -199,7 +199,6 @@ The grid must render before files are hashed — hashing 100k files takes minute
 ### Key external dependencies
 - **GRDB.swift** — already used; keep for SQLite layer (schema is new).
 - **SQLite FTS5** — bundled in macOS SQLite, just needs a `CREATE VIRTUAL TABLE` migration.
-- **MLX** (Apple) — Swift package for local LLM inference fallback.
 - **TreeSitter or Highlightr** — code syntax highlighting. (Pick during impl.)
 - **MCP Swift SDK** — pick the Anthropic-blessed Swift SDK if available, else implement the JSON-RPC stdio protocol directly (it's small).
 
@@ -319,7 +318,7 @@ A file can have multiple paths (hardlinks, copies). Removing the last alive path
 | Newly-enumerated path | Hash matches an existing alive `files` row | Copy / hardlink of known content | Set `paths.file_id` to the existing row. **Tags are shared across all alive paths.** |
 | Known alive path | Same hash as before | Unchanged file | Touch `last_seen_at` on `files`. |
 | Known alive path | New hash, no other `files` row has it | Edited in place | Update `files.content_hash` on the row this path points to. **Tags remain attached.** |
-| Known alive path | New hash matches a *different* existing `files` row | Edited to be byte-identical to another known file (rare but real — e.g. paste, copy-merge) | Re-link `paths.file_id` to the matching row. If the previous `files` row now has zero alive paths, mark its remaining dead paths as orphaned and prune the row after the 30-day grace window. **Tags from the previous row are NOT merged** — the path now belongs to the matching row's tag set. |
+| Known alive path | New hash matches a *different* existing `files` row | Edited to be byte-identical to another known file (rare but real — e.g. paste, copy-merge) | Re-link `paths.file_id` to the matching row. **Tags from the previous row are unioned into the matching row** following Q32's rule (manual beats vision on label conflict; otherwise both kept). If the previous `files` row now has zero alive paths, mark its dead paths orphaned and prune the row after the 30-day grace window. Union prevents quiet data loss when the orphaned row's only alive path was this one. |
 | Known alive path absent on disk | n/a | File deleted or moved away | Mark `paths.is_alive = 0`. If no other alive paths point to this `files` row, the file is "gone" but row + tags persist 30 days. |
 | Newly-enumerated path identical to a known **dead** path | Hash matches the dead row's `files` | Path-resurrection (drive remounted, file restored from backup) | Flip `is_alive = 1` on the dead row, reuse `files` row + tags. |
 | Newly-enumerated path identical to a known **dead** path | Hash differs from the dead row's `files` | Path was reused with new content | Create a fresh `files` row, link a new alive `paths` row, leave the dead row in place to be pruned. |
