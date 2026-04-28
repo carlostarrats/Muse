@@ -45,10 +45,10 @@ Muse pivots from an **import-based image inspiration vault** to a **filesystem-n
 | Q12 | Dedup suggestions | Smart suggest only where signal is strong: byte-exact dupes (rock solid), visual dupes with >10% resolution gap (reliable). Visual-similar at same resolution / filename-only dupes: no suggestion. **Delete always = move to Trash.** Never `unlink`. |
 | Q13 | MCP server scope | Muse-internal organization only. Read disk, but writes only touch Muse's database (tags, stars, collections, smart searches). **No file moves/renames/deletes via MCP.** |
 | Q14 | Smart sort | Dominant color, detected object/scene, face count, has-text-or-not, plus visual semantic clustering via Apple's image feature embeddings. |
-| Q15 | Min macOS | macOS 26 — full access to Apple Foundation Models, latest Vision APIs. |
+| Q15 | Min macOS | **macOS 14**. Vision, PDFKit, AVKit, FSEvents, FTS5 — all work. Foundation Models (chat panel) is capability-gated within macOS 14+: requires Apple Intelligence-enabled Mac on macOS 26+. Lower floor widens v1 audience at zero cost to other features. |
 | Q16 | File types | Universal viewer — see §4 for the full table. Anything unsupported falls back to Quick Look. |
 | Q17 | Scale target | Large (100k+ files). Architecture decisions (FTS5, paged queries, vector index, lazy folder load) all assume large libraries. Small libraries pay no penalty. |
-| Q18 | File identity | Hybrid — primary key is content SHA-256, with path tracking. Move a file in Finder → tags follow. Edit content → `previous_hashes` lookup reattaches tags. |
+| Q18 | File identity | Hybrid — primary key is content SHA-256, with path tracking. Move a file in Finder → tags follow (path-based identity). Edit content → tags stay attached to the same path, hash updated. See §4 reconciliation matrix for all cases. |
 | Q19 | View modes | **Keep:** Grid (default), Globe (reworked for current-folder content). **Drop:** Universe, Folder-3D. |
 | Q20 | Sidebar contents | Just the folder tree. Tags / starred / saved searches live elsewhere in the UI (TBD). |
 | Q21 | Search scope | Default = current folder. Toggle in search bar for "search everywhere" (entire indexed library). |
@@ -59,6 +59,11 @@ Muse pivots from an **import-based image inspiration vault** to a **filesystem-n
 | Q26 | Multi-root | **Multi-root, Finder-favorites style.** Sidebar shows roots as top-level groups; each independently navigable; starred folders pinned across all roots in their own section above. |
 | Q27 | Identity reconciliation | Byte-identical files at different paths = **one** `files` row with multiple `paths` children. **Tags shared across all paths of the same content.** Deliberate; documented for users. See §4 for the full decision matrix. |
 | Q28 | Captions | Captions come from **Vision**, not the LLM. Object/scene labels + OCR text + dominant color, concatenated and stored on `files.caption` for FTS indexing. (Foundation Models was wrong API for this.) |
+| Q29 | FileNode lifecycle | Three stages: `enumerated` (path known, no hash yet) → `seen` (hash known, deduped to a `files` row) → `indexed` (Vision pipeline complete). Grid renders from stage 1. See §3.1. |
+| Q30 | Path resurrection | Dead paths are kept; uniqueness is `UNIQUE(absolute_path) WHERE is_alive = 1`. Reviving a known dead path flips `is_alive = 1` and reuses the row + tags. |
+| Q31 | MCP transport | External `muse-mcp` CLI binary spawned by the agent; talks to Muse.app via Unix domain socket. Long-running tools return `jobId` + use MCP progress notifications. Binary content (thumbnails) via MCP resources, not base64 in JSON-RPC. |
+| Q32 | Tag uniqueness | `UNIQUE(file_id, label)`. Source enum (`manual`, `vision`); manual beats vision on conflict. |
+| Q33 | Indexer policies | Symlinks: follow once with cycle detection. Bundles (`.app`, `.photoslibrary`, etc.): treat opaque, don't descend. Hidden files (`.DS_Store`, dotfiles, `__MACOSX`): skip by default with a "show hidden" preference. |
 
 ### Cross-cutting principle
 **Muse views; specialist apps edit.** Editing of any kind (image, PDF, text, video) is delegated to whatever app the user already trusts via "Open With…" rather than reimplemented inside Muse.
@@ -111,7 +116,7 @@ Muse/
     TextViewer.swift              (NSTextView, selectable, read-only)
     MarkdownViewer.swift          (AttributedString markdown render)
     CodeViewer.swift              (TreeSitter or Highlightr syntax highlight)
-    OfficeViewer.swift            (NSAttributedString for .docx/.rtf, QL fallback for .doc)
+    OfficeViewer.swift            (NSAttributedString for .rtf only; .docx/.doc/.pages → Quick Look)
     VideoPlayer.swift             (AVKit)
     AudioPlayer.swift             (AVKit + waveform)
     ModelViewer.swift             (SceneKit/RealityKit USDZ/OBJ)
@@ -148,12 +153,17 @@ Muse/
       SmartSorter.swift           (color, object, face, has-text, semantic-cluster modes)
 
   Agents/
-    MCP/
-      MCPServer.swift             (stdio JSON-RPC; tool registry)
+    MCP/                          (in-process registry — wire format & job orchestration)
       MuseTools.swift             (search, list, getMetadata, addTag, etc.)
       Manifest.swift              (advertised tool schemas)
+      JobStore.swift              (long-running scans: jobId, progress, results)
+      ResourceProvider.swift      (binary content via MCP resources, not JSON)
+      SocketServer.swift          (Unix domain socket listener — accepts the muse-mcp CLI)
     AppIntents/
       MuseAppIntents.swift        (Shortcuts/Siri integration)
+
+  ../muse-mcp/                    (separate target — small CLI binary)
+    main.swift                    (stdio JSON-RPC ↔ Unix socket bridge to Muse.app)
 
   Editing/                        (REMOVED — see §6 — kept slot for future)
 
@@ -165,6 +175,26 @@ Muse/
     PreferencesView.swift         (roots, AI options, dedup thresholds, MCP toggle)
     Roots.swift                   (multi-root manager)
 ```
+
+### 3.1 FileNode lifecycle (pre-hash → post-hash → indexed)
+
+The grid must render before files are hashed — hashing 100k files takes minutes, not seconds. So `FileNode` has three stages, and capabilities light up progressively:
+
+| Stage | What's known | DB state | What works in UI | What doesn't |
+|---|---|---|---|---|
+| **enumerated** | Path, basename, size, mtime, kind (by extension) | `paths` row only; no `files` row yet | Grid render, sort by name/date/size, Open With, Quick Look preview, double-click to open file | Tagging (no `file_id`), find-similar, dedup, smart sort, FTS search hits |
+| **seen** | + content hash, deduped to a `files` row | `files` row + linked `paths` row | Above + tagging, byte-exact dedup, identity-aware operations | Vision-derived tags, captions, feature-print similarity, semantic clustering |
+| **indexed** | + Vision outputs (tags, OCR, faces, dominant color, feature print, caption) | `files.caption`, `tags`, `files.feature_print` populated | Everything | — |
+
+**Stage transitions** are async and idempotent:
+- `enumerated → seen`: background queue, hashes in batches; folder open shows a quiet "indexing N files…" indicator.
+- `seen → indexed`: only on user action (Q10 — Analyze button). Never automatic.
+
+**UI rules** that fall out of this:
+- Right-click → Open With… works at *all* stages (we have a path).
+- "Tag this file" requires stage `seen`. If user tags a stage-`enumerated` file, the action is queued and applied as soon as hashing completes (sub-second in practice).
+- Selecting a stage-`enumerated` file works fine; the detail panel shows path/size/kind without tags or caption.
+- "Find duplicates" / "Find similar" / "Sort by visual cluster" disable themselves with a tooltip ("waiting for indexing") if the scope contains stage-`enumerated` files.
 
 ### Key external dependencies
 - **GRDB.swift** — already used; keep for SQLite layer (schema is new).
@@ -191,7 +221,7 @@ Muse/
 | column | type | notes |
 |---|---|---|
 | `id` | TEXT PK | UUID |
-| `content_hash` | TEXT UNIQUE | SHA-256 |
+| `content_hash` | TEXT UNIQUE | SHA-256. Set when stage advances to `seen`. |
 | `kind` | TEXT | AssetKind raw value |
 | `size_bytes` | INTEGER | |
 | `width` | INTEGER NULL | images/video |
@@ -200,21 +230,24 @@ Muse/
 | `created_at` | INTEGER | filesystem birth time |
 | `modified_at` | INTEGER | filesystem mtime |
 | `last_seen_at` | INTEGER | last time indexer saw this file on disk |
-| `caption` | TEXT NULL | AI-generated description |
+| `caption` | TEXT NULL | concatenated Vision outputs (set at stage `indexed`) |
 | `dominant_color` | TEXT NULL | hex |
 | `feature_print` | BLOB NULL | VNFeaturePrintObservation data |
-| `previous_hashes` | TEXT NULL | JSON array — for tag survival across edits |
+| `lifecycle_stage` | TEXT | `enumerated` / `seen` / `indexed` |
 
 ### `paths`
 | column | type | notes |
 |---|---|---|
 | `id` | TEXT PK | |
-| `file_id` | TEXT FK → files.id | |
-| `absolute_path` | TEXT UNIQUE | |
+| `file_id` | TEXT FK → files.id NULL | NULL while stage = `enumerated` (no hash yet to attach to a `files` row) |
+| `absolute_path` | TEXT | |
 | `bookmark_data` | BLOB | security-scoped bookmark for sandbox |
 | `is_alive` | INTEGER | 1 if still on disk |
 
-A file can have multiple paths (hardlinks, copies). Removing the last alive path is what makes a file "gone."
+**Indexes / uniqueness:**
+- `UNIQUE INDEX paths_alive_unique ON paths(absolute_path) WHERE is_alive = 1` — partial unique index. Allows path resurrection: a dead row can stay around with the same `absolute_path` while a new alive row exists, but never two alive rows for the same path.
+
+A file can have multiple paths (hardlinks, copies). Removing the last alive path is what makes a file "gone." Dead rows are pruned after 30 days unless their `files` row has tags or a feature print.
 
 ### `tags`
 | column | type | notes |
@@ -222,8 +255,11 @@ A file can have multiple paths (hardlinks, copies). Removing the last alive path
 | `id` | TEXT PK | |
 | `file_id` | TEXT FK | |
 | `label` | TEXT | |
-| `source` | TEXT | "manual" or "vision" or "caption" |
-| `confidence` | REAL NULL | 0..1 for AI tags |
+| `source` | TEXT | `manual` or `vision` |
+| `confidence` | REAL NULL | 0..1 for vision tags |
+
+**Indexes / uniqueness:**
+- `UNIQUE(file_id, label)` — one row per `(file, label)` pair. **Manual beats vision on conflict** (manual writes overwrite vision rows; vision writes ignore existing manual rows).
 
 ### `roots`
 | column | type | notes |
@@ -271,12 +307,14 @@ The indexer encounters a path on disk. It computes the SHA-256 hash. Then:
 
 | Path state | Hash state | Interpretation | Action |
 |---|---|---|---|
-| New path | New hash | Brand new file | Create `files` row + `paths` row |
-| New path | Existing hash | Copy / hardlink of known content | Keep one `files` row; add new `paths` row. **Tags are shared across both paths.** |
-| Known path | Same hash | Unchanged file | Touch `last_seen_at` on `files`; nothing else |
-| Known path | New hash | File was edited in place | Update `files.content_hash` to new value; append old hash to `files.previous_hashes` JSON array. **Tags remain attached** — they followed the path. |
-| Known path absent on disk | n/a | File deleted or moved away | Mark `paths.is_alive = 0`. If no other alive paths point to this `files` row, the file is "gone" but its row + tags persist for ~30 days in case it reappears (e.g. detached drive). |
-| New path | New hash that matches a `previous_hashes` entry | Lightroom-style export from a known original | **Tags do NOT auto-attach.** Exports are deliberately treated as new files. (Reasoning: an export is a derivative, not the original; conflating them surprises users.) |
+| New path | New hash | Brand new file | Create `files` row + `paths` row, both alive |
+| New path | Existing hash | Copy / hardlink of known content | Keep one `files` row; add new alive `paths` row pointing to it. **Tags are shared across all alive paths.** |
+| Known alive path | Same hash | Unchanged file | Touch `last_seen_at` on `files`; nothing else |
+| Known alive path | New hash | File was edited in place | Update `files.content_hash` to new value. **Tags remain attached** — they belong to the file row, which is identified through the path. |
+| Known alive path absent on disk | n/a | File deleted or moved away | Mark `paths.is_alive = 0`. If no other alive paths point to this `files` row, the file is "gone" but its row + tags persist for 30 days in case it reappears. |
+| New path identical to a known **dead** path | New hash | Path-resurrection scenario (e.g. external drive remounted; file replaced after deletion) | If new hash matches the dead row's `files.content_hash`, **flip `is_alive = 1`** on the dead row, reuse `files` row + tags. If new hash is different, create a fresh `files` row, link a new alive `paths` row, leave the dead row in place to be pruned. |
+| New path | Hash already attached via a *different* current alive path | Copy of an existing file | Same as "new path, existing hash" — share the `files` row. |
+| Lightroom-style export to a new path | New hash | Derivative of a known original | Treated as a brand-new file. **Tags do NOT auto-attach.** No special detection — we don't track "this came from that," and we don't pretend to. |
 
 **Consequence to know:** if you copy `logo.png` into three folders, it's one row with three paths. Tagging "blue" tags all three. Deleting one path doesn't remove the tag. This is deliberate — matches Lightroom's "virtual copy" model and avoids the "same image, different tag set in each copy" footgun.
 
@@ -330,18 +368,60 @@ Asset detection is by extension first, content sniffing (magic bytes / UTType) a
 
 ### MCP server
 
-Runs as a child-process MCP server when the user enables "Allow agents to talk to Muse" in preferences. Exposes the following tools:
+**Transport architecture.** Claude Desktop and other MCP clients launch their own server processes over stdio. Muse.app is a long-running GUI; clients can't launch it. So:
 
-**Reads**
+```
+   ┌─────────────────────┐     spawns      ┌────────────────────┐
+   │  Claude Desktop /   │ ───────────────▶│   muse-mcp (CLI)   │
+   │  Perplexity Comet / │   stdin/stdout  │ small Swift binary │
+   │  Cursor / etc.      │ ◀──────────────▶│  bundled with app  │
+   └─────────────────────┘                 └─────────┬──────────┘
+                                                     │
+                                            Unix domain socket
+                                            (~/Library/Application
+                                            Support/Muse/mcp.sock)
+                                                     │
+                                                     ▼
+                                          ┌────────────────────┐
+                                          │     Muse.app       │
+                                          │  SocketServer +    │
+                                          │  MuseTools         │
+                                          └────────────────────┘
+```
+
+- The `muse-mcp` CLI is a thin bridge: speaks MCP stdio JSON-RPC outbound, forwards everything to Muse.app over a Unix socket. ~200 lines of Swift. Bundled inside `Muse.app/Contents/MacOS/`.
+- Users add Muse to Claude Desktop's config the same way as any other MCP server, pointing at the bundled CLI binary.
+- If Muse.app isn't running, `muse-mcp` either launches it (clean exit if user blocks) or returns errors with "open Muse to enable agent access."
+- **Q23 interaction:** sandboxed App Store builds may not be able to expose Unix sockets readable by external processes. This is one of the strongest arguments for direct distribution. If App Store is chosen, MCP becomes a stretch goal or moves to a separate CLI-only build.
+
+**Long-running tools** use a job pattern:
+- `runDuplicateScan(scope) → { jobId }` returns immediately
+- `getJobStatus(jobId) → { progress: 0..1, state: pending|running|complete|failed }`
+- `getJobResult(jobId) → DuplicateGroup[]` once `state = complete`
+- Server emits MCP progress notifications between status calls so well-behaved clients see live progress
+- Same pattern for `runAnalyze(scope)` (Vision pipeline over a folder)
+
+**Binary content** (thumbnails, full images) is exposed as MCP **resources** (`muse://thumbnail/{id}/{size}`, `muse://file/{id}`), not stuffed into JSON-RPC responses as base64.
+
+Exposes the following tools:
+
+**Reads (synchronous, fast)**
 - `searchFiles(query, scope, limit, kinds?, tags?)` → `[FileSummary]`
 - `listFolder(path, kinds?, sortBy?)` → `[FileSummary]`
 - `getFile(id)` → `FileDetail` (includes paths, tags, caption, dominant color)
-- `getThumbnail(id, size)` → image bytes
 - `getTextContent(id)` → text/markdown/code content
-- `findSimilar(id, limit)` → visual neighbors via feature print
-- `findDuplicates(scope)` → `[DuplicateGroup]`
+- `findSimilar(id, scope=current_folder, limit)` → visual neighbors via feature print (current-folder default per §4)
 - `listRoots()` → `[Root]`
 - `listTags()` → `[String]`
+
+**Reads (binary, via resources)**
+- `muse://thumbnail/{id}/{size}` — `image/png` resource
+- `muse://file/{id}` — original bytes, mime-typed
+
+**Reads (long-running, jobified)**
+- `runDuplicateScan(scope) → { jobId }`
+- `runAnalyze(scope) → { jobId }`
+- `getJobStatus(jobId)` / `getJobResult(jobId)` / `cancelJob(jobId)`
 
 **Writes (Muse DB only — never disk)**
 - `addTag(fileId, label)`
