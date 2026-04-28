@@ -85,6 +85,53 @@ final class AppState: ObservableObject {
         rebuildRootNodes()
         bookmarksCancellable = bookmarks.$roots
             .sink { [weak self] _ in self?.rebuildRootNodes() }
+
+        // App Intents wiring
+        NotificationCenter.default.addObserver(
+            forName: .museOpenFolder, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let url = note.userInfo?["url"] as? URL else { return }
+            Task { @MainActor in
+                self?.openFromIntent(url: url)
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: .museRunDuplicates, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let url = note.userInfo?["url"] as? URL else { return }
+            Task { @MainActor in
+                self?.openFromIntent(url: url)
+                let urls = self?.currentFiles
+                    .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
+                    .map { $0.url } ?? []
+                await DuplicateFinder.shared.scan(in: urls)
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: .museRunAnalyze, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let url = note.userInfo?["url"] as? URL else { return }
+            Task { @MainActor in
+                self?.openFromIntent(url: url)
+                await self?.analyzeCurrentFolder()
+            }
+        }
+    }
+
+    /// Used by App Intents — opens the URL as a transient root if it's not
+    /// already part of an active root tree.
+    func openFromIntent(url: URL) {
+        // If the URL is inside an existing root, navigate there directly.
+        for node in rootNodes {
+            if url.path.hasPrefix(node.url.path) {
+                let folder = FolderNode(url: url)
+                select(folder: folder)
+                return
+            }
+        }
+        // Otherwise just open as an ad-hoc folder (no persistence)
+        let folder = FolderNode(url: url)
+        select(folder: folder)
     }
 
     // MARK: - Roots wiring
