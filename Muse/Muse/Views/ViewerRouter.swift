@@ -4,10 +4,8 @@
 //
 //  Routes a FileNode to the right viewer for its AssetKind. Each
 //  case wraps the viewer body in ViewerChrome for consistent shell
-//  (dimmed background, close button, escape-to-dismiss).
-//
-//  Phase 1: ImageViewer, PDFViewer, TextViewer, MarkdownViewer +
-//  Quick Look fallback for everything else.
+//  (dimmed background, close button, escape-to-dismiss) — except
+//  ImageViewer, which has its own dim/dismiss layer.
 //
 
 import SwiftUI
@@ -17,13 +15,19 @@ struct ViewerRouter: View {
 
     var body: some View {
         switch file.kind {
-        case .image:
-            // ImageViewer has its own dim/dismiss chrome; doesn't use ViewerChrome
+        case .image, .raw, .psd:
+            // NSImage handles RAW + PSD flat composite via ImageIO.
             ImageViewer(file: file)
 
         case .pdf:
             ViewerChrome(title: file.basename) {
                 PDFViewerView(url: file.url)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+        case .svg:
+            ViewerChrome(title: file.basename) {
+                SVGViewerView(url: file.url)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
@@ -57,6 +61,30 @@ struct ViewerRouter: View {
                     QuickLookFallback(url: file.url)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+            }
+
+        case .video:
+            ViewerChrome(title: file.basename) {
+                VideoPlayerView(url: file.url)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+        case .audio:
+            ViewerChrome(title: file.basename) {
+                AudioPlayerView(url: file.url)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+        case .model3d:
+            ViewerChrome(title: file.basename) {
+                ModelViewerView(url: file.url)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+        case .font:
+            ViewerChrome(title: file.basename) {
+                FontViewerView(url: file.url)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
         default:
