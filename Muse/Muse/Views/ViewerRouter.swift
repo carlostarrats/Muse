@@ -2,9 +2,12 @@
 //  ViewerRouter.swift
 //  Muse
 //
-//  Routes a FileNode to the right viewer for its AssetKind.
-//  Phase 0.5: ImageViewer for images, QuickLookFallback for everything
-//  else. Phase 1+ adds PDFViewer, TextViewer, MarkdownViewer, etc.
+//  Routes a FileNode to the right viewer for its AssetKind. Each
+//  case wraps the viewer body in ViewerChrome for consistent shell
+//  (dimmed background, close button, escape-to-dismiss).
+//
+//  Phase 1: ImageViewer, PDFViewer, TextViewer, MarkdownViewer +
+//  Quick Look fallback for everything else.
 //
 
 import SwiftUI
@@ -15,37 +18,52 @@ struct ViewerRouter: View {
     var body: some View {
         switch file.kind {
         case .image:
+            // ImageViewer has its own dim/dismiss chrome; doesn't use ViewerChrome
             ImageViewer(file: file)
-        case .raw, .psd:
-            // Phase 1: dedicated RAW/PSD viewers. For now, Quick Look handles them.
-            qlOverlay
+
+        case .pdf:
+            ViewerChrome(title: file.basename) {
+                PDFViewerView(url: file.url)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+        case .markdown:
+            ViewerChrome(title: file.basename) {
+                MarkdownViewerView(url: file.url)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+        case .text:
+            ViewerChrome(title: file.basename) {
+                TextViewerView(url: file.url, isCode: false, isRTF: false)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+        case .code:
+            ViewerChrome(title: file.basename) {
+                TextViewerView(url: file.url, isCode: true, isRTF: false)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+        case .office:
+            // .rtf gets the rich text viewer; .docx/.doc/.pages → Quick Look
+            if file.url.pathExtension.lowercased() == "rtf" {
+                ViewerChrome(title: file.basename) {
+                    TextViewerView(url: file.url, isCode: false, isRTF: true)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            } else {
+                ViewerChrome(title: file.basename) {
+                    QuickLookFallback(url: file.url)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+
         default:
-            qlOverlay
-        }
-    }
-
-    @ViewBuilder
-    private var qlOverlay: some View {
-        QuickLookOverlay(file: file)
-    }
-}
-
-private struct QuickLookOverlay: View {
-    @EnvironmentObject var appState: AppState
-    let file: FileNode
-
-    var body: some View {
-        ZStack {
-            Color.black.opacity(0.6)
-                .ignoresSafeArea()
-                .onTapGesture { appState.selectedFile = nil }
-
-            QuickLookFallback(url: file.url)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(40)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .shadow(color: .black.opacity(0.4), radius: 24, x: 0, y: 12)
-                .padding(40)
+            ViewerChrome(title: file.basename) {
+                QuickLookFallback(url: file.url)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
     }
 }

@@ -20,9 +20,10 @@ import SwiftUI
 @MainActor
 final class AppState: ObservableObject {
 
-    // MARK: - Roots
+    // MARK: - Roots & stars
 
     let bookmarks = BookmarkStore()
+    let stars = StarStore()
 
     /// Currently active root (the one whose tree is in the sidebar).
     @Published var activeRoot: Root?
@@ -118,6 +119,36 @@ final class AppState: ObservableObject {
         selectedFile = nil
         reloadCurrentFiles()
         startWatching(folder.url)
+        scheduleIndexing(for: folder.url)
+    }
+
+    /// Kick off active-folder indexing on the high-priority queue.
+    private func scheduleIndexing(for url: URL) {
+        let files = currentFiles
+        Task.detached(priority: .userInitiated) {
+            let pairs = files.compactMap { f -> (URL, AssetKind)? in
+                guard f.kind != .folder, f.kind.hasNativeViewer || f.kind == .archive else { return nil }
+                return (f.url, f.kind)
+            }
+            await Indexer.shared.indexBatch(pairs, priority: .high)
+        }
+    }
+
+    // MARK: - Starring
+
+    func toggleStar(folder: FolderNode) {
+        if stars.isStarred(folder.url) {
+            stars.unstar(folder: folder.url)
+        } else {
+            stars.star(folder: folder.url)
+        }
+    }
+
+    func openStarred(_ star: StarStore.StarredFolder) {
+        guard let url = stars.resolveURL(for: star) else { return }
+        _ = url.startAccessingSecurityScopedResource()
+        let node = FolderNode(url: url, displayName: star.displayName)
+        select(folder: node)
     }
 
     private func reloadCurrentFiles() {

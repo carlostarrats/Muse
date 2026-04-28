@@ -15,7 +15,7 @@ struct SidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if appState.rootNodes.isEmpty {
+            if appState.rootNodes.isEmpty && appState.stars.starred.isEmpty {
                 emptyState
             } else {
                 List(selection: Binding(
@@ -26,10 +26,44 @@ struct SidebarView: View {
                         }
                     }
                 )) {
-                    ForEach(appState.rootNodes) { root in
-                        OutlineGroup(root, children: \.lazyChildren) { node in
-                            FolderRowLabel(node: node, isRoot: node.id == root.id)
-                                .tag(node.id)
+                    if !appState.stars.starred.isEmpty {
+                        Section("Starred") {
+                            ForEach(appState.stars.starred) { star in
+                                Button {
+                                    appState.openStarred(star)
+                                } label: {
+                                    Label(star.displayName, systemImage: "star.fill")
+                                        .foregroundStyle(.yellow, .primary)
+                                }
+                                .buttonStyle(.plain)
+                                .contextMenu {
+                                    Button("Remove from Starred") {
+                                        appState.stars.unstar(folder: URL(fileURLWithPath: star.path))
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Section("Folders") {
+                        ForEach(appState.rootNodes) { root in
+                            OutlineGroup(root, children: \.lazyChildren) { node in
+                                FolderRowLabel(node: node, isRoot: node.id == root.id)
+                                    .tag(node.id)
+                                    .contextMenu {
+                                        Button(appState.stars.isStarred(node.url) ? "Unstar" : "Star") {
+                                            appState.toggleStar(folder: node)
+                                        }
+                                        if node.id == root.id {
+                                            if let r = appState.bookmarks.roots.first(where: {
+                                                appState.bookmarks.url(for: $0) == node.url
+                                            }) {
+                                                Divider()
+                                                Button("Remove Folder") { appState.removeRoot(r) }
+                                            }
+                                        }
+                                    }
+                            }
                         }
                     }
                 }
