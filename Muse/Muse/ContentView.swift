@@ -12,6 +12,7 @@ import AppKit
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
+    @State private var showDuplicates = false
 
     var body: some View {
         NavigationSplitView {
@@ -65,6 +66,22 @@ struct ContentView: View {
 
                 ToolbarItem(placement: .primaryAction) {
                     Button {
+                        let urls = appState.currentFiles
+                            .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
+                            .map { $0.url }
+                        Task {
+                            await DuplicateFinder.shared.scan(in: urls)
+                            showDuplicates = true
+                        }
+                    } label: {
+                        Image(systemName: "square.on.square")
+                    }
+                    .help("Find Duplicates in this folder")
+                    .disabled(DuplicateFinder.shared.isRunning)
+                }
+
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
                         appState.detailPanelVisible.toggle()
                     } label: {
                         Image(systemName: "sidebar.right")
@@ -94,6 +111,9 @@ struct ContentView: View {
                 .keyboardShortcut(.escape, modifiers: [])
                 .hidden()
         )
+        .sheet(isPresented: $showDuplicates) {
+            DuplicatesView(isPresented: $showDuplicates)
+        }
         .overlay(alignment: .bottom) {
             if AnalyzePipeline.shared.isRunning {
                 analyzeStatusBanner
