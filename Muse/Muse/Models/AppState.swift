@@ -64,6 +64,9 @@ final class AppState: ObservableObject {
     /// Q21: search defaults to current folder; toggle to search everywhere.
     @Published var searchEverywhere: Bool = false
 
+    /// Whether the chat panel is shown (only meaningful when ChatService.isAvailable).
+    @Published var chatPanelVisible: Bool = false
+
     // MARK: - Water shader
 
     @Published var fluidEnabled: Bool = false

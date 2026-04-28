@@ -25,6 +25,10 @@ struct ContentView: View {
                         DetailPanelView(file: selected)
                             .transition(.move(edge: .trailing))
                     }
+                    if appState.chatPanelVisible && ChatService.shared.isAvailable {
+                        ChatPanelView()
+                            .transition(.move(edge: .trailing))
+                    }
                 }
 
                 if let selected = appState.selectedFile, !appState.detailPanelVisible
@@ -92,6 +96,18 @@ struct ContentView: View {
                     }
                     .help(appState.detailPanelVisible ? "Hide details" : "Show details")
                     .disabled(appState.selectedFile == nil)
+                }
+
+                ToolbarItem(placement: .primaryAction) {
+                    if ChatService.shared.isAvailable {
+                        Button {
+                            appState.chatPanelVisible.toggle()
+                        } label: {
+                            Image(systemName: "bubble.left.and.text.bubble.right")
+                                .foregroundStyle(appState.chatPanelVisible ? Color.purple : Color.primary)
+                        }
+                        .help("Ask Muse")
+                    }
                 }
 
                 ToolbarItem(placement: .primaryAction) {
