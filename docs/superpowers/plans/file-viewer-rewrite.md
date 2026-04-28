@@ -56,10 +56,11 @@ Muse pivots from an **import-based image inspiration vault** to a **filesystem-n
 | Q23 | Distribution | **Mac App Store**, sandboxed, free forever. Apple Developer account already in place. Auto-updates via App Store. |
 | Q24 | Primary user persona | **Generalist** — managing a Downloads folder, Documents, miscellaneous archives. Defaults bend toward fast Quick Look + Open With; AI features available but not the front door. |
 | Q25 | Globe & water shader | **Keep both. Polish later.** Globe view reworked for current-folder content. Water shader stays as alt visualization for image folders. |
-| Q23a | Pricing | **Free.** No purchase, no subscriptions, no in-app purchases, no ads, no analytics, no crash reporting that leaves the device. Privacy nutrition label: zero data collected. |
+| Q23a | Pricing | **Free forever.** No purchase, no subscriptions, no in-app purchases, no ads. Privacy nutrition label: **Data Not Collected.** |
+| Q23a' | Network policy | **Zero network calls, ever.** No analytics, no telemetry, no update pings, no crash reporting that leaves the device, no auto-suggest fetches, no remote config, no fonts loaded from the web, no SVG resources fetched. The app does not request the network entitlement. Apple's built-in crash reports (Xcode → App Store Connect) are the only failure-signal channel — they're routed by Apple, not by Muse. |
 | Q23b | MCP (consequence of App Store) | **Dropped from v1.** Sandbox blocks Unix-socket IPC to external agents (Claude Desktop, Comet, Cursor). Replaced by **App Intents** for Shortcuts/Siri/Spotlight automation. If MCP becomes load-bearing later, it requires a direct-distribution build (Q23 reopens). |
 | Q23c | iCloud Drive support | **Yes — best practice.** A root can be `~/Library/Mobile Documents/com~apple~CloudDocs/…`. Honor `NSURLUbiquitousItemDownloadingStatusKey`; auto-trigger downloads on file access; show "downloading from iCloud" state in grid for `NSURLUbiquitousItemIsDownloadingKey`. |
-| Q23d | Sandbox entitlements | `com.apple.security.app-sandbox`, `com.apple.security.files.user-selected.read-only`, `com.apple.security.files.bookmarks.app-scope`. **Read-only on user files in v1.** Read-write requested in Phase 4 when dedup-to-Trash ships, with rationale in App Review notes. |
+| Q23d | Sandbox entitlements | `com.apple.security.app-sandbox`, `com.apple.security.files.user-selected.read-only`, `com.apple.security.files.bookmarks.app-scope`. **Read-only on user files in v1.** Read-write requested in Phase 4 when dedup-to-Trash ships, with rationale in App Review notes. **No `com.apple.security.network.client` entitlement** — the absence is enforcement; sandbox blocks any accidental network access at the OS level. |
 | Q23e | Onboarding flow | **TBD — design separately before Phase 0.5 implementation.** Generalist users need a clear first-folder-pick moment + brief explanation of what Muse does. Flow spec lives in a sibling plan doc. |
 | Q26 | Multi-root | **Multi-root, Finder-favorites style.** Sidebar shows roots as top-level groups; each independently navigable; starred folders pinned across all roots in their own section above. |
 | Q27 | Identity reconciliation | Byte-identical files at different paths = **one** `files` row with multiple `paths` children. **Tags shared across all paths of the same content.** Deliberate; documented for users. See §4 for the full decision matrix. |
@@ -212,6 +213,13 @@ The grid must render before files are hashed — hashing 100k files takes minute
 - **Foundation Models** (macOS 26+) — chat panel
 - **AppIntents** — Shortcuts/Siri
 - **NSWorkspace** — Open With… resolution and execution
+
+### Hard architectural invariant: no network
+- The app's `Info.plist` does **not** declare `NSAppTransportSecurity` exceptions.
+- The sandbox entitlements file does **not** include `com.apple.security.network.client` or `com.apple.security.network.server`.
+- No `URLSession`, `NSURLConnection`, `URLProtocol`, `Network.framework`, raw socket, or `Process` invocation that performs HTTP. Any of these in a code review = automatic reject.
+- Markdown rendering ignores remote `<img>` tags rather than fetching. SVG viewer's WKWebView gets a `WKWebpagePreferences` policy that blocks all network loads.
+- Any third-party Swift package added later goes through the same audit: zero network surface area.
 
 ---
 
