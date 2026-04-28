@@ -38,6 +38,10 @@ struct ContentView: View {
                     BreadcrumbView()
                 }
 
+                ToolbarItem(placement: .principal) {
+                    SearchBar()
+                }
+
                 ToolbarItem(placement: .primaryAction) {
                     sortMenu
                 }

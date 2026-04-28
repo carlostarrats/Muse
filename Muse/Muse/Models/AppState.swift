@@ -55,6 +55,15 @@ final class AppState: ObservableObject {
     /// Whether the right-side detail panel (tags, metadata) is visible.
     @Published var detailPanelVisible: Bool = false
 
+    /// Active search query. Empty when no search.
+    @Published var searchQuery: String = ""
+
+    /// True when search results, not folder contents, are showing in the grid.
+    @Published var isSearchActive: Bool = false
+
+    /// Q21: search defaults to current folder; toggle to search everywhere.
+    @Published var searchEverywhere: Bool = false
+
     // MARK: - Water shader
 
     @Published var fluidEnabled: Bool = false
@@ -173,6 +182,33 @@ final class AppState: ObservableObject {
 
     func resort() {
         currentFiles = SmartSorter.apply(sortMode, to: currentFiles)
+    }
+
+    // MARK: - Search
+
+    func runSearch(_ query: String) async {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            clearSearch()
+            return
+        }
+        let scope: SearchScope
+        if searchEverywhere {
+            scope = .everywhere
+        } else if let folder = selectedFolder {
+            scope = .currentFolder(folder.url)
+        } else {
+            scope = .everywhere
+        }
+        let results = await SearchService.search(query: trimmed, scope: scope)
+        isSearchActive = true
+        currentFiles = SmartSorter.apply(sortMode, to: results)
+    }
+
+    func clearSearch() {
+        searchQuery = ""
+        isSearchActive = false
+        reloadCurrentFiles()
     }
 
     func analyzeCurrentFolder() async {
