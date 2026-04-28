@@ -59,7 +59,7 @@ Muse pivots from an **import-based image inspiration vault** to a **filesystem-n
 | Q26 | Multi-root | **Multi-root, Finder-favorites style.** Sidebar shows roots as top-level groups; each independently navigable; starred folders pinned across all roots in their own section above. |
 | Q27 | Identity reconciliation | Byte-identical files at different paths = **one** `files` row with multiple `paths` children. **Tags shared across all paths of the same content.** Deliberate; documented for users. See §4 for the full decision matrix. |
 | Q28 | Captions | Captions come from **Vision**, not the LLM. Object/scene labels + OCR text + dominant color, concatenated and stored on `files.caption` for FTS indexing. (Foundation Models was wrong API for this.) |
-| Q29 | FileNode lifecycle | Three stages: `enumerated` (path known, no hash yet) → `seen` (hash known, deduped to a `files` row) → `indexed` (Vision pipeline complete). Grid renders from stage 1. See §3.1. |
+| Q29 | FileNode lifecycle | Three stages, **derived not stored**: `enumerated` (path row, `file_id` NULL) → `seen` (hashed, linked to a `files` row, no Vision yet) → `indexed` (feature print present). Grid renders from stage 1. See §3.1. |
 | Q30 | Path resurrection | Dead paths are kept; uniqueness is `UNIQUE(absolute_path) WHERE is_alive = 1`. Reviving a known dead path flips `is_alive = 1` and reuses the row + tags. |
 | Q31 | MCP transport | External `muse-mcp` CLI binary spawned by the agent; talks to Muse.app via Unix domain socket. Long-running tools return `jobId` + use MCP progress notifications. Binary content (thumbnails) via MCP resources, not base64 in JSON-RPC. |
 | Q32 | Tag uniqueness | `UNIQUE(file_id, label)`. Source enum (`manual`, `vision`); manual beats vision on conflict. |
@@ -233,7 +233,13 @@ The grid must render before files are hashed — hashing 100k files takes minute
 | `caption` | TEXT NULL | concatenated Vision outputs (set at stage `indexed`) |
 | `dominant_color` | TEXT NULL | hex |
 | `feature_print` | BLOB NULL | VNFeaturePrintObservation data |
-| `lifecycle_stage` | TEXT | `enumerated` / `seen` / `indexed` |
+
+**Lifecycle stage is derived, not stored.** A file's stage is computed from its rows:
+- `paths.file_id IS NULL` → `enumerated`
+- `paths.file_id IS NOT NULL AND files.feature_print IS NULL` → `seen`
+- `files.feature_print IS NOT NULL` → `indexed`
+
+Storing the stage explicitly was tempting but unrepresentable: at `enumerated`, no `files` row exists yet, so there's nowhere to put the column.
 
 ### `paths`
 | column | type | notes |
@@ -246,6 +252,7 @@ The grid must render before files are hashed — hashing 100k files takes minute
 
 **Indexes / uniqueness:**
 - `UNIQUE INDEX paths_alive_unique ON paths(absolute_path) WHERE is_alive = 1` — partial unique index. Allows path resurrection: a dead row can stay around with the same `absolute_path` while a new alive row exists, but never two alive rows for the same path.
+- `INDEX paths_file_id_idx ON paths(file_id)` — hot query: "all alive paths for file_id" runs constantly (grid selection, dedup grouping, copy-count badges).
 
 A file can have multiple paths (hardlinks, copies). Removing the last alive path is what makes a file "gone." Dead rows are pruned after 30 days unless their `files` row has tags or a feature print.
 
@@ -292,7 +299,7 @@ A file can have multiple paths (hardlinks, copies). Removing the last alive path
 | `is_suggested_keeper` | INTEGER | 1 if smart-suggested to keep |
 
 ### FTS5 virtual tables
-- `files_fts(content_hash, basename, ocr_text, caption)` — populated by Indexer
+- `files_fts(file_id UNINDEXED, basename, ocr_text, caption)` — keyed by immutable `files.id`, not the mutable `content_hash`. Avoids rewriting FTS rows on every edit-in-place.
 
 ### Vector index — explicit scaling rules
 - Feature prints stored as `BLOB` on `files.feature_print`.
@@ -303,17 +310,19 @@ A file can have multiple paths (hardlinks, copies). Removing the last alive path
 - HNSW / LSH not implemented in v1. Trigger to add: a real user with a 100k+ "everywhere" workflow that's painful in practice. Until then, scope-by-default is the cheaper answer.
 
 ### Identity reconciliation matrix
-The indexer encounters a path on disk. It computes the SHA-256 hash. Then:
+
+**Anchor point:** every row below describes the action taken **at the moment hashing completes for a previously-enumerated path** (or the equivalent moment when re-hashing detects a content change). Path enumeration alone (the `enumerated` stage) just creates a `paths` row with `file_id = NULL` — no reconciliation happens until there's a hash to reconcile.
 
 | Path state | Hash state | Interpretation | Action |
 |---|---|---|---|
-| New path | New hash | Brand new file | Create `files` row + `paths` row, both alive |
-| New path | Existing hash | Copy / hardlink of known content | Keep one `files` row; add new alive `paths` row pointing to it. **Tags are shared across all alive paths.** |
-| Known alive path | Same hash | Unchanged file | Touch `last_seen_at` on `files`; nothing else |
-| Known alive path | New hash | File was edited in place | Update `files.content_hash` to new value. **Tags remain attached** — they belong to the file row, which is identified through the path. |
-| Known alive path absent on disk | n/a | File deleted or moved away | Mark `paths.is_alive = 0`. If no other alive paths point to this `files` row, the file is "gone" but its row + tags persist for 30 days in case it reappears. |
-| New path identical to a known **dead** path | New hash | Path-resurrection scenario (e.g. external drive remounted; file replaced after deletion) | If new hash matches the dead row's `files.content_hash`, **flip `is_alive = 1`** on the dead row, reuse `files` row + tags. If new hash is different, create a fresh `files` row, link a new alive `paths` row, leave the dead row in place to be pruned. |
-| New path | Hash already attached via a *different* current alive path | Copy of an existing file | Same as "new path, existing hash" — share the `files` row. |
+| Newly-enumerated path | Hash unknown to DB | Brand new file | Create `files` row; set `paths.file_id` to it. Both alive. |
+| Newly-enumerated path | Hash matches an existing alive `files` row | Copy / hardlink of known content | Set `paths.file_id` to the existing row. **Tags are shared across all alive paths.** |
+| Known alive path | Same hash as before | Unchanged file | Touch `last_seen_at` on `files`. |
+| Known alive path | New hash, no other `files` row has it | Edited in place | Update `files.content_hash` on the row this path points to. **Tags remain attached.** |
+| Known alive path | New hash matches a *different* existing `files` row | Edited to be byte-identical to another known file (rare but real — e.g. paste, copy-merge) | Re-link `paths.file_id` to the matching row. If the previous `files` row now has zero alive paths, mark its remaining dead paths as orphaned and prune the row after the 30-day grace window. **Tags from the previous row are NOT merged** — the path now belongs to the matching row's tag set. |
+| Known alive path absent on disk | n/a | File deleted or moved away | Mark `paths.is_alive = 0`. If no other alive paths point to this `files` row, the file is "gone" but row + tags persist 30 days. |
+| Newly-enumerated path identical to a known **dead** path | Hash matches the dead row's `files` | Path-resurrection (drive remounted, file restored from backup) | Flip `is_alive = 1` on the dead row, reuse `files` row + tags. |
+| Newly-enumerated path identical to a known **dead** path | Hash differs from the dead row's `files` | Path was reused with new content | Create a fresh `files` row, link a new alive `paths` row, leave the dead row in place to be pruned. |
 | Lightroom-style export to a new path | New hash | Derivative of a known original | Treated as a brand-new file. **Tags do NOT auto-attach.** No special detection — we don't track "this came from that," and we don't pretend to. |
 
 **Consequence to know:** if you copy `logo.png` into three folders, it's one row with three paths. Tagging "blue" tags all three. Deleting one path doesn't remove the tag. This is deliberate — matches Lightroom's "virtual copy" model and avoids the "same image, different tag set in each copy" footgun.
@@ -357,6 +366,12 @@ Asset detection is by extension first, content sniffing (magic bytes / UTType) a
   - Dominant color extraction via `CIAreaAverage`
   - **Caption** (`files.caption`) is composed by `CaptionBuilder` from the above signals — top scene/object labels + OCR-text snippet + dominant color name. Plain text, indexed in FTS5. **Not produced by Foundation Models.**
 
+- **Vision partial-failure policy.** Pipeline requests run independently. The file advances to stage `indexed` if `VNGenerateImageFeaturePrintRequest` succeeds, even if classify/OCR/face/color fail (each is logged with the underlying error). A subsequent "Analyze" call is a clean retry — succeeded steps are skipped (already populated), failed steps are re-attempted. If feature print itself fails, the file stays at stage `seen` and the user is notified once per Analyze run.
+
+- **Indexer priority.** Hashing the **active folder** (the one currently visible in the grid) runs on a high-priority queue with a small worker pool. Every other root or subfolder is best-effort on a single low-priority background worker. When the user navigates to a different folder, the active queue is drained first before the new folder takes priority. Without this, opening a freshly-added 100k root would starve everything else.
+
+- **Job persistence.** `JobStore` is in-memory only in v1. Quitting Muse cancels in-flight scans (`runDuplicateScan`, `runAnalyze`). Persisting jobs to SQLite + resuming on launch is a post-v1 feature, gated on real demand.
+
 - **"Find Duplicates"** runs three clusterers in parallel and merges results into `DuplicateGroup`s with `reason` annotated.
 
 - **Smart Sort** dropdown applies:
@@ -391,7 +406,7 @@ Asset detection is by extension first, content sniffing (magic bytes / UTType) a
 
 - The `muse-mcp` CLI is a thin bridge: speaks MCP stdio JSON-RPC outbound, forwards everything to Muse.app over a Unix socket. ~200 lines of Swift. Bundled inside `Muse.app/Contents/MacOS/`.
 - Users add Muse to Claude Desktop's config the same way as any other MCP server, pointing at the bundled CLI binary.
-- If Muse.app isn't running, `muse-mcp` either launches it (clean exit if user blocks) or returns errors with "open Muse to enable agent access."
+- **If Muse.app isn't running, `muse-mcp` auto-launches it** via `NSWorkspace.openApplication(at:)` and waits up to 5 seconds for the socket to come up before failing. Documented for users: agent activity can wake Muse. (Returning errors instead would push platform awareness onto every MCP client; clients shouldn't need to know that Muse's tools live behind a GUI process.)
 - **Q23 interaction:** sandboxed App Store builds may not be able to expose Unix sockets readable by external processes. This is one of the strongest arguments for direct distribution. If App Store is chosen, MCP becomes a stretch goal or moves to a separate CLI-only build.
 
 **Long-running tools** use a job pattern:
