@@ -2,9 +2,9 @@
 //  ContentView.swift
 //  Muse
 //
-//  Phase 0.5 main shell: NavigationSplitView with the sidebar +
-//  breadcrumb toolbar + grid. Selected file pops up the viewer overlay
-//  via ViewerRouter.
+//  Phase 3 main shell: NavigationSplitView with sidebar + grid +
+//  optional right detail panel + breadcrumb/sort/analyze toolbar.
+//  Selected file pops up the viewer overlay via ViewerRouter.
 //
 
 import SwiftUI
@@ -18,9 +18,16 @@ struct ContentView: View {
             SidebarView()
         } detail: {
             ZStack {
-                GridView()
+                HStack(spacing: 0) {
+                    GridView()
+                    if appState.detailPanelVisible, let selected = appState.selectedFile {
+                        DetailPanelView(file: selected)
+                            .transition(.move(edge: .trailing))
+                    }
+                }
 
-                if let selected = appState.selectedFile {
+                if let selected = appState.selectedFile, !appState.detailPanelVisible
+                    || (appState.detailPanelVisible && shouldShowFullViewer) {
                     ViewerRouter(file: selected)
                         .transition(.opacity)
                 }
@@ -28,6 +35,10 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItem(placement: .navigation) {
                     BreadcrumbView()
+                }
+
+                ToolbarItem(placement: .primaryAction) {
+                    sortMenu
                 }
 
                 ToolbarItem(placement: .primaryAction) {
@@ -44,6 +55,26 @@ struct ContentView: View {
 
                 ToolbarItem(placement: .primaryAction) {
                     Button {
+                        Task { await appState.analyzeCurrentFolder() }
+                    } label: {
+                        Image(systemName: "sparkles")
+                    }
+                    .help("Analyze current folder (AI tag + OCR + color)")
+                    .disabled(AnalyzePipeline.shared.isRunning)
+                }
+
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        appState.detailPanelVisible.toggle()
+                    } label: {
+                        Image(systemName: "sidebar.right")
+                    }
+                    .help(appState.detailPanelVisible ? "Hide details" : "Show details")
+                    .disabled(appState.selectedFile == nil)
+                }
+
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
                         appState.fluidEnabled.toggle()
                     } label: {
                         Image(systemName: "drop.fill")
@@ -54,16 +85,78 @@ struct ContentView: View {
             }
             .toolbarBackground(.ultraThinMaterial, for: .windowToolbar)
             .animation(.easeInOut(duration: 0.18), value: appState.selectedFile?.id)
+            .animation(.easeInOut(duration: 0.22), value: appState.detailPanelVisible)
         }
         .background(
             Button(action: {
                 if appState.selectedFile != nil { appState.selectedFile = nil }
-            }) {
-                EmptyView()
-            }
-            .keyboardShortcut(.escape, modifiers: [])
-            .hidden()
+            }) { EmptyView() }
+                .keyboardShortcut(.escape, modifiers: [])
+                .hidden()
         )
+        .overlay(alignment: .bottom) {
+            if AnalyzePipeline.shared.isRunning {
+                analyzeStatusBanner
+            }
+        }
+    }
+
+    private var shouldShowFullViewer: Bool {
+        // The viewer is the big preview. When the detail panel is open + a file
+        // is selected, show both — viewer beside panel.
+        true
+    }
+
+    @ViewBuilder
+    private var sortMenu: some View {
+        Menu {
+            Section("Standard") {
+                ForEach([SortMode.dateModified, .dateCreated, .name, .size, .kind], id: \.self) { mode in
+                    Button {
+                        appState.sortMode = mode
+                        appState.resort()
+                    } label: {
+                        Label(mode.displayName, systemImage: appState.sortMode == mode ? "checkmark" : "")
+                    }
+                }
+            }
+            Section("Smart") {
+                ForEach([SortMode.dominantColor, .faceCount, .hasText], id: \.self) { mode in
+                    Button {
+                        appState.sortMode = mode
+                        appState.resort()
+                    } label: {
+                        Label(mode.displayName, systemImage: appState.sortMode == mode ? "checkmark" : "")
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "arrow.up.arrow.down")
+        }
+        .help("Sort: \(appState.sortMode.displayName)")
+    }
+
+    @ViewBuilder
+    private var analyzeStatusBanner: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 8) {
+                ProgressView(value: AnalyzePipeline.shared.progress)
+                    .progressViewStyle(.linear)
+                    .frame(maxWidth: 240)
+                if !AnalyzePipeline.shared.current.isEmpty {
+                    Text(AnalyzePipeline.shared.current)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+        }
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(.horizontal, 12)
+        .padding(.bottom, 12)
     }
 }
 

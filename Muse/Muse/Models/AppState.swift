@@ -49,6 +49,12 @@ final class AppState: ObservableObject {
     /// Q33: show dotfiles / hidden files. Default off.
     @Published var showHidden: Bool = false
 
+    /// Active sort mode (default = date modified desc per Q24 generalist).
+    @Published var sortMode: SortMode = .dateModified
+
+    /// Whether the right-side detail panel (tags, metadata) is visible.
+    @Published var detailPanelVisible: Bool = false
+
     // MARK: - Water shader
 
     @Published var fluidEnabled: Bool = false
@@ -156,11 +162,31 @@ final class AppState: ObservableObject {
             currentFiles = []
             return
         }
+        let raw: [FileNode]
         if showSubfolders {
-            currentFiles = recursiveFiles(at: folder.url)
+            raw = recursiveFiles(at: folder.url)
         } else {
-            currentFiles = FolderReader.files(in: folder.url, showHidden: showHidden)
+            raw = FolderReader.files(in: folder.url, showHidden: showHidden)
         }
+        currentFiles = SmartSorter.apply(sortMode, to: raw)
+    }
+
+    func resort() {
+        currentFiles = SmartSorter.apply(sortMode, to: currentFiles)
+    }
+
+    func analyzeCurrentFolder() async {
+        let urls = currentFiles
+            .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
+            .map { $0.url }
+        await AnalyzePipeline.shared.analyze(folder: urls)
+        // Re-sort in case visual signals just landed
+        resort()
+    }
+
+    func analyzeSelected() async {
+        guard let url = selectedFile?.url else { return }
+        await AnalyzePipeline.shared.analyze(file: url)
     }
 
     private func recursiveFiles(at url: URL) -> [FileNode] {
