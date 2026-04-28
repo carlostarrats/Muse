@@ -67,9 +67,14 @@ final class AppState: ObservableObject {
     /// Whether the chat panel is shown (only meaningful when ChatService.isAvailable).
     @Published var chatPanelVisible: Bool = false
 
+    /// Grid vs Globe view mode for the active folder.
+    enum ViewMode: String { case grid, globe }
+    @Published var viewMode: ViewMode = .grid
+
     // MARK: - Water shader
 
     @Published var fluidEnabled: Bool = false
+    @Published var fluidViewportSize: CGSize = .zero
     let fluidSim = FluidSim()
     @Published var fluidDispImage: Image = FluidSim.neutralImage
     private var fluidCancellable: AnyCancellable?

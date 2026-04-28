@@ -17,6 +17,7 @@ struct MuseApp: App {
                 .environmentObject(appState)
                 .task {
                     appState.fluidSim.start()
+                    ThumbnailCache.shared.enforceDiskCap()
                 }
         }
 

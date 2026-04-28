@@ -20,7 +20,16 @@ struct ContentView: View {
         } detail: {
             ZStack {
                 HStack(spacing: 0) {
-                    GridView()
+                    Group {
+                        switch appState.viewMode {
+                        case .grid:
+                            GridView()
+                        case .globe:
+                            GlobeView()
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
                     if appState.detailPanelVisible, let selected = appState.selectedFile {
                         DetailPanelView(file: selected)
                             .transition(.move(edge: .trailing))
@@ -44,6 +53,15 @@ struct ContentView: View {
 
                 ToolbarItem(placement: .principal) {
                     SearchBar()
+                }
+
+                ToolbarItem(placement: .primaryAction) {
+                    Picker("View", selection: $appState.viewMode) {
+                        Image(systemName: "square.grid.2x2").tag(AppState.ViewMode.grid)
+                        Image(systemName: "globe").tag(AppState.ViewMode.globe)
+                    }
+                    .pickerStyle(.segmented)
+                    .help("Switch between grid and globe views")
                 }
 
                 ToolbarItem(placement: .primaryAction) {

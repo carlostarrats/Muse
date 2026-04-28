@@ -17,6 +17,7 @@ struct GridView: View {
     private let spacing: CGFloat = 16
 
     var body: some View {
+        GeometryReader { geo in
         ScrollView {
             if appState.currentFiles.isEmpty {
                 emptyState
@@ -48,6 +49,28 @@ struct GridView: View {
             }
         }
         .background(Color(NSColor.windowBackgroundColor))
+        .coordinateSpace(name: "gridViewport")
+        .onContinuousHover { phase in
+            switch phase {
+            case .active(let location):
+                if appState.fluidEnabled {
+                    appState.fluidSim.setMouse(location)
+                    appState.fluidSim.viewportSize = geo.size
+                    appState.fluidViewportSize = geo.size
+                }
+            case .ended:
+                appState.fluidSim.clearMouse()
+            }
+        }
+        .onChange(of: geo.size) { _, newSize in
+            appState.fluidSim.viewportSize = newSize
+            appState.fluidViewportSize = newSize
+        }
+        .onAppear {
+            appState.fluidSim.viewportSize = geo.size
+            appState.fluidViewportSize = geo.size
+        }
+        }
     }
 
     private var emptyState: some View {
@@ -65,10 +88,12 @@ struct GridView: View {
 }
 
 private struct TileView: View {
+    @EnvironmentObject var appState: AppState
     let file: FileNode
     let size: CGFloat
 
     @State private var thumbnail: NSImage?
+    @State private var tileFrame: CGRect = .zero
 
     var body: some View {
         VStack(spacing: 6) {
@@ -86,6 +111,26 @@ private struct TileView: View {
                         .font(.system(size: 36))
                         .foregroundStyle(.secondary)
                 }
+            }
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { tileFrame = proxy.frame(in: .named("gridViewport")) }
+                        .onChange(of: proxy.frame(in: .named("gridViewport"))) { _, newFrame in
+                            tileFrame = newFrame
+                        }
+                }
+            )
+            .applyIf(appState.fluidEnabled && (file.kind == .image || file.kind == .raw || file.kind == .psd)) { view in
+                view.layerEffect(
+                    ShaderLibrary.fluidDistort(
+                        .image(appState.fluidDispImage),
+                        .float2(Float(tileFrame.minX), Float(tileFrame.minY)),
+                        .float2(Float(appState.fluidViewportSize.width),
+                                Float(appState.fluidViewportSize.height))
+                    ),
+                    maxSampleOffset: CGSize(width: 50, height: 50)
+                )
             }
             Text(file.basename)
                 .font(.caption)
@@ -118,5 +163,14 @@ private struct TileView: View {
         case .folder: return "folder"
         case .unknown: return "doc"
         }
+    }
+}
+
+// MARK: - View helper
+
+private extension View {
+    @ViewBuilder
+    func applyIf<R: View>(_ condition: Bool, transform: (Self) -> R) -> some View {
+        if condition { transform(self) } else { self }
     }
 }
