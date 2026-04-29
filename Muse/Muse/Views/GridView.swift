@@ -2,244 +2,175 @@
 //  GridView.swift
 //  Muse
 //
-//  Created by Carlos Tarrats on 3/19/26.
+//  Phase 0.5 grid driven by FileNode. Lazy-loads thumbnails via
+//  ThumbnailCache. Shows a kind-specific icon for non-image kinds when
+//  the thumbnail is missing or still generating.
 //
 
 import SwiftUI
 import AppKit
 
-// MARK: - GridView
-
 struct GridView: View {
-
     @EnvironmentObject var appState: AppState
 
-    /// Asynchronously loaded thumbnails keyed by image ID.
-    @State private var thumbnailCache: [UUID: NSImage] = [:]
-
-    /// Current mouse position in the grid's coordinate space, normalised to [-1, 1].
-    @State private var normalisedCursor: CGPoint = .zero
+    private let tileSize: CGFloat = 160
+    private let spacing: CGFloat = 16
 
     var body: some View {
-        GeometryReader { geometry in
-            let columnCount = columns(for: geometry.size.width)
-
-            ScrollView {
-                MasonryLayout(columns: columnCount, spacing: 20) {
-                    ForEach(appState.filteredImages) { image in
-                        let isSelected = appState.selectedImages.contains(image.id)
-                        TileView(
-                            image: image,
-                            thumbnail: thumbnailCache[image.id],
-                            isSelected: isSelected,
-                            dispImage: appState.fluidDispImage,
-                            viewportSize: geometry.size,
-                            fluidEnabled: appState.fluidEnabled
-                        )
-                        .overlay(
-                            ClickHandlerView(
-                                onSingleClick: {
-                                    if NSEvent.modifierFlags.contains(.command) {
-                                        appState.selectedImage = nil
-                                        appState.toggleImageSelection(image)
-                                        appState.detailPanelVisible = !appState.selectedImages.isEmpty
-                                    } else {
-                                        appState.selectedImages.removeAll()
-                                        appState.selectedImages.insert(image.id)
-                                        appState.selectedImage = nil
-                                        appState.detailPanelVisible = false
-                                    }
-                                },
-                                onDoubleClick: {
-                                    appState.selectedImages.removeAll()
-                                    appState.selectedImage = image
-                                    appState.detailPanelVisible = true
-                                }
+        GeometryReader { geo in
+        ScrollView {
+            if appState.currentFiles.isEmpty {
+                emptyState
+            } else {
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: tileSize), spacing: spacing)],
+                    spacing: spacing
+                ) {
+                    ForEach(appState.currentFiles) { file in
+                        TileView(file: file, size: tileSize)
+                            .onTapGesture(count: 2) {
+                                NSWorkspace.shared.open(file.url)
+                            }
+                            .onTapGesture {
+                                appState.selectedFile = file
+                            }
+                            .background(
+                                appState.selectedFile?.id == file.id
+                                ? Color.accentColor.opacity(0.18)
+                                : Color.clear
                             )
-                        )
-                        .onAppear {
-                            loadThumbnail(for: image)
-                        }
+                            .cornerRadius(8)
+                            .contextMenu {
+                                OpenWithMenu(url: file.url)
+                            }
                     }
                 }
                 .padding(20)
             }
-            .background(Color(NSColor.windowBackgroundColor))
-            // Global parallax tilt on cursor movement — subtle and smooth
-            .rotation3DEffect(
-                .degrees(normalisedCursor.y * 1.2),
-                axis: (x: 1, y: 0, z: 0)
-            )
-            .rotation3DEffect(
-                .degrees(normalisedCursor.x * 1.2),
-                axis: (x: 0, y: 1, z: 0)
-            )
-            .onContinuousHover { phase in
-                switch phase {
-                case .active(let location):
-                    if appState.fluidEnabled {
-                        appState.fluidSim.setMouse(location)
-                    }
-                    withAnimation(.interactiveSpring(response: 0.6, dampingFraction: 0.7)) {
-                        normalisedCursor = normalise(location, in: geometry.size)
-                    }
-                case .ended:
-                    appState.fluidSim.clearMouse()
-                    withAnimation(.interactiveSpring(response: 0.8, dampingFraction: 0.6)) {
-                        normalisedCursor = .zero
-                    }
+        }
+        .background(Color(NSColor.windowBackgroundColor))
+        .coordinateSpace(name: "gridViewport")
+        .onContinuousHover { phase in
+            switch phase {
+            case .active(let location):
+                if appState.fluidEnabled {
+                    appState.fluidSim.setMouse(location)
+                    appState.fluidSim.viewportSize = geo.size
+                    appState.fluidViewportSize = geo.size
                 }
+            case .ended:
+                appState.fluidSim.clearMouse()
             }
-            .onChange(of: geometry.size) { _, newSize in
-                appState.fluidSim.viewportSize = newSize
-            }
-            .onAppear {
-                appState.fluidSim.viewportSize = geometry.size
-            }
-            .coordinateSpace(name: "gridViewport")
+        }
+        .onChange(of: geo.size) { _, newSize in
+            appState.fluidSim.viewportSize = newSize
+            appState.fluidViewportSize = newSize
+        }
+        .onAppear {
+            appState.fluidSim.viewportSize = geo.size
+            appState.fluidViewportSize = geo.size
+        }
         }
     }
 
-    // MARK: - Helpers
-
-    private func columns(for width: CGFloat) -> Int {
-        if width < 800 { return 3 }
-        if width > 1400 { return 5 }
-        return 4
-    }
-
-    private func normalise(_ point: CGPoint, in size: CGSize) -> CGPoint {
-        guard size.width > 0, size.height > 0 else { return .zero }
-        let x = (point.x / size.width) * 2 - 1
-        let y = (point.y / size.height) * 2 - 1
-        return CGPoint(x: x, y: y)
-    }
-
-    private func loadThumbnail(for image: MuseImage) {
-        guard thumbnailCache[image.id] == nil else { return }
-        // Prefer full-res image for grid quality, fall back to thumbnail
-        let url = image.resolvedStorageURL ?? image.resolvedThumbnailURL
-        guard let url else { return }
-
-        Task.detached(priority: .utility) {
-            guard let loaded = NSImage(contentsOf: url) else { return }
-            await MainActor.run {
-                thumbnailCache[image.id] = loaded
-            }
+    private var emptyState: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "tray")
+                .font(.system(size: 48))
+                .foregroundStyle(.tertiary)
+            Text(appState.selectedFolder == nil ? "Select a folder" : "Empty folder")
+                .font(.title3)
+                .foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(40)
     }
 }
 
-// MARK: - TileView
-
 private struct TileView: View {
+    @EnvironmentObject var appState: AppState
+    let file: FileNode
+    let size: CGFloat
 
-    let image: MuseImage
-    let thumbnail: NSImage?
-    let isSelected: Bool
-    let dispImage: Image
-    let viewportSize: CGSize
-    let fluidEnabled: Bool
-
-    @State private var isHovered = false
+    @State private var thumbnail: NSImage?
     @State private var tileFrame: CGRect = .zero
 
-    private static let limeGreen = Color(red: 0.2, green: 1.0, blue: 0.0)
-
     var body: some View {
-        tileContent
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(
+        VStack(spacing: 6) {
+            ZStack {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(isSelected ? Self.limeGreen : Color.clear, lineWidth: 2)
+                    .fill(Color(NSColor.controlBackgroundColor))
+                    .frame(width: size, height: size)
+                if let img = thumbnail {
+                    Image(nsImage: img)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: size - 16, height: size - 16)
+                } else {
+                    Image(systemName: iconName(for: file.kind))
+                        .font(.system(size: 36))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { tileFrame = proxy.frame(in: .named("gridViewport")) }
+                        .onChange(of: proxy.frame(in: .named("gridViewport"))) { _, newFrame in
+                            tileFrame = newFrame
+                        }
+                }
             )
-            .shadow(color: isSelected ? Self.limeGreen.opacity(0.6) : .black.opacity(0.12), radius: isSelected ? 12 : 6, x: 0, y: isSelected ? 0 : 3)
-            .shadow(color: .black.opacity(isHovered ? 0.1 : 0), radius: 10, x: 0, y: 5)
-            .applyIf(fluidEnabled) { view in
+            .applyIf(appState.fluidEnabled && (file.kind == .image || file.kind == .raw || file.kind == .psd)) { view in
                 view.layerEffect(
                     ShaderLibrary.fluidDistort(
-                        .image(dispImage),
+                        .image(appState.fluidDispImage),
                         .float2(Float(tileFrame.minX), Float(tileFrame.minY)),
-                        .float2(Float(viewportSize.width), Float(viewportSize.height))
+                        .float2(Float(appState.fluidViewportSize.width),
+                                Float(appState.fluidViewportSize.height))
                     ),
                     maxSampleOffset: CGSize(width: 50, height: 50)
                 )
             }
-            .background(GeometryReader { geo in
-                Color.clear
-                    .onAppear { tileFrame = geo.frame(in: .named("gridViewport")) }
-                    .onChange(of: geo.frame(in: .named("gridViewport"))) { _, newFrame in
-                        tileFrame = newFrame
-                    }
-            })
-            .animation(.easeOut(duration: 0.18), value: isHovered)
-            .animation(.easeOut(duration: 0.18), value: isSelected)
-            .onHover { hovering in
-                isHovered = hovering
-            }
+            Text(file.basename)
+                .font(.caption)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(width: size)
+        }
+        .frame(width: size + 12)
+        .padding(.vertical, 4)
+        .task(id: file.url) {
+            thumbnail = await ThumbnailCache.shared.thumbnail(
+                for: file.url,
+                size: CGSize(width: size, height: size)
+            )
+        }
     }
 
-    @ViewBuilder
-    private var tileContent: some View {
-        if let nsImage = thumbnail {
-            Image(nsImage: nsImage)
-                .resizable()
-                .scaledToFit()
-                .scaleEffect(isHovered ? 1.08 : 1.0)
-                .animation(.easeOut(duration: 0.3), value: isHovered)
-        } else {
-            let ratio: CGFloat = {
-                if let w = image.width, let h = image.height, w > 0 {
-                    return CGFloat(w) / CGFloat(h)
-                }
-                return 1.0
-            }()
-            Color(NSColor.systemGray)
-                .opacity(0.3)
-                .aspectRatio(ratio, contentMode: .fit)
+    private func iconName(for kind: AssetKind) -> String {
+        switch kind {
+        case .image, .raw, .psd, .svg: return "photo"
+        case .pdf: return "doc.richtext"
+        case .text, .markdown: return "doc.text"
+        case .code: return "chevron.left.forwardslash.chevron.right"
+        case .office: return "doc.text"
+        case .video: return "film"
+        case .audio: return "waveform"
+        case .model3d: return "cube"
+        case .font: return "textformat"
+        case .archive: return "archivebox"
+        case .folder: return "folder"
+        case .unknown: return "doc"
         }
     }
 }
 
-// MARK: - ClickHandlerView
-
-/// An NSView-backed click handler that fires single and double clicks instantly
-/// without the SwiftUI gesture disambiguation delay.
-private struct ClickHandlerView: NSViewRepresentable {
-    var onSingleClick: () -> Void
-    var onDoubleClick: () -> Void
-
-    func makeNSView(context: Context) -> ClickNSView {
-        let view = ClickNSView()
-        view.onSingleClick = onSingleClick
-        view.onDoubleClick = onDoubleClick
-        return view
-    }
-
-    func updateNSView(_ nsView: ClickNSView, context: Context) {
-        nsView.onSingleClick = onSingleClick
-        nsView.onDoubleClick = onDoubleClick
-    }
-}
-
-private class ClickNSView: NSView {
-    var onSingleClick: (() -> Void)?
-    var onDoubleClick: (() -> Void)?
-
-    override func mouseDown(with event: NSEvent) {
-        if event.clickCount >= 2 {
-            onDoubleClick?()
-        } else {
-            onSingleClick?()
-        }
-    }
-}
-
-// MARK: - View Helper
+// MARK: - View helper
 
 private extension View {
     @ViewBuilder
-    func applyIf<Result: View>(_ condition: Bool, transform: (Self) -> Result) -> some View {
+    func applyIf<R: View>(_ condition: Bool, transform: (Self) -> R) -> some View {
         if condition { transform(self) } else { self }
     }
 }

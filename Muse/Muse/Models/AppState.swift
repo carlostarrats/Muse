@@ -2,326 +2,320 @@
 //  AppState.swift
 //  Muse
 //
-//  Created by Carlos Tarrats on 3/19/26.
+//  Phase 0.5 — filesystem-native top-level state. Holds:
+//  - Roots (user-selected folders, persisted via security-scoped bookmarks)
+//  - Folder tree per active root
+//  - Currently selected folder + its files
+//  - Currently selected file (for preview)
+//  - FSEvents watcher for live disk sync (Q3)
+//  - Show-subfolders toggle (Q2 Adobe Bridge style)
+//  - Show-hidden-files toggle (Q33)
+//  - Water shader toggle (Q25)
 //
 
 import Foundation
 import Combine
 import SwiftUI
 
-// MARK: - View Mode
-
-enum ViewMode: Equatable {
-    case grid
-    case universe
-    case globe(collectionID: UUID)
-    case folder
-}
-
-/// Central state container for the Muse app. Owns all data and coordinates
-/// between the database, repository, and import subsystems.
 @MainActor
 final class AppState: ObservableObject {
 
-    // MARK: - Published Properties
+    // MARK: - Roots & stars
 
-    /// All images loaded from the database.
-    @Published var images: [MuseImage] = []
+    let bookmarks = BookmarkStore()
+    let stars = StarStore()
 
-    /// All collections loaded from the database.
-    @Published var collections: [MuseCollection] = []
+    /// Currently active root (the one whose tree is in the sidebar).
+    @Published var activeRoot: Root?
 
-    /// The currently focused image (drives the detail panel).
-    @Published var selectedImage: MuseImage?
+    /// Root nodes for the sidebar tree, one per active root.
+    @Published var rootNodes: [FolderNode] = []
 
-    /// Whether the right-side detail panel is visible.
+    // MARK: - Active folder + grid contents
+
+    @Published var selectedFolder: FolderNode?
+
+    /// Files in the selected folder (or, if recursive, including subfolders).
+    @Published var currentFiles: [FileNode] = []
+
+    /// Currently selected file (drives preview/detail).
+    @Published var selectedFile: FileNode?
+
+    // MARK: - Modes
+
+    /// Q2: include subfolders in the grid contents.
+    @Published var showSubfolders: Bool = false
+
+    /// Q33: show dotfiles / hidden files. Default off.
+    @Published var showHidden: Bool = false
+
+    /// Active sort mode (default = date modified desc per Q24 generalist).
+    @Published var sortMode: SortMode = .dateModified
+
+    /// Whether the right-side detail panel (tags, metadata) is visible.
     @Published var detailPanelVisible: Bool = false
 
-    /// Multi-selection set for batch operations (Cmd+click).
-    @Published var selectedImages: Set<UUID> = []
-
-    /// The active search filter string.
+    /// Active search query. Empty when no search.
     @Published var searchQuery: String = ""
 
-    /// Mirrors `ImportManager.isImporting` in real-time for top-level UI observation.
-    @Published var isImporting: Bool = false
+    /// True when search results, not folder contents, are showing in the grid.
+    @Published var isSearchActive: Bool = false
 
-    /// The current view mode (grid, universe, globe, folder).
+    /// Q21: search defaults to current folder; toggle to search everywhere.
+    @Published var searchEverywhere: Bool = false
+
+    /// Whether the chat panel is shown (only meaningful when ChatService.isAvailable).
+    @Published var chatPanelVisible: Bool = false
+
+    /// Grid vs Globe view mode for the active folder.
+    enum ViewMode: String { case grid, globe }
     @Published var viewMode: ViewMode = .grid
 
-    /// Filter: selected collection ID. Nil means show all.
-    @Published var filterCollectionID: UUID?
+    // MARK: - Water shader
 
-    /// Filter: selected tag labels. Empty means no tag filter.
-    @Published var filterTags: Set<String> = []
-
-    /// All unique tag labels available for filtering.
-    @Published var allTagLabels: [String] = []
-
-    /// Image IDs matching the current tag filter (cached).
-    @Published var tagFilteredImageIDs: Set<UUID>?
-
-    // MARK: - Dependencies
-
-    let databaseManager: DatabaseManager
-    private let repository: ImageRepository?
-    let importManager: ImportManager?
-
-    /// Keeps the Combine subscription alive for the lifetime of AppState.
-    private var importCancellable: AnyCancellable?
-
-    /// Fluid distortion simulation — shared across all views.
+    @Published var fluidEnabled: Bool = false
+    @Published var fluidViewportSize: CGSize = .zero
     let fluidSim = FluidSim()
-
-    /// Mirrors fluidSim.dispImage so SwiftUI observes changes.
     @Published var fluidDispImage: Image = FluidSim.neutralImage
     private var fluidCancellable: AnyCancellable?
 
-    /// Whether the water-ripple fluid distortion effect is enabled.
-    @Published var fluidEnabled: Bool = false
+    // MARK: - Watcher
 
-    // MARK: - Init
+    private var watcher: FolderWatcher?
+    private var bookmarksCancellable: AnyCancellable?
 
     init() {
-        let db = DatabaseManager()
-        databaseManager = db
-
-        if let queue = db.dbQueue {
-            let repo = ImageRepository(dbQueue: queue)
-            repository = repo
-            let manager = ImportManager(repository: repo)
-            importManager = manager
-            // Mirror ImportManager.isImporting so the progress banner reacts immediately.
-            importCancellable = manager.$isImporting
-                .receive(on: RunLoop.main)
-                .assign(to: \.isImporting, on: self)
-        } else {
-            repository = nil
-            importManager = nil
-        }
-
-        // Forward fluid sim displacement image, throttled to 30fps for SwiftUI perf
+        // Forward fluid sim displacement, throttled
         fluidCancellable = fluidSim.$dispImage
             .throttle(for: .milliseconds(33), scheduler: RunLoop.main, latest: true)
             .assign(to: \.fluidDispImage, on: self)
-    }
 
-    // MARK: - Computed Properties
+        rebuildRootNodes()
+        bookmarksCancellable = bookmarks.$roots
+            .sink { [weak self] _ in self?.rebuildRootNodes() }
 
-    /// Images filtered by search query, collection, and tag filters.
-    var filteredImages: [MuseImage] {
-        var result = images
-
-        // Collection filter
-        if let collectionID = filterCollectionID {
-            result = result.filter { $0.collectionID == collectionID }
-        }
-
-        // Tag filter
-        if let tagIDs = tagFilteredImageIDs, !filterTags.isEmpty {
-            result = result.filter { tagIDs.contains($0.id) }
-        }
-
-        // Search query
-        let query = searchQuery.trimmingCharacters(in: .whitespaces)
-        if !query.isEmpty {
-            let lowercased = query.lowercased()
-            result = result.filter { image in
-                image.fileName.lowercased().contains(lowercased) ||
-                image.notes.lowercased().contains(lowercased)
+        // App Intents wiring
+        NotificationCenter.default.addObserver(
+            forName: .museOpenFolder, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let url = note.userInfo?["url"] as? URL else { return }
+            Task { @MainActor in
+                self?.openFromIntent(url: url)
             }
         }
-
-        return result
-    }
-
-    // MARK: - Data Loading
-
-    /// Fetches all images and collections from the repository. Safe to call at launch
-    /// and after any data-mutating operation.
-    func loadAll() async {
-        guard let repo = repository else { return }
-        do {
-            async let fetchedImages = repo.fetchAllImages()
-            async let fetchedCollections = repo.fetchAllCollections()
-            images = try await fetchedImages
-            collections = try await fetchedCollections
-        } catch {
-            print("[AppState] loadAll failed: \(error)")
-        }
-        await loadAllTagLabels()
-    }
-
-    /// Re-fetches images after an import completes.
-    /// Note: `isImporting` is kept in sync automatically via Combine — no manual update needed.
-    func refreshAfterImport() async {
-        guard let repo = repository else { return }
-        do {
-            images = try await repo.fetchAllImages()
-        } catch {
-            print("[AppState] refreshAfterImport failed: \(error)")
-        }
-    }
-
-    // MARK: - Image Operations
-
-    /// Updates an image record and refreshes the in-memory images list.
-    func updateImage(_ image: MuseImage) async {
-        guard let repo = repository else { return }
-        do {
-            try await repo.updateImage(image)
-            images = try await repo.fetchAllImages()
-            // Keep selectedImage in sync.
-            if selectedImage?.id == image.id {
-                selectedImage = image
+        NotificationCenter.default.addObserver(
+            forName: .museRunDuplicates, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let url = note.userInfo?["url"] as? URL else { return }
+            Task { @MainActor in
+                self?.openFromIntent(url: url)
+                let urls = self?.currentFiles
+                    .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
+                    .map { $0.url } ?? []
+                await DuplicateFinder.shared.scan(in: urls)
             }
-        } catch {
-            print("[AppState] updateImage failed: \(error)")
         }
-    }
-
-    /// Deletes an image record and its files, then clears selection.
-    func deleteImage(_ image: MuseImage) async {
-        guard let repo = repository else { return }
-        do {
-            try await repo.deleteImage(image)
-            images = try await repo.fetchAllImages()
-            if selectedImage?.id == image.id {
-                selectedImage = nil
-                detailPanelVisible = false
+        NotificationCenter.default.addObserver(
+            forName: .museRunAnalyze, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let url = note.userInfo?["url"] as? URL else { return }
+            Task { @MainActor in
+                self?.openFromIntent(url: url)
+                await self?.analyzeCurrentFolder()
             }
-        } catch {
-            print("[AppState] deleteImage failed: \(error)")
         }
     }
 
-    // MARK: - Tag Operations
+    /// Used by App Intents — opens the URL as a transient root if it's not
+    /// already part of an active root tree.
+    func openFromIntent(url: URL) {
+        // If the URL is inside an existing root, navigate there directly.
+        for node in rootNodes {
+            if url.path.hasPrefix(node.url.path) {
+                let folder = FolderNode(url: url)
+                select(folder: folder)
+                return
+            }
+        }
+        // Otherwise just open as an ad-hoc folder (no persistence)
+        let folder = FolderNode(url: url)
+        select(folder: folder)
+    }
 
-    /// Returns all tags for the given image.
-    func fetchTags(for imageID: UUID) async -> [Tag] {
-        guard let repo = repository else { return [] }
-        do {
-            return try await repo.fetchTags(for: imageID)
-        } catch {
-            print("[AppState] fetchTags failed: \(error)")
-            return []
+    // MARK: - Roots wiring
+
+    private func rebuildRootNodes() {
+        let nodes: [FolderNode] = bookmarks.roots.compactMap { root in
+            guard let url = bookmarks.url(for: root) else { return nil }
+            return FolderNode(url: url, displayName: root.displayName, isRoot: true)
+        }
+        rootNodes = nodes
+        if activeRoot == nil, let first = bookmarks.roots.first {
+            select(rootForFirstFolder: first)
         }
     }
 
-    /// Inserts a tag and returns the updated tag list for the image.
-    func addTag(_ tag: Tag) async -> [Tag] {
-        guard let repo = repository else { return [] }
-        do {
-            try await repo.addTag(tag)
-            return try await repo.fetchTags(for: tag.imageID)
-        } catch {
-            print("[AppState] addTag failed: \(error)")
-            return []
+    private func select(rootForFirstFolder root: Root) {
+        activeRoot = root
+        if let node = rootNodes.first(where: { $0.url == bookmarks.url(for: root) }) {
+            select(folder: node)
         }
     }
 
-    /// Deletes a tag and returns the updated tag list for the image.
-    func deleteTag(_ tag: Tag) async -> [Tag] {
-        guard let repo = repository else { return [] }
-        do {
-            try await repo.deleteTag(tag)
-            return try await repo.fetchTags(for: tag.imageID)
-        } catch {
-            print("[AppState] deleteTag failed: \(error)")
-            return []
+    func pickAndAddRoot() {
+        guard let root = bookmarks.pickAndAddRoot() else { return }
+        rebuildRootNodes()
+        if let node = rootNodes.first(where: { $0.url == bookmarks.url(for: root) }) {
+            activeRoot = root
+            select(folder: node)
         }
+    }
+
+    func removeRoot(_ root: Root) {
+        bookmarks.removeRoot(root)
+        if activeRoot?.id == root.id {
+            activeRoot = bookmarks.roots.first
+            selectedFolder = nil
+            currentFiles = []
+            selectedFile = nil
+        }
+        rebuildRootNodes()
+    }
+
+    // MARK: - Folder selection
+
+    func select(folder: FolderNode) {
+        selectedFolder = folder
+        selectedFile = nil
+        reloadCurrentFiles()
+        startWatching(folder.url)
+        scheduleIndexing(for: folder.url)
+    }
+
+    /// Kick off active-folder indexing on the high-priority queue.
+    private func scheduleIndexing(for url: URL) {
+        let files = currentFiles
+        Task.detached(priority: .userInitiated) {
+            let pairs = files.compactMap { f -> (URL, AssetKind)? in
+                guard f.kind != .folder, f.kind.hasNativeViewer || f.kind == .archive else { return nil }
+                return (f.url, f.kind)
+            }
+            await Indexer.shared.indexBatch(pairs, priority: .high)
+        }
+    }
+
+    // MARK: - Starring
+
+    func toggleStar(folder: FolderNode) {
+        if stars.isStarred(folder.url) {
+            stars.unstar(folder: folder.url)
+        } else {
+            stars.star(folder: folder.url)
+        }
+    }
+
+    func openStarred(_ star: StarStore.StarredFolder) {
+        guard let url = stars.resolveURL(for: star) else { return }
+        _ = url.startAccessingSecurityScopedResource()
+        let node = FolderNode(url: url, displayName: star.displayName)
+        select(folder: node)
+    }
+
+    private func reloadCurrentFiles() {
+        guard let folder = selectedFolder else {
+            currentFiles = []
+            return
+        }
+        let raw: [FileNode]
+        if showSubfolders {
+            raw = recursiveFiles(at: folder.url)
+        } else {
+            raw = FolderReader.files(in: folder.url, showHidden: showHidden)
+        }
+        currentFiles = SmartSorter.apply(sortMode, to: raw)
+    }
+
+    func resort() {
+        currentFiles = SmartSorter.apply(sortMode, to: currentFiles)
     }
 
     // MARK: - Search
 
-    /// Performs a tag-aware database search when the query is non-empty,
-    /// falling back to `loadAll()` when cleared.
-    func searchImages(query: String) async {
-        guard let repo = repository else { return }
-        if query.trimmingCharacters(in: .whitespaces).isEmpty {
-            await loadAll()
+    func runSearch(_ query: String) async {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            clearSearch()
             return
         }
-        do {
-            images = try await repo.searchImages(query: query)
-        } catch {
-            print("[AppState] searchImages failed: \(error)")
-        }
-    }
-
-    // MARK: - Tag Filter
-
-    /// Loads all unique tag labels for the filter UI.
-    func loadAllTagLabels() async {
-        guard let repo = repository else { return }
-        do {
-            let tags = try await repo.fetchAllTags()
-            let unique = Array(Set(tags.map { $0.label })).sorted()
-            allTagLabels = unique
-        } catch {
-            print("[AppState] loadAllTagLabels failed: \(error)")
-        }
-    }
-
-    /// Updates the tag filter and caches matching image IDs.
-    func applyTagFilter() async {
-        guard let repo = repository else { return }
-        if filterTags.isEmpty {
-            tagFilteredImageIDs = nil
-            return
-        }
-        do {
-            let allTags = try await repo.fetchEveryTag()
-            var ids = Set<UUID>()
-            for tag in allTags {
-                if filterTags.contains(tag.label) {
-                    ids.insert(tag.imageID)
-                }
-            }
-            tagFilteredImageIDs = ids
-        } catch {
-            print("[AppState] applyTagFilter failed: \(error)")
-        }
-    }
-
-    // MARK: - Multi-Select
-
-    /// Toggles an image in/out of the multi-selection set.
-    func toggleImageSelection(_ image: MuseImage) {
-        if selectedImages.contains(image.id) {
-            selectedImages.remove(image.id)
+        let scope: SearchScope
+        if searchEverywhere {
+            scope = .everywhere
+        } else if let folder = selectedFolder {
+            scope = .currentFolder(folder.url)
         } else {
-            selectedImages.insert(image.id)
+            scope = .everywhere
         }
+        let results = await SearchService.search(query: trimmed, scope: scope)
+        isSearchActive = true
+        currentFiles = SmartSorter.apply(sortMode, to: results)
     }
 
-    /// Adds a tag to all currently selected images.
-    func batchAddTag(label: String) async {
-        guard let repo = repository else { return }
-        let trimmed = label.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
+    func clearSearch() {
+        searchQuery = ""
+        isSearchActive = false
+        reloadCurrentFiles()
+    }
 
-        for imageID in selectedImages {
-            let tag = Tag(imageID: imageID, label: trimmed, source: "manual")
-            do {
-                try await repo.addTag(tag)
-            } catch {
-                // Likely duplicate — skip silently
+    func analyzeCurrentFolder() async {
+        let urls = currentFiles
+            .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
+            .map { $0.url }
+        await AnalyzePipeline.shared.analyze(folder: urls)
+        // Re-sort in case visual signals just landed
+        resort()
+    }
+
+    func analyzeSelected() async {
+        guard let url = selectedFile?.url else { return }
+        await AnalyzePipeline.shared.analyze(file: url)
+    }
+
+    private func recursiveFiles(at url: URL) -> [FileNode] {
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(
+            at: url,
+            includingPropertiesForKeys: [
+                .isDirectoryKey, .isPackageKey, .fileSizeKey,
+                .contentModificationDateKey, .creationDateKey
+            ],
+            options: showHidden ? [] : [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+        var nodes: [FileNode] = []
+        for case let child as URL in enumerator {
+            let v = try? child.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
+            let isDir = v?.isDirectory == true
+            let isPackage = v?.isPackage == true
+            if isDir && !isPackage { continue }
+            nodes.append(FileNode(url: child))
+        }
+        return nodes.sorted { ($0.modifiedAt ?? .distantPast) > ($1.modifiedAt ?? .distantPast) }
+    }
+
+    func toggleSubfolders() {
+        showSubfolders.toggle()
+        reloadCurrentFiles()
+    }
+
+    // MARK: - Watcher
+
+    private func startWatching(_ url: URL) {
+        if watcher == nil {
+            watcher = FolderWatcher { [weak self] in
+                self?.reloadCurrentFiles()
             }
         }
-    }
-
-    // MARK: - Collection Operations
-
-    /// Inserts a new collection, refreshes the collections list, and returns the new collection.
-    func insertCollection(name: String) async {
-        guard let repo = repository else { return }
-        var collection = MuseCollection(name: name)
-        do {
-            try await repo.insertCollection(&collection)
-            collections = try await repo.fetchAllCollections()
-        } catch {
-            print("[AppState] insertCollection failed: \(error)")
-        }
+        watcher?.watch(url: url, recursive: showSubfolders)
     }
 }

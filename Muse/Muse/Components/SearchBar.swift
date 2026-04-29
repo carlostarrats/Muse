@@ -2,45 +2,55 @@
 //  SearchBar.swift
 //  Muse
 //
-//  Created by Carlos Tarrats on 3/19/26.
+//  FTS5-backed search bar with current-folder vs everywhere scope
+//  toggle. 250ms debounce so we don't fire a query on every keystroke.
 //
 
 import SwiftUI
 import Combine
 
-/// A search bar that debounces input by 300 ms before triggering a tag-aware
-/// database search via AppState. Cancels any in-flight search Task when a new
-/// query arrives.
 struct SearchBar: View {
-
     @EnvironmentObject var appState: AppState
 
-    // Local text state drives the Combine pipeline; appState.searchQuery is
-    // updated only after the debounce fires.
     @State private var text: String = ""
-    @State private var searchTask: Task<Void, Never>?
+    @State private var debounceTask: Task<Void, Never>?
     @FocusState private var isFocused: Bool
-
-    // Publisher that fires whenever `text` changes.
-    private let textSubject = PassthroughSubject<String, Never>()
-    // Holds the Combine subscription for the lifetime of this view.
-    @State private var cancellable: AnyCancellable?
 
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
 
-            TextField("Search images, notes, tags…", text: $text)
+            TextField("Search files, tags, captions…", text: $text)
                 .textFieldStyle(.plain)
                 .focused($isFocused)
                 .onChange(of: text) { _, newValue in
-                    textSubject.send(newValue)
+                    appState.searchQuery = newValue
+                    debounceAndRun(query: newValue)
                 }
+                .onSubmit {
+                    fire(query: text)
+                }
+
+            Toggle(isOn: $appState.searchEverywhere) {
+                Image(systemName: appState.searchEverywhere
+                      ? "globe"
+                      : "folder")
+            }
+            .toggleStyle(.button)
+            .controlSize(.mini)
+            .help(appState.searchEverywhere
+                  ? "Searching the entire indexed library"
+                  : "Searching the current folder")
+            .onChange(of: appState.searchEverywhere) { _, _ in
+                fire(query: text)
+            }
 
             if !text.isEmpty {
                 Button {
-                    clearSearch()
+                    text = ""
+                    appState.searchQuery = ""
+                    appState.clearSearch()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
@@ -48,44 +58,28 @@ struct SearchBar: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color(nsColor: .controlBackgroundColor))
         )
-        .onAppear {
-            // Wire up the 300 ms debounce once when the view first appears.
-            cancellable = textSubject
-                .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
-                .sink { [weak appState] debouncedQuery in
-                    guard let appState else { return }
-                    // Cancel any previous in-flight search before starting a new one.
-                    searchTask?.cancel()
-                    searchTask = Task {
-                        await appState.searchImages(query: debouncedQuery)
-                    }
-                }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .museSearchBarFocus)) { _ in
-            isFocused = true
+        .frame(minWidth: 240, maxWidth: 420)
+    }
+
+    // MARK: - Debounce
+
+    private func debounceAndRun(query: String) {
+        debounceTask?.cancel()
+        debounceTask = Task {
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            if !Task.isCancelled {
+                fire(query: query)
+            }
         }
     }
 
-    // MARK: - Private
-
-    private func clearSearch() {
-        text = ""
-        searchTask?.cancel()
-        searchTask = Task {
-            await appState.searchImages(query: "")
-        }
+    private func fire(query: String) {
+        Task { await appState.runSearch(query) }
     }
-}
-
-#Preview {
-    SearchBar()
-        .environmentObject(AppState())
-        .padding()
-        .frame(width: 360)
 }
