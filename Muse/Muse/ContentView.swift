@@ -167,6 +167,11 @@ struct ContentView: View {
             Button(action: {
                 if appState.collectionsOverlayVisible {
                     appState.collectionsOverlayVisible = false
+                } else if let selected = appState.selectedFile,
+                          selected.kind == .image || selected.kind == .raw
+                            || selected.kind == .psd {
+                    // Hero viewer: run the return flight instead of popping.
+                    appState.viewerClosing = true
                 } else if appState.selectedFile != nil {
                     appState.selectedFile = nil
                 }

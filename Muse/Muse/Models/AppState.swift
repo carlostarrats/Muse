@@ -41,6 +41,10 @@ final class AppState: ObservableObject {
     /// Currently selected file (drives preview/detail).
     @Published var selectedFile: FileNode?
 
+    /// Set true to ask the hero viewer to run its close flight (Esc path).
+    /// The viewer resets it to false in onCloseFinished.
+    @Published var viewerClosing = false
+
     // MARK: - Modes
 
     /// Q2: include subfolders in the grid contents.
