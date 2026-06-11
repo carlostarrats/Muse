@@ -85,8 +85,11 @@ final class CloudSceneCoordinator: NSObject {
     /// pivot node (drift) -> card node (pose/hover). Parallel to `files`.
     private(set) var cardNodes: [SCNNode] = []
     private(set) var files: [FileNode] = []
+    private(set) var poses: [CloudPose] = []
     private var identity: String = "<unbuilt>"
-    private var thumbnailTask: Task<Void, Never>?
+    nonisolated(unsafe) private var thumbnailTask: Task<Void, Never>?
+
+    deinit { thumbnailTask?.cancel() }
 
     static let shadowImage: NSImage = makeShadowImage()
 
@@ -111,6 +114,7 @@ final class CloudSceneCoordinator: NSObject {
 
         let seed = SeededRandom.fnv1a(newFiles.map(\.url.path))
         let poses = CloudLayout.poses(count: newFiles.count, seed: seed)
+        self.poses = poses
         var rng = SeededRandom(seed: seed &+ 1)
 
         cardNodes = []
@@ -151,6 +155,32 @@ final class CloudSceneCoordinator: NSObject {
             n = current.parent
         }
         return nil
+    }
+
+    // MARK: hover (prototype: flat + scale 1.15, .5s cubic-bezier(.25,.85,.3,1))
+
+    private weak var hoveredCard: SCNNode?
+
+    func setHovered(_ card: SCNNode?) {
+        guard card !== hoveredCard else { return }
+        SCNTransaction.begin()
+        SCNTransaction.animationDuration = 0.5
+        SCNTransaction.animationTimingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.85, 0.3, 1)
+        if let old = hoveredCard, let i = cardNodes.firstIndex(where: { $0 === old }) {
+            if poses.indices.contains(i) {
+                old.simdOrientation = CloudMath.orientation(
+                    rxDeg: poses[i].rx, ryDeg: poses[i].ry, rzDeg: poses[i].rz)
+            }
+            old.simdScale = SIMD3(1, 1, 1)
+            old.simdPosition = SIMD3(0, 0, 0)
+        }
+        if let card {
+            card.simdOrientation = simd_quatf(angle: 0, axis: SIMD3(0, 0, 1)) // flat
+            card.simdScale = SIMD3(1.15, 1.15, 1.15)
+            card.simdPosition = SIMD3(0, 0, 140)   // float up toward the camera
+        }
+        hoveredCard = card
+        SCNTransaction.commit()
     }
 
     private func loadThumbnails() {
@@ -237,10 +267,12 @@ final class CloudSceneCoordinator: NSObject {
     }
 }
 
-// MARK: - SCNView subclass (letterboxing; input arrives in Task 5)
+// MARK: - SCNView subclass (letterboxing + hover + click)
 
 final class CloudSCNView: SCNView {
     weak var coordinator: CloudSceneCoordinator?
+    private var trackingArea: NSTrackingArea?
+    private var mouseDownPoint: NSPoint?
 
     override func layout() {
         super.layout()
@@ -261,5 +293,47 @@ final class CloudSCNView: SCNView {
             cam.projectionDirection = .horizontal
             cam.fieldOfView = CloudMath.horizontalFOV
         }
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea { removeTrackingArea(trackingArea) }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow],
+            owner: self, userInfo: nil)
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    private func cardHit(_ event: NSEvent) -> (FileNode, SCNNode)? {
+        let point = convert(event.locationInWindow, from: nil)
+        let hits = hitTest(point, options: [.searchMode: NSNumber(value: SCNHitTestSearchMode.all.rawValue)])
+        for hit in hits {
+            if let match = coordinator?.file(forCardNode: hit.node) { return match }
+        }
+        return nil
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        coordinator?.setHovered(cardHit(event)?.1)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        coordinator?.setHovered(nil)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        mouseDownPoint = convert(event.locationInWindow, from: nil)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        defer { mouseDownPoint = nil }
+        let up = convert(event.locationInWindow, from: nil)
+        if let down = mouseDownPoint, hypot(up.x - down.x, up.y - down.y) > 6 { return }
+        guard let (file, node) = cardHit(event) else { return }
+        let rect = SceneProjection.screenRect(of: node, in: self)
+            ?? CGRect(x: bounds.midX - 80, y: bounds.midY - 80, width: 160, height: 160)
+        coordinator?.onOpen(file, rect)
     }
 }
