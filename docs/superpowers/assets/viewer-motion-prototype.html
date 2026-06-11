@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Muse — open-image motion v6</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #161618; font: 13px -apple-system, sans-serif; color: #ddd; overflow-x: hidden; }
+  .toolbar { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid #2a2a2e; }
+  .toolbar .crumb { color: #888; font-size: 12px; }
+  #filterchip { display: none; background: rgba(122,170,255,.15); border: 1px solid rgba(122,170,255,.4);
+                border-radius: 12px; padding: 3px 10px; font-size: 11px; color: #acf; cursor: pointer; }
+  #filterchip:hover { background: rgba(122,170,255,.3); }
+  .hint { margin-left: auto; color: #666; font-size: 11px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 16px 18px; }
+  .grid img { width: 100%; height: 150px; object-fit: cover; border-radius: 8px; cursor: pointer; display: block;
+              transition: transform .18s ease, opacity .3s ease; }
+  .grid img:hover { transform: scale(1.025); }
+  .grid img.hidden-cell { opacity: 0; }
+  .grid img.filtered-out { display: none; }
+
+  #backdrop { position: fixed; inset: 0; opacity: 0; pointer-events: none;
+              backdrop-filter: blur(30px) brightness(.5) saturate(1.15);
+              -webkit-backdrop-filter: blur(30px) brightness(.5) saturate(1.15);
+              transition: opacity .45s ease; }
+  #backdrop.on { opacity: 1; pointer-events: auto; }
+  #tint { position: fixed; inset: 0; opacity: 0; pointer-events: none;
+          transition: opacity .45s ease, background-color .6s ease; }
+  #tint.on { opacity: 1; }
+
+  #stage { position: fixed; z-index: 10; border-radius: 6px; object-fit: cover; cursor: default; display: none;
+           box-shadow: 0 30px 90px rgba(0,0,0,.65);
+           transition: left .4s cubic-bezier(.25,.8,.25,1), top .4s cubic-bezier(.25,.8,.25,1),
+                       width .4s cubic-bezier(.25,.8,.25,1), height .4s cubic-bezier(.25,.8,.25,1),
+                       transform .16s ease-out, opacity .15s ease; }
+  #stage.pannable { cursor: grab; }
+  #stage.panning { cursor: grabbing; transition: opacity .15s ease; }
+  /* quick return, decelerating into the cell with only a hint of settle */
+  #stage.closing { transition: left .34s cubic-bezier(.2,1.08,.35,1), top .34s cubic-bezier(.2,1.08,.35,1),
+                   width .34s cubic-bezier(.2,1.08,.35,1), height .34s cubic-bezier(.2,1.08,.35,1),
+                   transform .15s ease-out, opacity .15s ease; }
+
+  #meta { position: fixed; top: 80px; right: 40px; width: 258px; z-index: 11; opacity: 0;
+          max-height: calc(100vh - 110px); overflow-y: auto;
+          scrollbar-width: none; -ms-overflow-style: none;
+          transform: translateY(10px); transition: opacity .12s ease, transform .12s ease;
+          pointer-events: none; }
+  #meta.on { transition: opacity .4s ease .15s, transform .4s ease .15s; }
+  #meta::-webkit-scrollbar { display: none; }
+  #meta.on { opacity: 1; transform: none; pointer-events: auto; }
+  #meta h3 { color: rgba(255,255,255,.95); font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  #meta .dim { color: rgba(255,255,255,.45); font-size: 11px; margin-bottom: 16px; }
+
+  .card { background: rgba(255,255,255,.09); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+          border: 1px solid rgba(255,255,255,.07); border-radius: 14px; padding: 13px 14px; margin-bottom: 12px; }
+  .card .label { color: rgba(255,255,255,.42); font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+                 margin-bottom: 9px; display: flex; align-items: center; gap: 6px; }
+  .addbtn { width: 18px; height: 18px; border-radius: 9px; background: rgba(255,255,255,.12);
+            color: rgba(255,255,255,.7); font-size: 10px; line-height: 1;
+            display: inline-flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: background .15s ease, color .15s ease, transform .3s cubic-bezier(.3,1.6,.5,1); }
+  .addbtn:hover { background: rgba(255,255,255,.3); color: #fff; }
+  .addbtn.open { transform: rotate(45deg); background: rgba(255,255,255,.3); color: #fff; }
+  .addbtn.open:hover { background: rgba(255,255,255,.45); }
+
+  /* add-flow: the card grows downward, springs back up when done */
+  .expander { height: 0; overflow: hidden; transition: height .45s cubic-bezier(.3,1.35,.45,1); }
+  .exp-inner { padding-top: 12px; border-top: 1px solid rgba(255,255,255,.08); margin-top: 11px; }
+  .exp-hint { color: rgba(255,255,255,.4); font-size: 10px; margin-bottom: 8px; }
+  .exp-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .exp-pill { background: rgba(255,255,255,.10); border: 1px dashed rgba(255,255,255,.25); border-radius: 10px;
+              padding: 4px 11px; font-size: 11px; color: rgba(255,255,255,.8); cursor: pointer;
+              transition: background .15s ease, border-color .15s ease; }
+  .exp-pill:hover { background: rgba(255,255,255,.25); border-color: transparent; color: #fff; }
+  .exp-form { display: flex; gap: 6px; align-items: center; }
+  .exp-input { flex: 1; min-width: 0; background: rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.2);
+               border-radius: 9px; color: #fff; font-size: 11px; padding: 6px 10px; outline: none; }
+  .exp-input:focus { border-color: rgba(255,255,255,.45); }
+  .exp-go { width: 26px; height: 26px; border-radius: 13px; background: rgba(255,255,255,.12);
+            color: rgba(255,255,255,.75); display: flex; align-items: center; justify-content: center;
+            font-size: 11px; line-height: 1; cursor: pointer; flex-shrink: 0;
+            transition: background .15s ease, color .15s ease; }
+  .exp-go:hover { background: rgba(255,255,255,.32); color: #fff; }
+  /* rows wrap normally; on hover, JS condenses only the same-row pills after the
+     hovered one, so the hovered pill never moves and nothing changes rows */
+  .cardrow { display: flex; flex-wrap: wrap; gap: 6px; padding-right: 14px; }
+  .pill { position: relative; background: rgba(255,255,255,.12); border-radius: 10px;
+          padding: 4px 11px; font-size: 11px; color: rgba(255,255,255,.88); cursor: pointer;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+          flex: 0 1 auto; min-width: 30px; max-width: 150px;
+          transition: background .15s ease, padding .18s ease, margin .18s ease,
+                      max-width .18s ease, min-width .18s ease; }
+  /* growth is applied by JS, which steals exactly the space it needs from
+     end-of-row slack and same-row siblings — rows can never reflow */
+  .pill:hover { background: rgba(255,255,255,.26); flex-shrink: 0; z-index: 1; }
+  .pill .rm { display: none; position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+              width: 15px; height: 15px; border-radius: 50%;
+              font-size: 8px; color: rgba(255,255,255,.7); background: rgba(255,255,255,.14);
+              align-items: center; justify-content: center;
+              transition: background .15s ease, color .15s ease; }
+  .pill:hover .rm { display: flex; }
+  .pill .rm:hover { background: rgba(255,255,255,.42); color: #fff; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .sw { width: 26px; height: 26px; border-radius: 7px; border: 1px solid rgba(255,255,255,.18);
+        cursor: pointer; transition: transform .12s ease, border-color .12s ease; }
+  .sw:hover { transform: scale(1.15); border-color: rgba(255,255,255,.6); }
+  #copyall { font-size: 10px; color: rgba(255,255,255,.45); cursor: pointer; margin-left: auto;
+             text-transform: none; letter-spacing: 0; transition: color .15s ease; }
+  #copyall:hover { color: #fff; }
+
+  .chrome-btn { position: fixed; z-index: 12; opacity: 0; transition: opacity .12s ease, background .15s ease;
+                pointer-events: none; background: rgba(255,255,255,.10); backdrop-filter: blur(6px);
+                border-radius: 18px; color: rgba(255,255,255,.85); display: flex; align-items: center;
+                justify-content: center; cursor: pointer; user-select: none; }
+  .chrome-btn.on { opacity: 1; pointer-events: auto; transition: opacity .4s ease .2s, background .15s ease; }
+  .chrome-btn:hover { background: rgba(255,255,255,.24); color: #fff; }
+  /* right-aligned with the meta cards (meta: right 40px) */
+  #close-x { top: 18px; right: 40px; width: 38px; height: 38px; font-size: 21px; border-radius: 19px; font-weight: 300; }
+
+  .actions { display: flex; gap: 8px; }
+  .actbtn { flex: 1; background: rgba(255,255,255,.09); border: 1px solid rgba(255,255,255,.07);
+            border-radius: 12px; padding: 9px 0; text-align: center; font-size: 11px;
+            color: rgba(255,255,255,.85); cursor: pointer; transition: background .15s ease, color .15s ease; }
+  .actbtn:hover { background: rgba(255,255,255,.22); color: #fff; }
+  /* top row, left-aligned with the meta cards (meta: right 40px, width 258px) */
+  #bottombar { position: fixed; top: 18px; left: calc(100% - 298px); z-index: 12; display: flex; gap: 8px; }
+  #bottombar .chrome-btn { position: static; }
+  #zoom { height: 38px; padding: 0 8px; gap: 2px; font-size: 12px; cursor: default; border-radius: 19px;
+          user-select: none; -webkit-user-select: none; }
+  #zoom * { user-select: none; -webkit-user-select: none; }
+  #zoom:hover { background: rgba(255,255,255,.10); }
+  #fitbtn { height: 38px; padding: 0 16px; font-size: 12px; border-radius: 19px; }
+  #zoom span.btn { width: 26px; height: 26px; line-height: 26px; border-radius: 13px; text-align: center;
+                   cursor: pointer; font-size: 15px; color: rgba(255,255,255,.7); transition: background .15s, color .15s; }
+  #zoom span.btn:hover { color: #fff; background: rgba(255,255,255,.2); }
+  #zoom #pct { min-width: 44px; text-align: center; color: rgba(255,255,255,.9); }
+
+  #toast { position: fixed; bottom: 24px; left: 50%; transform: translate(-50%, 16px); z-index: 20;
+           background: rgba(255,255,255,.92); color: #111; border-radius: 14px; padding: 7px 16px;
+           font-size: 12px; opacity: 0; transition: opacity .25s ease, transform .25s ease; pointer-events: none; }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+</style>
+</head>
+<body>
+  <div class="toolbar">
+    <span class="crumb">Muse motion prototype v6 — Downloads ▸ inspo</span>
+    <span id="filterchip"></span>
+    <span class="hint">Click an image · ← → flips · scroll/＋− zooms · drag to pan when zoomed · Esc closes</span>
+  </div>
+  <div class="grid" id="grid"></div>
+  <div id="backdrop"></div>
+  <div id="tint"></div>
+  <img id="stage">
+  <div id="close-x" class="chrome-btn">✕</div>
+  <div id="bottombar">
+    <div id="zoom" class="chrome-btn">
+      <span class="btn" id="z-out">−</span><span id="pct">Fit</span><span class="btn" id="z-in">＋</span>
+    </div>
+    <div id="fitbtn" class="chrome-btn">Fit</div>
+  </div>
+  <div id="meta">
+    <h3 id="p-name"></h3>
+    <div class="dim" id="p-meta"></div>
+    <div class="card">
+      <div class="label">Collection <span class="addbtn" id="add-coll"><svg viewBox="0 0 18 18" style="display:block;width:100%;height:100%"><path d="M9 5v8M5 9h8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span></div>
+      <div class="cardrow" id="p-coll-row"></div>
+      <div class="expander" id="exp-coll">
+        <div class="exp-inner">
+          <div class="exp-hint">Add to an existing collection…</div>
+          <div class="exp-row" id="exp-coll-row"></div>
+          <div class="exp-form">
+            <input class="exp-input" id="in-coll" placeholder="…or create a new one">
+            <span class="exp-go" id="go-coll"><svg viewBox="0 0 26 26" style="display:block;width:100%;height:100%"><path d="M13 8v10M8 13h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="label">Tags <span class="addbtn" id="add-tag"><svg viewBox="0 0 18 18" style="display:block;width:100%;height:100%"><path d="M9 5v8M5 9h8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span></div>
+      <div class="cardrow" id="p-tags"></div>
+      <div class="expander" id="exp-tag">
+        <div class="exp-inner">
+          <div class="exp-hint">Add an existing tag…</div>
+          <div class="exp-row" id="exp-tag-row"></div>
+          <div class="exp-form">
+            <input class="exp-input" id="in-tag" placeholder="…or create a new one">
+            <span class="exp-go" id="go-tag"><svg viewBox="0 0 26 26" style="display:block;width:100%;height:100%"><path d="M13 8v10M8 13h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="label">Colors <span id="copyall">copy all</span></div>
+      <div class="swatches" id="p-colors"></div>
+    </div>
+    <div class="actions">
+      <div class="actbtn" id="act-finder">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-1px;margin-right:5px;"><path d="M1.5 3A1.5 1.5 0 0 1 3 1.5h3.2c.4 0 .8.16 1.06.44l1.1 1.06H13A1.5 1.5 0 0 1 14.5 4.5v8A1.5 1.5 0 0 1 13 14H3a1.5 1.5 0 0 1-1.5-1.5V3z"/></svg>Open in Finder
+      </div>
+      <div class="actbtn" id="act-delete">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-1px;margin-right:5px;"><path d="M6 2V1.5A1.5 1.5 0 0 1 7.5 0h1A1.5 1.5 0 0 1 10 1.5V2h3.5a.5.5 0 0 1 0 1h-.55l-.86 11.18A2 2 0 0 1 10.1 16H5.9a2 2 0 0 1-1.99-1.82L3.05 3H2.5a.5.5 0 0 1 0-1H6zm1 3.5v7a.5.5 0 0 0 1 0v-7a.5.5 0 0 0-1 0zm2.5 0v7a.5.5 0 0 0 1 0v-7a.5.5 0 0 0-1 0z"/></svg>Delete
+      </div>
+    </div>
+  </div>
+  <div id="toast"></div>
+
+<script>
+const IMAGES = [
+  { u: 'photo-1543466835-00a7907e9de1', c: ['#4a3320','#8a6a42','#c4b49a'], n: 'dog-park.jpg',    colls: ['Dogs'],   tags: ['dog','animal','grass','warm'] },
+  { u: 'photo-1441974231531-c6227db76b6e', c: ['#1e3b24','#4a6a3a','#9ab48a'], n: 'forest-road.jpg', colls: ['Nature'], tags: ['forest','green','path','moody'] },
+  { u: 'photo-1507525428034-b723cf961d3e', c: ['#1f4a5a','#5a8a9a','#d4e4e8'], n: 'beach-wide.jpg',  colls: ['Nature'], tags: ['beach','ocean','horizon','teal'] },
+  { u: 'photo-1501785888041-af3ef285b470', c: ['#5a2e1a','#b4642a','#e8b478'], n: 'lake-sunset.jpg', colls: ['Skies'],  tags: ['sunset','lake','orange','dusk'] },
+  { u: 'photo-1470071459604-3b5ec3a7fe05', c: ['#2a3038','#5a6470','#a4aab4'], n: 'fog-hills.jpg',   colls: ['Skies'],  tags: ['fog','hills','muted','gray'] },
+  { u: 'photo-1469474968028-56623f02e42e', c: ['#4a3a14','#9a7a2a','#e0c878'], n: 'sunray.jpg',      colls: ['Nature'], tags: ['sun','field','gold','flare'] },
+  { u: 'photo-1433086966358-54859d0ed716', c: ['#26424a','#4a7a8a','#b4d4dc'], n: 'waterfall.jpg',   colls: ['Nature'], tags: ['waterfall','rocks','mist','cool'] },
+  { u: 'photo-1490730141103-6cac27aaab94', c: ['#5a3a1e','#a4683a','#e8b88a'], n: 'dawn.jpg',        colls: ['Skies'],  tags: ['sunrise','silhouette','amber'] },
+  { u: 'photo-1502082553048-f009c37129b9', c: ['#1c3a1c','#3a6a2a','#8ab47a'], n: 'leaves.jpg',      colls: ['Nature'], tags: ['leaves','green','macro','fresh'] },
+  { u: 'photo-1504198453319-5ce911bafcde', c: ['#34404e','#6a7a94','#c4ccd8'], n: 'pier-blue.jpg',   colls: ['Skies'],  tags: ['pier','blue','minimal','calm'] },
+  { u: 'photo-1519125323398-675f0ddb6308', c: ['#3e3428','#7a644a','#bcaa90'], n: 'trail.jpg',       colls: ['Nature'], tags: ['trail','autumn','walk'] },
+  { u: 'photo-1493246507139-91e8fad9978e', c: ['#3a3a52','#6a6a94','#b4b4d4'], n: 'painted-peaks.jpg', colls: ['Posters'], tags: ['mountains','illustration','purple'] },
+];
+const url = (im, w) => `https://images.unsplash.com/${im.u}?w=${w}&q=70&fit=crop`;
+const tintColor = (hex) => {
+  const n = parseInt(hex.slice(1), 16);
+  const d = v => Math.round(v * 0.55);
+  return `rgba(${d(n >> 16 & 255)},${d(n >> 8 & 255)},${d(n & 255)},0.78)`;
+};
+const grid = document.getElementById('grid');
+const backdrop = document.getElementById('backdrop');
+const tint = document.getElementById('tint');
+const stage = document.getElementById('stage');
+const meta = document.getElementById('meta');
+const closeX = document.getElementById('close-x');
+const zoomBar = document.getElementById('zoom');
+const fitbtn = document.getElementById('fitbtn');
+const pctEl = document.getElementById('pct');
+const filterchip = document.getElementById('filterchip');
+const toast = document.getElementById('toast');
+let openIdx = -1, cells = [], zoom = 1, fitScale = 1, toastTimer = null;
+
+IMAGES.forEach((im, i) => {
+  const img = new Image();
+  img.src = url(im, 500);
+  img.onclick = () => openViewer(i);
+  grid.appendChild(img);
+  cells.push(img);
+});
+
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 1400);
+}
+function copyText(t) {
+  navigator.clipboard?.writeText(t).then(() => showToast('Copied ' + t), () => showToast(t));
+}
+function applyFilter(kind, value) {
+  closeViewer();
+  setTimeout(() => {
+    cells.forEach((cell, i) => {
+      const im = IMAGES[i];
+      const match = kind === 'coll' ? im.colls.includes(value) : im.tags.includes(value);
+      cell.classList.toggle('filtered-out', !match);
+    });
+    filterchip.style.display = 'inline-block';
+    filterchip.textContent = (kind === 'coll' ? '▣ ' : '# ') + value + '  ✕';
+  }, 520);
+}
+filterchip.onclick = () => {
+  cells.forEach(c => c.classList.remove('filtered-out'));
+  filterchip.style.display = 'none';
+};
+
+function targetRect(natW, natH) {
+  // center in the true viewable space: between the left edge and the meta column
+  const metaLeft = window.innerWidth - 298; // meta: right 40px + width 258px
+  const pad = 40;
+  const availW = Math.max(120, metaLeft - pad * 2), availH = Math.max(120, window.innerHeight - 130);
+  const s = Math.min(availW / natW, availH / natH);
+  fitScale = s;
+  const w = natW * s, h = natH * s;
+  return { left: pad + (availW - w) / 2, top: 70 + (availH - h) / 2, width: w, height: h };
+}
+function place(el, r) { el.style.left = r.left + 'px'; el.style.top = r.top + 'px';
+                        el.style.width = r.width + 'px'; el.style.height = r.height + 'px'; }
+
+function pillEl(text, onBody, onRemove) {
+  const s = document.createElement('span');
+  s.className = 'pill';
+  s.innerHTML = `${text}<span class="rm"><svg viewBox="0 0 15 15" style="display:block;width:100%;height:100%"><path d="M5.2 5.2l4.6 4.6M9.8 5.2l-4.6 4.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span>`;
+  s.onclick = e => { if (e.target.closest('.rm')) onRemove(); else onBody(); };
+  // Reveal-✕ growth needs +17px. All math uses each pill's NATURAL width
+  // (dataset.w, measured once at render) — never live geometry, which lies
+  // mid-transition. Rows are simulated from naturals, the deficit is taken
+  // from end-of-row slack, then same-row pills after this one, then our own
+  // text as a last resort. Rows can never overflow, so never reflow.
+  const GROW = 17, MIN_W = 26, GAP = 6;
+  s.onmouseenter = () => {
+    const row = s.parentElement;
+    const cs = getComputedStyle(row);
+    const contentW = row.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const pills = [...row.children];
+    const rows = [];
+    let cur = [], curW = 0;
+    for (const p of pills) {
+      const w = +p.dataset.w;
+      if (cur.length && curW + GAP + w > contentW) { rows.push(cur); cur = [p]; curW = w; }
+      else { cur.push(p); curW += (cur.length > 1 ? GAP : 0) + w; }
+    }
+    if (cur.length) rows.push(cur);
+    const myRow = rows.find(r => r.includes(s)) || [s];
+    const rowW = myRow.reduce((a, p, i) => a + (+p.dataset.w) + (i ? GAP : 0), 0);
+    // pills still animating back from a previous hover carry extra width for
+    // ~0.1s — budget for it so the row can't transiently overflow
+    const lingering = myRow.reduce((a, p) =>
+      p === s ? a : a + Math.max(0, p.getBoundingClientRect().width - (+p.dataset.w)), 0);
+    let deficit = Math.max(0, GROW + lingering - (contentW - rowW) + 3);
+    // plan targets: shrink same-row pills after us, truncate self as last resort
+    const plans = [];
+    const after = myRow.slice(myRow.indexOf(s) + 1);
+    for (const p of after) {
+      if (deficit <= 0) break;
+      const w = +p.dataset.w;
+      const take = Math.min(deficit, Math.max(0, w - MIN_W));
+      if (take > 0) { plans.push([p, w - take]); deficit -= take; }
+    }
+    const selfTarget = (+s.dataset.w) + GROW - Math.max(0, deficit);
+    // pin max-width to CURRENT width first (no transition), then animate to the
+    // target — the cap binds for the whole animation, so the row total is
+    // bounded at every frame and pills can never hop rows mid-animation
+    const affected = [s, ...plans.map(pl => pl[0])];
+    affected.forEach(p => {
+      p.style.transition = 'none';
+      p.style.maxWidth = p.getBoundingClientRect().width + 'px';
+      p.style.minWidth = '0';
+    });
+    void row.offsetWidth;
+    affected.forEach(p => { p.style.transition = ''; });
+    plans.forEach(([p, target]) => { p.style.maxWidth = target + 'px'; });
+    s.style.maxWidth = selfTarget + 'px';
+    s.style.paddingRight = '28px';
+  };
+  s.onmouseleave = () => {
+    [...s.parentElement.children].forEach(p => {
+      // snap back fast so the next hover's row math has near-natural widths
+      p.style.transition = 'background .15s ease, padding .08s ease, max-width .08s ease, min-width .08s ease';
+      p.style.maxWidth = ''; p.style.minWidth = ''; p.style.paddingRight = '';
+    });
+  };
+  return s;
+}
+
+function fillMeta(im) {
+  document.getElementById('p-name').textContent = im.n;
+  document.getElementById('p-meta').textContent = '2.4 MB · 2400 × 1600 · added May 2026';
+  const collRow = document.getElementById('p-coll-row');
+  collRow.innerHTML = '';
+  im.colls.forEach(c => collRow.appendChild(pillEl(c,
+    () => applyFilter('coll', c),
+    () => { im.colls = im.colls.filter(x => x !== c); showToast('Removed from ' + c); fillMeta(im); })));
+  const tagRow = document.getElementById('p-tags');
+  tagRow.innerHTML = '';
+  im.tags.forEach(t => tagRow.appendChild(pillEl(t,
+    () => applyFilter('tag', t),
+    () => { im.tags = im.tags.filter(x => x !== t); showToast('Tag removed: ' + t); fillMeta(im); })));
+  const swRow = document.getElementById('p-colors');
+  swRow.innerHTML = im.c.map(c => `<div class="sw" style="background:${c}" title="${c}"></div>`).join('');
+  [...swRow.querySelectorAll('.sw')].forEach((el, j) => el.onclick = () => copyText(im.c[j]));
+  document.getElementById('copyall').onclick = () => copyText(im.c.join(', '));
+  // record natural widths once, while nothing is hovered/transitioning
+  [collRow, tagRow].forEach(row =>
+    [...row.children].forEach(p => p.dataset.w = p.offsetWidth));
+}
+
+// ── add-flow: card expands down with existing options, springs back when done ──
+function allValues(kind) {
+  const set = new Set();
+  IMAGES.forEach(im => (kind === 'coll' ? im.colls : im.tags).forEach(v => set.add(v)));
+  return [...set];
+}
+function expand(exp) { exp.style.height = (exp.scrollHeight + 4) + 'px'; }
+function collapse(exp) { exp.style.height = '0px'; }
+function closeExpanders() {
+  ['coll', 'tag'].forEach(kind => {
+    collapse(document.getElementById('exp-' + kind));
+    document.getElementById('add-' + kind).classList.remove('open');
+  });
+}
+function wireAdd(kind, commit) {
+  const btn = document.getElementById('add-' + kind);
+  const exp = document.getElementById('exp-' + kind);
+  const row = document.getElementById('exp-' + kind + '-row');
+  const input = document.getElementById('in-' + kind);
+  const done = v => { commit(v); collapse(exp); btn.classList.remove('open'); input.value = ''; };
+  btn.onclick = () => {
+    if (btn.classList.contains('open')) { collapse(exp); btn.classList.remove('open'); return; }
+    if (openIdx < 0) return;
+    const im = IMAGES[openIdx];
+    const current = kind === 'coll' ? im.colls : im.tags;
+    const candidates = allValues(kind).filter(v => !current.includes(v));
+    row.innerHTML = '';
+    candidates.forEach(v => {
+      const p = document.createElement('span');
+      p.className = 'exp-pill';
+      p.textContent = v;
+      p.onclick = () => done(v);
+      row.appendChild(p);
+    });
+    btn.classList.add('open');
+    expand(exp);
+    setTimeout(() => input.focus(), 250);
+  };
+  input.onkeydown = e => {
+    e.stopPropagation();
+    if (e.key === 'Enter' && input.value.trim()) done(input.value.trim());
+    if (e.key === 'Escape') { collapse(exp); btn.classList.remove('open'); input.value = ''; }
+  };
+  document.getElementById('go-' + kind).onclick = () => {
+    if (input.value.trim()) done(input.value.trim());
+    else input.focus();
+  };
+}
+wireAdd('coll', v => { const im = IMAGES[openIdx]; if (!im.colls.includes(v)) im.colls.push(v); showToast('Added to ' + v); fillMeta(im); });
+wireAdd('tag',  v => { const im = IMAGES[openIdx]; if (!im.tags.includes(v)) im.tags.push(v); showToast('Tag added: ' + v); fillMeta(im); });
+
+let panX = 0, panY = 0;
+function clampPan() {
+  const maxX = (zoom - 1) * stage.offsetWidth / 2, maxY = (zoom - 1) * stage.offsetHeight / 2;
+  panX = Math.max(-maxX, Math.min(maxX, panX));
+  panY = Math.max(-maxY, Math.min(maxY, panY));
+}
+function applyTransform() {
+  stage.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+}
+function setZoom(z) {
+  zoom = Math.min(4, Math.max(1, z));
+  if (zoom === 1) { panX = 0; panY = 0; }
+  clampPan();
+  applyTransform();
+  stage.classList.toggle('pannable', zoom > 1);
+  pctEl.textContent = zoom === 1 ? 'Fit' : Math.round(fitScale * zoom * 100) + '%';
+  // zoomed in: ✕ hides, Fit button appears; back at fit: Fit goes away, ✕ returns
+  if (openIdx >= 0) {
+    closeX.classList.toggle('on', zoom === 1);
+    fitbtn.classList.toggle('on', zoom > 1);
+  }
+}
+let dragging = false, dragStartX = 0, dragStartY = 0, panStartX = 0, panStartY = 0;
+stage.addEventListener('mousedown', e => {
+  if (zoom <= 1) return;
+  e.preventDefault();
+  dragging = true;
+  stage.classList.add('panning');
+  dragStartX = e.clientX; dragStartY = e.clientY;
+  panStartX = panX; panStartY = panY;
+});
+document.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  panX = panStartX + (e.clientX - dragStartX);
+  panY = panStartY + (e.clientY - dragStartY);
+  clampPan();
+  applyTransform();
+});
+document.addEventListener('mouseup', () => {
+  dragging = false;
+  stage.classList.remove('panning');
+});
+function chrome(on) {
+  [meta, closeX, zoomBar].forEach(el => el.classList.toggle('on', on));
+  if (!on) fitbtn.classList.remove('on');
+}
+
+function openViewer(i) {
+  openIdx = i;
+  const im = IMAGES[i], cell = cells[i], r = cell.getBoundingClientRect();
+  stage.style.transition = 'none';
+  stage.style.transform = 'none';
+  stage.src = cell.src;
+  place(stage, r);
+  stage.style.display = 'block';
+  cell.classList.add('hidden-cell');
+  tint.style.backgroundColor = tintColor(im.c[0]);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    stage.style.transition = '';
+    backdrop.classList.add('on');
+    tint.classList.add('on');
+    place(stage, targetRect(cell.naturalWidth, cell.naturalHeight));
+    setZoom(1);
+    const hi = new Image(); hi.src = url(im, 1600); hi.onload = () => { if (openIdx === i) stage.src = hi.src; };
+    fillMeta(im);
+    chrome(true);
+  }));
+}
+
+function closeViewer() {
+  if (openIdx < 0) return;
+  const cell = cells[openIdx], r = cell.getBoundingClientRect();
+  chrome(false);
+  closeExpanders();
+  backdrop.classList.remove('on');
+  tint.classList.remove('on');
+  stage.classList.add('closing');
+  stage.style.transform = 'none';
+  place(stage, r);
+  openIdx = -1;
+  setTimeout(() => {
+    // reveal the cell instantly under the stage, THEN remove the stage — no flicker
+    cell.style.transition = 'none';
+    cell.classList.remove('hidden-cell');
+    void cell.offsetWidth;
+    cell.style.transition = '';
+    stage.style.display = 'none';
+    stage.classList.remove('closing');
+  }, 310);
+}
+
+function flip(dir) {
+  if (openIdx < 0) return;
+  cells[openIdx].classList.remove('hidden-cell');
+  let i = openIdx, tries = 0;
+  do { i = (i + dir + IMAGES.length) % IMAGES.length; tries++; }
+  while (cells[i].classList.contains('filtered-out') && tries < IMAGES.length);
+  const im = IMAGES[i], cell = cells[i];
+  openIdx = i;
+  cell.classList.add('hidden-cell');
+  stage.style.opacity = 0;
+  tint.style.backgroundColor = tintColor(im.c[0]);
+  setTimeout(() => {
+    stage.src = url(im, 1600);
+    stage.style.transition = 'none';
+    stage.style.transform = 'none';
+    place(stage, targetRect(cell.naturalWidth || 1200, cell.naturalHeight || 800));
+    requestAnimationFrame(() => { stage.style.transition = ''; stage.style.opacity = 1; });
+    setZoom(1);
+    fillMeta(im);
+  }, 160);
+}
+
+backdrop.onclick = closeViewer;
+closeX.onclick = closeViewer;
+document.getElementById('act-finder').onclick = () => showToast('Would reveal in Finder');
+document.getElementById('act-delete').onclick = () => {
+  if (openIdx < 0) return;
+  const cell = cells[openIdx];
+  closeViewer();
+  setTimeout(() => {
+    cell.classList.add('filtered-out');
+    toast.innerHTML = 'Moved to Trash &nbsp;<span id="undo" style="text-decoration:underline;cursor:pointer;font-weight:600;">Undo</span>';
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 3500);
+    document.getElementById('undo').onclick = () => {
+      cell.classList.remove('filtered-out');
+      showToast('Restored');
+    };
+  }, 320);
+};
+document.getElementById('z-in').onclick = () => setZoom(zoom * 1.25);
+document.getElementById('z-out').onclick = () => setZoom(zoom / 1.25);
+// double-click shouldn't text-select the zoom buttons
+['z-in', 'z-out'].forEach(id =>
+  document.getElementById(id).addEventListener('mousedown', e => e.preventDefault()));
+fitbtn.onclick = () => setZoom(1);
+// re-fit live when the window resizes so Fit never overlaps the info column
+window.addEventListener('resize', () => {
+  if (openIdx < 0) return;
+  const cell = cells[openIdx];
+  stage.style.transition = 'none';
+  place(stage, targetRect(cell.naturalWidth || 1200, cell.naturalHeight || 800));
+  clampPan();
+  applyTransform();
+  setZoom(zoom);
+  requestAnimationFrame(() => requestAnimationFrame(() => { stage.style.transition = ''; }));
+});
+document.addEventListener('wheel', e => {
+  if (openIdx < 0) return;
+  if (meta.contains(e.target)) return; // let the info column scroll normally
+  e.preventDefault();
+  setZoom(zoom * (e.deltaY < 0 ? 1.12 : 0.9));
+}, { passive: false });
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'Escape') closeViewer();
+  if (e.key === 'ArrowRight') flip(1);
+  if (e.key === 'ArrowLeft') flip(-1);
+  if (e.key === '+' || e.key === '=') setZoom(zoom * 1.25);
+  if (e.key === '-') setZoom(zoom / 1.25);
+});
+</script>
+</body>
+</html>

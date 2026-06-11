@@ -75,8 +75,9 @@ re-analyzed incrementally — no rearchitecting.
 ## 2. The open-image moment (viewer)
 
 Replaces the overlay presentation path for images; PDFs/video/etc. keep the
-existing chrome. Working prototype: `content/open-image-motion-v6.html`
-(final state) — implementation must match its behavior and timings.
+existing chrome. Working prototype: `docs/superpowers/assets/viewer-motion-prototype.html`
+(committed copy, final state) — implementation must match its behavior and
+timings. SHIPPED in polish phase 2.
 
 ### Motion
 
@@ -144,8 +145,10 @@ whatever is currently in scope (folder, collection, search results).
 
 ### Cloud view
 
-Final prototype: `content/cloud-pose.html`. The look is the Sternberg Press
-reference (`~/Desktop/MUSE APP/1.png`) — reached only after converging on:
+Final prototype: `docs/superpowers/assets/cloud-pose-prototype.html` (committed
+copy; measured pose data in `docs/superpowers/assets/cloud-poses.json`). The
+look is the Sternberg Press reference (`~/Desktop/MUSE APP/1.png`) — reached
+only after converging on:
 
 - A **real 3D scene**: cards are true tilted rectangles under perspective
   (per-card rx/ry/rz), giving genuine internal foreshortening. Flat
