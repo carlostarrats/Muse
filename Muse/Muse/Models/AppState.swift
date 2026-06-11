@@ -71,6 +71,12 @@ final class AppState: ObservableObject {
     enum ViewMode: String { case grid, globe }
     @Published var viewMode: ViewMode = .grid
 
+    /// Global (window) frames of grid tiles, keyed by file path. Used as the
+    /// hero-transition source rect. Deliberately NOT @Published — frames
+    /// update constantly during scroll and publishing would thrash the UI;
+    /// the viewer reads this once at open.
+    var tileFrames: [String: CGRect] = [:]
+
     // MARK: - Collections (AI brain)
 
     /// Whether the collections overlay is showing.

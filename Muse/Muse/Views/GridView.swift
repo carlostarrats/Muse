@@ -119,9 +119,15 @@ private struct TileView: View {
             .background(
                 GeometryReader { proxy in
                     Color.clear
-                        .onAppear { tileFrame = proxy.frame(in: .named("gridViewport")) }
+                        .onAppear {
+                            tileFrame = proxy.frame(in: .named("gridViewport"))
+                            appState.tileFrames[file.url.path] = proxy.frame(in: .global)
+                        }
                         .onChange(of: proxy.frame(in: .named("gridViewport"))) { _, newFrame in
                             tileFrame = newFrame
+                        }
+                        .onChange(of: proxy.frame(in: .global)) { _, f in
+                            appState.tileFrames[file.url.path] = f
                         }
                 }
             )
