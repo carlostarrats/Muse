@@ -160,10 +160,21 @@ final class AppState: ObservableObject {
         }
         deletion.onRestore = { [weak self] node in
             guard let self else { return }
-            if !self.currentFiles.contains(where: { $0.url == node.url }) {
-                self.currentFiles.append(node)
-                self.resort()
+            // The disk restore already happened; only resurface the tile
+            // if the current scope still contains it.
+            if self.isSearchActive {
+                // Re-rank instead of appending into unrelated results.
+                Task { await self.runSearch(self.searchQuery) }
+                return
             }
+            guard let folder = self.selectedFolder else { return }
+            let inScope = self.showSubfolders
+                ? node.url.path.hasPrefix(folder.url.path + "/")
+                : node.url.deletingLastPathComponent().path == folder.url.path
+            guard inScope,
+                  !self.currentFiles.contains(where: { $0.url == node.url }) else { return }
+            self.currentFiles.append(node)
+            self.resort()
         }
 
         rebuildRootNodes()
@@ -311,7 +322,20 @@ final class AppState: ObservableObject {
         } else {
             raw = FolderReader.files(in: folder.url, showHidden: showHidden)
         }
-        currentFiles = SmartSorter.apply(sortMode, to: raw)
+        // Reloads rebuild FileNodes with fresh UUIDs; reuse the existing
+        // node when the file is unchanged so tile identity (and @State —
+        // thumbnails, in-flight animations) survives FSEvents reloads.
+        let existing = Dictionary(currentFiles.map { ($0.url, $0) },
+                                  uniquingKeysWith: { a, _ in a })
+        let merged = raw.map { fresh in
+            if let old = existing[fresh.url],
+               old.modifiedAt == fresh.modifiedAt,
+               old.sizeBytes == fresh.sizeBytes {
+                return old
+            }
+            return fresh
+        }
+        currentFiles = SmartSorter.apply(sortMode, to: merged)
     }
 
     func resort() {
@@ -395,7 +419,10 @@ final class AppState: ObservableObject {
     private func startWatching(_ url: URL) {
         if watcher == nil {
             watcher = FolderWatcher { [weak self] in
-                self?.reloadCurrentFiles()
+                // Search results aren't folder contents — a disk event must
+                // not replace them with the watched folder's listing.
+                guard let self, !self.isSearchActive else { return }
+                self.reloadCurrentFiles()
             }
         }
         watcher?.watch(url: url, recursive: showSubfolders)

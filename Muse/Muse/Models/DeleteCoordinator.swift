@@ -38,17 +38,33 @@ final class DeleteCoordinator: ObservableObject {
         if burnDuration > 0 {
             try? await Task.sleep(nanoseconds: UInt64(burnDuration * 1_000_000_000))
         }
-        burningPaths.remove(path)
         do {
             let ticket = try TrashManager.trash(file.url)
             withAnimation(.easeIn(duration: 0.2)) {
                 onRemove(file.url)
             }
-            // Last-wins toast replacement is intentional for v1 single-file deletes.
+            // Clear the burn flag only after the exit collapse: removing it
+            // in the same commit as onRemove snaps the exiting tile's shader
+            // back to progress 0 (un-burned flash). Tests run with
+            // burnDuration == 0 and need the synchronous path.
+            if burnDuration > 0 {
+                Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: 250_000_000)
+                    self?.burningPaths.remove(path)
+                }
+            } else {
+                burningPaths.remove(path)
+            }
+            // Last-wins toast replacement is intentional for v1 single-file
+            // deletes (a second delete's toast replaces the first's Undo).
             toast = ToastData(message: "Moved to Trash", actionLabel: "Undo") { [weak self] in
                 self?.restore(ticket: ticket, node: file)
             }
         } catch {
+            // Un-char the still-present tile gracefully.
+            withAnimation(.easeOut(duration: 0.3)) {
+                _ = burningPaths.remove(path)
+            }
             toast = ToastData(message: "Couldn't move to Trash")
         }
     }
