@@ -142,6 +142,7 @@ timings. SHIPPED in polish phase 2.
 
 Grid / Cloud / Graph three-way toggle in the toolbar. Cloud and Graph show
 whatever is currently in scope (folder, collection, search results).
+SHIPPED in polish phase 3 (`docs/superpowers/plans/2026-06-11-spatial-views.md`).
 
 ### Cloud view
 

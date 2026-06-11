@@ -29,8 +29,8 @@ The full design lives in:
 
 - `docs/superpowers/plans/file-viewer-rewrite.md` — the binding plan.
 - `docs/superpowers/specs/2026-06-10-post-rewrite-polish-design.md` — the
-  polish-pass spec (AI brain ✅, hero viewer ✅ shipped; spatial views and
-  delights are phases 3–4, plans written per phase).
+  polish-pass spec (AI brain ✅, hero viewer ✅, spatial views ✅ shipped;
+  delights are phase 4, plan written per phase).
   Five rounds of review revisions baked in. All open product questions
   resolved. Implementation status reflected in the phase log below.
 
@@ -54,6 +54,7 @@ are the load-bearing reference artifacts.
 | 8 — Globe rework + water shader on grid tiles | ✅ shipped | `feat/file-viewer-rewrite` |
 | Polish 1 — AI brain (protocols, semantic search, living collections) | ✅ shipped | `feat/ai-brain` (merged) |
 | Polish 2 — hero viewer (adaptive wash, info cards, zoom/pan, delete+undo) | ✅ shipped | `feat/hero-viewer` (merged) |
+| Polish 3 — spatial views (cloud + graph, globe retired) | ✅ shipped | `feat/spatial-views` (merged) |
 
 `feat/file-viewer-rewrite` was merged to `main` after Phase 8
 finished — see the merge commit. The branch was kept around as an
@@ -121,7 +122,6 @@ Muse/Muse/
     SidebarView.swift              multi-root OutlineGroup tree + starred section
     GridView.swift                 LazyVGrid, kind-aware icons, water shader
                                    layerEffect when fluidEnabled
-    GlobeView.swift                Fibonacci-sphere image cluster (Phase 8)
     BreadcrumbView.swift           toolbar path breadcrumb
     OpenWithMenu.swift             NSWorkspace registered apps via LaunchServices
     ImageViewer.swift              fit/100% preview overlay
@@ -130,11 +130,20 @@ Muse/Muse/
     DetailPanelView.swift          right-side metadata + tag panel + Analyze
     DuplicatesView.swift           review pane with delete-to-Trash
     ChatPanelView.swift            collapsible chat panel
+    Spatial/
+      SeededRandom.swift           SplitMix64 + FNV-1a for launch-stable layouts
+      CloudPose.swift              25 measured reference poses + stage constants
+      CloudLayout.swift            band-composition pose generation for big folders
+      CloudMath.swift              CSS→SceneKit rotation + stage camera FOVs
+      CloudView.swift              cloud scatter (SceneKit, letterboxed stage)
+      SceneProjection.swift        node → screen rect (hero-viewer source frames)
+      GraphLayout.swift            2D force layout for collection overview
+      SimilarityLayout.swift       3D stress layout from feature-print distances
+      GraphModel.swift             scoped clusters + shared-tag edges + distances
+      GraphView.swift              knowledge graph (replaces GlobeView)
   Components/
     SearchBar.swift                debounced FTS5 search with scope toggle
     MasonryLayout.swift            (kept for future use)
-  SceneKit/
-    FibonacciSphere.swift          point distribution for GlobeView
   Fluid/
     FluidDistortion.metal          existing water-ripple shader (kept)
     FluidSim.swift                 CPU fluid sim (kept)
@@ -183,7 +192,7 @@ should be recorded in `docs/superpowers/plans/file-viewer-rewrite.md`
 1. Open `Muse/Muse.xcodeproj` in Xcode 16+.
 2. Build & run (Cmd+R). The app starts on a clean shell — click
    "Add Folder" in the sidebar to point Muse at any folder on disk.
-3. Toolbar buttons (left → right): breadcrumb · search · grid/globe ·
+3. Toolbar buttons (left → right): breadcrumb · search · grid/cloud/graph ·
    sort · subfolders · analyze · find duplicates · details · chat
    (when AI-capable) · water effect.
 4. Database lives at `~/Library/Application Support/Muse/muse.sqlite`.
