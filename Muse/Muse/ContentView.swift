@@ -48,6 +48,10 @@ struct ContentView: View {
                     ViewerRouter(file: selected)
                         .transition(.opacity)
                 }
+
+                if appState.collectionsOverlayVisible {
+                    CollectionsOverlay().zIndex(50)
+                }
             }
             .toolbar {
                 ToolbarItem(placement: .navigation) {
@@ -68,6 +72,12 @@ struct ContentView: View {
                 }
 
                 ToolbarItemGroup(placement: .primaryAction) {
+                    Button {
+                        appState.collectionsOverlayVisible.toggle()
+                    } label: { Image(systemName: "square.grid.2x2") }
+                    .help("All collections (⌘K)")
+                    .keyboardShortcut("k", modifiers: .command)
+
                     if appState.activeCollectionID != nil {
                         Button {
                             appState.setActiveCollection(nil)
@@ -155,7 +165,11 @@ struct ContentView: View {
         }
         .background(
             Button(action: {
-                if appState.selectedFile != nil { appState.selectedFile = nil }
+                if appState.collectionsOverlayVisible {
+                    appState.collectionsOverlayVisible = false
+                } else if appState.selectedFile != nil {
+                    appState.selectedFile = nil
+                }
             }) { EmptyView() }
                 .keyboardShortcut(.escape, modifiers: [])
                 .hidden()

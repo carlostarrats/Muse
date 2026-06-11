@@ -40,9 +40,13 @@ struct CollectionsRow: View {
 
 // MARK: - Collection card
 
-private struct CollectionCard: View {
+/// Cover card for a single collection. Internal so the ⌘K overlay can
+/// reuse it. By default a tap activates the collection filter; pass
+/// `onSelect` to override (e.g. the overlay selects AND dismisses).
+struct CollectionCard: View {
     @EnvironmentObject var appState: AppState
     let loaded: CollectionStore.Loaded
+    var onSelect: (() -> Void)? = nil
 
     private var isActive: Bool {
         appState.activeCollectionID == loaded.collection.id
@@ -69,7 +73,11 @@ private struct CollectionCard: View {
         .frame(width: 168, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture {
-            appState.setActiveCollection(loaded.collection.id)
+            if let onSelect {
+                onSelect()
+            } else {
+                appState.setActiveCollection(loaded.collection.id)
+            }
         }
         .contextMenu {
             Button("Hide Collection") {
