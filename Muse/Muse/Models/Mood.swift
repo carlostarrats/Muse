@@ -41,14 +41,17 @@ enum Mood: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The guaranteed fallback palette (Ink) — used when Auto has no tint yet.
+    static let fallbackPalette = MoodPalette(
+        backgroundRGB: MoodRGB(r: 0.066, g: 0.066, b: 0.078),
+        tileRGB: MoodRGB(r: 0.118, g: 0.118, b: 0.133),
+        scheme: .dark)
+
     /// nil for .auto — its palette comes from AutoTint at runtime.
     var palette: MoodPalette? {
         switch self {
         case .ink:     // matches the Graph scene's Ink
-            return MoodPalette(
-                backgroundRGB: MoodRGB(r: 0.066, g: 0.066, b: 0.078),
-                tileRGB: MoodRGB(r: 0.118, g: 0.118, b: 0.133),
-                scheme: .dark)
+            return Self.fallbackPalette
         case .paper:   // warm beige, as prototyped (#E6CFB5)
             return MoodPalette(
                 backgroundRGB: MoodRGB(r: 0.902, g: 0.812, b: 0.710),

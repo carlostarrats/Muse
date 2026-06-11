@@ -39,8 +39,14 @@ final class MoodTests: XCTestCase {
         XCTAssertEqual(Mood.blush.palette!.scheme, .light)
     }
 
+    func testFallbackPaletteIsInk() {
+        XCTAssertEqual(Mood.fallbackPalette, Mood.ink.palette)
+    }
+
     func testPersistenceRoundTrip() {
-        let d = UserDefaults(suiteName: "mood-tests-\(UUID().uuidString)")!
+        let name = "mood-tests-\(UUID().uuidString)"
+        let d = UserDefaults(suiteName: name)!
+        defer { d.removePersistentDomain(forName: name) }
         Mood.navy.save(to: d)
         XCTAssertEqual(Mood.load(from: d), .navy)
     }
