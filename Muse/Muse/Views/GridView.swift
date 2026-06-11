@@ -53,7 +53,8 @@ struct GridView: View {
                 .padding(20)
             }
         }
-        .background(Color(NSColor.windowBackgroundColor))
+        .background(appState.moodPalette.background)
+        .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
         .coordinateSpace(name: "gridViewport")
         .onContinuousHover { phase in
             switch phase {
@@ -109,7 +110,7 @@ private struct TileView: View {
         VStack(spacing: 6) {
             ZStack {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color(NSColor.controlBackgroundColor))
+                    .fill(appState.moodPalette.tileFill)
                     .frame(width: size, height: size)
                 if let img = thumbnail {
                     Image(nsImage: img)

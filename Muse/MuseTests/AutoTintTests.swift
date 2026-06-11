@@ -64,4 +64,24 @@ final class AutoTintTests: XCTestCase {
             queue: q, paths: ["/a/x.png", "/a/y.png", "/a/dead.png"])
         XCTAssertEqual(colors, ["#AA3322"])
     }
+
+    func testDominantColorsRespectsLimit() async throws {
+        let q = try DatabaseQueue()
+        try Database.makeMigrator().migrate(q)
+        try await q.write { db in
+            for i in 1...3 {
+                try db.execute(sql: """
+                    INSERT INTO files (id, kind, last_seen_at, dominant_color)
+                    VALUES ('f\(i)', 'image', 0, '#11223\(i)')
+                    """)
+                try db.execute(sql: """
+                    INSERT INTO paths (id, file_id, absolute_path, is_alive)
+                    VALUES ('p\(i)', 'f\(i)', '/a/\(i).png', 1)
+                    """)
+            }
+        }
+        let colors = try await AutoTint.dominantColors(
+            queue: q, paths: ["/a/1.png", "/a/2.png", "/a/3.png"], limit: 1)
+        XCTAssertEqual(colors, ["#112231"])
+    }
 }

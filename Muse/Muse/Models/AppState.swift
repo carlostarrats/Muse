@@ -113,6 +113,7 @@ final class AppState: ObservableObject {
         activeCollectionID = id
         guard let id else {
             activeCollectionPaths = nil
+            refreshAutoTint()
             return
         }
         Task { @MainActor in
@@ -126,6 +127,7 @@ final class AppState: ObservableObject {
             // Don't clobber a newer selection that landed while loading.
             if activeCollectionID == id {
                 activeCollectionPaths = Set(paths)
+                refreshAutoTint()
             }
         }
     }
@@ -141,6 +143,40 @@ final class AppState: ObservableObject {
     // MARK: - Burn-up delete (polish spec §4)
 
     let deletion = DeleteCoordinator()
+
+    // MARK: - Background mood (polish spec §4)
+
+    @Published var mood: Mood = Mood.load()
+
+    /// Computed tint for the Auto mood; nil until colors load (falls back to Ink).
+    @Published var autoTint: AutoTint?
+
+    var moodPalette: MoodPalette {
+        mood.palette ?? autoTint?.palette ?? Mood.fallbackPalette
+    }
+
+    func setMood(_ m: Mood) {
+        mood = m
+        m.save()
+        refreshAutoTint()
+    }
+
+    /// Recompute the Auto tint from what's on screen. One indexed read
+    /// over ≤48 paths — cheap enough to run on every scope change.
+    func refreshAutoTint() {
+        guard mood == .auto else { return }
+        guard let q = Database.shared.dbQueue else {
+            autoTint = nil
+            return
+        }
+        let paths = visibleFiles.prefix(48).map { $0.url.standardizedFileURL.path }
+        Task { @MainActor in
+            let hexes = (try? await AutoTint.dominantColors(queue: q, paths: Array(paths))) ?? []
+            withAnimation(.easeInOut(duration: 0.6)) {
+                autoTint = AutoTint.blend(hexes: hexes)
+            }
+        }
+    }
 
     // MARK: - Watcher
 
@@ -280,6 +316,7 @@ final class AppState: ObservableObject {
         reloadCurrentFiles()
         startWatching(folder.url)
         scheduleIndexing(for: folder.url)
+        refreshAutoTint()
     }
 
     /// Kick off active-folder indexing on the high-priority queue.
@@ -364,12 +401,14 @@ final class AppState: ObservableObject {
         isSearchActive = true
         // search results keep relevance rank; sort modes apply to folder browsing only
         currentFiles = results
+        refreshAutoTint()
     }
 
     func clearSearch() {
         searchQuery = ""
         isSearchActive = false
         reloadCurrentFiles()
+        refreshAutoTint()
     }
 
     func analyzeCurrentFolder() async {
@@ -412,6 +451,7 @@ final class AppState: ObservableObject {
     func toggleSubfolders() {
         showSubfolders.toggle()
         reloadCurrentFiles()
+        refreshAutoTint()
     }
 
     // MARK: - Watcher
