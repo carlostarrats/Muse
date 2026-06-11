@@ -69,24 +69,28 @@ final class AnalyzePipeline: ObservableObject {
         let kind = AssetKind.detect(at: url)
         guard kind == .image || kind == .raw || kind == .psd else { return }
 
-        let result = await VisionServices.analyze(url: url)
+        let registry = IntelligenceRegistry.shared
+        guard let out = await registry.tagger.analyze(url: url) else { return }
 
         guard let queue = Database.shared.dbQueue else { return }
-        let caption = result.caption()
+        let caption = out.caption
         let basename = url.lastPathComponent
         let now = Int64(Date().timeIntervalSince1970)
-        let hasFP = result.didSucceedFeaturePrint
+        let paletteJSON: String? = out.palette.isEmpty ? nil :
+            String(data: try! JSONEncoder().encode(out.palette), encoding: .utf8)
+        let taggerVersion = registry.tagger.modelVersion
 
         do {
             try await queue.write { db in
                 // Update files row
                 if var file = try FileRow.filter(FileRow.Columns.id == fileID).fetchOne(db) {
-                    file.width = result.width
-                    file.height = result.height
+                    file.width = out.width
+                    file.height = out.height
                     file.caption = caption
-                    file.dominant_color = result.dominantColor
-                    if hasFP {
-                        file.feature_print = result.featurePrint
+                    file.dominant_color = out.dominantColor
+                    file.palette = paletteJSON
+                    if let fp = out.featurePrint {
+                        file.feature_print = fp
                     }
                     file.last_seen_at = now
                     try file.update(db)
@@ -94,15 +98,17 @@ final class AnalyzePipeline: ObservableObject {
 
                 // Insert vision tags (manual-beats-vision per Q32 — ignore on conflict if a
                 // manual tag already exists for this label).
-                for (label, conf) in result.classifications {
+                for tag in out.tags {
                     if let existing = try TagRow
                         .filter(TagRow.Columns.file_id == fileID)
-                        .filter(TagRow.Columns.label == label)
+                        .filter(TagRow.Columns.label == tag.label)
                         .fetchOne(db) {
-                        if existing.source == "vision" {
-                            // Update confidence
+                        if existing.source != "manual" {
+                            // Update confidence + provenance
                             var t = existing
-                            t.confidence = Double(conf)
+                            t.confidence = tag.confidence
+                            t.source = tag.source
+                            t.model_version = taggerVersion
                             try t.update(db)
                         }
                         // Manual tag: leave alone
@@ -110,10 +116,10 @@ final class AnalyzePipeline: ObservableObject {
                         var t = TagRow(
                             id: UUID().uuidString,
                             file_id: fileID,
-                            label: label,
-                            source: "vision",
-                            confidence: Double(conf),
-                            model_version: nil
+                            label: tag.label,
+                            source: tag.source,
+                            confidence: tag.confidence,
+                            model_version: taggerVersion
                         )
                         try t.insert(db)
                     }
@@ -124,10 +130,25 @@ final class AnalyzePipeline: ObservableObject {
                 try db.execute(sql: """
                     INSERT INTO files_fts(file_id, basename, ocr_text, caption)
                     VALUES (?, ?, ?, ?)
-                """, arguments: [fileID, basename, result.ocrText, caption])
+                """, arguments: [fileID, basename, out.ocrText, caption])
             }
         } catch {
             print("[AnalyzePipeline] write failed: \(error)")
+        }
+
+        // Embedding write — separate from the main transaction; embedder may be nil.
+        if let embedder = registry.embedder {
+            let doc = (out.tags.map(\.label) + [out.caption ?? "", String(out.ocrText.prefix(300))])
+                .joined(separator: " ")
+            if let vec = embedder.embed(doc) {
+                try? await queue.write { db in
+                    var row = EmbeddingRow(file_id: fileID,
+                                           vector: VectorMath.toData(vec),
+                                           model_version: embedder.modelVersion,
+                                           updated_at: Int64(Date().timeIntervalSince1970))
+                    try row.save(db)
+                }
+            }
         }
     }
 }
