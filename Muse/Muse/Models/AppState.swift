@@ -41,6 +41,10 @@ final class AppState: ObservableObject {
     /// Currently selected file (drives preview/detail).
     @Published var selectedFile: FileNode?
 
+    /// Set true to ask the hero viewer to run its close flight (Esc path).
+    /// The viewer resets it to false in onCloseFinished.
+    @Published var viewerClosing = false
+
     // MARK: - Modes
 
     /// Q2: include subfolders in the grid contents.
@@ -70,6 +74,12 @@ final class AppState: ObservableObject {
     /// Grid vs Globe view mode for the active folder.
     enum ViewMode: String { case grid, globe }
     @Published var viewMode: ViewMode = .grid
+
+    /// Global (window) frames of grid tiles, keyed by file path. Used as the
+    /// hero-transition source rect. Deliberately NOT @Published — frames
+    /// update constantly during scroll and publishing would thrash the UI;
+    /// the viewer reads this once at open.
+    var tileFrames: [String: CGRect] = [:]
 
     // MARK: - Collections (AI brain)
 

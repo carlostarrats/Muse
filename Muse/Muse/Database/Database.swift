@@ -192,6 +192,19 @@ final class Database {
             }
         }
 
+        migrator.registerMigration("v3_membership") { db in
+            try db.alter(table: "collection_members") { t in
+                t.add(column: "added_by", .text).notNull().defaults(to: "auto")  // "auto" | "manual"
+            }
+            try db.create(table: "collection_exclusions") { t in
+                t.column("collection_id", .text).notNull()
+                    .references("collections", onDelete: .cascade)
+                t.column("file_id", .text).notNull()
+                    .references("files", onDelete: .cascade)
+                t.primaryKey(["collection_id", "file_id"])
+            }
+        }
+
         return migrator
     }
 }

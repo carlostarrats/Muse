@@ -5,7 +5,7 @@
 //  Routes a FileNode to the right viewer for its AssetKind. Each
 //  case wraps the viewer body in ViewerChrome for consistent shell
 //  (dimmed background, close button, escape-to-dismiss) — except
-//  ImageViewer, which has its own dim/dismiss layer.
+//  image kinds, which get the hero viewer (its own backdrop/flight).
 //
 
 import SwiftUI
@@ -17,7 +17,8 @@ struct ViewerRouter: View {
         switch file.kind {
         case .image, .raw, .psd:
             // NSImage handles RAW + PSD flat composite via ImageIO.
-            ImageViewer(file: file)
+            HeroImageViewer(file: file)
+                .id(file.url)
 
         case .pdf:
             ViewerChrome(title: file.basename) {

@@ -49,9 +49,11 @@ final class CollectionsEngine: ObservableObject {
         let matched = CollectionIdentity.match(old: old,
                                                new: clusters.map { Set($0.memberIDs) })
 
-        // drop collections that no longer exist
+        // drop collections that no longer exist — but never manual
+        // collections or collections holding manual members
         let liveIDs = Set(matched.map(\.id))
-        for staleID in old.keys where !liveIDs.contains(staleID) {
+        let protected = (try? await CollectionStore.protectedCollectionIDs(queue: q)) ?? []
+        for staleID in old.keys where !liveIDs.contains(staleID) && !protected.contains(staleID) {
             try? await q.write { db in
                 try db.execute(sql: "DELETE FROM collections WHERE id = ?", arguments: [staleID])
             }
