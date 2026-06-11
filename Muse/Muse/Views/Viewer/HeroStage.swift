@@ -16,7 +16,6 @@ struct HeroStage: View {
 
     @State private var displayRect: CGRect = .zero
     @State private var image: NSImage?
-    @State private var fullResLoaded = false
     @State private var dragStartPan: CGSize? = nil
 
     private var fitRect: CGRect {
@@ -42,6 +41,11 @@ struct HeroStage: View {
         .onAppear { open() }
         .onChange(of: isClosing) { _, closing in if closing { close() } }
         .onChange(of: url) { _, _ in flipTo() }
+        .onChange(of: viewport) { _, _ in
+            // spec: re-fit live on window resize
+            guard !isClosing else { return }
+            withAnimation(.easeOut(duration: 0.2)) { displayRect = fitRect }
+        }
         .task(id: url) { await loadFullRes() }
     }
 
@@ -67,12 +71,11 @@ struct HeroStage: View {
 
     private func flipTo() {
         zoom = 1; pan = .zero
-        fullResLoaded = false
+        // thumbnail swaps in fast; .task(id: url) handles the full-res load
         Task {
             image = await ThumbnailCache.shared.thumbnail(
                 for: url, size: CGSize(width: 320, height: 320))
             withAnimation(.easeOut(duration: 0.2)) { displayRect = fitRect }
-            await loadFullRes()
         }
     }
 
@@ -81,7 +84,6 @@ struct HeroStage: View {
         let img = await Task.detached(priority: .userInitiated) { NSImage(contentsOf: u) }.value
         if let img, u == url {
             image = img
-            fullResLoaded = true
             withAnimation(.easeOut(duration: 0.2)) { displayRect = fitRect }
         }
     }

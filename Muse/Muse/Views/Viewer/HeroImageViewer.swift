@@ -31,6 +31,10 @@ struct HeroImageViewer: View {
     /// once the toast dismisses.
     @State private var lingering = false
     @State private var scrollMonitor: Any?
+    @State private var backdropVisible = true
+    /// Overlay's frame in SwiftUI .global coords; the scroll monitor uses
+    /// minX to ignore scrolls over the sidebar.
+    @State private var overlayGlobalFrame: CGRect = .zero
 
     init(file: FileNode) {
         self.file = file
@@ -43,6 +47,8 @@ struct HeroImageViewer: View {
             ZStack {
                 if !lingering {
                     ViewerBackdrop(hexColor: details?.dominantColor)
+                        .opacity(backdropVisible ? 1 : 0)
+                        .animation(.easeOut(duration: 0.4), value: backdropVisible)
                         .contentShape(Rectangle())
                         .onTapGesture { startClose() }
 
@@ -61,18 +67,31 @@ struct HeroImageViewer: View {
                 ViewerToast(toast: $toast)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .onAppear { viewportSize = geo.size }
+            .onAppear {
+                viewportSize = geo.size
+                overlayGlobalFrame = overlayGlobal
+            }
             .onChange(of: geo.size) { _, s in viewportSize = s }
+            .onChange(of: overlayGlobal) { _, f in overlayGlobalFrame = f }
         }
         .ignoresSafeArea()
-        .background(KeyCaptureView(onLeft: { flip(-1) },
-                                   onRight: { flip(1) },
-                                   onReturn: {}))
+        .background {
+            // Detach key/click capture during the delete-linger state so the
+            // grid stays fully interactive under the undo toast.
+            if !lingering {
+                KeyCaptureView(onLeft: { flip(-1) },
+                               onRight: { flip(1) },
+                               onReturn: {})
+            }
+        }
         .onAppear {
             installScrollMonitor()
             withAnimation(.easeOut(duration: 0.4).delay(0.15)) { chromeVisible = true }
         }
-        .onDisappear { removeScrollMonitor() }
+        .onDisappear {
+            removeScrollMonitor()
+            appState.viewerClosing = false
+        }
         .onChange(of: appState.viewerClosing) { _, closing in
             if closing { startClose() }
         }
@@ -218,6 +237,7 @@ struct HeroImageViewer: View {
     private func startClose() {
         guard !isClosing else { return }
         withAnimation(.easeOut(duration: 0.12)) { chromeVisible = false }
+        backdropVisible = false   // fades out during the close flight
         isClosing = true
     }
 
@@ -289,7 +309,7 @@ struct HeroImageViewer: View {
         }
     }
 
-    private static func imagePixelSize(at url: URL) -> CGSize? {
+    nonisolated private static func imagePixelSize(at url: URL) -> CGSize? {
         guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
               let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
               let w = props[kCGImagePropertyPixelWidth] as? CGFloat,
@@ -308,7 +328,11 @@ struct HeroImageViewer: View {
                   let window = event.window, window.isKeyWindow else { return event }
             let width = window.contentView?.bounds.width ?? window.frame.width
             let columnLeft = width - ViewerGeometry.columnWidth - ViewerGeometry.columnMargin
-            guard event.locationInWindow.x < columnLeft else { return event }
+            // locationInWindow is bottom-left origin, but X is unaffected by the
+            // Y-flip — comparing against the overlay's global minX keeps scrolls
+            // over the sidebar from zooming.
+            guard event.locationInWindow.x >= overlayGlobalFrame.minX,
+                  event.locationInWindow.x < columnLeft else { return event }
             let dy = event.scrollingDeltaY
             guard dy != 0 else { return event }
             setZoom(zoom * (dy > 0 ? 1.08 : 0.93))

@@ -31,6 +31,7 @@ struct ViewerInfoColumn: View {
     @State private var tagsExpanded = false
     @State private var newCollectionName = ""
     @State private var newTagLabel = ""
+    @State private var tagSuggestions: [PillItem] = []
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -144,11 +145,17 @@ struct ViewerInfoColumn: View {
                          show("Removed \(pill.label)")
                      }
                  }) {
-            // No global tag list exists — the expander offers create-only.
-            CardExpander(candidates: [],
+            CardExpander(candidates: tagSuggestions,
                          placeholder: "…or create a new one",
                          text: $newTagLabel,
-                         onCandidateTap: { _ in },
+                         onCandidateTap: { candidate in
+                             Task {
+                                 _ = await TagStore.shared.addManualTag(label: candidate.label, for: url)
+                                 await refresh()
+                                 await loadTagSuggestions()
+                                 show("Added \(candidate.label)")
+                             }
+                         },
                          onCreate: { label in
                              Task {
                                  _ = await TagStore.shared.addManualTag(label: label, for: url)
@@ -156,7 +163,23 @@ struct ViewerInfoColumn: View {
                                  show("Added \(label)")
                              }
                          })
+            .task { await loadTagSuggestions() }
         }
+    }
+
+    /// Most-used tag labels across the library that aren't already on this file.
+    private func loadTagSuggestions() async {
+        guard let queue = Database.shared.dbQueue else { return }
+        let current = Set((details?.tags ?? []).map(\.label))
+        let labels: [String] = (try? await queue.read { db in
+            try String.fetchAll(db, sql: """
+                SELECT label FROM tags GROUP BY label ORDER BY COUNT(*) DESC LIMIT 24
+                """)
+        }) ?? []
+        tagSuggestions = labels
+            .filter { !current.contains($0) }
+            .prefix(12)
+            .map { PillItem(id: $0, label: $0) }
     }
 
     // MARK: - Colors card
