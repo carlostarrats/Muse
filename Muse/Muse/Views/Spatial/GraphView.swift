@@ -144,9 +144,14 @@ final class GraphSceneCoordinator: NSObject {
 
     // 3D similarity spread (Task 11)
     private var spreadCache: [String: [SIMD3<Float>]] = [:]
-    private var spreadTask: Task<Void, Never>?
+    nonisolated(unsafe) private var spreadTask: Task<Void, Never>?
+    nonisolated(unsafe) private var tailThumbnailTask: Task<Void, Never>?
 
-    deinit { thumbnailTask?.cancel() }
+    deinit {
+        thumbnailTask?.cancel()
+        spreadTask?.cancel()
+        tailThumbnailTask?.cancel()
+    }
 
     func rebuildIfNeeded(data newData: GraphData, in view: SCNView) {
         let newIdentity = newData.clusters.map { "\($0.id):\($0.memberPaths.count)" }
@@ -155,6 +160,7 @@ final class GraphSceneCoordinator: NSObject {
         identity = newIdentity
         thumbnailTask?.cancel()
         spreadTask?.cancel()
+        tailThumbnailTask?.cancel()
         spreadCache = [:]
         data = newData
         focusedID = nil
@@ -365,6 +371,7 @@ final class GraphSceneCoordinator: NSObject {
             guard let q = Database.shared.dbQueue else { return }
             let ids = cluster.memberFileIDs
             let printsByID = (try? await GraphModel.featurePrints(queue: q, fileIDs: ids)) ?? [:]
+            if Task.isCancelled { return }   // skip the O(n²) compute on stale work
             let prints: [Data?] = ids.map { printsByID[$0] }
             let seed = SeededRandom.fnv1a(ids)
             let positions = await Task.detached(priority: .userInitiated) {
@@ -400,9 +407,11 @@ final class GraphSceneCoordinator: NSObject {
     private func loadAllThumbnails(clusterIndex: Int) {
         let cluster = data.clusters[clusterIndex]
         let nodes = memberNodes[clusterIndex]
-        Task { @MainActor in
+        tailThumbnailTask?.cancel()
+        tailThumbnailTask = Task { @MainActor in
             for (mi, path) in cluster.memberPaths.enumerated()
             where mi >= Self.heapVisibleCount {
+                if Task.isCancelled { return }
                 guard mi < nodes.count,
                       let plane = nodes[mi].geometry as? SCNPlane else { continue }
                 if let img = await ThumbnailCache.shared.thumbnail(
