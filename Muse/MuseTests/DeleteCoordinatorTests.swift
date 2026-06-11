@@ -66,6 +66,28 @@ final class DeleteCoordinatorTests: XCTestCase {
         XCTAssertTrue(c.burningPaths.isEmpty)
     }
 
+    func testFailedUndoShowsErrorToast() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("muse-delete-tests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent("d.png")
+        try Data("x".utf8).write(to: url)
+
+        let c = DeleteCoordinator()
+        c.burnDuration = 0
+        var restored: [FileNode] = []
+        c.onRestore = { restored.append($0) }
+
+        await c.deleteWithBurn(FileNode(url: url))
+        // Original folder vanishes before Undo
+        try FileManager.default.removeItem(at: dir)
+        c.toast?.action?()   // Undo fails (no destination dir)
+
+        XCTAssertTrue(restored.isEmpty)
+        XCTAssertEqual(c.toast?.message, "Couldn't restore — file is in the Trash")
+        XCTAssertNil(c.toast?.action)
+    }
+
     func testReentrantDeleteIgnoredWhileBurning() async throws {
         let url = try tempFile("c.png")
         let c = DeleteCoordinator()

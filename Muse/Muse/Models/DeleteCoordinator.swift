@@ -44,6 +44,7 @@ final class DeleteCoordinator: ObservableObject {
             withAnimation(.easeIn(duration: 0.2)) {
                 onRemove(file.url)
             }
+            // Last-wins toast replacement is intentional for v1 single-file deletes.
             toast = ToastData(message: "Moved to Trash", actionLabel: "Undo") { [weak self] in
                 self?.restore(ticket: ticket, node: file)
             }
@@ -57,7 +58,10 @@ final class DeleteCoordinator: ObservableObject {
             try TrashManager.undo(ticket)
             onRestore(node)
         } catch {
-            // FSEvents reload reconciles if the file already moved back.
+            // Already back at the original path (FSEvents/external move) —
+            // the folder reload reconciles; stay quiet.
+            guard !FileManager.default.fileExists(atPath: ticket.originalURL.path) else { return }
+            toast = ToastData(message: "Couldn't restore — file is in the Trash")
         }
     }
 }
