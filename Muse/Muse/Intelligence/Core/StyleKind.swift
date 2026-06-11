@@ -9,76 +9,33 @@ enum StyleKind {
                          ocrLength: Int, faceCount: Int) -> String {
         let keys = Set(labels.keys.map { $0.lowercased() })
 
-        // Rule 1: Screen/screenshot
-        if hasScreenLabel(keys) && ocrLength > 80 { return "screenshot" }
+        // Rule 1: Screen words + high OCR
+        if hasAny(keys, ["screen", "screenshot", "monitor", "computer", "website", "software"]) && ocrLength > 80 { return "screenshot" }
 
-        let isScreenLike = computeScreenLikeness(width: width, height: height)
-        if isScreenLike && ocrLength > 400 { return "screenshot" }
+        // Rule 2: Screen-like aspect ratio + high OCR
+        if isScreenLike(width: width, height: height) && ocrLength > 400 { return "screenshot" }
 
-        // Rule 2: Diagram
-        if hasDiagramLabel(keys) { return "diagram" }
+        // Rule 3: Diagram words
+        if hasAny(keys, ["diagram", "chart", "graph", "blueprint", "map"]) { return "diagram" }
 
-        // Rule 3: Poster
-        if hasPosterLabel(keys) { return "poster" }
+        // Rule 4: Poster words
+        if hasAny(keys, ["poster", "flyer", "advertisement", "album cover", "book"]) { return "poster" }
 
-        // Rule 4: Illustration
-        if hasIllustrationLabel(keys) { return "illustration" }
+        // Rule 5: Illustration words
+        if hasAny(keys, ["illustration", "drawing", "cartoon", "painting", "sketch", "anime", "art"]) { return "illustration" }
 
-        // Rule 5: High OCR text = diagram
+        // Rule 6: High OCR text = diagram
         if ocrLength > 600 { return "diagram" }
 
+        // Rule 7: Default to photo
         return "photo"
     }
 
-    private static func hasScreenLabel(_ keys: Set<String>) -> Bool {
-        let screenWords = ["screen", "screenshot", "monitor", "computer", "website", "software"]
-        for key in keys {
-            for word in screenWords {
-                if key.contains(word) {
-                    return true
-                }
-            }
-        }
-        return false
+    private static func hasAny(_ keys: Set<String>, _ words: [String]) -> Bool {
+        keys.contains { k in words.contains { k.contains($0) } }
     }
 
-    private static func hasDiagramLabel(_ keys: Set<String>) -> Bool {
-        let diagramWords = ["diagram", "chart", "graph", "blueprint", "map"]
-        for key in keys {
-            for word in diagramWords {
-                if key.contains(word) {
-                    return true
-                }
-            }
-        }
-        return false
-    }
-
-    private static func hasPosterLabel(_ keys: Set<String>) -> Bool {
-        let posterWords = ["poster", "flyer", "advertisement", "album cover", "book"]
-        for key in keys {
-            for word in posterWords {
-                if key.contains(word) {
-                    return true
-                }
-            }
-        }
-        return false
-    }
-
-    private static func hasIllustrationLabel(_ keys: Set<String>) -> Bool {
-        let illustrationWords = ["illustration", "drawing", "cartoon", "painting", "sketch", "anime", "art"]
-        for key in keys {
-            for word in illustrationWords {
-                if key.contains(word) {
-                    return true
-                }
-            }
-        }
-        return false
-    }
-
-    private static func computeScreenLikeness(width: Int?, height: Int?) -> Bool {
+    private static func isScreenLike(width: Int?, height: Int?) -> Bool {
         guard let w = width, let h = height, w > 0, h > 0 else { return false }
         let aspect = Double(w) / Double(h)
 
