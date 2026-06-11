@@ -20,6 +20,8 @@ final class CollectionsEngine: ObservableObject {
     @Published var collections: [CollectionStore.Loaded] = []
     @Published var isClustering = false
 
+    private init() {}
+
     func reload() async {
         guard let q = Database.shared.dbQueue else { return }
         collections = (try? await CollectionStore.fetchAll(queue: q)) ?? []
@@ -41,7 +43,8 @@ final class CollectionsEngine: ObservableObject {
         }) ?? []
         guard !items.isEmpty else { return }
 
-        let clusters = registry.clusterer.cluster(items)
+        let clusterer = registry.clusterer
+        let clusters = await Task.detached(priority: .userInitiated) { clusterer.cluster(items) }.value
         let old = (try? await CollectionStore.currentMembership(queue: q)) ?? [:]
         let matched = CollectionIdentity.match(old: old,
                                                new: clusters.map { Set($0.memberIDs) })

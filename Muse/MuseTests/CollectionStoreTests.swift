@@ -50,4 +50,15 @@ final class CollectionStoreTests: XCTestCase {
         let all = try await CollectionStore.fetchAll(queue: q)
         XCTAssertEqual(Set(all[0].memberIDs), Set(["f3", "f4"]))
     }
+
+    func testUpsertPreservesHiddenFlag() async throws {
+        let q = try makeQueue()
+        try await CollectionStore.upsert(queue: q, id: "c1", name: "Dogs",
+                                         memberIDs: ["f1"], modelVersion: "t")
+        try await CollectionStore.setHidden(queue: q, id: "c1", hidden: true)
+        try await CollectionStore.upsert(queue: q, id: "c1", name: "Dogs v2",
+                                         memberIDs: ["f1", "f2"], modelVersion: "t2")
+        let all = try await CollectionStore.fetchAll(queue: q)
+        XCTAssertTrue(all.isEmpty, "hidden collection must stay hidden after upsert")
+    }
 }

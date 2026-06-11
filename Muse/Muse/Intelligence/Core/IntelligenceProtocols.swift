@@ -39,7 +39,7 @@ struct Cluster {
     var memberIDs: [String]
 }
 
-protocol Clusterer {
+protocol Clusterer: Sendable {
     var modelVersion: String { get }
     func cluster(_ items: [ClusterItem]) -> [Cluster]
 }
