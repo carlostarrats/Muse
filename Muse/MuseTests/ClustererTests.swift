@@ -24,4 +24,12 @@ final class ClustererTests: XCTestCase {
         let items = [ClusterItem(id: "n", textVector: nil, featurePrint: nil)]
         XCTAssertTrue(HybridClusterer().cluster(items).isEmpty)
     }
+    func testUndersizedGroupDroppedAmongLargerOnes() {
+        var items: [ClusterItem] = []
+        for i in 0..<4 { items.append(item("a\(i)", [1, 0.01 * Float(i), 0])) }
+        for i in 0..<2 { items.append(item("s\(i)", [0, 1, 0.01 * Float(i)])) }
+        let clusters = HybridClusterer().cluster(items)
+        XCTAssertEqual(clusters.count, 1)
+        XCTAssertEqual(Set(clusters[0].memberIDs), Set(["a0", "a1", "a2", "a3"]))
+    }
 }

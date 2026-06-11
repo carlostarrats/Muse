@@ -19,7 +19,11 @@ enum CollectionIdentity {
                 if uni > 0 { pairs.append((inter / uni, oldID, i)) }
             }
         }
-        pairs.sort { $0.score > $1.score }
+        pairs.sort {
+            if $0.score != $1.score { return $0.score > $1.score }
+            if $0.oldID != $1.oldID { return $0.oldID < $1.oldID }
+            return $0.newIdx < $1.newIdx
+        }
         var assigned: [Int: String] = [:]
         for p in pairs where p.score > 0.4 {
             guard available[p.oldID] != nil, assigned[p.newIdx] == nil else { continue }
