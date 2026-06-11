@@ -54,6 +54,8 @@ struct ContentView: View {
                 if appState.collectionsOverlayVisible {
                     CollectionsOverlay().zIndex(50)
                 }
+                GridToastHost(deletion: appState.deletion)
+                    .zIndex(60)
             }
             .toolbar {
                 ToolbarItem(placement: .navigation) {
@@ -250,6 +252,15 @@ struct ContentView: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .padding(.horizontal, 12)
         .padding(.bottom, 12)
+    }
+}
+
+/// Observes the DeleteCoordinator directly — nested ObservableObjects
+/// don't republish through AppState.
+private struct GridToastHost: View {
+    @ObservedObject var deletion: DeleteCoordinator
+    var body: some View {
+        ViewerToast(toast: $deletion.toast)
     }
 }
 

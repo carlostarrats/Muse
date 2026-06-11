@@ -138,6 +138,10 @@ final class AppState: ObservableObject {
     @Published var fluidDispImage: Image = FluidSim.neutralImage
     private var fluidCancellable: AnyCancellable?
 
+    // MARK: - Burn-up delete (polish spec §4)
+
+    let deletion = DeleteCoordinator()
+
     // MARK: - Watcher
 
     private var watcher: FolderWatcher?
@@ -148,6 +152,19 @@ final class AppState: ObservableObject {
         fluidCancellable = fluidSim.$dispImage
             .throttle(for: .milliseconds(33), scheduler: RunLoop.main, latest: true)
             .assign(to: \.fluidDispImage, on: self)
+
+        deletion.onRemove = { [weak self] url in
+            guard let self else { return }
+            self.currentFiles.removeAll { $0.url == url }
+            if self.selectedFile?.url == url { self.selectedFile = nil }
+        }
+        deletion.onRestore = { [weak self] node in
+            guard let self else { return }
+            if !self.currentFiles.contains(where: { $0.url == node.url }) {
+                self.currentFiles.append(node)
+                self.resort()
+            }
+        }
 
         rebuildRootNodes()
         bookmarksCancellable = bookmarks.$roots
