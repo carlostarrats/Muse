@@ -25,8 +25,13 @@ struct SearchBar: View {
                 .textFieldStyle(.plain)
                 .focused($isFocused)
                 .onChange(of: text) { _, newValue in
+                    guard newValue != appState.searchQuery else { return }
                     appState.searchQuery = newValue
                     debounceAndRun(query: newValue)
+                }
+                // programmatic searches (e.g. viewer tag taps) show in the bar
+                .onChange(of: appState.searchQuery) { _, newValue in
+                    if text != newValue { text = newValue }
                 }
                 .onSubmit {
                     fire(query: text)
