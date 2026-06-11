@@ -58,6 +58,21 @@ enum CollectionStore {
         }
     }
 
+    /// Alive absolute paths for a collection's members (for mosaics and
+    /// grid filtering). Optional limit for cover thumbnails.
+    static func alivePaths(queue: DatabaseQueue, collectionID: String,
+                           limit: Int? = nil) async throws -> [String] {
+        try await queue.read { db in
+            var sql = """
+                SELECT absolute_path FROM paths
+                WHERE is_alive = 1 AND file_id IN
+                    (SELECT file_id FROM collection_members WHERE collection_id = ?)
+                """
+            if let limit { sql += " LIMIT \(limit)" }
+            return try String.fetchAll(db, sql: sql, arguments: [collectionID])
+        }
+    }
+
     /// Old state for identity matching: id -> member set
     static func currentMembership(queue: DatabaseQueue) async throws -> [String: Set<String>] {
         try await queue.read { db in

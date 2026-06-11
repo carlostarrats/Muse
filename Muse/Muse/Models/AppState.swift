@@ -79,6 +79,42 @@ final class AppState: ObservableObject {
     /// Collection currently expanded/inspected in the overlay, if any.
     @Published var activeCollectionID: String? = nil
 
+    /// Alive absolute paths of the active collection's members. nil when
+    /// no collection filter is active (FileNode has no DB id, so the grid
+    /// filter resolves membership by path).
+    @Published var activeCollectionPaths: Set<String>? = nil
+
+    /// Files the grid should show: currentFiles, optionally narrowed to
+    /// the active collection's members.
+    var visibleFiles: [FileNode] {
+        guard let paths = activeCollectionPaths else { return currentFiles }
+        return currentFiles.filter { paths.contains($0.url.path) }
+    }
+
+    /// Set (or clear, with nil) the active collection filter. Loads the
+    /// member path set asynchronously; always go through this method
+    /// rather than setting `activeCollectionID` directly.
+    func setActiveCollection(_ id: String?) {
+        activeCollectionID = id
+        guard let id else {
+            activeCollectionPaths = nil
+            return
+        }
+        Task { @MainActor in
+            guard let q = Database.shared.dbQueue else {
+                activeCollectionPaths = []
+                return
+            }
+            let paths = (try? await CollectionStore.alivePaths(
+                queue: q, collectionID: id
+            )) ?? []
+            // Don't clobber a newer selection that landed while loading.
+            if activeCollectionID == id {
+                activeCollectionPaths = Set(paths)
+            }
+        }
+    }
+
     // MARK: - Water shader
 
     @Published var fluidEnabled: Bool = false

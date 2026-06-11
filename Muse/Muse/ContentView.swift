@@ -20,7 +20,10 @@ struct ContentView: View {
         } detail: {
             ZStack {
                 HStack(spacing: 0) {
-                    Group {
+                    VStack(spacing: 0) {
+                        if appState.viewMode == .grid && !appState.isSearchActive {
+                            CollectionsRow()
+                        }
                         switch appState.viewMode {
                         case .grid:
                             GridView()
@@ -64,7 +67,15 @@ struct ContentView: View {
                     .help("Switch between grid and globe views")
                 }
 
-                ToolbarItem(placement: .primaryAction) {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    if appState.activeCollectionID != nil {
+                        Button {
+                            appState.setActiveCollection(nil)
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                        }
+                        .help("Clear collection filter")
+                    }
                     sortMenu
                 }
 
