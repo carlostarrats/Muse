@@ -35,6 +35,7 @@ struct ContentView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(appState.moodPalette.background)
+                    .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
 
                     if appState.detailPanelVisible, let selected = appState.selectedFile {
                         DetailPanelView(file: selected)

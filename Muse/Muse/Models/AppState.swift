@@ -156,10 +156,19 @@ final class AppState: ObservableObject {
     }
 
     func setMood(_ m: Mood) {
-        mood = m
+        withAnimation(.easeInOut(duration: 0.35)) {
+            mood = m
+            // Named moods ignore autoTint; clearing it makes re-entering
+            // Auto deterministic (Ink fallback → fade to computed tint).
+            if m != .auto { autoTint = nil }
+        }
         m.save()
         refreshAutoTint()
     }
+
+    /// Stale-read guard for refreshAutoTint (same pattern as
+    /// setActiveCollection's "don't clobber a newer selection").
+    private var autoTintGeneration = 0
 
     /// Recompute the Auto tint from what's on screen. One indexed read
     /// over ≤48 paths — cheap enough to run on every scope change.
@@ -169,10 +178,13 @@ final class AppState: ObservableObject {
             autoTint = nil
             return
         }
+        autoTintGeneration += 1
+        let gen = autoTintGeneration
         let paths = visibleFiles.prefix(48).map { $0.url.standardizedFileURL.path }
         Task { @MainActor in
             let hexes = (try? await AutoTint.dominantColors(queue: q, paths: Array(paths))) ?? []
-            withAnimation(.easeInOut(duration: 0.6)) {
+            guard gen == autoTintGeneration, mood == .auto else { return }
+            withAnimation(.easeInOut(duration: 0.35)) {
                 autoTint = AutoTint.blend(hexes: hexes)
             }
         }
@@ -418,6 +430,7 @@ final class AppState: ObservableObject {
         await AnalyzePipeline.shared.analyze(folder: urls)
         // Re-sort in case visual signals just landed
         resort()
+        refreshAutoTint()
     }
 
     func analyzeSelected() async {
@@ -463,6 +476,7 @@ final class AppState: ObservableObject {
                 // not replace them with the watched folder's listing.
                 guard let self, !self.isSearchActive else { return }
                 self.reloadCurrentFiles()
+                self.refreshAutoTint()
             }
         }
         watcher?.watch(url: url, recursive: showSubfolders)
