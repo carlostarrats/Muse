@@ -37,6 +37,8 @@ final class AnalyzePipeline: ObservableObject {
         current = url.lastPathComponent
         defer { isRunning = false; current = ""; progress = 0 }
         await analyzeOne(fileID: id, url: url)
+        isRunning = false; current = ""; progress = 0
+        await CollectionsEngine.shared.recluster()
     }
 
     func analyze(folder urls: [URL]) async {
@@ -60,6 +62,8 @@ final class AnalyzePipeline: ObservableObject {
             }
             progress = Double(idx + 1) / Double(urls.count)
         }
+        isRunning = false; current = ""; progress = 0
+        await CollectionsEngine.shared.recluster()
     }
 
     // MARK: - Per-file

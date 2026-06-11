@@ -71,6 +71,14 @@ final class AppState: ObservableObject {
     enum ViewMode: String { case grid, globe }
     @Published var viewMode: ViewMode = .grid
 
+    // MARK: - Collections (AI brain)
+
+    /// Whether the collections overlay is showing.
+    @Published var collectionsOverlayVisible = false
+
+    /// Collection currently expanded/inspected in the overlay, if any.
+    @Published var activeCollectionID: String? = nil
+
     // MARK: - Water shader
 
     @Published var fluidEnabled: Bool = false
@@ -124,6 +132,9 @@ final class AppState: ObservableObject {
                 await self?.analyzeCurrentFolder()
             }
         }
+
+        // Load persisted collections so the overlay is warm on first open.
+        Task { await CollectionsEngine.shared.reload() }
     }
 
     /// Used by App Intents — opens the URL as a transient root if it's not
