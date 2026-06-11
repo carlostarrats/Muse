@@ -74,7 +74,7 @@ struct ContentView: View {
                 ToolbarItemGroup(placement: .primaryAction) {
                     Button {
                         appState.collectionsOverlayVisible.toggle()
-                    } label: { Image(systemName: "square.grid.2x2") }
+                    } label: { Image(systemName: "rectangle.grid.2x2") }
                     .help("All collections (⌘K)")
                     .keyboardShortcut("k", modifiers: .command)
 

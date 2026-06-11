@@ -25,14 +25,23 @@ struct CollectionsOverlay: View {
                 Text("ALL COLLECTIONS — arrows to move · return to open · esc to close")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.secondary)
-                ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 14)],
-                              spacing: 14) {
-                        ForEach(Array(engine.collections.enumerated()), id: \.element.collection.id) { i, loaded in
-                            CollectionCard(loaded: loaded, onSelect: { open(loaded) })
-                                .padding(6)
-                                .background(RoundedRectangle(cornerRadius: 10)
-                                    .fill(i == focusedIndex ? Color.accentColor.opacity(0.22) : .clear))
+                if engine.collections.isEmpty {
+                    VStack {
+                        Text("No collections yet — run Analyze on a folder of images")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 14)],
+                                  spacing: 14) {
+                            ForEach(Array(engine.collections.enumerated()), id: \.element.collection.id) { i, loaded in
+                                CollectionCard(loaded: loaded, onSelect: { open(loaded) })
+                                    .padding(6)
+                                    .background(RoundedRectangle(cornerRadius: 10)
+                                        .fill(i == focusedIndex ? Color.accentColor.opacity(0.22) : .clear))
+                            }
                         }
                     }
                 }

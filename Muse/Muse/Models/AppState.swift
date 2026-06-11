@@ -87,8 +87,10 @@ final class AppState: ObservableObject {
     /// Files the grid should show: currentFiles, optionally narrowed to
     /// the active collection's members.
     var visibleFiles: [FileNode] {
+        // search results are global; collection filter applies to browsing only
+        if isSearchActive { return currentFiles }
         guard let paths = activeCollectionPaths else { return currentFiles }
-        return currentFiles.filter { paths.contains($0.url.path) }
+        return currentFiles.filter { paths.contains($0.url.standardizedFileURL.path) }
     }
 
     /// Set (or clear, with nil) the active collection filter. Loads the

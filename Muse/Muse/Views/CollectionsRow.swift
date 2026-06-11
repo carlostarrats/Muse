@@ -54,7 +54,7 @@ struct CollectionCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            CollectionMosaic(collectionID: loaded.collection.id)
+            CollectionMosaic(collectionID: loaded.collection.id, memberIDs: loaded.memberIDs)
                 .overlay(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .strokeBorder(
@@ -101,6 +101,7 @@ struct CollectionCard: View {
 
 private struct CollectionMosaic: View {
     let collectionID: String
+    let memberIDs: [String]
 
     @State private var thumbs: [NSImage] = []
 
@@ -122,7 +123,7 @@ private struct CollectionMosaic: View {
         }
         .frame(width: totalWidth, height: totalHeight)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .task(id: collectionID) {
+        .task(id: memberIDs) {
             await loadThumbs()
         }
     }
