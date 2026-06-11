@@ -202,7 +202,8 @@ actor Indexer {
             last_seen_at: now,
             caption: nil,
             dominant_color: nil,
-            feature_print: nil
+            feature_print: nil,
+            palette: nil
         )
     }
 

@@ -112,7 +112,8 @@ final class AnalyzePipeline: ObservableObject {
                             file_id: fileID,
                             label: label,
                             source: "vision",
-                            confidence: Double(conf)
+                            confidence: Double(conf),
+                            model_version: nil
                         )
                         try t.insert(db)
                     }
