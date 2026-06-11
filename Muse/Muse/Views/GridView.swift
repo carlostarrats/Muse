@@ -27,7 +27,7 @@ struct GridView: View {
                     spacing: spacing
                 ) {
                     ForEach(appState.visibleFiles) { file in
-                        TileView(file: file, size: tileSize)
+                        TileView(file: file, size: tileSize, deletion: appState.deletion)
                             .onTapGesture(count: 2) {
                                 NSWorkspace.shared.open(file.url)
                             }
@@ -42,13 +42,19 @@ struct GridView: View {
                             .cornerRadius(8)
                             .contextMenu {
                                 OpenWithMenu(url: file.url)
+                                Divider()
+                                Button("Move to Trash", role: .destructive) {
+                                    Task { await appState.deletion.deleteWithBurn(file) }
+                                }
                             }
+                            .transition(.scale(scale: 0.1).combined(with: .opacity))
                     }
                 }
                 .padding(20)
             }
         }
-        .background(Color(NSColor.windowBackgroundColor))
+        .background(appState.moodPalette.background)
+        .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
         .coordinateSpace(name: "gridViewport")
         .onContinuousHover { phase in
             switch phase {
@@ -95,6 +101,7 @@ private struct TileView: View {
     @EnvironmentObject var appState: AppState
     let file: FileNode
     let size: CGFloat
+    @ObservedObject var deletion: DeleteCoordinator
 
     @State private var thumbnail: NSImage?
     @State private var tileFrame: CGRect = .zero
@@ -103,7 +110,7 @@ private struct TileView: View {
         VStack(spacing: 6) {
             ZStack {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color(NSColor.controlBackgroundColor))
+                    .fill(appState.moodPalette.tileFill)
                     .frame(width: size, height: size)
                 if let img = thumbnail {
                     Image(nsImage: img)
@@ -142,6 +149,10 @@ private struct TileView: View {
                     maxSampleOffset: CGSize(width: 50, height: 50)
                 )
             }
+            .modifier(BurnUpModifier(
+                progress: deletion.burningPaths.contains(file.url.path) ? 1 : 0,
+                seed: Double(SeededRandom.fnv1a([file.url.path]) % 1000) / 1000.0,
+                size: CGSize(width: size, height: size)))
             Text(file.basename)
                 .font(.caption)
                 .lineLimit(1)

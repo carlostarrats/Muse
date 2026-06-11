@@ -113,6 +113,7 @@ final class AppState: ObservableObject {
         activeCollectionID = id
         guard let id else {
             activeCollectionPaths = nil
+            refreshAutoTint()
             return
         }
         Task { @MainActor in
@@ -126,6 +127,7 @@ final class AppState: ObservableObject {
             // Don't clobber a newer selection that landed while loading.
             if activeCollectionID == id {
                 activeCollectionPaths = Set(paths)
+                refreshAutoTint()
             }
         }
     }
@@ -138,6 +140,56 @@ final class AppState: ObservableObject {
     @Published var fluidDispImage: Image = FluidSim.neutralImage
     private var fluidCancellable: AnyCancellable?
 
+    // MARK: - Burn-up delete (polish spec §4)
+
+    let deletion = DeleteCoordinator()
+
+    // MARK: - Background mood (polish spec §4)
+
+    @Published var mood: Mood = Mood.load()
+
+    /// Computed tint for the Auto mood; nil until colors load (falls back to Ink).
+    @Published var autoTint: AutoTint?
+
+    var moodPalette: MoodPalette {
+        mood.palette ?? autoTint?.palette ?? Mood.fallbackPalette
+    }
+
+    func setMood(_ m: Mood) {
+        withAnimation(.easeInOut(duration: 0.35)) {
+            mood = m
+            // Named moods ignore autoTint; clearing it makes re-entering
+            // Auto deterministic (Ink fallback → fade to computed tint).
+            if m != .auto { autoTint = nil }
+        }
+        m.save()
+        refreshAutoTint()
+    }
+
+    /// Stale-read guard for refreshAutoTint (same pattern as
+    /// setActiveCollection's "don't clobber a newer selection").
+    private var autoTintGeneration = 0
+
+    /// Recompute the Auto tint from what's on screen. One indexed read
+    /// over ≤48 paths — cheap enough to run on every scope change.
+    func refreshAutoTint() {
+        guard mood == .auto else { return }
+        guard let q = Database.shared.dbQueue else {
+            autoTint = nil
+            return
+        }
+        autoTintGeneration += 1
+        let gen = autoTintGeneration
+        let paths = visibleFiles.prefix(48).map { $0.url.standardizedFileURL.path }
+        Task { @MainActor in
+            let hexes = (try? await AutoTint.dominantColors(queue: q, paths: Array(paths))) ?? []
+            guard gen == autoTintGeneration, mood == .auto else { return }
+            withAnimation(.easeInOut(duration: 0.35)) {
+                autoTint = AutoTint.blend(hexes: hexes)
+            }
+        }
+    }
+
     // MARK: - Watcher
 
     private var watcher: FolderWatcher?
@@ -148,6 +200,30 @@ final class AppState: ObservableObject {
         fluidCancellable = fluidSim.$dispImage
             .throttle(for: .milliseconds(33), scheduler: RunLoop.main, latest: true)
             .assign(to: \.fluidDispImage, on: self)
+
+        deletion.onRemove = { [weak self] url in
+            guard let self else { return }
+            self.currentFiles.removeAll { $0.url == url }
+            if self.selectedFile?.url == url { self.selectedFile = nil }
+        }
+        deletion.onRestore = { [weak self] node in
+            guard let self else { return }
+            // The disk restore already happened; only resurface the tile
+            // if the current scope still contains it.
+            if self.isSearchActive {
+                // Re-rank instead of appending into unrelated results.
+                Task { await self.runSearch(self.searchQuery) }
+                return
+            }
+            guard let folder = self.selectedFolder else { return }
+            let inScope = self.showSubfolders
+                ? node.url.path.hasPrefix(folder.url.path + "/")
+                : node.url.deletingLastPathComponent().path == folder.url.path
+            guard inScope,
+                  !self.currentFiles.contains(where: { $0.url == node.url }) else { return }
+            self.currentFiles.append(node)
+            self.resort()
+        }
 
         rebuildRootNodes()
         bookmarksCancellable = bookmarks.$roots
@@ -252,6 +328,7 @@ final class AppState: ObservableObject {
         reloadCurrentFiles()
         startWatching(folder.url)
         scheduleIndexing(for: folder.url)
+        refreshAutoTint()
     }
 
     /// Kick off active-folder indexing on the high-priority queue.
@@ -294,7 +371,20 @@ final class AppState: ObservableObject {
         } else {
             raw = FolderReader.files(in: folder.url, showHidden: showHidden)
         }
-        currentFiles = SmartSorter.apply(sortMode, to: raw)
+        // Reloads rebuild FileNodes with fresh UUIDs; reuse the existing
+        // node when the file is unchanged so tile identity (and @State —
+        // thumbnails, in-flight animations) survives FSEvents reloads.
+        let existing = Dictionary(currentFiles.map { ($0.url, $0) },
+                                  uniquingKeysWith: { a, _ in a })
+        let merged = raw.map { fresh in
+            if let old = existing[fresh.url],
+               old.modifiedAt == fresh.modifiedAt,
+               old.sizeBytes == fresh.sizeBytes {
+                return old
+            }
+            return fresh
+        }
+        currentFiles = SmartSorter.apply(sortMode, to: merged)
     }
 
     func resort() {
@@ -323,12 +413,14 @@ final class AppState: ObservableObject {
         isSearchActive = true
         // search results keep relevance rank; sort modes apply to folder browsing only
         currentFiles = results
+        refreshAutoTint()
     }
 
     func clearSearch() {
         searchQuery = ""
         isSearchActive = false
         reloadCurrentFiles()
+        refreshAutoTint()
     }
 
     func analyzeCurrentFolder() async {
@@ -338,6 +430,7 @@ final class AppState: ObservableObject {
         await AnalyzePipeline.shared.analyze(folder: urls)
         // Re-sort in case visual signals just landed
         resort()
+        refreshAutoTint()
     }
 
     func analyzeSelected() async {
@@ -371,6 +464,7 @@ final class AppState: ObservableObject {
     func toggleSubfolders() {
         showSubfolders.toggle()
         reloadCurrentFiles()
+        refreshAutoTint()
     }
 
     // MARK: - Watcher
@@ -378,7 +472,11 @@ final class AppState: ObservableObject {
     private func startWatching(_ url: URL) {
         if watcher == nil {
             watcher = FolderWatcher { [weak self] in
-                self?.reloadCurrentFiles()
+                // Search results aren't folder contents — a disk event must
+                // not replace them with the watched folder's listing.
+                guard let self, !self.isSearchActive else { return }
+                self.reloadCurrentFiles()
+                self.refreshAutoTint()
             }
         }
         watcher?.watch(url: url, recursive: showSubfolders)

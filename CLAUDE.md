@@ -29,8 +29,8 @@ The full design lives in:
 
 - `docs/superpowers/plans/file-viewer-rewrite.md` — the binding plan.
 - `docs/superpowers/specs/2026-06-10-post-rewrite-polish-design.md` — the
-  polish-pass spec (AI brain ✅, hero viewer ✅, spatial views ✅ shipped;
-  delights are phase 4, plan written per phase).
+  polish-pass spec (all four phases shipped: AI brain ✅, hero viewer ✅,
+  spatial views ✅, delights ✅).
   Five rounds of review revisions baked in. All open product questions
   resolved. Implementation status reflected in the phase log below.
 
@@ -55,6 +55,7 @@ are the load-bearing reference artifacts.
 | Polish 1 — AI brain (protocols, semantic search, living collections) | ✅ shipped | `feat/ai-brain` (merged) |
 | Polish 2 — hero viewer (adaptive wash, info cards, zoom/pan, delete+undo) | ✅ shipped | `feat/hero-viewer` (merged) |
 | Polish 3 — spatial views (cloud + graph, globe retired) | ✅ shipped | `feat/spatial-views` (merged) |
+| Polish 4 — delights (burn-up delete, background moods) | ✅ shipped | `feat/delights` (merged) |
 
 `feat/file-viewer-rewrite` was merged to `main` after Phase 8
 finished — see the merge commit. The branch was kept around as an
@@ -74,6 +75,9 @@ Muse/Muse/
     AssetKind.swift                kind enum + extension/UTType detection
     FileNode.swift                 in-memory enumerated-file value type
     Root.swift                     security-scoped bookmark wrapper
+    DeleteCoordinator.swift        burn-delete state machine: trash + undo toast
+    Mood.swift                     background moods (Ink/Paper/Navy/Blush/Auto)
+    AutoTint.swift                 Auto mood — dominant-color blend + DB query
   Filesystem/
     BookmarkStore.swift            UserDefaults-backed root bookmarks; lifecycle
                                    start/stop access for sandbox
@@ -147,6 +151,8 @@ Muse/Muse/
   Fluid/
     FluidDistortion.metal          existing water-ripple shader (kept)
     FluidSim.swift                 CPU fluid sim (kept)
+    BurnUp.metal                   burn-up delete shader (chars edges-in + embers)
+    BurnUpModifier.swift           animatable layerEffect wrapper (chains after water)
   Settings/
     SettingsView.swift             placeholder; real Preferences pane is
                                    future work

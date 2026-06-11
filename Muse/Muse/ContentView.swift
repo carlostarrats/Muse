@@ -34,6 +34,8 @@ struct ContentView: View {
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(appState.moodPalette.background)
+                    .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
 
                     if appState.detailPanelVisible, let selected = appState.selectedFile {
                         DetailPanelView(file: selected)
@@ -54,6 +56,8 @@ struct ContentView: View {
                 if appState.collectionsOverlayVisible {
                     CollectionsOverlay().zIndex(50)
                 }
+                GridToastHost(deletion: appState.deletion)
+                    .zIndex(60)
             }
             .toolbar {
                 ToolbarItem(placement: .navigation) {
@@ -152,7 +156,8 @@ struct ContentView: View {
                     }
                 }
 
-                ToolbarItem(placement: .primaryAction) {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    moodMenu
                     Button {
                         appState.fluidEnabled.toggle()
                     } label: {
@@ -192,6 +197,7 @@ struct ContentView: View {
                 analyzeStatusBanner
             }
         }
+        .preferredColorScheme(appState.moodPalette.scheme)
     }
 
     private var shouldShowFullViewer: Bool {
@@ -230,6 +236,23 @@ struct ContentView: View {
     }
 
     @ViewBuilder
+    private var moodMenu: some View {
+        Menu {
+            ForEach(Mood.allCases) { mood in
+                Button {
+                    appState.setMood(mood)
+                } label: {
+                    Label(mood.displayName,
+                          systemImage: appState.mood == mood ? "checkmark" : "")
+                }
+            }
+        } label: {
+            Image(systemName: "paintpalette")
+        }
+        .help("Background mood: \(appState.mood.displayName)")
+    }
+
+    @ViewBuilder
     private var analyzeStatusBanner: some View {
         VStack(spacing: 6) {
             HStack(spacing: 8) {
@@ -250,6 +273,15 @@ struct ContentView: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .padding(.horizontal, 12)
         .padding(.bottom, 12)
+    }
+}
+
+/// Observes the DeleteCoordinator directly — nested ObservableObjects
+/// don't republish through AppState.
+private struct GridToastHost: View {
+    @ObservedObject var deletion: DeleteCoordinator
+    var body: some View {
+        ViewerToast(toast: $deletion.toast)
     }
 }
 
