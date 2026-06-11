@@ -86,7 +86,7 @@ final class SchemaV2Tests: XCTestCase {
             var c = CollectionRow(id: "c1", name: "X", is_hidden: 0, model_version: "t",
                                   created_at: 0, updated_at: 0)
             try c.insert(db)
-            var m = CollectionMemberRow(collection_id: "c1", file_id: "f1")
+            var m = CollectionMemberRow(collection_id: "c1", file_id: "f1", added_by: "auto")
             try m.insert(db)
             try db.execute(sql: "DELETE FROM files WHERE id = 'f1'")
             XCTAssertEqual(try EmbeddingRow.fetchCount(db), 0)

@@ -116,4 +116,5 @@ struct CollectionMemberRow: Codable, FetchableRecord, MutablePersistableRecord {
     static let databaseTableName = "collection_members"
     var collection_id: String
     var file_id: String
+    var added_by: String          // "auto" | "manual"
 }

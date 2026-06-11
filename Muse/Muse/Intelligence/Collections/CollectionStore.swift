@@ -25,14 +25,82 @@ enum CollectionStore {
                 ON CONFLICT(id) DO UPDATE SET name = excluded.name,
                     model_version = excluded.model_version, updated_at = excluded.updated_at
                 """, arguments: [id, name, modelVersion, now, now])
-            try db.execute(sql: "DELETE FROM collection_members WHERE collection_id = ?",
-                           arguments: [id])
-            for fid in memberIDs {
+            // Only auto members are rebuilt; manual adds survive reclustering.
+            try db.execute(sql: """
+                DELETE FROM collection_members WHERE collection_id = ? AND added_by = 'auto'
+                """, arguments: [id])
+            let excluded = try Set(String.fetchAll(db, sql:
+                "SELECT file_id FROM collection_exclusions WHERE collection_id = ?",
+                arguments: [id]))
+            for fid in memberIDs where !excluded.contains(fid) {
                 try db.execute(sql: """
-                    INSERT OR IGNORE INTO collection_members (collection_id, file_id)
-                    VALUES (?, ?)
+                    INSERT OR IGNORE INTO collection_members (collection_id, file_id, added_by)
+                    VALUES (?, ?, 'auto')
                     """, arguments: [id, fid])
             }
+        }
+    }
+
+    /// Manually add a file to a collection. Clears any standing exclusion.
+    static func addFile(queue: DatabaseQueue, fileID: String, collectionID: String) async throws {
+        try await queue.write { db in
+            try db.execute(sql: """
+                INSERT OR REPLACE INTO collection_members (collection_id, file_id, added_by)
+                VALUES (?, ?, 'manual')
+                """, arguments: [collectionID, fileID])
+            try db.execute(sql: "DELETE FROM collection_exclusions WHERE collection_id = ? AND file_id = ?",
+                           arguments: [collectionID, fileID])
+        }
+    }
+
+    /// Manually remove a file from a collection. Records an exclusion so
+    /// future auto rebuilds cannot re-add it.
+    static func removeFile(queue: DatabaseQueue, fileID: String, collectionID: String) async throws {
+        try await queue.write { db in
+            try db.execute(sql: "DELETE FROM collection_members WHERE collection_id = ? AND file_id = ?",
+                           arguments: [collectionID, fileID])
+            try db.execute(sql: """
+                INSERT OR IGNORE INTO collection_exclusions (collection_id, file_id) VALUES (?, ?)
+                """, arguments: [collectionID, fileID])
+        }
+    }
+
+    /// Visible collections containing a given file.
+    static func collections(queue: DatabaseQueue, forFileID fileID: String) async throws -> [CollectionRow] {
+        try await queue.read { db in
+            try CollectionRow.fetchAll(db, sql: """
+                SELECT c.* FROM collections c
+                JOIN collection_members m ON m.collection_id = c.id
+                WHERE m.file_id = ? AND c.is_hidden = 0
+                """, arguments: [fileID])
+        }
+    }
+
+    /// Create a brand-new manual collection containing one file.
+    static func createManual(queue: DatabaseQueue, name: String, fileID: String) async throws -> String {
+        let id = UUID().uuidString
+        let now = Int64(Date().timeIntervalSince1970)
+        try await queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO collections (id, name, is_hidden, model_version, created_at, updated_at)
+                VALUES (?, ?, 0, 'manual', ?, ?)
+                """, arguments: [id, name, now, now])
+            try db.execute(sql: """
+                INSERT INTO collection_members (collection_id, file_id, added_by) VALUES (?, ?, 'manual')
+                """, arguments: [id, fileID])
+        }
+        return id
+    }
+
+    /// Collections that must never be deleted as stale by the engine:
+    /// manual model_version OR any manual members.
+    static func protectedCollectionIDs(queue: DatabaseQueue) async throws -> Set<String> {
+        try await queue.read { db in
+            var ids = try Set(String.fetchAll(db, sql:
+                "SELECT id FROM collections WHERE model_version = 'manual'"))
+            ids.formUnion(try String.fetchAll(db, sql:
+                "SELECT DISTINCT collection_id FROM collection_members WHERE added_by = 'manual'"))
+            return ids
         }
     }
 
