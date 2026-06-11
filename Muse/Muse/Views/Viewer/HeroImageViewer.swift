@@ -105,6 +105,7 @@ struct HeroImageViewer: View {
                 do {
                     let ticket = try TrashManager.trash(url)
                     appState.currentFiles.removeAll { $0.url == url }
+                    if appState.selectedFile?.url == url { appState.selectedFile = nil }
                     appState.deletion.toast = ToastData(message: "Moved to Trash",
                                                         actionLabel: "Undo") {
                         appState.deletion.restore(ticket: ticket,
@@ -374,7 +375,7 @@ struct HeroImageViewer: View {
     /// over the stage zoom and are consumed.
     private func installScrollMonitor() {
         scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
-            guard !isClosing, !lingering, !burning,
+            guard !isClosing, !lingering, !burning, burnProgress <= 0,
                   let window = event.window, window.isKeyWindow else { return event }
             let width = window.contentView?.bounds.width ?? window.frame.width
             let columnLeft = width - ViewerGeometry.columnWidth - ViewerGeometry.columnMargin
