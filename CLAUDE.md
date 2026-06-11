@@ -28,6 +28,9 @@ local-first, Apple-Intelligence-native, and free forever.
 The full design lives in:
 
 - `docs/superpowers/plans/file-viewer-rewrite.md` — the binding plan.
+- `docs/superpowers/specs/2026-06-10-post-rewrite-polish-design.md` — the
+  polish-pass spec (AI brain ✅ shipped; viewer/spatial views/delights are
+  phases 2–4, plans written per phase).
   Five rounds of review revisions baked in. All open product questions
   resolved. Implementation status reflected in the phase log below.
 
@@ -49,6 +52,7 @@ are the load-bearing reference artifacts.
 | 6 — App Intents (Shortcuts/Siri/Spotlight) | ✅ shipped | `feat/file-viewer-rewrite` |
 | 7 — chat panel (Foundation Models, gated) | ✅ shipped | `feat/file-viewer-rewrite` |
 | 8 — Globe rework + water shader on grid tiles | ✅ shipped | `feat/file-viewer-rewrite` |
+| Polish 1 — AI brain (protocols, semantic search, living collections) | ✅ shipped | `feat/ai-brain` (merged) |
 
 `feat/file-viewer-rewrite` was merged to `main` after Phase 8
 finished — see the merge commit. The branch was kept around as an
