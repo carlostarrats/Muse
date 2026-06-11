@@ -20,7 +20,10 @@ struct ContentView: View {
         } detail: {
             ZStack {
                 HStack(spacing: 0) {
-                    Group {
+                    VStack(spacing: 0) {
+                        if appState.viewMode == .grid && !appState.isSearchActive {
+                            CollectionsRow()
+                        }
                         switch appState.viewMode {
                         case .grid:
                             GridView()
@@ -45,6 +48,10 @@ struct ContentView: View {
                     ViewerRouter(file: selected)
                         .transition(.opacity)
                 }
+
+                if appState.collectionsOverlayVisible {
+                    CollectionsOverlay().zIndex(50)
+                }
             }
             .toolbar {
                 ToolbarItem(placement: .navigation) {
@@ -64,7 +71,21 @@ struct ContentView: View {
                     .help("Switch between grid and globe views")
                 }
 
-                ToolbarItem(placement: .primaryAction) {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    Button {
+                        appState.collectionsOverlayVisible.toggle()
+                    } label: { Image(systemName: "rectangle.grid.2x2") }
+                    .help("All collections (⌘K)")
+                    .keyboardShortcut("k", modifiers: .command)
+
+                    if appState.activeCollectionID != nil {
+                        Button {
+                            appState.setActiveCollection(nil)
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                        }
+                        .help("Clear collection filter")
+                    }
                     sortMenu
                 }
 
@@ -144,7 +165,11 @@ struct ContentView: View {
         }
         .background(
             Button(action: {
-                if appState.selectedFile != nil { appState.selectedFile = nil }
+                if appState.collectionsOverlayVisible {
+                    appState.collectionsOverlayVisible = false
+                } else if appState.selectedFile != nil {
+                    appState.selectedFile = nil
+                }
             }) { EmptyView() }
                 .keyboardShortcut(.escape, modifiers: [])
                 .hidden()

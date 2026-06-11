@@ -71,6 +71,52 @@ final class AppState: ObservableObject {
     enum ViewMode: String { case grid, globe }
     @Published var viewMode: ViewMode = .grid
 
+    // MARK: - Collections (AI brain)
+
+    /// Whether the collections overlay is showing.
+    @Published var collectionsOverlayVisible = false
+
+    /// Collection currently expanded/inspected in the overlay, if any.
+    @Published var activeCollectionID: String? = nil
+
+    /// Alive absolute paths of the active collection's members. nil when
+    /// no collection filter is active (FileNode has no DB id, so the grid
+    /// filter resolves membership by path).
+    @Published var activeCollectionPaths: Set<String>? = nil
+
+    /// Files the grid should show: currentFiles, optionally narrowed to
+    /// the active collection's members.
+    var visibleFiles: [FileNode] {
+        // search results are global; collection filter applies to browsing only
+        if isSearchActive { return currentFiles }
+        guard let paths = activeCollectionPaths else { return currentFiles }
+        return currentFiles.filter { paths.contains($0.url.standardizedFileURL.path) }
+    }
+
+    /// Set (or clear, with nil) the active collection filter. Loads the
+    /// member path set asynchronously; always go through this method
+    /// rather than setting `activeCollectionID` directly.
+    func setActiveCollection(_ id: String?) {
+        activeCollectionID = id
+        guard let id else {
+            activeCollectionPaths = nil
+            return
+        }
+        Task { @MainActor in
+            guard let q = Database.shared.dbQueue else {
+                activeCollectionPaths = []
+                return
+            }
+            let paths = (try? await CollectionStore.alivePaths(
+                queue: q, collectionID: id
+            )) ?? []
+            // Don't clobber a newer selection that landed while loading.
+            if activeCollectionID == id {
+                activeCollectionPaths = Set(paths)
+            }
+        }
+    }
+
     // MARK: - Water shader
 
     @Published var fluidEnabled: Bool = false
@@ -124,6 +170,9 @@ final class AppState: ObservableObject {
                 await self?.analyzeCurrentFolder()
             }
         }
+
+        // Load persisted collections so the overlay is warm on first open.
+        Task { await CollectionsEngine.shared.reload() }
     }
 
     /// Used by App Intents — opens the URL as a transient root if it's not
@@ -236,6 +285,8 @@ final class AppState: ObservableObject {
     }
 
     func resort() {
+        // Don't re-sort search results; they maintain relevance ranking
+        guard !isSearchActive else { return }
         currentFiles = SmartSorter.apply(sortMode, to: currentFiles)
     }
 
@@ -257,7 +308,8 @@ final class AppState: ObservableObject {
         }
         let results = await SearchService.search(query: trimmed, scope: scope)
         isSearchActive = true
-        currentFiles = SmartSorter.apply(sortMode, to: results)
+        // search results keep relevance rank; sort modes apply to folder browsing only
+        currentFiles = results
     }
 
     func clearSearch() {

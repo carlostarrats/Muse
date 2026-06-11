@@ -26,6 +26,7 @@ struct FileRow: Codable, FetchableRecord, MutablePersistableRecord {
     var caption: String?
     var dominant_color: String?
     var feature_print: Data?
+    var palette: String?
 
     enum Columns {
         static let id = Column("id")
@@ -60,6 +61,7 @@ struct TagRow: Codable, FetchableRecord, MutablePersistableRecord {
     var label: String
     var source: String
     var confidence: Double?
+    var model_version: String?
 
     enum Columns {
         static let file_id = Column("file_id")
@@ -90,4 +92,28 @@ struct DuplicateMemberRow: Codable, FetchableRecord, MutablePersistableRecord {
     var group_id: String
     var file_id: String
     var is_suggested_keeper: Int
+}
+
+struct EmbeddingRow: Codable, FetchableRecord, MutablePersistableRecord {
+    static let databaseTableName = "embeddings"
+    var file_id: String
+    var vector: Data
+    var model_version: String
+    var updated_at: Int64
+}
+
+struct CollectionRow: Codable, FetchableRecord, MutablePersistableRecord {
+    static let databaseTableName = "collections"
+    var id: String
+    var name: String
+    var is_hidden: Int
+    var model_version: String
+    var created_at: Int64
+    var updated_at: Int64
+}
+
+struct CollectionMemberRow: Codable, FetchableRecord, MutablePersistableRecord {
+    static let databaseTableName = "collection_members"
+    var collection_id: String
+    var file_id: String
 }

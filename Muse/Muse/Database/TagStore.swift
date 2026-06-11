@@ -59,7 +59,8 @@ final class TagStore: ObservableObject {
                         file_id: fileID,
                         label: trimmed,
                         source: "manual",
-                        confidence: nil
+                        confidence: nil,
+                        model_version: nil
                     )
                     try t.insert(db)
                 }

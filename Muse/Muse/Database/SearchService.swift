@@ -41,17 +41,34 @@ enum SearchService {
                 .fetchAll(db)
                 .map { $0.file_id }
 
-            let allIDs = Array(Set(ftsIDs + tagIDs))
-            guard !allIDs.isEmpty else { return [] }
+            // Exact hits, ordered: FTS5 result order first, then tag matches
+            // not already included, in their query order.
+            var exactSeen = Set<String>()
+            var exactIDs: [String] = []
+            for id in ftsIDs + tagIDs where !exactSeen.contains(id) {
+                exactIDs.append(id); exactSeen.insert(id)
+            }
 
-            // Resolve to alive paths
-            let placeholders = allIDs.map { _ in "?" }.joined(separator: ",")
+            // 3) Semantic hits (embedding cosine similarity), merged after
+            // exact hits — exact first, semantic by descending similarity.
+            let semantic = (try? SemanticSearch.semanticIDs(query: trimmed, db: db)) ?? []
+            let orderedIDs = SemanticSearch.merge(
+                exactIDs: exactIDs, semantic: semantic, threshold: 0.45)
+            guard !orderedIDs.isEmpty else { return [] }
+
+            // Resolve to alive paths, preserving rank order.
+            let placeholders = orderedIDs.map { _ in "?" }.joined(separator: ",")
             let pathRows = try PathRow.fetchAll(
                 db,
                 sql: "SELECT * FROM paths WHERE file_id IN (\(placeholders)) AND is_alive = 1",
-                arguments: StatementArguments(allIDs)
+                arguments: StatementArguments(orderedIDs)
             )
-            return pathRows.map { $0.absolute_path }
+            var pathsByID: [String: [String]] = [:]
+            for row in pathRows {
+                guard let fid = row.file_id else { continue }
+                pathsByID[fid, default: []].append(row.absolute_path)
+            }
+            return orderedIDs.flatMap { pathsByID[$0] ?? [] }
         }) ?? []
 
         // Filter by scope
@@ -64,22 +81,26 @@ enum SearchService {
             scopedPaths = absPaths
         }
 
+        // Ranked results (exact-then-semantic) keep their rank order.
+        let ranked: [FileNode] = scopedPaths.map { FileNode(url: URL(fileURLWithPath: $0)) }
+
         // Also do a basename substring match on enumerated files (so search
         // works even when files aren't indexed yet, scoped to current folder).
-        var results: [FileNode] = scopedPaths.map { FileNode(url: URL(fileURLWithPath: $0)) }
-
+        // These unranked extras sort by modifiedAt and trail the ranked hits.
+        var extras: [FileNode] = []
         if case .currentFolder(let url) = scope {
             let candidates = FolderReader.files(in: url, showHidden: false)
             let lower = trimmed.lowercased()
             for f in candidates {
                 if f.basename.lowercased().contains(lower),
-                   !results.contains(where: { $0.url.standardizedFileURL == f.url.standardizedFileURL }) {
-                    results.append(f)
+                   !ranked.contains(where: { $0.url.standardizedFileURL == f.url.standardizedFileURL }),
+                   !extras.contains(where: { $0.url.standardizedFileURL == f.url.standardizedFileURL }) {
+                    extras.append(f)
                 }
             }
         }
 
-        return results.sorted { ($0.modifiedAt ?? .distantPast) > ($1.modifiedAt ?? .distantPast) }
+        return ranked + extras.sorted { ($0.modifiedAt ?? .distantPast) > ($1.modifiedAt ?? .distantPast) }
     }
 
     /// Escape a user query for FTS5: split into tokens, prefix-match each,

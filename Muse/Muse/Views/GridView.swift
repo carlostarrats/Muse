@@ -19,14 +19,14 @@ struct GridView: View {
     var body: some View {
         GeometryReader { geo in
         ScrollView {
-            if appState.currentFiles.isEmpty {
+            if appState.visibleFiles.isEmpty {
                 emptyState
             } else {
                 LazyVGrid(
                     columns: [GridItem(.adaptive(minimum: tileSize), spacing: spacing)],
                     spacing: spacing
                 ) {
-                    ForEach(appState.currentFiles) { file in
+                    ForEach(appState.visibleFiles) { file in
                         TileView(file: file, size: tileSize)
                             .onTapGesture(count: 2) {
                                 NSWorkspace.shared.open(file.url)
@@ -78,7 +78,11 @@ struct GridView: View {
             Image(systemName: "tray")
                 .font(.system(size: 48))
                 .foregroundStyle(.tertiary)
-            Text(appState.selectedFolder == nil ? "Select a folder" : "Empty folder")
+            Text(appState.selectedFolder == nil
+                 ? "Select a folder"
+                 : appState.activeCollectionID != nil
+                 ? "No collection members in this folder"
+                 : "Empty folder")
                 .font(.title3)
                 .foregroundStyle(.secondary)
         }

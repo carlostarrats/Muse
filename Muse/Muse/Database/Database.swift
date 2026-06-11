@@ -39,7 +39,7 @@ final class Database {
 
         do {
             let queue = try DatabaseQueue(path: dbURL.path)
-            try Self.migrate(queue: queue)
+            try Self.makeMigrator().migrate(queue)
             self.dbQueue = queue
         } catch {
             print("[Database] init failed: \(error)")
@@ -49,7 +49,7 @@ final class Database {
 
     // MARK: - Migrations
 
-    private static func migrate(queue: DatabaseQueue) throws {
+    nonisolated static func makeMigrator() -> DatabaseMigrator {
         var migrator = DatabaseMigrator()
 
         migrator.registerMigration("v1_schema") { db in
@@ -159,6 +159,39 @@ final class Database {
             """)
         }
 
-        try migrator.migrate(queue)
+        migrator.registerMigration("v2_intelligence") { db in
+            try db.create(table: "embeddings") { t in
+                t.column("file_id", .text).primaryKey()
+                    .references("files", onDelete: .cascade)
+                t.column("vector", .blob).notNull()       // Float32 array, little-endian
+                t.column("model_version", .text).notNull()
+                t.column("updated_at", .integer).notNull()
+            }
+            try db.create(table: "collections") { t in
+                t.column("id", .text).primaryKey()
+                t.column("name", .text).notNull()
+                t.column("is_hidden", .integer).notNull().defaults(to: 0)
+                t.column("model_version", .text).notNull()
+                t.column("created_at", .integer).notNull()
+                t.column("updated_at", .integer).notNull()
+            }
+            try db.create(table: "collection_members") { t in
+                t.column("collection_id", .text).notNull()
+                    .references("collections", onDelete: .cascade)
+                t.column("file_id", .text).notNull()
+                    .references("files", onDelete: .cascade)
+                t.primaryKey(["collection_id", "file_id"])
+            }
+            try db.create(index: "collection_members_file_id_idx",
+                          on: "collection_members", columns: ["file_id"])
+            try db.alter(table: "tags") { t in
+                t.add(column: "model_version", .text)     // nil for manual/legacy
+            }
+            try db.alter(table: "files") { t in
+                t.add(column: "palette", .text)           // JSON array of hex strings, ≤6
+            }
+        }
+
+        return migrator
     }
 }

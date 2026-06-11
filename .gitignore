@@ -24,3 +24,6 @@ Muse/.build/
 # Env
 .env
 .env.local
+
+# Brainstorm/visual-companion sessions
+.superpowers/
