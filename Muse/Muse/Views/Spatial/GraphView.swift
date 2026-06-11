@@ -359,6 +359,9 @@ final class GraphSceneCoordinator: NSObject {
     /// (print unarchiving + computeDistance are CPU-bound).
     func spread(clusterIndex: Int) {
         let cluster = data.clusters[clusterIndex]
+        // A refocus may have cancelled the previous tail load mid-way;
+        // always (re)start it so every member ends up textured.
+        loadAllThumbnails(clusterIndex: clusterIndex)
         if let cached = spreadCache[cluster.id] {
             applySpread(clusterIndex: clusterIndex, positions: cached)
             return
@@ -390,7 +393,6 @@ final class GraphSceneCoordinator: NSObject {
                 SCNTransaction.commit()
             }
         }
-        loadAllThumbnails(clusterIndex: clusterIndex)
     }
 
     private func applySpread(clusterIndex: Int, positions: [SIMD3<Float>]) {
