@@ -142,6 +142,10 @@ final class GraphSceneCoordinator: NSObject {
     private(set) var focusedID: String?
     nonisolated(unsafe) private var thumbnailTask: Task<Void, Never>?
 
+    // 3D similarity spread (Task 11)
+    private var spreadCache: [String: [SIMD3<Float>]] = [:]
+    private var spreadTask: Task<Void, Never>?
+
     deinit { thumbnailTask?.cancel() }
 
     func rebuildIfNeeded(data newData: GraphData, in view: SCNView) {
@@ -150,6 +154,8 @@ final class GraphSceneCoordinator: NSObject {
         guard newIdentity != identity else { return }
         identity = newIdentity
         thumbnailTask?.cancel()
+        spreadTask?.cancel()
+        spreadCache = [:]
         data = newData
         focusedID = nil
 
@@ -174,7 +180,7 @@ final class GraphSceneCoordinator: NSObject {
 
         // Edge lines (under the clusters).
         edgesNode = SCNNode()
-        for e in data.edges {
+        for e in data.edges where e.a < worldPositions.count && e.b < worldPositions.count {
             edgesNode.addChildNode(Self.lineNode(
                 from: worldPositions[e.a], to: worldPositions[e.b],
                 alpha: 0.18 + 0.07 * CGFloat(min(e.sharedTags, 4))))
@@ -300,8 +306,14 @@ final class GraphSceneCoordinator: NSObject {
 
     func setFocus(_ id: String?, in view: SCNView) {
         guard id != focusedID else { return }
-        focusedID = id
         let index = id.flatMap { fid in data.clusters.firstIndex { $0.id == fid } }
+        // If the requested id no longer exists in the data, treat as unfocus.
+        if id != nil, index == nil {
+            focusedID = nil
+            onFocus(nil)
+        } else {
+            focusedID = id
+        }
 
         SCNTransaction.begin()
         SCNTransaction.animationDuration = 0.7
@@ -334,11 +346,72 @@ final class GraphSceneCoordinator: NSObject {
         SCNTransaction.commit()
     }
 
-    /// Placeholder until Task 11: reveal all members in the flat heap
-    /// ring so focus already shows everything.
+    // MARK: 3D similarity spread
+
+    /// Spec §3: membership = collections, internal arrangement = visual
+    /// similarity. Positions are cached per cluster id; computed off-main
+    /// (print unarchiving + computeDistance are CPU-bound).
     func spread(clusterIndex: Int) {
-        for member in memberNodes[clusterIndex] {
+        let cluster = data.clusters[clusterIndex]
+        if let cached = spreadCache[cluster.id] {
+            applySpread(clusterIndex: clusterIndex, positions: cached)
+            return
+        }
+        // Until positions land: reveal everything in the flat heap ring.
+        for member in memberNodes[clusterIndex] { member.opacity = 1 }
+
+        spreadTask?.cancel()
+        spreadTask = Task { @MainActor in
+            guard let q = Database.shared.dbQueue else { return }
+            let ids = cluster.memberFileIDs
+            let printsByID = (try? await GraphModel.featurePrints(queue: q, fileIDs: ids)) ?? [:]
+            let prints: [Data?] = ids.map { printsByID[$0] }
+            let seed = SeededRandom.fnv1a(ids)
+            let positions = await Task.detached(priority: .userInitiated) {
+                let matrix = GraphModel.distanceMatrix(prints: prints)
+                return SimilarityLayout.positions(distances: matrix, seed: seed)
+                    .map { SIMD3<Float>(Float($0.x), Float($0.y), Float($0.z)) }
+            }.value
+            guard !Task.isCancelled else { return }
+            spreadCache[cluster.id] = positions
+            // Still focused on this cluster? Animate into the spread.
+            if focusedID == cluster.id {
+                SCNTransaction.begin()
+                SCNTransaction.animationDuration = 0.7
+                SCNTransaction.animationTimingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                applySpread(clusterIndex: clusterIndex, positions: positions)
+                SCNTransaction.commit()
+            }
+        }
+        loadAllThumbnails(clusterIndex: clusterIndex)
+    }
+
+    private func applySpread(clusterIndex: Int, positions: [SIMD3<Float>]) {
+        let radius = Float(Self.spreadRadius)
+        for (mi, member) in memberNodes[clusterIndex].enumerated() {
+            guard mi < positions.count else { break }
+            member.simdPosition = positions[mi] * radius
+            member.simdOrientation = simd_quatf(angle: 0, axis: SIMD3(0, 0, 1))
             member.opacity = 1
+        }
+    }
+
+    /// Focused cluster shows every member — load the tail thumbnails.
+    private func loadAllThumbnails(clusterIndex: Int) {
+        let cluster = data.clusters[clusterIndex]
+        let nodes = memberNodes[clusterIndex]
+        Task { @MainActor in
+            for (mi, path) in cluster.memberPaths.enumerated()
+            where mi >= Self.heapVisibleCount {
+                guard mi < nodes.count,
+                      let plane = nodes[mi].geometry as? SCNPlane else { continue }
+                if let img = await ThumbnailCache.shared.thumbnail(
+                    for: URL(fileURLWithPath: path),
+                    size: CGSize(width: 128, height: 128)
+                ) {
+                    CloudSceneCoordinator.applyCover(image: img, to: plane)
+                }
+            }
         }
     }
 
