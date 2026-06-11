@@ -27,8 +27,10 @@ struct ContentView: View {
                         switch appState.viewMode {
                         case .grid:
                             GridView()
-                        case .globe:
-                            GlobeView()
+                        case .cloud:
+                            CloudView()
+                        case .graph:
+                            GraphView()
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -65,10 +67,11 @@ struct ContentView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Picker("View", selection: $appState.viewMode) {
                         Image(systemName: "square.grid.2x2").tag(AppState.ViewMode.grid)
-                        Image(systemName: "globe").tag(AppState.ViewMode.globe)
+                        Image(systemName: "cloud").tag(AppState.ViewMode.cloud)
+                        Image(systemName: "point.3.connected.trianglepath.dotted").tag(AppState.ViewMode.graph)
                     }
                     .pickerStyle(.segmented)
-                    .help("Switch between grid and globe views")
+                    .help("Switch between grid, cloud, and graph views")
                 }
 
                 ToolbarItemGroup(placement: .primaryAction) {
@@ -174,6 +177,8 @@ struct ContentView: View {
                     appState.viewerClosing = true
                 } else if appState.selectedFile != nil {
                     appState.selectedFile = nil
+                } else if appState.graphFocusedCollectionID != nil {
+                    appState.graphFocusedCollectionID = nil
                 }
             }) { EmptyView() }
                 .keyboardShortcut(.escape, modifiers: [])

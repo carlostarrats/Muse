@@ -71,9 +71,12 @@ final class AppState: ObservableObject {
     /// Whether the chat panel is shown (only meaningful when ChatService.isAvailable).
     @Published var chatPanelVisible: Bool = false
 
-    /// Grid vs Globe view mode for the active folder.
-    enum ViewMode: String { case grid, globe }
+    /// Grid / Cloud / Graph view mode for the active folder (spec §3).
+    enum ViewMode: String { case grid, cloud, graph }
     @Published var viewMode: ViewMode = .grid
+
+    /// Collection the graph view is zoomed into (nil = flat overview).
+    @Published var graphFocusedCollectionID: String? = nil
 
     /// Global (window) frames of grid tiles, keyed by file path. Used as the
     /// hero-transition source rect. Deliberately NOT @Published — frames
