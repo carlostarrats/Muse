@@ -33,7 +33,7 @@ struct HeroStage: View {
                     .frame(width: displayRect.width, height: displayRect.height)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                     .modifier(BurnUpModifier(progress: burnProgress,
-                                             seed: 0.37,
+                                             seed: Double(SeededRandom.fnv1a([url.path]) % 1000) / 1000.0,
                                              size: displayRect.size))
                     .shadow(color: .black.opacity(0.5), radius: 40, y: 24)
                     .scaleEffect(zoom)
@@ -46,8 +46,9 @@ struct HeroStage: View {
         .onChange(of: isClosing) { _, closing in if closing { close() } }
         .onChange(of: url) { _, _ in flipTo() }
         .onChange(of: viewport) { _, _ in
-            // spec: re-fit live on window resize
-            guard !isClosing else { return }
+            // spec: re-fit live on window resize (but never mid-burn — the
+            // shader's size uniform would jump the char pattern)
+            guard !isClosing, burnProgress <= 0 else { return }
             withAnimation(.easeOut(duration: 0.2)) { displayRect = fitRect }
         }
         .task(id: url) { await loadFullRes() }
@@ -95,7 +96,7 @@ struct HeroStage: View {
     private var panGesture: some Gesture {
         DragGesture()
             .onChanged { v in
-                guard zoom > 1 else { return }
+                guard zoom > 1, burnProgress <= 0 else { return }
                 let start = dragStartPan ?? pan
                 dragStartPan = start
                 pan = ViewerGeometry.clampPan(

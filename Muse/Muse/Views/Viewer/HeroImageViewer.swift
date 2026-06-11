@@ -27,6 +27,7 @@ struct HeroImageViewer: View {
     @State private var toast: ToastData?
     @State private var burnProgress: Double = 0
     @State private var burning = false
+    @State private var deleteTask: Task<Void, Never>?
     @State private var viewportSize: CGSize = .zero
     /// After the close flight lands with an undo toast still showing, we keep
     /// only the toast mounted so Undo stays clickable; selectedFile is cleared
@@ -94,9 +95,38 @@ struct HeroImageViewer: View {
         .onDisappear {
             removeScrollMonitor()
             appState.viewerClosing = false
+            deleteTask?.cancel()
+            if burning {
+                // Unmounted mid-burn (sidebar navigation, window close):
+                // finish the user's delete through the coordinator so the
+                // Undo toast survives via GridToastHost.
+                let url = currentURL
+                let node = appState.currentFiles.first { $0.url == url }
+                do {
+                    let ticket = try TrashManager.trash(url)
+                    appState.currentFiles.removeAll { $0.url == url }
+                    appState.deletion.toast = ToastData(message: "Moved to Trash",
+                                                        actionLabel: "Undo") {
+                        appState.deletion.restore(ticket: ticket,
+                                                  node: node ?? FileNode(url: url))
+                    }
+                } catch {
+                    appState.deletion.toast = ToastData(message: "Couldn't move to Trash")
+                }
+            }
         }
         .onChange(of: appState.viewerClosing) { _, closing in
-            if closing { startClose() }
+            guard closing else { return }
+            if lingering || burnProgress > 0 {
+                // Mid-burn or lingering after a delete: never run the return
+                // flight on a burned image; Esc just dismisses the toast.
+                if lingering {
+                    withAnimation(.easeOut(duration: 0.18)) { toast = nil }
+                }
+                appState.viewerClosing = false
+            } else {
+                startClose()
+            }
         }
         .onChange(of: toast?.id) { _, id in
             if lingering && id == nil { reallyFinish() }
@@ -222,7 +252,7 @@ struct HeroImageViewer: View {
     // MARK: - Arrow-key flipping
 
     private func flip(_ delta: Int) {
-        guard !isClosing, !lingering, !burning else { return }
+        guard !isClosing, !lingering, !burning, burnProgress <= 0 else { return }
         let images = appState.visibleFiles.filter { isImageKind($0.kind) }
         guard !images.isEmpty,
               let idx = images.firstIndex(where: { $0.url == currentURL }) else { return }
@@ -238,7 +268,7 @@ struct HeroImageViewer: View {
     // MARK: - Close flight
 
     private func startClose() {
-        guard !isClosing, !burning else { return }
+        guard !isClosing, !burning, burnProgress <= 0 else { return }
         withAnimation(.easeOut(duration: 0.12)) { chromeVisible = false }
         backdropVisible = false   // fades out during the close flight
         isClosing = true
@@ -267,8 +297,9 @@ struct HeroImageViewer: View {
         let node = appState.currentFiles.first { $0.url == url }
         withAnimation(.easeOut(duration: 0.12)) { chromeVisible = false }
         withAnimation(.linear(duration: 0.8)) { burnProgress = 1 }
-        Task {
+        deleteTask = Task {
             try? await Task.sleep(nanoseconds: 850_000_000)
+            guard !Task.isCancelled else { return }
             completeDelete(url: url, node: node)
         }
     }
@@ -276,6 +307,9 @@ struct HeroImageViewer: View {
     private func completeDelete(url: URL, node: FileNode?) {
         do {
             let ticket = try TrashManager.trash(url)
+            // Delete is done; burnProgress stays 1 so flips and the return
+            // flight remain blocked through the linger window.
+            burning = false
             withAnimation(.easeIn(duration: 0.2)) {
                 appState.currentFiles.removeAll { $0.url == url }
             }
@@ -285,8 +319,15 @@ struct HeroImageViewer: View {
                                               node: node ?? FileNode(url: url))
                 }
             }
+            // Let the wash fade (its .animation observes backdropVisible)
+            // before lingering structurally removes it — otherwise the
+            // full-opacity backdrop pops off in one frame.
             backdropVisible = false
-            finishClose()   // image is fully burned out — no return flight
+            deleteTask = Task {
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                guard !Task.isCancelled else { return }
+                finishClose()
+            }
         } catch {
             withAnimation(.easeOut(duration: 0.18)) {
                 toast = ToastData(message: "Couldn't move to Trash")
@@ -294,6 +335,7 @@ struct HeroImageViewer: View {
                 burning = false
                 chromeVisible = true
             }
+            appState.viewerClosing = false
         }
     }
 
@@ -332,7 +374,7 @@ struct HeroImageViewer: View {
     /// over the stage zoom and are consumed.
     private func installScrollMonitor() {
         scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
-            guard !isClosing, !lingering,
+            guard !isClosing, !lingering, !burning,
                   let window = event.window, window.isKeyWindow else { return event }
             let width = window.contentView?.bounds.width ?? window.frame.width
             let columnLeft = width - ViewerGeometry.columnWidth - ViewerGeometry.columnMargin
