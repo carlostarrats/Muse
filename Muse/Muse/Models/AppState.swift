@@ -236,6 +236,8 @@ final class AppState: ObservableObject {
     }
 
     func resort() {
+        // Don't re-sort search results; they maintain relevance ranking
+        guard !isSearchActive else { return }
         currentFiles = SmartSorter.apply(sortMode, to: currentFiles)
     }
 
@@ -257,7 +259,8 @@ final class AppState: ObservableObject {
         }
         let results = await SearchService.search(query: trimmed, scope: scope)
         isSearchActive = true
-        currentFiles = SmartSorter.apply(sortMode, to: results)
+        // search results keep relevance rank; sort modes apply to folder browsing only
+        currentFiles = results
     }
 
     func clearSearch() {
