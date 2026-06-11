@@ -50,4 +50,12 @@ final class CloudLayoutTests: XCTestCase {
     func testZeroCount() {
         XCTAssertTrue(CloudLayout.poses(count: 0, seed: 1).isEmpty)
     }
+
+    func testMeasuredGeneratedBoundary() {
+        // 25 -> all measured verbatim; 26 -> fully generated, none measured.
+        XCTAssertEqual(CloudLayout.poses(count: 25, seed: 0), CloudPose.measured)
+        let generated = CloudLayout.poses(count: 26, seed: 0)
+        XCTAssertEqual(generated.count, 26)
+        XCTAssertNotEqual(generated[0], CloudPose.measured[0])
+    }
 }
