@@ -8,6 +8,7 @@ struct HeroStage: View {
     let url: URL
     let sourceFrame: CGRect          // tile frame, global coords
     let viewport: CGSize
+    var burnProgress: Double = 0
     var onCloseFinished: () -> Void
 
     @Binding var zoom: CGFloat
@@ -31,6 +32,9 @@ struct HeroStage: View {
                     .aspectRatio(contentMode: .fill)
                     .frame(width: displayRect.width, height: displayRect.height)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .modifier(BurnUpModifier(progress: burnProgress,
+                                             seed: 0.37,
+                                             size: displayRect.size))
                     .shadow(color: .black.opacity(0.5), radius: 40, y: 24)
                     .scaleEffect(zoom)
                     .offset(pan)
