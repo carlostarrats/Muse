@@ -20,7 +20,8 @@ struct GraphView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                Color(red: 0.066, green: 0.066, blue: 0.078).ignoresSafeArea() // Ink
+                // Graph scene is locked to the Ink mood (fallbackPalette == Ink)
+                Mood.fallbackPalette.background.ignoresSafeArea()
                 if let data, !data.clusters.isEmpty {
                     GraphSceneRepresentable(
                         data: data,
@@ -102,7 +103,7 @@ private struct GraphSceneRepresentable: NSViewRepresentable {
     func makeNSView(context: Context) -> GraphSCNView {
         let view = GraphSCNView()
         view.coordinator = context.coordinator
-        view.backgroundColor = NSColor(red: 0.066, green: 0.066, blue: 0.078, alpha: 1)
+        view.backgroundColor = Mood.fallbackPalette.backgroundRGB.nsColor // Ink
         view.antialiasingMode = .multisampling4X
         view.rendersContinuously = true
         view.allowsCameraControl = false
@@ -166,7 +167,7 @@ final class GraphSceneCoordinator: NSObject {
         focusedID = nil
 
         let scene = SCNScene()
-        scene.background.contents = NSColor(red: 0.066, green: 0.066, blue: 0.078, alpha: 1)
+        scene.background.contents = Mood.fallbackPalette.backgroundRGB.nsColor // Ink
 
         let camera = SCNCamera()
         camera.zNear = 10

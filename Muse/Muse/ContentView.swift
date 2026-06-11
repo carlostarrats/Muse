@@ -209,26 +209,25 @@ struct ContentView: View {
     @ViewBuilder
     private var sortMenu: some View {
         Menu {
-            Section("Standard") {
-                ForEach([SortMode.dateModified, .dateCreated, .name, .size, .kind], id: \.self) { mode in
-                    Button {
-                        appState.sortMode = mode
-                        appState.resort()
-                    } label: {
-                        Label(mode.displayName, systemImage: appState.sortMode == mode ? "checkmark" : "")
+            // Picker gives native menu checkmarks (the empty-systemImage
+            // Label hack logged "no symbol named ''" console noise).
+            Picker("Sort", selection: Binding(
+                get: { appState.sortMode },
+                set: { appState.sortMode = $0; appState.resort() }
+            )) {
+                Section("Standard") {
+                    ForEach([SortMode.dateModified, .dateCreated, .name, .size, .kind], id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                Section("Smart") {
+                    ForEach([SortMode.dominantColor, .faceCount, .hasText], id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
                     }
                 }
             }
-            Section("Smart") {
-                ForEach([SortMode.dominantColor, .faceCount, .hasText], id: \.self) { mode in
-                    Button {
-                        appState.sortMode = mode
-                        appState.resort()
-                    } label: {
-                        Label(mode.displayName, systemImage: appState.sortMode == mode ? "checkmark" : "")
-                    }
-                }
-            }
+            .pickerStyle(.inline)
+            .labelsHidden()
         } label: {
             Image(systemName: "arrow.up.arrow.down")
         }
@@ -238,14 +237,16 @@ struct ContentView: View {
     @ViewBuilder
     private var moodMenu: some View {
         Menu {
-            ForEach(Mood.allCases) { mood in
-                Button {
-                    appState.setMood(mood)
-                } label: {
-                    Label(mood.displayName,
-                          systemImage: appState.mood == mood ? "checkmark" : "")
+            Picker("Background mood", selection: Binding(
+                get: { appState.mood },
+                set: { appState.setMood($0) }
+            )) {
+                ForEach(Mood.allCases) { mood in
+                    Text(mood.displayName).tag(mood)
                 }
             }
+            .pickerStyle(.inline)
+            .labelsHidden()
         } label: {
             Image(systemName: "paintpalette")
         }

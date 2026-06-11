@@ -99,6 +99,7 @@ struct CollectionCard: View {
 // MARK: - Mosaic (1 big left + 2 stacked right, 168x84)
 
 private struct CollectionMosaic: View {
+    @EnvironmentObject var appState: AppState
     let collectionID: String
     let memberIDs: [String]
 
@@ -131,7 +132,7 @@ private struct CollectionMosaic: View {
     private func mosaicCell(index: Int, width: CGFloat, height: CGFloat) -> some View {
         ZStack {
             Rectangle()
-                .fill(Color(NSColor.controlBackgroundColor))
+                .fill(appState.moodPalette.tileFill)
             if index < thumbs.count {
                 Image(nsImage: thumbs[index])
                     .resizable()
