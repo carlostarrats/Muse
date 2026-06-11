@@ -3,7 +3,8 @@
 Date: 2026-06-10
 Status: validated with Carlos through interactive prototypes (visual companion
 session, `.superpowers/brainstorm/*/content/`). This spec records every decision
-as settled there. The binding rewrite plan
+as settled there. ALL FOUR PHASES SHIPPED (P4 delights landed 2026-06-11,
+`feat/delights`). The binding rewrite plan
 (`docs/superpowers/plans/file-viewer-rewrite.md`) remains the base; this spec
 layers the polish pass on top.
 
@@ -178,6 +179,8 @@ only after converging on:
   FibonacciSphere code retires with GlobeView.
 
 ## 4. The delights
+
+SHIPPED in polish phase 4 (`docs/superpowers/plans/2026-06-11-delights.md`).
 
 - **Burn-up delete:** Metal `layerEffect` (composes with the water shader):
   the thumbnail chars from the edges inward over ~0.8s with drifting ember
