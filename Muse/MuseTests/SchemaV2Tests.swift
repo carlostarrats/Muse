@@ -53,4 +53,44 @@ final class SchemaV2Tests: XCTestCase {
             XCTAssertEqual(back?.vector, Data([1, 2, 3, 4]))
         }
     }
+
+    func testUpgradeFromPopulatedV1() throws {
+        let q = try DatabaseQueue()
+        let migrator = Database.makeMigrator()
+        try migrator.migrate(q, upTo: "v1_schema")
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, kind, last_seen_at) VALUES ('old1', 'image', 0)")
+            try db.execute(sql: """
+                INSERT INTO tags (id, file_id, label, source, confidence)
+                VALUES ('t1', 'old1', 'dog', 'vision', 0.9)
+                """)
+        }
+        try migrator.migrate(q)   // up to v2
+        try q.read { db in
+            let f = try FileRow.fetchOne(db, key: "old1")
+            XCTAssertNotNil(f)
+            XCTAssertNil(f?.palette)
+            let t = try TagRow.fetchOne(db, key: "t1")
+            XCTAssertNotNil(t)
+            XCTAssertNil(t?.model_version)
+        }
+    }
+
+    func testCascadeDeletesEmbeddingAndMembership() throws {
+        let q = try DatabaseQueue()
+        try Database.makeMigrator().migrate(q)
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, kind, last_seen_at) VALUES ('f1', 'image', 0)")
+            var e = EmbeddingRow(file_id: "f1", vector: Data([9]), model_version: "t", updated_at: 0)
+            try e.insert(db)
+            var c = CollectionRow(id: "c1", name: "X", is_hidden: 0, model_version: "t",
+                                  created_at: 0, updated_at: 0)
+            try c.insert(db)
+            var m = CollectionMemberRow(collection_id: "c1", file_id: "f1")
+            try m.insert(db)
+            try db.execute(sql: "DELETE FROM files WHERE id = 'f1'")
+            XCTAssertEqual(try EmbeddingRow.fetchCount(db), 0)
+            XCTAssertEqual(try CollectionMemberRow.fetchCount(db), 0)
+        }
+    }
 }

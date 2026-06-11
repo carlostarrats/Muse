@@ -182,6 +182,8 @@ final class Database {
                     .references("files", onDelete: .cascade)
                 t.primaryKey(["collection_id", "file_id"])
             }
+            try db.create(index: "collection_members_file_id_idx",
+                          on: "collection_members", columns: ["file_id"])
             try db.alter(table: "tags") { t in
                 t.add(column: "model_version", .text)     // nil for manual/legacy
             }
