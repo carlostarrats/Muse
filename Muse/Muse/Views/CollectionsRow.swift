@@ -10,7 +10,6 @@
 
 import SwiftUI
 import AppKit
-import GRDB
 
 struct CollectionsRow: View {
     @EnvironmentObject var appState: AppState

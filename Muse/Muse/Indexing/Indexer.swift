@@ -224,6 +224,7 @@ actor Indexer {
                     var updated = existing
                     updated.source = "manual"
                     updated.confidence = nil
+                    updated.model_version = nil
                     try updated.update(db)
                 }
                 // Else keep existing
