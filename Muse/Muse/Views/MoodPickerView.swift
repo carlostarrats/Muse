@@ -18,7 +18,7 @@ struct MoodPickerView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 14) {
-                MoodSwatch(title: "White",
+                MoodSwatch(title: "Light",
                            isSelected: appState.mood == .paper,
                            action: { appState.setMood(.paper) }) {
                     Circle().fill(Mood.paperPalette.background)
@@ -51,6 +51,9 @@ struct MoodPickerView: View {
                 }
             }
 
+            // Dimmed while a preset is active so the selection reads at a
+            // glance — still touchable: the first drag lights them up and
+            // switches onto Custom.
             VStack(spacing: 10) {
                 GradientSlider(colors: Self.rainbow,
                                value: binding(\.customHue))
@@ -64,6 +67,9 @@ struct MoodPickerView: View {
                           brightness: 1),
                 ], value: binding(\.customBrightness))
             }
+            .opacity(appState.mood == .custom ? 1 : 0.3)
+            .saturation(appState.mood == .custom ? 1 : 0.4)
+            .animation(.easeOut(duration: 0.2), value: appState.mood)
         }
         .padding(16)
         .frame(width: 270)

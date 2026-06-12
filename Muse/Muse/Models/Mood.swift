@@ -36,7 +36,7 @@ enum Mood: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .paper:  return "White"
+        case .paper:  return "Light"
         case .ink:    return "Dark"
         case .auto:   return "Auto"
         case .custom: return "Custom"
