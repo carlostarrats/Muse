@@ -14,18 +14,24 @@
 import Foundation
 import GRDB
 
+/// Observable indexing progress for the bottom-center pill: how many files
+/// of the current batch (or overlapping batches) have been reconciled.
+@MainActor
+final class IndexProgress: ObservableObject {
+    static let shared = IndexProgress()
+    @Published private(set) var total = 0
+    @Published private(set) var completed = 0
+    var isActive: Bool { total > 0 }
+
+    func begin(_ count: Int) { total += count }
+    func step() {
+        completed += 1
+        if completed >= total { total = 0; completed = 0 }
+    }
+}
+
 actor Indexer {
     static let shared = Indexer()
-
-    private let highPriorityQueue = DispatchQueue(
-        label: "muse.indexer.active",
-        qos: .userInitiated,
-        attributes: .concurrent
-    )
-    private let backgroundQueue = DispatchQueue(
-        label: "muse.indexer.background",
-        qos: .background
-    )
 
     private var inFlightHashes: Set<String> = []
 
@@ -262,19 +268,29 @@ actor Indexer {
 
     // MARK: - Active folder pass
 
-    /// Public entry: hash all enumerated files in `urls` against `dispatch`.
+    /// Public entry: hash all enumerated files in `urls`. Work is windowed
+    /// (a couple of files in flight, the rest queued) at utility/background
+    /// priority — an unbounded fan-out of userInitiated hashing tasks made
+    /// the UI stutter on large libraries.
     func indexBatch(_ urls: [(URL, AssetKind)], priority: Priority) async {
-        let q = (priority == .high) ? highPriorityQueue : backgroundQueue
+        guard !urls.isEmpty else { return }
+        await IndexProgress.shared.begin(urls.count)
+        let taskPriority: TaskPriority = (priority == .high) ? .utility : .background
+
         await withTaskGroup(of: Void.self) { group in
-            for (url, kind) in urls {
-                group.addTask {
-                    await withCheckedContinuation { cont in
-                        q.async {
-                            Task { await self.indexFile(at: url, kind: kind) }
-                            cont.resume()
-                        }
-                    }
+            var iterator = urls.makeIterator()
+            var inFlight = 0
+            func enqueueNext() -> Bool {
+                guard let (url, kind) = iterator.next() else { return false }
+                group.addTask(priority: taskPriority) {
+                    await self.indexFile(at: url, kind: kind)
+                    await IndexProgress.shared.step()
                 }
+                return true
+            }
+            while inFlight < 2, enqueueNext() { inFlight += 1 }
+            while await group.next() != nil {
+                _ = enqueueNext()
             }
         }
     }
