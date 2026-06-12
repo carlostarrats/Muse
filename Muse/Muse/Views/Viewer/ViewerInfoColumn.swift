@@ -17,6 +17,8 @@ import GRDB
 struct ViewerInfoColumn: View {
     let url: URL
     let details: ViewerFileDetails?
+    /// Shown when the DB has no palette yet (computed on open by the viewer).
+    var fallbackPalette: [String] = []
     var refresh: () async -> Void
     var onTagTap: (String) -> Void
     var onCollectionTap: (String) -> Void
@@ -39,13 +41,19 @@ struct ViewerInfoColumn: View {
                 header
                 collectionCard
                 tagsCard
-                if let palette = details?.palette, !palette.isEmpty {
-                    colorsCard(palette: palette)
+                if !displayPalette.isEmpty {
+                    colorsCard(palette: displayPalette)
                 }
                 actionsRow
             }
         }
         .frame(width: 258)
+    }
+
+    /// Analyzed palette from the DB when present, else the on-open fallback.
+    private var displayPalette: [String] {
+        if let palette = details?.palette, !palette.isEmpty { return palette }
+        return fallbackPalette
     }
 
     // MARK: - Header

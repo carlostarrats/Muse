@@ -7,16 +7,20 @@ struct ViewerBackdrop: View {
 
     private var tint: Color {
         guard let hex = hexColor, let (r, g, b) = NamedColor.parse(hex) else {
-            return Color(red: 0.08, green: 0.08, blue: 0.09)
+            return Color(red: 0.16, green: 0.16, blue: 0.18)
         }
-        let k = 0.55   // darken
+        let k = 0.55   // darken, matching the prototype's tintColor()
         return Color(red: r * k, green: g * k, blue: b * k)
     }
 
     var body: some View {
         ZStack {
             Rectangle().fill(.ultraThinMaterial)
-            tint.opacity(0.78)
+            // Prototype: blur(30px) brightness(.5) + rgba(dominant·0.55, 0.78).
+            // While the tint is unknown (a beat at most — it's computed on
+            // open), stay light so the blurred grid shows through instead of
+            // crushing to black.
+            tint.opacity(hexColor == nil ? 0.45 : 0.78)
         }
         .ignoresSafeArea()
         .animation(.easeInOut(duration: 0.6), value: hexColor)

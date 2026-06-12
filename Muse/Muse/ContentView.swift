@@ -15,6 +15,7 @@ struct ContentView: View {
     @State private var showDuplicates = false
 
     var body: some View {
+        ZStack {
         NavigationSplitView {
             SidebarView()
         } detail: {
@@ -47,17 +48,9 @@ struct ContentView: View {
                     }
                 }
 
-                if let selected = appState.selectedFile, !appState.detailPanelVisible
-                    || (appState.detailPanelVisible && shouldShowFullViewer) {
-                    ViewerRouter(file: selected)
-                        .transition(.opacity)
-                }
-
                 if appState.collectionsOverlayVisible {
                     CollectionsOverlay().zIndex(50)
                 }
-                GridToastHost(deletion: appState.deletion)
-                    .zIndex(60)
             }
             .toolbar {
                 ToolbarItem(placement: .navigation) {
@@ -168,9 +161,30 @@ struct ContentView: View {
                 }
             }
             .toolbarBackground(.ultraThinMaterial, for: .windowToolbar)
-            .animation(.easeInOut(duration: 0.18), value: appState.selectedFile?.id)
+            // The viewer covers everything (prototype) — no toolbar above it.
+            // Must hide in the same transaction the viewer mounts: the stage
+            // computes its fit center from the overlay size, and a later hide
+            // moves that center mid-flight (the image visibly arcs).
+            .toolbar(appState.selectedFile == nil ? .automatic : .hidden,
+                     for: .windowToolbar)
             .animation(.easeInOut(duration: 0.22), value: appState.detailPanelVisible)
         }
+
+        // Window-level overlays: the hero viewer spans the whole window —
+        // sidebar and toolbar included — exactly like the prototype.
+        if let selected = appState.selectedFile, !appState.detailPanelVisible
+            || (appState.detailPanelVisible && shouldShowFullViewer) {
+            // Hero (image) viewers mount instantly: the prototype's stage is
+            // opaque from the first frame — only its backdrop fades in.
+            // Fading the whole subtree made the flight semi-transparent.
+            ViewerRouter(file: selected)
+                .transition(selected.kind == .image || selected.kind == .raw
+                            || selected.kind == .psd ? .identity : .opacity)
+        }
+        GridToastHost(deletion: appState.deletion)
+            .zIndex(60)
+        }
+        .animation(.easeInOut(duration: 0.18), value: appState.selectedFile?.id)
         .background(
             Button(action: {
                 if appState.collectionsOverlayVisible {
@@ -205,6 +219,7 @@ struct ContentView: View {
         // is selected, show both — viewer beside panel.
         true
     }
+
 
     @ViewBuilder
     private var sortMenu: some View {

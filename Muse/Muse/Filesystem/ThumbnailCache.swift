@@ -40,6 +40,12 @@ final class ThumbnailCache: ObservableObject {
         try? fileManager.createDirectory(at: diskRoot, withIntermediateDirectories: true)
     }
 
+    /// Synchronous memory-cache peek — no disk read, no generation. Lets the
+    /// hero viewer start its open flight instantly with the grid's tile image.
+    func cachedThumbnail(for url: URL, size: CGSize, scale: CGFloat = 2.0) -> NSImage? {
+        memCache.object(forKey: cacheKey(url: url, size: size, scale: scale) as NSString)
+    }
+
     /// Async fetch. Returns memory hit, then disk hit, then generates.
     func thumbnail(for url: URL, size: CGSize, scale: CGFloat = 2.0) async -> NSImage? {
         let key = cacheKey(url: url, size: size, scale: scale)

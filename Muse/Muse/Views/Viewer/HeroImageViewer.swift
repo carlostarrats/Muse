@@ -34,7 +34,13 @@ struct HeroImageViewer: View {
     /// once the toast dismisses.
     @State private var lingering = false
     @State private var scrollMonitor: Any?
-    @State private var backdropVisible = true
+    /// Starts false and flips on appear: the backdrop fades in over the grid
+    /// (prototype: 0.45s ease) while the already-opaque stage flies.
+    @State private var backdropVisible = false
+    /// Palette computed on open when the DB has none (file not yet analyzed).
+    /// The prototype always tints the backdrop and shows color swatches —
+    /// that can't wait for an explicit Analyze run.
+    @State private var computedPalette: [String] = []
     /// Overlay's frame in SwiftUI .global coords; the scroll monitor uses
     /// minX to ignore scrolls over the sidebar.
     @State private var overlayGlobalFrame: CGRect = .zero
@@ -49,7 +55,7 @@ struct HeroImageViewer: View {
             let overlayGlobal = geo.frame(in: .global)
             ZStack {
                 if !lingering {
-                    ViewerBackdrop(hexColor: details?.dominantColor)
+                    ViewerBackdrop(hexColor: details?.dominantColor ?? computedPalette.first)
                         .opacity(backdropVisible ? 1 : 0)
                         .animation(.easeOut(duration: 0.4), value: backdropVisible)
                         .contentShape(Rectangle())
@@ -90,6 +96,7 @@ struct HeroImageViewer: View {
         }
         .onAppear {
             installScrollMonitor()
+            backdropVisible = true   // animated by the .animation on the backdrop
             withAnimation(.easeOut(duration: 0.4).delay(0.15)) { chromeVisible = true }
         }
         .onDisappear {
@@ -140,6 +147,7 @@ struct HeroImageViewer: View {
     private var infoColumn: some View {
         ViewerInfoColumn(url: currentURL,
                          details: details,
+                         fallbackPalette: computedPalette,
                          refresh: { await loadDetails() },
                          onTagTap: { label in
                              appState.searchQuery = label
@@ -193,8 +201,10 @@ struct HeroImageViewer: View {
             ChromePillButton(systemName: "plus") { setZoom(zoom * 1.25, animated: true) }
         }
         .frame(height: 38)
-        .background(Capsule(style: .continuous).fill(.black.opacity(0.35)))
-        .overlay(Capsule(style: .continuous).stroke(.white.opacity(0.12), lineWidth: 1))
+        // Prototype chrome is white-glass: rgba(255,255,255,.10) at rest.
+        .background(Capsule(style: .continuous).fill(.white.opacity(0.10)))
+        // Segment hover fills are square — keep them inside the capsule ends.
+        .clipShape(Capsule(style: .continuous))
     }
 
     private var fitButton: some View {
@@ -358,6 +368,60 @@ struct HeroImageViewer: View {
             }.value
             if url == currentURL { naturalSize = s }
         }
+        // No analysis data yet → derive backdrop tint + swatches right now.
+        if (loaded?.palette.isEmpty ?? true) {
+            let pal = await Self.quickPalette(at: url)
+            if url == currentURL, !pal.isEmpty {
+                withAnimation(.easeInOut(duration: 0.6)) { computedPalette = pal }
+            }
+        }
+    }
+
+    /// Fast 3-swatch palette from a tiny downsample: coarse RGB-bucket
+    /// histogram, top distinct buckets ordered dark → light (the prototype's
+    /// swatch order). Display-only; Analyze still writes the real palette.
+    nonisolated private static func quickPalette(at url: URL) async -> [String] {
+        await Task.detached(priority: .userInitiated) { () -> [String] in
+            guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+                  let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, [
+                      kCGImageSourceCreateThumbnailFromImageAlways: true,
+                      kCGImageSourceThumbnailMaxPixelSize: 48,
+                  ] as CFDictionary) else { return [] }
+            let w = cg.width, h = cg.height
+            var data = [UInt8](repeating: 0, count: w * h * 4)
+            let drew = data.withUnsafeMutableBytes { buf -> Bool in
+                guard let ctx = CGContext(data: buf.baseAddress, width: w, height: h,
+                                          bitsPerComponent: 8, bytesPerRow: w * 4,
+                                          space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+                else { return false }
+                ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+                return true
+            }
+            guard drew else { return [] }
+            var counts: [Int: Int] = [:]
+            var sums: [Int: (r: Int, g: Int, b: Int)] = [:]
+            for i in stride(from: 0, to: data.count, by: 4) {
+                let r = Int(data[i]), g = Int(data[i + 1]), b = Int(data[i + 2])
+                let key = (r >> 4) << 8 | (g >> 4) << 4 | (b >> 4)
+                counts[key, default: 0] += 1
+                let s = sums[key] ?? (0, 0, 0)
+                sums[key] = (s.r + r, s.g + g, s.b + b)
+            }
+            let top = counts.sorted { $0.value > $1.value }.prefix(12)
+                .compactMap { key, c -> (Int, Int, Int)? in
+                    guard let s = sums[key] else { return nil }
+                    return (s.r / c, s.g / c, s.b / c)
+                }
+            var picked: [(Int, Int, Int)] = []
+            for c in top where picked.count < 3 {
+                if picked.allSatisfy({ abs($0.0 - c.0) + abs($0.1 - c.1) + abs($0.2 - c.2) > 60 }) {
+                    picked.append(c)
+                }
+            }
+            picked.sort { ($0.0 + $0.1 + $0.2) < ($1.0 + $1.1 + $1.2) }
+            return picked.map { String(format: "#%02x%02x%02x", $0.0, $0.1, $0.2) }
+        }.value
     }
 
     nonisolated private static func imagePixelSize(at url: URL) -> CGSize? {
@@ -411,10 +475,11 @@ private struct ChromeCircleButton: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white.opacity(hovering ? 1.0 : 0.8))
+                .foregroundStyle(.white.opacity(hovering ? 1.0 : 0.85))
                 .frame(width: 38, height: 38)
-                .background(Circle().fill(.black.opacity(hovering ? 0.55 : 0.35)))
-                .overlay(Circle().stroke(.white.opacity(0.12), lineWidth: 1))
+                // Hover lightens, like every other chrome control (prototype:
+                // rest .10 white, hover .24).
+                .background(Circle().fill(.white.opacity(hovering ? 0.24 : 0.10)))
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
@@ -434,7 +499,10 @@ private struct ChromePillButton: View {
                 .foregroundStyle(.white.opacity(hovering ? 1.0 : 0.7))
                 .frame(width: 34, height: 38)
                 .contentShape(Rectangle())
-                .background(hovering ? .white.opacity(0.12) : .clear)
+                // Explicit shape, not the bare-ShapeStyle background — that
+                // overload ignores safe-area edges and smears the hover fill
+                // into a full-height band beside the hidden toolbar area.
+                .background(Rectangle().fill(hovering ? .white.opacity(0.20) : .clear))
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
@@ -451,12 +519,11 @@ private struct ChromeTextButton: View {
         Button(action: action) {
             Text(label)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(hovering ? 1.0 : 0.8))
+                .foregroundStyle(.white.opacity(hovering ? 1.0 : 0.85))
                 .padding(.horizontal, 14)
                 .frame(height: 38)
                 .background(Capsule(style: .continuous)
-                    .fill(.black.opacity(hovering ? 0.55 : 0.35)))
-                .overlay(Capsule(style: .continuous).stroke(.white.opacity(0.12), lineWidth: 1))
+                    .fill(.white.opacity(hovering ? 0.24 : 0.10)))
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }

@@ -13,8 +13,7 @@ import AppKit
 struct GridView: View {
     @EnvironmentObject var appState: AppState
 
-    private let tileSize: CGFloat = 160
-    private let spacing: CGFloat = 16
+    private let spacing: CGFloat = 10
 
     var body: some View {
         GeometryReader { geo in
@@ -22,24 +21,21 @@ struct GridView: View {
             if appState.visibleFiles.isEmpty {
                 emptyState
             } else {
-                LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: tileSize), spacing: spacing)],
-                    spacing: spacing
-                ) {
+                // Jigsaw pack: images keep their own aspect ratio and stack
+                // into the shortest column — no identical squares, no
+                // letterboxing dead space.
+                MasonryLayout(columns: columnCount(for: geo.size.width),
+                              spacing: spacing) {
                     ForEach(appState.visibleFiles) { file in
-                        TileView(file: file, size: tileSize, deletion: appState.deletion)
-                            .onTapGesture(count: 2) {
-                                NSWorkspace.shared.open(file.url)
-                            }
+                        TileView(file: file, deletion: appState.deletion)
+                            // Single tap only — the old double-tap recognizer
+                            // (open in default app) made every single click wait
+                            // out the double-click interval before the viewer
+                            // opened, and spawning Preview was never approved.
+                            // Editing flows live in the Open With… context menu.
                             .onTapGesture {
                                 appState.selectedFile = file
                             }
-                            .background(
-                                appState.selectedFile?.id == file.id
-                                ? Color.accentColor.opacity(0.18)
-                                : Color.clear
-                            )
-                            .cornerRadius(8)
                             .contextMenu {
                                 OpenWithMenu(url: file.url)
                                 Divider()
@@ -79,6 +75,11 @@ struct GridView: View {
         }
     }
 
+    /// Wider window → more columns; columns stay in the 220–320pt band.
+    private func columnCount(for width: CGFloat) -> Int {
+        max(2, Int((width - 40) / 260))
+    }
+
     private var emptyState: some View {
         VStack(spacing: 14) {
             Image(systemName: "tray")
@@ -100,29 +101,31 @@ struct GridView: View {
 private struct TileView: View {
     @EnvironmentObject var appState: AppState
     let file: FileNode
-    let size: CGFloat
     @ObservedObject var deletion: DeleteCoordinator
 
     @State private var thumbnail: NSImage?
     @State private var tileFrame: CGRect = .zero
+    @State private var hovering = false
+
+    private var isImageKind: Bool {
+        file.kind == .image || file.kind == .raw || file.kind == .psd || file.kind == .svg
+    }
 
     var body: some View {
-        VStack(spacing: 6) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(appState.moodPalette.tileFill)
-                    .frame(width: size, height: size)
-                if let img = thumbnail {
-                    Image(nsImage: img)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: size - 16, height: size - 16)
-                } else {
-                    Image(systemName: iconName(for: file.kind))
-                        .font(.system(size: 36))
-                        .foregroundStyle(.secondary)
+        tile
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                if appState.selectedFile?.id == file.id {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(Color.accentColor.opacity(0.8), lineWidth: 2)
                 }
             }
+            .scaleEffect(hovering ? 1.025 : 1)
+            .animation(.easeOut(duration: 0.18), value: hovering)
+            .onHover { hovering = $0 }
+            // Prototype's hidden-cell: the tile vanishes while its image is
+            // flying/open so no ghost copy sits behind the hero stage.
+            .opacity(appState.selectedFile?.url == file.url ? 0 : 1)
             .background(
                 GeometryReader { proxy in
                     Color.clear
@@ -152,20 +155,45 @@ private struct TileView: View {
             .modifier(BurnUpModifier(
                 progress: deletion.burningPaths.contains(file.url.path) ? 1 : 0,
                 seed: Double(SeededRandom.fnv1a([file.url.path]) % 1000) / 1000.0,
-                size: CGSize(width: size, height: size)))
-            Text(file.basename)
-                .font(.caption)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(width: size)
-        }
-        .frame(width: size + 12)
-        .padding(.vertical, 4)
-        .task(id: file.url) {
-            thumbnail = await ThumbnailCache.shared.thumbnail(
-                for: file.url,
-                size: CGSize(width: size, height: size)
-            )
+                size: tileFrame.size))
+            .task(id: file.url) {
+                // 320 matches the hero viewer's first cache probe, so the open
+                // flight starts from this exact bitmap with zero wait.
+                thumbnail = await ThumbnailCache.shared.thumbnail(
+                    for: file.url,
+                    size: CGSize(width: 320, height: 320)
+                )
+            }
+    }
+
+    /// Images: natural aspect, column-width, edge to edge (the jigsaw piece).
+    /// Other kinds: a compact labeled card so files stay identifiable.
+    @ViewBuilder
+    private var tile: some View {
+        if isImageKind, let img = thumbnail {
+            Image(nsImage: img)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+        } else if isImageKind {
+            // Aspect placeholder until the thumbnail lands.
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(appState.moodPalette.tileFill)
+                .aspectRatio(1, contentMode: .fit)
+        } else {
+            VStack(spacing: 8) {
+                Image(systemName: iconName(for: file.kind))
+                    .font(.system(size: 30))
+                    .foregroundStyle(.secondary)
+                Text(file.basename)
+                    .font(.caption)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .padding(.horizontal, 10)
+            }
+            .frame(maxWidth: .infinity)
+            .aspectRatio(1.4, contentMode: .fit)
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(appState.moodPalette.tileFill))
         }
     }
 

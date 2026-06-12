@@ -16,7 +16,8 @@ struct MuseApp: App {
             ContentView()
                 .environmentObject(appState)
                 .task {
-                    appState.fluidSim.start()
+                    // fluidSim starts on demand via AppState.fluidEnabled —
+                    // a 60fps CPU timer must not run while the effect is off.
                     ThumbnailCache.shared.enforceDiskCap()
                 }
         }

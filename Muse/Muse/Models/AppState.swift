@@ -134,7 +134,12 @@ final class AppState: ObservableObject {
 
     // MARK: - Water shader
 
-    @Published var fluidEnabled: Bool = false
+    @Published var fluidEnabled: Bool = false {
+        didSet {
+            // The CPU sim ticks at 60fps — only while the effect is on.
+            if fluidEnabled { fluidSim.start() } else { fluidSim.stop() }
+        }
+    }
     @Published var fluidViewportSize: CGSize = .zero
     let fluidSim = FluidSim()
     @Published var fluidDispImage: Image = FluidSim.neutralImage

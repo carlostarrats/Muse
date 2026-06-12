@@ -26,8 +26,8 @@ struct CollectionsRow: View {
                     ForEach(engine.collections.prefix(4), id: \.collection.id) { loaded in
                         CollectionCard(loaded: loaded)
                     }
-                    AllCollectionsCard(count: engine.collections.count)
-                        .onTapGesture { appState.collectionsOverlayVisible = true }
+                    // The dashed "All (⌘K)" card was cut — the toolbar button
+                    // and ⌘K shortcut already open the collections overlay.
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 14)
@@ -165,32 +165,3 @@ private struct CollectionMosaic: View {
     }
 }
 
-// MARK: - All collections card
-
-private struct AllCollectionsCard: View {
-    let count: Int
-
-    var body: some View {
-        VStack(spacing: 4) {
-            Image(systemName: "square.grid.2x2")
-                .font(.system(size: 16))
-                .foregroundStyle(.secondary)
-            Text("All (⌘K)")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
-            Text("\(count)")
-                .font(.system(size: 10))
-                .foregroundStyle(.tertiary)
-        }
-        .frame(width: 84, height: 84)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(
-                    Color.secondary.opacity(0.4),
-                    style: StrokeStyle(lineWidth: 1, dash: [4, 3])
-                )
-        )
-        .contentShape(Rectangle())
-        .help("Show all collections")
-    }
-}

@@ -27,3 +27,6 @@ Muse/.build/
 
 # Brainstorm/visual-companion sessions
 .superpowers/
+
+# Local xcodebuild output (xcodebuild -derivedDataPath build)
+Muse/build/
