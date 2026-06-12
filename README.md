@@ -55,3 +55,9 @@ Built with SwiftUI, SceneKit, and GRDB.swift.
 ## Build
 
 Open `Muse/Muse.xcodeproj` in Xcode and run (Cmd+R). GRDB is fetched automatically via Swift Package Manager.
+
+## Acknowledgements
+
+- Custom background color sliders are designed after
+  [SwiftUI-Color-Kit](https://github.com/kieranb662/SwiftUI-Color-Kit)
+  by Kieran Brown (implemented natively in Muse — no dependency).

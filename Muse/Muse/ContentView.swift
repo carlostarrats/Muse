@@ -14,6 +14,7 @@ struct ContentView: View {
     @EnvironmentObject var appState: AppState
     @ObservedObject private var indexProgress = IndexProgress.shared
     @ObservedObject private var thumbProgress = ThumbProgress.shared
+    @State private var moodPickerShown = false
 
     var body: some View {
         ZStack {
@@ -202,21 +203,16 @@ struct ContentView: View {
 
     @ViewBuilder
     private var moodMenu: some View {
-        Menu {
-            Picker("Background mood", selection: Binding(
-                get: { appState.mood },
-                set: { appState.setMood($0) }
-            )) {
-                ForEach(Mood.allCases) { mood in
-                    Text(mood.displayName).tag(mood)
-                }
-            }
-            .pickerStyle(.inline)
-            .labelsHidden()
+        Button {
+            moodPickerShown.toggle()
         } label: {
             Image(systemName: "paintpalette")
         }
-        .help("Background mood: \(appState.mood.displayName)")
+        .help("Background: \(appState.mood.displayName)")
+        .popover(isPresented: $moodPickerShown, arrowEdge: .bottom) {
+            MoodPickerView()
+                .environmentObject(appState)
+        }
     }
 
     /// Bottom-center pill while tile thumbnails stream in for a big folder.

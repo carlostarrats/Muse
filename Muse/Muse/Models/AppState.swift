@@ -127,7 +127,6 @@ final class AppState: ObservableObject {
                 activeCollectionID = nil
                 activeCollectionPaths = nil
             }
-            refreshAutoTint()
             return
         }
         let token = collectionRequestToken
@@ -146,7 +145,6 @@ final class AppState: ObservableObject {
                     activeCollectionID = id
                     activeCollectionPaths = Set(paths)
                 }
-                refreshAutoTint()
             }
         }
     }
@@ -221,48 +219,60 @@ final class AppState: ObservableObject {
 
     let deletion = DeleteCoordinator()
 
-    // MARK: - Background mood (polish spec §4)
+    // MARK: - Background mood
 
     @Published var mood: Mood = Mood.load()
 
-    /// Computed tint for the Auto mood; nil until colors load (falls back to Ink).
-    @Published var autoTint: AutoTint?
+    /// Custom-mood HSB components (0–1), persisted. The mood popover's
+    /// sliders write these (and switch the mood to .custom).
+    @Published var customHue: Double =
+        UserDefaults.standard.object(forKey: "muse.customHue") as? Double ?? 0.61 {
+        didSet { UserDefaults.standard.set(customHue, forKey: "muse.customHue") }
+    }
+    @Published var customSaturation: Double =
+        UserDefaults.standard.object(forKey: "muse.customSaturation") as? Double ?? 0.25 {
+        didSet { UserDefaults.standard.set(customSaturation, forKey: "muse.customSaturation") }
+    }
+    @Published var customBrightness: Double =
+        UserDefaults.standard.object(forKey: "muse.customBrightness") as? Double ?? 0.18 {
+        didSet { UserDefaults.standard.set(customBrightness, forKey: "muse.customBrightness") }
+    }
+
+    /// Day/night flag for the Auto mood; a minute timer keeps it honest.
+    @Published private(set) var autoMoodIsDay = Mood.isDaytime()
+    private var autoMoodTimer: Timer?
 
     var moodPalette: MoodPalette {
-        mood.palette ?? autoTint?.palette ?? Mood.fallbackPalette
+        switch mood {
+        case .ink:    return Mood.fallbackPalette
+        case .paper:  return Mood.paperPalette
+        case .auto:   return autoMoodIsDay ? Mood.paperPalette : Mood.fallbackPalette
+        case .custom: return Mood.customPalette(hue: customHue,
+                                                saturation: customSaturation,
+                                                brightness: customBrightness)
+        }
     }
 
     func setMood(_ m: Mood) {
-        withAnimation(.easeInOut(duration: 0.35)) {
-            mood = m
-            // Named moods ignore autoTint; clearing it makes re-entering
-            // Auto deterministic (Ink fallback → fade to computed tint).
-            if m != .auto { autoTint = nil }
-        }
+        withAnimation(.easeInOut(duration: 0.35)) { mood = m }
         m.save()
-        refreshAutoTint()
+        updateAutoMoodTimer()
     }
 
-    /// Stale-read guard for refreshAutoTint (same pattern as
-    /// setActiveCollection's "don't clobber a newer selection").
-    private var autoTintGeneration = 0
-
-    /// Recompute the Auto tint from what's on screen. One indexed read
-    /// over ≤48 paths — cheap enough to run on every scope change.
-    func refreshAutoTint() {
+    /// Runs only while the mood is Auto; flips the palette at the
+    /// day/night boundary with a slow fade.
+    func updateAutoMoodTimer() {
+        autoMoodTimer?.invalidate()
+        autoMoodTimer = nil
         guard mood == .auto else { return }
-        guard let q = Database.shared.dbQueue else {
-            autoTint = nil
-            return
-        }
-        autoTintGeneration += 1
-        let gen = autoTintGeneration
-        let paths = visibleFiles.prefix(48).map { $0.url.standardizedFileURL.path }
-        Task { @MainActor in
-            let hexes = (try? await AutoTint.dominantColors(queue: q, paths: Array(paths))) ?? []
-            guard gen == autoTintGeneration, mood == .auto else { return }
-            withAnimation(.easeInOut(duration: 0.35)) {
-                autoTint = AutoTint.blend(hexes: hexes)
+        autoMoodIsDay = Mood.isDaytime()
+        autoMoodTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.mood == .auto else { return }
+                let day = Mood.isDaytime()
+                if day != self.autoMoodIsDay {
+                    withAnimation(.easeInOut(duration: 0.6)) { self.autoMoodIsDay = day }
+                }
             }
         }
     }
@@ -273,6 +283,8 @@ final class AppState: ObservableObject {
     private var bookmarksCancellable: AnyCancellable?
 
     init() {
+        updateAutoMoodTimer()
+
         // Forward fluid sim displacement, throttled
         fluidCancellable = fluidSim.$dispImage
             .throttle(for: .milliseconds(33), scheduler: RunLoop.main, latest: true)
@@ -405,7 +417,6 @@ final class AppState: ObservableObject {
         reloadCurrentFiles()
         startWatching(folder.url)
         scheduleIndexing(for: folder.url)
-        refreshAutoTint()
     }
 
     /// Scan the current folder's images for duplicates, then present the
@@ -502,14 +513,12 @@ final class AppState: ObservableObject {
         isSearchActive = true
         // search results keep relevance rank; sort modes apply to folder browsing only
         currentFiles = results
-        refreshAutoTint()
     }
 
     func clearSearch() {
         searchQuery = ""
         isSearchActive = false
         reloadCurrentFiles()
-        refreshAutoTint()
     }
 
     func analyzeCurrentFolder() async {
@@ -519,7 +528,6 @@ final class AppState: ObservableObject {
         await AnalyzePipeline.shared.analyze(folder: urls)
         // Re-sort in case visual signals just landed
         resort()
-        refreshAutoTint()
     }
 
     func analyzeSelected() async {
@@ -553,7 +561,6 @@ final class AppState: ObservableObject {
     func toggleSubfolders() {
         showSubfolders.toggle()
         reloadCurrentFiles()
-        refreshAutoTint()
     }
 
     // MARK: - Watcher
@@ -565,7 +572,6 @@ final class AppState: ObservableObject {
                 // not replace them with the watched folder's listing.
                 guard let self, !self.isSearchActive else { return }
                 self.reloadCurrentFiles()
-                self.refreshAutoTint()
             }
         }
         watcher?.watch(url: url, recursive: showSubfolders)
