@@ -11,7 +11,7 @@ final class TagFallbackNamer: CollectionNamer {
     }
 
     /// Returns the FM-backed namer on Apple Intelligence-capable Macs
-    /// (same gate as ChatService), otherwise the top-tag fallback.
+    /// (Apple Intelligence Macs only), otherwise the top-tag fallback.
     static func makeBest() -> CollectionNamer {
         #if canImport(FoundationModels)
         if #available(macOS 26.0, *),

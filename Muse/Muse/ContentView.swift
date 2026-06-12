@@ -48,10 +48,6 @@ struct ContentView: View {
                     .background(appState.moodPalette.background)
                     .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
 
-                    if appState.chatPanelVisible && ChatService.shared.isAvailable {
-                        ChatPanelView()
-                            .transition(.move(edge: .trailing))
-                    }
                 }
 
             }
@@ -102,18 +98,6 @@ struct ContentView: View {
                     }
                     .help("Analyze current folder (AI tag + OCR + color)")
                     .disabled(AnalyzePipeline.shared.isRunning)
-                }
-
-                ToolbarItem(placement: .primaryAction) {
-                    if ChatService.shared.isAvailable {
-                        Button {
-                            appState.chatPanelVisible.toggle()
-                        } label: {
-                            Image(systemName: "bubble.left.and.text.bubble.right")
-                                .foregroundStyle(appState.chatPanelVisible ? Color.purple : Color.primary)
-                        }
-                        .help("Ask Muse")
-                    }
                 }
 
                 ToolbarItemGroup(placement: .primaryAction) {
