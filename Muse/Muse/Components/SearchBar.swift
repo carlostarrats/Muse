@@ -2,8 +2,8 @@
 //  SearchBar.swift
 //  Muse
 //
-//  FTS5-backed search bar with current-folder vs everywhere scope
-//  toggle. 250ms debounce so we don't fire a query on every keystroke.
+//  FTS5-backed search bar, scoped to the folder selected in the sidebar.
+//  250ms debounce so we don't fire a query on every keystroke.
 //
 
 import SwiftUI
@@ -37,20 +37,6 @@ struct SearchBar: View {
                     fire(query: text)
                 }
 
-            Toggle(isOn: $appState.searchEverywhere) {
-                Image(systemName: appState.searchEverywhere
-                      ? "globe"
-                      : "folder")
-            }
-            .toggleStyle(.button)
-            .controlSize(.mini)
-            .help(appState.searchEverywhere
-                  ? "Searching the entire indexed library"
-                  : "Searching the current folder")
-            .onChange(of: appState.searchEverywhere) { _, _ in
-                fire(query: text)
-            }
-
             if !text.isEmpty {
                 Button {
                     text = ""
@@ -69,7 +55,7 @@ struct SearchBar: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color(nsColor: .controlBackgroundColor))
         )
-        .frame(minWidth: 240, maxWidth: 420)
+        .frame(minWidth: 320, maxWidth: 640)
     }
 
     // MARK: - Debounce

@@ -15,6 +15,7 @@ struct ContentView: View {
     @ObservedObject private var indexProgress = IndexProgress.shared
     @ObservedObject private var thumbProgress = ThumbProgress.shared
     @State private var moodPickerShown = false
+    @State private var infoShown = false
 
     var body: some View {
         ZStack {
@@ -53,6 +54,11 @@ struct ContentView: View {
 
             }
             .toolbar {
+                // Far left, beside the sidebar toggle — fully separate from search.
+                ToolbarItem(placement: .navigation) {
+                    sortMenu
+                }
+
                 ToolbarItem(placement: .principal) {
                     SearchBar()
                 }
@@ -76,7 +82,6 @@ struct ContentView: View {
                         }
                         .help("Clear collection filter")
                     }
-                    sortMenu
                 }
 
                 ToolbarItem(placement: .primaryAction) {
@@ -91,16 +96,6 @@ struct ContentView: View {
                     }
                 }
 
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        Task { await appState.analyzeCurrentFolder() }
-                    } label: {
-                        Image(systemName: "sparkles")
-                    }
-                    .help("Analyze current folder (AI tag + OCR + color)")
-                    .disabled(AnalyzePipeline.shared.isRunning)
-                }
-
                 ToolbarItemGroup(placement: .primaryAction) {
                     moodMenu
                     Button {
@@ -110,6 +105,13 @@ struct ContentView: View {
                             .foregroundStyle(appState.fluidEnabled ? Color.blue : Color.primary)
                     }
                     .help(appState.fluidEnabled ? "Disable Water Effect" : "Enable Water Effect")
+
+                    Button {
+                        infoShown = true
+                    } label: {
+                        Image(systemName: "info.circle")
+                    }
+                    .help("About Muse — how indexing, Analyze, collections, and tags work")
                 }
             }
             .toolbarBackground(.ultraThinMaterial, for: .windowToolbar)
@@ -161,6 +163,9 @@ struct ContentView: View {
         .sheet(isPresented: $appState.duplicatesSheetVisible) {
             DuplicatesView(isPresented: $appState.duplicatesSheetVisible)
         }
+        .sheet(isPresented: $infoShown) {
+            InfoSheet(isPresented: $infoShown)
+        }
         .overlay(alignment: .bottom) {
             if AnalyzePipeline.shared.isRunning {
                 analyzeStatusBanner
@@ -178,25 +183,20 @@ struct ContentView: View {
         Menu {
             // Picker gives native menu checkmarks (the empty-systemImage
             // Label hack logged "no symbol named ''" console noise).
+            // One flat list — Color and Shape simply use Analyze data when
+            // it exists, no Standard/Smart ceremony.
             Picker("Sort", selection: Binding(
                 get: { appState.sortMode },
                 set: { appState.sortMode = $0; appState.resort() }
             )) {
-                Section("Standard") {
-                    ForEach([SortMode.dateModified, .dateCreated, .name, .size, .kind], id: \.self) { mode in
-                        Text(mode.displayName).tag(mode)
-                    }
-                }
-                Section("Smart") {
-                    ForEach([SortMode.dominantColor, .faceCount, .hasText], id: \.self) { mode in
-                        Text(mode.displayName).tag(mode)
-                    }
+                ForEach(SortMode.allCases) { mode in
+                    Text(mode.displayName).tag(mode)
                 }
             }
             .pickerStyle(.inline)
             .labelsHidden()
         } label: {
-            Image(systemName: "arrow.up.arrow.down")
+            Image(systemName: "arrow.up.and.down.text.horizontal")
         }
         .help("Sort: \(appState.sortMode.displayName)")
     }

@@ -12,7 +12,7 @@ import GRDB
 
 enum SortMode: String, CaseIterable, Identifiable {
     case dateModified, dateCreated, name, size, kind
-    case dominantColor, faceCount, hasText
+    case dominantColor, shape
 
     var id: String { rawValue }
 
@@ -23,15 +23,16 @@ enum SortMode: String, CaseIterable, Identifiable {
         case .name: return "Name"
         case .size: return "Size"
         case .kind: return "Kind"
-        case .dominantColor: return "Dominant Color"
-        case .faceCount: return "Faces"
-        case .hasText: return "Has Text"
+        case .dominantColor: return "Color"
+        case .shape: return "Shape"
         }
     }
 
+    /// Color and Shape read Vision data written by Analyze (the ✨ button);
+    /// un-analyzed files fall back to date order.
     var requiresIndexedData: Bool {
         switch self {
-        case .dominantColor, .faceCount, .hasText: return true
+        case .dominantColor, .shape: return true
         default: return false
         }
     }
@@ -57,20 +58,15 @@ enum SmartSorter {
             return files.sorted { $0.kind.rawValue < $1.kind.rawValue }
         case .dominantColor:
             return sortByIndexed(files: files, valueFor: { row in row.dominant_color })
-        case .faceCount:
+        case .shape:
+            // Aspect-ratio continuum: widest landscape → square → tallest
+            // portrait. Files without analyzed dimensions (ratio 0) sink to
+            // the end, tiebroken by date.
             return sortByIndexed(files: files, descending: true,
                                  valueFor: { _ in nil as String? },
                                  numericFor: { row in
-                // tags table has face count? we encode it implicitly via vision tags;
-                // for v1, just use the FileRow.feature_print presence as a proxy
-                row.feature_print != nil ? 1 : 0
-            })
-        case .hasText:
-            return sortByIndexed(files: files, descending: true,
-                                 valueFor: { _ in nil as String? },
-                                 numericFor: { row in
-                // We index OCR text via files_fts; check via caption containing "text:"
-                (row.caption?.contains("text:") == true) ? 1 : 0
+                guard let w = row.width, let h = row.height, h > 0 else { return 0 }
+                return (w * 1000) / h
             })
         }
     }

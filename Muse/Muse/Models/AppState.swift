@@ -71,9 +71,6 @@ final class AppState: ObservableObject {
     /// True when search results, not folder contents, are showing in the grid.
     @Published var isSearchActive: Bool = false
 
-    /// Q21: search defaults to current folder; toggle to search everywhere.
-    @Published var searchEverywhere: Bool = false
-
 
     /// Grid / Cloud / Graph view mode for the active folder (spec §3).
     enum ViewMode: String { case grid, cloud, graph }
@@ -94,19 +91,21 @@ final class AppState: ObservableObject {
     @Published var activeCollectionID: String? = nil
 
     /// Alive absolute paths of the active collection's members. nil when
-    /// no collection filter is active (FileNode has no DB id, so the grid
-    /// filter resolves membership by path).
+    /// no collection filter is active.
     @Published var activeCollectionPaths: Set<String>? = nil
 
-    /// Files the grid should show: currentFiles, optionally narrowed to
-    /// the active collection's members.
+    /// FileNodes for ALL of the active collection's members, across every
+    /// folder — a collection is a library-wide view, not an intersection
+    /// with whatever folder happens to be selected in the sidebar.
+    @Published var activeCollectionFiles: [FileNode]? = nil
+
+    /// Files the grid should show: the active collection's members when
+    /// inside a collection, else the current folder's files; the tag chip
+    /// filter narrows either.
     var visibleFiles: [FileNode] {
         // search results are global; collection/tag filters apply to browsing only
         if isSearchActive { return currentFiles }
-        var files = currentFiles
-        if let paths = activeCollectionPaths {
-            files = files.filter { paths.contains($0.url.standardizedFileURL.path) }
-        }
+        var files = activeCollectionFiles ?? currentFiles
         if let tagPaths = activeTagPaths {
             files = files.filter { tagPaths.contains($0.url.standardizedFileURL.path) }
         }
@@ -126,6 +125,7 @@ final class AppState: ObservableObject {
             withAnimation(curve) {
                 activeCollectionID = nil
                 activeCollectionPaths = nil
+                activeCollectionFiles = nil
             }
             return
         }
@@ -134,16 +134,24 @@ final class AppState: ObservableObject {
             guard let q = Database.shared.dbQueue else {
                 activeCollectionID = id
                 activeCollectionPaths = []
+                activeCollectionFiles = []
                 return
             }
             let paths = (try? await CollectionStore.alivePaths(
                 queue: q, collectionID: id
             )) ?? []
+            // Members that still exist on disk, library-wide, sorted by
+            // the active sort mode.
+            let nodes = SmartSorter.apply(sortMode, to: paths.compactMap { path in
+                FileManager.default.fileExists(atPath: path)
+                    ? FileNode(url: URL(fileURLWithPath: path)) : nil
+            })
             // Don't clobber a newer selection that landed while loading.
             if token == collectionRequestToken {
                 withAnimation(curve) {
                     activeCollectionID = id
                     activeCollectionPaths = Set(paths)
+                    activeCollectionFiles = nodes
                 }
             }
         }
@@ -431,7 +439,9 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// Kick off active-folder indexing on the high-priority queue.
+    /// Kick off active-folder indexing, then the automatic analysis pass
+    /// over whatever images are new or changed (stale analyzed_hash) —
+    /// already-analyzed files are provably skipped.
     private func scheduleIndexing(for url: URL) {
         let files = currentFiles
         Task.detached(priority: .userInitiated) {
@@ -440,6 +450,10 @@ final class AppState: ObservableObject {
                 return (f.url, f.kind)
             }
             await Indexer.shared.indexBatch(pairs, priority: .high)
+            let imageURLs = files
+                .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
+                .map { $0.url }
+            await AnalyzePipeline.shared.analyzePending(in: imageURLs)
         }
     }
 
@@ -491,6 +505,9 @@ final class AppState: ObservableObject {
         // Don't re-sort search results; they maintain relevance ranking
         guard !isSearchActive else { return }
         currentFiles = SmartSorter.apply(sortMode, to: currentFiles)
+        if let collectionFiles = activeCollectionFiles {
+            activeCollectionFiles = SmartSorter.apply(sortMode, to: collectionFiles)
+        }
     }
 
     // MARK: - Search
@@ -501,10 +518,10 @@ final class AppState: ObservableObject {
             clearSearch()
             return
         }
+        // Search always scopes to the folder selected in the sidebar;
+        // with nothing selected, fall back to the whole indexed library.
         let scope: SearchScope
-        if searchEverywhere {
-            scope = .everywhere
-        } else if let folder = selectedFolder {
+        if let folder = selectedFolder {
             scope = .currentFolder(folder.url)
         } else {
             scope = .everywhere
