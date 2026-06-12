@@ -50,16 +50,24 @@ enum PaletteExtractor {
                   kCGImageSourceCreateThumbnailFromImageAlways: true,
                   kCGImageSourceThumbnailMaxPixelSize: 32,
               ] as CFDictionary) else { return [] }
-        guard let data = thumb.dataProvider?.data as Data?,
-              thumb.bitsPerPixel == 32 else { return [] }
-        let bpr = thumb.bytesPerRow
+        // Redraw into a known RGBA layout. Reading the thumbnail's raw
+        // dataProvider assumed R,G,B at bytes 0,1,2 — ImageIO thumbnails
+        // are typically BGRA, which swapped red and blue in every palette.
+        let w = thumb.width, h = thumb.height
+        var data = [UInt8](repeating: 0, count: w * h * 4)
+        let drew = data.withUnsafeMutableBytes { buf -> Bool in
+            guard let ctx = CGContext(data: buf.baseAddress, width: w, height: h,
+                                      bitsPerComponent: 8, bytesPerRow: w * 4,
+                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+            else { return false }
+            ctx.draw(thumb, in: CGRect(x: 0, y: 0, width: w, height: h))
+            return true
+        }
+        guard drew else { return [] }
         var px: [(Double, Double, Double)] = []
-        for y in 0..<thumb.height {
-            for x in 0..<thumb.width {
-                let o = y * bpr + x * 4
-                guard o + 2 < data.count else { continue }
-                px.append((Double(data[o]) / 255, Double(data[o + 1]) / 255, Double(data[o + 2]) / 255))
-            }
+        for o in stride(from: 0, to: data.count, by: 4) {
+            px.append((Double(data[o]) / 255, Double(data[o + 1]) / 255, Double(data[o + 2]) / 255))
         }
         return kmeansHex(pixels: px, k: k, seed: 7)
     }
