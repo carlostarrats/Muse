@@ -37,6 +37,16 @@ actor Indexer {
         inFlightHashes.insert(absPath)
         defer { inFlightHashes.remove(absPath) }
 
+        // Dataless iCloud placeholders have no local bytes — hashing them
+        // reads empty and corrupts identity. Skip until downloaded; the
+        // next pass after download reconciles them normally.
+        if let status = (try? url.resourceValues(
+                forKeys: [.ubiquitousItemDownloadingStatusKey]))?
+                .ubiquitousItemDownloadingStatus,
+           status == .notDownloaded {
+            return
+        }
+
         guard let queue = Database.shared.dbQueue else { return }
 
         let now = Int64(Date().timeIntervalSince1970)

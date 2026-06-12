@@ -21,11 +21,21 @@ enum HashService {
         var hasher = SHA256()
         let bufferSize = 1024 * 1024
         var buffer = [UInt8](repeating: 0, count: bufferSize)
+        var totalBytes = 0
         while stream.hasBytesAvailable {
             let n = stream.read(&buffer, maxLength: bufferSize)
             if n < 0 { return nil }
             if n == 0 { break }
+            totalBytes += n
             hasher.update(data: Data(bytes: buffer, count: n))
+        }
+        if stream.streamError != nil { return nil }
+        if totalBytes == 0 {
+            // Zero bytes off a non-empty file is a failed read (dataless
+            // iCloud placeholder, permissions). Hashing it as "empty"
+            // once welded 1750 evicted files to a single phantom files row.
+            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            if size > 0 { return nil }
         }
         let digest = hasher.finalize()
         return digest.map { String(format: "%02x", $0) }.joined()
