@@ -19,6 +19,13 @@ struct MuseApp: App {
                     // fluidSim starts on demand via AppState.fluidEnabled —
                     // a 60fps CPU timer must not run while the effect is off.
                     ThumbnailCache.shared.enforceDiskCap()
+                    // 180-day retention for data of removed folders.
+                    if let queue = Database.shared.dbQueue {
+                        let roots = appState.bookmarks.roots
+                            .compactMap { $0.resolveURL()?.standardizedFileURL.path }
+                        await Housekeeping.pruneUnreachable(queue: queue,
+                                                            rootPaths: roots)
+                    }
                 }
         }
         .commands {

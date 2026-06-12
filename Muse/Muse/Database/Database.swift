@@ -205,6 +205,14 @@ final class Database {
             }
         }
 
+        migrator.registerMigration("v4_auto_analyze") { db in
+            // Incremental auto-analysis: a file is (re)analyzed only when
+            // analyzed_hash is missing or no longer matches content_hash.
+            try db.alter(table: "files") { t in
+                t.add(column: "analyzed_hash", .text)
+            }
+        }
+
         return migrator
     }
 }

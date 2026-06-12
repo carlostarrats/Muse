@@ -219,7 +219,8 @@ actor Indexer {
             caption: nil,
             dominant_color: nil,
             feature_print: nil,
-            palette: nil
+            palette: nil,
+            analyzed_hash: nil
         )
     }
 

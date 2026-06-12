@@ -27,6 +27,9 @@ struct FileRow: Codable, FetchableRecord, MutablePersistableRecord {
     var dominant_color: String?
     var feature_print: Data?
     var palette: String?
+    /// content_hash at the time of the last Vision analysis; mismatch (or
+    /// nil) marks the file as needing (re)analysis.
+    var analyzed_hash: String?
 
     enum Columns {
         static let id = Column("id")
