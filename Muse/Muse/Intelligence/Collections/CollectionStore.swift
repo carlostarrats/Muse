@@ -13,6 +13,10 @@ enum CollectionStore {
     struct Loaded {
         var collection: CollectionRow
         var memberIDs: [String]
+        /// Members with an alive path — what the user actually has on disk.
+        /// Cards, headers, and the row all display THIS, so deleting images
+        /// or removing folders auto-shrinks (and at zero, hides) a collection.
+        var aliveCount: Int
     }
 
     static func upsert(queue: DatabaseQueue, id: String, name: String,
@@ -137,9 +141,15 @@ enum CollectionStore {
                 let members = try String.fetchAll(db, sql:
                     "SELECT file_id FROM collection_members WHERE collection_id = ?",
                     arguments: [row.id])
-                return Loaded(collection: row, memberIDs: members)
+                let alive = try Int.fetchOne(db, sql: """
+                    SELECT COUNT(DISTINCT p.file_id) FROM paths p
+                    JOIN collection_members m ON m.file_id = p.file_id
+                    WHERE m.collection_id = ? AND p.is_alive = 1
+                    """, arguments: [row.id]) ?? 0
+                return Loaded(collection: row, memberIDs: members, aliveCount: alive)
             }
-            .sorted { $0.memberIDs.count > $1.memberIDs.count }   // biggest first
+            .filter { $0.aliveCount > 0 }                      // nothing on disk → hidden
+            .sorted { $0.aliveCount > $1.aliveCount }          // biggest first
         }
     }
 

@@ -76,7 +76,7 @@ private struct ActiveCollectionHeader: View {
                 Text(loaded.collection.name)
                     .font(.system(size: 42, weight: .semibold))
                     .onTapGesture { startEdit() }
-                Text("\(loaded.memberIDs.count)")
+                Text("\(loaded.aliveCount)")
                     .font(.system(size: 42, weight: .semibold))
                     .foregroundStyle(.secondary)
                 HeaderIconButton(systemName: "square.and.pencil",
@@ -231,7 +231,7 @@ struct CollectionCard: View {
                     .font(.system(size: 15, weight: .semibold))
                     .lineLimit(1)
                     .truncationMode(.tail)
-                Text("\(loaded.memberIDs.count)")
+                Text("\(loaded.aliveCount)")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.secondary)
             }

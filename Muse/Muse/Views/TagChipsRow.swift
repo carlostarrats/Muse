@@ -63,7 +63,7 @@ struct TagChipsRow: View {
                 .padding(.bottom, appState.activeTagLabel != nil ? 14 : 24)
             }
         }
-        .task(id: appState.tagsVersion) { await loadLabels() }
+        .task(id: reloadKey) { await loadLabels() }
         .onChange(of: appState.tagRenameRequest) { _, label in
             if let label { renameText = label }
         }
@@ -115,14 +115,27 @@ struct TagChipsRow: View {
         else if hovered == index { hovered = nil }
     }
 
-    /// Most-used tag labels (with tagged-file counts) across the library.
+    /// Reload when tags mutate OR the sidebar selection changes.
+    private var reloadKey: String {
+        "\(appState.tagsVersion)|\(appState.selectedFolder?.url.path ?? "")"
+    }
+
+    /// Most-used tag labels (with tagged-file counts), scoped to the
+    /// folder selected in the sidebar — tags follow the folder, like search.
     private func loadLabels() async {
-        guard let q = Database.shared.dbQueue else { return }
+        guard let q = Database.shared.dbQueue,
+              let folder = appState.selectedFolder?.url.standardizedFileURL.path else {
+            tags = []
+            return
+        }
+        let prefix = folder + "/%"
         let rows: [(String, Int)] = (try? await q.read { db in
             try Row.fetchAll(db, sql: """
-                SELECT label, COUNT(*) AS c FROM tags GROUP BY label
-                ORDER BY c DESC LIMIT 30
-                """).map { ($0["label"], $0["c"]) }
+                SELECT t.label, COUNT(DISTINCT t.file_id) AS c
+                FROM tags t JOIN paths p ON p.file_id = t.file_id
+                WHERE p.is_alive = 1 AND p.absolute_path LIKE ?
+                GROUP BY t.label ORDER BY c DESC LIMIT 30
+                """, arguments: [prefix]).map { ($0["label"], $0["c"]) }
         }) ?? []
         tags = rows.map { (label: $0.0, count: $0.1) }
     }
