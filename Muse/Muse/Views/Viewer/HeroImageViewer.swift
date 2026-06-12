@@ -41,6 +41,10 @@ struct HeroImageViewer: View {
     /// The prototype always tints the backdrop and shows color swatches —
     /// that can't wait for an explicit Analyze run.
     @State private var computedPalette: [String] = []
+    /// False until the current file's palette is known (DB or quick compute);
+    /// the info column shows placeholder swatches meanwhile so the actions
+    /// row mounts in its final position.
+    @State private var paletteResolved = false
     /// Overlay's frame in SwiftUI .global coords; the scroll monitor uses
     /// minX to ignore scrolls over the sidebar.
     @State private var overlayGlobalFrame: CGRect = .zero
@@ -71,8 +75,7 @@ struct HeroImageViewer: View {
                               pan: $pan,
                               isClosing: $isClosing)
 
-                    infoColumn
-                    chromeRow
+                    rightRail
                 }
                 ViewerToast(toast: $toast)
             }
@@ -102,6 +105,7 @@ struct HeroImageViewer: View {
         .onDisappear {
             removeScrollMonitor()
             appState.viewerClosing = false
+            appState.viewerDismissing = false
             deleteTask?.cancel()
             if burning {
                 // Unmounted mid-burn (sidebar navigation, window close):
@@ -142,12 +146,20 @@ struct HeroImageViewer: View {
         .task(id: currentURL) { await loadDetails() }
     }
 
-    // MARK: - Info column
+    // MARK: - Right rail (chrome row + info column, shared zoom backing)
 
-    private var infoColumn: some View {
+    /// The chrome row rides inside the column's content stack, and the zoom
+    /// backing card is that stack's layout-bound background — so the card
+    /// resizes in the exact spring the expanders use, no measuring. The
+    /// paddings compensate for the card's 12pt inset: on screen everything
+    /// sits where it did (chrome at 32, cards 40 from the right edge).
+    private var rightRail: some View {
         ViewerInfoColumn(url: currentURL,
                          details: details,
                          fallbackPalette: computedPalette,
+                         paletteLoading: !paletteResolved,
+                         backing: infoBackingColor,
+                         backingVisible: zoom > 1.001,
                          refresh: { await loadDetails() },
                          onTagTap: { label in
                              appState.searchQuery = label
@@ -162,16 +174,29 @@ struct HeroImageViewer: View {
                              NSWorkspace.shared.activateFileViewerSelecting([currentURL])
                          },
                          onDelete: deleteCurrent,
-                         toast: $toast)
-            // Catch taps in the gaps between cards so they don't dismiss.
+                         toast: $toast,
+                         chrome: { chromeRow })
+            // Catch taps in the gaps so they don't dismiss.
             .contentShape(Rectangle())
             .onTapGesture {}
-            .padding(.top, 80)
-            .padding(.bottom, 40)
-            .padding(.trailing, ViewerGeometry.columnMargin)
+            .padding(.top, 20)
+            .padding(.bottom, 28)
+            .padding(.trailing, ViewerGeometry.columnMargin - 12)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .opacity(chromeVisible ? 1 : 0)
             .allowsHitTesting(chromeVisible && !isClosing)
+    }
+
+    /// Dark card color behind the info column while zoomed: the image's
+    /// dominant color darkened well past the backdrop's 0.55 wash, so the
+    /// white text stays readable but the card still "belongs" to the image.
+    private var infoBackingColor: Color {
+        guard let hex = details?.dominantColor ?? computedPalette.first,
+              let (r, g, b) = NamedColor.parse(hex) else {
+            return Color(red: 0.14, green: 0.14, blue: 0.15)
+        }
+        let k = 0.32
+        return Color(red: r * k, green: g * k, blue: b * k)
     }
 
     // MARK: - Chrome (✕ + zoom pill + Fit)
@@ -184,11 +209,6 @@ struct HeroImageViewer: View {
             if zoom <= 1.001 { closeButton }
         }
         .frame(width: ViewerGeometry.columnWidth)
-        .padding(.top, 18)
-        .padding(.trailing, ViewerGeometry.columnMargin)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-        .opacity(chromeVisible ? 1 : 0)
-        .allowsHitTesting(chromeVisible && !isClosing)
     }
 
     private var zoomPill: some View {
@@ -269,6 +289,8 @@ struct HeroImageViewer: View {
               let idx = images.firstIndex(where: { $0.url == currentURL }) else { return }
         let next = images[(idx + delta + images.count) % images.count]
         guard next.url != currentURL else { return }
+        computedPalette = []
+        paletteResolved = false
         currentURL = next.url
     }
 
@@ -282,6 +304,9 @@ struct HeroImageViewer: View {
         guard !isClosing, !burning, burnProgress <= 0 else { return }
         withAnimation(.easeOut(duration: 0.12)) { chromeVisible = false }
         backdropVisible = false   // fades out during the close flight
+        // Bring the toolbar back now so it fades in with the flight instead
+        // of popping after it; the grid shift it causes is retargeted.
+        withAnimation(.easeInOut(duration: 0.35)) { appState.viewerDismissing = true }
         isClosing = true
     }
 
@@ -297,6 +322,7 @@ struct HeroImageViewer: View {
     private func reallyFinish() {
         appState.viewerClosing = false
         appState.selectedFile = nil
+        appState.viewerDismissing = false
     }
 
     // MARK: - Delete / undo
@@ -321,6 +347,9 @@ struct HeroImageViewer: View {
             // Delete is done; burnProgress stays 1 so flips and the return
             // flight remain blocked through the linger window.
             burning = false
+            // The grid is interactive under the undo toast — the toolbar
+            // should be back (and fade in) for the linger, not after it.
+            withAnimation(.easeInOut(duration: 0.35)) { appState.viewerDismissing = true }
             withAnimation(.easeIn(duration: 0.2)) {
                 appState.currentFiles.removeAll { $0.url == url }
             }
@@ -354,6 +383,10 @@ struct HeroImageViewer: View {
 
     private func loadDetails() async {
         let url = currentURL
+        // Kick off the quick palette now (48px decode) rather than after the
+        // DB read: swatches should land before the chrome fade-in finishes,
+        // so the actions row never visibly shifts.
+        async let quick = Self.quickPalette(at: url)
         var loaded: ViewerFileDetails? = nil
         if let queue = Database.shared.dbQueue {
             loaded = try? await ViewerFileDetails.load(queue: queue, path: url.path)
@@ -369,10 +402,15 @@ struct HeroImageViewer: View {
             if url == currentURL { naturalSize = s }
         }
         // No analysis data yet → derive backdrop tint + swatches right now.
-        if (loaded?.palette.isEmpty ?? true) {
-            let pal = await Self.quickPalette(at: url)
-            if url == currentURL, !pal.isEmpty {
-                withAnimation(.easeInOut(duration: 0.6)) { computedPalette = pal }
+        if let palette = loaded?.palette, !palette.isEmpty {
+            paletteResolved = true
+        } else {
+            let pal = await quick
+            if url == currentURL {
+                withAnimation(.easeOut(duration: 0.25)) {
+                    computedPalette = pal
+                    paletteResolved = true
+                }
             }
         }
     }

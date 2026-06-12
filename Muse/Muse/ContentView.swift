@@ -165,7 +165,12 @@ struct ContentView: View {
             // Must hide in the same transaction the viewer mounts: the stage
             // computes its fit center from the overlay size, and a later hide
             // moves that center mid-flight (the image visibly arcs).
-            .toolbar(appState.selectedFile == nil ? .automatic : .hidden,
+            // It returns when the close flight *starts* (viewerDismissing),
+            // fading in alongside the flight rather than popping after it;
+            // HeroStage retargets mid-close, so the grid shifting down under
+            // the returning toolbar still lands the image on its tile.
+            .toolbar(appState.selectedFile == nil || appState.viewerDismissing
+                     ? .automatic : .hidden,
                      for: .windowToolbar)
             .animation(.easeInOut(duration: 0.22), value: appState.detailPanelVisible)
         }

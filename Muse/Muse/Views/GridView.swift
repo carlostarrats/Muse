@@ -113,10 +113,14 @@ private struct TileView: View {
 
     var body: some View {
         tile
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            // Images sit square-cornered (edge-to-edge jigsaw pieces); only
+            // the non-image file cards keep the rounded card look.
+            .clipShape(RoundedRectangle(cornerRadius: isImageKind ? 0 : 8,
+                                        style: .continuous))
             .overlay {
                 if appState.selectedFile?.id == file.id {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    RoundedRectangle(cornerRadius: isImageKind ? 0 : 8,
+                                     style: .continuous)
                         .stroke(Color.accentColor.opacity(0.8), lineWidth: 2)
                 }
             }
@@ -126,6 +130,11 @@ private struct TileView: View {
             // Prototype's hidden-cell: the tile vanishes while its image is
             // flying/open so no ghost copy sits behind the hero stage.
             .opacity(appState.selectedFile?.url == file.url ? 0 : 1)
+            // Never animated: the restore must land in the same frame the
+            // hero unmounts — ContentView's 0.18s selectedFile animation
+            // otherwise fades the tile back in, a visible blink after the
+            // close flight lands.
+            .animation(nil, value: appState.selectedFile?.url)
             .background(
                 GeometryReader { proxy in
                     Color.clear
@@ -176,7 +185,7 @@ private struct TileView: View {
                 .aspectRatio(contentMode: .fit)
         } else if isImageKind {
             // Aspect placeholder until the thumbnail lands.
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            Rectangle()
                 .fill(appState.moodPalette.tileFill)
                 .aspectRatio(1, contentMode: .fit)
         } else {

@@ -14,17 +14,29 @@ import SwiftUI
 import AppKit
 import GRDB
 
-struct ViewerInfoColumn: View {
+struct ViewerInfoColumn<Chrome: View>: View {
     let url: URL
     let details: ViewerFileDetails?
     /// Shown when the DB has no palette yet (computed on open by the viewer).
     var fallbackPalette: [String] = []
+    /// True while the viewer is still resolving a palette for the current
+    /// file. Renders the colors card with placeholder swatches so the
+    /// actions row doesn't jump down when the real swatches arrive.
+    var paletteLoading: Bool = false
+    /// Near-opaque card drawn behind the whole column while zoomed. It's the
+    /// direct background of the content stack, so it resizes in the same
+    /// layout pass (and spring) as the Collection/Tags expanders.
+    var backing: Color = .black
+    var backingVisible: Bool = false
     var refresh: () async -> Void
     var onTagTap: (String) -> Void
     var onCollectionTap: (String) -> Void
     var onOpenInFinder: () -> Void
     var onDelete: () -> Void
     @Binding var toast: ToastData?
+    /// The viewer's chrome row (zoom pill / Fit / ✕) — first row of the
+    /// column so the backing card covers it too.
+    @ViewBuilder var chrome: () -> Chrome
 
     @ObservedObject private var engine = CollectionsEngine.shared
     @State private var hoveredCollectionPill: Int?
@@ -38,16 +50,33 @@ struct ViewerInfoColumn: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) {
+                chrome()
+                    .padding(.bottom, 12)   // 14 + 12 = 26 down to the name
                 header
                 collectionCard
                 tagsCard
                 if !displayPalette.isEmpty {
                     colorsCard(palette: displayPalette)
+                } else if paletteLoading {
+                    colorsPlaceholderCard
                 }
                 actionsRow
             }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(backing.opacity(0.92))
+                    .opacity(backingVisible ? 1 : 0)
+                    // In fast (0.08s) so the card lands before the 0.15s
+                    // zoom finishes; out unhurried. Size changes need no
+                    // animation here — the card is layout-bound to the
+                    // content, so it moves with the expander springs.
+                    .animation(backingVisible ? .easeOut(duration: 0.08)
+                                              : .easeOut(duration: 0.3),
+                               value: backingVisible)
+            )
         }
-        .frame(width: 258)
+        .frame(width: 258 + 24)
     }
 
     /// Analyzed palette from the DB when present, else the on-open fallback.
@@ -210,6 +239,23 @@ struct ViewerInfoColumn: View {
                             copyToPasteboard(hex)
                             show("Copied \(hex)")
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Same shell and geometry as colorsCard so nothing below moves when
+    /// real swatches replace the placeholders.
+    private var colorsPlaceholderCard: some View {
+        InfoCard {
+            VStack(alignment: .leading, spacing: 10) {
+                CardLabel(text: "COLORS")
+                HStack(spacing: 6) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(.white.opacity(0.08))
+                            .frame(width: 26, height: 26)
                     }
                 }
             }

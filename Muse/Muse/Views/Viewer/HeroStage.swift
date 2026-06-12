@@ -51,6 +51,9 @@ struct HeroStage: View {
     @State private var image: NSImage?
     @State private var dragStartPan: CGSize? = nil
     @State private var openedAt = Date.distantPast
+    /// Fades out across the close flight so the image lands shadowless,
+    /// exactly like the grid tile it's about to become.
+    @State private var shadowVisible = true
 
     private var fitRect: CGRect {
         ViewerGeometry.fitRect(imageSize: image?.size ?? sourceFrame.size,
@@ -74,11 +77,11 @@ struct HeroStage: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(width: base.width, height: base.height)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .clipShape(Rectangle())
                     .modifier(BurnUpModifier(progress: burnProgress,
                                              seed: Double(SeededRandom.fnv1a([url.path]) % 1000) / 1000.0,
                                              size: base.size))
-                    .shadow(color: .black.opacity(0.5), radius: 40, y: 24)
+                    .shadow(color: .black.opacity(shadowVisible ? 0.5 : 0), radius: 40, y: 24)
                     .scaleEffect(zoom)
                     .offset(pan)
                     .modifier(FlightEffect(rect: displayRect, home: base))
@@ -149,6 +152,7 @@ struct HeroStage: View {
         withAnimation(.timingCurve(0.3, 1.08, 0.35, 1, duration: 0.34)) {
             zoom = 1; pan = .zero
             displayRect = sourceFrame
+            shadowVisible = false
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.36) { onCloseFinished() }
     }

@@ -45,6 +45,11 @@ final class AppState: ObservableObject {
     /// The viewer resets it to false in onCloseFinished.
     @Published var viewerClosing = false
 
+    /// True from the moment the hero viewer's close flight starts until the
+    /// viewer is fully gone. Brings the window toolbar back during the
+    /// flight (animated) instead of snapping it in after selectedFile clears.
+    @Published var viewerDismissing = false
+
     // MARK: - Modes
 
     /// Q2: include subfolders in the grid contents.
