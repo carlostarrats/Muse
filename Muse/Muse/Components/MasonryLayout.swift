@@ -82,8 +82,6 @@ struct MasonryLayout: Layout {
         var subviewHeights: [CGFloat] = []
         /// Running column heights after placing all subviews.
         var columnHeights: [CGFloat] = []
-        /// The available width used to build this cache, so we can invalidate it.
-        var lastAvailableWidth: CGFloat = -1
     }
 
     func makeCache(subviews: Subviews) -> Cache {
@@ -91,12 +89,10 @@ struct MasonryLayout: Layout {
     }
 
     func updateCache(_ cache: inout Cache, subviews: Subviews, availableWidth: CGFloat) {
-        // Only recompute if the available width changed or subview count changed
-        guard availableWidth != cache.lastAvailableWidth
-                || cache.subviewHeights.count != subviews.count
-        else { return }
-
-        cache.lastAvailableWidth = availableWidth
+        // Recompute every pass: a subview's height changes when its thumbnail
+        // lands (square placeholder → real aspect), which width/count guards
+        // can't see — gating on them packed multi-row grids with stale
+        // heights. Measuring is cheap (aspect math on fixed frames).
         let colWidth = columnWidth(for: availableWidth)
         let proposal = ProposedViewSize(width: colWidth, height: nil)
 
