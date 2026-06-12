@@ -21,6 +21,52 @@ struct MuseApp: App {
                     ThumbnailCache.shared.enforceDiskCap()
                 }
         }
+        .commands {
+            // Menu-bar equivalents of the chip context menu — keyboard and
+            // VoiceOver reachable. Enabled while a tag filter is selected.
+            CommandMenu("Tags") {
+                Button("Rename Tag…") {
+                    if let label = appState.activeTagLabel {
+                        appState.tagRenameRequest = label
+                    }
+                }
+                .disabled(appState.activeTagLabel == nil)
+
+                Button("Delete Tag…") {
+                    if let label = appState.activeTagLabel {
+                        appState.tagDeleteRequest = label
+                    }
+                }
+                .disabled(appState.activeTagLabel == nil)
+
+                Divider()
+
+                Button("Clear Tag Filter") {
+                    appState.setActiveTag(nil)
+                }
+                .disabled(appState.activeTagLabel == nil)
+            }
+
+            // Same for collections — enabled while inside one.
+            CommandMenu("Collections") {
+                Button("Rename Collection…") {
+                    appState.collectionRenameRequest = true
+                }
+                .disabled(appState.activeCollectionID == nil)
+
+                Button("Delete Collection…") {
+                    appState.collectionDeleteRequest = true
+                }
+                .disabled(appState.activeCollectionID == nil)
+
+                Divider()
+
+                Button("Back to Library") {
+                    appState.setActiveCollection(nil)
+                }
+                .disabled(appState.activeCollectionID == nil)
+            }
+        }
 
         Settings {
             SettingsView()

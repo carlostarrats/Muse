@@ -34,7 +34,8 @@ struct CollectionsOverlay: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ScrollView {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 14)],
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: CollectionCard.coverSize.width),
+                                                     spacing: 14)],
                                   spacing: 14) {
                             ForEach(Array(engine.collections.enumerated()), id: \.element.collection.id) { i, loaded in
                                 CollectionCard(loaded: loaded, onSelect: { open(loaded) })

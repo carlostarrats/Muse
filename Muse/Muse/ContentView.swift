@@ -23,7 +23,16 @@ struct ContentView: View {
                 HStack(spacing: 0) {
                     VStack(spacing: 0) {
                         if appState.viewMode == .grid && !appState.isSearchActive {
-                            CollectionsRow()
+                            // Chips only on the main page — inside a collection
+                            // the back-arrow header takes over.
+                            if appState.activeCollectionID == nil {
+                                TagChipsRow()
+                            }
+                            // A tag filter takes the page over: collections
+                            // hide until the filter clears back to "All".
+                            if appState.activeTagLabel == nil {
+                                CollectionsRow()
+                            }
                         }
                         switch appState.viewMode {
                         case .grid:

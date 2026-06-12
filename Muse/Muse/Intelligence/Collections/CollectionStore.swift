@@ -104,6 +104,23 @@ enum CollectionStore {
         }
     }
 
+    static func rename(queue: DatabaseQueue, id: String, name: String) async throws {
+        try await queue.write { db in
+            try db.execute(sql: "UPDATE collections SET name = ? WHERE id = ?",
+                           arguments: [name, id])
+        }
+    }
+
+    /// Removes the collection and its memberships. Files are untouched.
+    static func delete(queue: DatabaseQueue, id: String) async throws {
+        try await queue.write { db in
+            try db.execute(sql: "DELETE FROM collection_members WHERE collection_id = ?",
+                           arguments: [id])
+            try db.execute(sql: "DELETE FROM collections WHERE id = ?",
+                           arguments: [id])
+        }
+    }
+
     static func setHidden(queue: DatabaseQueue, id: String, hidden: Bool) async throws {
         try await queue.write { db in
             try db.execute(sql: "UPDATE collections SET is_hidden = ? WHERE id = ?",

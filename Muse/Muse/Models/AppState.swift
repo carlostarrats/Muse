@@ -105,24 +105,39 @@ final class AppState: ObservableObject {
     /// Files the grid should show: currentFiles, optionally narrowed to
     /// the active collection's members.
     var visibleFiles: [FileNode] {
-        // search results are global; collection filter applies to browsing only
+        // search results are global; collection/tag filters apply to browsing only
         if isSearchActive { return currentFiles }
-        guard let paths = activeCollectionPaths else { return currentFiles }
-        return currentFiles.filter { paths.contains($0.url.standardizedFileURL.path) }
+        var files = currentFiles
+        if let paths = activeCollectionPaths {
+            files = files.filter { paths.contains($0.url.standardizedFileURL.path) }
+        }
+        if let tagPaths = activeTagPaths {
+            files = files.filter { tagPaths.contains($0.url.standardizedFileURL.path) }
+        }
+        return files
     }
 
     /// Set (or clear, with nil) the active collection filter. Loads the
     /// member path set asynchronously; always go through this method
     /// rather than setting `activeCollectionID` directly.
     func setActiveCollection(_ id: String?) {
-        activeCollectionID = id
+        // ID and member paths land in ONE animated transaction, so the grid
+        // cross-fades once to the filtered set — no intermediate frame where
+        // the header swapped but the grid hasn't (the old "flash").
+        let curve = Animation.easeInOut(duration: 0.28)
+        collectionRequestToken += 1
         guard let id else {
-            activeCollectionPaths = nil
+            withAnimation(curve) {
+                activeCollectionID = nil
+                activeCollectionPaths = nil
+            }
             refreshAutoTint()
             return
         }
+        let token = collectionRequestToken
         Task { @MainActor in
             guard let q = Database.shared.dbQueue else {
+                activeCollectionID = id
                 activeCollectionPaths = []
                 return
             }
@@ -130,9 +145,65 @@ final class AppState: ObservableObject {
                 queue: q, collectionID: id
             )) ?? []
             // Don't clobber a newer selection that landed while loading.
-            if activeCollectionID == id {
-                activeCollectionPaths = Set(paths)
+            if token == collectionRequestToken {
+                withAnimation(curve) {
+                    activeCollectionID = id
+                    activeCollectionPaths = Set(paths)
+                }
                 refreshAutoTint()
+            }
+        }
+    }
+
+    /// Monotonic token so a slow collection load can't clobber a newer pick.
+    private var collectionRequestToken = 0
+
+    // MARK: - Tag chip filter (main grid)
+
+    /// Active tag-chip filter; nil = "All". Set via `setActiveTag`.
+    @Published var activeTagLabel: String?
+    /// Alive paths of files carrying `activeTagLabel`; nil = no filter.
+    @Published var activeTagPaths: Set<String>?
+    /// Bumped after any tag mutation (add/rename/delete) so the chip row
+    /// and other tag-derived UI reload.
+    @Published var tagsVersion = 0
+    /// Set to a label to present the rename/delete tag dialogs (shared by
+    /// the chip context menu and the menu-bar Tags menu).
+    @Published var tagRenameRequest: String?
+    @Published var tagDeleteRequest: String?
+
+    /// Menu-bar triggers for the in-collection header's rename/delete.
+    @Published var collectionRenameRequest = false
+    @Published var collectionDeleteRequest = false
+    private var tagRequestToken = 0
+
+    /// Set (or clear, with nil) the tag chip filter — same single-transaction
+    /// animated swap as the collection filter.
+    func setActiveTag(_ label: String?) {
+        let curve = Animation.easeInOut(duration: 0.28)
+        tagRequestToken += 1
+        guard let label else {
+            withAnimation(curve) {
+                activeTagLabel = nil
+                activeTagPaths = nil
+            }
+            return
+        }
+        let token = tagRequestToken
+        Task { @MainActor in
+            guard let q = Database.shared.dbQueue else { return }
+            let paths: [String] = (try? await q.read { db in
+                try String.fetchAll(db, sql: """
+                    SELECT p.absolute_path FROM paths p
+                    JOIN tags t ON t.file_id = p.file_id
+                    WHERE p.is_alive = 1 AND t.label = ?
+                    """, arguments: [label])
+            }) ?? []
+            if token == tagRequestToken {
+                withAnimation(curve) {
+                    activeTagLabel = label
+                    activeTagPaths = Set(paths)
+                }
             }
         }
     }

@@ -2,9 +2,9 @@
 //  CollectionsRow.swift
 //  Muse
 //
-//  Featured collections row above the grid (Cosmos-style cover cards).
-//  Top 4 collections as 3-thumb mosaic cards + an "All (⌘K)" card that
-//  opens the collections overlay. Card tap filters the grid to the
+//  Featured collections row above the grid (Cosmos-style cover cards):
+//  three equal cover slices, name + count on one line below. No header —
+//  the cards speak for themselves. Card tap filters the grid to the
 //  collection's members; right-click hides the collection.
 //
 
@@ -16,24 +16,189 @@ struct CollectionsRow: View {
     @ObservedObject var engine = CollectionsEngine.shared
 
     var body: some View {
-        if !engine.collections.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("COLLECTIONS")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 14)
-                HStack(spacing: 12) {
-                    ForEach(engine.collections.prefix(4), id: \.collection.id) { loaded in
+        if let activeID = appState.activeCollectionID,
+           let active = engine.collections.first(where: { $0.collection.id == activeID }) {
+            // Inside a collection: the cards row gives way to the header —
+            // back arrow out of the filter, editable name, count, delete.
+            ActiveCollectionHeader(loaded: active)
+                .padding(.horizontal, 14)
+                .padding(.top, 14)
+                .padding(.bottom, 48)
+                .transition(.opacity)
+        } else if !engine.collections.isEmpty {
+            // All collections, horizontally scrollable — no cap; with many
+            // collections you swipe through the row (⌘K overlay still has
+            // the grid view of everything).
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    ForEach(engine.collections, id: \.collection.id) { loaded in
                         CollectionCard(loaded: loaded)
                     }
-                    // The dashed "All (⌘K)" card was cut — the toolbar button
-                    // and ⌘K shortcut already open the collections overlay.
-                    Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 14)
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, 10)
+            .transition(.opacity)
         }
+    }
+}
+
+/// In-collection header: back arrow, rename-in-place title (commits on
+/// return or focus loss, persisted globally via CollectionStore.rename),
+/// member count, and delete with a confirmation alert.
+private struct ActiveCollectionHeader: View {
+    @EnvironmentObject var appState: AppState
+    let loaded: CollectionStore.Loaded
+
+    @State private var editing = false
+    @State private var name = ""
+    @State private var confirmDelete = false
+    @FocusState private var nameFocused: Bool
+
+    var body: some View {
+        HStack(spacing: 18) {
+            BackArrowButton { appState.setActiveCollection(nil) }
+            if editing {
+                TextField("Collection name", text: $name)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 42, weight: .semibold))
+                    .focused($nameFocused)
+                    .onSubmit { commitRename() }
+                    .onExitCommand { cancelEdit() }
+                    .fixedSize()
+                    .onAppear { nameFocused = true }
+                HStack(spacing: 8) {
+                    HeaderIconButton(systemName: "checkmark",
+                                     help: "Save name") { commitRename() }
+                    HeaderIconButton(systemName: "xmark",
+                                     help: "Cancel") { cancelEdit() }
+                }
+            } else {
+                Text(loaded.collection.name)
+                    .font(.system(size: 42, weight: .semibold))
+                    .onTapGesture { startEdit() }
+                Text("\(loaded.memberIDs.count)")
+                    .font(.system(size: 42, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                HeaderIconButton(systemName: "square.and.pencil",
+                                 help: "Rename collection") { startEdit() }
+            }
+            Spacer()
+            TrashButton { confirmDelete = true }
+        }
+        .onChange(of: loaded.collection.id) { _, _ in cancelEdit() }
+        // Menu-bar Collections commands route through these flags.
+        .onChange(of: appState.collectionRenameRequest) { _, requested in
+            if requested {
+                appState.collectionRenameRequest = false
+                startEdit()
+            }
+        }
+        .onChange(of: appState.collectionDeleteRequest) { _, requested in
+            if requested {
+                appState.collectionDeleteRequest = false
+                confirmDelete = true
+            }
+        }
+        .alert("Delete “\(loaded.collection.name)”?", isPresented: $confirmDelete) {
+            Button("Delete", role: .destructive) { deleteCollection() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The collection is removed everywhere. Your images stay on disk.")
+        }
+    }
+
+    private func startEdit() {
+        name = loaded.collection.name
+        editing = true
+    }
+
+    private func cancelEdit() {
+        editing = false
+        name = loaded.collection.name
+    }
+
+    private func commitRename() {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        editing = false
+        guard !trimmed.isEmpty, trimmed != loaded.collection.name else { return }
+        let id = loaded.collection.id
+        Task { @MainActor in
+            if let q = Database.shared.dbQueue {
+                try? await CollectionStore.rename(queue: q, id: id, name: trimmed)
+                await CollectionsEngine.shared.reload()
+            }
+        }
+    }
+
+    private func deleteCollection() {
+        let id = loaded.collection.id
+        Task { @MainActor in
+            appState.setActiveCollection(nil)
+            if let q = Database.shared.dbQueue {
+                try? await CollectionStore.delete(queue: q, id: id)
+                await CollectionsEngine.shared.reload()
+            }
+        }
+    }
+}
+
+/// Mid-size circular icon button for the header's edit controls.
+private struct HeaderIconButton: View {
+    let systemName: String
+    let help: String
+    var action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(hovering ? .primary : .secondary)
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(.primary.opacity(hovering ? 0.16 : 0.08)))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(help)
+    }
+}
+
+/// Circular hover trash button for the header; reddens on hover.
+private struct TrashButton: View {
+    var action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "trash")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(hovering ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(.primary.opacity(hovering ? 0.16 : 0.08)))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Delete collection")
+    }
+}
+
+/// Circular hover-brightening back arrow for the active-collection header.
+private struct BackArrowButton: View {
+    var action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "arrow.left")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(hovering ? .primary : .secondary)
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(.primary.opacity(hovering ? 0.16 : 0.08)))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Back to all collections")
     }
 }
 
@@ -47,29 +212,35 @@ struct CollectionCard: View {
     let loaded: CollectionStore.Loaded
     var onSelect: (() -> Void)? = nil
 
+    /// Cosmos-width cover, two rows of three landscape cells — same
+    /// footprint as the single-row version, cells just split the height.
+    static let coverSize = CGSize(width: 312, height: 144)
+
     private var isActive: Bool {
         appState.activeCollectionID == loaded.collection.id
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 8) {
             CollectionMosaic(collectionID: loaded.collection.id, memberIDs: loaded.memberIDs)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .strokeBorder(
                             isActive ? Color.accentColor : Color.clear,
                             lineWidth: 2
                         )
                 )
-            Text(loaded.collection.name)
-                .font(.system(size: 12, weight: .medium))
-                .lineLimit(1)
-                .truncationMode(.tail)
-            Text("\(loaded.memberIDs.count) images")
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(loaded.collection.name)
+                    .font(.system(size: 15, weight: .semibold))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text("\(loaded.memberIDs.count)")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
         }
-        .frame(width: 168, alignment: .leading)
+        .frame(width: Self.coverSize.width, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture {
             if let onSelect {
@@ -96,7 +267,7 @@ struct CollectionCard: View {
     }
 }
 
-// MARK: - Mosaic (1 big left + 2 stacked right, 168x84)
+// MARK: - Mosaic (3×2 cover cells)
 
 private struct CollectionMosaic: View {
     @EnvironmentObject var appState: AppState
@@ -105,24 +276,25 @@ private struct CollectionMosaic: View {
 
     @State private var thumbs: [NSImage] = []
 
-    private let totalWidth: CGFloat = 168
-    private let totalHeight: CGFloat = 84
-    private let gap: CGFloat = 2
+    private let gap: CGFloat = 3
 
     var body: some View {
-        let rightWidth = (totalWidth - gap) / 3          // ~55
-        let leftWidth = totalWidth - gap - rightWidth    // ~111
-        let rightHeight = (totalHeight - gap) / 2        // 41
+        let size = CollectionCard.coverSize
+        let cellWidth = (size.width - 2 * gap) / 3
+        let cellHeight = (size.height - gap) / 2
 
-        HStack(spacing: gap) {
-            mosaicCell(index: 0, width: leftWidth, height: totalHeight)
-            VStack(spacing: gap) {
-                mosaicCell(index: 1, width: rightWidth, height: rightHeight)
-                mosaicCell(index: 2, width: rightWidth, height: rightHeight)
+        VStack(spacing: gap) {
+            ForEach(0..<2, id: \.self) { row in
+                HStack(spacing: gap) {
+                    ForEach(0..<3, id: \.self) { col in
+                        mosaicCell(index: row * 3 + col,
+                                   width: cellWidth, height: cellHeight)
+                    }
+                }
             }
         }
-        .frame(width: totalWidth, height: totalHeight)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .frame(width: size.width, height: size.height)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .task(id: memberIDs) {
             await loadThumbs()
         }
@@ -150,13 +322,15 @@ private struct CollectionMosaic: View {
     private func loadThumbs() async {
         guard let q = Database.shared.dbQueue else { return }
         let paths = (try? await CollectionStore.alivePaths(
-            queue: q, collectionID: collectionID, limit: 3
+            queue: q, collectionID: collectionID, limit: 6
         )) ?? []
         var loaded: [NSImage] = []
         for path in paths {
             let url = URL(fileURLWithPath: path)
+            // 320 matches the grid/viewer probe size, so the bitmap is
+            // already in the shared cache.
             if let img = await ThumbnailCache.shared.thumbnail(
-                for: url, size: CGSize(width: 168, height: 84)
+                for: url, size: CGSize(width: 320, height: 320)
             ) {
                 loaded.append(img)
             }

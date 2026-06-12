@@ -14,6 +14,8 @@ struct GridView: View {
     @EnvironmentObject var appState: AppState
 
     private let spacing: CGFloat = 10
+    @State private var addTagFile: FileNode? = nil
+    @State private var newTagText = ""
 
     var body: some View {
         GeometryReader { geo in
@@ -39,18 +41,37 @@ struct GridView: View {
                             .contextMenu {
                                 OpenWithMenu(url: file.url)
                                 Divider()
+                                Button("Add Tag…") {
+                                    newTagText = ""
+                                    addTagFile = file
+                                }
+                                Divider()
                                 Button("Move to Trash", role: .destructive) {
                                     Task { await appState.deletion.deleteWithBurn(file) }
                                 }
                             }
-                            .transition(.scale(scale: 0.1).combined(with: .opacity))
+                            .transition(.opacity)
                     }
                 }
                 .padding(20)
+                // Collection/tag switches replace the grid wholesale — one
+                // clean cross-fade, not a per-tile reflow.
+                .id("\(appState.activeCollectionID ?? "")|\(appState.activeTagLabel ?? "")")
+                .transition(.opacity)
             }
         }
         .background(appState.moodPalette.background)
         .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
+        .alert("Add Tag", isPresented: Binding(
+            get: { addTagFile != nil },
+            set: { if !$0 { addTagFile = nil } }
+        )) {
+            TextField("Tag name", text: $newTagText)
+            Button("Add") { commitAddTag() }
+            Button("Cancel", role: .cancel) { addTagFile = nil }
+        } message: {
+            Text("Tags “\(addTagFile?.basename ?? "")”.")
+        }
         .coordinateSpace(name: "gridViewport")
         .onContinuousHover { phase in
             switch phase {
@@ -76,6 +97,17 @@ struct GridView: View {
     }
 
     /// Wider window → more columns; columns stay in the 220–320pt band.
+    private func commitAddTag() {
+        guard let file = addTagFile else { return }
+        let label = newTagText.trimmingCharacters(in: .whitespacesAndNewlines)
+        addTagFile = nil
+        guard !label.isEmpty else { return }
+        Task { @MainActor in
+            _ = await TagStore.shared.addManualTag(label: label, for: file.url)
+            appState.tagsVersion += 1
+        }
+    }
+
     private func columnCount(for width: CGFloat) -> Int {
         max(2, Int((width - 40) / 260))
     }
