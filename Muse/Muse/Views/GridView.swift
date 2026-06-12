@@ -22,6 +22,12 @@ struct GridView: View {
     var body: some View {
         GeometryReader { geo in
         ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+            // The collections row scrolls away with the page — only the
+            // tag chips above stay pinned.
+            if !appState.isSearchActive && appState.activeTagLabel == nil {
+                CollectionsRow()
+            }
             if appState.visibleFiles.isEmpty {
                 emptyState
             } else {
@@ -61,6 +67,7 @@ struct GridView: View {
                 // clean cross-fade, not a per-tile reflow.
                 .id("\(appState.activeCollectionID ?? "")|\(appState.activeTagLabel ?? "")")
                 .transition(.opacity)
+            }
             }
         }
         .background(appState.moodPalette.background)

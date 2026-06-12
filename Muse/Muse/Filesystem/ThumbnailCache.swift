@@ -17,6 +17,7 @@
 import AppKit
 import QuickLookThumbnailing
 import CryptoKit
+import AVFoundation
 
 /// Observable thumbnail-load progress; drives the bottom-center pill when
 /// a folder's tiles are streaming in. Small bursts (a viewer open) stay
@@ -26,12 +27,18 @@ final class ThumbProgress: ObservableObject {
     static let shared = ThumbProgress()
     @Published private(set) var total = 0
     @Published private(set) var completed = 0
-    var isActive: Bool { total - completed >= 4 }
+    /// Hysteresis: engages once a real batch builds up (≥4 pending) and
+    /// then STAYS up until the batch fully drains — no vanishing at 95%.
+    private var engaged = false
+    var isActive: Bool { engaged }
 
-    func begin() { total += 1 }
+    func begin() {
+        total += 1
+        if total - completed >= 4 { engaged = true }
+    }
     func step() {
         completed += 1
-        if completed >= total { total = 0; completed = 0 }
+        if completed >= total { total = 0; completed = 0; engaged = false }
     }
 }
 
@@ -149,6 +156,13 @@ final class ThumbnailCache: ObservableObject {
     }
 
     private nonisolated static func generate(url: URL, size: CGSize, scale: CGFloat) async -> NSImage? {
+        // Videos: grab a frame ~1s in (10% of duration for short clips)
+        // instead of QuickLook's first frame — openings are so often black
+        // or mid-fade. QuickLook remains the fallback if extraction fails.
+        if AssetKind.detect(at: url) == .video,
+           let frame = await videoFrame(url: url, size: size, scale: scale) {
+            return frame
+        }
         let request = QLThumbnailGenerator.Request(
             fileAt: url,
             size: size,
@@ -160,6 +174,30 @@ final class ThumbnailCache: ObservableObject {
                 continuation.resume(returning: rep?.nsImage)
             }
         }
+    }
+
+    /// Representative video frame: min(1s, duration × 0.1) in, never earlier
+    /// (zero tolerance before; a black frame 0 must not sneak back in).
+    private nonisolated static func videoFrame(url: URL, size: CGSize,
+                                               scale: CGFloat) async -> NSImage? {
+        let asset = AVURLAsset(url: url)
+        guard let duration = try? await asset.load(.duration) else { return nil }
+        let seconds = CMTimeGetSeconds(duration)
+        guard seconds.isFinite, seconds > 0 else { return nil }
+        let target = min(1.0, seconds * 0.1)
+
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: size.width * scale,
+                                       height: size.height * scale)
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = CMTime(seconds: 1, preferredTimescale: 600)
+
+        let time = CMTime(seconds: target, preferredTimescale: 600)
+        guard let cg = try? await generator.image(at: time).image else { return nil }
+        return NSImage(cgImage: cg,
+                       size: NSSize(width: CGFloat(cg.width) / scale,
+                                    height: CGFloat(cg.height) / scale))
     }
 
     private nonisolated static func writePNG(_ image: NSImage, to url: URL) {

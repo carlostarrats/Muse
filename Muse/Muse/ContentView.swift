@@ -14,6 +14,7 @@ struct ContentView: View {
     @EnvironmentObject var appState: AppState
     @ObservedObject private var indexProgress = IndexProgress.shared
     @ObservedObject private var thumbProgress = ThumbProgress.shared
+    @ObservedObject private var analyzePipeline = AnalyzePipeline.shared
     @State private var moodPickerShown = false
     @State private var infoShown = false
 
@@ -25,17 +26,11 @@ struct ContentView: View {
             ZStack {
                 HStack(spacing: 0) {
                     VStack(spacing: 0) {
-                        if appState.viewMode == .grid && !appState.isSearchActive {
-                            // Chips only on the main page — inside a collection
-                            // the back-arrow header takes over.
-                            if appState.activeCollectionID == nil {
-                                TagChipsRow()
-                            }
-                            // A tag filter takes the page over: collections
-                            // hide until the filter clears back to "All".
-                            if appState.activeTagLabel == nil {
-                                CollectionsRow()
-                            }
+                        // Chips stay pinned; the collections row lives inside
+                        // the grid's scroll view and scrolls away with it.
+                        if appState.viewMode == .grid && !appState.isSearchActive
+                            && appState.activeCollectionID == nil {
+                            TagChipsRow()
                         }
                         switch appState.viewMode {
                         case .grid:
@@ -57,6 +52,19 @@ struct ContentView: View {
                 // Far left, beside the sidebar toggle — fully separate from search.
                 ToolbarItem(placement: .navigation) {
                     sortMenu
+                }
+
+                // Its own item (own surface), sitting next to sort.
+                ToolbarItem(placement: .navigation) {
+                    Toggle(isOn: $appState.showSubfolders) {
+                        Image(systemName: "rectangle.stack")
+                    }
+                    .help(appState.showSubfolders
+                          ? "Hide files inside subfolders"
+                          : "Show files inside subfolders")
+                    .onChange(of: appState.showSubfolders) { _, _ in
+                        appState.toggleSubfolders()
+                    }
                 }
 
                 ToolbarItem(placement: .principal) {
@@ -84,24 +92,14 @@ struct ContentView: View {
                     }
                 }
 
-                ToolbarItem(placement: .primaryAction) {
-                    Toggle(isOn: $appState.showSubfolders) {
-                        Image(systemName: "rectangle.stack")
-                    }
-                    .help(appState.showSubfolders
-                          ? "Hide files inside subfolders"
-                          : "Show files inside subfolders")
-                    .onChange(of: appState.showSubfolders) { _, _ in
-                        appState.toggleSubfolders()
-                    }
-                }
-
                 ToolbarItemGroup(placement: .primaryAction) {
                     moodMenu
                     Button {
                         appState.fluidEnabled.toggle()
                     } label: {
-                        Image(systemName: "drop.fill")
+                        // Line icon at rest like the rest of the toolbar;
+                        // fills (and goes blue) only while the effect is on.
+                        Image(systemName: appState.fluidEnabled ? "drop.fill" : "drop")
                             .foregroundStyle(appState.fluidEnabled ? Color.blue : Color.primary)
                     }
                     .help(appState.fluidEnabled ? "Disable Water Effect" : "Enable Water Effect")
@@ -167,7 +165,7 @@ struct ContentView: View {
             InfoSheet(isPresented: $infoShown)
         }
         .overlay(alignment: .bottom) {
-            if AnalyzePipeline.shared.isRunning {
+            if analyzePipeline.isRunning {
                 analyzeStatusBanner
             } else if indexProgress.isActive {
                 indexingBanner
@@ -218,26 +216,29 @@ struct ContentView: View {
     /// Bottom-center pill while tile thumbnails stream in for a big folder.
     private var thumbsBanner: some View {
         statusPill(label: "Loading images \(thumbProgress.completed) of \(thumbProgress.total)",
-                   completed: thumbProgress.completed, total: thumbProgress.total)
+                   progress: Double(thumbProgress.completed) / Double(max(thumbProgress.total, 1)))
     }
 
     /// Bottom-center pill while the indexer works through a folder.
     private var indexingBanner: some View {
         statusPill(label: "Indexing \(indexProgress.completed) of \(indexProgress.total)",
-                   completed: indexProgress.completed, total: indexProgress.total)
+                   progress: Double(indexProgress.completed) / Double(max(indexProgress.total, 1)))
     }
 
-    /// Same glass as the grid's column slider: ultra-thin material capsule
-    /// with the hairline outline, same height, same 16pt bottom seat.
-    private func statusPill(label: String, completed: Int, total: Int) -> some View {
+    /// One shared pill for every phase — same glass as the grid's column
+    /// slider: ultra-thin material capsule, hairline outline, same height,
+    /// same 16pt bottom seat.
+    private func statusPill(label: String, progress: Double) -> some View {
         HStack(spacing: 10) {
-            ProgressView(value: Double(completed), total: Double(max(total, 1)))
+            ProgressView(value: min(max(progress, 0), 1))
                 .progressViewStyle(.linear)
                 .frame(width: 160)
             Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
+                .lineLimit(1)
+                .truncationMode(.middle)
         }
         .frame(height: 20)
         .padding(.horizontal, 14)
@@ -248,31 +249,13 @@ struct ContentView: View {
         .transition(.opacity)
     }
 
-    @ViewBuilder
     private var analyzeStatusBanner: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 8) {
-                Text("Analyzing")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                ProgressView(value: AnalyzePipeline.shared.progress)
-                    .progressViewStyle(.linear)
-                    .frame(maxWidth: 240)
-                if !AnalyzePipeline.shared.current.isEmpty {
-                    Text(AnalyzePipeline.shared.current)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-        }
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .padding(.horizontal, 12)
-        .padding(.bottom, 12)
+        statusPill(label: analyzePipeline.current.isEmpty
+                        ? "Analyzing…"
+                        : "Analyzing \(analyzePipeline.current)",
+                   progress: analyzePipeline.progress)
     }
+
 }
 
 /// Observes the DeleteCoordinator directly — nested ObservableObjects

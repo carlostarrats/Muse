@@ -47,7 +47,12 @@ final class AnalyzePipeline: ObservableObject {
     /// analyzed_hash is missing or stale (new or edited images). Runs
     /// after every index pass — analyzing twice is a provable no-op.
     func analyzePending(in urls: [URL]) async {
-        guard !isRunning, let queue = Database.shared.dbQueue else { return }
+        guard let queue = Database.shared.dbQueue else { return }
+        // A pass may already be running (e.g. the previous folder's) —
+        // wait our turn instead of silently skipping this folder.
+        while isRunning {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+        }
         let paths = urls.map { $0.standardizedFileURL.path }
         guard !paths.isEmpty else { return }
         let pending: Set<String> = (try? await queue.read { db in

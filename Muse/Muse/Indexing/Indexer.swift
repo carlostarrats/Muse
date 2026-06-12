@@ -61,6 +61,35 @@ actor Indexer {
         let modifiedAt = (attrs?[.modificationDate] as? Date).map { Int64($0.timeIntervalSince1970) }
         let createdAt = (attrs?[.creationDate] as? Date).map { Int64($0.timeIntervalSince1970) }
 
+        // Fast path: size + mtime unchanged since the last pass → the
+        // content can't have changed; skip the SHA-256 entirely. This is
+        // what makes re-opening a big folder near-instant. last_seen_at is
+        // touched at most daily to keep 180-day retention honest without
+        // a write per file per visit.
+        struct Known { let fileID: String; let lastSeen: Int64 }
+        let known: Known? = (try? queue.read { db -> Known? in
+            guard let path = try PathRow
+                    .filter(PathRow.Columns.absolute_path == absPath)
+                    .filter(PathRow.Columns.is_alive == 1)
+                    .fetchOne(db),
+                  let fid = path.file_id,
+                  let file = try FileRow.filter(FileRow.Columns.id == fid).fetchOne(db),
+                  file.content_hash != nil,
+                  file.size_bytes == sizeBytes,
+                  file.modified_at == modifiedAt
+            else { return nil }
+            return Known(fileID: fid, lastSeen: file.last_seen_at)
+        }) ?? nil
+        if let known {
+            if now - known.lastSeen > 86_400 {
+                try? queue.write { db in
+                    try db.execute(sql: "UPDATE files SET last_seen_at = ? WHERE id = ?",
+                                   arguments: [now, known.fileID])
+                }
+            }
+            return
+        }
+
         // Hash on caller's thread (we're already on a background actor)
         guard let hash = HashService.sha256(of: url) else { return }
 

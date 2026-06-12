@@ -115,29 +115,39 @@ struct TagChipsRow: View {
         else if hovered == index { hovered = nil }
     }
 
-    /// Reload when tags mutate OR the sidebar selection changes.
+    /// Reload when tags mutate, the sidebar selection changes, or the
+    /// folder's contents land/refresh.
     private var reloadKey: String {
-        "\(appState.tagsVersion)|\(appState.selectedFolder?.url.path ?? "")"
+        "\(appState.tagsVersion)|\(appState.selectedFolder?.url.path ?? "")|\(appState.currentFiles.count)"
     }
 
-    /// Most-used tag labels (with tagged-file counts), scoped to the
-    /// folder selected in the sidebar — tags follow the folder, like search.
+    /// Tag labels (with counts) for EXACTLY the files the grid can show.
+    /// Deriving from currentFiles — not a DB folder query — means a chip
+    /// can never filter down to an empty grid: a tag with no visible
+    /// images simply has no chip.
     private func loadLabels() async {
-        guard let q = Database.shared.dbQueue,
-              let folder = appState.selectedFolder?.url.standardizedFileURL.path else {
+        guard let q = Database.shared.dbQueue else { return }
+        let paths = appState.currentFiles.map { $0.url.standardizedFileURL.path }
+        guard !paths.isEmpty else {
             tags = []
             return
         }
-        let prefix = folder + "/%"
-        let rows: [(String, Int)] = (try? await q.read { db in
-            try Row.fetchAll(db, sql: """
-                SELECT t.label, COUNT(DISTINCT t.file_id) AS c
-                FROM tags t JOIN paths p ON p.file_id = t.file_id
-                WHERE p.is_alive = 1 AND p.absolute_path LIKE ?
-                GROUP BY t.label ORDER BY c DESC LIMIT 30
-                """, arguments: [prefix]).map { ($0["label"], $0["c"]) }
-        }) ?? []
-        tags = rows.map { (label: $0.0, count: $0.1) }
+        var counts: [String: Int] = [:]
+        for start in stride(from: 0, to: paths.count, by: 500) {
+            let chunk = Array(paths[start..<min(start + 500, paths.count)])
+            let rows: [(String, Int)] = (try? await q.read { db in
+                let marks = databaseQuestionMarks(count: chunk.count)
+                return try Row.fetchAll(db, sql: """
+                    SELECT t.label, COUNT(DISTINCT t.file_id) AS c
+                    FROM tags t JOIN paths p ON p.file_id = t.file_id
+                    WHERE p.is_alive = 1 AND p.absolute_path IN (\(marks))
+                    GROUP BY t.label
+                    """, arguments: StatementArguments(chunk)).map { ($0["label"], $0["c"]) }
+            }) ?? []
+            for (label, count) in rows { counts[label, default: 0] += count }
+        }
+        tags = counts.sorted { $0.value > $1.value }.prefix(30)
+            .map { (label: $0.key, count: $0.value) }
     }
 }
 

@@ -422,6 +422,8 @@ final class AppState: ObservableObject {
     func select(folder: FolderNode) {
         selectedFolder = folder
         selectedFile = nil
+        // A tag filter from the previous folder mustn't empty the new one.
+        if activeTagLabel != nil { setActiveTag(nil) }
         reloadCurrentFiles()
         startWatching(folder.url)
         scheduleIndexing(for: folder.url)
