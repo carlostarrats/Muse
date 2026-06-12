@@ -12,7 +12,8 @@ import AppKit
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
-    @State private var showDuplicates = false
+    @ObservedObject private var indexProgress = IndexProgress.shared
+    @ObservedObject private var thumbProgress = ThumbProgress.shared
 
     var body: some View {
         ZStack {
@@ -47,25 +48,14 @@ struct ContentView: View {
                     .background(appState.moodPalette.background)
                     .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
 
-                    if appState.detailPanelVisible, let selected = appState.selectedFile {
-                        DetailPanelView(file: selected)
-                            .transition(.move(edge: .trailing))
-                    }
                     if appState.chatPanelVisible && ChatService.shared.isAvailable {
                         ChatPanelView()
                             .transition(.move(edge: .trailing))
                     }
                 }
 
-                if appState.collectionsOverlayVisible {
-                    CollectionsOverlay().zIndex(50)
-                }
             }
             .toolbar {
-                ToolbarItem(placement: .navigation) {
-                    BreadcrumbView()
-                }
-
                 ToolbarItem(placement: .principal) {
                     SearchBar()
                 }
@@ -81,12 +71,6 @@ struct ContentView: View {
                 }
 
                 ToolbarItemGroup(placement: .primaryAction) {
-                    Button {
-                        appState.collectionsOverlayVisible.toggle()
-                    } label: { Image(systemName: "rectangle.grid.2x2") }
-                    .help("All collections (⌘K)")
-                    .keyboardShortcut("k", modifiers: .command)
-
                     if appState.activeCollectionID != nil {
                         Button {
                             appState.setActiveCollection(nil)
@@ -121,32 +105,6 @@ struct ContentView: View {
                 }
 
                 ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        let urls = appState.currentFiles
-                            .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
-                            .map { $0.url }
-                        Task {
-                            await DuplicateFinder.shared.scan(in: urls)
-                            showDuplicates = true
-                        }
-                    } label: {
-                        Image(systemName: "square.on.square")
-                    }
-                    .help("Find Duplicates in this folder")
-                    .disabled(DuplicateFinder.shared.isRunning)
-                }
-
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        appState.detailPanelVisible.toggle()
-                    } label: {
-                        Image(systemName: "sidebar.right")
-                    }
-                    .help(appState.detailPanelVisible ? "Hide details" : "Show details")
-                    .disabled(appState.selectedFile == nil)
-                }
-
-                ToolbarItem(placement: .primaryAction) {
                     if ChatService.shared.isAvailable {
                         Button {
                             appState.chatPanelVisible.toggle()
@@ -170,6 +128,8 @@ struct ContentView: View {
                 }
             }
             .toolbarBackground(.ultraThinMaterial, for: .windowToolbar)
+            // No window title — the toolbar starts at the search bar.
+            .navigationTitle("")
             // The viewer covers everything (prototype) — no toolbar above it.
             // Must hide in the same transaction the viewer mounts: the stage
             // computes its fit center from the overlay size, and a later hide
@@ -181,13 +141,11 @@ struct ContentView: View {
             .toolbar(appState.selectedFile == nil || appState.viewerDismissing
                      ? .automatic : .hidden,
                      for: .windowToolbar)
-            .animation(.easeInOut(duration: 0.22), value: appState.detailPanelVisible)
         }
 
         // Window-level overlays: the hero viewer spans the whole window —
         // sidebar and toolbar included — exactly like the prototype.
-        if let selected = appState.selectedFile, !appState.detailPanelVisible
-            || (appState.detailPanelVisible && shouldShowFullViewer) {
+        if let selected = appState.selectedFile {
             // Hero (image) viewers mount instantly: the prototype's stage is
             // opaque from the first frame — only its backdrop fades in.
             // Fading the whole subtree made the flight semi-transparent.
@@ -201,11 +159,9 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.18), value: appState.selectedFile?.id)
         .background(
             Button(action: {
-                if appState.collectionsOverlayVisible {
-                    appState.collectionsOverlayVisible = false
-                } else if let selected = appState.selectedFile,
-                          selected.kind == .image || selected.kind == .raw
-                            || selected.kind == .psd {
+                if let selected = appState.selectedFile,
+                   selected.kind == .image || selected.kind == .raw
+                       || selected.kind == .psd {
                     // Hero viewer: run the return flight instead of popping.
                     appState.viewerClosing = true
                 } else if appState.selectedFile != nil {
@@ -217,23 +173,20 @@ struct ContentView: View {
                 .keyboardShortcut(.escape, modifiers: [])
                 .hidden()
         )
-        .sheet(isPresented: $showDuplicates) {
-            DuplicatesView(isPresented: $showDuplicates)
+        .sheet(isPresented: $appState.duplicatesSheetVisible) {
+            DuplicatesView(isPresented: $appState.duplicatesSheetVisible)
         }
         .overlay(alignment: .bottom) {
             if AnalyzePipeline.shared.isRunning {
                 analyzeStatusBanner
+            } else if indexProgress.isActive {
+                indexingBanner
+            } else if thumbProgress.isActive {
+                thumbsBanner
             }
         }
         .preferredColorScheme(appState.moodPalette.scheme)
     }
-
-    private var shouldShowFullViewer: Bool {
-        // The viewer is the big preview. When the detail panel is open + a file
-        // is selected, show both — viewer beside panel.
-        true
-    }
-
 
     @ViewBuilder
     private var sortMenu: some View {
@@ -282,10 +235,46 @@ struct ContentView: View {
         .help("Background mood: \(appState.mood.displayName)")
     }
 
+    /// Bottom-center pill while tile thumbnails stream in for a big folder.
+    private var thumbsBanner: some View {
+        statusPill(label: "Loading images \(thumbProgress.completed) of \(thumbProgress.total)",
+                   completed: thumbProgress.completed, total: thumbProgress.total)
+    }
+
+    /// Bottom-center pill while the indexer works through a folder.
+    private var indexingBanner: some View {
+        statusPill(label: "Indexing \(indexProgress.completed) of \(indexProgress.total)",
+                   completed: indexProgress.completed, total: indexProgress.total)
+    }
+
+    /// Same glass as the grid's column slider: ultra-thin material capsule
+    /// with the hairline outline, same height, same 16pt bottom seat.
+    private func statusPill(label: String, completed: Int, total: Int) -> some View {
+        HStack(spacing: 10) {
+            ProgressView(value: Double(completed), total: Double(max(total, 1)))
+                .progressViewStyle(.linear)
+                .frame(width: 160)
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+        }
+        .frame(height: 20)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
+        .overlay(Capsule(style: .continuous).strokeBorder(.primary.opacity(0.08)))
+        .padding(.bottom, 16)
+        .transition(.opacity)
+    }
+
     @ViewBuilder
     private var analyzeStatusBanner: some View {
         VStack(spacing: 6) {
             HStack(spacing: 8) {
+                Text("Analyzing")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
                 ProgressView(value: AnalyzePipeline.shared.progress)
                     .progressViewStyle(.linear)
                     .frame(maxWidth: 240)

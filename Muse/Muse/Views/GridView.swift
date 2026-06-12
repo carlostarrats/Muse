@@ -16,6 +16,8 @@ struct GridView: View {
     private let spacing: CGFloat = 10
     @State private var addTagFile: FileNode? = nil
     @State private var newTagText = ""
+    /// User-set images-per-row, persisted; the bottom-right slider drives it.
+    @AppStorage("gridColumnCount") private var gridColumns = 4
 
     var body: some View {
         GeometryReader { geo in
@@ -26,10 +28,11 @@ struct GridView: View {
                 // Jigsaw pack: images keep their own aspect ratio and stack
                 // into the shortest column — no identical squares, no
                 // letterboxing dead space.
-                MasonryLayout(columns: columnCount(for: geo.size.width),
+                MasonryLayout(columns: gridColumns,
                               spacing: spacing) {
-                    ForEach(appState.visibleFiles) { file in
-                        TileView(file: file, deletion: appState.deletion)
+                    ForEach(Array(appState.visibleFiles.enumerated()),
+                            id: \.element.id) { order, file in
+                        TileView(file: file, order: order, deletion: appState.deletion)
                             // Single tap only — the old double-tap recognizer
                             // (open in default app) made every single click wait
                             // out the double-click interval before the viewer
@@ -62,6 +65,14 @@ struct GridView: View {
         }
         .background(appState.moodPalette.background)
         .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
+        .animation(.easeInOut(duration: 0.25), value: gridColumns)
+        .overlay(alignment: .bottomTrailing) {
+            if !appState.visibleFiles.isEmpty {
+                columnSlider
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 16)
+            }
+        }
         .alert("Add Tag", isPresented: Binding(
             get: { addTagFile != nil },
             set: { if !$0 { addTagFile = nil } }
@@ -108,8 +119,28 @@ struct GridView: View {
         }
     }
 
-    private func columnCount(for width: CGFloat) -> Int {
-        max(2, Int((width - 40) / 260))
+    /// Floating zoom control: fewer columns (bigger images) on the left,
+    /// more (smaller) on the right.
+    private var columnSlider: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "square.grid.2x2")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+            Slider(value: Binding(
+                get: { Double(gridColumns) },
+                set: { gridColumns = Int($0.rounded()) }
+            ), in: 2...8, step: 1)
+            .frame(width: 130)
+            .controlSize(.small)
+            Image(systemName: "square.grid.4x3.fill")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
+        .overlay(Capsule(style: .continuous).strokeBorder(.primary.opacity(0.08)))
+        .help("Images per row")
     }
 
     private var emptyState: some View {
@@ -133,6 +164,9 @@ struct GridView: View {
 private struct TileView: View {
     @EnvironmentObject var appState: AppState
     let file: FileNode
+    /// Visual position in the grid — thumbnail loads are served in this
+    /// order, so a cold folder fills top-to-bottom.
+    var order: Int = 0
     @ObservedObject var deletion: DeleteCoordinator
 
     @State private var thumbnail: NSImage?
@@ -202,7 +236,8 @@ private struct TileView: View {
                 // flight starts from this exact bitmap with zero wait.
                 thumbnail = await ThumbnailCache.shared.thumbnail(
                     for: file.url,
-                    size: CGSize(width: 320, height: 320)
+                    size: CGSize(width: 320, height: 320),
+                    order: order
                 )
             }
     }

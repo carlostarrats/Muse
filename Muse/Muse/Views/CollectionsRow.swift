@@ -27,8 +27,7 @@ struct CollectionsRow: View {
                 .transition(.opacity)
         } else if !engine.collections.isEmpty {
             // All collections, horizontally scrollable — no cap; with many
-            // collections you swipe through the row (⌘K overlay still has
-            // the grid view of everything).
+            // collections you swipe through the row.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
                     ForEach(engine.collections, id: \.collection.id) { loaded in
@@ -204,13 +203,10 @@ private struct BackArrowButton: View {
 
 // MARK: - Collection card
 
-/// Cover card for a single collection. Internal so the ⌘K overlay can
-/// reuse it. By default a tap activates the collection filter; pass
-/// `onSelect` to override (e.g. the overlay selects AND dismisses).
+/// Cover card for a single collection; a tap activates its filter.
 struct CollectionCard: View {
     @EnvironmentObject var appState: AppState
     let loaded: CollectionStore.Loaded
-    var onSelect: (() -> Void)? = nil
 
     /// Cosmos-width cover, two rows of three landscape cells — same
     /// footprint as the single-row version, cells just split the height.
@@ -243,11 +239,7 @@ struct CollectionCard: View {
         .frame(width: Self.coverSize.width, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture {
-            if let onSelect {
-                onSelect()
-            } else {
-                appState.setActiveCollection(loaded.collection.id)
-            }
+            appState.setActiveCollection(loaded.collection.id)
         }
         .contextMenu {
             Button("Hide Collection") {

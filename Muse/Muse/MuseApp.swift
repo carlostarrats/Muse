@@ -22,6 +22,14 @@ struct MuseApp: App {
                 }
         }
         .commands {
+            // Library tools live in the File menu.
+            CommandGroup(after: .newItem) {
+                Divider()
+                Button("Find Duplicates in Folder") {
+                    appState.findDuplicatesInCurrentFolder()
+                }
+            }
+
             // Menu-bar equivalents of the chip context menu — keyboard and
             // VoiceOver reachable. Enabled while a tag filter is selected.
             CommandMenu("Tags") {

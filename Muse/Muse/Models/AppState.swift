@@ -62,7 +62,8 @@ final class AppState: ObservableObject {
     @Published var sortMode: SortMode = .dateModified
 
     /// Whether the right-side detail panel (tags, metadata) is visible.
-    @Published var detailPanelVisible: Bool = false
+    /// Presents the duplicates review sheet (set by findDuplicatesInCurrentFolder).
+    @Published var duplicatesSheetVisible = false
 
     /// Active search query. Empty when no search.
     @Published var searchQuery: String = ""
@@ -91,10 +92,7 @@ final class AppState: ObservableObject {
 
     // MARK: - Collections (AI brain)
 
-    /// Whether the collections overlay is showing.
-    @Published var collectionsOverlayVisible = false
-
-    /// Collection currently expanded/inspected in the overlay, if any.
+    /// The collection the grid is filtered to, if any.
     @Published var activeCollectionID: String? = nil
 
     /// Alive absolute paths of the active collection's members. nil when
@@ -410,6 +408,18 @@ final class AppState: ObservableObject {
         startWatching(folder.url)
         scheduleIndexing(for: folder.url)
         refreshAutoTint()
+    }
+
+    /// Scan the current folder's images for duplicates, then present the
+    /// review sheet. Lives here so the menu bar can trigger it.
+    func findDuplicatesInCurrentFolder() {
+        let urls = currentFiles
+            .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
+            .map { $0.url }
+        Task { @MainActor in
+            await DuplicateFinder.shared.scan(in: urls)
+            duplicatesSheetVisible = true
+        }
     }
 
     /// Kick off active-folder indexing on the high-priority queue.
