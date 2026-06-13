@@ -101,3 +101,33 @@ extension Sidecar {
         }
     }
 }
+
+extension Sidecar {
+    /// Deterministically merge two sidecars for the same content hash.
+    /// Scalar fields come from whichever has the greater `updated_at`
+    /// (ties → `a`). Tags union by label; a "manual" source always wins
+    /// over a non-manual one for the same label (invariant Q32).
+    static func merge(_ a: Sidecar, _ b: Sidecar) -> Sidecar {
+        var winner = (b.updated_at > a.updated_at) ? b : a
+        winner.updated_at = max(a.updated_at, b.updated_at)
+        winner.tags = mergeTags(a.tags, b.tags)
+        return winner
+    }
+
+    private static func mergeTags(_ a: [SidecarTag], _ b: [SidecarTag]) -> [SidecarTag] {
+        var byLabel: [String: SidecarTag] = [:]
+        for tag in a + b {
+            if let existing = byLabel[tag.label] {
+                let incomingManual = tag.source == "manual"
+                let existingManual = existing.source == "manual"
+                if incomingManual && !existingManual {
+                    byLabel[tag.label] = tag
+                }
+                // else keep existing (manual stays, or first-seen vision stays)
+            } else {
+                byLabel[tag.label] = tag
+            }
+        }
+        return byLabel.values.sorted { $0.label < $1.label }
+    }
+}

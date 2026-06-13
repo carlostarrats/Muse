@@ -108,3 +108,40 @@ extension SidecarTests {
         XCTAssertEqual(Set(rows.map(\.id)), ["id1", "id2"])
     }
 }
+
+extension SidecarTests {
+    private func make(updated: Int64, caption: String, tags: [SidecarTag]) -> Sidecar {
+        var s = sampleSidecar()
+        s.updated_at = updated
+        s.caption = caption
+        s.tags = tags
+        return s
+    }
+
+    func testMergeScalarsTakeNewer() {
+        let older = make(updated: 100, caption: "old", tags: [])
+        let newer = make(updated: 200, caption: "new", tags: [])
+        XCTAssertEqual(Sidecar.merge(older, newer).caption, "new")
+        XCTAssertEqual(Sidecar.merge(newer, older).caption, "new")  // order-independent
+        XCTAssertEqual(Sidecar.merge(older, newer).updated_at, 200)
+    }
+
+    func testMergeManualTagBeatsVision() {
+        let a = make(updated: 200, caption: "x",
+                     tags: [SidecarTag(label: "dog", source: "vision", confidence: 0.9, model_version: "v1")])
+        let b = make(updated: 100, caption: "y",
+                     tags: [SidecarTag(label: "dog", source: "manual", confidence: nil, model_version: nil)])
+        let merged = Sidecar.merge(a, b)
+        let dog = merged.tags.first { $0.label == "dog" }
+        XCTAssertEqual(dog?.source, "manual")        // manual wins even though a is newer
+        XCTAssertEqual(merged.tags.count, 1)         // unioned, not duplicated
+    }
+
+    func testMergeUnionsDistinctTags() {
+        let a = make(updated: 100, caption: "x",
+                     tags: [SidecarTag(label: "dog", source: "vision", confidence: 0.9, model_version: "v1")])
+        let b = make(updated: 100, caption: "x",
+                     tags: [SidecarTag(label: "beach", source: "vision", confidence: 0.7, model_version: "v1")])
+        XCTAssertEqual(Set(Sidecar.merge(a, b).tags.map(\.label)), ["dog", "beach"])
+    }
+}
