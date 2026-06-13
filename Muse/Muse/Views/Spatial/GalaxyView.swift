@@ -183,18 +183,33 @@ final class GalaxySceneCoordinator: NSObject {
         nodes = []
         let billboard = SCNBillboardConstraint()
         billboard.freeAxes = .all
-        for (i, _) in data.nodes.enumerated() {
+        for (i, node) in data.nodes.enumerated() {
+            // Intent backing: a slightly larger plane behind the tile, tinted by bucket.
+            if let key = node.intent,
+               let bucket = IntentBucket(rawValue: key),
+               let color = Self.nsColor(hex: bucket.galaxyHex) {
+                let backing = SCNPlane(width: Self.tileSize * 1.28, height: Self.tileSize * 1.28)
+                let bm = backing.firstMaterial!
+                bm.lightingModel = .constant
+                bm.diffuse.contents = color
+                bm.isDoubleSided = true
+                let backingNode = SCNNode(geometry: backing)
+                backingNode.simdPosition = data.positions[i] * spread + SIMD3(0, 0, -1)
+                backingNode.constraints = [billboard]
+                scene.rootNode.addChildNode(backingNode)
+            }
+
             let plane = SCNPlane(width: Self.tileSize, height: Self.tileSize)
             let m = plane.firstMaterial!
             m.lightingModel = .constant
             m.diffuse.contents = NSColor(white: 0.5, alpha: 1)
             m.isDoubleSided = true
-            let node = SCNNode(geometry: plane)
-            node.name = "tile-\(i)"
-            node.simdPosition = data.positions[i] * spread
-            node.constraints = [billboard]
-            scene.rootNode.addChildNode(node)
-            nodes.append(node)
+            let tile = SCNNode(geometry: plane)
+            tile.name = "tile-\(i)"
+            tile.simdPosition = data.positions[i] * spread
+            tile.constraints = [billboard]
+            scene.rootNode.addChildNode(tile)
+            nodes.append(tile)
         }
 
         view.scene = scene
@@ -256,6 +271,16 @@ final class GalaxySceneCoordinator: NSObject {
         geometry.firstMaterial?.lightingModel = .constant
         geometry.firstMaterial?.diffuse.contents = color
         return SCNNode(geometry: geometry)
+    }
+
+    /// "#RRGGBB" -> NSColor (nil if malformed).
+    static func nsColor(hex: String) -> NSColor? {
+        var s = hex.trimmingCharacters(in: .whitespaces)
+        if s.hasPrefix("#") { s.removeFirst() }
+        guard s.count == 6, let v = UInt32(s, radix: 16) else { return nil }
+        return NSColor(red: CGFloat((v >> 16) & 0xFF) / 255,
+                       green: CGFloat((v >> 8) & 0xFF) / 255,
+                       blue: CGFloat(v & 0xFF) / 255, alpha: 1)
     }
 
     /// White-ish on dark themes, dark on light themes.
