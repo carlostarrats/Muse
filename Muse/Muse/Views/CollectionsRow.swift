@@ -29,14 +29,16 @@ struct CollectionsRow: View {
             // All collections, horizontally scrollable — no cap; with many
             // collections you swipe through the row.
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
+                HStack(spacing: 32) {
                     ForEach(engine.collections, id: \.collection.id) { loaded in
                         CollectionCard(loaded: loaded)
                     }
                 }
                 .padding(.horizontal, 14)
+                // Vertical padding INSIDE the scroll view so the cards' drop
+                // shadow isn't clipped against the scroll view's top/bottom.
+                .padding(.vertical, 10)
             }
-            .padding(.vertical, 10)
             .transition(.opacity)
         }
     }
@@ -208,9 +210,11 @@ struct CollectionCard: View {
     @EnvironmentObject var appState: AppState
     let loaded: CollectionStore.Loaded
 
-    /// Cosmos-width cover, two rows of three landscape cells — same
-    /// footprint as the single-row version, cells just split the height.
-    static let coverSize = CGSize(width: 312, height: 144)
+    /// Compact cover, a 2×2 grid of cells — smaller footprint so the
+    /// collections read as distinct cards rather than one dense band.
+    static let coverSize = CGSize(width: 240, height: 120)
+
+    @State private var hovering = false
 
     private var isActive: Bool {
         appState.activeCollectionID == loaded.collection.id
@@ -219,6 +223,12 @@ struct CollectionCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             CollectionMosaic(collectionID: loaded.collection.id, memberIDs: loaded.memberIDs)
+                // Hairline grey border + soft drop shadow so each card reads
+                // as a distinct object instead of blending into the row.
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+                )
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .strokeBorder(
@@ -226,13 +236,18 @@ struct CollectionCard: View {
                             lineWidth: 2
                         )
                 )
+                .shadow(color: Color.black.opacity(0.16), radius: 6, x: 0, y: 2)
+                // Same gentle lift as the grid tiles below on hover.
+                .scaleEffect(hovering ? 1.025 : 1)
+                .animation(.easeOut(duration: 0.18), value: hovering)
+                .onHover { hovering = $0 }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(loaded.collection.name)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 15, weight: .regular))
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Text("\(loaded.aliveCount)")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 15, weight: .regular))
                     .foregroundStyle(.secondary)
             }
         }
@@ -259,7 +274,7 @@ struct CollectionCard: View {
     }
 }
 
-// MARK: - Mosaic (3×2 cover cells)
+// MARK: - Mosaic (2×2 cover cells)
 
 private struct CollectionMosaic: View {
     @EnvironmentObject var appState: AppState
@@ -268,24 +283,29 @@ private struct CollectionMosaic: View {
 
     @State private var thumbs: [NSImage] = []
 
-    private let gap: CGFloat = 3
+    // White frame around the edges + white gaps between the four images,
+    // so the card reads as a white object with the photos floated inside.
+    private let inset: CGFloat = 8
+    private let gap: CGFloat = 6
 
     var body: some View {
         let size = CollectionCard.coverSize
-        let cellWidth = (size.width - 2 * gap) / 3
-        let cellHeight = (size.height - gap) / 2
+        let cellWidth = (size.width - 2 * inset - gap) / 2
+        let cellHeight = (size.height - 2 * inset - gap) / 2
 
         VStack(spacing: gap) {
             ForEach(0..<2, id: \.self) { row in
                 HStack(spacing: gap) {
-                    ForEach(0..<3, id: \.self) { col in
-                        mosaicCell(index: row * 3 + col,
+                    ForEach(0..<2, id: \.self) { col in
+                        mosaicCell(index: row * 2 + col,
                                    width: cellWidth, height: cellHeight)
                     }
                 }
             }
         }
+        .padding(inset)
         .frame(width: size.width, height: size.height)
+        .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .task(id: memberIDs) {
             await loadThumbs()
@@ -296,7 +316,7 @@ private struct CollectionMosaic: View {
     private func mosaicCell(index: Int, width: CGFloat, height: CGFloat) -> some View {
         ZStack {
             Rectangle()
-                .fill(appState.moodPalette.tileFill)
+                .fill(Color.primary.opacity(0.06))
             if index < thumbs.count {
                 Image(nsImage: thumbs[index])
                     .resizable()
@@ -314,7 +334,7 @@ private struct CollectionMosaic: View {
     private func loadThumbs() async {
         guard let q = Database.shared.dbQueue else { return }
         let paths = (try? await CollectionStore.alivePaths(
-            queue: q, collectionID: collectionID, limit: 6
+            queue: q, collectionID: collectionID, limit: 4
         )) ?? []
         var loaded: [NSImage] = []
         for path in paths {

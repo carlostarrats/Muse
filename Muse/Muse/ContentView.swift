@@ -99,8 +99,15 @@ struct ContentView: View {
                     } label: {
                         // Line icon at rest like the rest of the toolbar;
                         // fills (and goes blue) only while the effect is on.
-                        Image(systemName: appState.fluidEnabled ? "drop.fill" : "drop")
-                            .foregroundStyle(appState.fluidEnabled ? Color.blue : Color.primary)
+                        // When off, no explicit tint — so it greys out with
+                        // the window when the app is in the background, just
+                        // like every other toolbar icon.
+                        if appState.fluidEnabled {
+                            Image(systemName: "drop.fill")
+                                .foregroundStyle(Color.blue)
+                        } else {
+                            Image(systemName: "drop")
+                        }
                     }
                     .help(appState.fluidEnabled ? "Disable Water Effect" : "Enable Water Effect")
 
