@@ -31,6 +31,10 @@ final class AppState: ObservableObject {
     /// Root nodes for the sidebar tree, one per active root.
     @Published var rootNodes: [FolderNode] = []
 
+    /// The auto-discovered iCloud zone folder URL, resolved off-main at launch.
+    /// nil when the user isn't signed into iCloud. Surfaced as a sidebar root.
+    @Published var iCloudFolderURL: URL?
+
     // MARK: - Active folder + grid contents
 
     @Published var selectedFolder: FolderNode?
@@ -356,6 +360,8 @@ final class AppState: ObservableObject {
 
         // Load persisted collections so the overlay is warm on first open.
         Task { await CollectionsEngine.shared.reload() }
+
+        discoverICloudZone()
     }
 
     /// Used by App Intents — opens the URL as a transient root if it's not
@@ -377,13 +383,33 @@ final class AppState: ObservableObject {
     // MARK: - Roots wiring
 
     private func rebuildRootNodes() {
-        let nodes: [FolderNode] = bookmarks.roots.compactMap { root in
+        var nodes: [FolderNode] = bookmarks.roots.compactMap { root in
             guard let url = bookmarks.url(for: root) else { return nil }
             return FolderNode(url: url, displayName: root.displayName, isRoot: true)
+        }
+        // The single app-managed iCloud folder, when signed in, appears as a
+        // root alongside local folders. Appended here so it survives every
+        // rebuild (add/remove/restore of local roots).
+        if let icloud = iCloudFolderURL {
+            nodes.append(FolderNode(url: icloud, displayName: "Muse", isRoot: true))
         }
         rootNodes = nodes
         if activeRoot == nil, let first = bookmarks.roots.first {
             select(rootForFirstFolder: first)
+        }
+    }
+
+    /// Resolve the iCloud folder once at launch and surface it in the sidebar.
+    /// Also pushes the URL onto AnalyzePipeline (a real singleton) so the analyze
+    /// path can write sidecars without referencing AppState.
+    func discoverICloudZone() {
+        Task.detached(priority: .utility) {
+            let url = ICloudZone.folderURL()
+            await MainActor.run {
+                self.iCloudFolderURL = url
+                AnalyzePipeline.shared.iCloudFolder = url
+                self.rebuildRootNodes()
+            }
         }
     }
 

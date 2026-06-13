@@ -139,7 +139,7 @@ private struct FolderTreeNode: View {
             }
 
             HStack(spacing: 8) {
-                Image(systemName: "folder")
+                Image(systemName: node.url == appState.iCloudFolderURL ? "icloud" : "folder")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor)
                                                 : AnyShapeStyle(.primary))
