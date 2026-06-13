@@ -58,6 +58,7 @@ are the load-bearing reference artifacts.
 | Polish 3 — spatial views (cloud + graph, globe retired) | ✅ shipped | `feat/spatial-views` (merged) |
 | Polish 4 — delights (burn-up delete, background moods) | ✅ shipped | `feat/delights` (merged) |
 | Polish 5 — cloud rework (3D orbit ball) + galaxy view (similarity cloud, replaces graph) | ✅ shipped | `main` |
+| Polish 6 — screenshot intent collections + Galaxy taste-map (color by intent) | ✅ shipped | `main` |
 
 `feat/file-viewer-rewrite` was merged to `main` after Phase 8
 finished — see the merge commit. The branch was kept around as an
@@ -106,12 +107,51 @@ A long live-review pass. Landed:
   overlay effect — it breaks container views and only touches elements
   currently in the band.
 
+### Screenshot intent session — 2026-06-13 (on `main`)
+
+Shipped two Pool-inspired, on-device features (spec:
+`docs/superpowers/specs/2026-06-13-screenshot-aware-features-design.md`,
+plan: `docs/superpowers/plans/2026-06-13-screenshot-intent-collections.md`):
+
+- **Screenshot intent collections** — screenshots (only) are classified
+  by an FM-gated on-device classifier (`IntentClassifier`: reads OCR +
+  vision labels, 10 fixed buckets — recipe/shopping/places/receipt/quote/
+  article/conversation/event/design/code, "prefer none" bias) into a new
+  `files.intent` column (migration `v5_intent`). `CollectionsEngine` is
+  now two-track: typed screenshots form stable `intent:<key>` collections
+  (≥3 alive members, fixed names, rename-preserving) AND are EXCLUDED from
+  the emergent clustering. Non-AI Macs leave intent nil (no heuristic),
+  mirroring the namer gating. A one-time launch backfill (`IntentBackfill`)
+  classifies pre-existing screenshots from stored OCR (no re-Vision). No
+  new UI — ordinary collection cards.
+- **Galaxy "taste map" trial** — screenshot nodes get a colored backing
+  plane by bucket; non-screenshots stay neutral. Easy to remove if it
+  doesn't earn its place.
+- **Dropped (documented in the spec):** a screenshot→source-link feature
+  (#5) — verified screenshots carry no source URL in pixels OR metadata;
+  only downloaded images do (`kMDItemWhereFroms`), so recovering a
+  screenshot's origin needs networked reverse-image search (ruled out).
+  Also burst/obsession metrics (data-selling outputs, no user value).
+- **Test-target repair** — `MuseTests` had not compiled since the
+  graph→Galaxy / cloud / AutoTint / Mood refactors (orphaned test files
+  referencing removed symbols). Removed AutoTint/GraphLayout/GraphModel/
+  CloudLayout/Mood tests; fixed CollectionStore/Membership tests (they
+  inserted files but no live `paths`, so the alive-aware `fetchAll`
+  returned empty and crashed on `all[0]`). Suite green again (85 tests).
+- **Note (not a bug):** the "Indexing N of M" pill counts every
+  enumerated file in `IndexProgress.begin(urls.count)` BEFORE the
+  size+mtime fast-path check, so it climbs 0→N on every launch/folder-open
+  even though already-known files skip hashing entirely. Index data
+  persists fine across launches; the pill is cosmetic over a cheap
+  reconcile pass.
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
 Muse/Muse/
   MuseApp.swift                    entry point; ThumbnailCache LRU prune +
-                                   180-day Housekeeping prune on launch
+                                   180-day Housekeeping prune + IntentBackfill
+                                   on launch
   ContentView.swift                NavigationSplitView shell; floating tag
                                    chips; toolbar; menu-bar Tags/Collections
   Models/
@@ -135,8 +175,8 @@ Muse/Muse/
                                    off-main, ordered (top→bottom) load; 2-tier
                                    cache (NSCache 512MB cost + on-disk LRU 2GB)
   Database/
-    Database.swift                 GRDB queue + migrations (v1…v4_auto_analyze)
-    Records.swift                  FileRow (+analyzed_hash), PathRow, TagRow, etc.
+    Database.swift                 GRDB queue + migrations (v1…v5_intent)
+    Records.swift                  FileRow (+analyzed_hash, +intent), PathRow, TagRow, etc.
     SearchService.swift            FTS5 + tag-label search (sidebar-folder scope)
     TagStore.swift                 manual/vision tag CRUD + global rename/delete
     Housekeeping.swift             launch prune: index data for files unreachable
@@ -157,10 +197,19 @@ Muse/Muse/
     Core/
       PaletteExtractor.swift       k-means palette (RGBA-redraw; BGRA bug fixed)
       CollectionNaming.swift       Foundation Models namer (gated) → tag fallback
+      IntentBucket.swift           10 screenshot-intent buckets: keys, display
+                                   names, stable collection ids, raw→bucket, color
+      IntentClassifier.swift       pure IntentInput helpers + FM-gated classifier
+                                   (screenshot OCR+labels → bucket | none)
     Collections/
-      CollectionsEngine.swift      clustering + reconcile; CollectionStore CRUD
+      CollectionsEngine.swift      two-track recluster: intent collections (typed
+                                   screenshots) + emergent (everything else)
+      IntentCollections.swift      pure: which intent buckets qualify (≥3 members)
     AnalyzePipeline.swift          AUTOMATIC after indexing — analyzes only stale
-                                   analyzed_hash files; writes FileRow, tags, FTS5
+                                   analyzed_hash files; writes FileRow, tags, FTS5;
+                                   classifies screenshot intent (gated)
+    IntentBackfill.swift           one-time launch pass: classify pre-existing
+                                   screenshots from stored OCR (no re-Vision)
   Agents/
     AppIntents/
       MuseAppIntents.swift         OpenFolder/FindDuplicates/AnalyzeFolder/
@@ -205,7 +254,8 @@ Muse/Muse/
       GalaxyModel.swift            galaxy data: blended look+meaning+color distance,
                                    3D projection, nearest-neighbour edges
       GalaxyView.swift             galaxy: similarity-positioned cloud, orbit + zoom,
-                                   constellation lines (replaces the old graph view)
+                                   constellation lines (replaces the old graph view);
+                                   screenshot nodes get a colored backing by intent
   Components/
     SearchBar.swift                debounced FTS5 search, scoped to sidebar folder
     MasonryLayout.swift            aspect-true jigsaw grid (recompute every pass)
