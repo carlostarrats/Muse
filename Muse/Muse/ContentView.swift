@@ -32,18 +32,25 @@ struct ContentView: View {
                             && appState.activeCollectionID == nil {
                             TagChipsRow()
                         }
-                        switch appState.viewMode {
-                        case .grid:
-                            GridView()
-                        case .cloud:
-                            CloudView()
-                        case .graph:
-                            GalaxyView()
+                        Group {
+                            switch appState.viewMode {
+                            case .grid:
+                                GridView()
+                            case .cloud:
+                                CloudView()
+                            case .graph:
+                                GalaxyView()
+                            }
                         }
+                        // Crossfade between modes so the grid fades into place
+                        // instead of popping/loading down on the way back.
+                        .id(appState.viewMode)
+                        .transition(.opacity)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(appState.moodPalette.background)
                     .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
+                    .animation(.easeInOut(duration: 0.28), value: appState.viewMode)
 
                 }
 
@@ -74,7 +81,7 @@ struct ContentView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Picker("View", selection: $appState.viewMode) {
                         Image(systemName: "square.grid.2x2").tag(AppState.ViewMode.grid)
-                        Image(systemName: "cloud").tag(AppState.ViewMode.cloud)
+                        Image(systemName: "circle.grid.hex").tag(AppState.ViewMode.cloud)
                         Image(systemName: "point.3.connected.trianglepath.dotted").tag(AppState.ViewMode.graph)
                     }
                     .pickerStyle(.segmented)
@@ -92,8 +99,9 @@ struct ContentView: View {
                     }
                 }
 
-                // Each its own item so they sit as separate toolbar surfaces
-                // rather than one grouped cluster.
+                // Mood, water droplet, and info grouped together as one cluster
+                // (macOS fuses adjacent trailing items; a ToolbarSpacer would
+                // separate them but only with a wider-than-default gap).
                 ToolbarItem(placement: .primaryAction) {
                     moodMenu
                 }
@@ -212,7 +220,12 @@ struct ContentView: View {
         } label: {
             Image(systemName: "arrow.up.and.down.text.horizontal")
         }
-        .help("Sort: \(appState.sortMode.displayName)")
+        // Sorting only meaningfully applies to the grid; the cloud and galaxy
+        // arrange by relationship/aesthetics, so it's greyed out there.
+        .disabled(appState.viewMode != .grid)
+        .help(appState.viewMode == .grid
+              ? "Sort: \(appState.sortMode.displayName)"
+              : "Sorting applies to the grid view")
     }
 
     @ViewBuilder

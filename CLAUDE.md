@@ -57,6 +57,7 @@ are the load-bearing reference artifacts.
 | Polish 2 — hero viewer (adaptive wash, info cards, zoom/pan, delete+undo) | ✅ shipped | `feat/hero-viewer` (merged) |
 | Polish 3 — spatial views (cloud + graph, globe retired) | ✅ shipped | `feat/spatial-views` (merged) |
 | Polish 4 — delights (burn-up delete, background moods) | ✅ shipped | `feat/delights` (merged) |
+| Polish 5 — cloud rework (3D orbit ball) + galaxy view (similarity cloud, replaces graph) | ✅ shipped | `main` |
 
 `feat/file-viewer-rewrite` was merged to `main` after Phase 8
 finished — see the merge commit. The branch was kept around as an
@@ -194,15 +195,17 @@ Muse/Muse/
                                    PillFlow/PillRowModel)
     Spatial/
       SeededRandom.swift           SplitMix64 + FNV-1a for launch-stable layouts
-      CloudPose.swift              25 measured reference poses + stage constants
-      CloudLayout.swift            band-composition pose generation for big folders
-      CloudMath.swift              CSS→SceneKit rotation + stage camera FOVs
-      CloudView.swift              cloud scatter (SceneKit, letterboxed stage)
+      CloudPose.swift              stage constants (refW/refH/f) for cloud camera
+      CloudLayout.swift            3D ball placement (Fibonacci sphere) for the cloud
+      CloudMath.swift              SceneKit camera FOV helpers
+      CloudView.swift              cloud: 3D ball of billboarded cards, drag-orbit +
+                                   per-card drift + zoom (SceneKit), click → hero
       SceneProjection.swift        node → screen rect (hero-viewer source frames)
-      GraphLayout.swift            2D force layout for collection overview
-      SimilarityLayout.swift       3D stress layout from feature-print distances
-      GraphModel.swift             scoped clusters + shared-tag edges + distances
-      GraphView.swift              knowledge graph (replaces GlobeView)
+      SimilarityLayout.swift       3D stress layout from a distance matrix
+      GalaxyModel.swift            galaxy data: blended look+meaning+color distance,
+                                   3D projection, nearest-neighbour edges
+      GalaxyView.swift             galaxy: similarity-positioned cloud, orbit + zoom,
+                                   constellation lines (replaces the old graph view)
   Components/
     SearchBar.swift                debounced FTS5 search, scoped to sidebar folder
     MasonryLayout.swift            aspect-true jigsaw grid (recompute every pass)
@@ -269,10 +272,11 @@ before implementation.
 1. Open `Muse/Muse.xcodeproj` in Xcode 16+.
 2. Build & run (Cmd+R). The app starts on a clean shell — click
    "Add Folder" in the sidebar to point Muse at any folder on disk.
-3. Toolbar (left → right): sidebar toggle · sort · show-subfolders ·
-   search (center) · grid/cloud/graph picker · clear-collection (when
-   filtered) · background mood · water effect · ⓘ About. Find Duplicates
-   lives in the File menu; analysis runs automatically (no button).
+3. Toolbar (left → right): sidebar toggle · sort (grid only) ·
+   show-subfolders · search (center) · grid/cloud/galaxy picker ·
+   clear-collection (when filtered) · background mood · water effect ·
+   ⓘ About. Find Duplicates lives in the File menu; Pin/Unpin Folder and
+   Remove Folder live in the Edit menu; analysis runs automatically.
 4. Sandboxed container path:
    `~/Library/Containers/com.tarrats.Muse/Data/Library/Application Support/Muse/`.
    `muse.sqlite` there; wipe it to rebuild the schema on next launch.

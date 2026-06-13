@@ -236,7 +236,7 @@ struct CollectionCard: View {
                             lineWidth: 2
                         )
                 )
-                .shadow(color: Color.black.opacity(0.16), radius: 6, x: 0, y: 2)
+                .shadow(color: Color.black.opacity(0.09), radius: 4, x: 0, y: 1.5)
                 // Same gentle lift as the grid tiles below on hover.
                 .scaleEffect(hovering ? 1.025 : 1)
                 .animation(.easeOut(duration: 0.18), value: hovering)

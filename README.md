@@ -13,26 +13,32 @@ Built with SwiftUI, SceneKit, and GRDB.swift.
 
 ## Features
 
+Three ways to look at a folder — switch with the grid / cloud / galaxy
+picker in the toolbar. All of them open an image with the same hero zoom.
+
 ### Grid View
 - Masonry layout with parallax tilt on mouse movement
+- Sortable (Date, Name, Size, Kind, Color, Shape)
 - Click to preview full-size image with info panel
 - Cmd+click to multi-select for batch tagging
 - Drag-and-drop import
 
-### Universe View
-- All collections displayed as 3D globes scattered in space
-- Click a globe to fly into it and explore the collection
-- Unsorted images get their own globe
+### Cloud View
+- The folder's images as flat cards floating in a loose 3D ball
+- Click-drag to orbit (with inertia), scroll/pinch to zoom
+- Cards drift continuously so the cluster stays alive
+- Click a card for the hero zoom
 
-### Globe View
-- Single collection's images tiled on a 3D Fibonacci sphere
-- Drag to spin, click an image to focus and see details
-- Auto-rotation with smooth pause/resume
+### Galaxy View
+- The folder's images positioned by learned similarity — a blend of
+  visual look (Vision feature prints), meaning (text embeddings), and
+  color (palette) — so related images cluster together
+- Faint constellation lines link the nearest matches
+- Orbit + zoom; click a tile for the hero zoom
 
-### Folder View
-- Collections as 3D folders with open/close animation
-- Images fan out in a grid when a folder opens
-- Collection tabs for quick switching
+### Collections
+- Auto-built from analysis; shown as cover cards above the grid
+- Pin folders to the sidebar for quick access
 
 ### Core
 - Import single files, multiple files, or entire folders (jpg, png, heic, webp, gif, tiff)

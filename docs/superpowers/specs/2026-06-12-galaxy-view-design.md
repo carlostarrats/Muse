@@ -58,10 +58,9 @@ view was limited (a small banner/log — never a silent truncation).
 
 ## Overlays
 
-- **Cluster labels.** Images are grouped (clustering over the blended distance,
-  reusing `HybridClusterer` where practical). Each cluster gets a **billboarded**
-  text label at its centroid showing its **dominant tag** (most common
-  high-confidence tag among members).
+- **Cluster labels.** *(Dropped after review — removed in the shipped version;
+  the cloud reads cleaner without floating text.)* Originally: a billboarded
+  dominant-tag label at each cluster's centroid.
 - **Constellation lines.** Each tile links to its 1–2 nearest neighbours, drawn
   only when similarity clears a threshold; faint, with a global cap on line count
   to avoid clutter.
