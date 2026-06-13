@@ -114,6 +114,18 @@ final class AnalyzePipeline: ObservableObject {
             String(data: try! JSONEncoder().encode(out.palette), encoding: .utf8)
         let taggerVersion = registry.tagger.modelVersion
 
+        // Screenshot intent typing (Option A: screenshots only). On non-AI
+        // Macs the classifier is a no-op and intentKey stays nil.
+        var intentKey: String? = nil
+        var intentVersion: String? = nil
+        if IntentInput.isScreenshot(tags: out.tags) {
+            intentVersion = registry.intentModelVersion
+            let bucket = await registry.intentClassifier.classify(
+                ocrText: IntentInput.ocrSnippet(out.ocrText),
+                visionLabels: IntentInput.visionLabels(tags: out.tags))
+            intentKey = bucket?.rawValue
+        }
+
         do {
             try await queue.write { db in
                 // Update files row
@@ -130,6 +142,8 @@ final class AnalyzePipeline: ObservableObject {
                     // Mark analyzed-at-this-content so the automatic pass
                     // skips it until the file's bytes actually change.
                     file.analyzed_hash = file.content_hash
+                    file.intent = intentKey
+                    file.intent_model_version = intentVersion
                     try file.update(db)
                 }
 
