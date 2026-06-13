@@ -20,6 +20,10 @@ final class CollectionMembershipTests: XCTestCase {
             for id in ["f1", "f2", "f3", "f4", "f5"] {
                 try db.execute(sql: "INSERT INTO files (id, kind, last_seen_at) VALUES (?, 'image', 0)",
                                arguments: [id])
+                // fetchAll is alive-aware: a member only counts if it has a live
+                // path. Give every file one so collections aren't filtered out.
+                try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES (?, ?, ?, 1)",
+                               arguments: ["p_\(id)", id, "/tmp/\(id).png"])
             }
         }
         return q
