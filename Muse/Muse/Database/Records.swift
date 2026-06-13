@@ -30,6 +30,10 @@ struct FileRow: Codable, FetchableRecord, MutablePersistableRecord {
     /// content_hash at the time of the last Vision analysis; mismatch (or
     /// nil) marks the file as needing (re)analysis.
     var analyzed_hash: String?
+    /// One of IntentBucket.rawValue for a classified screenshot, else nil.
+    var intent: String?
+    /// Classifier model version that last set `intent` (drives one-time backfill).
+    var intent_model_version: String?
 
     enum Columns {
         static let id = Column("id")
