@@ -11,6 +11,21 @@ import SwiftUI
 struct MuseApp: App {
     @StateObject private var appState = AppState()
 
+    /// Pin / Unpin label reflects the selected folder's current state.
+    private var pinMenuTitle: String {
+        guard let folder = appState.selectedFolder else { return "Pin Folder" }
+        return appState.stars.isStarred(folder.url) ? "Unpin Folder" : "Pin Folder"
+    }
+
+    /// The added root matching the current selection, if it is a root —
+    /// only roots can be removed from the library.
+    private var selectedRoot: Root? {
+        guard let folder = appState.selectedFolder, folder.isRoot else { return nil }
+        return appState.bookmarks.roots.first {
+            appState.bookmarks.url(for: $0) == folder.url
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -29,6 +44,25 @@ struct MuseApp: App {
                 }
         }
         .commands {
+            // Folder actions on the current selection live in the Edit menu.
+            CommandGroup(after: .pasteboard) {
+                Divider()
+                Button(pinMenuTitle) {
+                    if let folder = appState.selectedFolder {
+                        appState.toggleStar(folder: folder)
+                    }
+                }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+                .disabled(appState.selectedFolder == nil)
+
+                Button("Remove Folder") {
+                    if let root = selectedRoot {
+                        appState.removeRoot(root)
+                    }
+                }
+                .disabled(selectedRoot == nil)
+            }
+
             // Library tools live in the File menu.
             CommandGroup(after: .newItem) {
                 Divider()

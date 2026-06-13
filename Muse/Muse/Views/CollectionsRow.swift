@@ -305,7 +305,9 @@ private struct CollectionMosaic: View {
         }
         .padding(inset)
         .frame(width: size.width, height: size.height)
-        .background(Color.white)
+        // Translucent rather than solid white, so the card picks up a hint of
+        // the mood background behind it — like the tag chips.
+        .background(Color.white.opacity(0.5))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .task(id: memberIDs) {
             await loadThumbs()

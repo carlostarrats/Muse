@@ -150,21 +150,33 @@ struct GridView: View {
         .help("Images per row")
     }
 
+    @ViewBuilder
     private var emptyState: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "tray")
-                .font(.system(size: 48))
-                .foregroundStyle(.tertiary)
-            Text(appState.selectedFolder == nil
-                 ? "Select a folder"
-                 : appState.activeCollectionID != nil
-                 ? "No collection members in this folder"
-                 : "Empty folder")
-                .font(.title3)
-                .foregroundStyle(.secondary)
+        // A plain empty folder shows nothing — just blank space. Only the
+        // states that need guidance (no folder picked, or a collection filter
+        // with no members here) get a message.
+        if let message = emptyStateMessage {
+            VStack(spacing: 14) {
+                Image(systemName: "tray")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.tertiary)
+                Text(message)
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(40)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(40)
+    }
+
+    private var emptyStateMessage: String? {
+        if appState.selectedFolder == nil {
+            return "Select a folder"
+        }
+        if appState.activeCollectionID != nil {
+            return "No collection members in this folder"
+        }
+        return nil   // genuinely empty folder → blank
     }
 }
 

@@ -92,8 +92,13 @@ struct ContentView: View {
                     }
                 }
 
-                ToolbarItemGroup(placement: .primaryAction) {
+                // Each its own item so they sit as separate toolbar surfaces
+                // rather than one grouped cluster.
+                ToolbarItem(placement: .primaryAction) {
                     moodMenu
+                }
+
+                ToolbarItem(placement: .primaryAction) {
                     Button {
                         appState.fluidEnabled.toggle()
                     } label: {
@@ -110,7 +115,9 @@ struct ContentView: View {
                         }
                     }
                     .help(appState.fluidEnabled ? "Disable Water Effect" : "Enable Water Effect")
+                }
 
+                ToolbarItem(placement: .primaryAction) {
                     Button {
                         infoShown = true
                     } label: {
@@ -119,7 +126,9 @@ struct ContentView: View {
                     .help("About Muse — how indexing, Analyze, collections, and tags work")
                 }
             }
-            .toolbarBackground(.ultraThinMaterial, for: .windowToolbar)
+            // Transparent title bar so the sidebar card flows continuously up
+            // to the top and curves with the window corner (Lineform-style).
+            .toolbarBackground(.hidden, for: .windowToolbar)
             // No window title — the toolbar starts at the search bar.
             .navigationTitle("")
             // The viewer covers everything (prototype) — no toolbar above it.
