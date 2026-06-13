@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		58392B122F6CE45200289407 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 58392B112F6CE45200289407 /* GRDB */; };
+		58D3504D2FDE055B0030BC12 /* MuseShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 58D350412FDE055B0030BC12 /* MuseShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -25,13 +26,45 @@
 			remoteGlobalIDString = 58392AE52F6CE15400289407;
 			remoteInfo = Muse;
 		};
+		58D3504B2FDE055B0030BC12 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 58392ADE2F6CE15400289407 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 58D350402FDE055B0030BC12;
+			remoteInfo = MuseShareExtension;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		58D3504E2FDE055B0030BC12 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				58D3504D2FDE055B0030BC12 /* MuseShareExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		58392AE62F6CE15400289407 /* Muse.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Muse.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		58392AF32F6CE15500289407 /* MuseTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MuseTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		58392AFD2F6CE15500289407 /* MuseUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MuseUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		58D350412FDE055B0030BC12 /* MuseShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MuseShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		58D350512FDE055B0030BC12 /* Exceptions for "MuseShareExtension" folder in "MuseShareExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 58D350402FDE055B0030BC12 /* MuseShareExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		58392AE82F6CE15400289407 /* Muse */ = {
@@ -47,6 +80,14 @@
 		58392B002F6CE15500289407 /* MuseUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = MuseUITests;
+			sourceTree = "<group>";
+		};
+		58D350422FDE055B0030BC12 /* MuseShareExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				58D350512FDE055B0030BC12 /* Exceptions for "MuseShareExtension" folder in "MuseShareExtension" target */,
+			);
+			path = MuseShareExtension;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -74,6 +115,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		58D3503E2FDE055B0030BC12 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -83,6 +131,7 @@
 				58392AE82F6CE15400289407 /* Muse */,
 				58392AF62F6CE15500289407 /* MuseTests */,
 				58392B002F6CE15500289407 /* MuseUITests */,
+				58D350422FDE055B0030BC12 /* MuseShareExtension */,
 				58392AE72F6CE15400289407 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -93,6 +142,7 @@
 				58392AE62F6CE15400289407 /* Muse.app */,
 				58392AF32F6CE15500289407 /* MuseTests.xctest */,
 				58392AFD2F6CE15500289407 /* MuseUITests.xctest */,
+				58D350412FDE055B0030BC12 /* MuseShareExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -107,10 +157,12 @@
 				58392AE22F6CE15400289407 /* Sources */,
 				58392AE32F6CE15400289407 /* Frameworks */,
 				58392AE42F6CE15400289407 /* Resources */,
+				58D3504E2FDE055B0030BC12 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				58D3504C2FDE055B0030BC12 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				58392AE82F6CE15400289407 /* Muse */,
@@ -169,6 +221,28 @@
 			productReference = 58392AFD2F6CE15500289407 /* MuseUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		58D350402FDE055B0030BC12 /* MuseShareExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 58D350522FDE055B0030BC12 /* Build configuration list for PBXNativeTarget "MuseShareExtension" */;
+			buildPhases = (
+				58D3503D2FDE055B0030BC12 /* Sources */,
+				58D3503E2FDE055B0030BC12 /* Frameworks */,
+				58D3503F2FDE055B0030BC12 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				58D350422FDE055B0030BC12 /* MuseShareExtension */,
+			);
+			name = MuseShareExtension;
+			packageProductDependencies = (
+			);
+			productName = MuseShareExtension;
+			productReference = 58D350412FDE055B0030BC12 /* MuseShareExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -176,7 +250,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2630;
+				LastSwiftUpdateCheck = 2650;
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					58392AE52F6CE15400289407 = {
@@ -189,6 +263,9 @@
 					58392AFC2F6CE15500289407 = {
 						CreatedOnToolsVersion = 26.3;
 						TestTargetID = 58392AE52F6CE15400289407;
+					};
+					58D350402FDE055B0030BC12 = {
+						CreatedOnToolsVersion = 26.5;
 					};
 				};
 			};
@@ -212,6 +289,7 @@
 				58392AE52F6CE15400289407 /* Muse */,
 				58392AF22F6CE15500289407 /* MuseTests */,
 				58392AFC2F6CE15500289407 /* MuseUITests */,
+				58D350402FDE055B0030BC12 /* MuseShareExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -232,6 +310,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		58392AFB2F6CE15500289407 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		58D3503F2FDE055B0030BC12 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -262,6 +347,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		58D3503D2FDE055B0030BC12 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -274,6 +366,11 @@
 			isa = PBXTargetDependency;
 			target = 58392AE52F6CE15400289407 /* Muse */;
 			targetProxy = 58392AFE2F6CE15500289407 /* PBXContainerItemProxy */;
+		};
+		58D3504C2FDE055B0030BC12 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 58D350402FDE055B0030BC12 /* MuseShareExtension */;
+			targetProxy = 58D3504B2FDE055B0030BC12 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -540,6 +637,74 @@
 			};
 			name = Release;
 		};
+		58D3504F2FDE055B0030BC12 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = MuseShareExtension/MuseShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TV4QZT7A7X;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = MuseShareExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = MuseShareExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tarrats.Muse.MuseShareExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		58D350502FDE055B0030BC12 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = MuseShareExtension/MuseShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TV4QZT7A7X;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = MuseShareExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = MuseShareExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tarrats.Muse.MuseShareExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -575,6 +740,15 @@
 			buildConfigurations = (
 				58392B0E2F6CE15500289407 /* Debug */,
 				58392B0F2F6CE15500289407 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		58D350522FDE055B0030BC12 /* Build configuration list for PBXNativeTarget "MuseShareExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				58D3504F2FDE055B0030BC12 /* Debug */,
+				58D350502FDE055B0030BC12 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
