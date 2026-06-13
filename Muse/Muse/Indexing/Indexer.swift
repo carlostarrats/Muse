@@ -118,7 +118,14 @@ actor Indexer {
             }
 
             if file.content_hash == hash {
-                // Unchanged — touch last_seen_at
+                // Same content — but REFRESH the stored size/mtime to what the
+                // filesystem reports now. iCloud rewrites size/mtime on sync,
+                // so a stale stored value makes the size+mtime fast path miss
+                // forever and re-hash the same file on every visit (the cause
+                // of the recurring "indexing 920" + UI freeze on the iCloud
+                // folder). Persisting current values lets the next pass skip it.
+                file.size_bytes = sizeBytes
+                file.modified_at = modifiedAt
                 file.last_seen_at = now
                 try file.update(db)
                 return
@@ -278,14 +285,21 @@ actor Indexer {
         return false
     }
 
-    /// True if `absPath` is already indexed with matching size + mtime, so
-    /// its content can't have changed — the fast path that makes re-opening
-    /// a known folder near-instant. Touches last_seen_at at most daily to
-    /// keep 180-day retention honest. Files that return true do NO hashing
-    /// and are NOT counted by the indexing progress pill.
+    /// True if the file is already indexed and can be treated as unchanged —
+    /// the fast path that makes re-opening a known folder near-instant. Touches
+    /// last_seen_at at most daily for 180-day retention. Files that return true
+    /// do NO hashing and are NOT counted by the indexing progress pill.
+    ///
+    /// - Local files: matched by size + mtime (a reliable change signal).
+    /// - iCloud files (`isUbiquitous`): size/mtime are NOT reliable — iCloud
+    ///   rewrites them on sync and they oscillate between values on successive
+    ///   reads, so the size+mtime proxy can never converge and would re-hash
+    ///   the whole folder on every visit. An already-hashed iCloud file is
+    ///   trusted as unchanged instead. (Genuine edits arrive via sync and the
+    ///   folder watcher, not by polling metadata here.)
     private static func isUnchanged(absPath: String, sizeBytes: Int64?,
-                                    modifiedAt: Int64?, now: Int64,
-                                    queue: DatabaseQueue) -> Bool {
+                                    modifiedAt: Int64?, isUbiquitous: Bool,
+                                    now: Int64, queue: DatabaseQueue) -> Bool {
         struct Known { let fileID: String; let lastSeen: Int64 }
         let known: Known? = (try? queue.read { db -> Known? in
             guard let path = try PathRow
@@ -294,9 +308,14 @@ actor Indexer {
                     .fetchOne(db),
                   let fid = path.file_id,
                   let file = try FileRow.filter(FileRow.Columns.id == fid).fetchOne(db),
-                  file.content_hash != nil,
-                  file.size_bytes == sizeBytes,
-                  file.modified_at == modifiedAt
+                  file.content_hash != nil
+            else { return nil }
+            // iCloud: trust the existing hash (metadata is unreliable).
+            if isUbiquitous {
+                return Known(fileID: fid, lastSeen: file.last_seen_at)
+            }
+            // Local: require an exact size + mtime match.
+            guard file.size_bytes == sizeBytes, file.modified_at == modifiedAt
             else { return nil }
             return Known(fileID: fid, lastSeen: file.last_seen_at)
         }) ?? nil
@@ -329,12 +348,18 @@ actor Indexer {
         work.reserveCapacity(urls.count)
         for (url, kind) in urls {
             if Self.isDataless(url) { continue }
+            // An iCloud item reports a downloading status; a plain local file
+            // reports nil. iCloud size/mtime can't be trusted as a change
+            // signal (it oscillates on sync), so isUnchanged trusts the hash.
+            let isUbiquitous = (try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]))?
+                .ubiquitousItemDownloadingStatus != nil
             let absPath = url.standardizedFileURL.path
-            let attrs = try? FileManager.default.attributesOfItem(atPath: absPath)
-            let sizeBytes = (attrs?[.size] as? NSNumber)?.int64Value
-            let modifiedAt = (attrs?[.modificationDate] as? Date).map { Int64($0.timeIntervalSince1970) }
+            let rv = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+            let sizeBytes = rv?.fileSize.map { Int64($0) }
+            let modifiedAt = rv?.contentModificationDate.map { Int64($0.timeIntervalSince1970) }
             if Self.isUnchanged(absPath: absPath, sizeBytes: sizeBytes,
-                                modifiedAt: modifiedAt, now: now, queue: queue) {
+                                modifiedAt: modifiedAt, isUbiquitous: isUbiquitous,
+                                now: now, queue: queue) {
                 continue
             }
             work.append((url, kind))

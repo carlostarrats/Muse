@@ -19,6 +19,9 @@ final class AnalyzePipeline: ObservableObject {
     @Published var isRunning: Bool = false
     @Published var progress: Double = 0
     @Published var current: String = ""
+    /// Count of files in the active pass (for the "N of M" pill — no filename).
+    @Published var completed: Int = 0
+    @Published var total: Int = 0
 
     private init() {}
 
@@ -76,10 +79,15 @@ final class AnalyzePipeline: ObservableObject {
         guard let queue = Database.shared.dbQueue else { return }
         isRunning = true
         progress = 0
-        defer { isRunning = false; current = ""; progress = 0 }
+        completed = 0
+        defer { isRunning = false; current = ""; progress = 0; completed = 0; total = 0 }
 
-        for (idx, url) in urls.enumerated() {
-            current = url.lastPathComponent
+        // Resolve to unique file IDs first, so duplicate content (the same
+        // bytes under several paths) is analyzed ONCE — and the count reflects
+        // real files, not path count.
+        var pairs: [(id: String, url: URL)] = []
+        var seen = Set<String>()
+        for url in urls {
             let absPath = url.standardizedFileURL.path
             let fileID: String? = (try? await queue.read { db -> String? in
                 try PathRow
@@ -87,12 +95,21 @@ final class AnalyzePipeline: ObservableObject {
                     .filter(PathRow.Columns.is_alive == 1)
                     .fetchOne(db)?.file_id
             }) ?? nil
-            if let id = fileID {
-                await analyzeOne(fileID: id, url: url)
+            if let id = fileID, !seen.contains(id) {
+                seen.insert(id)
+                pairs.append((id, url))
             }
-            progress = Double(idx + 1) / Double(urls.count)
         }
-        isRunning = false; current = ""; progress = 0
+        total = pairs.count
+        guard !pairs.isEmpty else { return }
+
+        for (idx, pair) in pairs.enumerated() {
+            current = pair.url.lastPathComponent
+            await analyzeOne(fileID: pair.id, url: pair.url)
+            completed = idx + 1
+            progress = Double(idx + 1) / Double(pairs.count)
+        }
+        isRunning = false; current = ""; progress = 0; completed = 0; total = 0
         await CollectionsEngine.shared.recluster()
     }
 

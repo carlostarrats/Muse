@@ -38,7 +38,9 @@ enum SortMode: String, CaseIterable, Identifiable {
     }
 }
 
-@MainActor
+// Nonisolated: pure value-type sorting plus thread-safe DB reads
+// (Database.shared.dbQueue is an immutable Sendable let, GRDB reads are
+// thread-safe). This lets folder loads run the sort off the main thread.
 enum SmartSorter {
 
     /// Sort (and optionally group) files. For smart sorts, looks up the

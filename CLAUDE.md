@@ -176,6 +176,33 @@ lag opening an image). Fixed and trimmed:
   only view (no button). `SeededRandom` kept (grid burn + hero). Intent
   collections (the typed-screenshot feature) are untouched — only the
   Galaxy *visualization* of them is gone.
+- **Responsive folder selection** — `select(folder:)` blocked the main
+  thread enumerating + sorting the folder synchronously (thousands of disk
+  stats + a DB-backed sort), so clicking a big folder froze until it
+  finished. Now selection sets the folder + a loading flag instantly and
+  `reloadCurrentFiles` does enumerate/merge/sort **off-main** (with a token
+  so a newer pick wins), publishing on completion; the grid shows a pulsing
+  **skeleton** (`isLoadingFolder`) meanwhile. `SmartSorter` made nonisolated
+  for off-main sorting. Indexing/prewarm/analysis kick off after files land.
+- **Honest progress pills** — `indexBatch` runs a discovery pass
+  (`isUnchanged`) and only counts files that truly need (re)hashing, so a
+  fully-indexed folder shows no indexing pill. Analyze pill shows a
+  fixed-width count ("Analyzing N of 835"), not a jittering filename; pills
+  hug their content. `analyze(folder:)` dedupes by file id (path dupes →
+  one analysis).
+- **iCloud size/mtime oscillation (the big one)** — `~/Library/Mobile
+  Documents/.../Saved Inspo` (iCloud Drive) re-indexed ~920 files on EVERY
+  visit, freezing the UI. Root cause: iCloud returns **different size/mtime
+  on successive reads of the same downloaded file** (they flip between two
+  values), so the size+mtime fast path could never converge — and the
+  "unchanged" reconcile path didn't even write metadata back. Fix:
+  `Indexer.isUnchanged` now takes `isUbiquitous` (true when the URL reports
+  a `ubiquitousItemDownloadingStatus`); for iCloud items it **trusts the
+  existing `content_hash`** and skips re-hashing entirely (local files keep
+  the exact size+mtime check). **Do NOT reintroduce a size/mtime comparison
+  for iCloud items** — it will reindex the whole folder every visit. Genuine
+  iCloud edits are expected via sync + the folder watcher, not metadata
+  polling.
 - **Possible follow-up (not done):** disk-hit thumbnails load via
   `NSImage(contentsOf:)`, which decodes lazily on the main thread at first
   draw — a candidate if any residual scroll hitch remains. Force-decode

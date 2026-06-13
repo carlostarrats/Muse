@@ -34,6 +34,9 @@ struct GridView: View {
     /// 0 at the top; goes negative as the user scrolls down.
     @State private var canvasMinY: CGFloat = 0
 
+    /// Drives the skeleton placeholder's gentle pulse while a folder loads.
+    @State private var skeletonPulse = false
+
     var body: some View {
         GeometryReader { geo in
             let contentWidth = max(0, geo.size.width - contentInset * 2)
@@ -46,7 +49,11 @@ struct GridView: View {
                         CollectionsRow()
                     }
                     if appState.visibleFiles.isEmpty {
-                        emptyState
+                        if appState.isLoadingFolder {
+                            skeletonGrid(width: contentWidth)
+                        } else {
+                            emptyState
+                        }
                     } else {
                         masonryCanvas(viewportHeight: geo.size.height)
                             .frame(width: contentWidth, height: totalHeight,
@@ -256,6 +263,37 @@ struct GridView: View {
         .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
         .overlay(Capsule(style: .continuous).strokeBorder(.primary.opacity(0.08)))
         .help("Images per row")
+    }
+
+    /// Pulsing placeholder tiles shown the instant a folder is selected,
+    /// while its contents enumerate off-main — so clicking a folder feels
+    /// immediate instead of a frozen pause followed by a sudden pop-in.
+    private func skeletonGrid(width: CGFloat) -> some View {
+        // Varied heights evoke the jigsaw without needing real dimensions.
+        let ratios: [CGFloat] = [1.3, 0.8, 1.0, 1.5, 0.7, 1.15, 0.9, 1.25]
+        let cols = max(1, gridColumns)
+        let columnWidth = max(1, (width - CGFloat(cols - 1) * spacing) / CGFloat(cols))
+        return HStack(alignment: .top, spacing: spacing) {
+            ForEach(0..<cols, id: \.self) { col in
+                VStack(spacing: spacing) {
+                    ForEach(0..<5, id: \.self) { row in
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(appState.moodPalette.tileFill)
+                            .frame(height: columnWidth * ratios[(col * 5 + row) % ratios.count])
+                    }
+                }
+                .frame(width: columnWidth)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(contentInset)
+        .opacity(skeletonPulse ? 0.45 : 0.85)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
+                skeletonPulse = true
+            }
+        }
+        .transition(.opacity)
     }
 
     @ViewBuilder

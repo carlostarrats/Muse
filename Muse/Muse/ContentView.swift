@@ -229,19 +229,18 @@ struct ContentView: View {
         HStack(spacing: 10) {
             ProgressView(value: min(max(progress, 0), 1))
                 .progressViewStyle(.linear)
-                .frame(width: 160)
+                .frame(width: 120)
             Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
                 .lineLimit(1)
-                .truncationMode(.middle)
-                // Fixed width so the pill never resizes as filenames of
-                // different lengths stream past — middle-truncation keeps the
-                // phase word ("Analyzing") and the extension, dropping the
-                // middle of long names. A steady bar, not a jittering one.
-                .frame(width: 220, alignment: .leading)
+                .fixedSize()
         }
+        // Hug the content — the pills now show short, stable counts (no
+        // filenames), so the capsule stays compact and centered instead of
+        // stretching across the window.
+        .fixedSize(horizontal: true, vertical: false)
         .frame(height: 20)
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
@@ -252,9 +251,9 @@ struct ContentView: View {
     }
 
     private var analyzeStatusBanner: some View {
-        statusPill(label: analyzePipeline.current.isEmpty
-                        ? "Analyzing…"
-                        : "Analyzing \(analyzePipeline.current)",
+        statusPill(label: analyzePipeline.total > 0
+                        ? "Analyzing \(analyzePipeline.completed) of \(analyzePipeline.total)"
+                        : "Analyzing…",
                    progress: analyzePipeline.progress)
     }
 

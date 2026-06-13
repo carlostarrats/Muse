@@ -38,6 +38,10 @@ final class AppState: ObservableObject {
     /// Files in the selected folder (or, if recursive, including subfolders).
     @Published var currentFiles: [FileNode] = []
 
+    /// True while a freshly-selected folder is being enumerated off-main, so
+    /// the grid can show a skeleton instead of a frozen click.
+    @Published var isLoadingFolder = false
+
     /// Currently selected file (drives preview/detail).
     @Published var selectedFile: FileNode?
 
@@ -413,13 +417,15 @@ final class AppState: ObservableObject {
     // MARK: - Folder selection
 
     func select(folder: FolderNode) {
+        // Update selection + start the loading state synchronously so the
+        // click registers instantly; the heavy enumeration/sort runs off-main
+        // (reloadCurrentFiles) and indexing kicks off once files land.
         selectedFolder = folder
         selectedFile = nil
         // A tag filter from the previous folder mustn't empty the new one.
         if activeTagLabel != nil { setActiveTag(nil) }
-        reloadCurrentFiles()
         startWatching(folder.url)
-        scheduleIndexing(for: folder.url)
+        reloadCurrentFiles(showLoading: true, thenIndex: true)
     }
 
     /// Scan the current folder's images for duplicates, then present the
@@ -476,31 +482,61 @@ final class AppState: ObservableObject {
         select(folder: node)
     }
 
-    private func reloadCurrentFiles() {
+    /// Monotonic token so a slow folder load can't clobber a newer selection.
+    private var folderLoadToken = 0
+
+    /// Enumerate + merge + sort the active folder OFF the main thread, then
+    /// publish on main. `showLoading` clears the grid to a skeleton (fresh
+    /// selection); without it the current list stays put until the new one is
+    /// ready (live FSEvents reloads — no flash). `thenIndex` runs the indexing
+    /// + thumbnail-prewarm + analysis pass once the files have landed.
+    private func reloadCurrentFiles(showLoading: Bool = false, thenIndex: Bool = false) {
         guard let folder = selectedFolder else {
             currentFiles = []
+            isLoadingFolder = false
             return
         }
-        let raw: [FileNode]
-        if showSubfolders {
-            raw = recursiveFiles(at: folder.url)
+        folderLoadToken += 1
+        let token = folderLoadToken
+        let folderURL = folder.url
+        let showSub = showSubfolders
+        let showHid = showHidden
+        let mode = sortMode
+
+        // Reuse unchanged nodes so live reloads keep tile @State (thumbnails,
+        // in-flight animations). A fresh selection clears instead — nothing to
+        // reuse — and shows the skeleton while it loads.
+        let existing: [URL: FileNode]
+        if showLoading {
+            existing = [:]
+            currentFiles = []
+            isLoadingFolder = true
         } else {
-            raw = FolderReader.files(in: folder.url, showHidden: showHidden)
-        }
-        // Reloads rebuild FileNodes with fresh UUIDs; reuse the existing
-        // node when the file is unchanged so tile identity (and @State —
-        // thumbnails, in-flight animations) survives FSEvents reloads.
-        let existing = Dictionary(currentFiles.map { ($0.url, $0) },
+            existing = Dictionary(currentFiles.map { ($0.url, $0) },
                                   uniquingKeysWith: { a, _ in a })
-        let merged = raw.map { fresh in
-            if let old = existing[fresh.url],
-               old.modifiedAt == fresh.modifiedAt,
-               old.sizeBytes == fresh.sizeBytes {
-                return old
-            }
-            return fresh
         }
-        currentFiles = SmartSorter.apply(sortMode, to: merged)
+
+        Task.detached(priority: .userInitiated) {
+            let raw = showSub
+                ? Self.enumerateRecursive(at: folderURL, showHidden: showHid)
+                : FolderReader.files(in: folderURL, showHidden: showHid)
+            let merged = raw.map { fresh -> FileNode in
+                if let old = existing[fresh.url],
+                   old.modifiedAt == fresh.modifiedAt,
+                   old.sizeBytes == fresh.sizeBytes {
+                    return old
+                }
+                return fresh
+            }
+            let sorted = SmartSorter.apply(mode, to: merged)
+            await MainActor.run {
+                // A newer selection started while we were loading — drop this.
+                guard token == self.folderLoadToken else { return }
+                self.currentFiles = sorted
+                self.isLoadingFolder = false
+                if thenIndex { self.scheduleIndexing(for: folderURL) }
+            }
+        }
     }
 
     func resort() {
@@ -554,7 +590,9 @@ final class AppState: ObservableObject {
         await AnalyzePipeline.shared.analyze(file: url)
     }
 
-    private func recursiveFiles(at url: URL) -> [FileNode] {
+    /// Nonisolated so it can run off the main thread during a folder load.
+    /// Sorting is left to SmartSorter (the caller applies the active mode).
+    private nonisolated static func enumerateRecursive(at url: URL, showHidden: Bool) -> [FileNode] {
         let fm = FileManager.default
         guard let enumerator = fm.enumerator(
             at: url,
@@ -574,7 +612,7 @@ final class AppState: ObservableObject {
             if isDir && !isPackage { continue }
             nodes.append(FileNode(url: child))
         }
-        return nodes.sorted { ($0.modifiedAt ?? .distantPast) > ($1.modifiedAt ?? .distantPast) }
+        return nodes
     }
 
     func toggleSubfolders() {
