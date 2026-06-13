@@ -112,16 +112,65 @@ final class ThumbnailCache: ObservableObject {
         if let hit = memCache.object(forKey: key as NSString) {
             return hit
         }
-        ThumbProgress.shared.begin()
         let diskURL = diskPath(for: key)
+        // The progress pill is for *generation* only. A disk hit (already
+        // prewarmed) is a fast read — counting it made scrolling a warm
+        // folder flash the pill for no real work. So only cold thumbnails
+        // (no PNG on disk yet) drive the pill.
+        let isCold = !FileManager.default.fileExists(atPath: diskURL.path)
+        if isCold { ThumbProgress.shared.begin() }
         let img = await Self.loadOrGenerate(url: url, diskURL: diskURL,
                                             size: size, scale: scale, order: order)
-        ThumbProgress.shared.step()
+        if isCold { ThumbProgress.shared.step() }
         if let img {
             let cost = Int(img.size.width * img.size.height * 4 * scale * scale)
             memCache.setObject(img, forKey: key as NSString, cost: cost)
         }
         return img
+    }
+
+    /// Generate every missing thumbnail for `urls` straight to the on-disk
+    /// cache, in the background. Called after a folder loads so the user
+    /// never waits on (or sees a progress pill for) thumbnail generation
+    /// while scrolling — by the time they reach the bottom, the disk cache
+    /// is already warm and a tile just reads its PNG. Already-cached files
+    /// (this launch or a prior one) are skipped. Bypasses the progress pill
+    /// entirely; this is silent up-front work.
+    nonisolated func prewarmToDisk(_ urls: [URL],
+                                   size: CGSize = CGSize(width: 320, height: 320),
+                                   scale: CGFloat = 2.0) {
+        guard !urls.isEmpty else { return }
+        let root = diskRoot
+        Task.detached(priority: .utility) {
+            await withTaskGroup(of: Void.self) { group in
+                let maxInFlight = 6
+                var next = 0
+                func addNext() {
+                    guard next < urls.count else { return }
+                    let url = urls[next]
+                    let order = next
+                    next += 1
+                    group.addTask {
+                        await Self.ensureDisk(url: url, diskRoot: root,
+                                              size: size, scale: scale, order: order)
+                    }
+                }
+                for _ in 0..<min(maxInFlight, urls.count) { addNext() }
+                for await _ in group { addNext() }
+            }
+        }
+    }
+
+    /// Ensure a single thumbnail exists on disk, generating it if missing.
+    /// Skips the in-memory cache and progress pill — prewarm-only path.
+    private nonisolated static func ensureDisk(url: URL, diskRoot: URL,
+                                               size: CGSize, scale: CGFloat,
+                                               order: Int) async {
+        let key = cacheKey(url: url, size: size, scale: scale)
+        let diskURL = diskRoot.appendingPathComponent(key + ".png")
+        if FileManager.default.fileExists(atPath: diskURL.path) { return }
+        _ = await loadOrGenerate(url: url, diskURL: diskURL,
+                                 size: size, scale: scale, order: order)
     }
 
     // MARK: - Off-main pipeline

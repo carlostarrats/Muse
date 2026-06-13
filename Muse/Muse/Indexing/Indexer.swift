@@ -44,51 +44,20 @@ actor Indexer {
         defer { inFlightHashes.remove(absPath) }
 
         // Dataless iCloud placeholders have no local bytes — hashing them
-        // reads empty and corrupts identity. Skip until downloaded; the
-        // next pass after download reconciles them normally.
-        if let status = (try? url.resourceValues(
-                forKeys: [.ubiquitousItemDownloadingStatusKey]))?
-                .ubiquitousItemDownloadingStatus,
-           status == .notDownloaded {
-            return
-        }
+        // reads empty and corrupts identity. Skip until downloaded.
+        if Self.isDataless(url) { return }
 
         guard let queue = Database.shared.dbQueue else { return }
 
+        // The fast-path skip for already-known, unchanged files lives in
+        // `indexBatch`'s discovery pass now — so the progress pill never
+        // counts skipped files. Reaching here means the file genuinely
+        // needs (re)hashing.
         let now = Int64(Date().timeIntervalSince1970)
         let attrs = try? FileManager.default.attributesOfItem(atPath: absPath)
         let sizeBytes = (attrs?[.size] as? NSNumber)?.int64Value
         let modifiedAt = (attrs?[.modificationDate] as? Date).map { Int64($0.timeIntervalSince1970) }
         let createdAt = (attrs?[.creationDate] as? Date).map { Int64($0.timeIntervalSince1970) }
-
-        // Fast path: size + mtime unchanged since the last pass → the
-        // content can't have changed; skip the SHA-256 entirely. This is
-        // what makes re-opening a big folder near-instant. last_seen_at is
-        // touched at most daily to keep 180-day retention honest without
-        // a write per file per visit.
-        struct Known { let fileID: String; let lastSeen: Int64 }
-        let known: Known? = (try? queue.read { db -> Known? in
-            guard let path = try PathRow
-                    .filter(PathRow.Columns.absolute_path == absPath)
-                    .filter(PathRow.Columns.is_alive == 1)
-                    .fetchOne(db),
-                  let fid = path.file_id,
-                  let file = try FileRow.filter(FileRow.Columns.id == fid).fetchOne(db),
-                  file.content_hash != nil,
-                  file.size_bytes == sizeBytes,
-                  file.modified_at == modifiedAt
-            else { return nil }
-            return Known(fileID: fid, lastSeen: file.last_seen_at)
-        }) ?? nil
-        if let known {
-            if now - known.lastSeen > 86_400 {
-                try? queue.write { db in
-                    try db.execute(sql: "UPDATE files SET last_seen_at = ? WHERE id = ?",
-                                   arguments: [now, known.fileID])
-                }
-            }
-            return
-        }
 
         // Hash on caller's thread (we're already on a background actor)
         guard let hash = HashService.sha256(of: url) else { return }
@@ -296,6 +265,51 @@ actor Indexer {
         }
     }
 
+    // MARK: - Fast-path helpers
+
+    /// Dataless iCloud placeholder — no local bytes to hash yet.
+    private static func isDataless(_ url: URL) -> Bool {
+        if let status = (try? url.resourceValues(
+                forKeys: [.ubiquitousItemDownloadingStatusKey]))?
+                .ubiquitousItemDownloadingStatus,
+           status == .notDownloaded {
+            return true
+        }
+        return false
+    }
+
+    /// True if `absPath` is already indexed with matching size + mtime, so
+    /// its content can't have changed — the fast path that makes re-opening
+    /// a known folder near-instant. Touches last_seen_at at most daily to
+    /// keep 180-day retention honest. Files that return true do NO hashing
+    /// and are NOT counted by the indexing progress pill.
+    private static func isUnchanged(absPath: String, sizeBytes: Int64?,
+                                    modifiedAt: Int64?, now: Int64,
+                                    queue: DatabaseQueue) -> Bool {
+        struct Known { let fileID: String; let lastSeen: Int64 }
+        let known: Known? = (try? queue.read { db -> Known? in
+            guard let path = try PathRow
+                    .filter(PathRow.Columns.absolute_path == absPath)
+                    .filter(PathRow.Columns.is_alive == 1)
+                    .fetchOne(db),
+                  let fid = path.file_id,
+                  let file = try FileRow.filter(FileRow.Columns.id == fid).fetchOne(db),
+                  file.content_hash != nil,
+                  file.size_bytes == sizeBytes,
+                  file.modified_at == modifiedAt
+            else { return nil }
+            return Known(fileID: fid, lastSeen: file.last_seen_at)
+        }) ?? nil
+        guard let known else { return false }
+        if now - known.lastSeen > 86_400 {
+            try? queue.write { db in
+                try db.execute(sql: "UPDATE files SET last_seen_at = ? WHERE id = ?",
+                               arguments: [now, known.fileID])
+            }
+        }
+        return true
+    }
+
     // MARK: - Active folder pass
 
     /// Public entry: hash all enumerated files in `urls`. Work is windowed
@@ -304,11 +318,34 @@ actor Indexer {
     /// the UI stutter on large libraries.
     func indexBatch(_ urls: [(URL, AssetKind)], priority: Priority) async {
         guard !urls.isEmpty else { return }
-        await IndexProgress.shared.begin(urls.count)
+        guard let queue = Database.shared.dbQueue else { return }
+        let now = Int64(Date().timeIntervalSince1970)
+
+        // Discovery: skip already-known, unchanged files up front (touching
+        // last_seen for retention). Only files that genuinely need
+        // (re)hashing survive — so a fully indexed folder does zero work and
+        // shows NO progress pill on relaunch.
+        var work: [(URL, AssetKind)] = []
+        work.reserveCapacity(urls.count)
+        for (url, kind) in urls {
+            if Self.isDataless(url) { continue }
+            let absPath = url.standardizedFileURL.path
+            let attrs = try? FileManager.default.attributesOfItem(atPath: absPath)
+            let sizeBytes = (attrs?[.size] as? NSNumber)?.int64Value
+            let modifiedAt = (attrs?[.modificationDate] as? Date).map { Int64($0.timeIntervalSince1970) }
+            if Self.isUnchanged(absPath: absPath, sizeBytes: sizeBytes,
+                                modifiedAt: modifiedAt, now: now, queue: queue) {
+                continue
+            }
+            work.append((url, kind))
+        }
+        guard !work.isEmpty else { return }
+
+        await IndexProgress.shared.begin(work.count)
         let taskPriority: TaskPriority = (priority == .high) ? .utility : .background
 
         await withTaskGroup(of: Void.self) { group in
-            var iterator = urls.makeIterator()
+            var iterator = work.makeIterator()
             var inFlight = 0
             func enqueueNext() -> Bool {
                 guard let (url, kind) = iterator.next() else { return false }

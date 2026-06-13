@@ -2,9 +2,11 @@
 //  GridView.swift
 //  Muse
 //
-//  Phase 0.5 grid driven by FileNode. Lazy-loads thumbnails via
-//  ThumbnailCache. Shows a kind-specific icon for non-image kinds when
-//  the thumbnail is missing or still generating.
+//  Virtualized masonry grid. The jigsaw packing is precomputed in plain
+//  Swift (MasonryGeometry) from stored aspect ratios (AspectRatioCache), so
+//  only the tiles inside the viewport (+ overscan) are ever materialized.
+//  This is what keeps a 1700+ image folder smooth: a handful of live tiles
+//  instead of the whole library, and no per-frame O(n) relayout.
 //
 
 import SwiftUI
@@ -14,107 +16,213 @@ struct GridView: View {
     @EnvironmentObject var appState: AppState
 
     private let spacing: CGFloat = 10
+    private let contentInset: CGFloat = 20
     @State private var addTagFile: FileNode? = nil
     @State private var newTagText = ""
     /// User-set images-per-row, persisted; the bottom-right slider drives it.
     @AppStorage("gridColumnCount") private var gridColumns = 4
 
+    @StateObject private var aspects = AspectRatioCache()
+
+    // Precomputed layout (recomputed only when the file set, column count,
+    // width, or resolved aspect ratios change — never on scroll).
+    @State private var frames: [CGRect] = []
+    @State private var totalHeight: CGFloat = 0
+    @State private var layoutWidth: CGFloat = 0
+
+    /// The masonry canvas's top, in the scroll viewport's coordinate space.
+    /// 0 at the top; goes negative as the user scrolls down.
+    @State private var canvasMinY: CGFloat = 0
+
     var body: some View {
         GeometryReader { geo in
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-            // The collections row scrolls away with the page — only the
-            // tag chips above stay pinned.
-            if !appState.isSearchActive && appState.activeTagLabel == nil {
-                CollectionsRow()
-            }
-            if appState.visibleFiles.isEmpty {
-                emptyState
-            } else {
-                // Jigsaw pack: images keep their own aspect ratio and stack
-                // into the shortest column — no identical squares, no
-                // letterboxing dead space.
-                MasonryLayout(columns: gridColumns,
-                              spacing: spacing) {
-                    ForEach(Array(appState.visibleFiles.enumerated()),
-                            id: \.element.id) { order, file in
-                        TileView(file: file, order: order, deletion: appState.deletion)
-                            // Single tap only — the old double-tap recognizer
-                            // (open in default app) made every single click wait
-                            // out the double-click interval before the viewer
-                            // opened, and spawning Preview was never approved.
-                            // Editing flows live in the Open With… context menu.
-                            .onTapGesture {
-                                appState.selectedFile = file
-                            }
-                            .contextMenu {
-                                OpenWithMenu(url: file.url)
-                                Divider()
-                                Button("Add Tag…") {
-                                    newTagText = ""
-                                    addTagFile = file
+            let contentWidth = max(0, geo.size.width - contentInset * 2)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    // The collections row scrolls away with the page — only the
+                    // tag chips above stay pinned.
+                    if !appState.isSearchActive && appState.activeTagLabel == nil {
+                        CollectionsRow()
+                    }
+                    if appState.visibleFiles.isEmpty {
+                        emptyState
+                    } else {
+                        masonryCanvas(viewportHeight: geo.size.height)
+                            .frame(width: contentWidth, height: totalHeight,
+                                   alignment: .topLeading)
+                            .background(
+                                GeometryReader { proxy in
+                                    Color.clear
+                                        .onAppear {
+                                            canvasMinY = proxy.frame(in: .named("gridScroll")).minY
+                                        }
+                                        .onChange(of: proxy.frame(in: .named("gridScroll")).minY) { _, y in
+                                            canvasMinY = y
+                                        }
                                 }
-                                Divider()
-                                Button("Move to Trash", role: .destructive) {
-                                    Task { await appState.deletion.deleteWithBurn(file) }
-                                }
-                            }
+                            )
+                            .padding(contentInset)
+                            // Collection/tag switches replace the grid wholesale —
+                            // one clean cross-fade, not a per-tile reflow.
+                            .id("\(appState.activeCollectionID ?? "")|\(appState.activeTagLabel ?? "")")
                             .transition(.opacity)
                     }
                 }
-                .padding(20)
-                // Collection/tag switches replace the grid wholesale — one
-                // clean cross-fade, not a per-tile reflow.
-                .id("\(appState.activeCollectionID ?? "")|\(appState.activeTagLabel ?? "")")
-                .transition(.opacity)
             }
-            }
-        }
-        .background(appState.moodPalette.background)
-        .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
-        .animation(.easeInOut(duration: 0.25), value: gridColumns)
-        .overlay(alignment: .bottomTrailing) {
-            if !appState.visibleFiles.isEmpty {
-                columnSlider
-                    .padding(.trailing, 16)
-                    .padding(.bottom, 16)
-            }
-        }
-        .alert("Add Tag", isPresented: Binding(
-            get: { addTagFile != nil },
-            set: { if !$0 { addTagFile = nil } }
-        )) {
-            TextField("Tag name", text: $newTagText)
-            Button("Add") { commitAddTag() }
-            Button("Cancel", role: .cancel) { addTagFile = nil }
-        } message: {
-            Text("Tags “\(addTagFile?.basename ?? "")”.")
-        }
-        .coordinateSpace(name: "gridViewport")
-        .onContinuousHover { phase in
-            switch phase {
-            case .active(let location):
-                if appState.fluidEnabled {
-                    appState.fluidSim.setMouse(location)
-                    appState.fluidSim.viewportSize = geo.size
-                    appState.fluidViewportSize = geo.size
+            .coordinateSpace(name: "gridScroll")
+            .background(appState.moodPalette.background)
+            .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
+            .overlay(alignment: .bottomTrailing) {
+                if !appState.visibleFiles.isEmpty {
+                    columnSlider
+                        .padding(.trailing, 16)
+                        .padding(.bottom, 16)
                 }
-            case .ended:
-                appState.fluidSim.clearMouse()
             }
-        }
-        .onChange(of: geo.size) { _, newSize in
-            appState.fluidSim.viewportSize = newSize
-            appState.fluidViewportSize = newSize
-        }
-        .onAppear {
-            appState.fluidSim.viewportSize = geo.size
-            appState.fluidViewportSize = geo.size
-        }
+            .alert("Add Tag", isPresented: Binding(
+                get: { addTagFile != nil },
+                set: { if !$0 { addTagFile = nil } }
+            )) {
+                TextField("Tag name", text: $newTagText)
+                Button("Add") { commitAddTag() }
+                Button("Cancel", role: .cancel) { addTagFile = nil }
+            } message: {
+                Text("Tags “\(addTagFile?.basename ?? "")”.")
+            }
+            .coordinateSpace(name: "gridViewport")
+            .onContinuousHover { phase in
+                switch phase {
+                case .active(let location):
+                    if appState.fluidEnabled {
+                        appState.fluidSim.setMouse(location)
+                        appState.fluidSim.viewportSize = geo.size
+                        appState.fluidViewportSize = geo.size
+                    }
+                case .ended:
+                    appState.fluidSim.clearMouse()
+                }
+            }
+            .onAppear {
+                appState.fluidSim.viewportSize = geo.size
+                appState.fluidViewportSize = geo.size
+                aspects.load(appState.visibleFiles)
+                recompute(width: contentWidth)
+            }
+            .onChange(of: geo.size) { _, newSize in
+                appState.fluidSim.viewportSize = newSize
+                appState.fluidViewportSize = newSize
+                recompute(width: max(0, newSize.width - contentInset * 2))
+            }
+            .onChange(of: gridSignature) { _, _ in
+                aspects.load(appState.visibleFiles)
+                recompute(width: contentWidth)
+            }
+            .onChange(of: gridColumns) { _, _ in
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    recompute(width: contentWidth)
+                }
+            }
+            .onChange(of: aspects.version) { _, _ in
+                recompute(width: contentWidth)
+            }
         }
     }
 
-    /// Wider window → more columns; columns stay in the 220–320pt band.
+    // MARK: - Virtualized canvas
+
+    /// Renders only the tiles whose precomputed frame intersects the viewport
+    /// (plus a one-screen overscan above and below for smooth scrolling).
+    @ViewBuilder
+    private func masonryCanvas(viewportHeight: CGFloat) -> some View {
+        let visibleTop = -canvasMinY
+        let overscan = max(300, viewportHeight)
+        let lo = visibleTop - overscan
+        let hi = visibleTop + viewportHeight + overscan
+        let files = appState.visibleFiles
+
+        ZStack(alignment: .topLeading) {
+            ForEach(visibleIndices(lo: lo, hi: hi, count: files.count), id: \.self) { i in
+                let rect = frames[i]
+                let file = files[i]
+                TileView(file: file, order: i, deletion: appState.deletion)
+                    .frame(width: rect.width, height: rect.height)
+                    .offset(x: rect.minX, y: rect.minY)
+                    // Single tap only — the old double-tap recognizer made every
+                    // click wait out the double-click interval before the viewer
+                    // opened. Editing flows live in the Open With… context menu.
+                    .onTapGesture {
+                        appState.selectedFile = file
+                    }
+                    .contextMenu {
+                        OpenWithMenu(url: file.url)
+                        Divider()
+                        Button("Add Tag…") {
+                            newTagText = ""
+                            addTagFile = file
+                        }
+                        Divider()
+                        Button("Move to Trash", role: .destructive) {
+                            Task { await appState.deletion.deleteWithBurn(file) }
+                        }
+                    }
+            }
+        }
+        .frame(width: layoutWidth, height: totalHeight, alignment: .topLeading)
+    }
+
+    /// Indices of tiles whose frame lies within [lo, hi] of content Y. A linear
+    /// scan over the precomputed frames — cheap enough to run every scroll tick.
+    private func visibleIndices(lo: CGFloat, hi: CGFloat, count: Int) -> [Int] {
+        guard !frames.isEmpty else { return [] }
+        let n = min(count, frames.count)
+        var out: [Int] = []
+        out.reserveCapacity(96)
+        for i in 0..<n {
+            let f = frames[i]
+            if f.maxY >= lo && f.minY <= hi { out.append(i) }
+        }
+        return out
+    }
+
+    /// Recompute the full masonry packing. Called only on set/column/width/
+    /// aspect changes — not on scroll.
+    private func recompute(width: CGFloat) {
+        let files = appState.visibleFiles
+        guard width > 0, !files.isEmpty else {
+            frames = []
+            totalHeight = 0
+            layoutWidth = width
+            return
+        }
+        let ratios = files.map { aspects.aspect(for: $0) }
+        let result = MasonryGeometry.compute(aspects: ratios,
+                                             columns: gridColumns,
+                                             width: width,
+                                             spacing: spacing)
+        frames = result.frames
+        totalHeight = result.totalHeight
+        layoutWidth = width
+    }
+
+    /// Cheap signature of everything that changes the *set* of files shown
+    /// (folder, sort, collection/tag filters, search). Avoids mapping 1700
+    /// ids on every render just to drive an onChange.
+    private var gridSignature: String {
+        let files = appState.visibleFiles
+        return [
+            String(files.count),
+            appState.selectedFolder?.id.uuidString ?? "",
+            appState.activeCollectionID ?? "",
+            appState.activeTagLabel ?? "",
+            appState.isSearchActive ? "s" : "",
+            appState.searchQuery,
+            String(describing: appState.sortMode),
+            files.first?.url.path ?? "",
+            files.last?.url.path ?? ""
+        ].joined(separator: "|")
+    }
+
     private func commitAddTag() {
         guard let file = addTagFile else { return }
         let label = newTagText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -261,7 +369,7 @@ private struct TileView: View {
             }
     }
 
-    /// Images: natural aspect, column-width, edge to edge (the jigsaw piece).
+    /// Images: natural aspect, fitted into the precomputed jigsaw frame.
     /// Other kinds: a compact labeled card so files stay identifiable.
     @ViewBuilder
     private var tile: some View {
@@ -270,10 +378,9 @@ private struct TileView: View {
                 .resizable()
                 .aspectRatio(contentMode: .fit)
         } else if isImageKind {
-            // Aspect placeholder until the thumbnail lands.
+            // Fills the frame until the thumbnail lands.
             Rectangle()
                 .fill(appState.moodPalette.tileFill)
-                .aspectRatio(1, contentMode: .fit)
         } else {
             VStack(spacing: 8) {
                 Image(systemName: iconName(for: file.kind))
@@ -285,8 +392,7 @@ private struct TileView: View {
                     .truncationMode(.middle)
                     .padding(.horizontal, 10)
             }
-            .frame(maxWidth: .infinity)
-            .aspectRatio(1.4, contentMode: .fit)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(appState.moodPalette.tileFill))
         }

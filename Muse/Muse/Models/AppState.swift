@@ -72,13 +72,6 @@ final class AppState: ObservableObject {
     @Published var isSearchActive: Bool = false
 
 
-    /// Grid / Cloud / Graph view mode for the active folder (spec §3).
-    enum ViewMode: String { case grid, cloud, graph }
-    @Published var viewMode: ViewMode = .grid
-
-    /// Collection the graph view is zoomed into (nil = flat overview).
-    @Published var graphFocusedCollectionID: String? = nil
-
     /// Global (window) frames of grid tiles, keyed by file path. Used as the
     /// hero-transition source rect. Deliberately NOT @Published — frames
     /// update constantly during scroll and publishing would thrash the UI;
@@ -455,6 +448,13 @@ final class AppState: ObservableObject {
             let imageURLs = files
                 .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
                 .map { $0.url }
+            // Warm the whole folder's thumbnails to disk up front (background),
+            // so scrolling anywhere later is an instant cache read — no
+            // generation, no progress pill. Runs concurrently with analysis.
+            let thumbURLs = files
+                .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd || $0.kind == .svg }
+                .map { $0.url }
+            await ThumbnailCache.shared.prewarmToDisk(thumbURLs)
             await AnalyzePipeline.shared.analyzePending(in: imageURLs)
         }
     }

@@ -28,30 +28,15 @@ struct ContentView: View {
                     VStack(spacing: 0) {
                         // Chips stay pinned; the collections row lives inside
                         // the grid's scroll view and scrolls away with it.
-                        if appState.viewMode == .grid && !appState.isSearchActive
+                        if !appState.isSearchActive
                             && appState.activeCollectionID == nil {
                             TagChipsRow()
                         }
-                        Group {
-                            switch appState.viewMode {
-                            case .grid:
-                                GridView()
-                            case .cloud:
-                                CloudView()
-                            case .graph:
-                                GalaxyView()
-                            }
-                        }
-                        // Crossfade between modes so the grid fades into place
-                        // instead of popping/loading down on the way back.
-                        .id(appState.viewMode)
-                        .transition(.opacity)
+                        GridView()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(appState.moodPalette.background)
                     .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
-                    .animation(.easeInOut(duration: 0.28), value: appState.viewMode)
-
                 }
 
             }
@@ -76,16 +61,6 @@ struct ContentView: View {
 
                 ToolbarItem(placement: .principal) {
                     SearchBar()
-                }
-
-                ToolbarItem(placement: .primaryAction) {
-                    Picker("View", selection: $appState.viewMode) {
-                        Image(systemName: "square.grid.2x2").tag(AppState.ViewMode.grid)
-                        Image(systemName: "circle.grid.hex").tag(AppState.ViewMode.cloud)
-                        Image(systemName: "point.3.connected.trianglepath.dotted").tag(AppState.ViewMode.graph)
-                    }
-                    .pickerStyle(.segmented)
-                    .help("Switch between grid, cloud, and graph views")
                 }
 
                 ToolbarItemGroup(placement: .primaryAction) {
@@ -175,8 +150,6 @@ struct ContentView: View {
                     appState.viewerClosing = true
                 } else if appState.selectedFile != nil {
                     appState.selectedFile = nil
-                } else if appState.graphFocusedCollectionID != nil {
-                    appState.graphFocusedCollectionID = nil
                 }
             }) { EmptyView() }
                 .keyboardShortcut(.escape, modifiers: [])
@@ -220,12 +193,7 @@ struct ContentView: View {
         } label: {
             Image(systemName: "arrow.up.and.down.text.horizontal")
         }
-        // Sorting only meaningfully applies to the grid; the cloud and galaxy
-        // arrange by relationship/aesthetics, so it's greyed out there.
-        .disabled(appState.viewMode != .grid)
-        .help(appState.viewMode == .grid
-              ? "Sort: \(appState.sortMode.displayName)"
-              : "Sorting applies to the grid view")
+        .help("Sort: \(appState.sortMode.displayName)")
     }
 
     @ViewBuilder
@@ -268,6 +236,11 @@ struct ContentView: View {
                 .monospacedDigit()
                 .lineLimit(1)
                 .truncationMode(.middle)
+                // Fixed width so the pill never resizes as filenames of
+                // different lengths stream past — middle-truncation keeps the
+                // phase word ("Analyzing") and the extension, dropping the
+                // middle of long names. A steady bar, not a jittering one.
+                .frame(width: 220, alignment: .leading)
         }
         .frame(height: 20)
         .padding(.horizontal, 14)

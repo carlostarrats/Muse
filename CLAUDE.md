@@ -59,6 +59,7 @@ are the load-bearing reference artifacts.
 | Polish 4 — delights (burn-up delete, background moods) | ✅ shipped | `feat/delights` (merged) |
 | Polish 5 — cloud rework (3D orbit ball) + galaxy view (similarity cloud, replaces graph) | ✅ shipped | `main` |
 | Polish 6 — screenshot intent collections + Galaxy taste-map (color by intent) | ✅ shipped | `main` |
+| Polish 7 — grid virtualization (perf) + thumbnail prewarm; cloud/galaxy views removed | ✅ shipped | `main` |
 
 `feat/file-viewer-rewrite` was merged to `main` after Phase 8
 finished — see the merge commit. The branch was kept around as an
@@ -138,12 +139,47 @@ plan: `docs/superpowers/plans/2026-06-13-screenshot-intent-collections.md`):
   CloudLayout/Mood tests; fixed CollectionStore/Membership tests (they
   inserted files but no live `paths`, so the alive-aware `fetchAll`
   returned empty and crashed on `all[0]`). Suite green again (85 tests).
-- **Note (not a bug):** the "Indexing N of M" pill counts every
-  enumerated file in `IndexProgress.begin(urls.count)` BEFORE the
-  size+mtime fast-path check, so it climbs 0→N on every launch/folder-open
-  even though already-known files skip hashing entirely. Index data
-  persists fine across launches; the pill is cosmetic over a cheap
-  reconcile pass.
+- **Note (FIXED 2026-06-13):** the "Indexing N of M" pill used to count
+  every enumerated file in `IndexProgress.begin(urls.count)` BEFORE the
+  size+mtime fast-path check, so it climbed 0→N on every launch even though
+  already-known files skip hashing. `indexBatch` now runs a discovery pass
+  first (`Indexer.isUnchanged`) and only counts files that genuinely need
+  (re)hashing — a fully indexed folder does zero work and shows no pill.
+
+### Performance + view-cleanup session — 2026-06-13 (on `main`)
+
+A 1700-image inspo folder was unusably slow (jagged scroll, multi-second
+lag opening an image). Fixed and trimmed:
+
+- **Grid virtualized** — the old `MasonryLayout: Layout` over a plain
+  `ForEach` was the root cause: a custom SwiftUI `Layout` materializes
+  *every* subview (no windowing) and re-measured all 1700 on every pass;
+  selecting a file republished `AppState` → 1700 tiles invalidated +
+  synchronous O(n) relayout right as the hero open should run. Replaced
+  with precomputed packing (`MasonryGeometry` from `AspectRatioCache`,
+  which bulk-reads stored `width/height` + ImageIO header fallback) and a
+  manual viewport window (only visible tiles + 1-screen overscan are
+  live). Jigsaw look preserved exactly. `MasonryLayout.swift` deleted.
+  See memory `muse-grid-must-stay-virtualized` — do NOT reintroduce a
+  custom Layout / non-lazy container over the full file set.
+- **Thumbnail prewarm** — indexing/analysis build metadata, not
+  thumbnails, so the first scroll to the bottom generated them on the fly
+  (the progress pill). `ThumbnailCache.prewarmToDisk` now warms the whole
+  folder to the on-disk cache in the background after indexing; the pill
+  only shows for genuinely cold generation (disk hits are silent). Disk
+  cache persists across launches → instant scroll thereafter.
+- **Cloud + Galaxy views removed** — judged not useable in their current
+  iterations. Deleted `CloudView/CloudLayout/CloudMath/CloudPose/
+  GalaxyView/GalaxyModel/SimilarityLayout/SceneProjection` and
+  `IntentBucket.galaxyHex`; dropped `AppState.ViewMode`, `viewMode`,
+  `graphFocusedCollectionID`, and the toolbar view picker. Grid is the
+  only view (no button). `SeededRandom` kept (grid burn + hero). Intent
+  collections (the typed-screenshot feature) are untouched — only the
+  Galaxy *visualization* of them is gone.
+- **Possible follow-up (not done):** disk-hit thumbnails load via
+  `NSImage(contentsOf:)`, which decodes lazily on the main thread at first
+  draw — a candidate if any residual scroll hitch remains. Force-decode
+  off-main (ImageIO, like `HeroStage.loadFullRes`) if so.
 
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
@@ -226,8 +262,13 @@ Muse/Muse/
     ViewerChrome.swift             dimmed bg + close button + Esc dismiss
   Views/
     SidebarView.swift              multi-root OutlineGroup tree + starred section
-    GridView.swift                 MasonryLayout grid; column-count slider; water
-                                   shader layerEffect when fluidEnabled
+    GridView.swift                 VIRTUALIZED masonry grid — precomputes tile
+                                   frames (MasonryGeometry from AspectRatioCache)
+                                   and renders only viewport tiles (+overscan);
+                                   column-count slider; water shader when fluidEnabled.
+                                   The ONLY view mode (cloud/galaxy retired 2026-06-13)
+    AspectRatioCache.swift         per-file aspect (h÷w) for layout: bulk DB
+                                   width/height + ImageIO header fallback, off-main
     CollectionsRow.swift           Cosmos-style cards + in-collection editable header
     TagChipsRow.swift              folder-scoped tag chips; filter + management
     MoodPickerView.swift           background popover (Light/Dark/Auto/Custom)
@@ -243,22 +284,16 @@ Muse/Muse/
                                    ViewerInfoColumn, backdrop, geometry, toast,
                                    PillFlow/PillRowModel)
     Spatial/
-      SeededRandom.swift           SplitMix64 + FNV-1a for launch-stable layouts
-      CloudPose.swift              stage constants (refW/refH/f) for cloud camera
-      CloudLayout.swift            3D ball placement (Fibonacci sphere) for the cloud
-      CloudMath.swift              SceneKit camera FOV helpers
-      CloudView.swift              cloud: 3D ball of billboarded cards, drag-orbit +
-                                   per-card drift + zoom (SceneKit), click → hero
-      SceneProjection.swift        node → screen rect (hero-viewer source frames)
-      SimilarityLayout.swift       3D stress layout from a distance matrix
-      GalaxyModel.swift            galaxy data: blended look+meaning+color distance,
-                                   3D projection, nearest-neighbour edges
-      GalaxyView.swift             galaxy: similarity-positioned cloud, orbit + zoom,
-                                   constellation lines (replaces the old graph view);
-                                   screenshot nodes get a colored backing by intent
+      SeededRandom.swift           SplitMix64 + FNV-1a (kept: grid burn seed +
+                                   hero). Cloud/Galaxy views + their layout files
+                                   (Cloud*/Galaxy*/SimilarityLayout/SceneProjection)
+                                   were removed 2026-06-13 — see session log.
   Components/
     SearchBar.swift                debounced FTS5 search, scoped to sidebar folder
-    MasonryLayout.swift            aspect-true jigsaw grid (recompute every pass)
+    MasonryGeometry.swift          pure masonry packing (frames + height) from
+                                   aspect ratios — feeds GridView's virtualization
+                                   (replaced the old MasonryLayout: Layout, deleted
+                                   2026-06-13 — a custom Layout can't virtualize)
   Fluid/
     FluidDistortion.metal          existing water-ripple shader (kept)
     FluidSim.swift                 CPU fluid sim (kept)
@@ -322,11 +357,12 @@ before implementation.
 1. Open `Muse/Muse.xcodeproj` in Xcode 16+.
 2. Build & run (Cmd+R). The app starts on a clean shell — click
    "Add Folder" in the sidebar to point Muse at any folder on disk.
-3. Toolbar (left → right): sidebar toggle · sort (grid only) ·
-   show-subfolders · search (center) · grid/cloud/galaxy picker ·
-   clear-collection (when filtered) · background mood · water effect ·
-   ⓘ About. Find Duplicates lives in the File menu; Pin/Unpin Folder and
-   Remove Folder live in the Edit menu; analysis runs automatically.
+3. Toolbar (left → right): sidebar toggle · sort · show-subfolders ·
+   search (center) · clear-collection (when filtered) · background mood ·
+   water effect · ⓘ About. (The grid/cloud/galaxy view picker was removed
+   2026-06-13 — grid is the only view.) Find Duplicates lives in the File
+   menu; Pin/Unpin Folder and Remove Folder live in the Edit menu; analysis
+   runs automatically.
 4. Sandboxed container path:
    `~/Library/Containers/com.tarrats.Muse/Data/Library/Application Support/Muse/`.
    `muse.sqlite` there; wipe it to rebuild the schema on next launch.
