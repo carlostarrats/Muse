@@ -650,7 +650,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MuseShareExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = MuseShareExtension;
+				INFOPLIST_KEY_CFBundleDisplayName = Muse;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -684,7 +684,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MuseShareExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = MuseShareExtension;
+				INFOPLIST_KEY_CFBundleDisplayName = Muse;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
