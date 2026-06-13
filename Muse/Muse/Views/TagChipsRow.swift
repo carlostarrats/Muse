@@ -57,10 +57,11 @@ struct TagChipsRow: View {
                     .padding(.horizontal, 14)
                 }
                 .padding(.top, 10)
-                // Resting 24 is breathing room above the collections row.
-                // Filtered, the collections are gone and the grid rises to
-                // where the cards sit: 24 + row's 10 − grid's own 20 inset.
-                .padding(.bottom, appState.activeTagLabel != nil ? 14 : 24)
+                // Constant gap below the chips so the grid sits at the same
+                // height whether a tag is selected or "All" — no vertical
+                // jump on selection. (The old inline collections row that the
+                // filtered/unfiltered split accommodated is gone.)
+                .padding(.bottom, 24)
             }
         }
         .task(id: reloadKey) { await loadLabels() }
@@ -115,19 +116,21 @@ struct TagChipsRow: View {
         else if hovered == index { hovered = nil }
     }
 
-    /// Reload when tags mutate, the sidebar selection changes, or the
-    /// folder's contents land/refresh.
+    /// Reload when tags mutate, the sidebar selection changes, the folder's
+    /// contents land/refresh, or the active collection changes (the chips
+    /// re-scope to the collection's members inside one).
     private var reloadKey: String {
-        "\(appState.tagsVersion)|\(appState.selectedFolder?.url.path ?? "")|\(appState.currentFiles.count)"
+        "\(appState.tagsVersion)|\(appState.activeCollectionID ?? appState.selectedFolder?.url.path ?? "")|\(appState.tagSourceFiles.count)"
     }
 
-    /// Tag labels (with counts) for EXACTLY the files the grid can show.
-    /// Deriving from currentFiles — not a DB folder query — means a chip
-    /// can never filter down to an empty grid: a tag with no visible
-    /// images simply has no chip.
+    /// Tag labels (with counts) for EXACTLY the files the grid can show — the
+    /// collection's members inside a collection, else the current folder.
+    /// Deriving from in-memory files (not a DB folder query) means a chip can
+    /// never filter down to an empty grid: a tag with no visible images
+    /// simply has no chip.
     private func loadLabels() async {
         guard let q = Database.shared.dbQueue else { return }
-        let paths = appState.currentFiles.map { $0.url.standardizedFileURL.path }
+        let paths = appState.tagSourceFiles.map { $0.url.standardizedFileURL.path }
         guard !paths.isEmpty else {
             tags = []
             return

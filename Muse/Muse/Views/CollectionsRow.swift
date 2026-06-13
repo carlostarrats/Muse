@@ -2,10 +2,10 @@
 //  CollectionsRow.swift
 //  Muse
 //
-//  Featured collections row above the grid (Cosmos-style cover cards):
-//  three equal cover slices, name + count on one line below. No header —
-//  the cards speak for themselves. Card tap filters the grid to the
-//  collection's members; right-click hides the collection.
+//  The in-collection header that sits above the filtered grid: back arrow
+//  out of the filter, editable name, count, delete. The all-collections
+//  browsing surface now lives on its own page (CollectionsPage), reached
+//  via the toolbar's collections icon — not an inline row here.
 //
 
 import SwiftUI
@@ -18,28 +18,13 @@ struct CollectionsRow: View {
     var body: some View {
         if let activeID = appState.activeCollectionID,
            let active = engine.collections.first(where: { $0.collection.id == activeID }) {
-            // Inside a collection: the cards row gives way to the header —
-            // back arrow out of the filter, editable name, count, delete.
+            // Inside a collection: header with back arrow out of the filter,
+            // editable name, count, delete.
             ActiveCollectionHeader(loaded: active)
                 .padding(.horizontal, 14)
                 .padding(.top, 14)
                 .padding(.bottom, 48)
                 .transition(.opacity)
-        } else if !engine.collections.isEmpty {
-            // All collections, horizontally scrollable — no cap; with many
-            // collections you swipe through the row.
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 32) {
-                    ForEach(engine.collections, id: \.collection.id) { loaded in
-                        CollectionCard(loaded: loaded)
-                    }
-                }
-                .padding(.horizontal, 14)
-                // Vertical padding INSIDE the scroll view so the cards' drop
-                // shadow isn't clipped against the scroll view's top/bottom.
-                .padding(.vertical, 10)
-            }
-            .transition(.opacity)
         }
     }
 }
@@ -184,8 +169,10 @@ private struct TrashButton: View {
     }
 }
 
-/// Circular hover-brightening back arrow for the active-collection header.
-private struct BackArrowButton: View {
+/// Circular hover-brightening back arrow, shared by the active-collection
+/// header and the Collections page.
+struct BackArrowButton: View {
+    var help: String = "Back to all collections"
     var action: () -> Void
     @State private var hovering = false
 
@@ -199,7 +186,7 @@ private struct BackArrowButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help("Back to all collections")
+        .help(help)
     }
 }
 
@@ -210,9 +197,12 @@ struct CollectionCard: View {
     @EnvironmentObject var appState: AppState
     let loaded: CollectionStore.Loaded
 
-    /// Compact cover, a 2×2 grid of cells — smaller footprint so the
-    /// collections read as distinct cards rather than one dense band.
-    static let coverSize = CGSize(width: 240, height: 120)
+    /// Cover size (a 2×2 mosaic). Defaults to the compact size; the
+    /// Collections page passes a width computed to fit 4 per row.
+    var coverSize: CGSize = CollectionCard.defaultCoverSize
+
+    /// Compact default cover, a 2×2 grid of cells.
+    static let defaultCoverSize = CGSize(width: 240, height: 120)
 
     @State private var hovering = false
 
@@ -222,7 +212,9 @@ struct CollectionCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            CollectionMosaic(collectionID: loaded.collection.id, memberIDs: loaded.memberIDs)
+            CollectionMosaic(collectionID: loaded.collection.id,
+                             memberIDs: loaded.memberIDs,
+                             size: coverSize)
                 // Hairline grey border + soft drop shadow so each card reads
                 // as a distinct object instead of blending into the row.
                 .overlay(
@@ -251,7 +243,7 @@ struct CollectionCard: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .frame(width: Self.coverSize.width, alignment: .leading)
+        .frame(width: coverSize.width, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture {
             appState.setActiveCollection(loaded.collection.id)
@@ -280,6 +272,7 @@ private struct CollectionMosaic: View {
     @EnvironmentObject var appState: AppState
     let collectionID: String
     let memberIDs: [String]
+    let size: CGSize
 
     @State private var thumbs: [NSImage] = []
 
@@ -289,7 +282,6 @@ private struct CollectionMosaic: View {
     private let gap: CGFloat = 6
 
     var body: some View {
-        let size = CollectionCard.coverSize
         let cellWidth = (size.width - 2 * inset - gap) / 2
         let cellHeight = (size.height - 2 * inset - gap) / 2
 
@@ -323,12 +315,15 @@ private struct CollectionMosaic: View {
                 Image(nsImage: thumbs[index])
                     .resizable()
                     .aspectRatio(contentMode: .fill)
+                    .transition(.opacity)
             } else {
                 Image(systemName: "photo")
                     .font(.system(size: 14))
                     .foregroundStyle(.tertiary)
             }
         }
+        // Covers fade in together once loaded rather than snapping in.
+        .animation(.easeOut(duration: 0.3), value: thumbs.count)
         .frame(width: width, height: height)
         .clipped()
     }

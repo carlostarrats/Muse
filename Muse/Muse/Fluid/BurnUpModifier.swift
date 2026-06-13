@@ -4,8 +4,7 @@
 //
 //  Animatable wrapper for the burnUp layerEffect. Shader uniforms don't
 //  animate on their own — Animatable re-evaluates body every frame with
-//  the interpolated progress. Apply AFTER fluidDistort so the char
-//  follows the water-distorted pixels.
+//  the interpolated progress.
 //
 
 import SwiftUI

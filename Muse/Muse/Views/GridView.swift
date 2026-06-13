@@ -43,9 +43,12 @@ struct GridView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    // The collections row scrolls away with the page — only the
-                    // tag chips above stay pinned.
-                    if !appState.isSearchActive && appState.activeTagLabel == nil {
+                    // The in-collection header scrolls away with the page —
+                    // only the tag chips above stay pinned. Shows whenever a
+                    // collection is active, even with a tag filter on (so you
+                    // can use tags within a collection). Returns nothing when
+                    // no collection is active.
+                    if !appState.isSearchActive {
                         CollectionsRow()
                     }
                     if appState.visibleFiles.isEmpty {
@@ -98,27 +101,11 @@ struct GridView: View {
                 Text("Tags “\(addTagFile?.basename ?? "")”.")
             }
             .coordinateSpace(name: "gridViewport")
-            .onContinuousHover { phase in
-                switch phase {
-                case .active(let location):
-                    if appState.fluidEnabled {
-                        appState.fluidSim.setMouse(location)
-                        appState.fluidSim.viewportSize = geo.size
-                        appState.fluidViewportSize = geo.size
-                    }
-                case .ended:
-                    appState.fluidSim.clearMouse()
-                }
-            }
             .onAppear {
-                appState.fluidSim.viewportSize = geo.size
-                appState.fluidViewportSize = geo.size
                 aspects.load(appState.visibleFiles)
                 recompute(width: contentWidth)
             }
             .onChange(of: geo.size) { _, newSize in
-                appState.fluidSim.viewportSize = newSize
-                appState.fluidViewportSize = newSize
                 recompute(width: max(0, newSize.width - contentInset * 2))
             }
             .onChange(of: gridSignature) { _, _ in
@@ -381,17 +368,6 @@ private struct TileView: View {
                         }
                 }
             )
-            .applyIf(appState.fluidEnabled && (file.kind == .image || file.kind == .raw || file.kind == .psd)) { view in
-                view.layerEffect(
-                    ShaderLibrary.fluidDistort(
-                        .image(appState.fluidDispImage),
-                        .float2(Float(tileFrame.minX), Float(tileFrame.minY)),
-                        .float2(Float(appState.fluidViewportSize.width),
-                                Float(appState.fluidViewportSize.height))
-                    ),
-                    maxSampleOffset: CGSize(width: 50, height: 50)
-                )
-            }
             .modifier(BurnUpModifier(
                 progress: deletion.burningPaths.contains(file.url.path) ? 1 : 0,
                 seed: Double(SeededRandom.fnv1a([file.url.path]) % 1000) / 1000.0,
@@ -411,14 +387,21 @@ private struct TileView: View {
     /// Other kinds: a compact labeled card so files stay identifiable.
     @ViewBuilder
     private var tile: some View {
-        if isImageKind, let img = thumbnail {
-            Image(nsImage: img)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-        } else if isImageKind {
-            // Fills the frame until the thumbnail lands.
-            Rectangle()
-                .fill(appState.moodPalette.tileFill)
+        if isImageKind {
+            // Placeholder stays put; the decoded image fades IN over it when
+            // it lands, so a cold grid resolves as a soft fade rather than
+            // hard tiles snapping in top-to-bottom.
+            ZStack {
+                Rectangle()
+                    .fill(appState.moodPalette.tileFill)
+                if let img = thumbnail {
+                    Image(nsImage: img)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeOut(duration: 0.28), value: thumbnail != nil)
         } else {
             VStack(spacing: 8) {
                 Image(systemName: iconName(for: file.kind))
@@ -451,14 +434,5 @@ private struct TileView: View {
         case .folder: return "folder"
         case .unknown: return "doc"
         }
-    }
-}
-
-// MARK: - View helper
-
-private extension View {
-    @ViewBuilder
-    func applyIf<R: View>(_ condition: Bool, transform: (Self) -> R) -> some View {
-        if condition { transform(self) } else { self }
     }
 }

@@ -5,8 +5,7 @@
 //  Burn-up delete (polish spec §4): the layer chars from the edges inward
 //  as progress goes 0→1 — char band, hot ember frontier, and drifting
 //  ember particles in the burned-out region. Pure function of
-//  (position, size, progress, seed) so it chains after fluidDistort in
-//  the same layerEffect stack.
+//  (position, size, progress, seed).
 //
 
 #include <metal_stdlib>

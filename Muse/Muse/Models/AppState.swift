@@ -100,6 +100,22 @@ final class AppState: ObservableObject {
     /// with whatever folder happens to be selected in the sidebar.
     @Published var activeCollectionFiles: [FileNode]? = nil
 
+    /// True when the dedicated Collections page (grid of all collection
+    /// cards) is showing. Toggled by the toolbar's collections icon. When a
+    /// collection is then opened from the page, `activeCollectionID` becomes
+    /// non-nil and the filtered grid takes over while this stays true, so the
+    /// in-collection back arrow returns here rather than to the main grid.
+    @Published var showingCollections = false
+
+    /// Open/close the Collections page. Always clears any active collection
+    /// filter so opening lands on the card grid (not inside a collection).
+    /// The crossfade is driven by the view layer (ContentView animates on
+    /// `isCollectionsPage`), so this just flips the flags.
+    func toggleCollectionsPage() {
+        showingCollections.toggle()
+        setActiveCollection(nil)
+    }
+
     /// Files the grid should show: the active collection's members when
     /// inside a collection, else the current folder's files; the tag chip
     /// filter narrows either.
@@ -111,6 +127,14 @@ final class AppState: ObservableObject {
             files = files.filter { tagPaths.contains($0.url.standardizedFileURL.path) }
         }
         return files
+    }
+
+    /// Files the tag chips derive their labels from: the active collection's
+    /// members (library-wide) when inside a collection, else the current
+    /// folder's files. Deliberately the UNFILTERED set, so selecting a tag
+    /// doesn't collapse the chip list down to just that tag.
+    var tagSourceFiles: [FileNode] {
+        activeCollectionFiles ?? currentFiles
     }
 
     /// Set (or clear, with nil) the active collection filter. Loads the
@@ -211,19 +235,6 @@ final class AppState: ObservableObject {
         }
     }
 
-    // MARK: - Water shader
-
-    @Published var fluidEnabled: Bool = false {
-        didSet {
-            // The CPU sim ticks at 60fps — only while the effect is on.
-            if fluidEnabled { fluidSim.start() } else { fluidSim.stop() }
-        }
-    }
-    @Published var fluidViewportSize: CGSize = .zero
-    let fluidSim = FluidSim()
-    @Published var fluidDispImage: Image = FluidSim.neutralImage
-    private var fluidCancellable: AnyCancellable?
-
     // MARK: - Burn-up delete (polish spec §4)
 
     let deletion = DeleteCoordinator()
@@ -293,11 +304,6 @@ final class AppState: ObservableObject {
 
     init() {
         updateAutoMoodTimer()
-
-        // Forward fluid sim displacement, throttled
-        fluidCancellable = fluidSim.$dispImage
-            .throttle(for: .milliseconds(33), scheduler: RunLoop.main, latest: true)
-            .assign(to: \.fluidDispImage, on: self)
 
         deletion.onRemove = { [weak self] url in
             guard let self else { return }

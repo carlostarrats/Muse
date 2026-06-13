@@ -18,6 +18,14 @@ struct ContentView: View {
     @State private var moodPickerShown = false
     @State private var infoShown = false
 
+    /// The Collections page is the card grid — showing collections with no
+    /// single collection drilled into (and not while searching).
+    private var isCollectionsPage: Bool {
+        appState.showingCollections
+            && appState.activeCollectionID == nil
+            && !appState.isSearchActive
+    }
+
     var body: some View {
         ZStack {
         NavigationSplitView {
@@ -25,18 +33,39 @@ struct ContentView: View {
         } detail: {
             ZStack {
                 HStack(spacing: 0) {
-                    VStack(spacing: 0) {
-                        // Chips stay pinned; the collections row lives inside
-                        // the grid's scroll view and scrolls away with it.
-                        if !appState.isSearchActive
-                            && appState.activeCollectionID == nil {
-                            TagChipsRow()
+                    // ZStack (not VStack) so the page⇄grid swap CROSS-fades in
+                    // place — both occupy the same slot during the transition
+                    // instead of one collapsing and the other growing from the
+                    // top (the abrupt "top-down" reload).
+                    ZStack {
+                        if isCollectionsPage {
+                            // Dedicated Collections page — no tag chips here.
+                            CollectionsPage()
+                                .transition(.opacity)
+                        } else {
+                            // Chips stay pinned — on the main grid AND inside a
+                            // collection (so tags filter within a collection).
+                            // The collection header lives inside the grid's
+                            // scroll view and scrolls with it. Hidden only
+                            // during search and on the Collections page.
+                            VStack(spacing: 0) {
+                                if !appState.isSearchActive {
+                                    TagChipsRow()
+                                        .transition(.opacity)
+                                }
+                                GridView()
+                            }
+                            .transition(.opacity)
                         }
-                        GridView()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(appState.moodPalette.background)
                     .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
+                    // Crossfade between the Collections page and the grid as a
+                    // single unit whenever the active experience changes.
+                    .animation(.easeInOut(duration: 0.3), value: isCollectionsPage)
+                    .animation(.easeInOut(duration: 0.25), value: appState.isSearchActive)
+                    .animation(.easeInOut(duration: 0.25), value: appState.activeCollectionID)
                 }
 
             }
@@ -44,6 +73,8 @@ struct ContentView: View {
                 // Far left, beside the sidebar toggle — fully separate from search.
                 ToolbarItem(placement: .navigation) {
                     sortMenu
+                        // Sorting is meaningless on the Collections card grid.
+                        .disabled(isCollectionsPage)
                 }
 
                 // Its own item (own surface), sitting next to sort.
@@ -63,41 +94,23 @@ struct ContentView: View {
                     SearchBar()
                 }
 
-                ToolbarItemGroup(placement: .primaryAction) {
-                    if appState.activeCollectionID != nil {
-                        Button {
-                            appState.setActiveCollection(nil)
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                        }
-                        .help("Clear collection filter")
-                    }
-                }
-
-                // Mood, water droplet, and info grouped together as one cluster
-                // (macOS fuses adjacent trailing items; a ToolbarSpacer would
-                // separate them but only with a wider-than-default gap).
-                ToolbarItem(placement: .primaryAction) {
-                    moodMenu
-                }
-
+                // Collections page toggle — sits to the LEFT of the mood
+                // (color) button. No selected/blue state: it's navigation with
+                // its own back button, not a sticky mode you toggle off here.
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        appState.fluidEnabled.toggle()
+                        appState.toggleCollectionsPage()
                     } label: {
-                        // Line icon at rest like the rest of the toolbar;
-                        // fills (and goes blue) only while the effect is on.
-                        // When off, no explicit tint — so it greys out with
-                        // the window when the app is in the background, just
-                        // like every other toolbar icon.
-                        if appState.fluidEnabled {
-                            Image(systemName: "drop.fill")
-                                .foregroundStyle(Color.blue)
-                        } else {
-                            Image(systemName: "drop")
-                        }
+                        Image(systemName: "square.stack.3d.up")
                     }
-                    .help(appState.fluidEnabled ? "Disable Water Effect" : "Enable Water Effect")
+                    .help("Collections")
+                }
+
+                // Mood and info grouped together as one cluster (macOS fuses
+                // adjacent trailing items; a ToolbarSpacer would separate them
+                // but only with a wider-than-default gap).
+                ToolbarItem(placement: .primaryAction) {
+                    moodMenu
                 }
 
                 ToolbarItem(placement: .primaryAction) {
@@ -198,11 +211,14 @@ struct ContentView: View {
 
     @ViewBuilder
     private var moodMenu: some View {
-        Button {
-            moodPickerShown.toggle()
-        } label: {
+        // Native toolbar Toggle: macOS gives it the standard icon size, the
+        // round hover state, and — while "on" (popover open) — the native
+        // selected fill (solid accent, white icon), identical to every other
+        // toolbar button's behavior. No custom chrome.
+        Toggle(isOn: $moodPickerShown) {
             Image(systemName: "paintpalette")
         }
+        .toggleStyle(.button)
         .help("Background: \(appState.mood.displayName)")
         .popover(isPresented: $moodPickerShown, arrowEdge: .bottom) {
             MoodPickerView()

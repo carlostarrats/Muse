@@ -263,6 +263,49 @@ plan: `docs/superpowers/plans/2026-06-13-icloud-sync-and-macos-share.md`):
   (referenced source deleted in the perf session) that were breaking the
   `MuseTests` target.
 
+### Collections page + water removal + nav polish — 2026-06-13 (on `main`)
+
+A live UI pass. Landed:
+
+- **Water effect removed** — the fun-only water-ripple distortion is gone:
+  `Fluid/FluidSim.swift` + `Fluid/FluidDistortion.metal` deleted, the toolbar
+  water-droplet toggle and all `fluidEnabled`/`fluidSim`/`fluidDispImage`
+  AppState plumbing stripped, GridView's `fluidDistort` layerEffect + mouse
+  tracking removed. The burn-up DELETE effect (`BurnUp.metal` /
+  `BurnUpModifier.swift`) is untouched — it never depended on the water shader.
+- **Collections get their own page** (`CollectionsPage.swift`) — a new toolbar
+  icon (`square.stack.3d.up`, left of the mood button) opens a dedicated page:
+  a "Collections" header (back arrow, NO edit/trash, 42pt title, same 48+20pt
+  gap-below as the in-collection view) over a 4-up card grid that resizes to
+  fit the window width, wraps to multiple rows, scrolls vertically, ordered
+  alphabetically. The old inline horizontal collections strip in the grid was
+  removed — `CollectionsRow` now renders only the in-collection header.
+  `CollectionCard`/`CollectionMosaic` take a `coverSize` so cards are
+  resizable. New `AppState.showingCollections` + `toggleCollectionsPage()`;
+  tapping a card drills in (page stays "open" so the in-collection back arrow
+  returns to the page). Sort menu is disabled on the page; tags hidden there.
+- **Tags work inside a collection (bug fix)** — selecting a tag then opening a
+  collection used to hide BOTH the collection header (gated on
+  `activeTagLabel == nil`) AND the tag chips (gated on `activeCollectionID ==
+  nil`). Now: the header shows whenever a collection is active, the chips stay
+  pinned inside a collection, and the chips re-scope to the collection's
+  members via `AppState.tagSourceFiles` (= `activeCollectionFiles ?? currentFiles`,
+  UNFILTERED so selecting a tag doesn't collapse the chip list). Tags now filter
+  within a collection (intersection); "All" clears.
+- **Smoother transitions** — the page⇄grid swap is a ZStack crossfade (was a
+  VStack that collapsed/regrew top-down), driven by `.animation(value:)` on the
+  active experience. Grid tiles and collection covers fade in over their
+  placeholder as thumbnails decode (was a hard snap).
+- **Nav consistency** — the clear-collection ✕ toolbar button removed entirely
+  (back arrows cover it). The mood/paint button is a native `Toggle` with
+  `.toggleStyle(.button)` so it shows the standard macOS selected fill (solid
+  accent, white icon) while its popover is open — no custom chrome. Tag-chip
+  row uses a constant 24pt bottom gap (was 14 vs 24) so the grid doesn't jump
+  vertically between a selected tag and "All".
+- **Not a bug** — double-clicking the Info button "zooms" the window: that's the
+  standard macOS "double-click the title bar to zoom" (the toolbar is in the
+  title bar), governed by System Settings, not app code.
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
@@ -356,12 +399,21 @@ Muse/Muse/
     GridView.swift                 VIRTUALIZED masonry grid — precomputes tile
                                    frames (MasonryGeometry from AspectRatioCache)
                                    and renders only viewport tiles (+overscan);
-                                   column-count slider; water shader when fluidEnabled.
-                                   The ONLY view mode (cloud/galaxy retired 2026-06-13)
+                                   column-count slider; tiles fade in as thumbs
+                                   land. The ONLY grid view (cloud/galaxy retired
+                                   2026-06-13; water effect removed 2026-06-13)
     AspectRatioCache.swift         per-file aspect (h÷w) for layout: bulk DB
                                    width/height + ImageIO header fallback, off-main
-    CollectionsRow.swift           Cosmos-style cards + in-collection editable header
-    TagChipsRow.swift              folder-scoped tag chips; filter + management
+    CollectionsPage.swift          dedicated Collections page (toolbar
+                                   square.stack.3d.up): "Collections" header (back
+                                   arrow, no edit/trash) + 4-up alphabetical card
+                                   grid that resizes to fit, scrolls vertically
+    CollectionsRow.swift           in-collection header only (back/rename/count/
+                                   delete); the all-collections cards moved to
+                                   CollectionsPage 2026-06-13
+    TagChipsRow.swift              tag chips; filter + management. Scopes to the
+                                   active collection's members inside one, else the
+                                   folder (AppState.tagSourceFiles)
     MoodPickerView.swift           background popover (Light/Dark/Auto/Custom)
     InfoSheet.swift                ⓘ About-Muse modal (behavior + privacy)
     KeyCaptureView.swift           NSView arrow/return capture (hero flips)
@@ -387,11 +439,10 @@ Muse/Muse/
                                    aspect ratios — feeds GridView's virtualization
                                    (replaced the old MasonryLayout: Layout, deleted
                                    2026-06-13 — a custom Layout can't virtualize)
-  Fluid/
-    FluidDistortion.metal          existing water-ripple shader (kept)
-    FluidSim.swift                 CPU fluid sim (kept)
+  Fluid/                           (water ripple effect removed 2026-06-13 —
+                                   FluidDistortion.metal + FluidSim.swift deleted)
     BurnUp.metal                   burn-up delete shader (chars edges-in + embers)
-    BurnUpModifier.swift           animatable layerEffect wrapper (chains after water)
+    BurnUpModifier.swift           animatable layerEffect wrapper (delete effect)
   Settings/
     SettingsView.swift             placeholder; real Preferences pane is
                                    future work
@@ -456,11 +507,11 @@ before implementation.
 2. Build & run (Cmd+R). The app starts on a clean shell — click
    "Add Folder" in the sidebar to point Muse at any folder on disk.
 3. Toolbar (left → right): sidebar toggle · sort · show-subfolders ·
-   search (center) · clear-collection (when filtered) · background mood ·
-   water effect · ⓘ About. (The grid/cloud/galaxy view picker was removed
-   2026-06-13 — grid is the only view.) Find Duplicates lives in the File
-   menu; Pin/Unpin Folder and Remove Folder live in the Edit menu; analysis
-   runs automatically.
+   search (center) · Collections (square.stack.3d.up) · background mood ·
+   ⓘ About. (The grid/cloud/galaxy view picker and the water effect were
+   removed 2026-06-13; the clear-collection ✕ was removed in favor of back
+   arrows.) Find Duplicates lives in the File menu; Pin/Unpin Folder and
+   Remove Folder live in the Edit menu; analysis runs automatically.
 4. Sandboxed container path:
    `~/Library/Containers/com.tarrats.Muse/Data/Library/Application Support/Muse/`.
    `muse.sqlite` there; wipe it to rebuild the schema on next launch.
