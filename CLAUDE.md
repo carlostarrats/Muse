@@ -14,7 +14,12 @@ local-first, Apple-Intelligence-native, and free forever.
 - Pricing: **Free**, no IAPs, no subscriptions, no ads
 - Network policy: **Zero**. No analytics, no telemetry, no remote
   fetches. The sandbox doesn't include `network.client` — accidental
-  network access is blocked at the OS level.
+  network access is blocked at the OS level. iCloud Drive *document*
+  sync (used for the optional single "Muse" iCloud folder) is mediated
+  by the OS sync daemon and adds only the iCloud Documents entitlement —
+  **not** `network.client`. The app still makes zero network calls and
+  the developer receives no data, so the "Data Not Collected" privacy
+  label is unchanged.
 - Data collection: **None**. Privacy nutrition label = "Data Not Collected".
 - Min macOS: **14.6** (Vision/PDFKit/AVKit/FSEvents/FTS5 all work).
   Foundation Models is used only to name auto-generated collections,
@@ -208,6 +213,49 @@ lag opening an image). Fixed and trimmed:
   draw — a candidate if any residual scroll hitch remains. Force-decode
   off-main (ImageIO, like `HeroStage.loadFullRes`) if so.
 
+### iCloud sync folder + macOS share session — 2026-06-13 (on `feat/icloud-sync-share`)
+
+Shipped iCloud-backed sync and two share surfaces (spec:
+`docs/superpowers/specs/2026-06-13-icloud-sync-and-macos-share-design.md`,
+plan: `docs/superpowers/plans/2026-06-13-icloud-sync-and-macos-share.md`):
+
+- **Two-zone model** — local zone (today's user-selected security-scoped
+  folders, unchanged) + a new optional iCloud zone: ONE app-managed "Muse"
+  folder in the app's iCloud Drive ubiquity container, auto-discovered on
+  every signed-in device (not re-picked per device). Users may create their
+  own subfolders inside it. Local-only, iCloud-only, and mixed users are
+  all first-class.
+- **Complete portable sidecar** — files in the iCloud folder carry a hidden
+  `.muse/<content_hash>.json` per-asset sidecar (tags, intent, caption,
+  dominant color, palette, dimensions, feature print, analyzed_hash) that
+  rides the same OS sync. On folder load `SidecarHydrator` imports current
+  sidecars into the local DB and sets `analyzed_hash`, so a fresh/iCloud-only
+  device reconstructs the experience WITHOUT re-running Vision. Collections
+  and thumbnails re-derive locally; OCR text is intentionally NOT carried
+  (large; FTS gets basename+caption on hydrate).
+- **iCloud Drive, not CloudKit** — document sync is OS-daemon-mediated, so
+  the app makes zero network calls and adds only the iCloud Documents
+  entitlement (no `network.client`); "Data Not Collected" holds. CloudKit
+  was explicitly rejected (would add a network surface). No live SQLite file
+  is ever placed in iCloud (corruption trap) — the sidecar is JSON snapshots
+  written with NSFileCoordinator.
+- **Conflict handling** — per-asset sidecars keyed by content hash isolate
+  conflicts; merge is last-writer-wins by an `updated_at` metadata timestamp,
+  with manual tags always beating vision tags (preserves invariant Q32).
+- **Share surfaces** — in-app Share button on the hero viewer
+  (`NSSharingServicePicker`: AirDrop/Mail/Messages/Save to Files) for sending
+  an image OUT; and a "Send to Muse" share extension (right-click → Share in
+  Finder) for bringing a file IN to the single iCloud folder, picked up by
+  the existing FolderWatcher.
+- **Still pending Xcode/user steps** — the iCloud Documents + App Groups
+  capabilities and code signing (Task 6), the share-extension target
+  (Task 11), and interactive runtime verification of the sync round-trip +
+  share sheet are done in Xcode by the user (they require the Apple Developer
+  account GUI). The Swift code for everything else is landed and build-verified.
+- **Pre-req fix** — removed orphaned `SimilarityLayoutTests`/`CloudMathTests`
+  (referenced source deleted in the perf session) that were breaking the
+  `MuseTests` target.
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
@@ -237,6 +285,15 @@ Muse/Muse/
     ThumbnailCache.swift           QLThumbnail + AVAssetImageGenerator (videos);
                                    off-main, ordered (top→bottom) load; 2-tier
                                    cache (NSCache 512MB cost + on-disk LRU 2GB)
+    Sidecar.swift                  portable per-asset metadata value type
+                                   (Codable); maps to/from FileRow+TagRow;
+                                   deterministic conflict merge (manual-tag wins)
+    SidecarStore.swift             read/write .muse/<hash>.json with
+                                   NSFileCoordinator (no live SQLite in iCloud)
+    ICloudZone.swift               discover the single app iCloud Drive folder
+                                   (ubiquity container Documents) + membership test
+    SidecarHydrator.swift          import current sidecars into local DB on folder
+                                   load so a fresh/iCloud-only device skips re-Vision
   Database/
     Database.swift                 GRDB queue + migrations (v1…v5_intent)
     Records.swift                  FileRow (+analyzed_hash, +intent), PathRow, TagRow, etc.
@@ -310,6 +367,8 @@ Muse/Muse/
     Viewer/                        hero image viewer (HeroImageViewer, HeroStage,
                                    ViewerInfoColumn, backdrop, geometry, toast,
                                    PillFlow/PillRowModel)
+      ShareButton.swift            macOS share sheet (NSSharingServicePicker)
+                                   for the hero image
     Spatial/
       SeededRandom.swift           SplitMix64 + FNV-1a (kept: grid burn seed +
                                    hero). Cloud/Galaxy views + their layout files
@@ -330,7 +389,12 @@ Muse/Muse/
     SettingsView.swift             placeholder; real Preferences pane is
                                    future work
   Muse.entitlements                app-sandbox + user-selected.read-write +
-                                   bookmarks.app-scope (no network entitlement)
+                                   bookmarks.app-scope + iCloud Documents
+                                   (no network entitlement)
+MuseShareExtension/                (separate app-extension target) "Send to Muse"
+                                   — Finder Share-menu extension; copies dropped
+                                   files into the single iCloud folder, picked up
+                                   by the existing FolderWatcher
 ```
 
 ## Conventions
