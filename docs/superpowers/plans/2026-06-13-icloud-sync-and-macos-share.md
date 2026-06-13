@@ -790,11 +790,15 @@ In `AppState.swift`, near the roots section, add:
 @Published var iCloudFolderURL: URL?
 
 /// Resolve the iCloud folder once at launch and surface it in the sidebar.
+/// Also pushes the URL onto AnalyzePipeline (a real singleton) so the
+/// analyze path can write sidecars without referencing AppState (AppState
+/// is NOT a singleton — it's injected via @EnvironmentObject).
 func discoverICloudZone() {
     Task.detached(priority: .utility) {
         let url = ICloudZone.folderURL()
         await MainActor.run {
             self.iCloudFolderURL = url
+            AnalyzePipeline.shared.iCloudFolder = url
             if let url { self.addICloudRootNode(url) }
         }
     }
@@ -839,12 +843,18 @@ After `analyzeOne` writes the DB, if the file is in the iCloud zone, build a sid
 In `AnalyzePipeline.swift`, add a method:
 
 ```swift
+/// Set by AppState.discoverICloudZone() when the iCloud zone resolves at
+/// launch (nil for local-only users / not signed into iCloud). AnalyzePipeline
+/// is a real singleton; AppState is not, so AppState pushes the value here
+/// rather than the pipeline reaching back into AppState.
+var iCloudFolder: URL?
+
 /// If `url` is in the iCloud zone, export the file's current metadata to a
 /// `.muse/<hash>.json` sidecar so it syncs to other devices. No-op for
-/// local-zone files. Reads the freshly-written FileRow + tags back out.
+/// local-zone files / when iCloudFolder is nil. Reads the freshly-written
+/// FileRow + tags back out; does the file write off the main actor.
 private func writeSidecarIfICloud(fileID: String, url: URL) async {
-    let folder = await AppState.shared.iCloudFolderURL
-    guard ICloudZone.contains(url, folder: folder) else { return }
+    guard ICloudZone.contains(url, folder: iCloudFolder) else { return }
     guard let queue = Database.shared.dbQueue else { return }
     let now = Int64(Date().timeIntervalSince1970)
     let bundle: (FileRow, [TagRow])? = try? await queue.read { db in
@@ -855,12 +865,13 @@ private func writeSidecarIfICloud(fileID: String, url: URL) async {
     }
     guard let (file, tags) = bundle,
           let sidecar = Sidecar.build(from: file, tags: tags, updatedAt: now) else { return }
-    do { try SidecarStore.write(sidecar, forAsset: url) }
-    catch { print("[AnalyzePipeline] sidecar write failed: \(error)") }
+    // Sidecar + URL are Sendable; write off-main so the (tiny) coordinated
+    // disk write never blocks the main actor.
+    await Task.detached { try? SidecarStore.write(sidecar, forAsset: url) }.value
 }
 ```
 
-(Confirm `AppState.shared` exists; the file header says AppState is a `@MainActor` singleton. If the singleton accessor has a different name, use it.)
+`iCloudFolder` is a plain stored property on the `@MainActor` `AnalyzePipeline` singleton; AppState sets it in `discoverICloudZone()` (Task 8). The single-file `analyze(file:)` path may run before it's set — that's fine, the sidecar write simply no-ops until the URL is known.
 
 - [ ] **Step 2: Call it at the end of `analyzeOne`**
 
