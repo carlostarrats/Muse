@@ -471,6 +471,7 @@ final class AppState: ObservableObject {
     /// already-analyzed files are provably skipped.
     private func scheduleIndexing(for url: URL) {
         let files = currentFiles
+        let icloud = iCloudFolderURL
         Task.detached(priority: .userInitiated) {
             let pairs = files.compactMap { f -> (URL, AssetKind)? in
                 guard f.kind != .folder, f.kind.hasNativeViewer || f.kind == .archive else { return nil }
@@ -487,6 +488,7 @@ final class AppState: ObservableObject {
                 .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd || $0.kind == .svg }
                 .map { $0.url }
             await ThumbnailCache.shared.prewarmToDisk(thumbURLs)
+            await SidecarHydrator.hydrate(urls: imageURLs, folder: icloud)
             await AnalyzePipeline.shared.analyzePending(in: imageURLs)
         }
     }
