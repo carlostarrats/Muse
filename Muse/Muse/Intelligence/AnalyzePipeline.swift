@@ -23,6 +23,12 @@ final class AnalyzePipeline: ObservableObject {
     @Published var completed: Int = 0
     @Published var total: Int = 0
 
+    /// Set by AppState.discoverICloudZone() when the iCloud zone resolves at
+    /// launch (nil for local-only users / not signed into iCloud). AnalyzePipeline
+    /// is a real singleton; AppState is not, so AppState pushes the value here
+    /// rather than the pipeline reaching back into AppState.
+    var iCloudFolder: URL?
+
     private init() {}
 
     // MARK: - File-level
@@ -114,6 +120,27 @@ final class AnalyzePipeline: ObservableObject {
     }
 
     // MARK: - Per-file
+
+    /// If `url` is in the iCloud zone, export the file's current metadata to a
+    /// `.muse/<hash>.json` sidecar so it syncs to other devices. No-op for
+    /// local-zone files / when iCloudFolder is nil. Reads the freshly-written
+    /// FileRow + tags back out; does the file write off the main actor.
+    private func writeSidecarIfICloud(fileID: String, url: URL) async {
+        guard ICloudZone.contains(url, folder: iCloudFolder) else { return }
+        guard let queue = Database.shared.dbQueue else { return }
+        let now = Int64(Date().timeIntervalSince1970)
+        let bundle: (FileRow, [TagRow])? = try? await queue.read { db -> (FileRow, [TagRow])? in
+            guard let file = try FileRow.filter(FileRow.Columns.id == fileID).fetchOne(db)
+            else { return nil }
+            let tags = try TagRow.filter(TagRow.Columns.file_id == fileID).fetchAll(db)
+            return (file, tags)
+        }
+        guard let (file, tags) = bundle,
+              let sidecar = Sidecar.build(from: file, tags: tags, updatedAt: now) else { return }
+        // Sidecar + URL are Sendable; write off-main so the (tiny) coordinated
+        // disk write never blocks the main actor.
+        await Task.detached { try? SidecarStore.write(sidecar, forAsset: url) }.value
+    }
 
     private func analyzeOne(fileID: String, url: URL) async {
         // Skip non-image kinds; Vision pipeline only handles images
@@ -218,5 +245,7 @@ final class AnalyzePipeline: ObservableObject {
                 }
             }
         }
+
+        await writeSidecarIfICloud(fileID: fileID, url: url)
     }
 }
