@@ -206,6 +206,7 @@ struct HeroImageViewer: View {
             zoomPill
             if zoom > 1.001 { fitButton }
             Spacer()
+            ShareButton(url: currentURL)
             if zoom <= 1.001 { closeButton }
         }
         .frame(width: ViewerGeometry.columnWidth)
