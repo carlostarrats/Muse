@@ -38,7 +38,7 @@ struct ContentView: View {
                         case .cloud:
                             CloudView()
                         case .graph:
-                            GraphView()
+                            GalaxyView()
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
