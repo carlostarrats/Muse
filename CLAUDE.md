@@ -65,6 +65,7 @@ are the load-bearing reference artifacts.
 | Polish 5 — cloud rework (3D orbit ball) + galaxy view (similarity cloud, replaces graph) | ✅ shipped | `main` |
 | Polish 6 — screenshot intent collections + Galaxy taste-map (color by intent) | ✅ shipped | `main` |
 | Polish 7 — grid virtualization (perf) + thumbnail prewarm; cloud/galaxy views removed | ✅ shipped | `main` |
+| Polish 8 — iCloud sync folder (portable `.muse` sidecars, no re-Vision) + macOS share (Share button + "Send to Muse" extension) | ✅ shipped | `feat/icloud-sync-share` |
 
 `feat/file-viewer-rewrite` was merged to `main` after Phase 8
 finished — see the merge commit. The branch was kept around as an
@@ -247,11 +248,17 @@ plan: `docs/superpowers/plans/2026-06-13-icloud-sync-and-macos-share.md`):
   an image OUT; and a "Send to Muse" share extension (right-click → Share in
   Finder) for bringing a file IN to the single iCloud folder, picked up by
   the existing FolderWatcher.
-- **Still pending Xcode/user steps** — the iCloud Documents + App Groups
-  capabilities and code signing (Task 6), the share-extension target
-  (Task 11), and interactive runtime verification of the sync round-trip +
-  share sheet are done in Xcode by the user (they require the Apple Developer
-  account GUI). The Swift code for everything else is landed and build-verified.
+- **Xcode setup (done)** — iCloud Documents + App Groups capabilities + signing
+  (team `TV4QZT7A7X`, container `iCloud.com.tarrats.Muse`, group
+  `group.com.tarrats.Muse`) added to both the Muse target and a new
+  `MuseShareExtension` macOS Share Extension target (shows as "Muse" in the
+  Share menu). The Muse folder is published to Finder's iCloud Drive via
+  `NSUbiquitousContainers` in `Muse/Info.plist` (at SRCROOT, outside the
+  synchronized group; `INFOPLIST_FILE` + `GENERATE_INFOPLIST_FILE`), and
+  `CFBundleVersion` was bumped to 2 so iCloud re-read it. The analyze→sidecar
+  round-trip was verified on a real file (a `.muse/<hash>.json` was written).
+  See memory `muse-icloud-folder-gotchas` for the empty-folder / version-bump /
+  TCC pitfalls.
 - **Pre-req fix** — removed orphaned `SimilarityLayoutTests`/`CloudMathTests`
   (referenced source deleted in the perf session) that were breaking the
   `MuseTests` target.
