@@ -138,8 +138,12 @@ final class AnalyzePipeline: ObservableObject {
         guard let (file, tags) = bundle,
               let sidecar = Sidecar.build(from: file, tags: tags, updatedAt: now) else { return }
         // Sidecar + URL are Sendable; write off-main so the (tiny) coordinated
-        // disk write never blocks the main actor.
-        await Task.detached { try? SidecarStore.write(sidecar, forAsset: url) }.value
+        // disk write never blocks the main actor. Log on failure — a silent
+        // write failure would silently defeat the "no re-Vision on sync" promise.
+        await Task.detached {
+            do { try SidecarStore.write(sidecar, forAsset: url) }
+            catch { print("[AnalyzePipeline] sidecar write failed for \(url.lastPathComponent): \(error)") }
+        }.value
     }
 
     private func analyzeOne(fileID: String, url: URL) async {

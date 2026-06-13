@@ -475,6 +475,18 @@ before implementation.
   - Settings/Preferences pane (placeholder only).
   - Top-edge "gradual blur" effect: attempted and reverted; prototype
     reference kept at `docs/superpowers/assets/gradual-blur-prototype.html`.
+  - iCloud sidecar hydration — two inherent (by-design, not bugs) behaviors:
+    (1) **OCR full-text search is degraded on hydrate-only devices.** Sidecars
+    don't carry OCR text (large; intentionally excluded), so a device that only
+    hydrated a file (never ran Vision locally) matches FTS on basename + caption
+    only, not OCR'd text. The file is marked analyzed, so it won't re-Vision to
+    recover OCR. Intent IS carried, so intent collections are unaffected.
+    (2) **Duplicate identical content split across subfolders.** Sidecars live
+    in a per-folder `.muse/` keyed by content hash; byte-identical files in
+    different subfolders of the iCloud zone only get a sidecar beside the copy
+    that was analyzed, so the other copy won't hydrate on a fresh device until
+    its own analyze pass runs. A future fix would be a single zone-root `.muse/`
+    index instead of per-folder.
 
 ## Working with this codebase
 
