@@ -17,8 +17,9 @@ local-first, Apple-Intelligence-native, and free forever.
   network access is blocked at the OS level.
 - Data collection: **None**. Privacy nutrition label = "Data Not Collected".
 - Min macOS: **14.6** (Vision/PDFKit/AVKit/FSEvents/FTS5 all work).
-  Foundation Models chat panel is capability-gated to Apple Intelligence
-  Macs (macOS 26+).
+  Foundation Models is used only to name auto-generated collections,
+  capability-gated to Apple Intelligence Macs (macOS 26+); the in-app
+  chat panel was retired (see the 2026-06-12 session log).
 - Primary user persona: **generalist** — managing a Downloads folder,
   Documents, miscellaneous archives. Defaults bend to fast Quick Look
   + Open With; AI features available but not the front door.
@@ -61,53 +62,104 @@ are the load-bearing reference artifacts.
 finished — see the merge commit. The branch was kept around as an
 audit trail of the per-phase progression.
 
-## Architecture map (post-Phase-8)
+### Post-polish session — 2026-06-12 (on `main`)
+
+A long live-review pass. Landed:
+
+- **Hero viewer polish** — late-Colors-card jump fixed, toolbar
+  returns animated with the close flight, same-frame tile handoff (no
+  landing blink), square corners on image tiles + stage, zoom backing
+  card behind the right rail.
+- **Collections, redesigned** — Cosmos-style 312pt cards with a 3×2
+  cover mosaic, name + count; the COLLECTIONS header and ⌘K overlay are
+  gone (scrollable row replaced both). Opening a collection shows ALL
+  members library-wide (not the folder intersection) with an editable
+  header (rename/delete + warning). Counts are alive-aware: deleting
+  images or removing folders shrinks/hides collections automatically.
+- **Tag chips row** above the grid — folder-scoped top tags; tap to
+  filter, hover for count (no-reflow neighbor condense). Full tag
+  management (add from a tile, rename/delete a label globally) plus
+  menu-bar Tags/Collections commands for accessibility.
+- **Automatic intelligence** — the ✨ Analyze button is gone. After
+  indexing, the Vision pipeline runs automatically on new/changed
+  images only (gated by `files.analyzed_hash` vs `content_hash`).
+  Indexer has a size+mtime fast path so folder revisits are instant.
+  180-day retention housekeeping (`Housekeeping.swift`) purges index
+  data for files unreachable from any sidebar folder.
+- **Background moods, reworked** — Light / Dark / Auto (day↔night by
+  clock) / Custom (HSB sliders), one popover (`MoodPickerView`).
+  AutoTint (content-dominant blend) retired.
+- **Shell cleanup** — window title + breadcrumb removed; sort + show-
+  subfolders moved left of search; Find Duplicates → File menu;
+  Show-Details panel removed (viewer info column covers it); ⓘ About
+  sheet (`InfoSheet`) explains the behind-the-scenes behavior. Bottom-
+  center glass status pills (Analyzing → Indexing → Loading images),
+  bottom-right column-count slider, off-main throttled thumbnails with
+  top-to-bottom ordered loading, video thumbnails from a ~1s frame,
+  BGRA→RGB palette fix.
+- **Not shipped** — a top-edge "gradual blur" effect was attempted at
+  length and fully reverted; the only artifact kept is
+  `docs/superpowers/assets/gradual-blur-prototype.html` (an approved
+  visual reference for any future attempt). Per-element SwiftUI
+  `.layerEffect`/`.visualEffect` is the wrong tool for a fixed-viewport
+  overlay effect — it breaks container views and only touches elements
+  currently in the band.
+
+## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
 Muse/Muse/
-  App/
-    MuseApp.swift                  entry point; starts fluidSim, runs ThumbnailCache LRU prune
-    ContentView.swift              NavigationSplitView shell; toolbar wires every feature
+  MuseApp.swift                    entry point; ThumbnailCache LRU prune +
+                                   180-day Housekeeping prune on launch
+  ContentView.swift                NavigationSplitView shell; floating tag
+                                   chips; toolbar; menu-bar Tags/Collections
   Models/
     AppState.swift                 @MainActor singleton — roots, active folder,
                                    current files, selected file, sort mode,
-                                   search state, view mode, fluid + chat state
+                                   search, view mode, collection + tag filters,
+                                   mood, fluid state
     AssetKind.swift                kind enum + extension/UTType detection
     FileNode.swift                 in-memory enumerated-file value type
     Root.swift                     security-scoped bookmark wrapper
     DeleteCoordinator.swift        burn-delete state machine: trash + undo toast
-    Mood.swift                     background moods (Ink/Paper/Navy/Blush/Auto)
-    AutoTint.swift                 Auto mood — dominant-color blend + DB query
+    Mood.swift                     Light / Dark / Auto (day↔night) / Custom HSB
+                                   (AutoTint retired)
   Filesystem/
     BookmarkStore.swift            UserDefaults-backed root bookmarks; lifecycle
                                    start/stop access for sandbox
     FolderTree.swift               lazy hierarchical tree + FolderReader
     FolderWatcher.swift            FSEvents-backed live watcher
     StarStore.swift                SQLite-backed starred folders
-    ThumbnailCache.swift           QLThumbnailGenerator + 2-tier cache
-                                   (NSCache + on-disk, LRU at 2GB cap)
+    ThumbnailCache.swift           QLThumbnail + AVAssetImageGenerator (videos);
+                                   off-main, ordered (top→bottom) load; 2-tier
+                                   cache (NSCache 512MB cost + on-disk LRU 2GB)
   Database/
-    Database.swift                 GRDB queue + migrations (v1 schema)
-    Records.swift                  FileRow, PathRow, TagRow, etc.
-    SearchService.swift            FTS5 + tag-label search with scope
-    TagStore.swift                 manual/vision tag CRUD honoring Q32
+    Database.swift                 GRDB queue + migrations (v1…v4_auto_analyze)
+    Records.swift                  FileRow (+analyzed_hash), PathRow, TagRow, etc.
+    SearchService.swift            FTS5 + tag-label search (sidebar-folder scope)
+    TagStore.swift                 manual/vision tag CRUD + global rename/delete
+    Housekeeping.swift             launch prune: index data for files unreachable
+                                   from any sidebar folder, unseen >180 days
   Indexing/
-    HashService.swift              streaming SHA-256
-    Indexer.swift                  identity reconciliation matrix (§4)
+    HashService.swift              streaming SHA-256; nil on dataless iCloud reads
+    Indexer.swift                  identity reconciliation matrix (§4); size+mtime
+                                   fast path; skips not-downloaded iCloud items
   Intelligence/
     Vision/
       VisionServices.swift         classify/OCR/faces/feature print/dom color
                                    + CaptionBuilder (Vision-derived, NOT LLM)
     Sort/
-      SmartSorter.swift            8 sort modes; smart sorts pull FileRow data
+      SmartSorter.swift            7 sort modes; Color + Shape pull FileRow data
     Dedup/
       DuplicateFinder.swift        byte-exact + visual + filename clusterers
                                    with smart-suggest only where signal is strong
-    Chat/
-      ChatService.swift            Foundation Models, capability-gated;
-                                   context-prompted Q&A (no tool calls in v1)
-    AnalyzePipeline.swift          orchestrates the Vision pipeline + writes
-                                   to FileRow, tags, FTS5
+    Core/
+      PaletteExtractor.swift       k-means palette (RGBA-redraw; BGRA bug fixed)
+      CollectionNaming.swift       Foundation Models namer (gated) → tag fallback
+    Collections/
+      CollectionsEngine.swift      clustering + reconcile; CollectionStore CRUD
+    AnalyzePipeline.swift          AUTOMATIC after indexing — analyzes only stale
+                                   analyzed_hash files; writes FileRow, tags, FTS5
   Agents/
     AppIntents/
       MuseAppIntents.swift         OpenFolder/FindDuplicates/AnalyzeFolder/
@@ -124,16 +176,22 @@ Muse/Muse/
     ViewerChrome.swift             dimmed bg + close button + Esc dismiss
   Views/
     SidebarView.swift              multi-root OutlineGroup tree + starred section
-    GridView.swift                 LazyVGrid, kind-aware icons, water shader
-                                   layerEffect when fluidEnabled
-    BreadcrumbView.swift           toolbar path breadcrumb
+    GridView.swift                 MasonryLayout grid; column-count slider; water
+                                   shader layerEffect when fluidEnabled
+    CollectionsRow.swift           Cosmos-style cards + in-collection editable header
+    TagChipsRow.swift              folder-scoped tag chips; filter + management
+    MoodPickerView.swift           background popover (Light/Dark/Auto/Custom)
+    InfoSheet.swift                ⓘ About-Muse modal (behavior + privacy)
+    KeyCaptureView.swift           NSView arrow/return capture (hero flips)
+    BreadcrumbView.swift           path breadcrumb (kept; not in toolbar)
     OpenWithMenu.swift             NSWorkspace registered apps via LaunchServices
-    ImageViewer.swift              fit/100% preview overlay
+    ImageDetailPanel.swift         fit/100% preview overlay
     QuickLookFallback.swift        QLPreviewView wrapper
     ViewerRouter.swift             AssetKind → viewer dispatch
-    DetailPanelView.swift          right-side metadata + tag panel + Analyze
     DuplicatesView.swift           review pane with delete-to-Trash
-    ChatPanelView.swift            collapsible chat panel
+    Viewer/                        hero image viewer (HeroImageViewer, HeroStage,
+                                   ViewerInfoColumn, backdrop, geometry, toast,
+                                   PillFlow/PillRowModel)
     Spatial/
       SeededRandom.swift           SplitMix64 + FNV-1a for launch-stable layouts
       CloudPose.swift              25 measured reference poses + stage constants
@@ -146,8 +204,8 @@ Muse/Muse/
       GraphModel.swift             scoped clusters + shared-tag edges + distances
       GraphView.swift              knowledge graph (replaces GlobeView)
   Components/
-    SearchBar.swift                debounced FTS5 search with scope toggle
-    MasonryLayout.swift            (kept for future use)
+    SearchBar.swift                debounced FTS5 search, scoped to sidebar folder
+    MasonryLayout.swift            aspect-true jigsaw grid (recompute every pass)
   Fluid/
     FluidDistortion.metal          existing water-ripple shader (kept)
     FluidSim.swift                 CPU fluid sim (kept)
@@ -170,7 +228,11 @@ Muse/Muse/
   mutates `id` in place. `let` rows fail to compile.
 - **Manual tags beat vision tags** on label conflict (Q32). Enforced
   via `UNIQUE(file_id, label)` + branching in `Indexer.unionTags` and
-  `AnalyzePipeline.analyzeOne`.
+  `AnalyzePipeline.analyzeOne`. This is what makes automatic re-analysis
+  safe — it can never undo a user's tag edit.
+- **Analysis is automatic + incremental** — it runs after indexing for
+  files whose `analyzed_hash` ≠ `content_hash` (new/changed only); never
+  re-processes unchanged files. There is no user-facing "Analyze" button.
 - **Files are never deleted, only moved to Trash** via
   `NSWorkspace.shared.recycle`. Don't `unlink` user files. Ever.
 - **No editing UI** — every "edit this" path goes through Open With…
@@ -189,23 +251,32 @@ Muse/Muse/
 
 ## Open product questions (none currently)
 
-All Q1–Q33 from the plan are locked in. Future product decisions
-should be recorded in `docs/superpowers/plans/file-viewer-rewrite.md`
-(or a sibling plan doc) before implementation.
+All Q1–Q33 from the plan are locked in, with two superseded by the
+2026-06-12 session:
+
+- **Q10 (analysis manual-only)** — superseded. Analysis now runs
+  automatically after indexing, incrementally (stale `analyzed_hash`).
+- **Q9 / Phase 7 (chat panel)** — retired. The differentiating version
+  is tool-calling; the v1 context-prompted panel was removed. History
+  holds it for when that phase happens.
+
+Future product decisions should be recorded in
+`docs/superpowers/plans/file-viewer-rewrite.md` (or a sibling plan doc)
+before implementation.
 
 ## How to run
 
 1. Open `Muse/Muse.xcodeproj` in Xcode 16+.
 2. Build & run (Cmd+R). The app starts on a clean shell — click
    "Add Folder" in the sidebar to point Muse at any folder on disk.
-3. Toolbar buttons (left → right): breadcrumb · search · grid/cloud/graph ·
-   sort · subfolders · analyze · find duplicates · details · chat
-   (when AI-capable) · water effect.
-4. Database lives at `~/Library/Application Support/Muse/muse.sqlite`.
-   Wipe by deleting that file; the app rebuilds the schema on next
-   launch.
-5. ThumbnailCache: `~/Library/Application Support/Muse/ThumbnailCache/`.
-   Capped at 2GB, LRU-evicted on launch.
+3. Toolbar (left → right): sidebar toggle · sort · show-subfolders ·
+   search (center) · grid/cloud/graph picker · clear-collection (when
+   filtered) · background mood · water effect · ⓘ About. Find Duplicates
+   lives in the File menu; analysis runs automatically (no button).
+4. Sandboxed container path:
+   `~/Library/Containers/com.tarrats.Muse/Data/Library/Application Support/Muse/`.
+   `muse.sqlite` there; wipe it to rebuild the schema on next launch.
+5. ThumbnailCache lives beside it; capped at 2GB, LRU-evicted on launch.
 
 ## Status as of merge to main
 
@@ -215,11 +286,14 @@ should be recorded in `docs/superpowers/plans/file-viewer-rewrite.md`
 - Test coverage: none. (Test suites are a separate workstream.)
 - Known soft spots:
   - Code syntax highlighting (renders as plain monospaced for now).
-  - iCloud Drive UI (download-state badges deferred).
+  - iCloud Drive: dataless files are skipped on index/hash until
+    downloaded (no empty-hash corruption); download-state badges deferred.
   - Saved smart searches (schema exists; UI is post-v1).
   - Archive browse-without-extracting (uses Quick Look).
   - Onboarding flow (separate design pass needed).
   - Settings/Preferences pane (placeholder only).
+  - Top-edge "gradual blur" effect: attempted and reverted; prototype
+    reference kept at `docs/superpowers/assets/gradual-blur-prototype.html`.
 
 ## Working with this codebase
 

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Muse — gradual blur prototype</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+  body { background: #f4f3f1; overflow: hidden; }
+
+  /* ===== stage: mimics the Muse main page ===== */
+  .stage { position: relative; height: 100vh; overflow: hidden; }
+
+  .scroller { height: 100%; overflow-y: auto; padding: 84px 24px 40px; }
+
+  /* chips row — floats at top, no bar behind it */
+  .chips {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; gap: 8px; padding: 14px 16px;
+    z-index: 2000; pointer-events: none;
+    overflow: hidden;
+  }
+  .chip {
+    pointer-events: auto;
+    font-size: 13px; font-weight: 500; color: #555;
+    background: rgba(0,0,0,0.07);
+    padding: 7px 14px; border-radius: 999px; white-space: nowrap;
+    cursor: pointer;
+  }
+  .chip.sel { background: #1c1c1e; color: #fff; }
+
+  /* masonry of placeholder "images" */
+  .grid { columns: 5; column-gap: 10px; }
+  .tile {
+    break-inside: avoid; margin-bottom: 10px;
+    width: 100%; border-radius: 0;
+    display: block;
+  }
+
+  /* ===== GradualBlur container (filled by JS, literal component port) ===== */
+  .gradual-blur {
+    position: absolute; top: 0; left: 0; right: 0;
+    pointer-events: none; z-index: 1000;
+  }
+  .gradual-blur-inner { position: relative; width: 100%; height: 100%; }
+  .gradual-blur-inner > div { position: absolute; inset: 0; }
+
+  /* ===== param panel ===== */
+  .panel {
+    position: fixed; right: 16px; bottom: 16px; z-index: 3000;
+    background: rgba(28,28,30,0.92); color: #eee; border-radius: 12px;
+    padding: 14px 16px; font-size: 12px; width: 230px;
+    backdrop-filter: blur(10px);
+  }
+  .panel label { display: flex; justify-content: space-between; align-items: center; margin: 8px 0 2px; color: #aaa; }
+  .panel input[type=range] { width: 100%; }
+  .panel select, .panel input[type=checkbox] { accent-color: #4c8dff; }
+  .panel .val { color: #fff; font-variant-numeric: tabular-nums; }
+  .panel h3 { font-size: 12px; font-weight: 600; margin-bottom: 4px; color: #fff; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="scroller" id="scroller">
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <div class="chips" id="chips"></div>
+
+  <!-- GradualBlur mounts here -->
+  <div class="gradual-blur gradual-blur-parent" id="gblur">
+    <div class="gradual-blur-inner" id="gblur-inner"></div>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>GradualBlur params</h3>
+  <label>height <span class="val" id="v-height">7rem</span></label>
+  <input type="range" id="p-height" min="3" max="16" step="0.5" value="7">
+  <label>strength <span class="val" id="v-strength">2</span></label>
+  <input type="range" id="p-strength" min="0.5" max="6" step="0.25" value="2">
+  <label>divCount <span class="val" id="v-div">5</span></label>
+  <input type="range" id="p-div" min="2" max="12" step="1" value="5">
+  <label>curve
+    <select id="p-curve">
+      <option>linear</option>
+      <option selected>bezier</option>
+      <option>ease-in</option>
+      <option>ease-out</option>
+      <option>ease-in-out</option>
+    </select>
+  </label>
+  <label>exponential <input type="checkbox" id="p-exp" checked></label>
+  <label>opacity <span class="val" id="v-op">1</span></label>
+  <input type="range" id="p-op" min="0.2" max="1" step="0.05" value="1">
+</div>
+
+<script>
+/* ===== placeholder tiles: local, no network — gradients, type, patterns ===== */
+const palettes = [
+  ['#3a4a7c','#7ca0d6'], ['#b8552f','#e8b07a'], ['#2e6b4f','#9fd0a8'],
+  ['#6b3158','#c87ba6'], ['#22222a','#5a5a72'], ['#c2b49a','#efe7d4'],
+  ['#9c2f2f','#e08585'], ['#33687c','#8fc3d4'], ['#7a6c2f','#d6c87c'],
+  ['#4c4cd6','#9a9aff'], ['#111','#444'], ['#d6d2c8','#f5f2ea'],
+];
+const words = ['SYMPOSIUM','Calm','MUSE','the next chapter','Prada','10–18 UHR',
+               'Dutch Design Week','vocation brewery','metanoia','HALL OF FAME',
+               'Liminal spaces','visions'];
+const grid = document.getElementById('grid');
+for (let i = 0; i < 90; i++) {
+  const h = 120 + ((i * 73) % 220);
+  const [a, b] = palettes[i % palettes.length];
+  const c = document.createElement('canvas');
+  c.className = 'tile';
+  c.width = 300; c.height = h;
+  const x = c.getContext('2d');
+  const g = x.createLinearGradient(0, 0, (i % 3) * 150, h);
+  g.addColorStop(0, a); g.addColorStop(1, b);
+  x.fillStyle = g; x.fillRect(0, 0, 300, h);
+  // texture: stripes / dots / type so the blur has detail to melt
+  if (i % 4 === 0) {
+    x.fillStyle = 'rgba(255,255,255,0.55)';
+    for (let s = 0; s < 300; s += 18) x.fillRect(s, 0, 4, h);
+  } else if (i % 4 === 1) {
+    x.fillStyle = 'rgba(0,0,0,0.35)';
+    for (let yy = 8; yy < h; yy += 20)
+      for (let xx = 8; xx < 300; xx += 20) { x.beginPath(); x.arc(xx, yy, 3, 0, 7); x.fill(); }
+  } else if (i % 4 === 2) {
+    x.fillStyle = i % 8 === 2 ? '#fff' : '#111';
+    x.font = `${18 + (i % 4) * 8}px Georgia`;
+    x.fillText(words[i % words.length], 14, h / 2);
+    x.font = '11px -apple-system';
+    x.fillText('placeholder · ' + i, 14, h / 2 + 22);
+  } else {
+    x.strokeStyle = 'rgba(255,255,255,0.5)'; x.lineWidth = 2;
+    x.beginPath();
+    for (let xx = 0; xx <= 300; xx += 6)
+      x.lineTo(xx, h/2 + Math.sin(xx / 18 + i) * h * 0.3);
+    x.stroke();
+  }
+  grid.appendChild(c);
+}
+
+/* chips */
+const labels = ['All','gray','document','photo','screenshot','white','outdoor',
+                'orange','people','sky','yellow','machine','beige','plant','adult','purse'];
+const chips = document.getElementById('chips');
+labels.forEach((l, i) => {
+  const d = document.createElement('div');
+  d.className = 'chip' + (i === 0 ? ' sel' : '');
+  d.textContent = l;
+  chips.appendChild(d);
+});
+
+/* ===== GradualBlur — literal port of the component's blurDivs logic ===== */
+const CURVES = {
+  linear: p => p,
+  bezier: p => p * p * (3 - 2 * p),
+  'ease-in': p => p * p,
+  'ease-out': p => 1 - Math.pow(1 - p, 2),
+  'ease-in-out': p => (p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2),
+};
+
+function rebuild() {
+  const height = parseFloat(document.getElementById('p-height').value);
+  const strength = parseFloat(document.getElementById('p-strength').value);
+  const divCount = parseInt(document.getElementById('p-div').value);
+  const curve = document.getElementById('p-curve').value;
+  const exponential = document.getElementById('p-exp').checked;
+  const opacity = parseFloat(document.getElementById('p-op').value);
+
+  document.getElementById('v-height').textContent = height + 'rem';
+  document.getElementById('v-strength').textContent = strength;
+  document.getElementById('v-div').textContent = divCount;
+  document.getElementById('v-op').textContent = opacity;
+
+  const container = document.getElementById('gblur');
+  container.style.height = height + 'rem';
+
+  const inner = document.getElementById('gblur-inner');
+  inner.innerHTML = '';
+  const increment = 100 / divCount;
+  const curveFunc = CURVES[curve] || CURVES.linear;
+
+  for (let i = 1; i <= divCount; i++) {
+    let progress = i / divCount;
+    progress = curveFunc(progress);
+
+    let blurValue;
+    if (exponential) {
+      blurValue = Math.pow(2, progress * 4) * 0.0625 * strength;
+    } else {
+      blurValue = 0.0625 * (progress * divCount + 1) * strength;
+    }
+
+    const p1 = Math.round((increment * i - increment) * 10) / 10;
+    const p2 = Math.round(increment * i * 10) / 10;
+    const p3 = Math.round((increment * i + increment) * 10) / 10;
+    const p4 = Math.round((increment * i + increment * 2) * 10) / 10;
+
+    let gradient = `transparent ${p1}%, black ${p2}%`;
+    if (p3 <= 100) gradient += `, black ${p3}%`;
+    if (p4 <= 100) gradient += `, transparent ${p4}%`;
+
+    const div = document.createElement('div');
+    div.style.maskImage = `linear-gradient(to top, ${gradient})`;
+    div.style.webkitMaskImage = `linear-gradient(to top, ${gradient})`;
+    div.style.backdropFilter = `blur(${blurValue.toFixed(3)}rem)`;
+    div.style.webkitBackdropFilter = `blur(${blurValue.toFixed(3)}rem)`;
+    div.style.opacity = opacity;
+    inner.appendChild(div);
+  }
+}
+
+document.querySelectorAll('.panel input, .panel select')
+  .forEach(el => el.addEventListener('input', rebuild));
+
+/* URL params for deterministic harness runs:
+   ?height=4&strength=1.25&div=6&curve=ease-in&exp=1&op=1&seed=1&scroll=600 */
+const q = new URLSearchParams(location.search);
+if (q.has('height')) document.getElementById('p-height').value = q.get('height');
+if (q.has('strength')) document.getElementById('p-strength').value = q.get('strength');
+if (q.has('div')) document.getElementById('p-div').value = q.get('div');
+if (q.has('curve')) document.getElementById('p-curve').value = q.get('curve');
+if (q.has('exp')) document.getElementById('p-exp').checked = q.get('exp') !== '0';
+if (q.has('op')) document.getElementById('p-op').value = q.get('op');
+if (q.has('panel') && q.get('panel') === '0')
+  document.querySelector('.panel').style.display = 'none';
+rebuild();
+if (q.has('scroll'))
+  document.getElementById('scroller').scrollTop = parseFloat(q.get('scroll'));
+
+/* Ground-truth stamp: every capture shows exactly what state rendered. */
+const stamp = document.createElement('div');
+stamp.style.cssText = 'position:fixed;left:6px;bottom:6px;z-index:5000;' +
+  'font:11px monospace;color:#fff;background:#c00;padding:2px 6px;border-radius:4px';
+const fmt = () => 'h=' + document.getElementById('p-height').value +
+  ' s=' + document.getElementById('p-strength').value +
+  ' d=' + document.getElementById('p-div').value +
+  ' c=' + document.getElementById('p-curve').value +
+  ' e=' + (document.getElementById('p-exp').checked ? 1 : 0) +
+  ' y=' + Math.round(document.getElementById('scroller').scrollTop);
+stamp.textContent = fmt();
+document.body.appendChild(stamp);
+setInterval(() => stamp.textContent = fmt(), 300);
+</script>
+</body>
+</html>
