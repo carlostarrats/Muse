@@ -213,6 +213,16 @@ final class Database {
             }
         }
 
+        migrator.registerMigration("v5_intent") { db in
+            // Screenshot intent typing: a per-file bucket + the classifier
+            // version that produced it. Both nullable; populated lazily by the
+            // analyze pipeline and a one-time backfill.
+            try db.alter(table: "files") { t in
+                t.add(column: "intent", .text)
+                t.add(column: "intent_model_version", .text)
+            }
+        }
+
         return migrator
     }
 }

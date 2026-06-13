@@ -17,6 +17,7 @@ import simd
 struct GalaxyNode {
     let path: String
     let fileID: String
+    let intent: String?
 }
 
 struct GalaxyLabel {
@@ -92,16 +93,18 @@ enum GalaxyModel {
             let ids = ordered.map(\.fileID)
             var printByID: [String: Data] = [:]
             var paletteByID: [String: String] = [:]
+            var intentByID: [String: String] = [:]
             for chunk in chunks(ids, 500) {
                 let marks = chunk.map { _ in "?" }.joined(separator: ",")
                 let rows = try Row.fetchAll(db, sql: """
-                    SELECT id, feature_print, palette FROM files
+                    SELECT id, feature_print, palette, intent FROM files
                     WHERE id IN (\(marks))
                     """, arguments: StatementArguments(chunk))
                 for r in rows {
                     let id: String = r["id"]
                     if let d: Data = r["feature_print"] { printByID[id] = d }
                     if let p: String = r["palette"] { paletteByID[id] = p }
+                    if let it: String = r["intent"] { intentByID[id] = it }
                 }
             }
 
@@ -116,12 +119,13 @@ enum GalaxyModel {
             }
 
             return Fetched(ordered: ordered, printByID: printByID,
-                           paletteByID: paletteByID, vectorByID: vectorByID)
+                           paletteByID: paletteByID, vectorByID: vectorByID,
+                           intentByID: intentByID)
         }
 
         guard fetched.ordered.count > 1 else {
             // 0 or 1 usable images — nothing to arrange.
-            let nodes = fetched.ordered.map { GalaxyNode(path: $0.path, fileID: $0.fileID) }
+            let nodes = fetched.ordered.map { GalaxyNode(path: $0.path, fileID: $0.fileID, intent: fetched.intentByID[$0.fileID]) }
             return GalaxyData(nodes: nodes,
                               positions: nodes.isEmpty ? [] : [SIMD3(0, 0, 0)],
                               edges: [], labels: [], totalInScope: total)
@@ -142,8 +146,9 @@ enum GalaxyModel {
         var printByID: [String: Data]
         var paletteByID: [String: String]
         var vectorByID: [String: Data]
+        var intentByID: [String: String]
         static let empty = Fetched(ordered: [], printByID: [:], paletteByID: [:],
-                                   vectorByID: [:])
+                                   vectorByID: [:], intentByID: [:])
     }
 
     private static func assemble(fetched: Fetched, total: Int, seed: UInt64) -> GalaxyData {
@@ -217,7 +222,9 @@ enum GalaxyModel {
                                              iterations: iterations)
         let positions = raw.map { SIMD3<Float>(Float($0.x), Float($0.y), Float($0.z)) }
 
-        let nodes = ordered.map { GalaxyNode(path: $0.path, fileID: $0.fileID) }
+        let nodes = ordered.map {
+            GalaxyNode(path: $0.path, fileID: $0.fileID, intent: fetched.intentByID[$0.fileID])
+        }
         let edges = constellationEdges(blended: blended)
 
         return GalaxyData(nodes: nodes, positions: positions,

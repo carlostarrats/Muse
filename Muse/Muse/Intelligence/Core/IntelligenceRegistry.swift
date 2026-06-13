@@ -9,11 +9,15 @@ final class IntelligenceRegistry {
     let embedder: Embedder?           // nil if no embedding model available
     let clusterer: Clusterer
     let namer: CollectionNamer
+    let intentClassifier: IntentClassifying
+    let intentModelVersion: String
 
     private init() {
         tagger = VisionTagger()
         embedder = SentenceEmbedder.makeIfAvailable()
         clusterer = HybridClusterer()
         namer = TagFallbackNamer.makeBest()
+        intentClassifier = IntentClassifierFactory.makeBest()
+        intentModelVersion = IntentClassifierFactory.modelVersion
     }
 }

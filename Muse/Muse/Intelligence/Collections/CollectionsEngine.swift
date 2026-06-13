@@ -33,25 +33,57 @@ final class CollectionsEngine: ObservableObject {
         defer { isClustering = false }
 
         let registry = IntelligenceRegistry.shared
+
+        // --- Intent track (typed screenshots) — runs regardless of embeddings.
+        let intentMembers: [(fileID: String, bucket: String)] = (try? await q.read { db in
+            try Row.fetchAll(db, sql: """
+                SELECT f.id AS id, f.intent AS intent FROM files f
+                JOIN paths p ON p.file_id = f.id
+                WHERE f.intent IS NOT NULL AND p.is_alive = 1
+                """).map { (fileID: $0["id"] as String, bucket: $0["intent"] as String) }
+        }) ?? []
+        let qualifying = IntentCollections.qualifyingBuckets(members: intentMembers)
+        var intentLiveIDs = Set<String>()
+        for (bucketKey, fileIDs) in qualifying {
+            guard let bucket = IntentBucket(rawValue: bucketKey) else { continue }
+            let id = bucket.collectionID
+            intentLiveIDs.insert(id)
+            // Preserve a user rename: reuse the stored name if the collection exists.
+            let existing: String? = (try? await q.read { db in
+                try String.fetchOne(db, sql: "SELECT name FROM collections WHERE id = ?",
+                                    arguments: [id])
+            }) ?? nil
+            let name = existing ?? bucket.displayName
+            try? await CollectionStore.upsert(queue: q, id: id, name: name,
+                                              memberIDs: fileIDs, modelVersion: "intent-v1")
+        }
+
+        // --- Emergent track — everything EXCEPT typed screenshots.
+        let typedIDs: Set<String> = (try? await q.read { db in
+            try Set(String.fetchAll(db, sql: "SELECT id FROM files WHERE intent IS NOT NULL"))
+        }) ?? []
         let items: [ClusterItem] = (try? await q.read { db in
             let rows = try EmbeddingRow.fetchAll(db)
-            return rows.map {
-                ClusterItem(id: $0.file_id,
-                            textVector: VectorMath.fromData($0.vector),
-                            featurePrint: nil)
+            return rows.compactMap { row -> ClusterItem? in
+                guard !typedIDs.contains(row.file_id) else { return nil }
+                return ClusterItem(id: row.file_id,
+                                   textVector: VectorMath.fromData(row.vector),
+                                   featurePrint: nil)
             }
         }) ?? []
-        guard !items.isEmpty else { return }
 
-        let clusterer = registry.clusterer
-        let clusters = await Task.detached(priority: .userInitiated) { clusterer.cluster(items) }.value
         let old = (try? await CollectionStore.currentMembership(queue: q)) ?? [:]
-        let matched = CollectionIdentity.match(old: old,
+        var matched: [CollectionIdentity.Matched] = []
+        if !items.isEmpty {
+            let clusterer = registry.clusterer
+            let clusters = await Task.detached(priority: .userInitiated) { clusterer.cluster(items) }.value
+            matched = CollectionIdentity.match(old: old,
                                                new: clusters.map { Set($0.memberIDs) })
+        }
 
-        // drop collections that no longer exist — but never manual
-        // collections or collections holding manual members
-        let liveIDs = Set(matched.map(\.id))
+        // Drop collections that no longer exist — but never manual collections,
+        // collections holding manual members, or live intent collections.
+        let liveIDs = Set(matched.map(\.id)).union(intentLiveIDs)
         let protected = (try? await CollectionStore.protectedCollectionIDs(queue: q)) ?? []
         for staleID in old.keys where !liveIDs.contains(staleID) && !protected.contains(staleID) {
             try? await q.write { db in

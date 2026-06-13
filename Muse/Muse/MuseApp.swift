@@ -41,6 +41,7 @@ struct MuseApp: App {
                         await Housekeeping.pruneUnreachable(queue: queue,
                                                             rootPaths: roots)
                     }
+                    Task { await IntentBackfill.run() }
                 }
         }
         .commands {
