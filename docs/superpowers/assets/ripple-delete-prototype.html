@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Muse — Ripple delete CHOREOGRAPHY prototype</title>
+<style>
+  :root { --bg:#08080a; --panel:#141417; --line:#26262b; --txt:#e8e8ea; --dim:#9a9aa2; --accent:#3aa0ff; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--txt);
+    font:13px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif; }
+  .wrap { display:flex; gap:18px; padding:18px; height:100%; }
+  .stagecol { flex:1; min-width:0; display:flex; flex-direction:column; gap:12px; }
+  .stagebox { flex:1; display:flex; align-items:center; justify-content:center;
+    background:#0a0a0b; border:1px solid var(--line); border-radius:12px; overflow:hidden; position:relative; }
+  /* the whole "page" that fades together */
+  #page { position:relative; display:flex; align-items:center; justify-content:center; }
+  canvas { display:block; cursor:crosshair; }
+  /* mock right-side info rail, like the app's viewer column */
+  .rail { position:absolute; right:12px; top:50%; transform:translateY(-50%);
+    width:150px; background:rgba(28,28,32,.82); backdrop-filter:blur(8px);
+    border:1px solid #3a3a40; border-radius:14px; padding:14px; }
+  .rail .name { font-weight:600; font-size:13px; margin-bottom:3px; }
+  .rail .meta { color:var(--dim); font-size:11px; margin-bottom:12px; }
+  .rail .sw { display:flex; gap:6px; margin-bottom:14px; }
+  .rail .sw i { width:22px; height:22px; border-radius:6px; display:block; }
+  .rail .act { display:flex; gap:8px; }
+  .rail .act button { flex:1; background:#222; border:1px solid #3a3a40; color:#ddd;
+    border-radius:8px; padding:7px 0; font-size:11px; }
+  .rail .act button.del { background:#3a1414; border-color:#5a1f1f; color:#ff8a8a; }
+  .transport { display:flex; gap:10px; align-items:center; }
+  .transport button { background:var(--panel); color:var(--txt); border:1px solid var(--line);
+    border-radius:8px; padding:7px 14px; cursor:pointer; font-weight:600; }
+  .transport button#play { background:var(--accent); color:#04121a; border:none; }
+  .transport input[type=range] { flex:1; accent-color:var(--accent); }
+  .panel { width:330px; background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:14px; overflow-y:auto; }
+  .panel h2 { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--dim);
+    margin:18px 0 8px; }
+  .panel h2:first-child { margin-top:0; }
+  .row { display:grid; grid-template-columns:1fr 56px; align-items:center; gap:8px; margin:7px 0; }
+  .row .val { color:var(--dim); text-align:right; font-variant-numeric:tabular-nums; font-size:12px; }
+  .row input[type=range] { grid-column:1 / -1; width:100%; margin:2px 0 0; accent-color:var(--accent); }
+  /* timeline diagram */
+  .timeline { margin:10px 0 2px; height:34px; position:relative; background:#0a0a0c;
+    border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .timeline .ripband { position:absolute; top:4px; height:9px; background:#2b6cb0; border-radius:5px; opacity:.85; }
+  .timeline .fadeband { position:absolute; top:19px; height:9px; background:#b04a2b; border-radius:5px; opacity:.85; }
+  .timeline .play { position:absolute; top:0; bottom:0; width:2px; background:#fff; }
+  .tllabels { display:flex; justify-content:space-between; color:var(--dim); font-size:10px; }
+  .actions { display:flex; gap:8px; margin-top:16px; }
+  .actions button { flex:1; background:var(--accent); color:#04121a; border:none; font-weight:600;
+    border-radius:8px; padding:9px; cursor:pointer; }
+  .actions button.secondary { background:var(--panel); color:var(--txt); border:1px solid var(--line); }
+  .file input { width:100%; color:var(--dim); margin-top:10px; }
+  pre#dump { white-space:pre-wrap; background:#0a0a0c; border:1px solid var(--line); border-radius:8px;
+    padding:10px; margin-top:12px; color:var(--dim); font-size:11px; }
+  .hint { color:var(--dim); font-size:11.5px; margin-top:6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="stagecol">
+    <div class="stagebox">
+      <div id="page">
+        <canvas id="gl"></canvas>
+        <div class="rail" id="rail">
+          <div class="name">Daily Fit #154</div>
+          <div class="meta">PNG · 1206×2622</div>
+          <div class="sw"><i style="background:#7d8a76"></i><i style="background:#cdbfa8"></i><i style="background:#3a3f37"></i></div>
+          <div class="act"><button>Share</button><button class="del" id="delbtn">Delete</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="transport">
+      <button id="play">▶ Play delete</button>
+      <input type="range" id="scrub" min="0" max="1" step="0.001" value="0" />
+      <span class="val" id="scrubval" style="width:42px;color:var(--dim)">0.00</span>
+    </div>
+    <div class="file"><input type="file" id="fileinput" accept="image/*" /></div>
+  </div>
+
+  <div class="panel" id="panel">
+    <h2>Choreography (timeline)</h2>
+    <div class="timeline" id="timeline">
+      <div class="ripband" id="ripband"></div>
+      <div class="fadeband" id="fadeband"></div>
+      <div class="play" id="tlplay" style="left:0"></div>
+    </div>
+    <div class="tllabels"><span>press</span><span id="durlabel">0.70s</span></div>
+    <div id="controls"></div>
+    <div class="actions">
+      <button id="copybtn">Copy settings</button>
+      <button id="resetbtn" class="secondary">Reset</button>
+    </div>
+    <div class="hint">Blue = ripple expanding · Orange = page fading out. Click the image to move the ripple origin (the delete button). Tune, then <b>Copy settings</b>.</div>
+    <pre id="dump"></pre>
+  </div>
+</div>
+
+<script>
+const SECTIONS = [
+  { h:"Timing", items:[
+    ["duration","Total duration (s)",0.3,2.5,0.01,1.1],
+    ["fadeStart","Page-fade starts at",0.0,1.0,0.01,0.6],
+    ["fadeDur","Page-fade length",0.05,0.7,0.01,0.35],
+  ]},
+  { h:"Ripple origin (delete button)", items:[
+    ["originX","Origin X",0.0,1.0,0.01,0.9],
+    ["originY","Origin Y",0.0,1.0,0.01,0.55],
+  ]},
+  { h:"Ripple look (ONE ring — guaranteed single)", items:[
+    ["speed","Spread speed",0.5,2.5,0.01,1.4],
+    ["intensity","Intensity (warp + sheen)",0.0,0.15,0.002,0.05],
+    ["thickness","Ring thickness",0.02,0.4,0.005,0.12],
+  ]},
+];
+const DEFAULTS = {}; SECTIONS.forEach(s=>s.items.forEach(([k,,,,,v])=>DEFAULTS[k]=v));
+const P = Object.assign({}, DEFAULTS);
+
+const controls=document.getElementById("controls");
+SECTIONS.forEach(sec=>{
+  const h=document.createElement("h2"); h.textContent=sec.h; controls.appendChild(h);
+  sec.items.forEach(([key,label,min,max,step,val])=>{
+    const row=document.createElement("div"); row.className="row";
+    row.innerHTML=`<label>${label}</label><span class="val" id="v_${key}"></span>
+      <input type="range" id="r_${key}" min="${min}" max="${max}" step="${step}" value="${val}">`;
+    controls.appendChild(row);
+    const r=row.querySelector("input"), v=row.querySelector(".val");
+    const upd=()=>{ P[key]=parseFloat(r.value); v.textContent=(+r.value).toFixed(step<0.01?3:2); dump(); syncTimeline(); };
+    r.addEventListener("input",upd); upd();
+  });
+});
+
+const canvas=document.getElementById("gl");
+const gl=canvas.getContext("webgl2",{premultipliedAlpha:false,alpha:true,antialias:true});
+const VS=`#version 300 es
+in vec2 p; out vec2 vUV; void main(){ vUV=vec2(p.x*0.5+0.5,0.5-p.y*0.5); gl_Position=vec4(p,0.0,1.0);} `;
+// Single-ring ripple — identical to the app's RippleShader.metal. One gaussian
+// band at the wavefront: physically ONE ring, no crest/trough, no color split.
+const FS=`#version 300 es
+precision highp float;
+in vec2 vUV; out vec4 frag;
+uniform sampler2D u_img;
+uniform vec2 u_size,u_center;
+uniform float u_time,u_speed,u_thickness,u_intensity;
+void main(){
+  vec2 uv = vUV;
+  float aspect = u_size.x/u_size.y;
+  vec2 dir = uv - u_center;
+  dir.x *= aspect;
+  float dist = length(dir);
+
+  float radius = smoothstep(0.0,1.0,u_time) * u_speed * 1.1;
+
+  float band = exp(-pow((dist-radius)/max(u_thickness,0.001),2.0));
+  band *= smoothstep(0.0,0.10,radius);             // intro
+  band *= 1.0 - smoothstep(0.95,1.45,radius);      // outro
+
+  vec2 ndir = dist>1e-4 ? dir/dist : vec2(0.0);
+  ndir.x /= aspect;
+  vec2 off = ndir * (band * u_intensity);
+  vec4 color = texture(u_img, uv + off);
+  color.rgb += vec3(band * u_intensity * 2.5) * color.a;
+  frag = color;
+}`;
+function sh(t,s){ const o=gl.createShader(t); gl.shaderSource(o,s); gl.compileShader(o);
+  if(!gl.getShaderParameter(o,gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(o)); return o; }
+const prog=gl.createProgram(); gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS)); gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));
+gl.linkProgram(prog); gl.useProgram(prog);
+const b=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,b);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+const lp=gl.getAttribLocation(prog,"p"); gl.enableVertexAttribArray(lp); gl.vertexAttribPointer(lp,2,gl.FLOAT,false,0,0);
+const tex=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,tex);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+const U={}; ["u_size","u_center","u_time","u_speed","u_thickness","u_intensity"].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
+
+let imgW=720,imgH=900;
+function loadImage(src){ const im=new Image(); im.onload=()=>{ imgW=im.naturalWidth; imgH=im.naturalHeight;
+  gl.bindTexture(gl.TEXTURE_2D,tex); gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,im); sizeCanvas(); }; im.src=src; }
+function sizeCanvas(){ const box=document.querySelector(".stagebox").getBoundingClientRect();
+  const maxW=box.width-40,maxH=box.height-40; let r=Math.min(maxW/imgW,maxH/imgH);
+  canvas.width=Math.round(imgW*r); canvas.height=Math.round(imgH*r); }
+(function def(){ const c=document.createElement("canvas"); c.width=720;c.height=900; const x=c.getContext("2d");
+  const g=x.createLinearGradient(0,0,720,900); g.addColorStop(0,"#cfe0d6"); g.addColorStop(.5,"#eef0e8"); g.addColorStop(1,"#d8c4b0");
+  x.fillStyle=g; x.fillRect(0,0,720,900); x.fillStyle="#5a5f55"; x.fillRect(230,200,260,300); x.fillStyle="#3a3f37"; x.fillRect(250,540,220,190);
+  loadImage(c.toDataURL()); })();
+window.addEventListener("resize",sizeCanvas);
+document.getElementById("fileinput").addEventListener("change",e=>{ const f=e.target.files[0]; if(f) loadImage(URL.createObjectURL(f)); });
+canvas.addEventListener("click",e=>{ const r=canvas.getBoundingClientRect();
+  P.originX=Math.min(1,Math.max(0,(e.clientX-r.left)/r.width)); P.originY=Math.min(1,Math.max(0,(e.clientY-r.top)/r.height));
+  document.getElementById("r_originX").value=P.originX; document.getElementById("r_originX").dispatchEvent(new Event("input"));
+  document.getElementById("r_originY").value=P.originY; document.getElementById("r_originY").dispatchEvent(new Event("input")); });
+
+// timeline diagram
+function syncTimeline(){
+  const rip=document.getElementById("ripband"), fad=document.getElementById("fadeband");
+  // ripple "active" until ~ when radius outro completes: radius=smoothstep(t)*speed*1.1 hits 1 → approx
+  const ripEnd=Math.min(1, 0.95);
+  rip.style.left="0%"; rip.style.width=(ripEnd*100)+"%";
+  fad.style.left=(P.fadeStart*100)+"%"; fad.style.width=(Math.min(1,P.fadeStart+P.fadeDur)-P.fadeStart)*100+"%";
+  document.getElementById("durlabel").textContent=P.duration.toFixed(2)+"s";
+}
+
+let T=0, playing=false, startMs=0;
+const scrub=document.getElementById("scrub"), scrubval=document.getElementById("scrubval"), tlplay=document.getElementById("tlplay");
+function playDelete(){ playing=true; T=0; startMs=performance.now(); }
+document.getElementById("play").addEventListener("click",playDelete);
+document.getElementById("delbtn").addEventListener("click",playDelete);
+scrub.addEventListener("input",()=>{ playing=false; T=parseFloat(scrub.value); });
+
+function pageFadeAt(t){ if(t<=P.fadeStart) return 1; return Math.max(0,1-(t-P.fadeStart)/P.fadeDur); }
+
+function frame(now){
+  if(playing){ T=Math.min(1,(now-startMs)/1000/P.duration); if(T>=1) playing=false; scrub.value=T; }
+  scrubval.textContent=T.toFixed(2); tlplay.style.left=(T*100)+"%";
+  // page fade applied to the whole stage (image + rail)
+  document.getElementById("page").style.opacity=pageFadeAt(T);
+  gl.viewport(0,0,canvas.width,canvas.height); gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.useProgram(prog);
+  gl.uniform2f(U.u_size,canvas.width,canvas.height); gl.uniform2f(U.u_center,P.originX,P.originY);
+  gl.uniform1f(U.u_time,T); gl.uniform1f(U.u_speed,P.speed);
+  gl.uniform1f(U.u_thickness,P.thickness); gl.uniform1f(U.u_intensity,P.intensity);
+  gl.bindTexture(gl.TEXTURE_2D,tex); gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame); syncTimeline();
+
+function dump(){ const L=[]; SECTIONS.forEach(s=>s.items.forEach(([k])=>L.push(`${k} = ${(+P[k]).toFixed(4)}`)));
+  document.getElementById("dump").textContent=L.join("\n"); }
+document.getElementById("copybtn").addEventListener("click",()=>{ navigator.clipboard.writeText(document.getElementById("dump").textContent)
+  .then(()=>{ const b=document.getElementById("copybtn"); b.textContent="Copied ✓"; setTimeout(()=>b.textContent="Copy settings",1200); }); });
+document.getElementById("resetbtn").addEventListener("click",()=>{ Object.assign(P,DEFAULTS);
+  SECTIONS.forEach(s=>s.items.forEach(([k])=>{ const r=document.getElementById("r_"+k); r.value=DEFAULTS[k]; r.dispatchEvent(new Event("input")); })); });
+dump();
+</script>
+</body>
+</html>

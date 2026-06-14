@@ -80,6 +80,11 @@ struct HeroImageViewer: View {
                 ViewerToast(toast: $toast)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Delete: the image fades first; then, as it's finishing, the whole
+            // page (right-side info + backdrop) fades out behind it, landing
+            // back on the grid. Animatable so the curve is sampled every frame.
+            .modifier(FadeOutModifier(progress: burnProgress,
+                                      fadeStart: 0.5, fadeLength: 0.5))
             .onAppear {
                 viewportSize = geo.size
                 overlayGlobalFrame = overlayGlobal
@@ -336,12 +341,13 @@ struct HeroImageViewer: View {
         burning = true
         let url = currentURL
         let node = appState.currentFiles.first { $0.url == url }
-        withAnimation(.easeOut(duration: 0.12)) { chromeVisible = false }
-        withAnimation(.linear(duration: 0.7)) { burnProgress = 1 }
+        // Everything stays put — the ripple plays over the full page; the
+        // whole viewer fades out on the tail (see deleteFade), not the chrome
+        // up front.
+        withAnimation(.easeInOut(duration: 0.8)) { burnProgress = 1 }
         deleteTask = Task {
-            // Wait past full burn (clears ~0.66s) plus a short empty beat so the
-            // image is fully gone before the return-to-grid transition.
-            try? await Task.sleep(nanoseconds: 740_000_000)
+            // Wait for the image + page fade to finish before returning to grid.
+            try? await Task.sleep(nanoseconds: 850_000_000)
             guard !Task.isCancelled else { return }
             await completeDelete(url: url, node: node)
         }

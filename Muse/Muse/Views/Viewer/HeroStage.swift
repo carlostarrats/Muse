@@ -78,9 +78,9 @@ struct HeroStage: View {
                     .aspectRatio(contentMode: .fill)
                     .frame(width: base.width, height: base.height)
                     .clipShape(Rectangle())
-                    .modifier(BurnUpModifier(progress: burnProgress,
-                                             seed: Double(SeededRandom.fnv1a([url.path]) % 1000) / 1000.0,
-                                             size: base.size))
+                    // Delete: the image fades out first (front ~60%).
+                    .modifier(FadeOutModifier(progress: burnProgress,
+                                              fadeStart: 0.0, fadeLength: 0.6))
                     .shadow(color: .black.opacity(shadowVisible ? 0.5 : 0), radius: 40, y: 24)
                     .scaleEffect(zoom)
                     .offset(pan)
