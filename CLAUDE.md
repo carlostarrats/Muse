@@ -344,6 +344,55 @@ Two folder-scoped Tags menu commands and a progress pill (spec:
   pre-existing, self-healing on the next analyze, and a fix would change core
   clustering across every analyze path — left alone deliberately.
 
+### Viewer zoom-out + Duplicates redesign + sidebar reorder — 2026-06-14 (on `feat/next-6`)
+
+A live UI/UX pass. Landed:
+
+- **Hero viewer zoom-out** — `ViewerGeometry.minZoom` 1.0 → 0.7 so the image
+  can be pulled back a touch below Fit (bounded, not infinite). The zoom pill's
+  − / + buttons grey out (and disable) at the min/max limit. "Fit" detection is
+  now `abs(zoom - 1) <= 0.001` (was `zoom > 1.001`), so the Fit button + live %
+  readout show when zoomed OUT too, not just in. Pan stays disabled below Fit
+  (clampPan yields 0 for zoom < 1).
+- **Duplicates modal redesign** (`DuplicatesView`) — dropped the per-group
+  "Byte-exact · N files" header (the reason terminology confused; the thumbnails
+  + KEEP badge carry the meaning). Rows now sit on ONE faint panel
+  (`Color.primary.opacity(0.05)` — `controlBackgroundColor` is white in light
+  mode and vanished) separated by hairline dividers, not per-group grey cards.
+  KEEP badge centered over the image (thumbnail switched to `.fill` + `.clipped`
+  so it no longer floats in a letterbox gap). Header matches InfoSheet (24pt
+  title + shared hover-X `CloseXButton`, no divider beneath). Move-to-Trash now
+  closes the modal (the group list is a stale snapshot that doesn't re-derive,
+  so leaving it open looked like nothing happened).
+- **Grid spacing** — masonry gutter 10 → 14pt (one `spacing` value drives rows
+  and columns + the skeleton, so all widen equally).
+- **Sidebar: drag-to-reorder top-level folders** — added a custom `DropDelegate`
+  (`RootDropDelegate`) with an accent insertion line, before/after half-detection
+  (top half of a row → above, bottom half → below; a constant bottom catch-zone
+  handles "send to the end"). The reorder is committed by **Root identity**
+  (`BookmarkStore.reorder(_:relativeTo:placeAfter:)`), NOT by visible index — a
+  root whose bookmark doesn't resolve is hidden from the list but kept in the
+  store, so an index-based move would shift the wrong folder. Order persists in
+  the existing UserDefaults bookmark array.
+- **Pin restricted to subfolders** — top-level roots are already visible at the
+  top, so Pin is offered only on subfolders now (it's a shortcut for buried
+  ones). The "Pinned" section header text was removed (the pin icon is
+  self-explanatory). Right-clicking a root shows only Remove Folder.
+- **iCloud "Muse" folder pinned on top** — it's the fixed home: always first,
+  not reorderable (no bookmark → excluded from the reorderable set), with a 12pt
+  gap separating it from the local folders.
+- **Two observation bugs fixed** — (1) Pin/Unpin now refreshes the sidebar
+  immediately: `stars` is a nested `ObservableObject`, so its changes are
+  forwarded to `AppState.objectWillChange` (was only repainting on the next
+  unrelated AppState change). (2) Reorder takes effect on the FIRST drop:
+  `@Published` fires in `willSet`, so the `bookmarks.$roots` sink was rebuilding
+  the sidebar from the OLD array; it now rebuilds from the value the publisher
+  delivers (`rebuildRootNodes(roots:)`). `rebuildRootNodes` also reuses nodes by
+  URL (consume-once, so duplicate-URL roots don't make duplicate `ForEach` ids)
+  to preserve each tree's expansion across reorders.
+- **QA pass** — two rounds of independent review; the identity-based reorder and
+  consume-once node reuse above were the review-found fixes. Build green.
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
