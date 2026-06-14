@@ -15,6 +15,7 @@ struct ContentView: View {
     @ObservedObject private var indexProgress = IndexProgress.shared
     @ObservedObject private var thumbProgress = ThumbProgress.shared
     @ObservedObject private var analyzePipeline = AnalyzePipeline.shared
+    @ObservedObject private var collectionsEngine = CollectionsEngine.shared
     @State private var moodPickerShown = false
     @State private var infoShown = false
 
@@ -177,6 +178,8 @@ struct ContentView: View {
         .overlay(alignment: .bottom) {
             if analyzePipeline.isRunning {
                 analyzeStatusBanner
+            } else if collectionsEngine.isClustering {
+                organizingBanner
             } else if indexProgress.isActive {
                 indexingBanner
             } else if thumbProgress.isActive {
@@ -271,6 +274,14 @@ struct ContentView: View {
                         ? "Analyzing \(analyzePipeline.completed) of \(analyzePipeline.total)"
                         : "Analyzing…",
                    progress: analyzePipeline.progress)
+    }
+
+    /// Bottom-center pill while collections recluster after an analyze batch —
+    /// closes the otherwise-invisible gap between the Analyzing pill vanishing
+    /// and results appearing. Indeterminate phase, so the bar reads as
+    /// "finishing up". Same capsule as every other pill.
+    private var organizingBanner: some View {
+        statusPill(label: "Organizing…", progress: 1)
     }
 
 }
