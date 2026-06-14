@@ -113,17 +113,20 @@ struct HeroImageViewer: View {
                 // Undo toast survives via GridToastHost.
                 let url = currentURL
                 let node = appState.currentFiles.first { $0.url == url }
-                do {
-                    let ticket = try TrashManager.trash(url)
-                    appState.currentFiles.removeAll { $0.url == url }
-                    if appState.selectedFile?.url == url { appState.selectedFile = nil }
-                    appState.deletion.toast = ToastData(message: "Moved to Trash",
-                                                        actionLabel: "Undo") {
-                        appState.deletion.restore(ticket: ticket,
-                                                  node: node ?? FileNode(url: url))
+                let appState = self.appState
+                Task { @MainActor in
+                    do {
+                        let ticket = try await TrashManager.trash(url)
+                        appState.currentFiles.removeAll { $0.url == url }
+                        if appState.selectedFile?.url == url { appState.selectedFile = nil }
+                        appState.deletion.toast = ToastData(message: "Moved to Trash",
+                                                            actionLabel: "Undo") {
+                            appState.deletion.restore(ticket: ticket,
+                                                      node: node ?? FileNode(url: url))
+                        }
+                    } catch {
+                        appState.deletion.toast = ToastData(message: "Couldn't move to Trash")
                     }
-                } catch {
-                    appState.deletion.toast = ToastData(message: "Couldn't move to Trash")
                 }
             }
         }
@@ -334,41 +337,37 @@ struct HeroImageViewer: View {
         let url = currentURL
         let node = appState.currentFiles.first { $0.url == url }
         withAnimation(.easeOut(duration: 0.12)) { chromeVisible = false }
-        withAnimation(.linear(duration: 0.8)) { burnProgress = 1 }
+        withAnimation(.linear(duration: 0.7)) { burnProgress = 1 }
         deleteTask = Task {
-            try? await Task.sleep(nanoseconds: 850_000_000)
+            // Wait past full burn (clears ~0.66s) plus a short empty beat so the
+            // image is fully gone before the return-to-grid transition.
+            try? await Task.sleep(nanoseconds: 740_000_000)
             guard !Task.isCancelled else { return }
-            completeDelete(url: url, node: node)
+            await completeDelete(url: url, node: node)
         }
     }
 
-    private func completeDelete(url: URL, node: FileNode?) {
+    private func completeDelete(url: URL, node: FileNode?) async {
         do {
-            let ticket = try TrashManager.trash(url)
-            // Delete is done; burnProgress stays 1 so flips and the return
-            // flight remain blocked through the linger window.
+            let ticket = try await TrashManager.trash(url)
             burning = false
-            // The grid is interactive under the undo toast — the toolbar
-            // should be back (and fade in) for the linger, not after it.
-            withAnimation(.easeInOut(duration: 0.35)) { appState.viewerDismissing = true }
+            // The burn has fully finished; now CLOSE back to the grid we came
+            // from (main / tag / collection) — never linger on the burned frame
+            // and never advance to the next image. The Undo toast is handed to
+            // the always-present GridToastHost so it stays clickable over the
+            // grid, and selectedFile = nil unmounts the viewer.
             withAnimation(.easeIn(duration: 0.2)) {
                 appState.currentFiles.removeAll { $0.url == url }
             }
-            withAnimation(.easeOut(duration: 0.18)) {
-                toast = ToastData(message: "Moved to Trash", actionLabel: "Undo") {
-                    appState.deletion.restore(ticket: ticket,
-                                              node: node ?? FileNode(url: url))
-                }
+            appState.deletion.toast = ToastData(message: "Moved to Trash",
+                                                actionLabel: "Undo") {
+                appState.deletion.restore(ticket: ticket,
+                                          node: node ?? FileNode(url: url))
             }
-            // Let the wash fade (its .animation observes backdropVisible)
-            // before lingering structurally removes it — otherwise the
-            // full-opacity backdrop pops off in one frame.
+            appState.viewerClosing = false
+            appState.viewerDismissing = false
             backdropVisible = false
-            deleteTask = Task {
-                try? await Task.sleep(nanoseconds: 400_000_000)
-                guard !Task.isCancelled else { return }
-                finishClose()
-            }
+            appState.selectedFile = nil
         } catch {
             withAnimation(.easeOut(duration: 0.18)) {
                 toast = ToastData(message: "Couldn't move to Trash")

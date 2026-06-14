@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Muse — Burn-up tuning prototype</title>
+<style>
+  :root { --bg:#08080a; --panel:#141417; --line:#26262b; --txt:#e8e8ea; --dim:#9a9aa2; --accent:#ff7a2a; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--txt);
+    font:13px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif; }
+  .wrap { display:flex; gap:18px; padding:18px; height:100%; }
+  .stage { flex:1; min-width:0; display:flex; flex-direction:column; gap:12px; }
+  .canvasbox { flex:1; display:flex; align-items:center; justify-content:center;
+    background:#0a0a0b; border:1px solid var(--line); border-radius:12px; overflow:hidden; position:relative; }
+  canvas { max-width:100%; max-height:100%; display:block; }
+  .drophint { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    pointer-events:none; color:var(--dim); font-size:14px; text-align:center; padding:24px; }
+  .transport { display:flex; gap:10px; align-items:center; }
+  .transport button { background:var(--panel); color:var(--txt); border:1px solid var(--line);
+    border-radius:8px; padding:7px 12px; cursor:pointer; }
+  .transport button:hover { border-color:var(--accent); }
+  .transport input[type=range] { flex:1; accent-color:var(--accent); }
+  .panel { width:340px; background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:14px; overflow-y:auto; }
+  .panel h2 { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--dim);
+    margin:18px 0 8px; }
+  .panel h2:first-child { margin-top:0; }
+  .row { display:grid; grid-template-columns:1fr 56px; align-items:center; gap:8px; margin:7px 0; }
+  .row .val { color:var(--dim); text-align:right; font-variant-numeric:tabular-nums; font-size:12px; }
+  .row input[type=range] { grid-column:1 / -1; width:100%; margin:2px 0 0; accent-color:var(--accent); }
+  .colorrow { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:7px 0; }
+  .colorrow input[type=color] { width:42px; height:26px; border:1px solid var(--line);
+    border-radius:6px; background:none; cursor:pointer; padding:0; }
+  .actions { display:flex; gap:8px; margin-top:16px; }
+  .actions button { flex:1; background:var(--accent); color:#1a0d04; border:none; font-weight:600;
+    border-radius:8px; padding:9px; cursor:pointer; }
+  .actions button.secondary { background:var(--panel); color:var(--txt); border:1px solid var(--line); }
+  .file { margin-top:10px; }
+  .file input { width:100%; color:var(--dim); }
+  pre#dump { white-space:pre-wrap; background:#0a0a0c; border:1px solid var(--line); border-radius:8px;
+    padding:10px; margin-top:12px; color:var(--dim); font-size:11px; max-height:150px; overflow:auto; }
+  .hint { color:var(--dim); font-size:11.5px; margin-top:6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="stage">
+    <div class="canvasbox" id="canvasbox">
+      <canvas id="gl"></canvas>
+      <div class="drophint" id="drophint">Drag an image here (or use the file picker below)<br>to watch it burn.</div>
+    </div>
+    <div class="transport">
+      <button id="playbtn">⏸ Pause</button>
+      <input type="range" id="progress" min="0" max="1" step="0.001" value="0" />
+      <span class="val" id="progressval" style="width:42px;color:var(--dim)">0.00</span>
+    </div>
+    <div class="file"><input type="file" id="fileinput" accept="image/*" /></div>
+  </div>
+
+  <div class="panel" id="panel">
+    <div id="controls"></div>
+    <h2>Colors</h2>
+    <div id="colors"></div>
+    <div class="actions">
+      <button id="copybtn">Copy settings</button>
+      <button id="resetbtn" class="secondary">Reset</button>
+    </div>
+    <div class="hint">Time keeps running even when progress is paused — pause and scrub to study the edge while the flame still flickers. Tune it, hit <b>Copy settings</b>, paste back to Claude.</div>
+    <pre id="dump"></pre>
+  </div>
+</div>
+
+<script>
+// defaults mirror the intended smooth-gradient look
+const SECTIONS = [
+  { h:"Burn shape (front)", items:[
+    ["dirBias","Directional ↔ concentric",0.0,1.0,0.01,0.6],
+    ["overshoot","Front overshoot (full clear)",1.0,2.0,0.01,1.55],
+    ["bigAmp","Big-lobe amount",0.0,0.9,0.005,0.69],
+    ["bigFreq","Big-lobe scale",2.0,20.0,0.1,8.4],
+  ]},
+  { h:"Edge raggedness", items:[
+    ["medAmp","Medium ripple",0.0,0.20,0.002,0.122],
+    ["medFreq","Medium scale",5.0,60.0,0.5,23.5],
+    ["fineAmp","Fine jagged",0.0,0.10,0.001,0.006],
+    ["fineFreq","Fine scale",20.0,160.0,1.0,124.0],
+  ]},
+  { h:"Movement (animated)", items:[
+    ["wobbleAmp","Edge wobble",0.0,0.12,0.001,0.075],
+    ["flameSpeed","Flame flow speed",0.0,4.0,0.05,2.55],
+    ["flicker","Flame flicker",0.0,2.0,0.02,0.66],
+  ]},
+  { h:"Flame glow", items:[
+    ["glowWidth","Glow softness",0.005,0.12,0.001,0.06],
+    ["glowCenter","Glow position",-0.02,0.06,0.001,0.008],
+    ["whiteCore","White-hot core",0.0,1.0,0.01,0.67],
+    ["flameOpacity","Flame opacity",0.0,1.0,0.01,0.6],
+  ]},
+  { h:"Char", items:[
+    ["charW","Char depth",0.02,0.30,0.002,0.10],
+    ["charStart","Char onset",-0.02,0.06,0.001,0.022],
+    ["ashFade","Ash dissolve",0.0,0.10,0.002,0.064],
+    ["charGrain","Char grain",0.0,1.4,0.01,1.22],
+    ["scorchW","Scorch reach",0.0,0.12,0.002,0.026],
+    ["scorchStr","Scorch strength",0.0,1.0,0.01,0.5],
+    ["sat","Saturation",0.0,1.6,0.01,1.0],
+  ]},
+  { h:"Embers (sparks off the edge)", items:[
+    ["embDensity","Ember count",0.0,0.20,0.002,0.096],
+    ["embRise","Rise speed",0.0,2.0,0.02,0.6],
+    ["embSway","Sway / wander",0.0,3.0,0.02,1.14],
+    ["embSize","Ember size",0.4,2.5,0.02,0.82],
+    ["embReach","Reach off edge",0.05,0.6,0.005,0.35],
+    ["embTwinkle","Twinkle",0.0,1.0,0.01,0.6],
+  ]},
+];
+const COLORS = [
+  ["emberCool","Glow (cool / orange)","#ff6b12"],
+  ["emberHot","Glow (hot / amber)","#ffd27a"],
+  ["charEdge","Char edge (brown)","#3a1c0c"],
+  ["charDeep","Char deep (ash)","#050403"],
+  ["scorchCol","Scorch tint","#6b3a1c"],
+];
+const DEFAULTS = {};
+SECTIONS.forEach(s=>s.items.forEach(([k,,,,,v])=>DEFAULTS[k]=v));
+COLORS.forEach(([k,,v])=>DEFAULTS[k]=v);
+const P = Object.assign({}, DEFAULTS);
+
+const controls=document.getElementById("controls");
+SECTIONS.forEach(sec=>{
+  const h=document.createElement("h2"); h.textContent=sec.h; controls.appendChild(h);
+  sec.items.forEach(([key,label,min,max,step,val])=>{
+    const row=document.createElement("div"); row.className="row";
+    row.innerHTML=`<label>${label}</label><span class="val" id="v_${key}"></span>
+      <input type="range" id="r_${key}" min="${min}" max="${max}" step="${step}" value="${val}">`;
+    controls.appendChild(row);
+    const r=row.querySelector("input"), v=row.querySelector(".val");
+    const upd=()=>{ P[key]=parseFloat(r.value); v.textContent=(+r.value).toFixed(step<0.01?3:2); dump(); };
+    r.addEventListener("input",upd); upd();
+  });
+});
+const colorsBox=document.getElementById("colors");
+COLORS.forEach(([key,label,val])=>{
+  const row=document.createElement("div"); row.className="colorrow";
+  row.innerHTML=`<label>${label}</label><input type="color" id="c_${key}" value="${val}">`;
+  colorsBox.appendChild(row);
+  row.querySelector("input").addEventListener("input",e=>{ P[key]=e.target.value; dump(); });
+});
+function hexToRGB(h){ return [parseInt(h.slice(1,3),16)/255,parseInt(h.slice(3,5),16)/255,parseInt(h.slice(5,7),16)/255]; }
+
+// ---- WebGL ----
+const canvas=document.getElementById("gl");
+const gl=canvas.getContext("webgl2",{premultipliedAlpha:true,alpha:true,antialias:true});
+const VS=`#version 300 es
+in vec2 p; out vec2 vUV; void main(){ vUV=vec2(p.x*0.5+0.5,0.5-p.y*0.5); gl_Position=vec4(p,0.0,1.0);} `;
+const FS=`#version 300 es
+precision highp float;
+in vec2 vUV; out vec4 frag;
+uniform sampler2D u_img;
+uniform float u_prog,u_time,u_seed,u_dirBias,u_flameOpacity;
+uniform float u_overshoot,u_bigAmp,u_bigFreq,u_medAmp,u_medFreq,u_fineAmp,u_fineFreq;
+uniform float u_wobbleAmp,u_flameSpeed,u_flicker,u_glowWidth,u_glowCenter,u_whiteCore;
+uniform float u_charW,u_charStart,u_ashFade,u_charGrain,u_scorchW,u_scorchStr,u_sat;
+uniform float u_embDensity,u_embRise,u_embSway,u_embSize,u_embReach,u_embTwinkle;
+uniform vec3 u_emberCool,u_emberHot,u_charEdge,u_charDeep,u_scorchCol;
+float hash(vec2 p){ vec3 q=fract(vec3(p.xyx)*0.1031); q+=dot(q,q.yzx+33.33); return fract((q.x+q.y)*q.z);}
+float noise(vec2 p){ vec2 i=floor(p),f=fract(p); vec2 u=f*f*(3.0-2.0*f);
+  return mix(mix(hash(i),hash(i+vec2(1,0)),u.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),u.x),u.y);}
+vec3 sat(vec3 c,float s){ float l=dot(c,vec3(0.299,0.587,0.114)); return clamp(mix(vec3(l),c,s),0.0,1.6);}
+vec3 emberRamp(float h){
+  vec3 c=mix(u_charDeep,u_emberCool,smoothstep(0.04,0.45,h));
+  c=mix(c,u_emberHot,smoothstep(0.45,0.95,h));
+  c=mix(c,vec3(1.0,0.96,0.82),smoothstep(0.95,1.35,h)*u_whiteCore);
+  return c;
+}
+vec3 embers(vec2 uv,float gate){
+  vec3 acc=vec3(0.0);
+  for(int L=0;L<3;L++){
+    float fl=float(L);
+    float sc=(7.0+fl*4.0)/max(u_embSize,0.2);
+    vec2 q=uv*sc;
+    q.y+=u_time*u_embRise*(0.8+0.3*fl);
+    q.x+=sin(uv.y*6.0+u_time*1.3+fl*2.1)*u_embSway;
+    vec2 ci=floor(q),cf=fract(q)-0.5;
+    float rnd=hash(ci+u_seed*(fl+3.0));
+    if(rnd>1.0-u_embDensity){
+      float spark=smoothstep(0.45,0.0,length(cf*vec2(1.2,0.85)));
+      float tw=mix(1.0,0.4+0.6*sin(u_time*7.0*rnd+rnd*40.0),u_embTwinkle);
+      acc+=mix(u_emberCool,u_emberHot,hash(ci+5.0))*spark*tw;
+    }
+  }
+  return acc*gate;
+}
+void main(){
+  vec2 uv=vUV; vec4 src=texture(u_img,uv);
+  if(u_prog<=0.001){ frag=vec4(src.rgb*src.a,src.a); return; }
+  float edge=2.0*min(min(uv.x,1.0-uv.x),min(uv.y,1.0-uv.y));
+  float ang=6.2831853*hash(vec2(u_seed*1.7,4.2));
+  vec2 dir=vec2(cos(ang),sin(ang));
+  float along=dot(uv-0.5,dir)/(abs(dir.x)+abs(dir.y))+0.5;   // 0..1 across the sheet
+  float base=mix(edge,along,u_dirBias);
+  float nBig=noise(uv*u_bigFreq+u_seed*13.7);
+  float nMed=noise(uv*u_medFreq+u_seed*4.3);
+  float nFine=noise(uv*u_fineFreq+u_seed*8.1);
+  float wob=noise(uv*u_medFreq*0.5+vec2(u_time*0.25,-u_time*0.5)+u_seed*3.0)-0.5;
+  float local=base+(nBig-0.5)*u_bigAmp+(nMed-0.5)*u_medAmp+(nFine-0.5)*u_fineAmp+wob*u_wobbleAmp;
+  float s=local-u_prog*u_overshoot;          // <0 burned
+  float tex=nFine*0.6+nMed*0.4;
+
+  float gone=smoothstep(-u_charW,-u_charW-u_ashFade,s);
+  float charM=smoothstep(u_charStart,-u_charW*0.5,s)*(1.0-gone);
+  float flick=mix(1.0,0.55+0.7*noise(uv*vec2(9.0,15.0)+vec2(0.0,-u_time*u_flameSpeed)+u_seed*2.0),clamp(u_flicker,0.0,1.0))
+              *max(u_flicker,0.0001);
+  float heat=exp(-pow((s+u_glowCenter)/max(u_glowWidth,0.001),2.0))*flick;
+
+  vec3 col=src.rgb;
+  float scorch=smoothstep(u_scorchW,0.0,s);
+  col=mix(col,u_scorchCol,scorch*u_scorchStr*(1.0-charM));
+  vec3 charC=mix(u_charEdge,u_charDeep,smoothstep(0.0,-u_charW,s))*(0.45+u_charGrain*tex);
+  col=mix(col,charC,charM);
+  col=sat(col,u_sat);
+  float baseA=src.a*(1.0-gone);
+  vec3 emis=emberRamp(heat)*heat;
+  vec3 outc=col*baseA + emis*u_flameOpacity;          // translucent flame
+  float alpha=max(baseA, clamp(heat*u_flameOpacity*0.8,0.0,1.0));
+  float gate=smoothstep(-u_embReach,-0.005,s)*(1.0-smoothstep(-0.005,0.02,s));
+  vec3 emb=embers(uv,gate);
+  outc+=emb; alpha=max(alpha,max(emb.r,max(emb.g,emb.b))*0.9);
+  frag=vec4(outc,alpha);
+}`;
+function sh(t,src){ const s=gl.createShader(t); gl.shaderSource(s,src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s)); return s; }
+const program=gl.createProgram();
+gl.attachShader(program,sh(gl.VERTEX_SHADER,VS)); gl.attachShader(program,sh(gl.FRAGMENT_SHADER,FS));
+gl.linkProgram(program); gl.useProgram(program);
+if(!gl.getProgramParameter(program,gl.LINK_STATUS)) console.error(gl.getProgramInfoLog(program));
+const buf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+const loc=gl.getAttribLocation(program,"p"); gl.enableVertexAttribArray(loc);
+gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
+const tex=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,tex);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+const U={}; const NAMES=["u_prog","u_time","u_seed","u_dirBias","u_flameOpacity","u_overshoot","u_bigAmp","u_bigFreq","u_medAmp","u_medFreq",
+  "u_fineAmp","u_fineFreq","u_wobbleAmp","u_flameSpeed","u_flicker","u_glowWidth","u_glowCenter","u_whiteCore",
+  "u_charW","u_charStart","u_ashFade","u_charGrain","u_scorchW","u_scorchStr","u_sat",
+  "u_embDensity","u_embRise","u_embSway","u_embSize","u_embReach","u_embTwinkle",
+  "u_emberCool","u_emberHot","u_charEdge","u_charDeep","u_scorchCol"];
+NAMES.forEach(n=>U[n]=gl.getUniformLocation(program,n));
+
+let imgW=900,imgH=600,seed=0.37;
+function loadImage(src){ const im=new Image(); im.onload=()=>{ imgW=im.naturalWidth; imgH=im.naturalHeight;
+  gl.bindTexture(gl.TEXTURE_2D,tex); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,true);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,im);
+  document.getElementById("drophint").style.display="none"; sizeCanvas(); }; im.src=src; }
+function sizeCanvas(){ const box=document.getElementById("canvasbox").getBoundingClientRect();
+  const maxW=box.width-24,maxH=box.height-24; let w=imgW,h=imgH;
+  let r=Math.min(maxW/w,maxH/h); if(w*r<420&&h*r<420) r=Math.min(maxW/w,maxH/h);
+  r=Math.min(r, maxW/w, maxH/h); canvas.width=Math.round(w*r); canvas.height=Math.round(h*r); }
+(function defaultImg(){ const c=document.createElement("canvas"); c.width=900;c.height=600; const x=c.getContext("2d");
+  const g=x.createLinearGradient(0,0,900,600); g.addColorStop(0,"#3a6ea5"); g.addColorStop(0.5,"#c0d6e4"); g.addColorStop(1,"#b6552d");
+  x.fillStyle=g; x.fillRect(0,0,900,600);
+  x.fillStyle="rgba(255,255,255,.85)"; for(let i=0;i<40;i++){ x.beginPath(); x.arc(Math.random()*900,Math.random()*600,Math.random()*40+6,0,7); x.fill(); }
+  x.fillStyle="rgba(20,20,30,.6)"; x.font="bold 60px sans-serif"; x.fillText("load a photo →",120,320); loadImage(c.toDataURL()); })();
+window.addEventListener("resize",sizeCanvas);
+document.getElementById("fileinput").addEventListener("change",e=>{ const f=e.target.files[0]; if(f) loadImage(URL.createObjectURL(f)); });
+const cbox=document.getElementById("canvasbox");
+["dragover","drop"].forEach(ev=>cbox.addEventListener(ev,e=>e.preventDefault()));
+cbox.addEventListener("drop",e=>{ const f=e.dataTransfer.files[0]; if(f) loadImage(URL.createObjectURL(f)); });
+
+// transport
+let playing=true,prog=0,t0=performance.now();
+const pslider=document.getElementById("progress"),pval=document.getElementById("progressval");
+document.getElementById("playbtn").addEventListener("click",e=>{ playing=!playing;
+  e.target.textContent=playing?"⏸ Pause":"▶ Play"; t0=performance.now()-prog*2600; });
+pslider.addEventListener("input",()=>{ playing=false; document.getElementById("playbtn").textContent="▶ Play"; prog=parseFloat(pslider.value); });
+
+function frame(now){
+  if(playing){ const cycle=2600+800; const e=((now-t0)%cycle); prog=Math.min(e/2600,1.0); pslider.value=prog; }
+  pval.textContent=prog.toFixed(2);
+  gl.viewport(0,0,canvas.width,canvas.height); gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.useProgram(program);
+  gl.uniform1f(U.u_prog,prog); gl.uniform1f(U.u_time,now/1000); gl.uniform1f(U.u_seed,seed);
+  const f=k=>gl.uniform1f(U[k],P[k.slice(2)]);
+  ["u_dirBias","u_flameOpacity","u_overshoot","u_bigAmp","u_bigFreq","u_medAmp","u_medFreq","u_fineAmp","u_fineFreq","u_wobbleAmp",
+   "u_flameSpeed","u_flicker","u_glowWidth","u_glowCenter","u_whiteCore","u_charW","u_charStart","u_ashFade",
+   "u_charGrain","u_scorchW","u_scorchStr","u_sat","u_embDensity","u_embRise","u_embSway","u_embSize",
+   "u_embReach","u_embTwinkle"].forEach(f);
+  gl.uniform3fv(U.u_emberCool,hexToRGB(P.emberCool)); gl.uniform3fv(U.u_emberHot,hexToRGB(P.emberHot));
+  gl.uniform3fv(U.u_charEdge,hexToRGB(P.charEdge)); gl.uniform3fv(U.u_charDeep,hexToRGB(P.charDeep));
+  gl.uniform3fv(U.u_scorchCol,hexToRGB(P.scorchCol));
+  gl.bindTexture(gl.TEXTURE_2D,tex); gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+function dump(){ const L=[]; SECTIONS.forEach(s=>s.items.forEach(([k])=>L.push(`${k} = ${(+P[k]).toFixed(4)}`)));
+  COLORS.forEach(([k])=>{ const c=hexToRGB(P[k]); L.push(`${k} = (${c.map(n=>n.toFixed(3)).join(", ")})  ${P[k]}`); });
+  document.getElementById("dump").textContent=L.join("\n"); }
+document.getElementById("copybtn").addEventListener("click",()=>{ navigator.clipboard.writeText(document.getElementById("dump").textContent)
+  .then(()=>{ const b=document.getElementById("copybtn"); b.textContent="Copied ✓"; setTimeout(()=>b.textContent="Copy settings",1200); }); });
+document.getElementById("resetbtn").addEventListener("click",()=>{ Object.assign(P,DEFAULTS);
+  SECTIONS.forEach(s=>s.items.forEach(([k])=>{ const r=document.getElementById("r_"+k); r.value=DEFAULTS[k]; r.dispatchEvent(new Event("input")); }));
+  COLORS.forEach(([k])=>{ document.getElementById("c_"+k).value=DEFAULTS[k]; P[k]=DEFAULTS[k]; }); dump(); });
+dump();
+</script>
+</body>
+</html>

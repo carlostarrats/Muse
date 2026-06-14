@@ -21,8 +21,8 @@ final class DeleteCoordinator: ObservableObject {
     /// its linger-for-undo machinery stays untouched.
     @Published var toast: ToastData?
 
-    /// Spec: ~0.8s char. Tests inject 0.
-    var burnDuration: Double = 0.85
+    /// Spec: ~0.8s char; ~0.7s after live review. Tests inject 0.
+    var burnDuration: Double = 0.7
 
     /// AppState wires these to currentFiles mutations.
     var onRemove: (URL) -> Void = { _ in }
@@ -39,7 +39,7 @@ final class DeleteCoordinator: ObservableObject {
             try? await Task.sleep(nanoseconds: UInt64(burnDuration * 1_000_000_000))
         }
         do {
-            let ticket = try TrashManager.trash(file.url)
+            let ticket = try await TrashManager.trash(file.url)
             withAnimation(.easeIn(duration: 0.2)) {
                 onRemove(file.url)
             }

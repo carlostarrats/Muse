@@ -62,8 +62,12 @@ final class BookmarkStore: ObservableObject {
 
     @discardableResult
     func addRoot(at url: URL) -> Root? {
+        // Read-WRITE scope: Muse moves files to Trash (delete + undo), which
+        // needs write access. `.securityScopeAllowOnlyReadAccess` made every
+        // delete fail with afpAccessDenied even though reads worked. The app's
+        // entitlement is user-selected.read-write, so this is permitted.
         guard let data = try? url.bookmarkData(
-            options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess],
+            options: [.withSecurityScope],
             includingResourceValuesForKeys: nil,
             relativeTo: nil
         ) else { return nil }
