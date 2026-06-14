@@ -205,6 +205,8 @@ final class AppState: ObservableObject {
     /// Menu-bar triggers for the in-collection header's rename/delete.
     @Published var collectionRenameRequest = false
     @Published var collectionDeleteRequest = false
+    @Published var deleteAllTagsRequest = false
+    @Published var regenerateTagsRequest = false
     private var tagRequestToken = 0
 
     /// Set the active collection's cover to the given file (right-click on a
