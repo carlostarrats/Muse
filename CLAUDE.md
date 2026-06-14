@@ -306,6 +306,44 @@ A live UI pass. Landed:
   standard macOS "double-click the title bar to zoom" (the toolbar is in the
   title bar), governed by System Settings, not app code.
 
+### Bulk tag commands + Organizing pill — 2026-06-13 (on `feat/next-2`)
+
+Two folder-scoped Tags menu commands and a progress pill (spec:
+`docs/superpowers/specs/2026-06-13-bulk-tag-commands-design.md`, plan:
+`docs/superpowers/plans/2026-06-13-bulk-tag-commands.md`):
+
+- **Delete All Tags… / Regenerate Tags…** — new items in the menu-bar Tags
+  menu, both scoped to the CURRENT folder's files (`AppState.currentFiles`),
+  not library-wide. Delete (`TagStore.deleteAllTags(forURLs:)`) removes every
+  tag — manual AND vision — for the folder's files, but **deliberately leaves
+  `analyzed_hash` untouched** so the automatic pipeline never resurrects them;
+  they only return via an explicit Regenerate. No FTS cleanup needed (tags
+  aren't in `files_fts`; tag search is a separate label lookup). Regenerate
+  (`AnalyzePipeline.regenerateTagless(in:)`) re-runs Vision only on folder
+  files with **zero tags** — a "no-tags" gate (NOT an `analyzed_hash` reset),
+  which makes it both the recovery path (after a wipe all files qualify) and
+  incremental (a fully-tagged folder is a no-op). Tags are content-identity
+  keyed (by `file_id`), so this matches the app's existing tag model: a
+  byte-identical duplicate in another folder shares the same tag rows.
+- **"Organizing…" pill** — `ContentView` now observes
+  `CollectionsEngine.isClustering` and shows the same glass capsule during the
+  post-analyze recluster, closing the previously-invisible gap between the
+  "Analyzing N of M" pill vanishing and results appearing (Regenerate made it
+  noticeable). Purely additive view code.
+- **Two QA-found bugs fixed** — (1) the menu items were enabled whenever the
+  folder had files, but their confirmation alerts live on `TagChipsRow`, which
+  is unmounted during search and on the Collections card page → firing there
+  was a silent no-op that popped a ghost destructive alert later. Now gated on
+  `AppState.bulkTagCommandsAvailable` (matches exactly where TagChipsRow is
+  mounted). (2) An open hero viewer showed stale tag pills after a menu
+  Delete/Regenerate because `details` reloads via `.task(id: currentURL)`;
+  added an `.onChange(of: tagsVersion)` reload.
+- **Known, accepted limitation (not fixed):** `CollectionsEngine.recluster()`'s
+  `guard !isClustering` can drop a regenerate's trailing recluster if a prior
+  recluster is in flight, so collections can lag by one analyze pass. It's
+  pre-existing, self-healing on the next analyze, and a fix would change core
+  clustering across every analyze path — left alone deliberately.
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
