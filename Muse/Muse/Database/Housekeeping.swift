@@ -13,7 +13,7 @@ import Foundation
 import GRDB
 
 enum Housekeeping {
-    static let retentionDays = 180
+    nonisolated static let retentionDays = 180
 
     /// Purge index data for files unreachable from `rootPaths` whose
     /// last_seen_at is older than the retention window. Runs in one write

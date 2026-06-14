@@ -78,14 +78,18 @@ final class AspectRatioCache: ObservableObject {
             default: return nil
             }
         }
+        // Read the DB handle here on the main actor and hand it to the
+        // background task, rather than reaching for the @MainActor singleton
+        // from nonisolated code (mirrors Housekeeping.pruneUnreachable(queue:)).
+        let queue = Database.shared.dbQueue
 
-        Task.detached(priority: .utility) { [paths, imageURLs, token] in
+        Task.detached(priority: .utility) { [paths, imageURLs, token, queue] in
             // 1) DB dimensions for the whole set — fast, published right away.
             //    Everything NOT awaiting an ImageIO read (DB hits + non-image
             //    files like PDFs that have no aspect to resolve) is marked
             //    resolved now, so a later load() skips them instead of
             //    reprocessing the whole folder each call.
-            let fromDB = Self.dbDimensions(paths: paths)
+            let fromDB = queue.map { Self.dbDimensions(paths: paths, queue: $0) } ?? [:]
             let gaps = imageURLs.filter { fromDB[$0.standardizedFileURL.path] == nil }
             let gapSet = Set(gaps.map { $0.standardizedFileURL.path })
             let nonGap = paths.filter { !gapSet.contains($0) }
@@ -134,8 +138,9 @@ final class AspectRatioCache: ObservableObject {
     /// Bulk lookup of stored pixel dimensions by absolute path, mirroring
     /// `SmartSorter.indexedRows` (paths → file_id → FileRow). Chunked to keep
     /// the SQL variable count well under SQLite's limit.
-    private nonisolated static func dbDimensions(paths: [String]) -> [String: CGFloat] {
-        guard let queue = Database.shared.dbQueue, !paths.isEmpty else { return [:] }
+    private nonisolated static func dbDimensions(paths: [String],
+                                                 queue: DatabaseQueue) -> [String: CGFloat] {
+        guard !paths.isEmpty else { return [:] }
         return (try? queue.read { db -> [String: CGFloat] in
             var out: [String: CGFloat] = [:]
             var start = 0

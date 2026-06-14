@@ -40,7 +40,7 @@ enum AssetKind: String, Codable, Equatable, Hashable, CaseIterable {
 extension AssetKind {
     /// Map a URL to an AssetKind. Folders detected first, then by file extension,
     /// then by UTType conformance for files without a recognizable extension.
-    static func detect(at url: URL) -> AssetKind {
+    nonisolated static func detect(at url: URL) -> AssetKind {
         var isDir: ObjCBool = false
         if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
             // .app, .photoslibrary, .pages, etc. — opaque bundles per Q33
@@ -52,7 +52,7 @@ extension AssetKind {
         return classify(url: url, fallback: .unknown)
     }
 
-    static func classify(url: URL, fallback: AssetKind) -> AssetKind {
+    nonisolated static func classify(url: URL, fallback: AssetKind) -> AssetKind {
         let ext = url.pathExtension.lowercased()
         if ext.isEmpty {
             return classifyByUTType(url: url, fallback: fallback)
@@ -63,7 +63,7 @@ extension AssetKind {
         return classifyByUTType(url: url, fallback: fallback)
     }
 
-    private static func classifyByUTType(url: URL, fallback: AssetKind) -> AssetKind {
+    private nonisolated static func classifyByUTType(url: URL, fallback: AssetKind) -> AssetKind {
         guard let type = UTType(filenameExtension: url.pathExtension) ?? typeFromContent(url: url) else {
             return fallback
         }
@@ -79,12 +79,12 @@ extension AssetKind {
         return fallback
     }
 
-    private static func typeFromContent(url: URL) -> UTType? {
+    private nonisolated static func typeFromContent(url: URL) -> UTType? {
         try? url.resourceValues(forKeys: [.contentTypeKey]).contentType
     }
 
     /// macOS package directories that should be treated as opaque files (don't descend).
-    private static func isOpaqueBundle(url: URL) -> Bool {
+    private nonisolated static func isOpaqueBundle(url: URL) -> Bool {
         let bundleExts: Set<String> = [
             "app", "photoslibrary", "rtfd", "pages", "numbers", "key",
             "framework", "bundle", "kext", "xcassets", "lproj", "pkg", "mpkg",
@@ -93,7 +93,7 @@ extension AssetKind {
         return bundleExts.contains(url.pathExtension.lowercased())
     }
 
-    static let byExtension: [String: AssetKind] = {
+    nonisolated static let byExtension: [String: AssetKind] = {
         var map: [String: AssetKind] = [:]
         let mapping: [(AssetKind, [String])] = [
             (.image,    ["jpg", "jpeg", "png", "heic", "heif", "webp", "gif", "tiff", "tif", "bmp", "ico"]),
