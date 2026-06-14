@@ -80,6 +80,34 @@ final class AnalyzePipeline: ObservableObject {
         await analyze(folder: pendingURLs)
     }
 
+    /// Recovery / gap-fill pass: of `urls` (the current folder), analyze only
+    /// those files that currently have NO tags. This is the explicit
+    /// "Regenerate Tags" command. The no-tags gate makes it both the recovery
+    /// path (after a Delete All, every file qualifies) and incremental
+    /// (already-tagged files are skipped, so a fully-tagged folder is a no-op).
+    /// Intentionally NOT gated on analyzed_hash, so it doesn't entangle with
+    /// the automatic pipeline.
+    func regenerateTagless(in urls: [URL]) async {
+        guard let queue = Database.shared.dbQueue else { return }
+        while isRunning {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+        }
+        let paths = urls.map { $0.standardizedFileURL.path }
+        guard !paths.isEmpty else { return }
+        let tagless: Set<String> = (try? await queue.read { db in
+            let marks = databaseQuestionMarks(count: paths.count)
+            return try Set(String.fetchAll(db, sql: """
+                SELECT p.absolute_path FROM paths p
+                WHERE p.is_alive = 1
+                  AND p.absolute_path IN (\(marks))
+                  AND NOT EXISTS (SELECT 1 FROM tags t WHERE t.file_id = p.file_id)
+                """, arguments: StatementArguments(paths)))
+        }) ?? []
+        guard !tagless.isEmpty else { return }
+        let taglessURLs = urls.filter { tagless.contains($0.standardizedFileURL.path) }
+        await analyze(folder: taglessURLs)
+    }
+
     func analyze(folder urls: [URL]) async {
         guard !urls.isEmpty else { return }
         guard let queue = Database.shared.dbQueue else { return }
