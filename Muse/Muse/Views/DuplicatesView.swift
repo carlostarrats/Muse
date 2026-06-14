@@ -21,7 +21,7 @@ struct DuplicatesView: View {
         VStack(spacing: 0) {
             HStack {
                 Text("Duplicates")
-                    .font(.title3.weight(.semibold))
+                    .font(.system(size: 24, weight: .semibold))
                 Text("(\(DuplicateFinder.shared.groups.count) groups)")
                     .foregroundStyle(.secondary)
                     .font(.callout)
@@ -36,12 +36,9 @@ struct DuplicatesView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                Button("Close") { isPresented = false }
-                    .keyboardShortcut(.cancelAction)
+                CloseXButton { isPresented = false }
             }
             .padding(16)
-
-            Divider()
 
             if DuplicateFinder.shared.groups.isEmpty && !DuplicateFinder.shared.isRunning {
                 VStack(spacing: 12) {
@@ -55,11 +52,24 @@ struct DuplicatesView: View {
                 .padding(40)
             } else {
                 ScrollView {
-                    VStack(spacing: 24) {
-                        ForEach(DuplicateFinder.shared.groups) { group in
-                            groupCard(group)
+                    VStack(spacing: 0) {
+                        ForEach(Array(DuplicateFinder.shared.groups.enumerated()),
+                                id: \.element.id) { index, group in
+                            if index > 0 {
+                                Divider().padding(.horizontal, 16)
+                            }
+                            groupRow(group)
                         }
                     }
+                    // One light panel for the whole list; rows sit on it,
+                    // separated by hairlines (no per-group grey cards). A faint
+                    // primary tint reads as light grey on the white modal and a
+                    // soft lift in dark mode — controlBackgroundColor is white in
+                    // light mode and would vanish against the modal.
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.primary.opacity(0.05))
+                    )
                     .padding(20)
                 }
             }
@@ -96,35 +106,21 @@ struct DuplicatesView: View {
     }
 
     @ViewBuilder
-    private func groupCard(_ group: DuplicateGroup) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: badgeIcon(group.reason))
-                    .foregroundStyle(badgeColor(group.reason))
-                Text(group.reason.displayName)
-                    .font(.subheadline.weight(.medium))
-                Text("·")
-                    .foregroundStyle(.tertiary)
-                Text("\(group.members.count) files")
-                    .foregroundStyle(.secondary)
-                    .font(.caption)
-            }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(group.members, id: \.url) { member in
-                        memberCard(member)
-                    }
+    private func groupRow(_ group: DuplicateGroup) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach(group.members, id: \.url) { member in
+                    memberCard(member)
                 }
             }
+            .padding(16)
         }
-        .padding(16)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     @ViewBuilder
     private func memberCard(_ member: DuplicateGroup.Member) -> some View {
         VStack(spacing: 6) {
-            ZStack(alignment: .topTrailing) {
+            ZStack(alignment: .top) {
                 AsyncThumbnail(url: member.url, size: 140)
                     .frame(width: 140, height: 140)
                     .background(Color(NSColor.controlBackgroundColor))
@@ -136,7 +132,7 @@ struct DuplicatesView: View {
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
                         .background(.green, in: Capsule())
-                        .padding(6)
+                        .padding(.top, 8)
                 }
             }
             Text(member.url.lastPathComponent)
@@ -160,22 +156,6 @@ struct DuplicatesView: View {
         }
     }
 
-    private func badgeIcon(_ r: DuplicateGroup.Reason) -> String {
-        switch r {
-        case .byteExact: return "equal.circle"
-        case .visual:    return "eye.circle"
-        case .filename:  return "textformat.abc"
-        }
-    }
-
-    private func badgeColor(_ r: DuplicateGroup.Reason) -> Color {
-        switch r {
-        case .byteExact: return .green
-        case .visual:    return .blue
-        case .filename:  return .orange
-        }
-    }
-
     private func formatBytes(_ b: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: b, countStyle: .file)
     }
@@ -188,6 +168,31 @@ struct DuplicatesView: View {
             }
         }
         selected.removeAll()
+        // The shown groups still reference the now-trashed files and don't
+        // re-derive here, so leaving the modal open looks like nothing
+        // happened. Close it — the files are on their way to the Trash.
+        isPresented = false
+    }
+}
+
+/// Circular ✕, hover-brightening — identical to the InfoSheet close button so
+/// all of Muse's modals share the same header chrome. Esc also closes.
+private struct CloseXButton: View {
+    var action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(hovering ? .primary : .secondary)
+                .frame(width: 26, height: 26)
+                .background(Circle().fill(.primary.opacity(hovering ? 0.16 : 0.08)))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .keyboardShortcut(.cancelAction)
+        .help("Close")
     }
 }
 
@@ -201,7 +206,9 @@ private struct AsyncThumbnail: View {
             if let image {
                 Image(nsImage: image)
                     .resizable()
-                    .aspectRatio(contentMode: .fit)
+                    // Fill the square so the KEEP badge sits on the image,
+                    // not in a letterbox gap above it.
+                    .aspectRatio(contentMode: .fill)
             } else {
                 Image(systemName: "doc")
                     .font(.system(size: 24))
@@ -209,6 +216,7 @@ private struct AsyncThumbnail: View {
             }
         }
         .frame(width: size, height: size)
+        .clipped()
         .task(id: url) {
             image = await ThumbnailCache.shared.thumbnail(
                 for: url,
