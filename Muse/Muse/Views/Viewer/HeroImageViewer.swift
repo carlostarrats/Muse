@@ -152,6 +152,12 @@ struct HeroImageViewer: View {
             if lingering && id == nil { reallyFinish() }
         }
         .task(id: currentURL) { await loadDetails() }
+        // Reload tag pills when tags mutate library-wide (e.g. the menu-bar
+        // Delete All / Regenerate commands fire while this viewer is open) —
+        // .task is keyed on the URL, so it wouldn't otherwise refresh.
+        .onChange(of: appState.tagsVersion) { _, _ in
+            Task { await loadDetails() }
+        }
     }
 
     // MARK: - Right rail (chrome row + info column, shared zoom backing)

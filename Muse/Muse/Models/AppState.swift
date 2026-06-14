@@ -209,6 +209,18 @@ final class AppState: ObservableObject {
     @Published var regenerateTagsRequest = false
     private var tagRequestToken = 0
 
+    /// Whether the bulk-tag menu commands (Delete All / Regenerate) may fire.
+    /// Their confirmation alerts live on TagChipsRow, which is unmounted during
+    /// search and on the Collections card page — firing a request there would
+    /// be a silent no-op that pops a ghost alert later when the row remounts.
+    /// Gate the menu items to exactly where TagChipsRow is mounted (a real
+    /// folder grid or inside a collection) with files present.
+    var bulkTagCommandsAvailable: Bool {
+        !currentFiles.isEmpty
+            && !isSearchActive
+            && !(showingCollections && activeCollectionID == nil)
+    }
+
     /// Set the active collection's cover to the given file (right-click on a
     /// tile, or the Edit-menu command). One cover per collection; replaces any
     /// previous choice. No-op outside a collection or for an unindexed file.

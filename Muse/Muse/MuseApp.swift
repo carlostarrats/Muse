@@ -106,12 +106,12 @@ struct MuseApp: App {
                 Button("Delete All Tags…") {
                     appState.deleteAllTagsRequest = true
                 }
-                .disabled(appState.currentFiles.isEmpty)
+                .disabled(!appState.bulkTagCommandsAvailable)
 
                 Button("Regenerate Tags…") {
                     appState.regenerateTagsRequest = true
                 }
-                .disabled(appState.currentFiles.isEmpty)
+                .disabled(!appState.bulkTagCommandsAvailable)
             }
 
             // Same for collections — enabled while inside one.
