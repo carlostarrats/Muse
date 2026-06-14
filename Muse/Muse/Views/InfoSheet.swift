@@ -2,9 +2,10 @@
 //  InfoSheet.swift
 //  Muse
 //
-//  The ⓘ modal: how the app behaves — indexing, Analyze, collections,
-//  tags, search, moods, privacy. Plain-language home for the rules that
-//  otherwise live in nobody's head.
+//  The ⓘ modal: how the app behaves — indexing, viewing, analysis,
+//  collections, tags, search, duplicates, sharing, iCloud, moods,
+//  privacy. Plain-language home for the rules that otherwise live in
+//  nobody's head.
 //
 
 import SwiftUI
@@ -24,11 +25,31 @@ struct InfoSheet: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
+                    section("What Muse is", """
+                        A local-first viewer and organizer for the folders \
+                        you already have. Point it at a folder — Downloads, \
+                        Documents, a pile of screenshots — and browse \
+                        everything in one place. Nothing is imported or \
+                        copied: Muse reads your files where they live and \
+                        never moves or changes them.
+                        """)
+                    rowDivider
                     section("Library & indexing", """
                         Add folders from the sidebar and Muse indexes them \
                         automatically — the status pills at the bottom show \
-                        the progress. Your files are never modified; deleting \
-                        always means moving to the Trash, and it's undoable.
+                        the progress. Pin folders you use often. Your files \
+                        are never modified; deleting always means moving to \
+                        the Trash, and it's undoable.
+                        """)
+                    rowDivider
+                    section("Viewing files", """
+                        Muse opens almost anything in place: images, PDFs, \
+                        video, audio, 3D models, fonts, Markdown, and code or \
+                        text. Click an image for a full-screen hero view with \
+                        zoom, pan, and a side panel of its details. Anything \
+                        Muse doesn't have a dedicated viewer for falls back to \
+                        Quick Look — and you can always right-click and Open \
+                        With another app.
                         """)
                     rowDivider
                     section("Analysis", """
@@ -45,11 +66,14 @@ struct InfoSheet: View {
                     section("Collections", """
                         Groupings that span your whole library, suggested \
                         automatically from what Vision finds, plus any you \
-                        build by hand in the viewer. Open the Collections \
-                        page from the toolbar to browse them. They track your \
-                        files: delete images or remove a folder and \
-                        collections shrink to match — empty ones disappear. \
-                        Open one to rename or delete it from its header.
+                        build by hand in the viewer. Screenshots get their \
+                        own smart collections by what they're of — recipes, \
+                        receipts, places, articles, and more. Open the \
+                        Collections page from the toolbar to browse them. \
+                        They track your files: delete images or remove a \
+                        folder and collections shrink to match — empty ones \
+                        disappear. Open one to rename or delete it from its \
+                        header.
                         """)
                     rowDivider
                     section("Tags", """
@@ -63,6 +87,13 @@ struct InfoSheet: View {
                     section("Search", """
                         Searches the folder selected in the sidebar — names, \
                         tags, captions, and text found inside images.
+                        """)
+                    rowDivider
+                    section("Duplicates", """
+                        Find Duplicates in the File menu surfaces copies — \
+                        byte-for-byte identical files, visually similar \
+                        images, and matching filenames — so you can review \
+                        and clear them out to the Trash.
                         """)
                     rowDivider
                     section("Sharing", """

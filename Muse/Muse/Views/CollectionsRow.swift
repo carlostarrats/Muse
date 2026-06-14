@@ -66,8 +66,7 @@ private struct ActiveCollectionHeader: View {
                 Text("\(loaded.aliveCount)")
                     .font(.system(size: 42, weight: .semibold))
                     .foregroundStyle(.secondary)
-                HeaderIconButton(systemName: "square.and.pencil",
-                                 help: "Rename collection") { startEdit() }
+                EditPill { startEdit() }
             }
             Spacer()
             TrashButton { confirmDelete = true }
@@ -129,6 +128,26 @@ private struct ActiveCollectionHeader: View {
     }
 }
 
+/// Small pill that reads "Edit"; triggers inline rename of the collection.
+private struct EditPill: View {
+    var action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Text("Edit")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(hovering ? .primary : .secondary)
+                .padding(.horizontal, 12)
+                .frame(height: 26)
+                .background(Capsule().fill(.primary.opacity(hovering ? 0.16 : 0.08)))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Rename collection")
+    }
+}
+
 /// Mid-size circular icon button for the header's edit controls.
 private struct HeaderIconButton: View {
     let systemName: String
@@ -139,9 +158,9 @@ private struct HeaderIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(hovering ? .primary : .secondary)
-                .frame(width: 32, height: 32)
+                .frame(width: 26, height: 26)
                 .background(Circle().fill(.primary.opacity(hovering ? 0.16 : 0.08)))
         }
         .buttonStyle(.plain)
