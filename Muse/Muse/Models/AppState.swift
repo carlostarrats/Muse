@@ -204,6 +204,20 @@ final class AppState: ObservableObject {
     @Published var collectionDeleteRequest = false
     private var tagRequestToken = 0
 
+    /// Set the active collection's cover to the given file (right-click on a
+    /// tile, or the Edit-menu command). One cover per collection; replaces any
+    /// previous choice. No-op outside a collection or for an unindexed file.
+    func setCollectionCover(_ file: FileNode) {
+        guard let cid = activeCollectionID,
+              let q = Database.shared.dbQueue else { return }
+        let path = file.url.path
+        Task { @MainActor in
+            guard let fid = try? await CollectionStore.fileID(queue: q, path: path) else { return }
+            try? await CollectionStore.setCover(queue: q, id: cid, fileID: fid)
+            await CollectionsEngine.shared.reload()
+        }
+    }
+
     /// Set (or clear, with nil) the tag chip filter — same single-transaction
     /// animated swap as the collection filter.
     func setActiveTag(_ label: String?) {

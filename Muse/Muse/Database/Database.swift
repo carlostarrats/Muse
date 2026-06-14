@@ -223,6 +223,14 @@ final class Database {
             }
         }
 
+        migrator.registerMigration("v6_collection_cover") { db in
+            // Optional user-chosen cover image per collection. Nil = auto (the
+            // first alive member). A manual choice survives reclustering.
+            try db.alter(table: "collections") { t in
+                t.add(column: "cover_file_id", .text)
+            }
+        }
+
         return migrator
     }
 }

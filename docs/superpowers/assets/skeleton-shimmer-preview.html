@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Muse skeleton shimmer — tuner</title>
+<style>
+  :root { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; }
+  body { margin: 0; background: #2b2b2e; color: #ddd; padding: 28px; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+  .sub { font-size: 13px; color: #9a9a9e; margin: 0 0 24px; max-width: 860px; line-height: 1.5; }
+
+  .panels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: start; }
+  .panel { border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,.08); background: #232326; }
+  .panel h2 { font-size: 13px; font-weight: 600; margin: 0; padding: 12px 16px; color: #cfcfd3; letter-spacing: .02em; }
+
+  .stage { padding: 16px; }
+  .skeleton { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; opacity: var(--stack, 1); }
+  .col { display: grid; gap: 10px; align-content: start; }
+
+  .tile {
+    position: relative;
+    border-radius: var(--radius, 8px);
+    overflow: hidden;
+    background: var(--tile);
+  }
+  .tile::after {
+    content: "";
+    position: absolute; top: -10%; bottom: -10%; left: 0;
+    width: var(--bw, 72%);
+    background: linear-gradient(100deg,
+        rgba(0,0,0,0)         0%,
+        rgba(0,0,0,var(--w))  38%,
+        rgba(0,0,0,var(--s))  50%,
+        rgba(0,0,0,var(--w))  62%,
+        rgba(0,0,0,0)        100%);
+    filter: blur(var(--blur, 10px));
+    will-change: transform;
+    animation: sweep var(--speed, 1.8s) linear infinite;
+  }
+  @keyframes sweep { from { transform: translateX(-115%); } to { transform: translateX(150%); } }
+
+  .h13 { height: 130px; } .h08 { height: 80px; } .h10 { height: 100px; }
+  .h15 { height: 150px; } .h07 { height: 70px; } .h115 { height: 114px; }
+
+  /* controls */
+  .controls { padding: 10px 16px 16px; border-top: 1px solid rgba(255,255,255,.07); }
+  .ctl { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 10px; padding: 7px 0; }
+  .ctl label { font-size: 11px; color: #b6b6ba; font-weight: 600; }
+  .ctl output { font-size: 11px; color: #8a8a8e; font-variant-numeric: tabular-nums; }
+  .ctl input[type=range] { grid-column: 1 / -1; width: 100%; }
+  .ctl input[type=color] { grid-column: 1 / -1; width: 100%; height: 30px; padding: 2px;
+                           background: #2b2b2e; border: 1px solid rgba(255,255,255,.12); border-radius: 6px; }
+
+  .out { margin-top: 22px; }
+  .out textarea { width: 100%; min-height: 150px; box-sizing: border-box; resize: vertical;
+                  background: #1c1c1f; color: #d6d6da; border: 1px solid rgba(255,255,255,.12);
+                  border-radius: 8px; padding: 12px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .actions { display: flex; gap: 8px; margin-top: 8px; }
+  button { font: 12px/1 inherit; font-weight: 600; padding: 9px 14px; border-radius: 7px; cursor: pointer;
+           border: 1px solid rgba(255,255,255,.14); background: #34343a; color: #e6e6ea; }
+  button:hover { background: #3e3e45; }
+</style>
+</head>
+<body>
+  <h1>Muse skeleton shimmer — tuner</h1>
+  <p class="sub">Inverted dark sweep (translucent shadow band, blurred). Tune each variant, then hit
+  <b>Copy values</b> and paste them back to me and I'll lock them into the app. <b>Shadow</b> = band darkness,
+  <b>Stack</b> = overall translucency (lower = more background shows through).</p>
+
+  <div class="panels" id="panels">
+    <!-- panels injected by JS -->
+  </div>
+
+  <div class="out">
+    <textarea id="output" readonly></textarea>
+    <div class="actions">
+      <button id="copy">Copy values</button>
+      <button id="reset">Reset</button>
+    </div>
+  </div>
+
+<script>
+  const HEIGHTS = [['h13','h08','h115'], ['h10','h15','h07']];
+
+  // key, title, default values
+  const DEFAULTS = [
+    { key:'lt', title:'Light (Paper)',      bg:'#f6f5f3', tile:'#f3f4f6', s:0.07, blur:10, stack:1.00, bw:72, speed:1.8, radius:8 },
+    { key:'dk', title:'Dark (Ink / night)', bg:'#111114', tile:'#1e1e22', s:0.22, blur:10, stack:0.70, bw:72, speed:1.8, radius:8 },
+    { key:'cu', title:'Custom (colored bg)',bg:'#266674', tile:'#1e5460', s:0.13, blur:10, stack:0.74, bw:72, speed:1.8, radius:8 },
+  ];
+
+  // control definitions (slider knobs)
+  const KNOBS = [
+    { id:'s',     label:'Shadow',  min:0,   max:0.6, step:0.01, fmt:v=>v.toFixed(2) },
+    { id:'stack', label:'Stack',   min:0.3, max:1,   step:0.01, fmt:v=>v.toFixed(2) },
+    { id:'blur',  label:'Blur',    min:0,   max:24,  step:1,    fmt:v=>v+'px' },
+    { id:'bw',    label:'Band w',  min:40,  max:120, step:1,    fmt:v=>v+'%' },
+    { id:'speed', label:'Speed',   min:0.4, max:3.2, step:0.1,  fmt:v=>v.toFixed(1)+'s' },
+    { id:'radius',label:'Radius',  min:0,   max:24,  step:1,    fmt:v=>v+'px' },
+  ];
+
+  const state = DEFAULTS.map(d => ({ ...d }));
+  const panelsEl = document.getElementById('panels');
+  const outputEl = document.getElementById('output');
+
+  function tilesMarkup() {
+    return `<div class="skeleton">` +
+      HEIGHTS.map(col => `<div class="col">` + col.map(h => `<div class="tile ${h}"></div>`).join('') + `</div>`).join('') +
+      `</div>`;
+  }
+
+  function buildPanel(d) {
+    const knobs = KNOBS.map(k => `
+      <div class="ctl">
+        <label for="${d.key}-${k.id}">${k.label}</label>
+        <output id="${d.key}-${k.id}-out"></output>
+        <input id="${d.key}-${k.id}" type="range" data-key="${d.key}" data-knob="${k.id}"
+               min="${k.min}" max="${k.max}" step="${k.step}" value="${d[k.id]}">
+      </div>`).join('');
+    return `
+      <div class="panel">
+        <h2>${d.title}</h2>
+        <div class="stage" id="${d.key}-stage">${tilesMarkup()}</div>
+        <div class="controls">
+          <div class="ctl">
+            <label for="${d.key}-bg">Background</label>
+            <input id="${d.key}-bg" type="color" data-key="${d.key}" data-knob="bg" value="${d.bg}">
+          </div>
+          <div class="ctl">
+            <label for="${d.key}-tile">Tile</label>
+            <input id="${d.key}-tile" type="color" data-key="${d.key}" data-knob="tile" value="${d.tile}">
+          </div>
+          ${knobs}
+        </div>
+      </div>`;
+  }
+
+  function applyPanel(d) {
+    const panel = document.getElementById(`${d.key}-stage`).parentElement;
+    panel.style.background = d.bg;
+    const stage = document.getElementById(`${d.key}-stage`);
+    stage.style.setProperty('--tile', d.tile);
+    stage.style.setProperty('--s', d.s);
+    stage.style.setProperty('--w', (d.s * 0.42).toFixed(3));   // shoulder derived from peak
+    stage.style.setProperty('--stack', d.stack);
+    stage.style.setProperty('--blur', d.blur + 'px');
+    stage.style.setProperty('--bw', d.bw + '%');
+    stage.style.setProperty('--speed', d.speed + 's');
+    stage.style.setProperty('--radius', d.radius + 'px');
+    // readouts
+    KNOBS.forEach(k => {
+      const o = document.getElementById(`${d.key}-${k.id}-out`);
+      if (o) o.textContent = k.fmt(d[k.id]);
+    });
+  }
+
+  function syncOutput() {
+    outputEl.value = state.map(d =>
+`${d.title}
+  background: ${d.bg}
+  tile:       ${d.tile}
+  shadow:     ${d.s.toFixed(2)}
+  stack:      ${d.stack.toFixed(2)}
+  blur:       ${d.blur}px
+  band width: ${d.bw}%
+  speed:      ${d.speed.toFixed(1)}s
+  radius:     ${d.radius}px`).join('\n\n');
+  }
+
+  function render() {
+    panelsEl.innerHTML = state.map(buildPanel).join('');
+    panelsEl.querySelectorAll('input').forEach(input => {
+      input.addEventListener('input', e => {
+        const { key, knob } = e.target.dataset;
+        const d = state.find(s => s.key === key);
+        const raw = e.target.value;
+        d[knob] = (e.target.type === 'color') ? raw : parseFloat(raw);
+        applyPanel(d);
+        syncOutput();
+      });
+    });
+    state.forEach(applyPanel);
+    syncOutput();
+  }
+
+  document.getElementById('copy').addEventListener('click', async () => {
+    outputEl.select();
+    try { await navigator.clipboard.writeText(outputEl.value); }
+    catch (_) { document.execCommand('copy'); }
+  });
+  document.getElementById('reset').addEventListener('click', () => {
+    DEFAULTS.forEach((d, i) => Object.assign(state[i], d));
+    render();
+  });
+
+  render();
+</script>
+</body>
+</html>

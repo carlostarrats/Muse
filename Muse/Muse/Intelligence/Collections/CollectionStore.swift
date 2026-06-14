@@ -17,6 +17,8 @@ enum CollectionStore {
         /// Cards, headers, and the row all display THIS, so deleting images
         /// or removing folders auto-shrinks (and at zero, hides) a collection.
         var aliveCount: Int
+        /// User-chosen cover file id; nil = auto (first alive member).
+        var coverFileID: String?
     }
 
     static func upsert(queue: DatabaseQueue, id: String, name: String,
@@ -125,6 +127,42 @@ enum CollectionStore {
         }
     }
 
+    /// Set (or replace) a collection's chosen cover image. One per collection.
+    static func setCover(queue: DatabaseQueue, id: String, fileID: String) async throws {
+        let now = Int64(Date().timeIntervalSince1970)
+        try await queue.write { db in
+            try db.execute(sql: "UPDATE collections SET cover_file_id = ?, updated_at = ? WHERE id = ?",
+                           arguments: [fileID, now, id])
+        }
+    }
+
+    /// Resolve an alive file's absolute path to its file id (nil if not indexed
+    /// / not alive). Mirrors the lookup TagStore uses.
+    static func fileID(queue: DatabaseQueue, path: String) async throws -> String? {
+        try await queue.read { db in
+            try PathRow
+                .filter(PathRow.Columns.absolute_path == path)
+                .filter(PathRow.Columns.is_alive == 1)
+                .fetchOne(db)?
+                .file_id
+        }
+    }
+
+    /// The chosen cover's alive absolute path — but only if it's still an alive
+    /// member of the collection. Returns nil otherwise so callers fall back to
+    /// the auto cover (first alive member).
+    static func coverPath(queue: DatabaseQueue, collectionID: String,
+                          coverFileID: String) async throws -> String? {
+        try await queue.read { db in
+            try String.fetchOne(db, sql: """
+                SELECT p.absolute_path FROM paths p
+                JOIN collection_members m ON m.file_id = p.file_id
+                WHERE p.is_alive = 1 AND p.file_id = ? AND m.collection_id = ?
+                LIMIT 1
+                """, arguments: [coverFileID, collectionID])
+        }
+    }
+
     static func setHidden(queue: DatabaseQueue, id: String, hidden: Bool) async throws {
         try await queue.write { db in
             try db.execute(sql: "UPDATE collections SET is_hidden = ? WHERE id = ?",
@@ -146,7 +184,8 @@ enum CollectionStore {
                     JOIN collection_members m ON m.file_id = p.file_id
                     WHERE m.collection_id = ? AND p.is_alive = 1
                     """, arguments: [row.id]) ?? 0
-                return Loaded(collection: row, memberIDs: members, aliveCount: alive)
+                return Loaded(collection: row, memberIDs: members, aliveCount: alive,
+                              coverFileID: row.cover_file_id)
             }
             .filter { $0.aliveCount > 0 }                      // nothing on disk → hidden
             .sorted { $0.aliveCount > $1.aliveCount }          // biggest first

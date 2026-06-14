@@ -117,6 +117,7 @@ struct CollectionRow: Codable, FetchableRecord, MutablePersistableRecord {
     var model_version: String
     var created_at: Int64
     var updated_at: Int64
+    var cover_file_id: String?      // user-chosen cover; nil = auto (first member)
 }
 
 struct CollectionMemberRow: Codable, FetchableRecord, MutablePersistableRecord {

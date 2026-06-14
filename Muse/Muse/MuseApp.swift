@@ -60,6 +60,13 @@ struct MuseApp: App {
                     }
                 }
                 .disabled(selectedRoot == nil)
+
+                Button("Set as Collection Cover") {
+                    if let file = appState.selectedFile {
+                        appState.setCollectionCover(file)
+                    }
+                }
+                .disabled(appState.activeCollectionID == nil || appState.selectedFile == nil)
             }
 
             // Library tools live in the File menu.

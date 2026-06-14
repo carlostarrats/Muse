@@ -197,11 +197,11 @@ struct CollectionCard: View {
     @EnvironmentObject var appState: AppState
     let loaded: CollectionStore.Loaded
 
-    /// Cover size (a 2×2 mosaic). Defaults to the compact size; the
+    /// Cover size (a single cover image). Defaults to the compact size; the
     /// Collections page passes a width computed to fit 4 per row.
     var coverSize: CGSize = CollectionCard.defaultCoverSize
 
-    /// Compact default cover, a 2×2 grid of cells.
+    /// Compact default cover.
     static let defaultCoverSize = CGSize(width: 240, height: 120)
 
     @State private var hovering = false
@@ -212,9 +212,10 @@ struct CollectionCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            CollectionMosaic(collectionID: loaded.collection.id,
-                             memberIDs: loaded.memberIDs,
-                             size: coverSize)
+            CollectionCover(collectionID: loaded.collection.id,
+                            memberIDs: loaded.memberIDs,
+                            coverFileID: loaded.coverFileID,
+                            size: coverSize)
                 // Hairline grey border + soft drop shadow so each card reads
                 // as a distinct object instead of blending into the row.
                 .overlay(
@@ -266,85 +267,68 @@ struct CollectionCard: View {
     }
 }
 
-// MARK: - Mosaic (2×2 cover cells)
+// MARK: - Cover (single image)
 
-private struct CollectionMosaic: View {
+private struct CollectionCover: View {
     @EnvironmentObject var appState: AppState
     let collectionID: String
     let memberIDs: [String]
+    let coverFileID: String?
     let size: CGSize
 
-    @State private var thumbs: [NSImage] = []
+    @State private var cover: NSImage?
 
-    // White frame around the edges + white gaps between the four images,
-    // so the card reads as a white object with the photos floated inside.
-    private let inset: CGFloat = 8
-    private let gap: CGFloat = 6
+    /// Fill the card, then zoom a touch *past* the fit so the side that would
+    /// otherwise sit edge-to-edge gets cropped too — screenshots often carry a
+    /// thin white border, and this lets the actual content define the edges.
+    private let contentZoom: CGFloat = 1.10
 
     var body: some View {
-        let cellWidth = (size.width - 2 * inset - gap) / 2
-        let cellHeight = (size.height - 2 * inset - gap) / 2
-
-        VStack(spacing: gap) {
-            ForEach(0..<2, id: \.self) { row in
-                HStack(spacing: gap) {
-                    ForEach(0..<2, id: \.self) { col in
-                        mosaicCell(index: row * 2 + col,
-                                   width: cellWidth, height: cellHeight)
-                    }
-                }
-            }
-        }
-        .padding(inset)
-        .frame(width: size.width, height: size.height)
-        // Translucent rather than solid white, so the card picks up a hint of
-        // the mood background behind it — like the tag chips.
-        .background(Color.white.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .task(id: memberIDs) {
-            await loadThumbs()
-        }
-    }
-
-    @ViewBuilder
-    private func mosaicCell(index: Int, width: CGFloat, height: CGFloat) -> some View {
         ZStack {
             Rectangle()
                 .fill(Color.primary.opacity(0.06))
-            if index < thumbs.count {
-                Image(nsImage: thumbs[index])
+            if let cover {
+                Image(nsImage: cover)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
+                    .scaleEffect(contentZoom)
                     .transition(.opacity)
             } else {
                 Image(systemName: "photo")
-                    .font(.system(size: 14))
+                    .font(.system(size: 18))
                     .foregroundStyle(.tertiary)
             }
         }
-        // Covers fade in together once loaded rather than snapping in.
-        .animation(.easeOut(duration: 0.3), value: thumbs.count)
-        .frame(width: width, height: height)
-        .clipped()
+        // Cover fades in once loaded rather than snapping in.
+        .animation(.easeOut(duration: 0.3), value: cover != nil)
+        .frame(width: size.width, height: size.height)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        // Reload when the membership OR the chosen cover changes.
+        .task(id: "\(memberIDs.joined(separator: ","))|\(coverFileID ?? "")") {
+            await loadCover()
+        }
     }
 
-    private func loadThumbs() async {
+    private func loadCover() async {
         guard let q = Database.shared.dbQueue else { return }
-        let paths = (try? await CollectionStore.alivePaths(
-            queue: q, collectionID: collectionID, limit: 4
-        )) ?? []
-        var loaded: [NSImage] = []
-        for path in paths {
-            let url = URL(fileURLWithPath: path)
-            // 320 matches the grid/viewer probe size, so the bitmap is
-            // already in the shared cache.
-            if let img = await ThumbnailCache.shared.thumbnail(
-                for: url, size: CGSize(width: 320, height: 320)
-            ) {
-                loaded.append(img)
-            }
+        // Prefer the user-chosen cover (if still an alive member); otherwise
+        // fall back to the first alive member.
+        var path: String?
+        if let coverFileID {
+            path = try? await CollectionStore.coverPath(
+                queue: q, collectionID: collectionID, coverFileID: coverFileID)
         }
-        thumbs = loaded
+        if path == nil {
+            path = (try? await CollectionStore.alivePaths(
+                queue: q, collectionID: collectionID, limit: 1))?.first
+        }
+        guard let path else { return }
+        let url = URL(fileURLWithPath: path)
+        // 320 matches the grid/viewer probe size, so the bitmap is
+        // already in the shared cache.
+        cover = await ThumbnailCache.shared.thumbnail(
+            for: url, size: CGSize(width: 320, height: 320)
+        )
     }
 }
 

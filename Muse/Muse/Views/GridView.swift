@@ -34,8 +34,9 @@ struct GridView: View {
     /// 0 at the top; goes negative as the user scrolls down.
     @State private var canvasMinY: CGFloat = 0
 
-    /// Drives the skeleton placeholder's gentle pulse while a folder loads.
-    @State private var skeletonPulse = false
+    /// Drives the skeleton placeholder's traveling sheen (0→1, looped) while
+    /// a folder loads.
+    @State private var shimmerPhase: CGFloat = 0
 
     var body: some View {
         GeometryReader { geo in
@@ -155,6 +156,11 @@ struct GridView: View {
                             newTagText = ""
                             addTagFile = file
                         }
+                        if appState.activeCollectionID != nil {
+                            Button("Set as Collection Cover") {
+                                appState.setCollectionCover(file)
+                            }
+                        }
                         Divider()
                         Button("Move to Trash", role: .destructive) {
                             Task { await appState.deletion.deleteWithBurn(file) }
@@ -252,7 +258,7 @@ struct GridView: View {
         .help("Images per row")
     }
 
-    /// Pulsing placeholder tiles shown the instant a folder is selected,
+    /// Shimmering placeholder tiles shown the instant a folder is selected,
     /// while its contents enumerate off-main — so clicking a folder feels
     /// immediate instead of a frozen pause followed by a sudden pop-in.
     private func skeletonGrid(width: CGFloat) -> some View {
@@ -260,12 +266,53 @@ struct GridView: View {
         let ratios: [CGFloat] = [1.3, 0.8, 1.0, 1.5, 0.7, 1.15, 0.9, 1.25]
         let cols = max(1, gridColumns)
         let columnWidth = max(1, (width - CGFloat(cols - 1) * spacing) / CGFloat(cols))
+
+        // Inverted, mood-aware sweep: a translucent BLACK band (a soft shadow)
+        // travels through each tile — never a bright streak. It's blurred so the
+        // gradient steps dither out (no banding), and the whole stack is drawn
+        // below 1 opacity so a colored background tints through. Per-mood shadow
+        // strength + stack opacity were tuned live (skeleton-shimmer-preview.html).
+        let palette = appState.moodPalette
+        let peak: Double        // band darkness
+        let stackOpacity: Double // overall translucency
+        if appState.mood == .custom {
+            (peak, stackOpacity) = (0.09, 0.74)
+        } else if palette.scheme == .dark {
+            (peak, stackOpacity) = (0.18, 0.87)
+        } else {
+            (peak, stackOpacity) = (0.06, 1.00)
+        }
+        let shoulder = peak * 0.42
+        let blurRadius: CGFloat = 15
+
         return HStack(alignment: .top, spacing: spacing) {
             ForEach(0..<cols, id: \.self) { col in
                 VStack(spacing: spacing) {
                     ForEach(0..<5, id: \.self) { row in
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .fill(appState.moodPalette.tileFill)
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(palette.tileFill)
+                            .overlay {
+                                GeometryReader { g in
+                                    let bandW = g.size.width * 0.72
+                                    Rectangle()
+                                        .fill(LinearGradient(
+                                            stops: [
+                                                .init(color: .black.opacity(0),        location: 0),
+                                                .init(color: .black.opacity(shoulder), location: 0.38),
+                                                .init(color: .black.opacity(peak),     location: 0.50),
+                                                .init(color: .black.opacity(shoulder), location: 0.62),
+                                                .init(color: .black.opacity(0),        location: 1),
+                                            ],
+                                            startPoint: .leading, endPoint: .trailing))
+                                        // Overshoot vertically so the blur's soft
+                                        // edges fall outside the clipped tile.
+                                        .frame(width: bandW, height: g.size.height + 60)
+                                        .blur(radius: blurRadius)
+                                        .offset(x: -1.15 * bandW + shimmerPhase * 2.65 * bandW,
+                                                y: -30)
+                                }
+                            }
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                             .frame(height: columnWidth * ratios[(col * 5 + row) % ratios.count])
                     }
                 }
@@ -274,10 +321,11 @@ struct GridView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(contentInset)
-        .opacity(skeletonPulse ? 0.45 : 0.85)
+        .opacity(stackOpacity)
         .onAppear {
-            withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
-                skeletonPulse = true
+            shimmerPhase = 0
+            withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
+                shimmerPhase = 1
             }
         }
         .transition(.opacity)
