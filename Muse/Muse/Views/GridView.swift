@@ -411,14 +411,21 @@ private struct TileView: View {
                         // Correct the tile's aspect from the real image BEFORE
                         // showing it, so the frame is already right when the
                         // image lands — it fills, never letterboxed in grey.
-                        if img.size.width > 0 {
+                        // Image kinds only: non-image cards keep their fixed
+                        // labeled-card aspect (a QuickLook doc thumbnail's
+                        // proportions must not resize the card).
+                        if isImageKind, img.size.width > 0 {
                             reportAspect(img.size.height / img.size.width)
                         }
                         thumbnail = img
                         return
                     }
                     if Task.isCancelled { return }
-                    try? await Task.sleep(nanoseconds: UInt64(300_000_000) * UInt64(attempt + 1))
+                    // No backoff after the final attempt — it would just stall
+                    // a permanently-unrenderable tile for nothing.
+                    if attempt < 3 {
+                        try? await Task.sleep(nanoseconds: UInt64(300_000_000) * UInt64(attempt + 1))
+                    }
                 }
             }
     }

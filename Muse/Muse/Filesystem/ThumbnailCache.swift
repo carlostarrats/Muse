@@ -94,6 +94,10 @@ private actor ThumbnailGate {
     /// caller treats that as "no thumbnail needed anymore" and moves on.
     nonisolated func withSlot<T: Sendable>(order: Int,
                                            _ body: @Sendable () async -> T?) async -> T? {
+        // Already cancelled before we even queue? Don't enqueue a waiter — it
+        // avoids the already-cancelled-at-entry window in the cancellation
+        // handler entirely.
+        if Task.isCancelled { return nil }
         do {
             try await acquire(order: order)
         } catch {
