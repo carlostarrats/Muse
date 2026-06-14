@@ -125,6 +125,30 @@ final class TagStore: ObservableObject {
         }
     }
 
+    /// Delete every tag (manual + vision) for the given file URLs. Scoped by
+    /// resolving each URL to its alive file_id. Deliberately does NOT touch
+    /// analyzed_hash, so the automatic analysis pipeline will not resurrect
+    /// these tags on the next index pass — they only return via an explicit
+    /// Regenerate. No FTS cleanup needed: tags aren't stored in files_fts.
+    func deleteAllTags(forURLs urls: [URL]) async {
+        guard let queue = Database.shared.dbQueue else { return }
+        let paths = urls.map { $0.standardizedFileURL.path }
+        guard !paths.isEmpty else { return }
+        do {
+            try await queue.write { db in
+                let marks = databaseQuestionMarks(count: paths.count)
+                try db.execute(sql: """
+                    DELETE FROM tags WHERE file_id IN (
+                        SELECT p.file_id FROM paths p
+                        WHERE p.is_alive = 1 AND p.absolute_path IN (\(marks))
+                    )
+                    """, arguments: StatementArguments(paths))
+            }
+        } catch {
+            print("[TagStore] deleteAllTags failed: \(error)")
+        }
+    }
+
     func removeTag(_ tag: TagRow, for url: URL) async -> [TagRow] {
         guard let queue = Database.shared.dbQueue else { return [] }
         let tagID = tag.id
