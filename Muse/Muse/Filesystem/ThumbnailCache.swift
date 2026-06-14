@@ -18,6 +18,8 @@ import AppKit
 import QuickLookThumbnailing
 import CryptoKit
 import AVFoundation
+import ImageIO
+import UniformTypeIdentifiers
 
 /// Observable thumbnail-load progress; drives the bottom-center pill when
 /// a folder's tiles are streaming in. Small bursts (a viewer open) stay
@@ -48,22 +50,56 @@ final class ThumbProgress: ObservableObject {
 /// (nonisolated), so the limit really is `limit`, not 1.
 private actor ThumbnailGate {
     private var available: Int
-    private var waiters: [(order: Int, cont: CheckedContinuation<Void, Never>)] = []
+    private struct Waiter {
+        let order: Int
+        let id: UInt64
+        let cont: CheckedContinuation<Void, Error>
+    }
+    private var waiters: [Waiter] = []
+    private var nextID: UInt64 = 0
     init(limit: Int) { available = limit }
 
-    private func acquire(order: Int) async {
+    /// Acquire a permit, honoring cancellation. Throws `CancellationError` if
+    /// the task is cancelled while queued — which is exactly what happens when
+    /// a grid tile scrolls off-screen before it reached the front of the line.
+    /// That waiter is then removed instead of being served, so the gate spends
+    /// its slots on tiles that are STILL visible, not on the hundreds the user
+    /// already scrolled past.
+    private func acquire(order: Int) async throws {
         if available > 0 { available -= 1; return }
-        await withCheckedContinuation { waiters.append((order, $0)) }
+        let id = nextID; nextID += 1
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { cont in
+                waiters.append(Waiter(order: order, id: id, cont: cont))
+            }
+        } onCancel: {
+            Task { await self.dropWaiter(id) }
+        }
     }
+
+    /// Remove a still-queued waiter (cancelled before it got a permit) and fail
+    /// its continuation. It never held a permit, so `available` is untouched.
+    private func dropWaiter(_ id: UInt64) {
+        guard let idx = waiters.firstIndex(where: { $0.id == id }) else { return }
+        waiters.remove(at: idx).cont.resume(throwing: CancellationError())
+    }
+
     private func releaseNow() {
         guard let next = waiters.indices.min(by: { waiters[$0].order < waiters[$1].order })
         else { available += 1; return }
         waiters.remove(at: next).cont.resume()
     }
 
+    /// Returns `nil` if cancelled while queued (or before the body ran) — the
+    /// caller treats that as "no thumbnail needed anymore" and moves on.
     nonisolated func withSlot<T: Sendable>(order: Int,
-                                           _ body: @Sendable () async -> T) async -> T {
-        await acquire(order: order)
+                                           _ body: @Sendable () async -> T?) async -> T? {
+        do {
+            try await acquire(order: order)
+        } catch {
+            return nil   // cancelled while waiting → drop the work entirely
+        }
+        if Task.isCancelled { await releaseNow(); return nil }
         let result = await body()
         await releaseNow()
         return result
@@ -76,7 +112,19 @@ final class ThumbnailCache: ObservableObject {
 
     private let memCache = NSCache<NSString, NSImage>()
     private nonisolated let diskRoot: URL
-    private static let gate = ThumbnailGate(limit: 4)
+    // ImageIO image decodes are light and thread-safe (an isolated test ran
+    // 8-wide over 300 files in 1.7s), so the viewport keeps up with fast deep
+    // scrolling instead of draining 4-at-a-time behind the prewarm front.
+    private static let gate = ThumbnailGate(limit: 8)
+
+    /// Background prewarm work is enqueued at `prewarmOrderBase + index`, which
+    /// is strictly higher than any live request's order (grid tiles pass their
+    /// file index 0…N; the hero viewer passes 0). The gate serves the lowest
+    /// order first, so the user's actual viewport — and the viewer — always
+    /// preempt the top-to-bottom prewarm sweep. Without this, scrolling ahead
+    /// of the prewarm front leaves visible tiles grey for seconds while the
+    /// gate drains hundreds of lower-numbered prewarm jobs first.
+    private nonisolated static let prewarmOrderBase = 1_000_000
 
     /// Total on-disk cache size cap in bytes. Defaults to 2GB.
     var diskCapBytes: Int64 = 2 * 1024 * 1024 * 1024
@@ -148,7 +196,9 @@ final class ThumbnailCache: ObservableObject {
                 func addNext() {
                     guard next < urls.count else { return }
                     let url = urls[next]
-                    let order = next
+                    // Strictly higher than any live request, so a visible tile
+                    // always jumps ahead of the background prewarm sweep.
+                    let order = Self.prewarmOrderBase + next
                     next += 1
                     group.addTask {
                         await Self.ensureDisk(url: url, diskRoot: root,
@@ -183,6 +233,8 @@ final class ThumbnailCache: ObservableObject {
                let img = NSImage(contentsOf: diskURL) {
                 return img
             }
+            // Scrolled off-screen while queued? Skip the decode entirely.
+            if Task.isCancelled { return nil }
             guard let generated = await generate(url: url, size: size, scale: scale) else {
                 return nil
             }
@@ -205,13 +257,29 @@ final class ThumbnailCache: ObservableObject {
     }
 
     private nonisolated static func generate(url: URL, size: CGSize, scale: CGFloat) async -> NSImage? {
+        let kind = AssetKind.detect(at: url)
+
         // Videos: grab a frame ~1s in (10% of duration for short clips)
         // instead of QuickLook's first frame — openings are so often black
         // or mid-fade. QuickLook remains the fallback if extraction fails.
-        if AssetKind.detect(at: url) == .video,
+        if kind == .video,
            let frame = await videoFrame(url: url, size: size, scale: scale) {
             return frame
         }
+
+        // Plain raster images (incl. RAW/PSD, which CGImageSource handles)
+        // decode straight through ImageIO. This is the load-bearing path —
+        // the vast majority of a library — and ImageIO never returns nil for a
+        // valid image, decodes faster than QuickLook, and avoids the single
+        // shared QLThumbnailGenerator that, under the app's real concurrent
+        // load (Vision + indexing + prewarm), intermittently returned nil and
+        // left tiles permanently grey. SVG is excluded (not a raster source).
+        if kind == .image || kind == .raw || kind == .psd,
+           let io = imageIOThumbnail(url: url, size: size, scale: scale) {
+            return io
+        }
+
+        // Everything else (PDF, SVG, fonts, 3D, office, archives) → QuickLook.
         let request = QLThumbnailGenerator.Request(
             fileAt: url,
             size: size,
@@ -223,6 +291,26 @@ final class ThumbnailCache: ObservableObject {
                 continuation.resume(returning: rep?.nsImage)
             }
         }
+    }
+
+    /// Downsampled thumbnail via ImageIO — honors EXIF orientation and forces
+    /// the decode now (off-main), so the main thread never lazily decodes on
+    /// first draw. Returns nil only for a genuinely unreadable/non-image file.
+    private nonisolated static func imageIOThumbnail(url: URL, size: CGSize,
+                                                     scale: CGFloat) -> NSImage? {
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        let maxPixel = Int(max(size.width, size.height) * scale)
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+        ]
+        guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, options as CFDictionary)
+        else { return nil }
+        return NSImage(cgImage: cg,
+                       size: NSSize(width: CGFloat(cg.width) / scale,
+                                    height: CGFloat(cg.height) / scale))
     }
 
     /// Representative video frame: min(1s, duration × 0.1) in, never earlier

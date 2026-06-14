@@ -14,7 +14,6 @@ import AppKit
 
 struct GridView: View {
     @EnvironmentObject var appState: AppState
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let spacing: CGFloat = 10
     private let contentInset: CGFloat = 20
@@ -34,10 +33,6 @@ struct GridView: View {
     /// The masonry canvas's top, in the scroll viewport's coordinate space.
     /// 0 at the top; goes negative as the user scrolls down.
     @State private var canvasMinY: CGFloat = 0
-
-    /// Drives the skeleton placeholder's traveling sheen (0→1, looped) while
-    /// a folder loads.
-    @State private var shimmerPhase: CGFloat = 0
 
     var body: some View {
         GeometryReader { geo in
@@ -141,7 +136,11 @@ struct GridView: View {
             ForEach(visibleIndices(lo: lo, hi: hi, count: files.count), id: \.self) { i in
                 let rect = frames[i]
                 let file = files[i]
-                TileView(file: file, order: i, deletion: appState.deletion)
+                TileView(file: file, order: i, deletion: appState.deletion,
+                         reportAspect: { [weak aspects] ratio in
+                             aspects?.report(aspect: ratio,
+                                              forStandardizedPath: file.url.standardizedFileURL.path)
+                         })
                     .frame(width: rect.width, height: rect.height)
                     .offset(x: rect.minX, y: rect.minY)
                     // Single tap only — the old double-tap recognizer made every
@@ -277,17 +276,8 @@ struct GridView: View {
         // below 1 opacity so a colored background tints through. Per-mood shadow
         // strength + stack opacity were tuned live (skeleton-shimmer-preview.html).
         let palette = appState.moodPalette
-        let peak: Double        // band darkness
-        let stackOpacity: Double // overall translucency
-        if appState.mood == .custom {
-            (peak, stackOpacity) = (0.09, 0.74)
-        } else if palette.scheme == .dark {
-            (peak, stackOpacity) = (0.18, 0.87)
-        } else {
-            (peak, stackOpacity) = (0.06, 1.00)
-        }
-        let shoulder = peak * 0.42
-        let blurRadius: CGFloat = 15
+        let tuning = shimmerTuning(isCustom: appState.mood == .custom,
+                                   isDark: palette.scheme == .dark)
 
         return HStack(alignment: .top, spacing: spacing) {
             ForEach(0..<cols, id: \.self) { col in
@@ -296,25 +286,8 @@ struct GridView: View {
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
                             .fill(palette.tileFill)
                             .overlay {
-                                GeometryReader { g in
-                                    let bandW = g.size.width * 0.72
-                                    Rectangle()
-                                        .fill(LinearGradient(
-                                            stops: [
-                                                .init(color: .black.opacity(0),        location: 0),
-                                                .init(color: .black.opacity(shoulder), location: 0.38),
-                                                .init(color: .black.opacity(peak),     location: 0.50),
-                                                .init(color: .black.opacity(shoulder), location: 0.62),
-                                                .init(color: .black.opacity(0),        location: 1),
-                                            ],
-                                            startPoint: .leading, endPoint: .trailing))
-                                        // Overshoot vertically so the blur's soft
-                                        // edges fall outside the clipped tile.
-                                        .frame(width: bandW, height: g.size.height + 60)
-                                        .blur(radius: blurRadius)
-                                        .offset(x: -1.15 * bandW + shimmerPhase * 2.65 * bandW,
-                                                y: -30)
-                                }
+                                ShimmerBand(peak: tuning.peak,
+                                            shoulder: tuning.shoulder)
                             }
                             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                             .frame(height: columnWidth * ratios[(col * 5 + row) % ratios.count])
@@ -325,16 +298,7 @@ struct GridView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(contentInset)
-        .opacity(stackOpacity)
-        .onAppear {
-            shimmerPhase = 0
-            // Reduce Motion: leave the sheen static — the skeleton still shows
-            // as a loading placeholder, just without the perpetual sweep.
-            guard !reduceMotion else { return }
-            withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
-                shimmerPhase = 1
-            }
-        }
+        .opacity(tuning.stackOpacity)
         .transition(.opacity)
     }
 
@@ -376,6 +340,9 @@ private struct TileView: View {
     /// order, so a cold folder fills top-to-bottom.
     var order: Int = 0
     @ObservedObject var deletion: DeleteCoordinator
+    /// Reports the decoded thumbnail's exact aspect back to the layout so the
+    /// tile frame matches the image (no grey letterbox).
+    var reportAspect: (CGFloat) -> Void = { _ in }
 
     @State private var thumbnail: NSImage?
     @State private var tileFrame: CGRect = .zero
@@ -431,11 +398,28 @@ private struct TileView: View {
             .task(id: file.url) {
                 // 320 matches the hero viewer's first cache probe, so the open
                 // flight starts from this exact bitmap with zero wait.
-                thumbnail = await ThumbnailCache.shared.thumbnail(
-                    for: file.url,
-                    size: CGSize(width: 320, height: 320),
-                    order: order
-                )
+                // Retry on nil so a tile never stays grey: ImageIO carries the
+                // image path reliably, but the QuickLook fallback (PDF, SVG,
+                // fonts…) can transiently fail under load — a short backoff
+                // recovers it instead of leaving a dead box.
+                for attempt in 0..<4 {
+                    if let img = await ThumbnailCache.shared.thumbnail(
+                        for: file.url,
+                        size: CGSize(width: 320, height: 320),
+                        order: order
+                    ) {
+                        // Correct the tile's aspect from the real image BEFORE
+                        // showing it, so the frame is already right when the
+                        // image lands — it fills, never letterboxed in grey.
+                        if img.size.width > 0 {
+                            reportAspect(img.size.height / img.size.width)
+                        }
+                        thumbnail = img
+                        return
+                    }
+                    if Task.isCancelled { return }
+                    try? await Task.sleep(nanoseconds: UInt64(300_000_000) * UInt64(attempt + 1))
+                }
             }
     }
 
@@ -450,6 +434,19 @@ private struct TileView: View {
             ZStack {
                 Rectangle()
                     .fill(appState.moodPalette.tileFill)
+                // While the thumbnail generates, the grey placeholder sweeps
+                // with the same loading sheen as the folder skeleton — so any
+                // grey a user sees is alive, never a dead box. Removed the
+                // instant the image lands.
+                if thumbnail == nil {
+                    let tuning = shimmerTuning(
+                        isCustom: appState.mood == .custom,
+                        isDark: appState.moodPalette.scheme == .dark)
+                    ShimmerBand(peak: tuning.peak,
+                                shoulder: tuning.shoulder,
+                                blurRadius: 12)
+                        .opacity(tuning.stackOpacity)
+                }
                 if let img = thumbnail {
                     Image(nsImage: img)
                         .resizable()
@@ -489,6 +486,69 @@ private struct TileView: View {
         case .archive: return "archivebox"
         case .folder: return "folder"
         case .unknown: return "doc"
+        }
+    }
+}
+
+// MARK: - Shimmer
+
+/// Per-mood band darkness / shoulder / overall translucency for the loading
+/// sheen. Shared by the folder-enumeration skeleton AND the per-tile
+/// placeholder so both shimmer identically. Tuned live (peak = band darkness,
+/// shoulder = its falloff, stackOpacity = how much background tints through);
+/// see docs/superpowers/assets/skeleton-shimmer-preview.html.
+fileprivate func shimmerTuning(isCustom: Bool, isDark: Bool)
+    -> (peak: Double, shoulder: Double, stackOpacity: Double) {
+    let peak: Double, stack: Double
+    if isCustom        { (peak, stack) = (0.09, 0.74) }
+    else if isDark     { (peak, stack) = (0.18, 0.87) }
+    else               { (peak, stack) = (0.06, 1.00) }
+    return (peak, peak * 0.42, stack)
+}
+
+/// A single translucent BLACK sweep band (a soft traveling shadow, never a
+/// bright streak), blurred so its gradient steps dither out. It drives its OWN
+/// 0→1 sweep, so the perpetual animation lives and dies with the band — once a
+/// tile's image lands and the band is removed, the animation stops (rather than
+/// running forever per tile, which would pile up across the whole grid).
+/// Overshoots vertically so the blur's soft edges fall outside the clipped
+/// tile. The caller clips to the tile/skeleton shape.
+fileprivate struct ShimmerBand: View {
+    let peak: Double
+    let shoulder: Double
+    var blurRadius: CGFloat = 15
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var phase: CGFloat = 0
+
+    var body: some View {
+        GeometryReader { g in
+            let bandW = g.size.width * 0.72
+            Rectangle()
+                .fill(LinearGradient(
+                    stops: [
+                        .init(color: .black.opacity(0),        location: 0),
+                        .init(color: .black.opacity(shoulder), location: 0.38),
+                        .init(color: .black.opacity(peak),     location: 0.50),
+                        .init(color: .black.opacity(shoulder), location: 0.62),
+                        .init(color: .black.opacity(0),        location: 1),
+                    ],
+                    startPoint: .leading, endPoint: .trailing))
+                // Taller than the tile so the 10° tilt never exposes a corner.
+                .frame(width: bandW, height: g.size.height + 120)
+                .blur(radius: blurRadius)
+                // Matches the prototype's `linear-gradient(100deg)` — a band
+                // raked 10° off vertical rather than a straight vertical wipe.
+                .rotationEffect(.degrees(10))
+                .offset(x: -1.15 * bandW + phase * 2.65 * bandW, y: -60)
+        }
+        .onAppear {
+            phase = 0
+            // Reduce Motion: leave the sheen static (still reads as loading).
+            guard !reduceMotion else { return }
+            withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
+                phase = 1
+            }
         }
     }
 }

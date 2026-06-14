@@ -43,8 +43,28 @@ final class AspectRatioCache: ObservableObject {
         }
     }
 
-    /// Resolve dimensions for `files` in bulk (DB first, ImageIO for image
-    /// gaps), off the main thread. Skips anything already resolved.
+    /// Authoritative aspect from a tile's freshly-decoded thumbnail (exact
+    /// image dimensions). This is the backstop that guarantees a VISIBLE tile's
+    /// frame matches its image — no grey letterbox — even if the pre-pass below
+    /// hasn't reached it yet. Bumps are coalesced so a burst of tiles reporting
+    /// at once triggers a single recompute.
+    func report(aspect: CGFloat, forStandardizedPath path: String) {
+        guard aspect > 0, ratios[path] != aspect else { return }
+        ratios[path] = aspect
+        resolved.insert(path)
+        if !pendingBump {
+            pendingBump = true
+            Task { @MainActor in self.pendingBump = false; self.version &+= 1 }
+        }
+    }
+    private var pendingBump = false
+
+    /// Resolve dimensions for `files` off the main thread. DB-known dimensions
+    /// publish IMMEDIATELY; the ImageIO header reads for the rest run
+    /// CONCURRENTLY and publish in small batches. The old version did a single
+    /// sequential ImageIO pass that published only at the very end, so a folder
+    /// with many un-analyzed images left every tile on the square default
+    /// (= images letterboxed in grey) until the whole pass finished.
     func load(_ files: [FileNode]) {
         let needed = files.filter { !resolved.contains($0.url.standardizedFileURL.path) }
         guard !needed.isEmpty else { return }
@@ -60,26 +80,53 @@ final class AspectRatioCache: ObservableObject {
         }
 
         Task.detached(priority: .utility) { [paths, imageURLs, token] in
+            // 1) DB dimensions for the whole set — fast, published right away.
+            //    Everything NOT awaiting an ImageIO read (DB hits + non-image
+            //    files like PDFs that have no aspect to resolve) is marked
+            //    resolved now, so a later load() skips them instead of
+            //    reprocessing the whole folder each call.
             let fromDB = Self.dbDimensions(paths: paths)
-            var fromIO: [String: CGFloat] = [:]
-            for url in imageURLs {
-                let path = url.standardizedFileURL.path
-                if fromDB[path] != nil { continue }
-                if let ratio = Self.imageIOAspect(url: url) { fromIO[path] = ratio }
-            }
-            await MainActor.run {
-                guard token == self.loadToken else { return }
-                for path in paths { self.resolved.insert(path) }
-                var changed = false
-                for (path, ratio) in fromDB where self.ratios[path] != ratio {
-                    self.ratios[path] = ratio; changed = true
+            let gaps = imageURLs.filter { fromDB[$0.standardizedFileURL.path] == nil }
+            let gapSet = Set(gaps.map { $0.standardizedFileURL.path })
+            let nonGap = paths.filter { !gapSet.contains($0) }
+            await self.apply(fromDB, resolvedPaths: nonGap, token: token)
+
+            // 2) ImageIO header reads for everything the DB didn't cover, run
+            //    concurrently and flushed in batches so the layout converges in
+            //    a fraction of a second.
+            await withTaskGroup(of: (String, CGFloat?).self) { group in
+                for url in gaps {
+                    group.addTask { (url.standardizedFileURL.path, Self.imageIOAspect(url: url)) }
                 }
-                for (path, ratio) in fromIO where self.ratios[path] != ratio {
-                    self.ratios[path] = ratio; changed = true
+                var batch: [String: CGFloat] = [:]
+                var attempted: [String] = []
+                for await (path, ratio) in group {
+                    attempted.append(path)
+                    if let ratio { batch[path] = ratio }
+                    if attempted.count >= 40 {
+                        await self.apply(batch, resolvedPaths: attempted, token: token)
+                        batch.removeAll(keepingCapacity: true)
+                        attempted.removeAll(keepingCapacity: true)
+                    }
                 }
-                if changed { self.version &+= 1 }
+                if !attempted.isEmpty {
+                    await self.apply(batch, resolvedPaths: attempted, token: token)
+                }
             }
         }
+    }
+
+    /// Merge one batch of resolved ratios and bump `version` once if anything
+    /// changed. `resolvedPaths` are marked done even when their ratio was nil,
+    /// so a failed read isn't retried (the thumbnail `report` can still fix it).
+    private func apply(_ batch: [String: CGFloat], resolvedPaths: [String], token: Int) {
+        guard token == loadToken else { return }
+        for path in resolvedPaths { resolved.insert(path) }
+        var changed = false
+        for (path, ratio) in batch where ratios[path] != ratio {
+            ratios[path] = ratio; changed = true
+        }
+        if changed { version &+= 1 }
     }
 
     // MARK: - Off-main resolvers
