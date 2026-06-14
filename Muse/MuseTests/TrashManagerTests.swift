@@ -1,6 +1,7 @@
 import XCTest
 @testable import Muse
 
+@MainActor
 final class TrashManagerTests: XCTestCase {
     func testTrashAndUndo() async throws {
         let dir = FileManager.default.temporaryDirectory
@@ -9,7 +10,7 @@ final class TrashManagerTests: XCTestCase {
         let file = dir.appendingPathComponent("x.txt")
         try "hello".data(using: .utf8)!.write(to: file)
 
-        let ticket = try TrashManager.trash(file)
+        let ticket = try await TrashManager.trash(file)
         XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
 
         do {

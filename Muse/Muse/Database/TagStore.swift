@@ -71,19 +71,41 @@ final class TagStore: ObservableObject {
         return await tags(for: url)
     }
 
-    /// Renames a label across the whole library. Files already carrying
-    /// the new label keep their existing row; the old rows are dropped
-    /// (UNIQUE(file_id, label) makes the conflicting UPDATEs no-ops).
+    /// Renames a label across the whole library. Where a file already
+    /// carries the target label, the two rows merge — and because manual
+    /// beats vision (Q32), the surviving row is manual if EITHER side was
+    /// manual. (A blind `UPDATE OR IGNORE` + `DELETE` would silently destroy
+    /// a manual old-label tag whenever a vision target-label row pre-existed.)
     func renameLabel(from old: String, to new: String) async {
         guard let queue = Database.shared.dbQueue else { return }
         let trimmed = new.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed != old else { return }
         do {
             try await queue.write { db in
-                try db.execute(sql: "UPDATE OR IGNORE tags SET label = ? WHERE label = ?",
-                               arguments: [trimmed, old])
-                try db.execute(sql: "DELETE FROM tags WHERE label = ?",
-                               arguments: [old])
+                let oldRows = try TagRow
+                    .filter(TagRow.Columns.label == old)
+                    .fetchAll(db)
+                for row in oldRows {
+                    if var existing = try TagRow
+                        .filter(TagRow.Columns.file_id == row.file_id)
+                        .filter(TagRow.Columns.label == trimmed)
+                        .fetchOne(db) {
+                        // Conflict: a target-label row already exists for this
+                        // file. Promote it to manual if the old row was manual,
+                        // then drop the now-redundant old-label row.
+                        if row.source == "manual", existing.source != "manual" {
+                            existing.source = "manual"
+                            existing.confidence = nil
+                            try existing.update(db)
+                        }
+                        try row.delete(db)
+                    } else {
+                        // No conflict — relabel in place, preserving source.
+                        var moved = row
+                        moved.label = trimmed
+                        try moved.update(db)
+                    }
+                }
             }
         } catch {
             print("[TagStore] renameLabel failed: \(error)")

@@ -64,6 +64,13 @@ final class FolderWatcher {
         guard let s = stream else { return }
         FSEventStreamStop(s)
         FSEventStreamInvalidate(s)
+        // The callback context is passUnretained(self); a coalesced event
+        // block may already be queued on `queue`. Drain it before we return
+        // so no in-flight callback dereferences a deallocating watcher
+        // (stop() runs from deinit). The block dispatches to main and returns
+        // immediately, so this barrier is cheap. Callbacks never retain self,
+        // so deinit cannot be running on `queue` — no self-deadlock.
+        queue.sync { }
         FSEventStreamRelease(s)
         stream = nil
     }

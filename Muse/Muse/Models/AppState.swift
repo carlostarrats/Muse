@@ -157,6 +157,9 @@ final class AppState: ObservableObject {
         let token = collectionRequestToken
         Task { @MainActor in
             guard let q = Database.shared.dbQueue else {
+                // Honor the same stale-pick guard as the success path below —
+                // a newer pick that landed while this ran must not be clobbered.
+                guard token == collectionRequestToken else { return }
                 activeCollectionID = id
                 activeCollectionPaths = []
                 activeCollectionFiles = []
@@ -542,6 +545,7 @@ final class AppState: ObservableObject {
         guard let folder = selectedFolder else {
             currentFiles = []
             isLoadingFolder = false
+            tileFrames.removeAll()
             return
         }
         folderLoadToken += 1
@@ -559,6 +563,10 @@ final class AppState: ObservableObject {
             existing = [:]
             currentFiles = []
             isLoadingFolder = true
+            // Fresh folder: the old folder's recorded tile frames are dead
+            // weight (and could mis-seed a hero open for a stale path).
+            // Bounds tileFrames to roughly one folder's worth of tiles.
+            tileFrames.removeAll()
         } else {
             existing = Dictionary(currentFiles.map { ($0.url, $0) },
                                   uniquingKeysWith: { a, _ in a })
@@ -598,12 +606,18 @@ final class AppState: ObservableObject {
 
     // MARK: - Search
 
+    /// Monotonic token so a slow search can't clobber a newer search — or a
+    /// dismissal that landed while it was in flight.
+    private var searchRequestToken = 0
+
     func runSearch(_ query: String) async {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             clearSearch()
             return
         }
+        searchRequestToken += 1
+        let token = searchRequestToken
         // Search always scopes to the folder selected in the sidebar;
         // with nothing selected, fall back to the whole indexed library.
         let scope: SearchScope
@@ -613,12 +627,15 @@ final class AppState: ObservableObject {
             scope = .everywhere
         }
         let results = await SearchService.search(query: trimmed, scope: scope)
+        // A newer search — or clearSearch() — invalidates this stale result.
+        guard token == searchRequestToken else { return }
         isSearchActive = true
         // search results keep relevance rank; sort modes apply to folder browsing only
         currentFiles = results
     }
 
     func clearSearch() {
+        searchRequestToken += 1   // cancel any in-flight search result
         searchQuery = ""
         isSearchActive = false
         reloadCurrentFiles()

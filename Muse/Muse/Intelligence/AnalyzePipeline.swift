@@ -159,7 +159,7 @@ final class AnalyzePipeline: ObservableObject {
         let basename = url.lastPathComponent
         let now = Int64(Date().timeIntervalSince1970)
         let paletteJSON: String? = out.palette.isEmpty ? nil :
-            String(data: try! JSONEncoder().encode(out.palette), encoding: .utf8)
+            (try? JSONEncoder().encode(out.palette)).flatMap { String(data: $0, encoding: .utf8) }
         let taggerVersion = registry.tagger.modelVersion
 
         // Screenshot intent typing (Option A: screenshots only). On non-AI

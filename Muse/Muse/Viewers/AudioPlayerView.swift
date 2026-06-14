@@ -100,4 +100,11 @@ private struct AVKitPlayer: NSViewRepresentable {
             nsView.player = AVPlayer(url: url)
         }
     }
+
+    // Tear the player down on dismiss so audio doesn't keep playing from a
+    // viewer the user already closed (AppKit won't auto-pause it).
+    static func dismantleNSView(_ nsView: AVPlayerView, coordinator: ()) {
+        nsView.player?.pause()
+        nsView.player = nil
+    }
 }

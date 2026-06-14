@@ -26,4 +26,12 @@ struct VideoPlayerView: NSViewRepresentable {
             nsView.player?.play()
         }
     }
+
+    // AppKit does not auto-pause an AVPlayer when its view leaves the
+    // hierarchy. Without this, closing the viewer leaves audio playing
+    // from an invisible player until it eventually deallocs.
+    static func dismantleNSView(_ nsView: AVPlayerView, coordinator: ()) {
+        nsView.player?.pause()
+        nsView.player = nil
+    }
 }
