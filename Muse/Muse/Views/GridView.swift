@@ -97,7 +97,6 @@ struct GridView: View {
             } message: {
                 Text("Tags “\(addTagFile?.basename ?? "")”.")
             }
-            .coordinateSpace(name: "gridViewport")
             .onAppear {
                 aspects.load(appState.visibleFiles)
                 recompute(width: contentWidth)
@@ -345,7 +344,6 @@ private struct TileView: View {
     var reportAspect: (CGFloat) -> Void = { _ in }
 
     @State private var thumbnail: NSImage?
-    @State private var tileFrame: CGRect = .zero
     @State private var hovering = false
 
     private var isImageKind: Bool {
@@ -379,22 +377,21 @@ private struct TileView: View {
             .background(
                 GeometryReader { proxy in
                     Color.clear
+                        // Global tile frame feeds the hero open/close flight.
                         .onAppear {
-                            tileFrame = proxy.frame(in: .named("gridViewport"))
                             appState.tileFrames[file.url.path] = proxy.frame(in: .global)
-                        }
-                        .onChange(of: proxy.frame(in: .named("gridViewport"))) { _, newFrame in
-                            tileFrame = newFrame
                         }
                         .onChange(of: proxy.frame(in: .global)) { _, f in
                             appState.tileFrames[file.url.path] = f
                         }
                 }
             )
-            .modifier(BurnUpModifier(
-                progress: deletion.burningPaths.contains(file.url.path) ? 1 : 0,
-                seed: Double(SeededRandom.fnv1a([file.url.path]) % 1000) / 1000.0,
-                size: tileFrame.size))
+            // Delete = a quiet fade-out (no burn/fire shader). The coordinator
+            // marks the path, the tile fades to 0, then it's removed and the
+            // grid closes the gap.
+            .opacity(deletion.burningPaths.contains(file.url.path) ? 0 : 1)
+            .animation(.easeOut(duration: 0.3),
+                       value: deletion.burningPaths.contains(file.url.path))
             .task(id: file.url) {
                 // 320 matches the hero viewer's first cache probe, so the open
                 // flight starts from this exact bitmap with zero wait.

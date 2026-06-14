@@ -15,15 +15,15 @@ import AppKit
 @MainActor
 final class DeleteCoordinator: ObservableObject {
 
-    /// Paths currently playing the burn-up shader.
+    /// Paths currently fading out for a delete (drives the tile's opacity fade).
     @Published var burningPaths: Set<String> = []
 
     /// Toast shown over the grid. The hero viewer keeps its own toast so
     /// its linger-for-undo machinery stays untouched.
     @Published var toast: ToastData?
 
-    /// Spec: ~0.8s char; ~0.7s after live review. Tests inject 0.
-    var burnDuration: Double = 0.7
+    /// Tile fade-out duration before the file is trashed. Tests inject 0.
+    var burnDuration: Double = 0.3
 
     /// AppState wires these to currentFiles mutations.
     var onRemove: (URL) -> Void = { _ in }
@@ -33,23 +33,10 @@ final class DeleteCoordinator: ObservableObject {
         let path = file.url.path
         guard !burningPaths.contains(path) else { return }
 
-        // Reduce Motion: skip the flame/ember burn shader entirely. Trash the
-        // file and let the tile fade out — same Undo toast, no vestibular motion.
-        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-            do {
-                let ticket = try await TrashManager.trash(file.url)
-                withAnimation(.easeOut(duration: 0.25)) { onRemove(file.url) }
-                toast = ToastData(message: "Moved to Trash", actionLabel: "Undo") { [weak self] in
-                    self?.restore(ticket: ticket, node: file)
-                }
-            } catch {
-                toast = ToastData(message: "Couldn't move to Trash")
-            }
-            return
-        }
-
-        // withAnimation drives BurnUpModifier.animatableData 0→1.
-        withAnimation(.linear(duration: burnDuration)) {
+        // Mark the tile as deleting → TileView fades it to 0 opacity (no burn /
+        // fire shader). Then trash the file, remove it (the grid closes the
+        // gap), and surface the Undo toast.
+        withAnimation(.easeOut(duration: burnDuration)) {
             _ = burningPaths.insert(path)
         }
         if burnDuration > 0 {
@@ -60,10 +47,9 @@ final class DeleteCoordinator: ObservableObject {
             withAnimation(.easeIn(duration: 0.2)) {
                 onRemove(file.url)
             }
-            // Clear the burn flag only after the exit collapse: removing it
-            // in the same commit as onRemove snaps the exiting tile's shader
-            // back to progress 0 (un-burned flash). Tests run with
-            // burnDuration == 0 and need the synchronous path.
+            // Clear the fade flag only after the exit collapse: removing it in
+            // the same commit as onRemove would flash the exiting tile back to
+            // full opacity. Tests run with burnDuration == 0 (synchronous path).
             if burnDuration > 0 {
                 Task { [weak self] in
                     try? await Task.sleep(nanoseconds: 250_000_000)
@@ -78,7 +64,7 @@ final class DeleteCoordinator: ObservableObject {
                 self?.restore(ticket: ticket, node: file)
             }
         } catch {
-            // Un-char the still-present tile gracefully.
+            // Restore the still-present tile gracefully.
             withAnimation(.easeOut(duration: 0.3)) {
                 _ = burningPaths.remove(path)
             }
