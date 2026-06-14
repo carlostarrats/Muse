@@ -39,6 +39,7 @@ struct ViewerChrome<Content: View>: View {
                         .foregroundStyle(.white.opacity(0.85))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Close")
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)

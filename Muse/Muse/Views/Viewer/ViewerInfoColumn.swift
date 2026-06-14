@@ -341,7 +341,9 @@ private struct PillCard<Expander: View>: View {
                 HStack {
                     CardLabel(text: title)
                     Spacer()
-                    PlusCircleButton(size: 18, rotated: isExpanded) {
+                    PlusCircleButton(size: 18, rotated: isExpanded,
+                                     accessibilityLabel: isExpanded ? "Hide \(title.lowercased()) field"
+                                                                    : "Add \(title.lowercased())") {
                         withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
                             isExpanded.toggle()
                         }
@@ -402,7 +404,8 @@ private struct CardExpander: View {
                     .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(.white.opacity(0.08)))
                     .onSubmit(submit)
-                PlusCircleButton(size: 18, rotated: false, action: submit)
+                PlusCircleButton(size: 18, rotated: false,
+                                 accessibilityLabel: "Create", action: submit)
             }
         }
     }
@@ -443,6 +446,7 @@ private struct DashedPill: View {
 private struct PlusCircleButton: View {
     let size: CGFloat
     let rotated: Bool
+    var accessibilityLabel: String = "Add"
     var action: () -> Void
     @State private var hovering = false
 
@@ -456,6 +460,7 @@ private struct PlusCircleButton: View {
                 .rotationEffect(.degrees(rotated ? 45 : 0))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
         .onHover { hovering = $0 }
     }
 }

@@ -82,6 +82,7 @@ struct HoverPill: View {
                         .background(Circle().fill(.white.opacity(removeHovered ? 0.32 : 0.14)))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Remove \(label)")
                 .onHover { removeHovered = $0 }
                 .padding(.trailing, 4)
                 .transition(.opacity)

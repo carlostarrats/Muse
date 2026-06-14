@@ -10,6 +10,7 @@
 
 import Foundation
 import SwiftUI
+import AppKit
 
 @MainActor
 final class DeleteCoordinator: ObservableObject {
@@ -31,6 +32,22 @@ final class DeleteCoordinator: ObservableObject {
     func deleteWithBurn(_ file: FileNode) async {
         let path = file.url.path
         guard !burningPaths.contains(path) else { return }
+
+        // Reduce Motion: skip the flame/ember burn shader entirely. Trash the
+        // file and let the tile fade out — same Undo toast, no vestibular motion.
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            do {
+                let ticket = try await TrashManager.trash(file.url)
+                withAnimation(.easeOut(duration: 0.25)) { onRemove(file.url) }
+                toast = ToastData(message: "Moved to Trash", actionLabel: "Undo") { [weak self] in
+                    self?.restore(ticket: ticket, node: file)
+                }
+            } catch {
+                toast = ToastData(message: "Couldn't move to Trash")
+            }
+            return
+        }
+
         // withAnimation drives BurnUpModifier.animatableData 0→1.
         withAnimation(.linear(duration: burnDuration)) {
             _ = burningPaths.insert(path)

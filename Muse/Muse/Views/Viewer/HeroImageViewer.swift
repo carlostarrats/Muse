@@ -526,6 +526,7 @@ private struct ChromeCircleButton: View {
                 .background(Circle().fill(.white.opacity(hovering ? 0.24 : 0.10)))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(systemName == "xmark" ? "Close" : systemName)
         .onHover { hovering = $0 }
     }
 }
@@ -549,6 +550,8 @@ private struct ChromePillButton: View {
                 .background(Rectangle().fill(hovering ? .white.opacity(0.20) : .clear))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(systemName == "minus" ? "Zoom out"
+                            : systemName == "plus" ? "Zoom in" : systemName)
         .onHover { hovering = $0 }
     }
 }

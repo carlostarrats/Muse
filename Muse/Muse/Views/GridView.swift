@@ -14,6 +14,7 @@ import AppKit
 
 struct GridView: View {
     @EnvironmentObject var appState: AppState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let spacing: CGFloat = 10
     private let contentInset: CGFloat = 20
@@ -149,6 +150,9 @@ struct GridView: View {
                     .onTapGesture {
                         appState.selectedFile = file
                     }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(file.basename)
+                    .accessibilityAddTraits(.isButton)
                     .contextMenu {
                         OpenWithMenu(url: file.url)
                         Divider()
@@ -324,6 +328,9 @@ struct GridView: View {
         .opacity(stackOpacity)
         .onAppear {
             shimmerPhase = 0
+            // Reduce Motion: leave the sheen static — the skeleton still shows
+            // as a loading placeholder, just without the perpetual sweep.
+            guard !reduceMotion else { return }
             withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
                 shimmerPhase = 1
             }
@@ -341,6 +348,7 @@ struct GridView: View {
                 Image(systemName: "tray")
                     .font(.system(size: 48))
                     .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
                 Text(message)
                     .font(.title3)
                     .foregroundStyle(.secondary)

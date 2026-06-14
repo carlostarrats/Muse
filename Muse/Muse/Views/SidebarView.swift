@@ -131,11 +131,13 @@ private struct FolderTreeNode: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(node.isExpanded ? "Collapse" : "Expand")
             } else {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 10, weight: .semibold))
                     .opacity(0)
                     .frame(width: 10)
+                    .accessibilityHidden(true)
             }
 
             HStack(spacing: 8) {
@@ -217,11 +219,13 @@ private struct StarRow: View {
                 .font(.system(size: 10, weight: .semibold))
                 .opacity(0)
                 .frame(width: 10)
+                .accessibilityHidden(true)
 
             Image(systemName: "pin.fill")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .frame(width: 18)
+                .accessibilityHidden(true)
 
             Text(star.displayName)
                 .font(.system(size: 13))
