@@ -134,7 +134,6 @@ struct SidebarView: View {
     private func rootRow(_ node: FolderNode, index: Int) -> some View {
         if let model = reorderableRoot(for: node) {
             FolderTreeNode(node: node, depth: 0)
-                .opacity(draggingRoot == model ? 0.4 : 1)
                 .overlay(alignment: .top) {
                     if draggingRoot != nil, dropTarget == index { insertionLine }
                 }
@@ -146,6 +145,7 @@ struct SidebarView: View {
                 }
                 .onDrop(of: [.text],
                         delegate: RootDropDelegate(index: index,
+                                                   targetRoot: model,
                                                    splitHeight: Self.rowHeight,
                                                    store: appState.bookmarks,
                                                    dragging: $draggingRoot,
@@ -156,12 +156,12 @@ struct SidebarView: View {
         }
     }
 
-    /// Drop area filling the space under the last folder. Always targets the
-    /// end, and shows the landing line at its top edge (just below the last
-    /// folder) so dragging "to the bottom" reliably lands there.
+    /// Drop area below the last folder so dragging "to the bottom" lands at the
+    /// end. A constant, modest height — present even at rest so a cancelled drag
+    /// can never leave a stray gap, and small enough to read as trailing space.
     private var endDropZone: some View {
         ZStack(alignment: .top) {
-            Color.clear.frame(height: 44)
+            Color.clear.frame(height: 24)
             if draggingRoot != nil, dropTarget == reorderableNodes.count {
                 insertionLine
             }
@@ -169,6 +169,7 @@ struct SidebarView: View {
         .contentShape(Rectangle())
         .onDrop(of: [.text],
                 delegate: RootDropDelegate(index: reorderableNodes.count,
+                                           targetRoot: nil,
                                            splitHeight: nil,
                                            store: appState.bookmarks,
                                            dragging: $draggingRoot,
@@ -184,9 +185,13 @@ struct SidebarView: View {
 /// half → before this row (`index`), bottom half → after it (`index + 1`), so
 /// the last row's bottom half targets the very end.
 private struct RootDropDelegate: DropDelegate {
+    /// Visible position (in reorderable nodes) — used only to place the line.
     let index: Int
-    /// Row height for the before/after split; nil for the end zone, which
-    /// always targets `index` (the end).
+    /// The row's backing root; nil for the end zone. The move is committed by
+    /// this identity, not by `index`, so a hidden unresolved root can't shift
+    /// the mapping and reorder the wrong folder.
+    let targetRoot: Root?
+    /// Row height for the before/after split; nil for the end zone (append).
     let splitHeight: CGFloat?
     let store: BookmarkStore
     @Binding var dragging: Root?
@@ -215,10 +220,12 @@ private struct RootDropDelegate: DropDelegate {
 
     func performDrop(info: DropInfo) -> Bool {
         defer { dragging = nil; dropTarget = nil; dropOwner = nil }
-        guard let dragging, let dest = dropTarget,
-              let from = store.roots.firstIndex(of: dragging) else { return false }
+        guard let dragging else { return false }
+        // End zone (no split) appends; a row places before/after by which half
+        // the cursor is in.
+        let placeAfter = splitHeight.map { info.location.y > $0 / 2 } ?? true
         withAnimation(.easeInOut(duration: 0.18)) {
-            store.move(from: from, to: dest)
+            store.reorder(dragging, relativeTo: targetRoot, placeAfter: placeAfter)
         }
         return true
     }

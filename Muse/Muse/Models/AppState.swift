@@ -435,18 +435,21 @@ final class AppState: ObservableObject {
         // Reuse existing nodes by URL so reorder / add / remove preserves each
         // folder's identity — and thus its expansion state — instead of building
         // fresh nodes that would collapse the tree and break a live drag.
-        let existing = Dictionary(rootNodes.map { ($0.url, $0) },
-                                  uniquingKeysWith: { first, _ in first })
+        // Consume each cached node at most once: if two roots resolve to the
+        // same URL (folder added twice) the second gets a fresh node so the
+        // ForEach never sees duplicate ids.
+        var pool = Dictionary(rootNodes.map { ($0.url, $0) },
+                              uniquingKeysWith: { first, _ in first })
         var nodes: [FolderNode] = sourceRoots.compactMap { root in
             guard let url = bookmarks.url(for: root) else { return nil }
-            return existing[url]
+            return pool.removeValue(forKey: url)
                 ?? FolderNode(url: url, displayName: root.displayName, isRoot: true)
         }
         // The single app-managed iCloud folder, when signed in, appears as a
         // root alongside local folders. Appended here so it survives every
         // rebuild (add/remove/restore of local roots).
         if let icloud = iCloudFolderURL {
-            nodes.append(existing[icloud]
+            nodes.append(pool.removeValue(forKey: icloud)
                 ?? FolderNode(url: icloud, displayName: "Muse", isRoot: true))
         }
         rootNodes = nodes

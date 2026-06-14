@@ -94,13 +94,22 @@ final class BookmarkStore: ObservableObject {
 
     // MARK: - Reorder
 
-    /// Move a top-level root to a new position (manual sidebar ordering).
-    /// `to` follows `Array.move(fromOffsets:toOffset:)` insert-before semantics.
-    /// Persists immediately so the order survives relaunch.
-    func move(from: Int, to: Int) {
-        guard roots.indices.contains(from) else { return }
-        let dest = min(max(0, to), roots.count)
-        roots.move(fromOffsets: IndexSet(integer: from), toOffset: dest)
+    /// Reorder by Root identity (manual sidebar ordering): move `moving` to sit
+    /// just before/after `target`, or to the end when `target` is nil. Keyed by
+    /// identity — not integer indices — so it stays correct even when the
+    /// sidebar hides a root whose bookmark didn't resolve. Persists immediately.
+    func reorder(_ moving: Root, relativeTo target: Root?, placeAfter: Bool) {
+        guard moving != target,
+              let from = roots.firstIndex(of: moving) else { return }
+        var updated = roots
+        updated.remove(at: from)
+        if let target, let t = updated.firstIndex(of: target) {
+            updated.insert(moving, at: placeAfter ? t + 1 : t)
+        } else {
+            updated.append(moving)
+        }
+        guard updated != roots else { return }   // dropped in place — no churn
+        roots = updated
         save()
     }
 
