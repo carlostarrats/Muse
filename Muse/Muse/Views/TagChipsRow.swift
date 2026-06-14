@@ -87,6 +87,18 @@ struct TagChipsRow: View {
         } message: {
             Text("The tag is removed from every image. Your images stay on disk.")
         }
+        .alert("Delete all tags in this folder?", isPresented: $appState.deleteAllTagsRequest) {
+            Button("Delete All", role: .destructive) { commitDeleteAllTags() }
+            Button("Cancel", role: .cancel) { appState.deleteAllTagsRequest = false }
+        } message: {
+            Text("This removes every tag on the images in this folder — both automatic tags and ones you've added yourself. Tags you added by hand can't be recovered. Your images stay on disk.")
+        }
+        .alert("Regenerate tags for this folder?", isPresented: $appState.regenerateTagsRequest) {
+            Button("Regenerate") { commitRegenerateTags() }
+            Button("Cancel", role: .cancel) { appState.regenerateTagsRequest = false }
+        } message: {
+            Text("Looks for images in this folder that have no tags and generates tags for them in the background. Images that already have tags are left alone. Only automatic tags are created — tags you added by hand aren't restored.")
+        }
     }
 
     private func commitRename() {
@@ -107,6 +119,25 @@ struct TagChipsRow: View {
         Task { @MainActor in
             await TagStore.shared.deleteLabel(label)
             if appState.activeTagLabel == label { appState.setActiveTag(nil) }
+            appState.tagsVersion += 1
+        }
+    }
+
+    private func commitDeleteAllTags() {
+        appState.deleteAllTagsRequest = false
+        let urls = appState.currentFiles.map { $0.url }
+        Task { @MainActor in
+            await TagStore.shared.deleteAllTags(forURLs: urls)
+            appState.setActiveTag(nil)
+            appState.tagsVersion += 1
+        }
+    }
+
+    private func commitRegenerateTags() {
+        appState.regenerateTagsRequest = false
+        let urls = appState.currentFiles.map { $0.url }
+        Task { @MainActor in
+            await AnalyzePipeline.shared.regenerateTagless(in: urls)
             appState.tagsVersion += 1
         }
     }
