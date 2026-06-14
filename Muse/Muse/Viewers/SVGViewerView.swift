@@ -16,7 +16,7 @@ struct SVGViewerView: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         // Local file access only — block any remote URL the SVG might reference.
-        config.preferences.javaScriptEnabled = false
+        config.defaultWebpagePreferences.allowsContentJavaScript = false
         let view = WKWebView(frame: .zero, configuration: config)
         view.setValue(false, forKey: "drawsBackground") // transparent background
         view.navigationDelegate = context.coordinator

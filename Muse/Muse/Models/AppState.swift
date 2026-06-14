@@ -318,7 +318,7 @@ final class AppState: ObservableObject {
         guard mood == .auto else { return }
         autoMoodIsDay = Mood.isDaytime()
         autoMoodTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self, self.mood == .auto else { return }
                 let day = Mood.isDaytime()
                 if day != self.autoMoodIsDay {
@@ -369,7 +369,7 @@ final class AppState: ObservableObject {
             forName: .museOpenFolder, object: nil, queue: .main
         ) { [weak self] note in
             guard let url = note.userInfo?["url"] as? URL else { return }
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.openFromIntent(url: url)
             }
         }

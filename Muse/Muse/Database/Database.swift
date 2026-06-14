@@ -18,11 +18,15 @@ import GRDB
 
 @MainActor
 final class Database {
-    static let shared = Database()
+    // The singleton + queue are an immutable, Sendable GRDB handle with a
+    // pure initializer — safe to read from any context (background actors:
+    // Indexer, AnalyzePipeline, etc.). Keep @MainActor on the type for any
+    // future main-actor members, but expose these nonisolated.
+    nonisolated static let shared = Database()
 
-    let dbQueue: DatabaseQueue?
+    nonisolated let dbQueue: DatabaseQueue?
 
-    private init() {
+    nonisolated private init() {
         let fm = FileManager.default
         guard let appSupport = try? fm.url(
             for: .applicationSupportDirectory,

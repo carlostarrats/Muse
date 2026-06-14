@@ -41,7 +41,7 @@ struct Cluster {
 
 protocol Clusterer: Sendable {
     var modelVersion: String { get }
-    func cluster(_ items: [ClusterItem]) -> [Cluster]
+    nonisolated func cluster(_ items: [ClusterItem]) -> [Cluster]
 }
 
 protocol CollectionNamer {

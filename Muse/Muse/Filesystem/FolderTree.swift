@@ -51,7 +51,7 @@ final class FolderNode: ObservableObject, Identifiable {
 }
 
 /// Reads files (non-folder entries) inside a single folder. Used by the grid.
-enum FolderReader {
+nonisolated enum FolderReader {
     static func files(in url: URL, showHidden: Bool = false) -> [FileNode] {
         let fm = FileManager.default
         guard let entries = try? fm.contentsOfDirectory(

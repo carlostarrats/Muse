@@ -10,7 +10,7 @@
 import Foundation
 import CryptoKit
 
-enum HashService {
+nonisolated enum HashService {
     /// Streams the file in 1MB chunks and returns the lowercase hex SHA-256.
     /// Returns nil on read failure.
     static func sha256(of url: URL) -> String? {

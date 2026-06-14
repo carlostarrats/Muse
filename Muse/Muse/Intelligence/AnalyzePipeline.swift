@@ -201,6 +201,10 @@ final class AnalyzePipeline: ObservableObject {
                 visionLabels: IntentInput.visionLabels(tags: out.tags))
             intentKey = bucket?.rawValue
         }
+        // Immutable copies for the @Sendable write closure (a captured var
+        // would be a data race under strict concurrency).
+        let finalIntentKey = intentKey
+        let finalIntentVersion = intentVersion
 
         do {
             try await queue.write { db in
@@ -218,8 +222,8 @@ final class AnalyzePipeline: ObservableObject {
                     // Mark analyzed-at-this-content so the automatic pass
                     // skips it until the file's bytes actually change.
                     file.analyzed_hash = file.content_hash
-                    file.intent = intentKey
-                    file.intent_model_version = intentVersion
+                    file.intent = finalIntentKey
+                    file.intent_model_version = finalIntentVersion
                     try file.update(db)
                 }
 
@@ -267,11 +271,12 @@ final class AnalyzePipeline: ObservableObject {
         if let embedder = registry.embedder {
             let doc = (out.tags.map(\.label) + [out.caption ?? "", String(out.ocrText.prefix(300))])
                 .joined(separator: " ")
+            let embedderVersion = embedder.modelVersion
             if let vec = embedder.embed(doc) {
                 try? await queue.write { db in
                     var row = EmbeddingRow(file_id: fileID,
                                            vector: VectorMath.toData(vec),
-                                           model_version: embedder.modelVersion,
+                                           model_version: embedderVersion,
                                            updated_at: Int64(Date().timeIntervalSince1970))
                     try row.save(db)
                 }

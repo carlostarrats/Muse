@@ -1,6 +1,6 @@
 import Foundation
 
-enum VectorMath {
+nonisolated enum VectorMath {
     static func cosine(_ a: [Float], _ b: [Float]) -> Double {
         guard a.count == b.count, !a.isEmpty else { return 0 }
         var dot: Double = 0, na: Double = 0, nb: Double = 0

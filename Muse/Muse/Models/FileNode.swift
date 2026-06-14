@@ -9,7 +9,7 @@
 
 import Foundation
 
-struct FileNode: Identifiable, Hashable {
+nonisolated struct FileNode: Identifiable, Hashable {
     let id: UUID
     let url: URL
     let basename: String

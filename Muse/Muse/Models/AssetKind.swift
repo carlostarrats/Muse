@@ -29,7 +29,7 @@ enum AssetKind: String, Codable, Equatable, Hashable, CaseIterable {
     case unknown
 
     /// Whether this kind is something Muse can render natively.
-    var hasNativeViewer: Bool {
+    nonisolated var hasNativeViewer: Bool {
         switch self {
         case .folder, .unknown: return false
         default: return true

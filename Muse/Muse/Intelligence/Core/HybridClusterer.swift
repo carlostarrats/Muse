@@ -5,7 +5,7 @@ final class HybridClusterer: Clusterer {
     let textThreshold = 0.62
     let minClusterSize = 4
 
-    func cluster(_ items: [ClusterItem]) -> [Cluster] {
+    nonisolated func cluster(_ items: [ClusterItem]) -> [Cluster] {
         let usable = items.filter { $0.textVector != nil }
         guard usable.count >= minClusterSize else { return [] }
         var parent = Array(0..<usable.count)

@@ -10,7 +10,7 @@
 
 import Foundation
 
-enum ICloudZone {
+nonisolated enum ICloudZone {
     static let containerID = "iCloud.com.tarrats.Muse"
 
     /// The synced "Muse" folder URL (the container's Documents dir), creating

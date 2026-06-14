@@ -25,6 +25,9 @@ enum SearchService {
         guard let queue = Database.shared.dbQueue else { return [] }
 
         let escaped = ftsEscape(trimmed)
+        // Embed the query here on the main actor (the registry is @MainActor);
+        // the off-main DB scan below only does cosine scoring on this vector.
+        let queryVector = IntelligenceRegistry.shared.embedder?.embed(trimmed)
 
         let absPaths: [String] = (try? await queue.read { db -> [String] in
             // 1) FTS5 hits
@@ -51,7 +54,9 @@ enum SearchService {
 
             // 3) Semantic hits (embedding cosine similarity), merged after
             // exact hits — exact first, semantic by descending similarity.
-            let semantic = (try? SemanticSearch.semanticIDs(query: trimmed, db: db)) ?? []
+            let semantic = (queryVector.flatMap {
+                try? SemanticSearch.semanticIDs(queryVector: $0, db: db)
+            }) ?? []
             let orderedIDs = SemanticSearch.merge(
                 exactIDs: exactIDs, semantic: semantic, threshold: 0.45)
             guard !orderedIDs.isEmpty else { return [] }

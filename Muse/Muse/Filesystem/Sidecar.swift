@@ -11,7 +11,7 @@
 import Foundation
 
 /// One manual or vision tag, mirrored from TagRow's portable columns.
-struct SidecarTag: Codable, Equatable, Sendable {
+nonisolated struct SidecarTag: Codable, Equatable, Sendable {
     var label: String
     var source: String            // "manual" | "vision" | "vision-*"
     var confidence: Double?
@@ -20,7 +20,7 @@ struct SidecarTag: Codable, Equatable, Sendable {
 
 /// Complete portable record for one asset, keyed by content hash. Must
 /// stay platform-neutral (no AppKit types) so iOS can read it unchanged.
-struct Sidecar: Codable, Equatable, Sendable {
+nonisolated struct Sidecar: Codable, Equatable, Sendable {
     var schema: Int               // = 1
     /// When this metadata was last written (epoch seconds). Drives
     /// last-writer-wins conflict resolution — NOT the file's mtime.
@@ -76,7 +76,7 @@ extension Sidecar {
     /// Apply this sidecar's portable fields onto an existing file row,
     /// leaving identity/device-local columns (id, size_bytes, last_seen_at,
     /// content_hash) untouched.
-    func apply(onto file: inout FileRow) {
+    nonisolated func apply(onto file: inout FileRow) {
         file.width = width
         file.height = height
         file.duration_seconds = duration_seconds
@@ -93,7 +93,7 @@ extension Sidecar {
 
     /// Materialize TagRows for a given file id. `makeID` supplies unique row
     /// ids (UUID in production, deterministic in tests).
-    func tagRows(fileID: String, makeID: () -> String) -> [TagRow] {
+    nonisolated func tagRows(fileID: String, makeID: () -> String) -> [TagRow] {
         tags.map {
             TagRow(id: makeID(), file_id: fileID, label: $0.label,
                    source: $0.source, confidence: $0.confidence,

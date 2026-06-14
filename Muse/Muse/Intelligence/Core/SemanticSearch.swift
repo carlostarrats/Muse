@@ -10,7 +10,7 @@
 import Foundation
 import GRDB
 
-enum SemanticSearch {
+nonisolated enum SemanticSearch {
     /// Exact hits keep their order and rank first; semantic hits above the
     /// threshold follow, sorted by similarity, deduplicated.
     static func merge(exactIDs: [String], semantic: [(String, Double)],
@@ -24,10 +24,10 @@ enum SemanticSearch {
         return out
     }
 
-    /// Cosine-score the query against all stored embeddings.
-    static func semanticIDs(query: String, db: GRDB.Database) throws -> [(String, Double)] {
-        guard let embedder = IntelligenceRegistry.shared.embedder,
-              let qv = embedder.embed(query) else { return [] }
+    /// Cosine-score a precomputed query vector against all stored embeddings.
+    /// The caller embeds the query (touching the @MainActor registry) and
+    /// passes the vector in, so this scoring pass stays off-main/nonisolated.
+    static func semanticIDs(queryVector qv: [Float], db: GRDB.Database) throws -> [(String, Double)] {
         let rows = try EmbeddingRow.fetchAll(db)
         return rows.map { ($0.file_id, VectorMath.cosine(qv, VectorMath.fromData($0.vector))) }
     }

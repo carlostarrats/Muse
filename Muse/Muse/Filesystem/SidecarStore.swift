@@ -9,7 +9,7 @@
 
 import Foundation
 
-enum SidecarStore {
+nonisolated enum SidecarStore {
     /// `<asset's folder>/.muse/<content_hash>.json`
     static func sidecarURL(forAsset assetURL: URL, contentHash: String) -> URL {
         assetURL.deletingLastPathComponent()
