@@ -9,7 +9,9 @@ enum ViewerGeometry {
     static let topPad: CGFloat = 70
     static let bottomPad: CGFloat = 60
     static let maxZoom: CGFloat = 4
-    static let minZoom: CGFloat = 1
+    /// A little headroom below Fit (1.0) so the image can be pulled back a
+    /// touch — not an infinite zoom-out, just one or two steps of breathing room.
+    static let minZoom: CGFloat = 0.7
 
     /// Centered in the true viewable space: between the left edge and the info column.
     static func fitRect(imageSize: CGSize, viewport: CGSize) -> CGRect {

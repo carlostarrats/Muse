@@ -218,22 +218,28 @@ struct HeroImageViewer: View {
     private var chromeRow: some View {
         HStack(spacing: 8) {
             zoomPill
-            if zoom > 1.001 { fitButton }
+            if abs(zoom - 1) > 0.001 { fitButton }
             Spacer()
             ShareButton(url: currentURL)
-            if zoom <= 1.001 { closeButton }
+            if abs(zoom - 1) <= 0.001 { closeButton }
         }
         .frame(width: ViewerGeometry.columnWidth)
     }
 
     private var zoomPill: some View {
         HStack(spacing: 0) {
-            ChromePillButton(systemName: "minus") { setZoom(zoom / 1.25, animated: true) }
+            ChromePillButton(systemName: "minus",
+                             disabled: zoom <= ViewerGeometry.minZoom + 0.001) {
+                setZoom(zoom / 1.25, animated: true)
+            }
             Text(zoomReadout)
                 .font(.system(size: 11, weight: .medium).monospacedDigit())
                 .foregroundStyle(.white.opacity(0.85))
                 .frame(minWidth: 38)
-            ChromePillButton(systemName: "plus") { setZoom(zoom * 1.25, animated: true) }
+            ChromePillButton(systemName: "plus",
+                             disabled: zoom >= ViewerGeometry.maxZoom - 0.001) {
+                setZoom(zoom * 1.25, animated: true)
+            }
         }
         .frame(height: 38)
         // Prototype chrome is white-glass: rgba(255,255,255,.10) at rest.
@@ -253,7 +259,7 @@ struct HeroImageViewer: View {
     }
 
     private var zoomReadout: String {
-        guard zoom > 1.001 else { return "Fit" }
+        guard abs(zoom - 1) > 0.001 else { return "Fit" }
         if let n = naturalSize, n.width > 0 {
             let fitScale = currentFitRect.width / n.width
             return "\(Int(zoom * fitScale * 100))%"
@@ -540,22 +546,26 @@ private struct ChromeCircleButton: View {
 /// − / ＋ segments inside the zoom pill.
 private struct ChromePillButton: View {
     let systemName: String
+    var disabled: Bool = false
     var action: () -> Void
     @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
+                // Greyed when the zoom limit is reached — no hover lift, no fill.
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(hovering ? 1.0 : 0.7))
+                .foregroundStyle(.white.opacity(disabled ? 0.25
+                                                : hovering ? 1.0 : 0.7))
                 .frame(width: 34, height: 38)
                 .contentShape(Rectangle())
                 // Explicit shape, not the bare-ShapeStyle background — that
                 // overload ignores safe-area edges and smears the hover fill
                 // into a full-height band beside the hidden toolbar area.
-                .background(Rectangle().fill(hovering ? .white.opacity(0.20) : .clear))
+                .background(Rectangle().fill(hovering && !disabled ? .white.opacity(0.20) : .clear))
         }
         .buttonStyle(.plain)
+        .disabled(disabled)
         .accessibilityLabel(systemName == "minus" ? "Zoom out"
                             : systemName == "plus" ? "Zoom in" : systemName)
         .onHover { hovering = $0 }
