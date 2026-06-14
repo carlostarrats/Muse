@@ -16,37 +16,42 @@ struct InfoSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("About Muse")
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.system(size: 24, weight: .semibold))
                 Spacer()
                 CloseButton { isPresented = false }
             }
-            .padding(.bottom, 14)
+            .padding(.bottom, 20)
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 0) {
                     section("Library & indexing", """
-                        Add folders from the sidebar; Muse indexes them \
-                        automatically (the progress bar at the bottom). Your \
-                        files are never modified — deleting always means \
-                        moving to the Trash, undoable.
+                        Add folders from the sidebar and Muse indexes them \
+                        automatically — the status pills at the bottom show \
+                        the progress. Your files are never modified; deleting \
+                        always means moving to the Trash, and it's undoable.
                         """)
+                    rowDivider
                     section("Analysis", """
                         After indexing, Muse automatically analyzes new or \
                         changed images with Apple's on-device Vision: tags, \
                         dominant colors, dimensions, and readable text. This \
                         powers the tag chips, the Color and Shape sorts, the \
-                        viewer's color swatches, and collections. Images \
-                        already analyzed are never redone, and your own tag \
-                        edits always win over the machine's.
+                        viewer's color swatches, and collections. There's no \
+                        button to press — images already analyzed are never \
+                        redone, and your own tag edits always win over the \
+                        machine's.
                         """)
+                    rowDivider
                     section("Collections", """
                         Groupings that span your whole library, suggested \
-                        after Analyze (plus any you build by hand in the \
-                        viewer). They track your files: delete images or \
-                        remove a folder and collections shrink to match — \
-                        empty ones disappear. Open one to rename or delete \
-                        it from the header.
+                        automatically from what Vision finds, plus any you \
+                        build by hand in the viewer. Open the Collections \
+                        page from the toolbar to browse them. They track your \
+                        files: delete images or remove a folder and \
+                        collections shrink to match — empty ones disappear. \
+                        Open one to rename or delete it from its header.
                         """)
+                    rowDivider
                     section("Tags", """
                         The chip row shows the tags of the folder you're \
                         viewing. Click a chip to filter; hover for its count. \
@@ -54,27 +59,54 @@ struct InfoSheet: View {
                         everywhere; add tags from an image's right-click menu \
                         or inside the viewer.
                         """)
+                    rowDivider
                     section("Search", """
                         Searches the folder selected in the sidebar — names, \
                         tags, captions, and text found inside images.
                         """)
+                    rowDivider
+                    section("Sharing", """
+                        Share an image straight from the viewer — AirDrop, \
+                        Mail, Messages, or Save to Files. From Finder, \
+                        right-click any file and choose Share → Muse to send \
+                        it into your iCloud folder.
+                        """)
+                    rowDivider
+                    section("iCloud sync", """
+                        Muse can keep one folder in your iCloud Drive, synced \
+                        across your Macs. Each image carries a small sidecar \
+                        of its tags, colors, and analysis, so a second Mac \
+                        restores everything without re-analyzing. This rides \
+                        Apple's iCloud sync — Muse itself still makes no \
+                        network calls.
+                        """)
+                    rowDivider
                     section("Background", """
                         The palette button offers Light, Dark, Auto (light by \
                         day, dark at night), and a custom color via the \
                         sliders.
                         """)
+                    rowDivider
                     section("Privacy & retention", """
-                        Everything happens on this Mac. Muse has no network \
-                        access — nothing is uploaded, collected, or shared. \
-                        If you remove a folder from the sidebar, its index \
-                        data is kept for 180 days (so re-adding it restores \
-                        everything instantly), then deleted automatically.
+                        Everything happens on this Mac. Muse makes no network \
+                        calls — nothing is uploaded to us, collected, or \
+                        shared (iCloud sync, if you use it, is handled by the \
+                        system). If you remove a folder from the sidebar, its \
+                        index data is kept for 180 days — so re-adding it \
+                        restores everything instantly — then deleted \
+                        automatically.
                         """)
                 }
             }
         }
-        .padding(20)
-        .frame(width: 440, height: 480)
+        .padding(28)
+        .frame(width: 540, height: 640)
+    }
+
+    /// Hairline between section rows.
+    private var rowDivider: some View {
+        Divider()
+            .padding(.vertical, 16)
     }
 
     /// Circular ✕, hover-brightening — same family as the app's other
@@ -99,12 +131,13 @@ struct InfoSheet: View {
     }
 
     private func section(_ title: String, _ body: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
             Text(body)
-                .font(.system(size: 12))
+                .font(.system(size: 13))
                 .foregroundStyle(.secondary)
+                .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

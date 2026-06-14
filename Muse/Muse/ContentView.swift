@@ -119,7 +119,7 @@ struct ContentView: View {
                     } label: {
                         Image(systemName: "info.circle")
                     }
-                    .help("About Muse — how indexing, Analyze, collections, and tags work")
+                    .help("About Muse — how indexing, analysis, collections, and tags work")
                 }
             }
             // Transparent title bar so the sidebar card flows continuously up
