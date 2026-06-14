@@ -100,6 +100,18 @@ struct MuseApp: App {
                     appState.setActiveTag(nil)
                 }
                 .disabled(appState.activeTagLabel == nil)
+
+                Divider()
+
+                Button("Delete All Tags…") {
+                    appState.deleteAllTagsRequest = true
+                }
+                .disabled(appState.currentFiles.isEmpty)
+
+                Button("Regenerate Tags…") {
+                    appState.regenerateTagsRequest = true
+                }
+                .disabled(appState.currentFiles.isEmpty)
             }
 
             // Same for collections — enabled while inside one.
