@@ -92,6 +92,18 @@ final class BookmarkStore: ObservableObject {
         save()
     }
 
+    // MARK: - Reorder
+
+    /// Move a top-level root to a new position (manual sidebar ordering).
+    /// `to` follows `Array.move(fromOffsets:toOffset:)` insert-before semantics.
+    /// Persists immediately so the order survives relaunch.
+    func move(from: Int, to: Int) {
+        guard roots.indices.contains(from) else { return }
+        let dest = min(max(0, to), roots.count)
+        roots.move(fromOffsets: IndexSet(integer: from), toOffset: dest)
+        save()
+    }
+
     // MARK: - Access
 
     /// Returns the resolved URL for a root, or nil if the bookmark is stale or

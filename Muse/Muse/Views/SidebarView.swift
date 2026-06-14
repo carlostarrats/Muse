@@ -11,10 +11,23 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SidebarView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.colorScheme) private var colorScheme
+
+    /// The root currently being dragged for manual reordering.
+    @State private var draggingRoot: Root?
+    /// Insertion index (into the reorderable roots) the drop would land at.
+    @State private var dropTarget: Int?
+    /// Physical row index currently under the cursor — guards exit-clear so a
+    /// neighbour that just claimed the target isn't wiped.
+    @State private var dropOwner: Int?
+
+    /// Height of a single collapsed folder row; the drop midpoint for the
+    /// before/after split lives at half this.
+    fileprivate static let rowHeight: CGFloat = 28
 
     /// Low-opacity fill used behind a hovered row, matching Lineform.
     static let rowHoverFillOpacity = 0.08
@@ -34,16 +47,27 @@ struct SidebarView: View {
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 1) {
+                        // The iCloud "Muse" folder is the fixed home — always on
+                        // top, not reorderable — with a gap below it separating
+                        // it from the local folders.
+                        if let icloud = iCloudNode {
+                            FolderTreeNode(node: icloud, depth: 0)
+                            Color.clear.frame(height: 12)
+                        }
+
                         if !appState.stars.starred.isEmpty {
-                            sectionHeader("Pinned")
                             ForEach(appState.stars.starred) { star in
                                 StarRow(star: star)
                             }
                         }
 
-                        ForEach(appState.rootNodes) { root in
-                            FolderTreeNode(node: root, depth: 0)
+                        ForEach(Array(reorderableNodes.enumerated()),
+                                id: \.element.id) { pair in
+                            rootRow(pair.element, index: pair.offset)
                         }
+                        // Catch-area below the last folder so a drag released in
+                        // the empty space underneath still lands at the bottom.
+                        if !reorderableNodes.isEmpty { endDropZone }
                     }
                     .padding(.horizontal, 8)
                     .padding(.top, 6)
@@ -77,14 +101,126 @@ struct SidebarView: View {
         .padding(.top, 10)
     }
 
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(.secondary)
+    /// The bookmark Root backing a top-level node, if it's a user folder that
+    /// can be reordered (the iCloud "Muse" folder has no bookmark, so nil).
+    private func reorderableRoot(for node: FolderNode) -> Root? {
+        appState.bookmarks.roots.first { appState.bookmarks.url(for: $0) == node.url }
+    }
+
+    /// Top-level nodes that can be dragged to reorder (everything but iCloud).
+    private var reorderableNodes: [FolderNode] {
+        appState.rootNodes.filter { reorderableRoot(for: $0) != nil }
+    }
+
+    /// The non-reorderable iCloud "Muse" node, if signed in.
+    private var iCloudNode: FolderNode? {
+        appState.rootNodes.first { reorderableRoot(for: $0) == nil }
+    }
+
+    /// A thin accent rule shown where a dragged folder will land.
+    private var insertionLine: some View {
+        RoundedRectangle(cornerRadius: 1)
+            .fill(Color.accentColor)
+            .frame(height: 2)
             .padding(.horizontal, 6)
-            .padding(.top, 8)
-            .padding(.bottom, 2)
-            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// One draggable top-level folder. The drop line is an overlay (not a real
+    /// row) so showing it never shifts layout — which would make the row under
+    /// the cursor jump and the drag target flicker. Hovering the top half of a
+    /// row targets the gap above it; the bottom half targets the gap below — so
+    /// dragging a folder onto another's lower half drops it underneath.
+    @ViewBuilder
+    private func rootRow(_ node: FolderNode, index: Int) -> some View {
+        if let model = reorderableRoot(for: node) {
+            FolderTreeNode(node: node, depth: 0)
+                .opacity(draggingRoot == model ? 0.4 : 1)
+                .overlay(alignment: .top) {
+                    if draggingRoot != nil, dropTarget == index { insertionLine }
+                }
+                .onDrag {
+                    draggingRoot = model
+                    dropTarget = nil
+                    dropOwner = nil
+                    return NSItemProvider(object: model.id.uuidString as NSString)
+                }
+                .onDrop(of: [.text],
+                        delegate: RootDropDelegate(index: index,
+                                                   splitHeight: Self.rowHeight,
+                                                   store: appState.bookmarks,
+                                                   dragging: $draggingRoot,
+                                                   dropTarget: $dropTarget,
+                                                   dropOwner: $dropOwner))
+        } else {
+            FolderTreeNode(node: node, depth: 0)
+        }
+    }
+
+    /// Drop area filling the space under the last folder. Always targets the
+    /// end, and shows the landing line at its top edge (just below the last
+    /// folder) so dragging "to the bottom" reliably lands there.
+    private var endDropZone: some View {
+        ZStack(alignment: .top) {
+            Color.clear.frame(height: 44)
+            if draggingRoot != nil, dropTarget == reorderableNodes.count {
+                insertionLine
+            }
+        }
+        .contentShape(Rectangle())
+        .onDrop(of: [.text],
+                delegate: RootDropDelegate(index: reorderableNodes.count,
+                                           splitHeight: nil,
+                                           store: appState.bookmarks,
+                                           dragging: $draggingRoot,
+                                           dropTarget: $dropTarget,
+                                           dropOwner: $dropOwner))
+    }
+}
+
+// MARK: - Root drag-to-reorder
+
+/// Tracks the insertion point as a folder is dragged and commits the move on
+/// release. The cursor's vertical position within the row picks the gap: top
+/// half → before this row (`index`), bottom half → after it (`index + 1`), so
+/// the last row's bottom half targets the very end.
+private struct RootDropDelegate: DropDelegate {
+    let index: Int
+    /// Row height for the before/after split; nil for the end zone, which
+    /// always targets `index` (the end).
+    let splitHeight: CGFloat?
+    let store: BookmarkStore
+    @Binding var dragging: Root?
+    @Binding var dropTarget: Int?
+    @Binding var dropOwner: Int?
+
+    func validateDrop(info: DropInfo) -> Bool { dragging != nil }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        guard dragging != nil else { return nil }
+        dropOwner = index
+        let newTarget = splitHeight.map { info.location.y > $0 / 2 ? index + 1 : index } ?? index
+        if newTarget != dropTarget { dropTarget = newTarget }
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) {
+        // Clear only if this row still owns the target — a neighbour we've
+        // already crossed into may have claimed it (its dropTarget can equal
+        // ours when both point at the gap between us).
+        if dropOwner == index {
+            dropOwner = nil
+            dropTarget = nil
+        }
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        defer { dragging = nil; dropTarget = nil; dropOwner = nil }
+        guard let dragging, let dest = dropTarget,
+              let from = store.roots.firstIndex(of: dragging) else { return false }
+        withAnimation(.easeInOut(duration: 0.18)) {
+            store.move(from: from, to: dest)
+        }
+        return true
     }
 }
 
@@ -177,16 +313,17 @@ private struct FolderTreeNode: View {
             withAnimation(.easeOut(duration: 0.12)) { isHovered = hovering }
         }
         .contextMenu {
-            Button(appState.stars.isStarred(node.url) ? "Unpin" : "Pin") {
-                appState.toggleStar(folder: node)
-            }
-            if node.isRoot {
-                if let r = appState.bookmarks.roots.first(where: {
-                    appState.bookmarks.url(for: $0) == node.url
-                }) {
-                    Divider()
-                    Button("Remove Folder") { appState.removeRoot(r) }
+            // Pinning is a shortcut for buried subfolders; top-level folders are
+            // already visible at the top of the sidebar, so Pin is offered only
+            // for subfolders. Roots are reordered by dragging instead.
+            if !node.isRoot {
+                Button(appState.stars.isStarred(node.url) ? "Unpin" : "Pin") {
+                    appState.toggleStar(folder: node)
                 }
+            } else if let r = appState.bookmarks.roots.first(where: {
+                appState.bookmarks.url(for: $0) == node.url
+            }) {
+                Button("Remove Folder") { appState.removeRoot(r) }
             }
         }
     }

@@ -37,9 +37,13 @@ struct InfoSheet: View {
                     section("Library & indexing", """
                         Add folders from the sidebar and Muse indexes them \
                         automatically — the status pills at the bottom show \
-                        the progress. Pin folders you use often. Your files \
-                        are never modified; deleting always means moving to \
-                        the Trash, and it's undoable.
+                        the progress. Drag your folders up or down to put the \
+                        ones you care about on top. To keep a buried subfolder \
+                        within reach, right-click it and Pin — a shortcut \
+                        appears in the Pinned section at the top (top-level \
+                        folders are already there, so they aren't pinnable). \
+                        Your files are never modified; deleting always means \
+                        moving to the Trash, and it's undoable.
                         """)
                     rowDivider
                     section("Viewing files", """

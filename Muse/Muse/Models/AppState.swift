@@ -332,6 +332,7 @@ final class AppState: ObservableObject {
 
     private var watcher: FolderWatcher?
     private var bookmarksCancellable: AnyCancellable?
+    private var starsCancellable: AnyCancellable?
 
     init() {
         updateAutoMoodTimer()
@@ -362,7 +363,13 @@ final class AppState: ObservableObject {
 
         rebuildRootNodes()
         bookmarksCancellable = bookmarks.$roots
-            .sink { [weak self] _ in self?.rebuildRootNodes() }
+            .sink { [weak self] newRoots in self?.rebuildRootNodes(roots: newRoots) }
+        // `stars` is a nested ObservableObject; without forwarding its changes,
+        // views observing AppState (the sidebar) don't refresh when a folder is
+        // pinned/unpinned until some other AppState change republishes. Forward
+        // it so Pin/Unpin shows immediately.
+        starsCancellable = stars.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
 
         // App Intents wiring
         NotificationCenter.default.addObserver(
@@ -419,19 +426,31 @@ final class AppState: ObservableObject {
 
     // MARK: - Roots wiring
 
-    private func rebuildRootNodes() {
-        var nodes: [FolderNode] = bookmarks.roots.compactMap { root in
+    /// - Parameter roots: the source roots to rebuild from. The `$roots` sink
+    ///   MUST pass the value it's handed: `@Published` fires in `willSet`, so
+    ///   re-reading `bookmarks.roots` here would see the *old* array and a
+    ///   reorder would silently render the previous order (the move-only bug).
+    private func rebuildRootNodes(roots: [Root]? = nil) {
+        let sourceRoots = roots ?? bookmarks.roots
+        // Reuse existing nodes by URL so reorder / add / remove preserves each
+        // folder's identity — and thus its expansion state — instead of building
+        // fresh nodes that would collapse the tree and break a live drag.
+        let existing = Dictionary(rootNodes.map { ($0.url, $0) },
+                                  uniquingKeysWith: { first, _ in first })
+        var nodes: [FolderNode] = sourceRoots.compactMap { root in
             guard let url = bookmarks.url(for: root) else { return nil }
-            return FolderNode(url: url, displayName: root.displayName, isRoot: true)
+            return existing[url]
+                ?? FolderNode(url: url, displayName: root.displayName, isRoot: true)
         }
         // The single app-managed iCloud folder, when signed in, appears as a
         // root alongside local folders. Appended here so it survives every
         // rebuild (add/remove/restore of local roots).
         if let icloud = iCloudFolderURL {
-            nodes.append(FolderNode(url: icloud, displayName: "Muse", isRoot: true))
+            nodes.append(existing[icloud]
+                ?? FolderNode(url: icloud, displayName: "Muse", isRoot: true))
         }
         rootNodes = nodes
-        if activeRoot == nil, let first = bookmarks.roots.first {
+        if activeRoot == nil, let first = sourceRoots.first {
             select(rootForFirstFolder: first)
         }
     }
