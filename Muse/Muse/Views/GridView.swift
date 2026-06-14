@@ -15,7 +15,7 @@ import AppKit
 struct GridView: View {
     @EnvironmentObject var appState: AppState
 
-    private let spacing: CGFloat = 10
+    private let spacing: CGFloat = 14
     private let contentInset: CGFloat = 20
     @State private var addTagFile: FileNode? = nil
     @State private var newTagText = ""
