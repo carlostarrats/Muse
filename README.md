@@ -10,8 +10,7 @@ already have — Downloads, Documents, screenshots, an inspiration stash.
 Point it at a folder and it reads your files where they live. Nothing is
 imported, copied, or moved, and your files are never modified.
 
-In the spirit of Adobe Bridge, but local-first, Apple-Intelligence-native,
-and **free forever** — no subscriptions, no in-app purchases, no ads.
+In the spirit of Adobe Bridge, but local-first, Apple-Intelligence-native — no subscriptions, no in-app purchases, no ads.
 
 <img width="1359" height="948" alt="Screenshot 2026-06-15 at 11 14 32 AM" src="https://github.com/user-attachments/assets/3ecb33ff-2fe1-4875-9f72-f229c41b9e9a" />
 
