@@ -508,11 +508,24 @@ genuinely incompatible with Sparkle, so this was surfaced before any code).
 - **Docs:** rewrote the Distribution + Network-policy identity bullets here,
   the README Privacy section (+ a "Staying up to date" section), and added
   `docs/RELEASING.md`.
-- **NOT verified at runtime:** the actual update *install* can only be
-  exercised on a signed + notarized build against a published appcast (no
-  release exists yet), so the in-app menu/UI is wired and builds clean, but the
-  end-to-end download-and-install must be smoke-tested on the first real
-  release. Documented in `docs/RELEASING.md`.
+- **Shipped v1.0.0 live (2026-06-15).** The repo was made **public** and
+  licensed **MIT** (`LICENSE`) — required because Sparkle fetches the appcast
+  unauthenticated, and a private repo's `releases/latest/download/…` URLs 404
+  for everyone (that was the "couldn't retrieve update information" error).
+  README has a Lineform-style download badge → `releases/latest/download/
+  Muse-<version>.dmg`; `release.sh --publish` auto-bumps that version.
+- **Notarization gotchas baked into `release.sh`:** (1) **Hardened Runtime is
+  required** — the app was MAS-configured (no hardened runtime), so the first
+  notarization came back *Invalid*; `release.sh` archives with
+  `ENABLE_HARDENED_RUNTIME=YES`. (2) `notarytool submit --wait` exits 0 even on
+  an *Invalid* result, so the script now checks for `status: Accepted` and
+  dumps the log on failure. (3) iCloud + App Groups need provisioning profiles
+  even for Developer ID → `-allowProvisioningUpdates`. (4) stapling can lag
+  Apple's ticket → `staple_retry`.
+- **Still to verify by the user:** the actual download-and-install update flow
+  (install 1.0.0 from the DMG, publish 1.0.1, Check for Updates). The infra is
+  confirmed live (appcast + DMG return 200, EdDSA-signed). Full release flow:
+  `docs/RELEASING.md`; one command: `scripts/release.sh <version> --publish`.
 
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
