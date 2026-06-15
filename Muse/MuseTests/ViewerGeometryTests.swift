@@ -17,7 +17,7 @@ final class ViewerGeometryTests: XCTestCase {
         XCTAssertEqual(r.height, 800 - 70 - 60, accuracy: 0.5)
     }
     func testZoomClamp() {
-        XCTAssertEqual(ViewerGeometry.clampZoom(0.3), 1.0)
+        XCTAssertEqual(ViewerGeometry.clampZoom(0.3), 0.7)  // minZoom (zoom-out, 2026-06-14)
         XCTAssertEqual(ViewerGeometry.clampZoom(9), 4.0)
         XCTAssertEqual(ViewerGeometry.clampZoom(2.2), 2.2)
     }

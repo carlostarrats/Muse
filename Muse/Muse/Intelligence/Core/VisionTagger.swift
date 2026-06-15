@@ -9,15 +9,18 @@ final class VisionTagger: Tagger {
         // can't be loaded — width is only set after a successful CGImage load.
         guard v.width != nil else { return nil }
 
-        var tags: [IntelTag] = v.classifications.map {
-            IntelTag(label: $0.key, confidence: Double($0.value), source: "vision")
+        // Curate Vision's raw taxonomy into clean, human-friendly tags
+        // (drops abstract/sensitive labels, remaps ugly compounds).
+        var tags: [IntelTag] = ClassificationCuration.curate(v.classifications).map {
+            IntelTag(label: $0.label, confidence: $0.confidence, source: "vision")
         }
 
-        let palette = PaletteExtractor.palette(for: url)
-        var colorNames = Set<String>()
-        for hex in palette.prefix(3) {
-            if let n = NamedColor.name(forHex: hex) { colorNames.insert(n) }
-        }
+        // Weighted palette: only colors that actually dominate become tags, so
+        // a tiny accent (or a portrait's skin sliver) no longer tags the whole
+        // image. The stored palette keeps the full sorted list (backdrop/wash).
+        let weighted = PaletteExtractor.weightedPalette(for: url)
+        let palette = weighted.map { $0.0 }
+        let colorNames = ColorTagger.tags(fromWeighted: weighted)
         tags += colorNames.map { IntelTag(label: $0, confidence: nil, source: "vision-color") }
 
         let kind = StyleKind.classify(labels: v.classifications,

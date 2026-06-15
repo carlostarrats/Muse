@@ -1,6 +1,12 @@
 import Foundation
 
 /// Maps a hex color to a coarse human name via HSB rules. Pure, deterministic.
+///
+/// The hard part is the achromatic gate. A near-black charcoal (`#202226`) or a
+/// washed-out light tint has a *hue* mathematically, but that hue is just
+/// channel noise — naming it "blue"/"purple" is wrong. So before assigning any
+/// hue we first decide whether the color is colorful enough to deserve a hue
+/// name at all; only then do we read the hue band.
 enum NamedColor {
     static func name(forHex hex: String) -> String? {
         guard let (r, g, b) = parse(hex) else { return nil }
@@ -9,11 +15,19 @@ enum NamedColor {
         let brightness = mx
         let saturation = mx == 0 ? 0 : delta / mx
 
-        if brightness < 0.13 { return "black" }
-        if saturation < 0.10 {
-            if brightness > 0.92 { return "white" }
-            return "gray"
+        // --- Achromatic gate (brightness/saturation aware) ---
+        // Very dark reads black regardless of a faint hue.
+        if brightness < 0.16 { return "black" }
+        // Dark + weakly-saturated = charcoal / near-black neutral, not a hue.
+        // (Genuinely dark *saturated* colors — navy, maroon — clear this and
+        // keep their hue.)
+        if brightness < 0.30 && saturation < 0.35 { return "black" }
+        // Low saturation overall = neutral: white when light, gray otherwise.
+        if saturation < 0.12 {
+            return brightness > 0.90 ? "white" : "gray"
         }
+
+        // --- Chromatic: read the hue band ---
         var hue: Double = 0
         if delta > 0 {
             if mx == r { hue = ((g - b) / delta).truncatingRemainder(dividingBy: 6) }
@@ -28,7 +42,16 @@ enum NamedColor {
             return "orange"
         }
         switch hue {
-        case ..<15, 345...: return r > 0.85 && b > 0.6 ? "pink" : "red"
+        case ..<15, 345...:
+            // Pale, low-saturation warm tones are skin / peach / salmon — they
+            // read as pink, not red. Calling them "red" was the dominant source
+            // of false "red" tags on portraits and product shots. A true red is
+            // either reasonably saturated or not bright-and-washed-out.
+            if brightness > 0.8 && saturation < 0.55 { return "pink" }
+            // Muted, not-bright warm tones (taupe, mauve, dried-blood, warm-gray)
+            // are brown, not red. Saturated darks (maroon) stay red.
+            if brightness < 0.7 && saturation < 0.45 { return "brown" }
+            return r > 0.85 && b > 0.6 ? "pink" : "red"
         case 50..<70: return "yellow"
         case 70..<160: return "green"
         case 160..<200: return "teal"

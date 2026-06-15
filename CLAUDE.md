@@ -393,6 +393,75 @@ A live UI/UX pass. Landed:
 - **QA pass** — two rounds of independent review; the identity-based reorder and
   consume-once node reuse above were the review-found fixes. Build green.
 
+### Tagging overhaul: color naming + neutrals + label curation — 2026-06-15 (on `feat/next-7`)
+
+Investigated "inaccurate image tags" (e.g. an all-blue vinyl image showing under
+the **red** filter). Root-caused against the live DB; the decision (see memory
+`muse-fix-code-not-my-data`) was to fix the **forward code** and validate by a
+clean re-analysis — NOT to ship one-time data-migration passes to patch existing
+corrupted DBs. Two root causes, plus a diagnosis of a third that needed no new code:
+
+- **Identity collision — already fixed at the source, no new code.** On the dev
+  DB ~51% of the library (915 distinct iCloud images) were welded onto a single
+  phantom `files` row, so they all shared that record's tags/palette/caption —
+  why a blue image showed under "red". Verified by hashing the files: different
+  sizes + different SHA-256, none matching the phantom's stored hash. This was
+  legacy damage from the OLD zero-byte-hash bug, which is **already guarded** in
+  `HashService.sha256` (returns nil on a zero-byte read of a non-empty file). A
+  fresh index therefore cannot re-weld — proven by wiping + re-indexing (below).
+  (A migration to un-weld existing DBs was prototyped and then removed as a
+  band-aid: the user's library is a disposable test fixture; real fix = the hash
+  guard + re-analyze. The lingering caveat is unchanged: for iCloud files
+  `Indexer.isUnchanged` trusts the stored hash and never re-hashes, so the
+  size/mtime change-signal doesn't apply there — fine for a clean index, but it
+  means a corrupted iCloud DB couldn't self-heal without a wipe.)
+  This was a whole-system tagging pass, not a one-band patch. Three forward fixes:
+
+- **Color naming (`NamedColor`) — robust across every hue + neutrals.** The bug
+  class generalised well beyond red: (a) pale warm tones (skin/peach/salmon) were
+  called "red"; (b) muted mauve/taupe was "red"; (c) **near-black charcoals
+  (`#202226`, `#282429`) were called "blue"/"purple"** because a near-neutral has
+  a hue mathematically but it's just channel noise. Fixes:
+  - Achromatic gate *before* any hue read: `brightness < 0.16` ⇒ black; dark +
+    weakly-saturated (`brightness < 0.30 && saturation < 0.35`) ⇒ black (charcoal,
+    not a hue — genuinely dark *saturated* navy/maroon still keep their hue);
+    `saturation < 0.12` ⇒ white/gray by brightness.
+  - Red band: pale warm ⇒ pink; muted/not-bright warm
+    (`brightness < 0.7 && saturation < 0.45`) ⇒ brown; saturated reds (maroon
+    incl.) stay red.
+- **Color dominance (`ColorTagger` + `PaletteExtractor.kmeansWeighted` /
+  `weightedPalette`).** Tagging now uses each cluster's **share**: the dominant
+  cluster is always named, others only if they cover ≥15% of the image, deduped +
+  capped at 3. `VisionTagger` uses the weighted path; the stored `palette` keeps
+  the full sorted list (backdrop/wash). Kills the "minor accent tags the whole
+  image" failure mode at analysis time.
+- **Classification labels (`ClassificationCuration`, wired into `VisionTagger`).**
+  Apple Vision's raw taxonomy was surfaced verbatim — abstract terms (`material`,
+  `structure`, `conveyance`, `container`, `carton`), sensitive demographic guesses
+  (`adult` was on 242 files, `male`/`female`), and underscored compounds
+  (`wood_processed`, `blue_sky`, `printed_page`, `footwear`). Curation: confidence
+  floor (0.45) + top-5 cap, a drop-set for noise/sensitive labels, a remap for
+  known-ugly → friendly (`wood_processed`→wood, `blue_sky`→sky, `footwear`→shoes,
+  `printed_page`→document, `illustrations`→illustration…), and a generic
+  underscore→space fallback. Deduped after remap.
+- **Stale tags were a symptom, not a cause.** Files whose stored tags disagreed
+  with their content were just frozen by the incremental `analyzed_hash` gate — a
+  re-analysis regenerates them correctly, so no migration was needed.
+
+Tests: added `ColorTaggerTests`, `ClassificationCurationTests`; extended
+`NamedColorTests` (dark-neutral, light-neutral, dark-saturated cases) /
+`PaletteExtractorTests`; fixed a stale `ViewerGeometryTests.testZoomClamp`
+(2026-06-14 minZoom 1.0→0.7, unrelated pre-existing failure).
+
+**Validated end-to-end** by wiping `muse.sqlite` and re-analyzing the real
+~1.7k-image library from scratch: max 2 paths/file (no welding — the hash guard
+holds on a clean index); all 1740 images analyzed; `black` rose to 569 as
+charcoals left blue/purple; **0 of 3447 color tags lack a matching palette color**
+(every band, checked with a NamedColor replica); **no banned/sensitive labels
+present** (`adult` etc. gone); visual contact-sheet audit (montages per color band
++ per classification label) confirmed image↔tag agreement for people/document/
+shoes/sky and the color bands.
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```

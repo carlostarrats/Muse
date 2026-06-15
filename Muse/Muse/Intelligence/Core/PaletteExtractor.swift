@@ -6,6 +6,14 @@ enum PaletteExtractor {
     /// Deterministic k-means over RGB pixels; returns hex strings sorted by
     /// cluster size, capped at 6.
     static func kmeansHex(pixels: [(Double, Double, Double)], k: Int, seed: UInt64) -> [String] {
+        kmeansWeighted(pixels: pixels, k: k, seed: seed).map { $0.0 }
+    }
+
+    /// As `kmeansHex`, but each entry carries its cluster's share of the
+    /// pixels (0…1), sorted by share descending. Color tagging uses the share
+    /// so a tiny accent cluster doesn't tag the whole image (a 5%-coverage
+    /// red sliver should not make an image "red").
+    static func kmeansWeighted(pixels: [(Double, Double, Double)], k: Int, seed: UInt64) -> [(String, Double)] {
         guard !pixels.isEmpty else { return [] }
         let k = min(max(1, k), 6, pixels.count)
         var rng = seed
@@ -34,22 +42,36 @@ enum PaletteExtractor {
             }
         }
         let counts = (0..<k).map { c in assign.filter { $0 == c }.count }
+        let total = Double(pixels.count)
         return zip(centers, counts)
             .filter { $0.1 > 0 }
             .sorted { $0.1 > $1.1 }
-            .map { ctr, _ in
-                String(format: "#%02x%02x%02x",
-                       Int(ctr.0 * 255), Int(ctr.1 * 255), Int(ctr.2 * 255))
+            .map { ctr, count in
+                (String(format: "#%02x%02x%02x",
+                        Int(ctr.0 * 255), Int(ctr.1 * 255), Int(ctr.2 * 255)),
+                 Double(count) / total)
             }
     }
 
     /// Downsample an image to ~32x32 and extract its palette.
     static func palette(for url: URL, k: Int = 5) -> [String] {
+        weightedPalette(for: url, k: k).map { $0.0 }
+    }
+
+    /// As `palette(for:)` but each entry carries its share of the image (0…1).
+    static func weightedPalette(for url: URL, k: Int = 5) -> [(String, Double)] {
+        guard let pixels = downsampledRGB(for: url) else { return [] }
+        return kmeansWeighted(pixels: pixels, k: k, seed: 7)
+    }
+
+    /// Decode an image, downsample to ~32x32, and return its RGB pixels in a
+    /// known layout. Shared by `palette` / `weightedPalette`.
+    private static func downsampledRGB(for url: URL) -> [(Double, Double, Double)]? {
         guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
               let thumb = CGImageSourceCreateThumbnailAtIndex(src, 0, [
                   kCGImageSourceCreateThumbnailFromImageAlways: true,
                   kCGImageSourceThumbnailMaxPixelSize: 32,
-              ] as CFDictionary) else { return [] }
+              ] as CFDictionary) else { return nil }
         // Redraw into a known RGBA layout. Reading the thumbnail's raw
         // dataProvider assumed R,G,B at bytes 0,1,2 — ImageIO thumbnails
         // are typically BGRA, which swapped red and blue in every palette.
@@ -64,11 +86,11 @@ enum PaletteExtractor {
             ctx.draw(thumb, in: CGRect(x: 0, y: 0, width: w, height: h))
             return true
         }
-        guard drew else { return [] }
+        guard drew else { return nil }
         var px: [(Double, Double, Double)] = []
         for o in stride(from: 0, to: data.count, by: 4) {
             px.append((Double(data[o]) / 255, Double(data[o + 1]) / 255, Double(data[o + 2]) / 255))
         }
-        return kmeansHex(pixels: px, k: k, seed: 7)
+        return px
     }
 }
