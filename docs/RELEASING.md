@@ -44,7 +44,26 @@ users will receive automatically.
 5. **`create-dmg`** (for the installer DMG with the drag-to-Applications
    background): `brew install create-dmg`.
 
-## Per-release steps
+## The easy way: one command
+
+Once the one-time setup above is done, every release is just:
+
+```sh
+scripts/release.sh 1.0.1            # build + notarize + DMG + sign + appcast
+scripts/release.sh 1.0.1 --publish  # …and publish the GitHub release too
+```
+
+It archives, notarizes and staples the app, builds the DMG with the
+drag-to-Applications background, notarizes and staples the DMG, EdDSA-signs
+the update, and writes the appcast. Without `--publish` it stops there and
+prints the exact `gh release create` command to run when you're ready. The
+build number (`CFBundleVersion`) is set automatically from the git commit
+count, so it always increases.
+
+The manual breakdown below documents what that script does, step by step,
+in case you need to run or debug a single stage.
+
+## Per-release steps (manual)
 
 ### 1. Bump the version
 
