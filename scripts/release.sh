@@ -71,6 +71,7 @@ mkdir -p "$REL_DIR"
 echo "▸ Archiving…"
 xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
   -archivePath "$ARCHIVE" \
+  -allowProvisioningUpdates \
   MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
   archive
 
@@ -89,7 +90,8 @@ cat > "$BUILD_DIR/ExportOptions.plist" <<PLIST
 PLIST
 xcodebuild -exportArchive -archivePath "$ARCHIVE" \
   -exportOptionsPlist "$BUILD_DIR/ExportOptions.plist" \
-  -exportPath "$EXPORT_DIR"
+  -exportPath "$EXPORT_DIR" \
+  -allowProvisioningUpdates
 
 # ---- 3. notarize + staple the app ------------------------------------------
 echo "▸ Notarizing app…"

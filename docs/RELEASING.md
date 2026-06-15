@@ -161,3 +161,10 @@ embedded public key, and offers the update.
 - **`latest/download/…` requires a non-prerelease "latest" release.** If you
   publish a release marked *pre-release*, GitHub won't treat it as "latest"
   and the feed URL will 404 for users.
+- **iCloud + App Groups need provisioning profiles even for Developer ID.**
+  Unlike a plain Developer ID app, Muse uses iCloud Documents + App Groups, so
+  the app *and* the share extension each need a Developer ID provisioning
+  profile. The archive/export steps pass `-allowProvisioningUpdates` so Xcode
+  creates/refreshes them automatically against your account. If export ever
+  fails with `No profiles for 'com.tarrats.Muse…' were found`, that flag (or a
+  one-time Distribute App ▸ Direct Distribution in the Xcode UI) is the fix.
