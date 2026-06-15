@@ -140,7 +140,13 @@ staple_retry "$DMG"
 
 # ---- 6. sign update + generate appcast -------------------------------------
 echo "▸ Signing update + writing appcast…"
-"$SPARKLE_BIN/generate_appcast" "$REL_DIR" \
+# Keep ONLY this release's DMG in the appcast dir before generating. GitHub
+# hosts each version's assets under its own tag, so a single download-url-prefix
+# can't address older versions — and cross-tag deltas would 404. One DMG in →
+# one correct item out (full-download updates; no deltas).
+find "$REL_DIR" -maxdepth 1 \( -name '*.dmg' -o -name '*.delta' -o -name 'appcast.xml' \) \
+  ! -name "$(basename "$DMG")" -delete
+"$SPARKLE_BIN/generate_appcast" --maximum-deltas 0 "$REL_DIR" \
   --download-url-prefix "https://github.com/$REPO_SLUG/releases/download/$TAG/"
 
 echo "✓ Built: $DMG"
