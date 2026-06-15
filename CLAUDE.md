@@ -526,9 +526,21 @@ genuinely incompatible with Sparkle, so this was surfaced before any code).
   dumps the log on failure. (3) iCloud + App Groups need provisioning profiles
   even for Developer ID → `-allowProvisioningUpdates`. (4) stapling can lag
   Apple's ticket → `staple_retry`.
-- **Still to verify by the user:** the actual download-and-install update flow
-  (install 1.0.0 from the DMG, publish 1.0.1, Check for Updates). The infra is
-  confirmed live (appcast + DMG return 200, EdDSA-signed). Full release flow:
+- **Sandboxed install fix (the big one for self-update):** a sandboxed app
+  can't launch Sparkle's installer directly — the first real update downloaded
+  + verified but died at "launching the installer." Fix: Info.plist
+  `SUEnableInstallerLauncherService = true` + entitlements `mach-lookup`
+  temporary-exception for `com.tarrats.Muse-spks`/`-spki`. Takes effect for the
+  app DOING the update, so pre-fix builds can't self-update — the first fixed
+  build must be installed manually once.
+- **First-run UX:** `SUEnableAutomaticChecks = true` (silent background checks,
+  no consent prompt — the prompt confused users AND its modal stole focus so
+  the window didn't appear until a Dock click).
+- **VERIFIED end-to-end (2026-06-15):** shipped v1.0.0→v1.0.3; self-update
+  proven (installed 1.0.2 → Check for Updates → downloaded, EdDSA-verified,
+  installed, relaunched on 1.0.3). Each release publishes a clean single-item
+  appcast (`--maximum-deltas 0`, dir pruned to the current DMG — GitHub hosts
+  assets per-tag so cross-tag deltas/old entries would 404). Full release flow:
   `docs/RELEASING.md`; one command: `scripts/release.sh <version> --publish`.
 
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
@@ -549,12 +561,13 @@ Muse/Muse/
   Models/
     AppState.swift                 @MainActor singleton — roots, active folder,
                                    current files, selected file, sort mode,
-                                   search, view mode, collection + tag filters,
-                                   mood, fluid state
+                                   search, collection + tag filters, mood
     AssetKind.swift                kind enum + extension/UTType detection
     FileNode.swift                 in-memory enumerated-file value type
     Root.swift                     security-scoped bookmark wrapper
-    DeleteCoordinator.swift        burn-delete state machine: trash + undo toast
+    DeleteCoordinator.swift        delete state machine (trash + undo toast);
+                                   drives a fade-out (internals still named
+                                   "burn"; the Metal burn shader is gone)
     Mood.swift                     Light / Dark / Auto (day↔night) / Custom HSB
                                    (AutoTint retired)
   Filesystem/
@@ -670,17 +683,22 @@ Muse/Muse/
                                    aspect ratios — feeds GridView's virtualization
                                    (replaced the old MasonryLayout: Layout, deleted
                                    2026-06-13 — a custom Layout can't virtualize)
-  Fluid/                           (water ripple effect removed 2026-06-13 —
-                                   FluidDistortion.metal + FluidSim.swift deleted)
-    BurnUp.metal                   burn-up delete shader (chars edges-in + embers)
-    BurnUpModifier.swift           animatable layerEffect wrapper (delete effect)
+  Fluid/                           (legacy dir name; water ripple removed
+                                   2026-06-13 and the burn-up delete SHADER
+                                   removed too — NO Metal shaders remain in app)
+    FadeOutModifier.swift          animatable staggered opacity fade for the
+                                   delete sequence (replaced the BurnUp shader)
   Settings/
     SettingsView.swift             placeholder; real Preferences pane is
                                    future work
   Muse.entitlements                app-sandbox + user-selected.read-write +
                                    bookmarks.app-scope + iCloud Documents +
                                    network.client (Sparkle update fetch ONLY —
-                                   added 2026-06-15; no other network use)
+                                   added 2026-06-15; no other network use) +
+                                   mach-lookup temporary-exception for
+                                   <bundleid>-spks/-spki (so the sandbox can run
+                                   Sparkle's installer XPC — see SUEnableInstaller-
+                                   LauncherService in Info.plist)
 MuseShareExtension/                (separate app-extension target) "Send to Muse"
                                    — Finder Share-menu extension; copies dropped
                                    files into the single iCloud folder, picked up

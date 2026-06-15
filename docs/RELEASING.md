@@ -168,3 +168,22 @@ embedded public key, and offers the update.
   creates/refreshes them automatically against your account. If export ever
   fails with `No profiles for 'com.tarrats.Muse…' were found`, that flag (or a
   one-time Distribute App ▸ Direct Distribution in the Xcode UI) is the fix.
+- **Notarization requires Hardened Runtime.** Muse was originally
+  MAS-configured (no hardened runtime), and notarization rejected it as
+  *Invalid*. `release.sh` archives with `ENABLE_HARDENED_RUNTIME=YES`; the
+  notarize step also fails loudly on a non-`Accepted` result (notarytool exits
+  0 even on *Invalid*) and prints the log.
+- **Sandboxed self-update needs the InstallerLauncher XPC + mach-lookup.** A
+  sandboxed app can't launch Sparkle's installer directly, so an update will
+  download and verify but fail at *"An error occurred while launching the
+  installer."* This is configured (don't remove): `Info.plist`
+  `SUEnableInstallerLauncherService = true` plus the entitlements
+  `com.apple.security.temporary-exception.mach-lookup.global-name` =
+  `com.tarrats.Muse-spks`, `com.tarrats.Muse-spki`. These are allowed for
+  notarized direct distribution (not App Store). Note the fix only helps the
+  app *doing* the updating — a build shipped without it can't self-update to a
+  fixed build; that one must be installed manually.
+- **The appcast is single-item per release.** `release.sh` prunes the appcast
+  dir to just the current DMG and passes `--maximum-deltas 0`, because GitHub
+  hosts each version's assets under its own tag — a multi-version appcast with
+  one `--download-url-prefix` (or cross-tag deltas) would 404.
