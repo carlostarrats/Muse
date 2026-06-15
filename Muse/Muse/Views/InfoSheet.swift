@@ -48,12 +48,12 @@ struct InfoSheet: View {
                     rowDivider
                     section("Viewing files", """
                         Muse opens almost anything in place: images, PDFs, \
-                        video, audio, 3D models, fonts, Markdown, and code or \
-                        text. Click an image for a full-screen hero view with \
-                        zoom, pan, and a side panel of its details. Anything \
-                        Muse doesn't have a dedicated viewer for falls back to \
-                        Quick Look — and you can always right-click and Open \
-                        With another app.
+                        video, audio, fonts, Markdown, and code or text. Click \
+                        an image for a full-screen hero view with zoom, pan, \
+                        and a side panel of its details. Anything Muse doesn't \
+                        have a dedicated viewer for falls back to Quick Look — \
+                        and you can always right-click and Open With another \
+                        app.
                         """)
                     rowDivider
                     section("Analysis", """

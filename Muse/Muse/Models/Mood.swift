@@ -9,15 +9,12 @@
 //
 
 import SwiftUI
-import AppKit
 
 struct MoodRGB: Equatable {
     var r: Double
     var g: Double
     var b: Double
     var color: Color { Color(red: r, green: g, blue: b) }
-    /// For SceneKit/AppKit consumers (Graph scene background).
-    var nsColor: NSColor { NSColor(red: r, green: g, blue: b, alpha: 1) }
 }
 
 struct MoodPalette: Equatable {
