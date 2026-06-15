@@ -21,6 +21,15 @@
 	     app makes (no analytics, no telemetry). -->
 	<key>com.apple.security.network.client</key>
 	<true/>
+	<!-- Sandboxed Sparkle installs run through Sparkle's XPC services; the
+	     sandbox must be allowed to look up their mach service names (host
+	     bundle id + -spks/-spki) or "launching the installer" fails. These are
+	     allowed for Developer ID + notarized distribution (not App Store). -->
+	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+	<array>
+		<string>com.tarrats.Muse-spks</string>
+		<string>com.tarrats.Muse-spki</string>
+	</array>
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.com.tarrats.Muse</string>

@@ -14,6 +14,11 @@
 	<string>QZNDbCzR71yEGGdAzXVbSS5qcOQxhi86Q6aNd+Av9+I=</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
+	<!-- Required for a SANDBOXED app to install updates: routes the install
+	     through Sparkle's InstallerLauncher XPC service (paired with the
+	     mach-lookup entitlements). Without it the installer can't launch. -->
+	<key>SUEnableInstallerLauncherService</key>
+	<true/>
 	<key>NSUbiquitousContainers</key>
 	<dict>
 		<key>iCloud.com.tarrats.Muse</key>
