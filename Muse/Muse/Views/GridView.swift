@@ -253,6 +253,9 @@ struct GridView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
         }
+        // Match the status pills exactly: same 20pt content height + 9pt
+        // vertical padding so every bottom capsule is the same height.
+        .frame(height: 20)
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
         .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
