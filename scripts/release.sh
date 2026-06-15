@@ -67,6 +67,19 @@ SPARKLE_BIN="$(dirname "${SPARKLE_BIN:-/nonexistent}")"
 rm -rf "$ARCHIVE" "$EXPORT_DIR" "$DMG"
 mkdir -p "$REL_DIR"
 
+# stapler can fail with "ticket not ready" right after notarytool returns —
+# Apple's CDN needs a moment to publish it. Retry a few times before giving up.
+staple_retry() {
+  local target="$1" i
+  for i in 1 2 3 4 5 6; do
+    if xcrun stapler staple "$target"; then return 0; fi
+    echo "  ticket not ready, retrying in 30s ($i/6)…"
+    sleep 30
+  done
+  echo "✗ stapling failed for $target after retries" >&2
+  return 1
+}
+
 # ---- 1. archive (Developer ID, versioned) ----------------------------------
 echo "▸ Archiving…"
 xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
@@ -97,7 +110,7 @@ xcodebuild -exportArchive -archivePath "$ARCHIVE" \
 echo "▸ Notarizing app…"
 ditto -c -k --keepParent "$APP" "$BUILD_DIR/Muse-app.zip"
 xcrun notarytool submit "$BUILD_DIR/Muse-app.zip" --keychain-profile "$NOTARY_PROFILE" --wait
-xcrun stapler staple "$APP"
+staple_retry "$APP"
 
 # ---- 4. build the DMG (drag-to-Applications background) --------------------
 echo "▸ Building DMG…"
@@ -106,7 +119,7 @@ echo "▸ Building DMG…"
 # ---- 5. notarize + staple the DMG ------------------------------------------
 echo "▸ Notarizing DMG…"
 xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
-xcrun stapler staple "$DMG"
+staple_retry "$DMG"
 
 # ---- 6. sign update + generate appcast -------------------------------------
 echo "▸ Signing update + writing appcast…"

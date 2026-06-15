@@ -22,7 +22,10 @@ APP="${1:?usage: make-dmg.sh <path-to-Muse.app> [output.dmg]}"
 OUT="${2:-build/Muse.dmg}"
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-BG="$REPO_ROOT/dmg/dmg-background.jpg"
+# Multi-resolution TIFF (600x400 @1x + 1200x800 @2x) so Finder renders the
+# background at 600x400 points, crisp on Retina, with no cropping. Rebuild it
+# from dmg/dmg-background.jpg with scripts/make-dmg-background.sh.
+BG="$REPO_ROOT/dmg/dmg-background.tiff"
 
 if [[ ! -d "$APP" ]]; then
   echo "error: app not found at '$APP'" >&2
@@ -43,10 +46,28 @@ mkdir -p "$(dirname "$OUT")"
 
 # Stage only the app so the volume contains exactly Muse.app + Applications.
 STAGE="$(mktemp -d)"
-trap 'rm -rf "$STAGE"' EXIT
+WRAP="$(mktemp -d)"
+trap 'rm -rf "$STAGE" "$WRAP"' EXIT
 cp -R "$APP" "$STAGE/"
 
-create-dmg \
+# create-dmg's bundled AppleScript template sets icon size / text size but NOT
+# the label position, so on some systems Finder shows labels to the RIGHT of
+# the icons (and runs "Applications" off the edge). We want labels BELOW the
+# icons. create-dmg resolves its template from its own directory and treats a
+# dir containing `.this-is-the-create-dmg-repo` as a source checkout, using a
+# sibling `support/`. So we run a symlinked create-dmg from a temp dir whose
+# `support/template.applescript` is patched with `set label position to bottom`
+# — no global file is touched, and it works on any machine with create-dmg.
+CDMG_REAL="$(readlink -f "$(command -v create-dmg)")"
+CDMG_SUPPORT="$(dirname "$(dirname "$CDMG_REAL")")/share/create-dmg/support"
+ln -s "$CDMG_REAL" "$WRAP/create-dmg"
+touch "$WRAP/.this-is-the-create-dmg-repo"
+cp -R "$CDMG_SUPPORT" "$WRAP/support"
+# Insert the label-position line right after the text-size line in `tell opts`.
+sed -i '' 's/\(set text size to TEXT_SIZE\)/\1\
+			set label position to bottom/' "$WRAP/support/template.applescript"
+
+"$WRAP/create-dmg" \
   --volname "Muse" \
   --background "$BG" \
   --window-pos 200 120 \
