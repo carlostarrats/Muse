@@ -1,6 +1,6 @@
 # Muse
 
-[![Download Muse for macOS](https://img.shields.io/badge/Download-Muse%20for%20macOS-111111?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/carlostarrats/Muse/releases/latest/download/Muse-1.0.1.dmg)
+[![Download Muse for macOS](https://img.shields.io/badge/Download-Muse%20for%20macOS-111111?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/carlostarrats/Muse/releases/latest/download/Muse-1.0.2.dmg)
 
 
 <img width="1382" height="1004" alt="Screenshot 2026-03-19 at 8 57 13 PM" src="https://github.com/user-attachments/assets/09e936a9-01d2-4774-8381-33ed9c3b3563" />
@@ -19,7 +19,7 @@ and **free forever** — no subscriptions, no in-app purchases, no ads.
 
 ## Download
 
-**[Download Muse for macOS](https://github.com/carlostarrats/Muse/releases/latest/download/Muse-1.0.1.dmg)** — open the DMG and drag Muse to Applications.
+**[Download Muse for macOS](https://github.com/carlostarrats/Muse/releases/latest/download/Muse-1.0.2.dmg)** — open the DMG and drag Muse to Applications.
 
 More builds and release notes are on the [Releases page](https://github.com/carlostarrats/Muse/releases). Once installed, Muse keeps itself up to date via Sparkle (**Muse ▸ Check for Updates…**). Requires macOS 14.6+. The product website is at [muse-site-phi.vercel.app](https://muse-site-phi.vercel.app/).
 
