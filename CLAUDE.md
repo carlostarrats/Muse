@@ -10,16 +10,26 @@ Muse is a **filesystem-native universal file viewer + AI-organized
 asset library** for macOS, in the spirit of Adobe Bridge but
 local-first, Apple-Intelligence-native, and free forever.
 
-- Distribution: **Mac App Store**, sandboxed
+- Distribution: **Direct** — a Developer ID–signed, notarized build that
+  self-updates via **Sparkle**, hosted on GitHub Releases (DMG with a
+  drag-to-Applications background). **Not the Mac App Store**: Sparkle
+  self-update is incompatible with MAS, and shipping directly lets updates
+  go out without an App Store submission. Still **sandboxed**. (Pivoted from
+  MAS on 2026-06-15 — see that session log. If a MAS build is ever wanted,
+  it must be a separate target/config with Sparkle compiled out.) Release
+  workflow: `docs/RELEASING.md`.
 - Pricing: **Free**, no IAPs, no subscriptions, no ads
-- Network policy: **Zero**. No analytics, no telemetry, no remote
-  fetches. The sandbox doesn't include `network.client` — accidental
-  network access is blocked at the OS level. iCloud Drive *document*
-  sync (used for the optional single "Muse" iCloud folder) is mediated
-  by the OS sync daemon and adds only the iCloud Documents entitlement —
-  **not** `network.client`. The app still makes zero network calls and
-  the developer receives no data, so the "Data Not Collected" privacy
-  label is unchanged.
+- Network policy: **Update-only**. No analytics, no telemetry, no data
+  collection, no remote content fetches. The **only** network access is
+  Sparkle: fetching its signed appcast feed + downloading the update, gated
+  by `com.apple.security.network.client` (added 2026-06-15 for Sparkle, the
+  sole network code path). Every download is EdDSA-verified against the
+  embedded `SUPublicEDKey`; first-run automatic checks are opt-in (the
+  `SUEnableAutomaticChecks` key is deliberately omitted so Sparkle prompts).
+  iCloud Drive *document* sync (the optional single "Muse" iCloud folder) is
+  mediated by the OS sync daemon and adds only the iCloud Documents
+  entitlement. The developer still receives **no data**, so the "Data Not
+  Collected" privacy label is unchanged.
 - Data collection: **None**. Privacy nutrition label = "Data Not Collected".
 - Min macOS: **14.6** (Vision/PDFKit/AVKit/FSEvents/FTS5 all work).
   Foundation Models is used only to name auto-generated collections,
@@ -462,13 +472,61 @@ present** (`adult` etc. gone); visual contact-sheet audit (montages per color ba
 + per classification label) confirmed image↔tag agreement for people/document/
 shoes/sky and the color bands.
 
+### Self-update (Sparkle) + distribution pivot — 2026-06-15 (on `main`)
+
+Added a **Check for Updates** flow and pivoted distribution away from the Mac
+App Store. Decision was the user's, confirmed up front: direct distribution +
+GitHub Releases hosting (the two App-Store/zero-network constraints below are
+genuinely incompatible with Sparkle, so this was surfaced before any code).
+
+- **Sparkle 2.x via SPM** (`https://github.com/sparkle-project/Sparkle`,
+  resolved 2.9.3), wired into `project.pbxproj` by mirroring the existing GRDB
+  SPM entries (the `Muse` group is a `fileSystemSynchronizedGroups` root, so
+  new `.swift` files are auto-included — only the package refs needed manual
+  pbxproj edits). `Updates/Updater.swift` holds an `SPUStandardUpdaterController`
+  wrapper + `CheckForUpdatesView`; `MuseApp` owns it and adds the menu item via
+  `CommandGroup(after: .appInfo)` (right under "About Muse").
+- **Info.plist:** `SUFeedURL` →
+  `https://github.com/carlostarrats/Muse/releases/latest/download/appcast.xml`,
+  `SUPublicEDKey` = the EdDSA public key. `SUEnableAutomaticChecks` deliberately
+  **omitted** so Sparkle shows its first-run "check automatically?" consent
+  prompt (privacy-first) rather than opting users in silently.
+- **Entitlement:** added `com.apple.security.network.client` — the FIRST and
+  ONLY network entitlement, solely for Sparkle's appcast fetch + download.
+  Verified the built app embeds `Sparkle.framework` with its sandbox XPC
+  services (`Downloader.xpc` / `Installer.xpc`) and that the codesigned
+  entitlements include `network.client`. **This breaks the old literal
+  "zero network calls" guarantee** — the docs now say "update-only network".
+  The "Data Not Collected" label still holds (Sparkle sends no profile data;
+  system-profile reporting is off).
+- **EdDSA key:** a pre-existing Sparkle signing key in the login Keychain
+  (shared with the user's other Sparkle app) was reused via `generate_keys`;
+  the private key stays in the Keychain, never committed.
+- **DMG:** release artifact is a DMG with a drag-to-Applications background
+  (`dmg/dmg-background.jpg`); `scripts/make-dmg.sh` builds it. See
+  `docs/RELEASING.md` for the full archive→notarize→sign→appcast→publish flow.
+- **Docs:** rewrote the Distribution + Network-policy identity bullets here,
+  the README Privacy section (+ a "Staying up to date" section), and added
+  `docs/RELEASING.md`.
+- **NOT verified at runtime:** the actual update *install* can only be
+  exercised on a signed + notarized build against a published appcast (no
+  release exists yet), so the in-app menu/UI is wired and builds clean, but the
+  end-to-end download-and-install must be smoke-tested on the first real
+  release. Documented in `docs/RELEASING.md`.
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
 Muse/Muse/
   MuseApp.swift                    entry point; ThumbnailCache LRU prune +
                                    180-day Housekeeping prune + IntentBackfill
-                                   on launch
+                                   on launch; owns the Sparkle updater +
+                                   "Check for Updates…" command (after .appInfo)
+  Updates/
+    Updater.swift                  Sparkle SPUStandardUpdaterController wrapper +
+                                   CheckForUpdatesView (menu item, disables while
+                                   a check is in flight). Direct-distribution
+                                   self-update; see docs/RELEASING.md
   ContentView.swift                NavigationSplitView shell; floating tag
                                    chips; toolbar; menu-bar Tags/Collections
   Models/
@@ -603,8 +661,9 @@ Muse/Muse/
     SettingsView.swift             placeholder; real Preferences pane is
                                    future work
   Muse.entitlements                app-sandbox + user-selected.read-write +
-                                   bookmarks.app-scope + iCloud Documents
-                                   (no network entitlement)
+                                   bookmarks.app-scope + iCloud Documents +
+                                   network.client (Sparkle update fetch ONLY —
+                                   added 2026-06-15; no other network use)
 MuseShareExtension/                (separate app-extension target) "Send to Muse"
                                    — Finder Share-menu extension; copies dropped
                                    files into the single iCloud folder, picked up

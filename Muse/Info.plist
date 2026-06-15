@@ -2,6 +2,15 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Sparkle self-update (direct-distribution build). The feed is the
+	     signed appcast published on GitHub Releases; every download is
+	     verified against SUPublicEDKey. SUEnableAutomaticChecks is omitted
+	     on purpose so Sparkle shows its first-run "check automatically?"
+	     consent prompt instead of opting the user in silently. -->
+	<key>SUFeedURL</key>
+	<string>https://github.com/carlostarrats/Muse/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>QZNDbCzR71yEGGdAzXVbSS5qcOQxhi86Q6aNd+Av9+I=</string>
 	<key>NSUbiquitousContainers</key>
 	<dict>
 		<key>iCloud.com.tarrats.Muse</key>

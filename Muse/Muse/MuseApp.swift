@@ -10,6 +10,9 @@ import SwiftUI
 @main
 struct MuseApp: App {
     @StateObject private var appState = AppState()
+    /// Sparkle self-updater (direct-distribution build only). Started at
+    /// launch so background checks honor the user's preference.
+    @StateObject private var updater = UpdaterController()
 
     /// Pin / Unpin label reflects the selected folder's current state.
     private var pinMenuTitle: String {
@@ -43,6 +46,12 @@ struct MuseApp: App {
                 }
         }
         .commands {
+            // "Check for Updates…" sits in the Muse app menu, right below
+            // "About Muse" — the conventional spot every Mac app uses.
+            CommandGroup(after: .appInfo) {
+                CheckForUpdatesView(updater: updater.controller.updater)
+            }
+
             // Folder actions on the current selection live in the Edit menu.
             CommandGroup(after: .pasteboard) {
                 Divider()
