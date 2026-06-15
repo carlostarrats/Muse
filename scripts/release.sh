@@ -67,13 +67,29 @@ SPARKLE_BIN="$(dirname "${SPARKLE_BIN:-/nonexistent}")"
 rm -rf "$ARCHIVE" "$EXPORT_DIR" "$DMG"
 mkdir -p "$REL_DIR"
 
-# stapler can fail with "ticket not ready" right after notarytool returns —
-# Apple's CDN needs a moment to publish it. Retry a few times before giving up.
+# Submit to Apple and FAIL if the result isn't "Accepted". notarytool exits 0
+# even when a submission comes back "Invalid", so we must inspect the status
+# and dump the rejection log ourselves — otherwise the pipeline limps onward
+# and stapling fails with a confusing "ticket not found".
+notarize() {
+  local target="$1" out id
+  out="$(xcrun notarytool submit "$target" --keychain-profile "$NOTARY_PROFILE" --wait 2>&1)"
+  echo "$out"
+  if ! grep -q "status: Accepted" <<<"$out"; then
+    id="$(grep -m1 ' id:' <<<"$out" | awk '{print $2}')"
+    echo "✗ Notarization NOT accepted for $target" >&2
+    [[ -n "$id" ]] && xcrun notarytool log "$id" --keychain-profile "$NOTARY_PROFILE" >&2
+    return 1
+  fi
+}
+
+# stapler can fail with "ticket not ready" right after a successful notarization
+# — Apple's CDN needs a moment to publish it. Retry a few times before giving up.
 staple_retry() {
   local target="$1" i
-  for i in 1 2 3 4 5 6; do
+  for i in 1 2 3 4 5 6 7 8; do
     if xcrun stapler staple "$target"; then return 0; fi
-    echo "  ticket not ready, retrying in 30s ($i/6)…"
+    echo "  ticket not ready, retrying in 30s ($i/8)…"
     sleep 30
   done
   echo "✗ stapling failed for $target after retries" >&2
@@ -86,6 +102,7 @@ xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
   -archivePath "$ARCHIVE" \
   -allowProvisioningUpdates \
   MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
+  ENABLE_HARDENED_RUNTIME=YES \
   archive
 
 # ---- 2. export with Developer ID -------------------------------------------
@@ -109,7 +126,7 @@ xcodebuild -exportArchive -archivePath "$ARCHIVE" \
 # ---- 3. notarize + staple the app ------------------------------------------
 echo "▸ Notarizing app…"
 ditto -c -k --keepParent "$APP" "$BUILD_DIR/Muse-app.zip"
-xcrun notarytool submit "$BUILD_DIR/Muse-app.zip" --keychain-profile "$NOTARY_PROFILE" --wait
+notarize "$BUILD_DIR/Muse-app.zip"
 staple_retry "$APP"
 
 # ---- 4. build the DMG (drag-to-Applications background) --------------------
@@ -118,7 +135,7 @@ echo "▸ Building DMG…"
 
 # ---- 5. notarize + staple the DMG ------------------------------------------
 echo "▸ Notarizing DMG…"
-xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
+notarize "$DMG"
 staple_retry "$DMG"
 
 # ---- 6. sign update + generate appcast -------------------------------------
@@ -135,6 +152,12 @@ if [[ "$PUBLISH" == "yes" ]]; then
   echo "▸ Publishing to GitHub…"
   "${GH_CMD[@]}"
   echo "✓ Published $TAG"
+  # Keep the README download links pointed at this version's asset
+  # (the latest/download/<asset> URL is version-pinned by filename).
+  if grep -q 'releases/latest/download/Muse-[0-9][0-9.]*\.dmg' "$REPO_ROOT/README.md" 2>/dev/null; then
+    sed -i '' "s#releases/latest/download/Muse-[0-9][0-9.]*\.dmg#releases/latest/download/Muse-$VERSION.dmg#g" "$REPO_ROOT/README.md"
+    echo "  ↪ Updated README download links to Muse-$VERSION.dmg — commit README.md."
+  fi
   echo "  Verify: curl -L https://github.com/$REPO_SLUG/releases/latest/download/appcast.xml"
 else
   echo

@@ -122,14 +122,28 @@ struct InfoSheet: View {
                         sliders.
                         """)
                     rowDivider
+                    section("Updates", """
+                        Muse is distributed directly (not via the App Store) \
+                        and keeps itself up to date with Sparkle. Choose Muse ▸ \
+                        Check for Updates… any time, or let it check on its own \
+                        — it asks first. New versions are downloaded over HTTPS \
+                        and cryptographically verified before installing.
+                        """)
+                    rowDivider
+                    section("Open source", """
+                        Muse is open source under the MIT license. The code \
+                        lives at github.com/carlostarrats/Muse.
+                        """)
+                    rowDivider
                     section("Privacy & retention", """
-                        Everything happens on this Mac. Muse makes no network \
-                        calls — nothing is uploaded to us, collected, or \
-                        shared (iCloud sync, if you use it, is handled by the \
-                        system). If you remove a folder from the sidebar, its \
-                        index data is kept for 180 days — so re-adding it \
-                        restores everything instantly — then deleted \
-                        automatically.
+                        Everything happens on this Mac. Muse collects nothing — \
+                        no analytics, no telemetry; nothing about you or your \
+                        files is ever uploaded or shared. Its only network use \
+                        is checking for and downloading app updates (iCloud \
+                        sync, if you use it, is handled by the system). If you \
+                        remove a folder from the sidebar, its index data is \
+                        kept for 180 days — so re-adding it restores everything \
+                        instantly — then deleted automatically.
                         """)
                 }
             }
