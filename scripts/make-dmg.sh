@@ -11,9 +11,10 @@
 # Example:
 #   scripts/make-dmg.sh build/export/Muse.app build/Muse-1.0.1.dmg
 #
-# The window is sized to the 1200x800 background so the artwork maps 1:1.
-# Muse.app sits on the left; the Applications drop-link on the right; the
-# user drags one onto the other.
+# The window is 600x400 POINTS; the 1200x800 background is the @2x (Retina)
+# asset, so it renders crisp and at the right size. Icon coordinates are in
+# the 600x400 point space. Muse.app sits on the left; the Applications
+# drop-link on the right; the user drags one onto the other.
 
 set -euo pipefail
 
@@ -49,10 +50,10 @@ create-dmg \
   --volname "Muse" \
   --background "$BG" \
   --window-pos 200 120 \
-  --window-size 1200 800 \
+  --window-size 600 400 \
   --icon-size 128 \
-  --icon "Muse.app" 330 400 \
-  --app-drop-link 870 400 \
+  --icon "Muse.app" 165 200 \
+  --app-drop-link 435 200 \
   --hide-extension "Muse.app" \
   --no-internet-enable \
   "$OUT" \
