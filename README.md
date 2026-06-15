@@ -21,7 +21,7 @@ and **free forever** — no subscriptions, no in-app purchases, no ads.
 
 **[Download Muse for macOS](https://github.com/carlostarrats/Muse/releases/latest/download/Muse-1.0.0.dmg)** — open the DMG and drag Muse to Applications.
 
-More builds and release notes are on the [Releases page](https://github.com/carlostarrats/Muse/releases). Once installed, Muse keeps itself up to date via Sparkle (**Muse ▸ Check for Updates…**). Requires macOS 14.6+.
+More builds and release notes are on the [Releases page](https://github.com/carlostarrats/Muse/releases). Once installed, Muse keeps itself up to date via Sparkle (**Muse ▸ Check for Updates…**). Requires macOS 14.6+. The product website is at [muse-site-phi.vercel.app](https://muse-site-phi.vercel.app/).
 
 ## Privacy first
 
