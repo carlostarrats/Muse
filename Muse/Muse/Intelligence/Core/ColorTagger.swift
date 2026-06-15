@@ -22,17 +22,4 @@ enum ColorTagger {
         }
         return out
     }
-
-    /// Color tags from a stored palette (no per-cluster shares available — used
-    /// by the one-time recompute over already-analyzed files). Names each entry
-    /// in dominance order, dedupes, and caps at `maxTags`.
-    static func tags(fromPalette palette: [String], maxTags: Int = 3) -> [String] {
-        var out: [String] = []
-        for hex in palette {
-            guard let name = NamedColor.name(forHex: hex) else { continue }
-            if !out.contains(name) { out.append(name) }
-            if out.count >= maxTags { break }
-        }
-        return out
-    }
 }

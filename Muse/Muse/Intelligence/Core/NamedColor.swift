@@ -16,11 +16,12 @@ enum NamedColor {
         let saturation = mx == 0 ? 0 : delta / mx
 
         // --- Achromatic gate (brightness/saturation aware) ---
-        // Very dark reads black regardless of a faint hue.
-        if brightness < 0.16 { return "black" }
-        // Dark + weakly-saturated = charcoal / near-black neutral, not a hue.
-        // (Genuinely dark *saturated* colors — navy, maroon — clear this and
-        // keep their hue.)
+        // Almost no light at all reads black whatever the hue.
+        if brightness < 0.13 { return "black" }
+        // Dark + weakly-saturated = charcoal / near-black neutral, not a hue
+        // (this is what catches noise-hue charcoals like #202226). Genuinely
+        // dark *saturated* colors — navy, maroon, deep green — clear this gate
+        // and keep their hue, so we must NOT force black on brightness alone.
         if brightness < 0.30 && saturation < 0.35 { return "black" }
         // Low saturation overall = neutral: white when light, gray otherwise.
         if saturation < 0.12 {

@@ -61,10 +61,14 @@ final class NamedColorTests: XCTestCase {
         XCTAssertEqual(NamedColor.name(forHex: "#141519"), "black")
     }
 
-    /// Dark but genuinely saturated colors keep their hue (navy, deep green).
+    /// Dark but genuinely saturated colors keep their hue (navy, deep green) —
+    /// including the thin brightness band [0.13, 0.16) where an earlier hard
+    /// black gate wrongly swallowed them.
     func testDarkSaturatedKeepsHue() {
         XCTAssertEqual(NamedColor.name(forHex: "#001a40"), "blue")  // navy
         XCTAssertEqual(NamedColor.name(forHex: "#06320a"), "green") // deep green
+        XCTAssertEqual(NamedColor.name(forHex: "#000028"), "blue")  // navy, brightness ~0.157
+        XCTAssertEqual(NamedColor.name(forHex: "#0a2810"), "green") // forest, brightness ~0.157
     }
 
     /// Light, low-saturation tints read white/gray, not a hue.

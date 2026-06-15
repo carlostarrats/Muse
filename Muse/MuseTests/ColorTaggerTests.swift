@@ -38,18 +38,4 @@ final class ColorTaggerTests: XCTestCase {
                                                     ("#ffff00", 0.25)], maxTags: 3)
         XCTAssertEqual(names.count, 3)
     }
-
-    // MARK: - From stored palette (one-time recompute path)
-
-    func testFromPaletteNamesDedupCap() {
-        let names = ColorTagger.tags(fromPalette: ["#0000ff", "#ffffff", "#1a1a1a"])
-        XCTAssertEqual(names, ["blue", "white", "black"])
-    }
-
-    func testFromPaletteDropsStaleReds() {
-        // A brown/taupe palette (the IMG_0509 case) must not yield "red".
-        let names = ColorTagger.tags(fromPalette: ["#927f74", "#bdad9b", "#615654",
-                                                   "#2e2b32", "#e8e4d9"])
-        XCTAssertFalse(names.contains("red"))
-    }
 }

@@ -53,19 +53,16 @@ enum PaletteExtractor {
             }
     }
 
-    /// Downsample an image to ~32x32 and extract its palette.
-    static func palette(for url: URL, k: Int = 5) -> [String] {
-        weightedPalette(for: url, k: k).map { $0.0 }
-    }
-
-    /// As `palette(for:)` but each entry carries its share of the image (0…1).
+    /// Downsample an image to ~32x32 and extract its palette as (hex, share),
+    /// sorted by share descending. The stored palette is `map { $0.0 }`; color
+    /// tagging uses the shares (see `ColorTagger`).
     static func weightedPalette(for url: URL, k: Int = 5) -> [(String, Double)] {
         guard let pixels = downsampledRGB(for: url) else { return [] }
         return kmeansWeighted(pixels: pixels, k: k, seed: 7)
     }
 
     /// Decode an image, downsample to ~32x32, and return its RGB pixels in a
-    /// known layout. Shared by `palette` / `weightedPalette`.
+    /// known layout. Backs `weightedPalette`.
     private static func downsampledRGB(for url: URL) -> [(Double, Double, Double)]? {
         guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
               let thumb = CGImageSourceCreateThumbnailAtIndex(src, 0, [
