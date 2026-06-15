@@ -19,12 +19,14 @@ and **free forever** — no subscriptions, no in-app purchases, no ads.
 
 ## Privacy first
 
-Everything happens on your Mac. **Muse makes zero network calls** — nothing
-is uploaded, collected, or shared. The app is sandboxed and doesn't even
-include the network entitlement, so there's no accidental phoning home. The
-privacy label is "Data Not Collected." Optional iCloud Drive sync, if you
-turn it on, is handled entirely by the system; Muse still sends nothing
-anywhere.
+Everything happens on your Mac. **Muse collects nothing** — no analytics, no
+telemetry, nothing about you or your files is ever uploaded or shared. The
+*only* network access it makes is to check for and download its own updates
+(see [Staying up to date](#staying-up-to-date)), and you choose whether
+automatic checks are on. The app is sandboxed; its single outgoing-network
+entitlement exists solely so the updater can reach its release feed — there
+is no other code path that touches the network. Optional iCloud Drive sync,
+if you turn it on, is handled entirely by the system.
 
 ## What you can do
 
@@ -75,6 +77,18 @@ anywhere.
   custom color.
 - Drive it from anywhere via Shortcuts, Siri, and Spotlight (App Intents).
 
+## Staying up to date
+
+Muse is distributed directly (a Developer ID–signed, notarized build), not
+through the Mac App Store, so it updates itself with
+[Sparkle](https://sparkle-project.org). Choose **Muse ▸ Check for Updates…**
+any time, or let it check on its own — on first launch Sparkle asks whether
+you want automatic checks, and you can decline. When a new version is
+available you get the standard update prompt with release notes, and you
+decide whether to install. Every download is cryptographically verified
+(EdDSA) before it's applied, and the feed is served over HTTPS from the
+project's GitHub Releases.
+
 ## Requirements
 
 - macOS 14.6 or later (Apple Intelligence features require macOS 26+)
@@ -85,13 +99,21 @@ anywhere.
 - **UI:** SwiftUI, with PDFKit, AVKit, and SceneKit for the viewers
 - **Intelligence:** Apple Vision (on-device) + Foundation Models, capability-gated
 - **Database:** GRDB.swift (SQLite) with FTS5 full-text search
+- **Updates:** [Sparkle](https://sparkle-project.org) (direct-distribution
+  self-update; not used by any App Store build)
 - **Storage:** `~/Library/Application Support/Muse/` (sandboxed container)
 
 ## Build
 
-Open `Muse/Muse.xcodeproj` in Xcode 16+ and run (Cmd+R). GRDB is fetched
-automatically via Swift Package Manager. On first launch, click **Add
+Open `Muse/Muse.xcodeproj` in Xcode 16+ and run (Cmd+R). GRDB and Sparkle are
+fetched automatically via Swift Package Manager. On first launch, click **Add
 Folder** in the sidebar to point Muse at any folder on disk.
+
+## Releasing
+
+Cutting a release (archive → notarize → sign the update → publish the
+appcast to GitHub Releases) is documented step by step in
+[`docs/RELEASING.md`](docs/RELEASING.md).
 
 ## Acknowledgements
 

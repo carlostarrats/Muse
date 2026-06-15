@@ -234,6 +234,7 @@ struct CollectionCard: View {
             CollectionCover(collectionID: loaded.collection.id,
                             memberIDs: loaded.memberIDs,
                             coverFileID: loaded.coverFileID,
+                            isEmpty: loaded.aliveCount == 0,
                             size: coverSize)
                 // Hairline grey border + soft drop shadow so each card reads
                 // as a distinct object instead of blending into the row.
@@ -293,6 +294,8 @@ private struct CollectionCover: View {
     let collectionID: String
     let memberIDs: [String]
     let coverFileID: String?
+    /// No alive members → render a plain grey card (nothing to preview).
+    var isEmpty: Bool = false
     let size: CGSize
 
     @State private var cover: NSImage?
@@ -312,7 +315,9 @@ private struct CollectionCover: View {
                     .aspectRatio(contentMode: .fill)
                     .scaleEffect(contentZoom)
                     .transition(.opacity)
-            } else {
+            } else if !isEmpty {
+                // Placeholder glyph only while a non-empty collection's cover
+                // loads. An empty collection stays plain grey — nothing to show.
                 Image(systemName: "photo")
                     .font(.system(size: 18))
                     .foregroundStyle(.tertiary)
@@ -329,6 +334,8 @@ private struct CollectionCover: View {
     }
 
     private func loadCover() async {
+        // An empty collection has no cover to load — leave it plain grey.
+        guard !isEmpty else { return }
         guard let q = Database.shared.dbQueue else { return }
         // Prefer the user-chosen cover (if still an alive member); otherwise
         // fall back to the first alive member.

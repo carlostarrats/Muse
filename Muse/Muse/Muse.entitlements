@@ -16,6 +16,11 @@
 	</array>
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
+	<!-- Sparkle self-update needs outgoing HTTPS to fetch the appcast feed
+	     and download the signed update. This is the ONLY network access the
+	     app makes (no analytics, no telemetry). -->
+	<key>com.apple.security.network.client</key>
+	<true/>
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.com.tarrats.Muse</string>

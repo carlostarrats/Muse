@@ -253,6 +253,9 @@ struct GridView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
         }
+        // Match the status pills exactly: same 20pt content height + 9pt
+        // vertical padding so every bottom capsule is the same height.
+        .frame(height: 20)
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
         .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
@@ -322,11 +325,14 @@ struct GridView: View {
     }
 
     private var emptyStateMessage: String? {
+        // Inside a collection, an empty result shows nothing — no icon, no
+        // message, just blank space under the header (the header already
+        // names the collection).
+        if appState.activeCollectionID != nil {
+            return nil
+        }
         if appState.selectedFolder == nil {
             return "Select a folder"
-        }
-        if appState.activeCollectionID != nil {
-            return "No collection members in this folder"
         }
         return nil   // genuinely empty folder → blank
     }
