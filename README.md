@@ -1,6 +1,7 @@
 # Muse
 
 [![Download Muse for macOS](https://img.shields.io/badge/Download-Muse%20for%20macOS-111111?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/carlostarrats/Muse/releases/latest/download/Muse-1.0.3.dmg)
+[![Visit the website](https://img.shields.io/badge/Website-muse--site--phi.vercel.app-f2f2f2?style=for-the-badge)](https://muse-site-phi.vercel.app/)
 
 
 <img width="1382" height="1004" alt="Screenshot 2026-03-19 at 8 57 13 PM" src="https://github.com/user-attachments/assets/09e936a9-01d2-4774-8381-33ed9c3b3563" />
