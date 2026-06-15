@@ -24,8 +24,10 @@ local-first, Apple-Intelligence-native, and free forever.
   Sparkle: fetching its signed appcast feed + downloading the update, gated
   by `com.apple.security.network.client` (added 2026-06-15 for Sparkle, the
   sole network code path). Every download is EdDSA-verified against the
-  embedded `SUPublicEDKey`; first-run automatic checks are opt-in (the
-  `SUEnableAutomaticChecks` key is deliberately omitted so Sparkle prompts).
+  embedded `SUPublicEDKey`. `SUEnableAutomaticChecks = true` so Sparkle checks
+  quietly in the background with no UI unless an update exists (the first-run
+  consent prompt was removed 2026-06-15 — it was a confusing first launch and
+  its modal stole focus from the main window).
   iCloud Drive *document* sync (the optional single "Muse" iCloud folder) is
   mediated by the OS sync daemon and adds only the iCloud Documents
   entitlement. The developer still receives **no data**, so the "Data Not
@@ -488,9 +490,11 @@ genuinely incompatible with Sparkle, so this was surfaced before any code).
   `CommandGroup(after: .appInfo)` (right under "About Muse").
 - **Info.plist:** `SUFeedURL` →
   `https://github.com/carlostarrats/Muse/releases/latest/download/appcast.xml`,
-  `SUPublicEDKey` = the EdDSA public key. `SUEnableAutomaticChecks` deliberately
-  **omitted** so Sparkle shows its first-run "check automatically?" consent
-  prompt (privacy-first) rather than opting users in silently.
+  `SUPublicEDKey` = the EdDSA public key. `SUEnableAutomaticChecks = true` —
+  Sparkle checks quietly in the background, no UI unless an update exists. (The
+  first-run consent prompt was tried first but removed 2026-06-15: it was a
+  confusing first launch AND its modal stole focus so the main window didn't
+  appear until the user clicked the Dock icon.)
 - **Entitlement:** added `com.apple.security.network.client` — the FIRST and
   ONLY network entitlement, solely for Sparkle's appcast fetch + download.
   Verified the built app embeds `Sparkle.framework` with its sandbox XPC

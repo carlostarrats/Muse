@@ -4,13 +4,16 @@
 <dict>
 	<!-- Sparkle self-update (direct-distribution build). The feed is the
 	     signed appcast published on GitHub Releases; every download is
-	     verified against SUPublicEDKey. SUEnableAutomaticChecks is omitted
-	     on purpose so Sparkle shows its first-run "check automatically?"
-	     consent prompt instead of opting the user in silently. -->
+	     verified against SUPublicEDKey. SUEnableAutomaticChecks = true so
+	     Sparkle checks quietly in the background (no first-run consent prompt,
+	     no UI unless an update is actually available) — only ever an update
+	     check, never any data collection. -->
 	<key>SUFeedURL</key>
 	<string>https://github.com/carlostarrats/Muse/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>QZNDbCzR71yEGGdAzXVbSS5qcOQxhi86Q6aNd+Av9+I=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
 	<key>NSUbiquitousContainers</key>
 	<dict>
 		<key>iCloud.com.tarrats.Muse</key>
