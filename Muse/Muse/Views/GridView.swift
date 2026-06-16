@@ -161,6 +161,15 @@ struct GridView: View {
                             onOpen: { appState.selectedFile = file }
                         )
                     }
+                    // Drag onto a sidebar folder to move. Dragging an unselected
+                    // tile first selects just it, so the drop moves the right set.
+                    .onDrag {
+                        let p = file.url.standardizedFileURL.path
+                        if !appState.selectedFiles.contains(p) {
+                            appState.applyClick(.single(p))
+                        }
+                        return NSItemProvider(object: file.url as NSURL)
+                    }
                     .offset(x: rect.minX, y: rect.minY)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(file.basename)

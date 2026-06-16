@@ -175,6 +175,13 @@ struct ContentView: View {
         .sheet(isPresented: $infoShown) {
             InfoSheet(isPresented: $infoShown)
         }
+        .alert("Couldn’t move some files",
+               isPresented: Binding(get: { !appState.moveFailureNames.isEmpty },
+                                    set: { if !$0 { appState.moveFailureNames = [] } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(appState.moveFailureNames.joined(separator: "\n"))
+        }
         .overlay(alignment: .bottom) {
             if analyzePipeline.isRunning {
                 analyzeStatusBanner

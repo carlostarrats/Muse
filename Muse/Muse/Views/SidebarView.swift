@@ -12,6 +12,7 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import AppKit
 
 struct SidebarView: View {
     @EnvironmentObject var appState: AppState
@@ -332,6 +333,19 @@ private struct FolderTreeNode: View {
             }) {
                 Button("Remove Folder") { appState.removeRoot(r) }
             }
+            Divider()
+            Button("Reveal in Finder") {
+                NSWorkspace.shared.activateFileViewerSelecting([node.url])
+            }
+        }
+        // Drop grid images here to move them into this folder. The grid's
+        // .onDrag selects the dragged tile first, so the current selection is
+        // the set to move.
+        .onDrop(of: [.fileURL], isTargeted: nil) { _ in
+            let selected = appState.effectiveSelectionURLs(fallback: "")
+            guard !selected.isEmpty else { return false }
+            appState.reloadAfterMove(failed: FileMover.move(selected, into: node.url))
+            return true
         }
     }
 

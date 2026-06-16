@@ -643,6 +643,19 @@ final class AppState: ObservableObject {
     /// selection); without it the current list stays put until the new one is
     /// ready (live FSEvents reloads — no flash). `thenIndex` runs the indexing
     /// + thumbnail-prewarm + analysis pass once the files have landed.
+    /// Public reload entry point (e.g. after a drag-move changes the folder).
+    func reloadCurrentFilesPublic() { reloadCurrentFiles(thenIndex: true) }
+
+    /// After a move: clear selection, reload the current folder, and (if any
+    /// failed) surface a brief alert listing the unmoved files.
+    func reloadAfterMove(failed: [URL]) {
+        clearSelection()
+        reloadCurrentFilesPublic()
+        if !failed.isEmpty {
+            moveFailureNames = failed.map { $0.lastPathComponent }
+        }
+    }
+
     private func reloadCurrentFiles(showLoading: Bool = false, thenIndex: Bool = false) {
         guard let folder = selectedFolder else {
             currentFiles = []
