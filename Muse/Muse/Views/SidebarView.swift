@@ -84,7 +84,13 @@ struct SidebarView: View {
         .frame(minWidth: 220)
         // One continuous card: the opaque surface flows up behind the title
         // bar and curves with the window's top corner, like Lineform.
-        .background(cardColor.ignoresSafeArea())
+        // Tapping the empty sidebar surface deselects the grid (folder rows and
+        // the add button consume their own taps).
+        .background {
+            cardColor.ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { appState.clearSelection() }
+        }
     }
 
     // MARK: - Empty state

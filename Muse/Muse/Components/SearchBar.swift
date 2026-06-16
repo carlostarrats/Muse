@@ -62,6 +62,10 @@ struct SearchBar: View {
                 .fill(Color(nsColor: .controlBackgroundColor))
         )
         .frame(minWidth: 320, maxWidth: 640)
+        // Any tap on the search bar deselects the grid — reliable even when the
+        // text field doesn't take focus (e.g. clicking the magnifier or padding).
+        .contentShape(Rectangle())
+        .simultaneousGesture(TapGesture().onEnded { appState.clearSelection() })
     }
 
     // MARK: - Debounce
