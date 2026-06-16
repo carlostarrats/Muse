@@ -32,6 +32,15 @@ final class TagStore: ObservableObject {
         }) ?? [])
     }
 
+    /// All distinct tag labels in use, alphabetical.
+    func allLabels() async -> [String] {
+        guard let queue = Database.shared.dbQueue else { return [] }
+        return (try? await queue.read { db in
+            try String.fetchAll(db, sql:
+                "SELECT DISTINCT label FROM tags ORDER BY label COLLATE NOCASE")
+        }) ?? []
+    }
+
     func addManualTag(label: String, for url: URL) async -> [TagRow] {
         guard let queue = Database.shared.dbQueue else { return [] }
         let absPath = url.standardizedFileURL.path

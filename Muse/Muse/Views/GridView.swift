@@ -166,20 +166,34 @@ struct GridView: View {
                     .accessibilityLabel(file.basename)
                     .accessibilityAddTraits(.isButton)
                     .contextMenu {
-                        OpenWithMenu(url: file.url)
+                        let p = file.url.standardizedFileURL.path
+                        // Single-image items show only when the effective
+                        // selection is one image (this tile, or a 1-item set).
+                        let single = !appState.selectedFiles.contains(p)
+                            || appState.selectedFiles.count <= 1
+                        SelectionActionsMenu(path: p)
                         Divider()
-                        Button("Add Tag…") {
-                            newTagText = ""
-                            addTagFile = file
-                        }
-                        if appState.activeCollectionID != nil {
-                            Button("Set as Collection Cover") {
-                                appState.setCollectionCover(file)
+                        if single {
+                            OpenWithMenu(url: file.url)
+                            if appState.activeCollectionID != nil {
+                                Button("Set as Collection Cover") {
+                                    appState.setCollectionCover(file)
+                                }
                             }
+                            Divider()
                         }
-                        Divider()
                         Button("Move to Trash", role: .destructive) {
-                            Task { await appState.deletion.deleteWithBurn(file) }
+                            let targets = appState.effectiveSelectionURLs(fallback: p)
+                            let byPath = Dictionary(
+                                appState.visibleFiles.map { ($0.url.standardizedFileURL.path, $0) },
+                                uniquingKeysWith: { a, _ in a })
+                            Task { @MainActor in
+                                for url in targets {
+                                    if let node = byPath[url.standardizedFileURL.path] {
+                                        await appState.deletion.deleteWithBurn(node)
+                                    }
+                                }
+                            }
                         }
                     }
             }

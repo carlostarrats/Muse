@@ -59,6 +59,19 @@ enum CollectionStore {
         }
     }
 
+    /// Resolve standardized absolute paths to their (alive) file_ids.
+    static func fileIDs(queue: DatabaseQueue, paths: [String]) async throws -> [String] {
+        guard !paths.isEmpty else { return [] }
+        return try await queue.read { db in
+            let placeholders = paths.map { _ in "?" }.joined(separator: ",")
+            let rows = try PathRow.fetchAll(
+                db,
+                sql: "SELECT * FROM paths WHERE absolute_path IN (\(placeholders)) AND is_alive = 1",
+                arguments: StatementArguments(paths))
+            return rows.compactMap { $0.file_id }
+        }
+    }
+
     /// Manually remove a file from a collection. Records an exclusion so
     /// future auto rebuilds cannot re-add it.
     static func removeFile(queue: DatabaseQueue, fileID: String, collectionID: String) async throws {
