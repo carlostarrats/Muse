@@ -62,6 +62,11 @@ struct GridView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    // Clicking anywhere outside the grid (sidebar, search,
+                    // toolbar) deselects. Lives inside the grid scroll view so
+                    // it can measure the grid's bounds.
+                    OutsideClickDeselect(onOutsideClick: { appState.clearSelection() })
+                        .frame(width: 0, height: 0)
                     // The in-collection header scrolls away with the page —
                     // only the tag chips above stay pinned. Shows whenever a
                     // collection is active, even with a tag filter on (so you
