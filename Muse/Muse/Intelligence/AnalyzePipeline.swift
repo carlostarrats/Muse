@@ -29,6 +29,25 @@ final class AnalyzePipeline: ObservableObject {
     /// rather than the pipeline reaching back into AppState.
     var iCloudFolder: URL?
 
+    /// Asks the in-flight pass to stop at the next file boundary. Checked
+    /// alongside `Task.isCancelled` so BOTH the automatic path (a cancellable
+    /// `indexingTask`) and the manual menu / App-Intent paths (which launch
+    /// from un-stored `Task {}` blocks the caller can't cancel) can be halted
+    /// when the folder being analyzed is removed. Reset at the start of every
+    /// pass, so a later pass over a still-valid folder runs normally.
+    private var cancelRequested = false
+
+    /// True when the active pass should stop — either its owning task was
+    /// cancelled or `cancelActivePass()` was called.
+    private var shouldStop: Bool { cancelRequested || Task.isCancelled }
+
+    /// Stop whatever pass is currently running (e.g. its folder was removed).
+    /// No-op when idle, so it can't poison the next legitimate pass.
+    func cancelActivePass() {
+        guard isRunning else { return }
+        cancelRequested = true
+    }
+
     private init() {}
 
     // MARK: - File-level
@@ -44,11 +63,12 @@ final class AnalyzePipeline: ObservableObject {
                 .fetchOne(db)?.file_id
         }) ?? nil
         guard let id = fileID else { return }
+        cancelRequested = false
         isRunning = true
         current = url.lastPathComponent
         defer { isRunning = false; current = ""; progress = 0 }
         await analyzeOne(fileID: id, url: url)
-        isRunning = false; current = ""; progress = 0
+        if shouldStop { return }
         await CollectionsEngine.shared.recluster()
     }
 
@@ -58,10 +78,13 @@ final class AnalyzePipeline: ObservableObject {
     func analyzePending(in urls: [URL]) async {
         guard let queue = Database.shared.dbQueue else { return }
         // A pass may already be running (e.g. the previous folder's) —
-        // wait our turn instead of silently skipping this folder.
+        // wait our turn instead of silently skipping this folder. Bail if the
+        // owning task is cancelled (folder removed) so we don't busy-spin.
         while isRunning {
+            if Task.isCancelled { return }
             try? await Task.sleep(nanoseconds: 500_000_000)
         }
+        if Task.isCancelled { return }
         let paths = urls.map { $0.standardizedFileURL.path }
         guard !paths.isEmpty else { return }
         let pending: Set<String> = (try? await queue.read { db in
@@ -90,8 +113,10 @@ final class AnalyzePipeline: ObservableObject {
     func regenerateTagless(in urls: [URL]) async {
         guard let queue = Database.shared.dbQueue else { return }
         while isRunning {
+            if Task.isCancelled { return }
             try? await Task.sleep(nanoseconds: 500_000_000)
         }
+        if Task.isCancelled { return }
         let paths = urls.map { $0.standardizedFileURL.path }
         guard !paths.isEmpty else { return }
         let tagless: Set<String> = (try? await queue.read { db in
@@ -111,6 +136,7 @@ final class AnalyzePipeline: ObservableObject {
     func analyze(folder urls: [URL]) async {
         guard !urls.isEmpty else { return }
         guard let queue = Database.shared.dbQueue else { return }
+        cancelRequested = false
         isRunning = true
         progress = 0
         completed = 0
@@ -122,6 +148,7 @@ final class AnalyzePipeline: ObservableObject {
         var pairs: [(id: String, url: URL)] = []
         var seen = Set<String>()
         for url in urls {
+            if shouldStop { return }
             let absPath = url.standardizedFileURL.path
             let fileID: String? = (try? await queue.read { db -> String? in
                 try PathRow
@@ -138,12 +165,18 @@ final class AnalyzePipeline: ObservableObject {
         guard !pairs.isEmpty else { return }
 
         for (idx, pair) in pairs.enumerated() {
+            // Folder removed (or the pass otherwise cancelled) → stop now
+            // rather than analyzing files that are no longer reachable.
+            if shouldStop { break }
             current = pair.url.lastPathComponent
             await analyzeOne(fileID: pair.id, url: pair.url)
             completed = idx + 1
             progress = Double(idx + 1) / Double(pairs.count)
         }
         isRunning = false; current = ""; progress = 0; completed = 0; total = 0
+        // Skip the (non-trivial) recluster if the pass was cancelled — e.g. the
+        // folder was removed out from under us; there's nothing new to cluster.
+        if shouldStop { return }
         await CollectionsEngine.shared.recluster()
     }
 

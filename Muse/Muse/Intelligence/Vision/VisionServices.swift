@@ -61,26 +61,53 @@ enum VisionServices {
         }.value
     }
 
+    // MARK: - Single-resume request runner
+
+    /// Runs one Vision request and resumes the continuation EXACTLY once.
+    ///
+    /// `VNImageRequestHandler.perform(_:)` invokes the request's completion
+    /// handler synchronously and, for the same failure, can ALSO `throw` — so
+    /// a naive "resume in the handler, resume again in `catch`" double-resumes
+    /// the continuation and traps (`CheckedContinuation` fatal error). That was
+    /// the crash when a folder was removed mid-analysis and a file's Vision
+    /// request failed. The `done` flag needs no lock: `perform` is synchronous
+    /// and calls the handler on the calling thread before returning, so the
+    /// handler and the `catch` can never run concurrently.
+    private static func runRequest<T>(
+        on cgImage: CGImage,
+        fallback: T,
+        makeRequest: (@escaping (T) -> Void) -> VNRequest
+    ) async -> T {
+        await withCheckedContinuation { continuation in
+            var done = false
+            let finish: (T) -> Void = { value in
+                guard !done else { return }
+                done = true
+                continuation.resume(returning: value)
+            }
+            let request = makeRequest(finish)
+            do {
+                try VNImageRequestHandler(cgImage: cgImage).perform([request])
+            } catch {
+                finish(fallback)
+            }
+        }
+    }
+
     // MARK: - Classify
 
     private static func classify(cgImage: CGImage) async -> [String: Float] {
-        await withCheckedContinuation { continuation in
-            let request = VNClassifyImageRequest { req, _ in
+        await runRequest(on: cgImage, fallback: [:]) { finish in
+            VNClassifyImageRequest { req, _ in
                 guard let results = req.results as? [VNClassificationObservation] else {
-                    continuation.resume(returning: [:])
+                    finish([:])
                     return
                 }
                 // Keep only confident-ish results
                 let kept = results
                     .filter { $0.confidence >= 0.4 }
                     .prefix(10)
-                let dict = Dictionary(uniqueKeysWithValues: kept.map { ($0.identifier, $0.confidence) })
-                continuation.resume(returning: dict)
-            }
-            do {
-                try VNImageRequestHandler(cgImage: cgImage).perform([request])
-            } catch {
-                continuation.resume(returning: [:])
+                finish(Dictionary(uniqueKeysWithValues: kept.map { ($0.identifier, $0.confidence) }))
             }
         }
     }
@@ -88,37 +115,27 @@ enum VisionServices {
     // MARK: - OCR
 
     private static func ocr(cgImage: CGImage) async -> String {
-        await withCheckedContinuation { continuation in
+        await runRequest(on: cgImage, fallback: "") { finish in
             let request = VNRecognizeTextRequest { req, _ in
                 guard let results = req.results as? [VNRecognizedTextObservation] else {
-                    continuation.resume(returning: "")
+                    finish("")
                     return
                 }
                 let strings = results.compactMap { $0.topCandidates(1).first?.string }
-                continuation.resume(returning: strings.joined(separator: "\n"))
+                finish(strings.joined(separator: "\n"))
             }
             request.recognitionLevel = .accurate
             request.usesLanguageCorrection = true
-            do {
-                try VNImageRequestHandler(cgImage: cgImage).perform([request])
-            } catch {
-                continuation.resume(returning: "")
-            }
+            return request
         }
     }
 
     // MARK: - Face count
 
     private static func detectFaces(cgImage: CGImage) async -> Int {
-        await withCheckedContinuation { continuation in
-            let request = VNDetectFaceRectanglesRequest { req, _ in
-                let count = (req.results as? [VNFaceObservation])?.count ?? 0
-                continuation.resume(returning: count)
-            }
-            do {
-                try VNImageRequestHandler(cgImage: cgImage).perform([request])
-            } catch {
-                continuation.resume(returning: 0)
+        await runRequest(on: cgImage, fallback: 0) { finish in
+            VNDetectFaceRectanglesRequest { req, _ in
+                finish((req.results as? [VNFaceObservation])?.count ?? 0)
             }
         }
     }
@@ -126,18 +143,13 @@ enum VisionServices {
     // MARK: - Feature print
 
     private static func featurePrint(cgImage: CGImage) async -> Data? {
-        await withCheckedContinuation { continuation in
-            let request = VNGenerateImageFeaturePrintRequest { req, _ in
+        await runRequest(on: cgImage, fallback: nil) { finish in
+            VNGenerateImageFeaturePrintRequest { req, _ in
                 guard let obs = (req.results as? [VNFeaturePrintObservation])?.first else {
-                    continuation.resume(returning: nil)
+                    finish(nil)
                     return
                 }
-                continuation.resume(returning: obs.data)
-            }
-            do {
-                try VNImageRequestHandler(cgImage: cgImage).perform([request])
-            } catch {
-                continuation.resume(returning: nil)
+                finish(obs.data)
             }
         }
     }
