@@ -10,7 +10,7 @@
 import CoreGraphics
 import ImageIO
 import CoreText
-import AppKit
+import Foundation
 
 enum CollectionPDFExporter {
 
@@ -93,21 +93,22 @@ enum CollectionPDFExporter {
     }
 
     /// "Title  count" at 24pt, top-left of the content box. PDF (bottom-left)
-    /// coordinates: text baseline sits 24pt below the top margin.
+    /// coordinates: text baseline sits 24pt below the top margin. Built with
+    /// CoreText (CTFont/CGColor) only — no AppKit — since this runs off the
+    /// main thread inside the detached export task.
     private static func drawHeader(title: String, count: Int, in ctx: CGContext,
                                    pageSize: CGSize, margin: CGFloat) {
+        let base = CTFontCreateUIFontForLanguage(.system, 24, nil)
+            ?? CTFontCreateWithName("Helvetica" as CFString, 24, nil)
+        let font = CTFontCreateCopyWithSymbolicTraits(base, 24, nil, .traitBold, .traitBold) ?? base
+        let fontKey = NSAttributedString.Key(kCTFontAttributeName as String)
+        let colorKey = NSAttributedString.Key(kCTForegroundColorAttributeName as String)
         let attr = NSMutableAttributedString(
             string: title,
-            attributes: [
-                .font: NSFont.systemFont(ofSize: 24, weight: .semibold),
-                .foregroundColor: NSColor.black
-            ])
+            attributes: [fontKey: font, colorKey: CGColor(gray: 0, alpha: 1)])
         attr.append(NSAttributedString(
             string: "  \(count)",
-            attributes: [
-                .font: NSFont.systemFont(ofSize: 24, weight: .semibold),
-                .foregroundColor: NSColor.gray
-            ]))
+            attributes: [fontKey: font, colorKey: CGColor(gray: 0.5, alpha: 1)]))
         let line = CTLineCreateWithAttributedString(attr)
         ctx.textPosition = CGPoint(x: margin, y: pageSize.height - margin - 24)
         CTLineDraw(line, ctx)

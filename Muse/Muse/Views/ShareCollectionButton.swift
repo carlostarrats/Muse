@@ -58,28 +58,33 @@ struct ShareCollectionButton: View {
         .help("Share collection")
     }
 
-    private func buildPDF() async -> URL? {
-        preparing = true
-        defer { preparing = false }
+    private func makePDF() async -> URL? {
         let urls = imageURLs
         return await CollectionPDFExporter.makePDF(
             urls: urls, title: title, count: urls.count, columns: gridColumns)
     }
 
     private func save() async {
-        guard let pdf = await buildPDF() else { return }
+        preparing = true
+        defer { preparing = false }
+        guard let pdf = await makePDF() else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [UTType.pdf]
         panel.nameFieldStringValue = "\(title).pdf"
         panel.directoryURL = FileManager.default
             .urls(for: .desktopDirectory, in: .userDomainMask).first
         guard panel.runModal() == .OK, let dest = panel.url else { return }
-        try? FileManager.default.removeItem(at: dest)
-        try? FileManager.default.copyItem(at: pdf, to: dest)
+        // Atomic overwrite — no pre-delete window that could destroy an
+        // existing file if the write fails.
+        if let data = try? Data(contentsOf: pdf) {
+            try? data.write(to: dest, options: .atomic)
+        }
     }
 
     private func share() async {
-        guard let pdf = await buildPDF() else { return }
+        preparing = true
+        defer { preparing = false }
+        guard let pdf = await makePDF() else { return }
         guard let contentView = NSApp.keyWindow?.contentView else { return }
         let picker = NSSharingServicePicker(items: [pdf])
         picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
