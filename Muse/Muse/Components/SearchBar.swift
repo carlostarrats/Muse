@@ -61,6 +61,12 @@ struct SearchBar: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color(nsColor: .controlBackgroundColor))
         )
+        // Accent focus ring while typing, like a native macOS search field.
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(isFocused ? Color.accentColor : Color.clear, lineWidth: 2)
+        )
+        .animation(.easeOut(duration: 0.15), value: isFocused)
         .frame(minWidth: 320, maxWidth: 640)
         // Any tap on the search bar deselects the grid — reliable even when the
         // text field doesn't take focus (e.g. clicking the magnifier or padding).
