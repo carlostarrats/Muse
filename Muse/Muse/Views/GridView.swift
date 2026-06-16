@@ -410,14 +410,18 @@ private struct TileView: View {
             .clipShape(RoundedRectangle(cornerRadius: isImageKind ? 0 : 8,
                                         style: .continuous))
             .overlay {
-                // Selected (multi-select) OR the open file get the accent
-                // border. Inside the scaleEffect below, so it grows with the
-                // hover zoom instead of the image spilling past it.
+                // Selected (multi-select) OR the open file get an accent wash
+                // + border. Inside the scaleEffect below, so they grow with the
+                // hover zoom instead of the image spilling past them. The tint
+                // tracks the system accent (light blue by default).
                 if appState.selectedFiles.contains(file.url.standardizedFileURL.path)
                     || appState.selectedFile?.id == file.id {
-                    RoundedRectangle(cornerRadius: isImageKind ? 0 : 8,
-                                     style: .continuous)
-                        .stroke(Color.accentColor, lineWidth: 3)
+                    RoundedRectangle(cornerRadius: isImageKind ? 0 : 8, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.22))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: isImageKind ? 0 : 8, style: .continuous)
+                                .stroke(Color.accentColor, lineWidth: 3)
+                        }
                 }
             }
             .scaleEffect(hovering ? 1.025 : 1)

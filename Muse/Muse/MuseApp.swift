@@ -53,6 +53,16 @@ struct MuseApp: App {
             }
 
             // Folder actions on the current selection live in the Edit menu.
+            // Image selection commands, like Finder's Edit menu.
+            CommandGroup(after: .pasteboard) {
+                Button("Select All") { appState.selectAllVisible() }
+                    .keyboardShortcut("a", modifiers: .command)
+                    .disabled(appState.visibleFiles.isEmpty)
+                Button("Deselect All") { appState.clearSelection() }
+                    .keyboardShortcut("a", modifiers: [.command, .shift])
+                    .disabled(appState.selectedFiles.isEmpty)
+            }
+
             CommandGroup(after: .pasteboard) {
                 Divider()
                 Button(pinMenuTitle) {

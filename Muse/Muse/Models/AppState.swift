@@ -84,6 +84,13 @@ final class AppState: ObservableObject {
         selectionAnchor = nil
     }
 
+    /// Select every visible image (the Edit ▸ Select All command).
+    func selectAllVisible() {
+        let paths = selectionOrder
+        selectedFiles = Set(paths)
+        selectionAnchor = paths.first
+    }
+
     /// URLs for the effective selection (the selection, or `[fallback]` if the
     /// fallback path isn't part of the selection). An empty `fallback` yields
     /// only the current selection.
