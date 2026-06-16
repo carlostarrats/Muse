@@ -30,10 +30,18 @@ struct PageScrollCatcher: NSViewRepresentable {
 
     func updateNSView(_ nsView: CatcherView, context: Context) {
         nsView.isActive = isActive
+        // Re-claim focus when paging becomes active again (e.g. a hero viewer
+        // just closed) so Page keys resume without needing a grid click.
+        let active = isActive()
+        if active && !nsView.lastActive {
+            nsView.grabFocusSoon()
+        }
+        nsView.lastActive = active
     }
 
     final class CatcherView: NSView {
         var isActive: () -> Bool = { false }
+        var lastActive = false
         private var clickMonitor: Any?
 
         // Dedicated Page Up/Down keys (full keyboards) …
@@ -97,7 +105,14 @@ struct PageScrollCatcher: NSViewRepresentable {
             let isPageDown = key == Self.pageDownKey || (fn && key == Self.downArrowKey)
             guard isPageUp || isPageDown,
                   isActive(), let scrollView = enclosingScrollView else {
-                super.keyDown(with: event)
+                // Not ours — forward down the responder chain instead of
+                // dead-ending into a beep, so the scroll view (and others) can
+                // still handle arrows and other keys.
+                if let next = nextResponder {
+                    next.keyDown(with: event)
+                } else {
+                    super.keyDown(with: event)
+                }
                 return
             }
             let clip = scrollView.contentView
