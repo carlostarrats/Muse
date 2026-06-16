@@ -141,13 +141,27 @@ struct GridView: View {
                                               forStandardizedPath: file.url.standardizedFileURL.path)
                          })
                     .frame(width: rect.width, height: rect.height)
-                    .offset(x: rect.minX, y: rect.minY)
-                    // Single tap only — the old double-tap recognizer made every
-                    // click wait out the double-click interval before the viewer
-                    // opened. Editing flows live in the Open With… context menu.
-                    .onTapGesture {
-                        appState.selectedFile = file
+                    // Accent border on selected tiles.
+                    .overlay {
+                        if appState.selectedFiles.contains(file.url.standardizedFileURL.path) {
+                            Rectangle().strokeBorder(Color.accentColor, lineWidth: 3)
+                        }
                     }
+                    // Click selects immediately (single/Cmd/Shift); double-click
+                    // opens the clicked image. Right-click falls through to the
+                    // context menu below.
+                    .overlay {
+                        TileClickCatcher(
+                            onSelect: { command, shift in
+                                let p = file.url.standardizedFileURL.path
+                                if shift { appState.applyClick(.range(p)) }
+                                else if command { appState.applyClick(.toggle(p)) }
+                                else { appState.applyClick(.single(p)) }
+                            },
+                            onOpen: { appState.selectedFile = file }
+                        )
+                    }
+                    .offset(x: rect.minX, y: rect.minY)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(file.basename)
                     .accessibilityAddTraits(.isButton)
