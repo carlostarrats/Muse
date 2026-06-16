@@ -147,19 +147,16 @@ struct GridView: View {
                             Rectangle().strokeBorder(Color.accentColor, lineWidth: 3)
                         }
                     }
-                    // Click selects immediately (single/Cmd/Shift); double-click
-                    // opens the clicked image. Right-click falls through to the
-                    // context menu below.
-                    .overlay {
-                        TileClickCatcher(
-                            onSelect: { command, shift in
-                                let p = file.url.standardizedFileURL.path
-                                if shift { appState.applyClick(.range(p)) }
-                                else if command { appState.applyClick(.toggle(p)) }
-                                else { appState.applyClick(.single(p)) }
-                            },
-                            onOpen: { appState.selectedFile = file }
-                        )
+                    // Double-click opens the clicked image; single click selects
+                    // (Cmd toggles, Shift ranges — modifiers read from the live
+                    // event). All-SwiftUI so .onDrag and .contextMenu coexist.
+                    .onTapGesture(count: 2) { appState.selectedFile = file }
+                    .onTapGesture(count: 1) {
+                        let p = file.url.standardizedFileURL.path
+                        let m = NSEvent.modifierFlags
+                        if m.contains(.shift) { appState.applyClick(.range(p)) }
+                        else if m.contains(.command) { appState.applyClick(.toggle(p)) }
+                        else { appState.applyClick(.single(p)) }
                     }
                     // Drag onto a sidebar folder to move. Dragging an unselected
                     // tile first selects just it, so the drop moves the right set.
