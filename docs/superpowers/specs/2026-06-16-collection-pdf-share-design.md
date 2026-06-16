@@ -20,13 +20,22 @@ the existing image `ShareButton`, or any data.
 1. Inside a collection, the header shows: back arrow · name · count ·
    Edit · (spacer) · **Share** · Trash. Share is the only new control,
    placed immediately to the left of Trash.
-2. Tapping Share builds a PDF of the collection, then opens the macOS
-   share sheet (`NSSharingServicePicker`: AirDrop, Mail, Messages, Save
-   to Files, …) anchored to the window. The OS owns the transfer — no new
-   entitlement, no network surface.
-3. While the PDF builds, the button shows a brief "preparing" state (a
-   small spinner replacing the icon) and is non-interactive, so a large
-   collection never feels frozen.
+2. Tapping Share opens a small **menu** with two plain items — no system
+   UI is customized, we only compose standard pieces:
+   - **Save to…** — opens the standard macOS save dialog (`NSSavePanel`),
+     defaulted to the Desktop with the filename pre-filled
+     (`<Collection Name>.pdf`). Confirming writes the PDF there; the panel
+     grants sandbox access to the chosen location, so this needs **no new
+     entitlement** (the app already has `files.user-selected.read-write`).
+     The user can redirect to any folder.
+   - **Share** — opens the normal, unmodified macOS share sheet
+     (`NSSharingServicePicker`: AirDrop, Mail, Messages, Notes, …)
+     anchored to the window. The OS owns the transfer — no network surface.
+3. The PDF is built **only after the user picks an item** (not on opening
+   the menu). During the build the menu/button shows a brief "preparing"
+   state (a small spinner replacing the icon) and is non-interactive, so a
+   large collection never feels frozen. Then the panel or share sheet
+   appears.
 4. Share is disabled when the collection has zero alive members.
 
 ## What the PDF contains
@@ -104,10 +113,14 @@ New files, mirroring existing patterns (`MasonryGeometry`, `ShareButton`):
     returns the URL.
 
 - **`ShareCollectionButton`** (header control)
-  - Styled like `TrashButton` (40pt circle, `square.and.arrow.up`,
-    secondary→primary hover). Drives: tap → `preparing` state → await
-    `CollectionPDFExporter` → present `NSSharingServicePicker` with the
-    temp URL. Re-enables / restores the icon when done.
+  - A `Menu` styled like `TrashButton` (40pt circle, `square.and.arrow.up`,
+    secondary→primary hover) with two items: **Save to…** and **Share**.
+  - **Save to…**: enter `preparing` → await `CollectionPDFExporter` → run
+    an `NSSavePanel` (`directoryURL` = Desktop, `nameFieldStringValue` =
+    `<Collection Name>.pdf`, allowed type PDF) → on confirm, write the PDF
+    to the chosen URL. Restore the icon when done/cancelled.
+  - **Share**: enter `preparing` → await `CollectionPDFExporter` → present
+    `NSSharingServicePicker` with the temp URL (standard, unmodified).
   - Wired into `ActiveCollectionHeader`'s `HStack`, before `TrashButton`.
 
 ## Testing
@@ -129,8 +142,10 @@ New files, mirroring existing patterns (`MasonryGeometry`, `ShareButton`):
 
 ## Out of scope
 
-- No print dialog / page-setup UI (share sheet's "Save to Files" + Preview
-  cover printing).
+- No print dialog / page-setup UI (saving the PDF + Preview cover
+  printing).
+- No customizing of the macOS share sheet — the menu's **Share** item
+  presents it unmodified.
 - No per-image captions, tags, or metadata on the page.
 - No change to the single-image `ShareButton` or the collection grid.
 - No new entitlement (the OS share sheet owns the transfer).
