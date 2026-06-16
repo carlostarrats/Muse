@@ -2,76 +2,45 @@
 //  SearchBar.swift
 //  Muse
 //
-//  FTS5-backed search bar, scoped to the folder selected in the sidebar.
-//  250ms debounce so we don't fire a query on every keystroke.
+//  Native macOS search field (NSSearchField), scoped to the folder selected in
+//  the sidebar. 250ms debounce so we don't fire a query on every keystroke.
+//  Using the real control gives the system focus ring, the native clear button,
+//  and full accessibility for free; its appearance follows the current mood so
+//  the colors match the app.
 //
 
 import SwiftUI
-import Combine
+import AppKit
 
 struct SearchBar: View {
     @EnvironmentObject var appState: AppState
 
     @State private var text: String = ""
     @State private var debounceTask: Task<Void, Never>?
-    @FocusState private var isFocused: Bool
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-
-            TextField("Search files, tags, captions…", text: $text)
-                .textFieldStyle(.plain)
-                .focused($isFocused)
-                // Clicking into search is a context switch — drop any grid
-                // selection so it stays scoped to what you're looking at.
-                .onChange(of: isFocused) { _, focused in
-                    if focused { appState.clearSelection() }
-                }
-                .onChange(of: text) { _, newValue in
-                    guard newValue != appState.searchQuery else { return }
-                    appState.searchQuery = newValue
-                    debounceAndRun(query: newValue)
-                }
-                // programmatic searches (e.g. viewer tag taps) show in the bar
-                .onChange(of: appState.searchQuery) { _, newValue in
-                    if text != newValue { text = newValue }
-                }
-                .onSubmit {
-                    fire(query: text)
-                }
-
-            if !text.isEmpty {
-                Button {
-                    text = ""
-                    appState.searchQuery = ""
-                    appState.clearSearch()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
+        NativeSearchField(
+            text: $text,
+            scheme: appState.moodPalette.scheme,
+            onChange: handleChange,
+            onSubmit: { fire(query: $0) }
         )
-        // Accent focus ring while typing, like a native macOS search field.
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(isFocused ? Color.accentColor : Color.clear, lineWidth: 2)
-        )
-        .animation(.easeOut(duration: 0.15), value: isFocused)
         .frame(minWidth: 320, maxWidth: 640)
-        // Any tap on the search bar deselects the grid — reliable even when the
-        // text field doesn't take focus (e.g. clicking the magnifier or padding).
-        .contentShape(Rectangle())
-        .simultaneousGesture(TapGesture().onEnded { appState.clearSelection() })
+        // Programmatic searches (e.g. viewer tag taps) push their query into the
+        // field for display; the search itself was already run by the caller.
+        .onChange(of: appState.searchQuery) { _, newValue in
+            if text != newValue { text = newValue }
+        }
+    }
+
+    private func handleChange(_ newValue: String) {
+        guard newValue != appState.searchQuery else { return }
+        appState.searchQuery = newValue
+        if newValue.isEmpty {
+            appState.clearSearch()
+        } else {
+            debounceAndRun(query: newValue)
+        }
     }
 
     // MARK: - Debounce
@@ -88,5 +57,53 @@ struct SearchBar: View {
 
     private func fire(query: String) {
         Task { await appState.runSearch(query) }
+    }
+}
+
+/// The native AppKit search field wrapped for SwiftUI. Brings the system focus
+/// ring, the native clear button, and accessibility; its appearance is forced
+/// to the app's current mood (light/dark) so it matches the surrounding colors.
+private struct NativeSearchField: NSViewRepresentable {
+    @Binding var text: String
+    var scheme: ColorScheme
+    var onChange: (String) -> Void
+    var onSubmit: (String) -> Void
+
+    func makeNSView(context: Context) -> NSSearchField {
+        let field = NSSearchField()
+        field.placeholderString = "Search files, tags, captions…"
+        field.delegate = context.coordinator
+        field.sendsSearchStringImmediately = false
+        field.sendsWholeSearchString = false
+        field.focusRingType = .default
+        return field
+    }
+
+    func updateNSView(_ field: NSSearchField, context: Context) {
+        context.coordinator.parent = self
+        if field.stringValue != text { field.stringValue = text }
+        field.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, NSSearchFieldDelegate {
+        var parent: NativeSearchField
+        init(_ parent: NativeSearchField) { self.parent = parent }
+
+        func controlTextDidChange(_ obj: Notification) {
+            guard let field = obj.object as? NSSearchField else { return }
+            parent.text = field.stringValue
+            parent.onChange(field.stringValue)
+        }
+
+        func control(_ control: NSControl, textView: NSTextView,
+                     doCommandBy selector: Selector) -> Bool {
+            if selector == #selector(NSResponder.insertNewline(_:)) {
+                parent.onSubmit(parent.text)
+                return true
+            }
+            return false
+        }
     }
 }
