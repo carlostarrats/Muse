@@ -491,6 +491,15 @@ final class AppState: ObservableObject {
     func removeRoot(_ root: Root) {
         bookmarks.removeRoot(root)
         if activeRoot?.id == root.id {
+            // Stop indexing/analyzing the folder we're tearing down — its files
+            // are about to become unreachable, and continuing the pass over them
+            // is both wasted work and a source of mid-pass Vision failures.
+            // Cancel the automatic pass's task AND trip the pipeline's own stop
+            // flag, which also halts manual/App-Intent analyze passes that run
+            // in un-stored tasks this handle can't reach.
+            indexingTask?.cancel()
+            indexingTask = nil
+            AnalyzePipeline.shared.cancelActivePass()
             activeRoot = bookmarks.roots.first
             selectedFolder = nil
             currentFiles = []
@@ -528,15 +537,25 @@ final class AppState: ObservableObject {
     /// Kick off active-folder indexing, then the automatic analysis pass
     /// over whatever images are new or changed (stale analyzed_hash) —
     /// already-analyzed files are provably skipped.
+    /// In-flight index/prewarm/analyze work for the active folder. Held so
+    /// removing the folder can cancel it — otherwise the detached task keeps
+    /// analyzing files that are no longer reachable (the user-reported "kept
+    /// analyzing after I removed the folder", which also drove a Vision
+    /// failure mid-pass). A new selection supersedes via `folderLoadToken`;
+    /// the previous folder's pass is deliberately allowed to finish, so this
+    /// is cancelled only on explicit removal, not on every switch.
+    private var indexingTask: Task<Void, Never>?
+
     private func scheduleIndexing(for url: URL) {
         let files = currentFiles
         let icloud = iCloudFolderURL
-        Task.detached(priority: .userInitiated) {
+        indexingTask = Task.detached(priority: .userInitiated) {
             let pairs = files.compactMap { f -> (URL, AssetKind)? in
                 guard f.kind != .folder, f.kind.hasNativeViewer || f.kind == .archive else { return nil }
                 return (f.url, f.kind)
             }
             await Indexer.shared.indexBatch(pairs, priority: .high)
+            if Task.isCancelled { return }
             let imageURLs = files
                 .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
                 .map { $0.url }
@@ -547,7 +566,9 @@ final class AppState: ObservableObject {
                 .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd || $0.kind == .svg }
                 .map { $0.url }
             await ThumbnailCache.shared.prewarmToDisk(thumbURLs)
+            if Task.isCancelled { return }
             await SidecarHydrator.hydrate(urls: imageURLs, folder: icloud)
+            if Task.isCancelled { return }
             await AnalyzePipeline.shared.analyzePending(in: imageURLs)
         }
     }
