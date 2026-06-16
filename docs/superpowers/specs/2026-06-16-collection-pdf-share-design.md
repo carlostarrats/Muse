@@ -45,8 +45,13 @@ document is paginated, never one tall page.
 
 **Margins / grid:**
 - 0.5in (36pt) margins on all sides → content box 720×936pt.
-- **3 columns**, 12pt gutters → column (tile) width ≈ 232pt. (Column count
-  is a single tunable constant; 3 is the default density.)
+- **Columns = the user's current grid density** — the same
+  `@AppStorage("gridColumnCount")` value driven by the in-grid column
+  slider (range 2–8, default 4). The PDF mirrors how the user has the
+  collection laid out when they hit Share, so a sparse grid → big tiles /
+  more pages, a dense grid → small tiles / fewer pages.
+- 12pt gutters; tile width = `(720 − gutters) / columns` (e.g. 4 columns →
+  ≈ 171pt tiles, 2 columns → ≈ 354pt).
 
 **Masonry packing (per page):**
 - Each tile's height = `columnWidth × (imageHeight / imageWidth)`, so the
@@ -90,6 +95,9 @@ New files, mirroring existing patterns (`MasonryGeometry`, `ShareButton`):
     crisp), **off the main thread**.
   - Reads each image's pixel dimensions (from `AspectRatioCache` / DB
     `width`·`height` with an ImageIO header fallback) to feed the layout.
+  - Takes the column count as a parameter; the caller passes the current
+    `gridColumnCount` (read from `@AppStorage`) so the export matches the
+    grid the user is viewing.
   - Runs `CollectionPDFLayout`, then draws each page into a `CGPDFContext`
     (white fill, page-1 header text, images into their rects), writes to a
     temp file (`<Collection Name>.pdf` in `NSTemporaryDirectory()`), and
@@ -112,7 +120,9 @@ New files, mirroring existing patterns (`MasonryGeometry`, `ShareButton`):
 
 ## Decisions made (defaults, easily tuned)
 
-- **3 columns** default density (single constant).
+- **Columns mirror the grid** — the PDF uses the user's current
+  `gridColumnCount` (2–8) so the exported density matches what they're
+  viewing, no separate setting.
 - **White background / black text** regardless of mood (shareable doc).
 - **Source = `activeCollectionFiles`** (displayed order) so the PDF
   matches what the user sees.
