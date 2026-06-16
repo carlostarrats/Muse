@@ -182,6 +182,10 @@ struct ContentView: View {
         } message: {
             Text(appState.moveFailureNames.joined(separator: "\n"))
         }
+        // Preload the tag-label list for the selection menu, and keep it fresh
+        // as tags change.
+        .task { appState.refreshTagLabels() }
+        .onChange(of: appState.tagsVersion) { _, _ in appState.refreshTagLabels() }
         .overlay(alignment: .bottom) {
             if analyzePipeline.isRunning {
                 analyzeStatusBanner

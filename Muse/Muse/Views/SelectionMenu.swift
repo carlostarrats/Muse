@@ -16,8 +16,6 @@ struct SelectionActionsMenu: View {
     /// Standardized path of the right-clicked tile.
     let path: String
 
-    @State private var labels: [String] = []
-
     private var urls: [URL] { appState.effectiveSelectionURLs(fallback: path) }
 
     var body: some View {
@@ -33,15 +31,14 @@ struct SelectionActionsMenu: View {
             }
         }
         Menu("Add Tag") {
-            if labels.isEmpty {
+            if appState.allTagLabels.isEmpty {
                 Button("No tags") {}.disabled(true)
             } else {
-                ForEach(labels, id: \.self) { label in
+                ForEach(appState.allTagLabels, id: \.self) { label in
                     Button(label) { addTag(label) }
                 }
             }
         }
-        .task { labels = await TagStore.shared.allLabels() }
         Button("Share") { share() }
     }
 

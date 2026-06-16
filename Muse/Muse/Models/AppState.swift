@@ -54,6 +54,14 @@ final class AppState: ObservableObject {
     @Published var selectedFiles: Set<String> = []
     /// Anchor for Shift-range selection.
     @Published var selectionAnchor: String? = nil
+    /// All existing tag labels (vision + manual), preloaded so the selection
+    /// menu can list them synchronously — a context-menu `.task` doesn't fire
+    /// reliably in the NSMenu bridge.
+    @Published var allTagLabels: [String] = []
+
+    func refreshTagLabels() {
+        Task { @MainActor in allTagLabels = await TagStore.shared.allLabels() }
+    }
     /// Names of files a recent move couldn't relocate (drives an alert).
     @Published var moveFailureNames: [String] = []
 
