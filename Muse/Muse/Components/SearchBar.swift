@@ -24,6 +24,11 @@ struct SearchBar: View {
             TextField("Search files, tags, captions…", text: $text)
                 .textFieldStyle(.plain)
                 .focused($isFocused)
+                // Clicking into search is a context switch — drop any grid
+                // selection so it stays scoped to what you're looking at.
+                .onChange(of: isFocused) { _, focused in
+                    if focused { appState.clearSelection() }
+                }
                 .onChange(of: text) { _, newValue in
                     guard newValue != appState.searchQuery else { return }
                     appState.searchQuery = newValue

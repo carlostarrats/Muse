@@ -186,6 +186,9 @@ struct ContentView: View {
         // as tags change.
         .task { appState.refreshTagLabels() }
         .onChange(of: appState.tagsVersion) { _, _ in appState.refreshTagLabels() }
+        // Selection belongs to the grid: entering or leaving search clears it,
+        // so actions never operate on images the search has hidden.
+        .onChange(of: appState.isSearchActive) { _, _ in appState.clearSelection() }
         .overlay(alignment: .bottom) {
             if analyzePipeline.isRunning {
                 analyzeStatusBanner
