@@ -100,7 +100,13 @@ struct GridView: View {
                 }
             }
             .coordinateSpace(name: "gridScroll")
-            .background(appState.moodPalette.background)
+            .background {
+                // Tapping anywhere in the empty grid background (margins, gaps,
+                // below the tiles) deselects. Tiles consume their own taps.
+                appState.moodPalette.background
+                    .contentShape(Rectangle())
+                    .onTapGesture { appState.clearSelection() }
+            }
             .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
             .overlay(alignment: .bottomTrailing) {
                 if !appState.visibleFiles.isEmpty {
