@@ -331,10 +331,8 @@ struct GridView: View {
         if appState.activeCollectionID != nil {
             return nil
         }
-        if appState.selectedFolder == nil {
-            return "Select a folder"
-        }
-        return nil   // genuinely empty folder → blank
+        // No folder picked → blank space, never a "Select a folder" tray prompt.
+        return nil
     }
 }
 
