@@ -32,6 +32,7 @@ _Last reviewed: 2026-06-17. Both code-tidiness items below were completed on
 
 ---
 
-For the longer-standing product backlog — code syntax highlighting, saved smart
-searches, a real Preferences pane, onboarding, archive browse-without-extract —
-see **"Known soft spots"** in CLAUDE.md.
+Earlier "soft spots" (code syntax highlighting, saved smart searches, a
+Preferences pane, onboarding, a top-edge gradual-blur effect) were reviewed on
+2026-06-17 and **dropped — not wanted.** CLAUDE.md's only remaining note in that
+area is a short list of current iCloud by-design behaviors (not pending work).

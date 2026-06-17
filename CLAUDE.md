@@ -978,8 +978,9 @@ Muse/Muse/
     FadeOutModifier.swift          animatable staggered opacity fade for the
                                    delete sequence (replaced the BurnUp shader)
   Settings/
-    SettingsView.swift             placeholder; real Preferences pane is
-                                   future work
+    SettingsView.swift             vestigial placeholder view; no Preferences
+                                   pane is planned (settings live in the
+                                   sidebar / toolbar / menus)
   Muse.entitlements                app-sandbox + user-selected.read-write +
                                    bookmarks.app-scope + iCloud Documents +
                                    network.client (Sparkle update fetch ONLY —
@@ -1069,28 +1070,20 @@ before implementation.
   the pre-rewrite water-toggle commit (older); `feat/file-viewer-rewrite`
   is the source-of-truth branch for the rewrite progression.
 - Test coverage: none. (Test suites are a separate workstream.)
-- Known soft spots:
-  - Code syntax highlighting (renders as plain monospaced for now).
-  - iCloud Drive: dataless files are skipped on index/hash until
-    downloaded (no empty-hash corruption); download-state badges deferred.
-  - Saved smart searches (schema exists; UI is post-v1).
-  - Archive browse-without-extracting (uses Quick Look).
-  - Onboarding flow (separate design pass needed).
-  - Settings/Preferences pane (placeholder only).
-  - Top-edge "gradual blur" effect: attempted and reverted; prototype
-    reference kept at `docs/superpowers/assets/gradual-blur-prototype.html`.
-  - iCloud sidecar hydration — two inherent (by-design, not bugs) behaviors:
-    (1) **OCR full-text search is degraded on hydrate-only devices.** Sidecars
-    don't carry OCR text (large; intentionally excluded), so a device that only
-    hydrated a file (never ran Vision locally) matches FTS on basename + caption
-    only, not OCR'd text. The file is marked analyzed, so it won't re-Vision to
-    recover OCR. Intent IS carried, so intent collections are unaffected.
-    (2) **Duplicate identical content split across subfolders.** Sidecars live
-    in a per-folder `.muse/` keyed by content hash; byte-identical files in
-    different subfolders of the iCloud zone only get a sidecar beside the copy
-    that was analyzed, so the other copy won't hydrate on a fresh device until
-    its own analyze pass runs. A future fix would be a single zone-root `.muse/`
-    index instead of per-folder.
+- Current by-design behaviors (NOT bugs, NOT pending work — documented so a
+  future session doesn't mistake them for defects):
+  - iCloud Drive: dataless (not-yet-downloaded) files are skipped on
+    index/hash until macOS downloads them (avoids empty-hash corruption).
+  - iCloud sidecar hydration — two inherent behaviors: (1) **OCR full-text
+    search is degraded on hydrate-only devices.** Sidecars don't carry OCR text
+    (large; intentionally excluded), so a device that only hydrated a file
+    (never ran Vision locally) matches FTS on basename + caption only, not OCR'd
+    text. The file is marked analyzed, so it won't re-Vision to recover OCR.
+    Intent IS carried, so intent collections are unaffected. (2) **Byte-identical
+    content split across subfolders.** Sidecars live in a per-folder `.muse/`
+    keyed by content hash; identical files in different subfolders of the iCloud
+    zone only get a sidecar beside the copy that was analyzed, so the other copy
+    won't hydrate on a fresh device until its own analyze pass runs.
 
 ## Working with this codebase
 
