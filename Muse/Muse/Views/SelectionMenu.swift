@@ -39,6 +39,23 @@ struct SelectionActionsMenu: View {
                 }
             }
         }
+        // Remove from the tag/collection you're currently viewing. Shown only
+        // in that context (a tag filter or an open collection); acts on the
+        // effective selection.
+        if appState.activeTagLabel != nil || appState.activeCollectionID != nil {
+            Divider()
+            if let label = appState.activeTagLabel {
+                Button("Remove Tag “\(label)”") {
+                    appState.removeTag(label, fromURLs: urls)
+                }
+            }
+            if let cid = appState.activeCollectionID {
+                Button("Remove from Collection “\(collectionName(cid))”") {
+                    appState.removeFromCollection(cid, urls: urls)
+                }
+            }
+            Divider()
+        }
         Button("Share") { share() }
         Menu("Move to Folder") {
             let folders = moveDestinations
@@ -59,6 +76,11 @@ struct SelectionActionsMenu: View {
             guard let url = appState.bookmarks.url(for: root) else { return nil }
             return (url.lastPathComponent, url)
         }
+    }
+
+    /// Display name of the active collection, for the remove menu label.
+    private func collectionName(_ id: String) -> String {
+        engine.collections.first { $0.collection.id == id }?.collection.name ?? "Collection"
     }
 
     private func move(to dest: URL) {

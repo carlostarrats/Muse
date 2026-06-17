@@ -296,6 +296,59 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Remove `label` from `urls` (the right-clicked tile or the whole
+    /// selection). Tags are auto-generated, but this leaves the files marked
+    /// analyzed — same as Delete All Tags — so the pipeline never regenerates
+    /// the tag. If the grid is filtered to this tag, the affected tiles drop
+    /// out immediately and the chip counts refresh.
+    func removeTag(_ label: String, fromURLs urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        let removed = Set(urls.map { $0.standardizedFileURL.path })
+        Task { @MainActor in
+            await TagStore.shared.removeLabel(label, fromURLs: urls)
+            tagsVersion &+= 1
+            if activeTagLabel == label {
+                // If nothing here would still carry the tag, the chip is gone
+                // and the grid would be stranded empty — go straight back to
+                // "All" in ONE transaction (same crossfade as switching tags),
+                // rather than emptying the grid first and then repopulating.
+                let anyLeft = visibleFiles.contains {
+                    !removed.contains($0.url.standardizedFileURL.path)
+                }
+                if !anyLeft {
+                    setActiveTag(nil)
+                    return
+                }
+                activeTagPaths?.subtract(removed)
+            }
+            clearSelection()
+        }
+    }
+
+    /// Remove `urls` from collection `id` (the right-clicked tile or the whole
+    /// selection). Collections are manual, so the removal simply sticks (an
+    /// exclusion is also recorded as a safeguard). If that collection is open,
+    /// the affected tiles drop out immediately.
+    func removeFromCollection(_ id: String, urls: [URL]) {
+        guard !urls.isEmpty, let q = Database.shared.dbQueue else { return }
+        let paths = urls.map { $0.standardizedFileURL.path }
+        let removed = Set(paths)
+        Task { @MainActor in
+            let ids = (try? await CollectionStore.fileIDs(queue: q, paths: paths)) ?? []
+            for fid in ids {
+                try? await CollectionStore.removeFile(queue: q, fileID: fid, collectionID: id)
+            }
+            await CollectionsEngine.shared.reload()
+            if activeCollectionID == id {
+                activeCollectionPaths?.subtract(removed)
+                activeCollectionFiles?.removeAll {
+                    removed.contains($0.url.standardizedFileURL.path)
+                }
+            }
+            clearSelection()
+        }
+    }
+
     /// Set (or clear, with nil) the tag chip filter — same single-transaction
     /// animated swap as the collection filter.
     func setActiveTag(_ label: String?) {

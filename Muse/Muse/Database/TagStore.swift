@@ -170,4 +170,26 @@ final class TagStore: ObservableObject {
         }
         return await tags(for: url)
     }
+
+    /// Remove one label (manual OR vision) from the given files. Like
+    /// `deleteAllTags`, it leaves `analyzed_hash` untouched so the automatic
+    /// pipeline never resurrects the tag — only an explicit re-analysis would.
+    func removeLabel(_ label: String, fromURLs urls: [URL]) async {
+        guard let queue = Database.shared.dbQueue else { return }
+        let paths = urls.map { $0.standardizedFileURL.path }
+        guard !paths.isEmpty else { return }
+        do {
+            try await queue.write { db in
+                let marks = databaseQuestionMarks(count: paths.count)
+                try db.execute(sql: """
+                    DELETE FROM tags WHERE label = ? AND file_id IN (
+                        SELECT p.file_id FROM paths p
+                        WHERE p.is_alive = 1 AND p.absolute_path IN (\(marks))
+                    )
+                    """, arguments: StatementArguments([label] + paths))
+            }
+        } catch {
+            print("[TagStore] removeLabel failed: \(error)")
+        }
+    }
 }

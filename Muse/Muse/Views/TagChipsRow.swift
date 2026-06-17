@@ -14,6 +14,7 @@
 //
 
 import SwiftUI
+import AppKit
 import GRDB
 
 struct TagChipsRow: View {
@@ -28,7 +29,7 @@ struct TagChipsRow: View {
         ZStack {
             if !tags.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    ChipFlow(gap: 8, hovered: hovered, grow: 30, noGrow: [0]) {
+                    ChipFlow(gap: 8, hovered: hovered, grow: growForHovered, noGrow: [0]) {
                         TagChip(index: 0, label: "All", count: nil,
                                 isSelected: appState.activeTagLabel == nil,
                                 isHovered: hovered == 0,
@@ -147,6 +148,24 @@ struct TagChipsRow: View {
         else if hovered == index { hovered = nil }
     }
 
+    /// How far the hovered chip should grow: just enough for its count plus a
+    /// fixed gap, so the space between the label and the number is the same for
+    /// "1" and "1234" (a fixed grow left a big gap after short counts). Index 0
+    /// is "All" (no count) and is in ChipFlow's noGrow set, so its grow is moot.
+    private var growForHovered: CGFloat {
+        guard let h = hovered, h >= 1, h - 1 < tags.count else { return 0 }
+        return Self.countWidth(tags[h - 1].count) + 5
+    }
+
+    /// Rendered width of the count in the exact font the overlay draws it in.
+    private static func countWidth(_ count: Int) -> CGFloat {
+        let s = "\(count)" as NSString
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 13, weight: .medium)
+        ]
+        return ceil(s.size(withAttributes: attrs).width)
+    }
+
     /// Reload when tags mutate, the sidebar selection changes, the folder's
     /// contents land/refresh, or the active collection changes (the chips
     /// re-scope to the collection's members inside one).
@@ -180,7 +199,16 @@ struct TagChipsRow: View {
             }) ?? []
             for (label, count) in rows { counts[label, default: 0] += count }
         }
-        tags = counts.sorted { $0.value > $1.value }.prefix(30)
+        // Show EVERY tag in scope (the row scrolls horizontally) — capping the
+        // list hid tags with no other way to reach them. Most-used first, with
+        // an alphabetical tiebreak so equal-count tags keep a stable order
+        // (no shuffling between reloads).
+        tags = counts
+            .sorted {
+                $0.value != $1.value
+                    ? $0.value > $1.value
+                    : $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending
+            }
             .map { (label: $0.key, count: $0.value) }
     }
 }
@@ -208,7 +236,18 @@ private struct ChipFlow: Layout {
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        naturalSize(subviews)   // hover-independent: the row never reflows
+        // Report the ACTUAL laid-out width. Usually this equals the natural row
+        // width (the neighbors absorb the hovered chip's growth, so nothing
+        // reflows). Only when the neighbors can't free enough room does the row
+        // grow by the small remainder — so a hovered chip can ALWAYS reach the
+        // width its count needs, with no cap and no overlap.
+        let naturals = subviews.map { $0.sizeThatFits(.unspecified).width }
+        let h = subviews.first?.sizeThatFits(.unspecified).height ?? 30
+        let effectiveGrow = hovered.map { noGrow.contains($0) ? 0 : grow } ?? 0
+        let widths = Self.widths(naturals: naturals, hovered: hovered,
+                                 grow: effectiveGrow, floor: 30)
+        return CGSize(width: widths.reduce(0, +) + gap * CGFloat(max(0, widths.count - 1)),
+                      height: h)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize,
@@ -217,7 +256,7 @@ private struct ChipFlow: Layout {
         let h = subviews.first?.sizeThatFits(.unspecified).height ?? 30
         let effectiveGrow = hovered.map { noGrow.contains($0) ? 0 : grow } ?? 0
         let widths = Self.widths(naturals: naturals, hovered: hovered,
-                                 grow: effectiveGrow, floor: 50)
+                                 grow: effectiveGrow, floor: 30)
         var x = bounds.minX
         for (i, sub) in subviews.enumerated() {
             sub.place(at: CGPoint(x: x, y: bounds.minY),
@@ -226,17 +265,17 @@ private struct ChipFlow: Layout {
         }
     }
 
-    /// Steal `grow` from the hovered chip's neighbors, alternating one step
-    /// out per side, never below `floor`. The hovered chip grows by exactly
-    /// what was stolen, so the row total is invariant.
+    /// Grow the hovered chip by the FULL `grow` (so its count always fits — no
+    /// cap, no overlap) and reclaim that room from its two immediate neighbors,
+    /// half from each side, never shrinking a neighbor below `floor`. Whatever
+    /// the neighbors can't give is left as a positive total, which makes the
+    /// row widen by that small remainder (see `sizeThatFits`) — only in the
+    /// rare case that both neighbors are already short. Distant chips are never
+    /// shrunk; at most they shift when the row widens.
     static func widths(naturals: [CGFloat], hovered: Int?,
                        grow: CGFloat, floor: CGFloat) -> [CGFloat] {
         var out = naturals
         guard let h = hovered, naturals.indices.contains(h), grow > 0 else { return out }
-        // ONLY the two immediate neighbors give space — half each, capped
-        // at their floor. Never spill further out: a 1pt steal still
-        // truncates a chip's text, so distant chips must stay untouched.
-        // Any shortfall just shrinks the hovered chip's growth instead.
         var deficit = grow
         let ring = [h + 1, h - 1].filter { naturals.indices.contains($0) }
         if !ring.isEmpty {
@@ -247,7 +286,7 @@ private struct ChipFlow: Layout {
                 deficit -= take
             }
         }
-        out[h] = naturals[h] + (grow - max(0, deficit))
+        out[h] = naturals[h] + grow
         return out
     }
 }
