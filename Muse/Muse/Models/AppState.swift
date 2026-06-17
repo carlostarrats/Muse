@@ -42,6 +42,32 @@ final class AppState: ObservableObject {
     /// Files in the selected folder (or, if recursive, including subfolders).
     @Published var currentFiles: [FileNode] = []
 
+    /// Per-path content version, bumped when a file's bytes change in place
+    /// (crop, edit-and-save, iCloud sync-in). The grid tile keys its
+    /// thumbnail-load task on this, so a bump re-decodes the now-fresh bytes —
+    /// the cache having already been invalidated for that path. Path-based
+    /// (not node id) so it survives the FileNode being rebuilt by a reload.
+    @Published private(set) var contentVersion: [String: Int] = [:]
+
+    /// Cache-busting token the grid folds into its tile-load task id.
+    func contentToken(for file: FileNode) -> Int {
+        contentVersion[file.url.standardizedFileURL.path] ?? 0
+    }
+
+    /// Mark files whose CONTENT changed in place: drop their cached thumbnails
+    /// (memory + disk, synchronously) and bump their version so any visible
+    /// tile re-decodes. Re-analysis is handled separately (the indexer cleared
+    /// `analyzed_hash`, so the analyze pass regenerates tags/colors/dimensions).
+    private func markContentChanged(_ paths: [String]) {
+        guard !paths.isEmpty else { return }
+        for raw in paths {
+            let url = URL(fileURLWithPath: raw)
+            let std = url.standardizedFileURL.path
+            ThumbnailCache.shared.invalidate(url)
+            contentVersion[std, default: 0] += 1
+        }
+    }
+
     /// True while a freshly-selected folder is being enumerated off-main, so
     /// the grid can show a skeleton instead of a frozen click.
     @Published var isLoadingFolder = false
@@ -646,7 +672,7 @@ final class AppState: ObservableObject {
         // A tag filter from the previous folder mustn't empty the new one.
         if activeTagLabel != nil { setActiveTag(nil) }
         startWatching(folder.url)
-        reloadCurrentFiles(showLoading: true, thenIndex: true)
+        reloadCurrentFiles(showLoading: true, thenIndex: true, verifyICloud: true)
     }
 
     /// Scan the current folder's images for duplicates, then present the
@@ -673,7 +699,13 @@ final class AppState: ObservableObject {
     /// is cancelled only on explicit removal, not on every switch.
     private var indexingTask: Task<Void, Never>?
 
-    private func scheduleIndexing(for url: URL) {
+    /// - verifyICloud: run the background content-verify pass over the iCloud
+    ///   files (catches edits made while the app was closed — iCloud
+    ///   size/mtime oscillates so the normal fast path can't notice). Only the
+    ///   FRESH folder selection asks for this; live FSEvents reloads handle
+    ///   their specific changed files directly and must not re-hash the whole
+    ///   iCloud folder on every event.
+    private func scheduleIndexing(for url: URL, verifyICloud: Bool = false) {
         let files = currentFiles
         let icloud = iCloudFolderURL
         indexingTask = Task.detached(priority: .userInitiated) {
@@ -681,7 +713,10 @@ final class AppState: ObservableObject {
                 guard f.kind != .folder, f.kind.hasNativeViewer || f.kind == .archive else { return nil }
                 return (f.url, f.kind)
             }
-            await Indexer.shared.indexBatch(pairs, priority: .high)
+            // Local edits made while closed surface here (size/mtime changed),
+            // as do brand-new files. Drop stale art for the ones that changed.
+            let changed = await Indexer.shared.indexBatch(pairs, priority: .high)
+            await MainActor.run { self.markContentChanged(changed.map { $0.path }) }
             if Task.isCancelled { return }
             let imageURLs = files
                 .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
@@ -697,6 +732,24 @@ final class AppState: ObservableObject {
             await SidecarHydrator.hydrate(urls: imageURLs, folder: icloud)
             if Task.isCancelled { return }
             await AnalyzePipeline.shared.analyzePending(in: imageURLs)
+            if Task.isCancelled { return }
+
+            // iCloud cold-start parity: re-hash the iCloud-zone files to catch
+            // edits/syncs that landed while Muse was closed. Background +
+            // silent (no pill) and content-hash based — NOT size/mtime, which
+            // oscillates on iCloud. Only the files that truly changed get their
+            // art dropped + a re-analyze; an unchanged folder is just reads.
+            guard verifyICloud, let icloud else { return }
+            let icloudPairs = pairs.filter {
+                $0.0.standardizedFileURL.path.hasPrefix(icloud.standardizedFileURL.path + "/")
+            }
+            guard !icloudPairs.isEmpty else { return }
+            let icloudChanged = await Indexer.shared.indexBatch(
+                icloudPairs, priority: .background, force: true, silent: true)
+            if Task.isCancelled || icloudChanged.isEmpty { return }
+            await MainActor.run { self.markContentChanged(icloudChanged.map { $0.path }) }
+            await ThumbnailCache.shared.prewarmToDisk(icloudChanged)
+            await AnalyzePipeline.shared.analyzePending(in: icloudChanged)
         }
     }
 
@@ -744,7 +797,8 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func reloadCurrentFiles(showLoading: Bool = false, thenIndex: Bool = false) {
+    private func reloadCurrentFiles(showLoading: Bool = false, thenIndex: Bool = false,
+                                    verifyICloud: Bool = false) {
         guard let folder = selectedFolder else {
             currentFiles = []
             isLoadingFolder = false
@@ -770,6 +824,11 @@ final class AppState: ObservableObject {
             // weight (and could mis-seed a hero open for a stale path).
             // Bounds tileFrames to roughly one folder's worth of tiles.
             tileFrames.removeAll()
+            // Same rationale for the per-path content versions: they only need
+            // to live as long as the folder is on screen (an edit already
+            // regenerated the on-disk thumbnail under its path key), so reset
+            // here rather than let the dict accumulate across a long session.
+            contentVersion.removeAll()
         } else {
             existing = Dictionary(currentFiles.map { ($0.url, $0) },
                                   uniquingKeysWith: { a, _ in a })
@@ -793,7 +852,7 @@ final class AppState: ObservableObject {
                 guard token == self.folderLoadToken else { return }
                 self.currentFiles = sorted
                 self.isLoadingFolder = false
-                if thenIndex { self.scheduleIndexing(for: folderURL) }
+                if thenIndex { self.scheduleIndexing(for: folderURL, verifyICloud: verifyICloud) }
             }
         }
     }
@@ -892,13 +951,45 @@ final class AppState: ObservableObject {
 
     private func startWatching(_ url: URL) {
         if watcher == nil {
-            watcher = FolderWatcher { [weak self] in
+            watcher = FolderWatcher { [weak self] changedPaths in
                 // Search results aren't folder contents — a disk event must
                 // not replace them with the watched folder's listing.
                 guard let self, !self.isSearchActive else { return }
-                self.reloadCurrentFiles()
+                self.handleFolderEvent(changedPaths: changedPaths)
             }
         }
         watcher?.watch(url: url, recursive: showSubfolders)
+    }
+
+    /// A live disk change landed. Two jobs: (1) refresh the specific media
+    /// files that changed — re-hash them (forced, so iCloud's oscillating
+    /// metadata can't hide a real edit), drop their stale thumbnails, and
+    /// re-analyze new/edited ones; (2) reflect adds/removes/renames in the
+    /// grid listing. No folder-wide reindex — only the touched files do work.
+    private func handleFolderEvent(changedPaths: [String]) {
+        guard let folder = selectedFolder else { return }
+        let media = FolderEventFilter.mediaChanges(
+            paths: changedPaths, folder: folder.url, recursive: showSubfolders)
+        let existing = media.filter { FileManager.default.fileExists(atPath: $0) }
+        if !existing.isEmpty {
+            Task.detached(priority: .userInitiated) {
+                let pairs = existing.map { p -> (URL, AssetKind) in
+                    let u = URL(fileURLWithPath: p)
+                    return (u, AssetKind.detect(at: u))
+                }
+                // force: a same-path edit (and every iCloud edit) wouldn't be
+                // caught by the size/mtime fast path. silent: no progress pill
+                // for a handful of files.
+                let changed = await Indexer.shared.indexBatch(
+                    pairs, priority: .high, force: true, silent: true)
+                await MainActor.run { self.markContentChanged(changed.map { $0.path }) }
+                let urls = existing.map { URL(fileURLWithPath: $0) }
+                // prewarm covers brand-new files; analyzePending self-gates on
+                // a stale analyzed_hash, so it re-tags new + edited only.
+                await ThumbnailCache.shared.prewarmToDisk(urls)
+                await AnalyzePipeline.shared.analyzePending(in: urls)
+            }
+        }
+        reloadCurrentFiles()
     }
 }

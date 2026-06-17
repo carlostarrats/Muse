@@ -674,6 +674,73 @@ this same machine/Apple ID).
   phantom registrations don't accumulate. A backup of the container's current
   contents was taken to `~/Documents/Muse-iCloud-backup-<timestamp>/`.
 
+### In-place edit refresh — change detection overhaul — 2026-06-17 (on `main`)
+
+Fixed "I crop/edit an image (Apple Preview, Photoshop) and the thumbnail never
+updates — not on edit, not even after removing + re-adding the folder." Root
+cause was **four independent caches keyed purely by file path**, with no
+content/mtime signal, so a file re-saved at the same path served stale data
+forever. User requirement: **parity everywhere — local AND the iCloud "Muse"
+folder must refresh identically.**
+
+- **Root causes (all path-keyed, no change signal):** (1) `ThumbnailCache` key
+  was `url.absoluteString | WxH@scale` — the on-disk PNG persists across launches
+  AND folder remove/re-add (same URL → same key), so the old thumbnail was
+  immortal. (2) The `FolderWatcher` reload passed `thenIndex: false`, so a live
+  edit never re-indexed/re-analyzed/prewarmed — tags/colors/OCR/dimensions stayed
+  frozen, and a newly-added file wasn't tagged until you reselected the folder.
+  (3) `AspectRatioCache.resolved` is permanent per session, so a crop that
+  changed proportions kept the old masonry frame. (4) iCloud files are never
+  re-hashed by `Indexer.isUnchanged` (it trusts the stored hash because iCloud
+  oscillates size/mtime), so iCloud edits didn't re-analyze at all.
+- **The fix (forward code, mirrors the existing local/iCloud split):**
+  - **`ThumbnailCache.invalidate(_ url:)`** drops mem + on-disk PNGs for every
+    rendered variant (`renderedVariants` = 320@2, 160@2 — single source of truth),
+    deleting disk **synchronously** so a re-fetch can't read the stale PNG back.
+    The cache key now normalizes on `standardizedFileURL.path` (NOT absoluteString)
+    so a tile's enumerated URL and an invalidate()/reconstructed-from-path URL hash
+    to the SAME key (a one-time orphan+regen of old PNGs).
+  - **`Indexer`** `reconcile`/`indexFile` now return `Bool` (true = in-place
+    content change), and `indexBatch` returns the changed URLs + gained `force`
+    (re-hash everything, skipping the size/mtime/known-hash shortcut) and `silent`
+    (no progress pill) params. A pure edit-in-place also **clears `analyzed_hash`**
+    so the analyze pass regenerates tags/palette/OCR/dimensions.
+  - **`FolderWatcher`** now delivers the FSEvents **changed paths**; the pure,
+    unit-tested `FolderEventFilter.mediaChanges(paths:folder:recursive:)` keeps
+    only viewable files inside the folder (drops hidden / `.muse` sidecar dirs /
+    out-of-folder / subfolder-when-shallow).
+  - **`AppState`** gained `contentVersion: [path:Int]` + `contentToken(for:)` +
+    `markContentChanged(_:)` (invalidate thumbnails + bump version). The grid
+    tile's load `.task` is keyed on `TileLoadID(url, version)`, so a bump
+    re-decodes the now-fresh bytes. `handleFolderEvent` force-re-hashes ONLY the
+    specifically-changed media (works for both zones — driven by a real FSEvents
+    write, including iCloud sync-in, not by polling oscillating metadata), drops
+    their art, prewarms + re-analyzes (analyzePending self-gates on stale
+    analyzed_hash → covers new AND edited), then reloads the listing for
+    adds/removes/renames. No folder-wide reindex per event.
+  - **iCloud cold-start parity (edits made while Muse was closed):** a fresh
+    folder selection runs a **background, silent, content-hash** verify pass
+    (`scheduleIndexing(verifyICloud:)` → `indexBatch(force:silent:)`) over the
+    iCloud-zone files; only genuinely-changed files get art dropped + re-analyzed.
+- **OVERRIDE of prior guidance (deliberate, user-directed):** the old rule "do
+  NOT re-check iCloud files; trust the stored hash" was about **size/mtime**
+  comparison (which oscillates and would re-index the whole folder every visit).
+  This change does NOT reintroduce size/mtime for iCloud — it uses **content
+  hashing** (reliable) driven by FSEvents (live) + a background verify (cold
+  start). The trade-off is real: the cold-start verify re-reads downloaded iCloud
+  files' bytes once per folder-open (background/silent). Accepted for parity.
+  Live edits in BOTH zones are cheap + reliable via FSEvents.
+- Tests: `FolderEventFilterTests` (pure path filter). Full suite green; Debug
+  build green.
+- **QA review pass (fixed):** (1) the FSEvents callback cast `eventPaths` via
+  `unsafeBitCast(_, to: NSArray.self)`, but without `kFSEventStreamCreateFlagUseCFTypes`
+  the framework delivers a raw C `char**` — undefined behavior (crash/garbage)
+  on the FIRST file change. Added the flag so `eventPaths` is a CFArray of
+  CFString (toll-free bridged). (2) `contentVersion` is now reset on a fresh
+  folder load so it can't accumulate across a long session (the on-disk
+  thumbnail is path-keyed and already regenerated on edit, so the reset can't
+  strand stale art).
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
@@ -713,11 +780,17 @@ Muse/Muse/
     BookmarkStore.swift            UserDefaults-backed root bookmarks; lifecycle
                                    start/stop access for sandbox
     FolderTree.swift               lazy hierarchical tree + FolderReader
-    FolderWatcher.swift            FSEvents-backed live watcher
+    FolderWatcher.swift            FSEvents-backed live watcher; delivers the
+                                   changed paths. FolderEventFilter (pure) keeps
+                                   only viewable in-folder files (drops hidden/
+                                   .muse/out-of-folder) — see 2026-06-17 session
     StarStore.swift                SQLite-backed starred folders
     ThumbnailCache.swift           QLThumbnail + AVAssetImageGenerator (videos);
                                    off-main, ordered (top→bottom) load; 2-tier
-                                   cache (NSCache 512MB cost + on-disk LRU 2GB)
+                                   cache (NSCache 512MB cost + on-disk LRU 2GB).
+                                   Key normalized on standardized path; invalidate(_:)
+                                   drops mem+disk for all renderedVariants so an
+                                   in-place edit regenerates (2026-06-17)
     Sidecar.swift                  portable per-asset metadata value type
                                    (Codable); maps to/from FileRow+TagRow;
                                    deterministic conflict merge (manual-tag wins)
@@ -737,7 +810,10 @@ Muse/Muse/
   Indexing/
     HashService.swift              streaming SHA-256; nil on dataless iCloud reads
     Indexer.swift                  identity reconciliation matrix (§4); size+mtime
-                                   fast path; skips not-downloaded iCloud items
+                                   fast path; skips not-downloaded iCloud items.
+                                   reconcile/indexFile return "content changed",
+                                   indexBatch returns changed URLs + force/silent
+                                   (re-hash for edits + iCloud verify) (2026-06-17)
   Intelligence/
     Vision/
       VisionServices.swift         classify/OCR/faces/feature print/dom color

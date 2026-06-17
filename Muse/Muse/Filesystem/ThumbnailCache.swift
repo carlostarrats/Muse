@@ -133,6 +133,17 @@ final class ThumbnailCache: ObservableObject {
     /// Total on-disk cache size cap in bytes. Defaults to 2GB.
     var diskCapBytes: Int64 = 2 * 1024 * 1024 * 1024
 
+    /// Every (size, scale) the app actually renders. `invalidate(_:)` must
+    /// drop EVERY variant — the cache key is path-based, so a file edited in
+    /// place (crop / Photoshop save / iCloud sync) would otherwise serve its
+    /// old thumbnail forever, including across launches (the on-disk PNG
+    /// persists) and folder remove/re-add (same URL → same key). Keep this in
+    /// sync with the sizes requested in GridView / HeroStage / prewarmToDisk.
+    static let renderedVariants: [(size: CGSize, scale: CGFloat)] = [
+        (CGSize(width: 320, height: 320), 2.0),
+        (CGSize(width: 160, height: 160), 2.0),
+    ]
+
     private init() {
         memCache.countLimit = 2000
         memCache.totalCostLimit = 512 * 1024 * 1024   // ~512MB of decoded pixels
@@ -152,6 +163,22 @@ final class ThumbnailCache: ObservableObject {
     /// hero viewer start its open flight instantly with the grid's tile image.
     func cachedThumbnail(for url: URL, size: CGSize, scale: CGFloat = 2.0) -> NSImage? {
         memCache.object(forKey: Self.cacheKey(url: url, size: size, scale: scale) as NSString)
+    }
+
+    /// Drop every cached representation (memory + disk) of `url` so the next
+    /// request regenerates from the file's CURRENT bytes. Called when a file's
+    /// content changed in place (crop, edit-and-save, iCloud sync-in).
+    ///
+    /// The disk PNGs are removed SYNCHRONOUSLY before this returns: a caller
+    /// typically bumps a version that immediately re-triggers the tile's load,
+    /// so an async delete could lose the race and the re-fetch would read the
+    /// stale PNG right back. It's only a couple of tiny `unlink`s per file.
+    func invalidate(_ url: URL) {
+        for v in Self.renderedVariants {
+            let key = Self.cacheKey(url: url, size: v.size, scale: v.scale)
+            memCache.removeObject(forKey: key as NSString)
+            try? FileManager.default.removeItem(at: diskPath(for: key))
+        }
     }
 
     /// Async fetch. Returns memory hit, then disk hit, then generates —
@@ -251,7 +278,12 @@ final class ThumbnailCache: ObservableObject {
     }
 
     private nonisolated static func cacheKey(url: URL, size: CGSize, scale: CGFloat) -> String {
-        let raw = "\(url.absoluteString)|\(Int(size.width))x\(Int(size.height))@\(scale)"
+        // Standardized path (NOT absoluteString) so the key is independent of
+        // how the URL was constructed — a tile's enumerated URL and an
+        // invalidate()/reconstructed-from-path URL must hash to the SAME key,
+        // or stale thumbnails survive an edit. (Changing this orphans the old
+        // absoluteString-keyed PNGs; they regenerate once, then LRU-evict.)
+        let raw = "\(url.standardizedFileURL.path)|\(Int(size.width))x\(Int(size.height))@\(scale)"
         let hash = SHA256.hash(data: Data(raw.utf8))
         return hash.map { String(format: "%02x", $0) }.joined()
     }

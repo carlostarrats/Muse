@@ -37,17 +37,23 @@ actor Indexer {
 
     /// Index a single file synchronously (call site decides priority via dispatch).
     /// Performs hashing + identity reconciliation per the matrix.
-    func indexFile(at url: URL, kind: AssetKind) {
+    ///
+    /// Returns `true` when the file's CONTENT changed in place (the path was
+    /// already known but now hashes differently) — the signal AppState uses to
+    /// drop stale thumbnails and re-run analysis. A brand-new file or a fresh
+    /// path returns `false` (nothing cached to invalidate).
+    @discardableResult
+    func indexFile(at url: URL, kind: AssetKind) -> Bool {
         let absPath = url.standardizedFileURL.path
-        if inFlightHashes.contains(absPath) { return }
+        if inFlightHashes.contains(absPath) { return false }
         inFlightHashes.insert(absPath)
         defer { inFlightHashes.remove(absPath) }
 
         // Dataless iCloud placeholders have no local bytes — hashing them
         // reads empty and corrupts identity. Skip until downloaded.
-        if Self.isDataless(url) { return }
+        if Self.isDataless(url) { return false }
 
-        guard let queue = Database.shared.dbQueue else { return }
+        guard let queue = Database.shared.dbQueue else { return false }
 
         // The fast-path skip for already-known, unchanged files lives in
         // `indexBatch`'s discovery pass now — so the progress pill never
@@ -60,10 +66,10 @@ actor Indexer {
         let createdAt = (attrs?[.creationDate] as? Date).map { Int64($0.timeIntervalSince1970) }
 
         // Hash on caller's thread (we're already on a background actor)
-        guard let hash = HashService.sha256(of: url) else { return }
+        guard let hash = HashService.sha256(of: url) else { return false }
 
         do {
-            try queue.write { db in
+            return try queue.write { db in
                 try Self.reconcile(
                     db: db,
                     absPath: absPath,
@@ -77,11 +83,17 @@ actor Indexer {
             }
         } catch {
             print("[Indexer] write failed for \(absPath): \(error)")
+            return false
         }
     }
 
     /// Identity reconciliation matrix from the plan §4. Anchored at "moment
     /// hashing completes for a previously-enumerated path."
+    ///
+    /// Returns `true` when an already-known alive path now hashes to different
+    /// content (a genuine in-place edit) — so the caller can drop stale
+    /// thumbnails and re-run analysis. New files / new paths return `false`.
+    @discardableResult
     private static func reconcile(
         db: GRDB.Database,
         absPath: String,
@@ -91,7 +103,7 @@ actor Indexer {
         createdAt: Int64?,
         modifiedAt: Int64?,
         now: Int64
-    ) throws {
+    ) throws -> Bool {
 
         // 1. Look up alive path.
         let alivePath = try PathRow
@@ -114,7 +126,7 @@ actor Indexer {
                 try newFile.insert(db)
                 path.file_id = newFile.id
                 try path.update(db)
-                return
+                return false
             }
 
             if file.content_hash == hash {
@@ -128,7 +140,7 @@ actor Indexer {
                 file.modified_at = modifiedAt
                 file.last_seen_at = now
                 try file.update(db)
-                return
+                return false
             }
 
             // Hash changed — edit-in-place
@@ -144,14 +156,19 @@ actor Indexer {
                 refreshed.last_seen_at = now
                 try refreshed.update(db)
             } else {
-                // Pure edit-in-place: update hash on the existing file row
+                // Pure edit-in-place: update hash on the existing file row.
+                // Reset analyzed_hash so the analyze pass re-runs Vision — a
+                // crop/edit can change colors, dimensions, and OCR'd text, so
+                // the old tags/palette must not stick. (analyzed_hash != the
+                // new content_hash also makes analyzePending pick it up.)
                 file.content_hash = hash
                 file.size_bytes = sizeBytes
                 file.modified_at = modifiedAt
                 file.last_seen_at = now
+                file.analyzed_hash = nil
                 try file.update(db)
             }
-            return
+            return true
         }
 
         // No alive path. Check for a dead path with the same absolute_path.
@@ -169,7 +186,7 @@ actor Indexer {
                 var refreshed = target
                 refreshed.last_seen_at = now
                 try refreshed.update(db)
-                return
+                return false
             }
             // Otherwise: brand-new path pointing at known content
             var newPath = PathRow(
@@ -183,7 +200,7 @@ actor Indexer {
             var refreshed = target
             refreshed.last_seen_at = now
             try refreshed.update(db)
-            return
+            return false
         }
 
         // No file with this hash. Brand new file (or path was reused with new content).
@@ -200,6 +217,7 @@ actor Indexer {
             is_alive: 1
         )
         try newPath.insert(db)
+        return false
     }
 
     private static func makeFile(
@@ -335,19 +353,34 @@ actor Indexer {
     /// (a couple of files in flight, the rest queued) at utility/background
     /// priority — an unbounded fan-out of userInitiated hashing tasks made
     /// the UI stutter on large libraries.
-    func indexBatch(_ urls: [(URL, AssetKind)], priority: Priority) async {
-        guard !urls.isEmpty else { return }
-        guard let queue = Database.shared.dbQueue else { return }
+    ///
+    /// Returns the URLs whose CONTENT changed in place (so the caller can drop
+    /// stale thumbnails + re-analyze).
+    ///
+    /// - `force`: re-hash every file, skipping the size/mtime/known-hash
+    ///   discovery shortcut. Used to (a) re-verify files an FSEvents change
+    ///   flagged and (b) catch iCloud edits made while the app was closed —
+    ///   iCloud size/mtime oscillates so the normal fast path trusts the
+    ///   stored hash and would never notice. Pair `force` with `silent` so the
+    ///   verify pass doesn't flash the "Indexing N of M" pill on every visit.
+    /// - `silent`: don't drive the progress pill (background verification).
+    @discardableResult
+    func indexBatch(_ urls: [(URL, AssetKind)], priority: Priority,
+                    force: Bool = false, silent: Bool = false) async -> [URL] {
+        guard !urls.isEmpty else { return [] }
+        guard let queue = Database.shared.dbQueue else { return [] }
         let now = Int64(Date().timeIntervalSince1970)
 
         // Discovery: skip already-known, unchanged files up front (touching
         // last_seen for retention). Only files that genuinely need
         // (re)hashing survive — so a fully indexed folder does zero work and
-        // shows NO progress pill on relaunch.
+        // shows NO progress pill on relaunch. `force` re-hashes everything
+        // (still skipping dataless placeholders, which have no bytes).
         var work: [(URL, AssetKind)] = []
         work.reserveCapacity(urls.count)
         for (url, kind) in urls {
             if Self.isDataless(url) { continue }
+            if force { work.append((url, kind)); continue }
             // An iCloud item reports a downloading status; a plain local file
             // reports nil. iCloud size/mtime can't be trusted as a change
             // signal (it oscillates on sync), so isUnchanged trusts the hash.
@@ -364,27 +397,31 @@ actor Indexer {
             }
             work.append((url, kind))
         }
-        guard !work.isEmpty else { return }
+        guard !work.isEmpty else { return [] }
 
-        await IndexProgress.shared.begin(work.count)
+        if !silent { await IndexProgress.shared.begin(work.count) }
         let taskPriority: TaskPriority = (priority == .high) ? .utility : .background
 
-        await withTaskGroup(of: Void.self) { group in
+        var changed: [URL] = []
+        await withTaskGroup(of: URL?.self) { group in
             var iterator = work.makeIterator()
             var inFlight = 0
             func enqueueNext() -> Bool {
                 guard let (url, kind) = iterator.next() else { return false }
                 group.addTask(priority: taskPriority) {
-                    await self.indexFile(at: url, kind: kind)
-                    await IndexProgress.shared.step()
+                    let didChange = await self.indexFile(at: url, kind: kind)
+                    if !silent { await IndexProgress.shared.step() }
+                    return didChange ? url : nil
                 }
                 return true
             }
             while inFlight < 2, enqueueNext() { inFlight += 1 }
-            while await group.next() != nil {
+            while let result = await group.next() {
+                if let u = result { changed.append(u) }
                 _ = enqueueNext()
             }
         }
+        return changed
     }
 
     enum Priority { case high, background }
