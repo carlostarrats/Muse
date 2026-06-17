@@ -42,6 +42,9 @@ struct CollectionsPage: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    // Page Up / Page Down scrolls the cards a screenful at a time.
+                    PageScrollCatcher(isActive: { appState.selectedFile == nil })
+                        .frame(width: 0, height: 0)
                     header
                     if sorted.isEmpty {
                         emptyState

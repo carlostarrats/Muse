@@ -40,6 +40,10 @@ struct GridView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    // Page Up / Page Down scrolls the grid a screenful at a
+                    // time. Inactive while a hero viewer covers the grid.
+                    PageScrollCatcher(isActive: { appState.selectedFile == nil })
+                        .frame(width: 0, height: 0)
                     // The in-collection header scrolls away with the page —
                     // only the tag chips above stay pinned. Shows whenever a
                     // collection is active, even with a tag filter on (so you
