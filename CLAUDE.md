@@ -868,7 +868,13 @@ Muse/Muse/
                                    mach-lookup temporary-exception for
                                    <bundleid>-spks/-spki (so the sandbox can run
                                    Sparkle's installer XPC — see SUEnableInstaller-
-                                   LauncherService in Info.plist)
+                                   LauncherService in Info.plist). DEBUG builds
+                                   sign with Muse-Debug.entitlements (same keys
+                                   MINUS iCloud) so dev-build churn can't claim/
+                                   purge the production iCloud container — see the
+                                   2026-06-16 iCloud isolation session log
+  Muse-Debug.entitlements          Debug-only: Muse.entitlements without the three
+                                   iCloud keys (Release/App Store keep iCloud)
 MuseShareExtension/                (separate app-extension target) "Send to Muse"
                                    — Finder Share-menu extension; copies dropped
                                    files into the single iCloud folder, picked up
