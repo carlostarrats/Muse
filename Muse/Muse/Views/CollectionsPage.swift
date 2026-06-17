@@ -82,10 +82,9 @@ struct CollectionsPage: View {
             }
             Text("Collections")
                 .font(.system(size: 42, weight: .semibold))
-            HeaderIconButton(systemName: "plus", help: "New Collection") {
-                createCollection()
-            }
             Spacer()
+            // Far right, same size/position as the in-collection trash button.
+            AddCollectionButton { createCollection() }
         }
         .padding(.horizontal, 14)
         .padding(.top, 14)
@@ -111,12 +110,33 @@ struct CollectionsPage: View {
             Text("No collections yet")
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(.secondary)
-            Text("Collections form automatically as Muse analyzes your images.")
+            Text("Collections form automatically as Muse analyzes your images — or tap + to make your own.")
                 .font(.callout)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 80)
+    }
+}
+
+/// "+" header button — same size/shape as the in-collection trash button
+/// (40×40, 16pt glyph), but additive, so it leans on the accent/primary on
+/// hover rather than red.
+private struct AddCollectionButton: View {
+    var action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "plus")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(hovering ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(.primary.opacity(hovering ? 0.16 : 0.08)))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("New Collection")
     }
 }

@@ -154,7 +154,7 @@ private struct EditPill: View {
 }
 
 /// Mid-size circular icon button for the header's edit controls.
-struct HeaderIconButton: View {
+private struct HeaderIconButton: View {
     let systemName: String
     let help: String
     var action: () -> Void
