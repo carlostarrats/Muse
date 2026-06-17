@@ -798,6 +798,15 @@ stop forcing auto-organization on the user.
   toggle gates only the automatic pass, and analysis is incremental), and the
   **manual** paths still work (Analyze / Regenerate Tags; hand-made
   collections). Global + future-only by construction — no per-folder state.
+- **Hand-made collections.** A **+** button beside the Collections-page header
+  creates an empty collection auto-named "Collection N"
+  (`ManualCollectionName.next` = one past the highest existing "Collection N",
+  pure + tested) via `CollectionStore.createManual` (model_version='manual', so
+  it's protected from reclustering/pruning). `fetchAll` now keeps EMPTY manual
+  collections visible (auto collections with nothing on disk stay hidden), so a
+  fresh one shows up and can be populated with the existing "Add to Collection"
+  selection action; rename via the in-collection header. `HeaderIconButton` is
+  now non-private (the page reuses it).
 
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
