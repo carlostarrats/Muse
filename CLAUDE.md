@@ -754,6 +754,23 @@ ascending); `SortMode.directionLabel(ascending:)` gives the mode-aware tooltip
 per-mode) and disabled on the Collections page like the sort menu. Tests:
 `SortDirectionTests`. Build + suite green.
 
+### Cosmetic tidy-ups — 2026-06-17 (on `feat/in-place-edit-refresh`)
+
+Cleared the two `docs/possible-updates.md` code-tidiness items (pure refactors,
+no behavior change; build + full suite green):
+
+- **Split `AppState.swift`** (1012 → 782 LOC). Grid multi-selection moved to
+  `AppState+Selection.swift`; tag/collection filtering moved to
+  `AppState+Filters.swift`. Stored `@Published` state stays in the core class
+  (extensions can't hold stored properties); the only access change was making
+  `collectionRequestToken` / `tagRequestToken` internal (Swift `private` is
+  file-scoped, so the moved methods couldn't otherwise reach them). Methods moved
+  verbatim. `@MainActor` isolation propagates to same-module extensions, so no
+  re-annotation needed.
+- **Renamed `Muse/Fluid/` → `Muse/Effects/`** (held only `FadeOutModifier.swift`;
+  the water/burn shaders are long gone). No code or pbxproj references — it's a
+  filesystem-synchronized group, so the `git mv` is the whole change.
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
@@ -771,13 +788,22 @@ Muse/Muse/
                                    chips; toolbar; menu-bar Tags/Collections
   Models/
     AppState.swift                 @MainActor singleton — roots, active folder,
-                                   current files, selected file, sort mode,
-                                   search, collection + tag filters, mood. Grid
-                                   MULTI-selection (selectedFiles: Set<String> of
-                                   paths + anchor): applyClick / clearSelection /
-                                   selectAllVisible / effectiveSelectionURLs;
-                                   reloadAfterMove; allTagLabels preload
-                                   (feat/multi-select)
+                                   current files, selected file, sort mode +
+                                   direction, search, mood, watcher, indexing.
+                                   The stored @Published state + folder/roots/
+                                   search/watcher/indexing logic; filter + grid-
+                                   selection methods split into the extensions
+                                   below (2026-06-17 tidy-up). reloadAfterMove;
+                                   allTagLabels preload (feat/multi-select)
+    AppState+Selection.swift       extension: grid MULTI-selection (selectedFiles:
+                                   Set<String> of paths + anchor) — applyClick /
+                                   clearSelection / selectAllVisible /
+                                   effectiveSelectionURLs / selectionOrder
+    AppState+Filters.swift         extension: collection + tag-chip filtering —
+                                   visibleFiles / tagSourceFiles / setActive-
+                                   Collection / setActiveTag / removeTag /
+                                   removeFromCollection / setCollectionCover /
+                                   toggleCollectionsPage / bulkTagCommandsAvailable
     AssetKind.swift                kind enum + extension/UTType detection
     FileNode.swift                 in-memory enumerated-file value type
     Root.swift                     security-scoped bookmark wrapper
@@ -946,9 +972,9 @@ Muse/Muse/
                                    PDF (no image split across pages), unit-tested
     CollectionPDFExporter.swift    ImageIO downsample (off-main) → CGPDFContext;
                                    CoreText 11×14 header (feat/collection-pdf-share)
-  Fluid/                           (legacy dir name; water ripple removed
-                                   2026-06-13 and the burn-up delete SHADER
-                                   removed too — NO Metal shaders remain in app)
+  Effects/                         (was Fluid/, renamed 2026-06-17; water ripple
+                                   removed 2026-06-13 and the burn-up delete
+                                   SHADER removed too — NO Metal shaders remain)
     FadeOutModifier.swift          animatable staggered opacity fade for the
                                    delete sequence (replaced the BurnUp shader)
   Settings/
