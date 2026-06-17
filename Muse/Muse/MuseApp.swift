@@ -53,6 +53,23 @@ struct MuseApp: App {
             }
 
             // Folder actions on the current selection live in the Edit menu.
+            // Image selection commands, like Finder's Edit menu.
+            CommandGroup(after: .pasteboard) {
+                Button("Select All") {
+                    // If a text field (e.g. the search box) has focus, ⌘A must
+                    // select its text, like every Mac app — not the grid images.
+                    if let editor = NSApp.keyWindow?.firstResponder as? NSText {
+                        editor.selectAll(nil)
+                    } else {
+                        appState.selectAllVisible()
+                    }
+                }
+                .keyboardShortcut("a", modifiers: .command)
+                Button("Deselect All") { appState.clearSelection() }
+                    .keyboardShortcut("a", modifiers: [.command, .shift])
+                    .disabled(appState.selectedFiles.isEmpty)
+            }
+
             CommandGroup(after: .pasteboard) {
                 Divider()
                 Button(pinMenuTitle) {

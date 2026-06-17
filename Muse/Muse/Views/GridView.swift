@@ -22,6 +22,28 @@ struct GridView: View {
     /// User-set images-per-row, persisted; the bottom-right slider drives it.
     @AppStorage("gridColumnCount") private var gridColumns = 4
 
+    /// Manual double-click detection so single-click selection is INSTANT —
+    /// a lone `onTapGesture` fires immediately, with no SwiftUI count:1-vs-2
+    /// disambiguation delay. A second quick tap on the same tile opens it.
+    @State private var lastTapPath: String?
+    @State private var lastTapAt: Date = .distantPast
+
+    private func handleTileTap(_ file: FileNode) {
+        let p = file.url.standardizedFileURL.path
+        let now = Date()
+        if lastTapPath == p, now.timeIntervalSince(lastTapAt) < 0.35 {
+            lastTapPath = nil
+            appState.selectedFile = file          // double-click → open
+            return
+        }
+        lastTapPath = p
+        lastTapAt = now
+        let m = NSEvent.modifierFlags
+        if m.contains(.shift) { appState.applyClick(.range(p)) }
+        else if m.contains(.command) { appState.applyClick(.toggle(p)) }
+        else { appState.applyClick(.single(p)) }
+    }
+
     @StateObject private var aspects = AspectRatioCache()
 
     // Precomputed layout (recomputed only when the file set, column count,
@@ -44,6 +66,13 @@ struct GridView: View {
                     // time. Inactive while a hero viewer covers the grid.
                     PageScrollCatcher(isActive: { appState.selectedFile == nil })
                         .frame(width: 0, height: 0)
+                        .accessibilityHidden(true)
+                    // Clicking anywhere outside the grid (sidebar, search,
+                    // toolbar) deselects. Lives inside the grid scroll view so
+                    // it can measure the grid's bounds.
+                    OutsideClickDeselect(onOutsideClick: { appState.clearSelection() })
+                        .frame(width: 0, height: 0)
+                        .accessibilityHidden(true)
                     // The in-collection header scrolls away with the page —
                     // only the tag chips above stay pinned. Shows whenever a
                     // collection is active, even with a tag filter on (so you
@@ -82,7 +111,13 @@ struct GridView: View {
                 }
             }
             .coordinateSpace(name: "gridScroll")
-            .background(appState.moodPalette.background)
+            .background {
+                // Tapping anywhere in the empty grid background (margins, gaps,
+                // below the tiles) deselects. Tiles consume their own taps.
+                appState.moodPalette.background
+                    .contentShape(Rectangle())
+                    .onTapGesture { appState.clearSelection() }
+            }
             .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
             .overlay(alignment: .bottomTrailing) {
                 if !appState.visibleFiles.isEmpty {
@@ -136,6 +171,12 @@ struct GridView: View {
         let files = appState.visibleFiles
 
         ZStack(alignment: .topLeading) {
+            // Click empty space to deselect. Sits behind the tiles, so a tap on
+            // a tile is handled by the tile, not this.
+            Color.clear
+                .frame(width: layoutWidth, height: totalHeight)
+                .contentShape(Rectangle())
+                .onTapGesture { appState.clearSelection() }
             ForEach(visibleIndices(lo: lo, hi: hi, count: files.count), id: \.self) { i in
                 let rect = frames[i]
                 let file = files[i]
@@ -145,31 +186,56 @@ struct GridView: View {
                                               forStandardizedPath: file.url.standardizedFileURL.path)
                          })
                     .frame(width: rect.width, height: rect.height)
-                    .offset(x: rect.minX, y: rect.minY)
-                    // Single tap only — the old double-tap recognizer made every
-                    // click wait out the double-click interval before the viewer
-                    // opened. Editing flows live in the Open With… context menu.
-                    .onTapGesture {
-                        appState.selectedFile = file
+                    // Instant single-click select (Cmd toggles, Shift ranges);
+                    // a second quick tap opens. Selection border lives inside
+                    // TileView so it scales with the hover zoom.
+                    .onTapGesture { handleTileTap(file) }
+                    // Drag onto a sidebar folder to move. Dragging an unselected
+                    // tile first selects just it, so the drop moves the right set.
+                    .onDrag {
+                        let p = file.url.standardizedFileURL.path
+                        if !appState.selectedFiles.contains(p) {
+                            appState.applyClick(.single(p))
+                        }
+                        return NSItemProvider(object: file.url as NSURL)
                     }
+                    .offset(x: rect.minX, y: rect.minY)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(file.basename)
-                    .accessibilityAddTraits(.isButton)
+                    // Expose selection to VoiceOver, not just via the color/border.
+                    .accessibilityAddTraits(
+                        appState.selectedFiles.contains(file.url.standardizedFileURL.path)
+                            ? [.isButton, .isSelected] : .isButton)
+                    .accessibilityHint("Double-tap to open. Right-click for actions.")
                     .contextMenu {
-                        OpenWithMenu(url: file.url)
+                        let p = file.url.standardizedFileURL.path
+                        // Single-image items show only when the effective
+                        // selection is one image (this tile, or a 1-item set).
+                        let single = !appState.selectedFiles.contains(p)
+                            || appState.selectedFiles.count <= 1
+                        SelectionActionsMenu(path: p)
                         Divider()
-                        Button("Add Tag…") {
-                            newTagText = ""
-                            addTagFile = file
-                        }
-                        if appState.activeCollectionID != nil {
-                            Button("Set as Collection Cover") {
-                                appState.setCollectionCover(file)
+                        if single {
+                            OpenWithMenu(url: file.url)
+                            if appState.activeCollectionID != nil {
+                                Button("Set as Collection Cover") {
+                                    appState.setCollectionCover(file)
+                                }
                             }
+                            Divider()
                         }
-                        Divider()
                         Button("Move to Trash", role: .destructive) {
-                            Task { await appState.deletion.deleteWithBurn(file) }
+                            let targets = appState.effectiveSelectionURLs(fallback: p)
+                            let byPath = Dictionary(
+                                appState.visibleFiles.map { ($0.url.standardizedFileURL.path, $0) },
+                                uniquingKeysWith: { a, _ in a })
+                            Task { @MainActor in
+                                for url in targets {
+                                    if let node = byPath[url.standardizedFileURL.path] {
+                                        await appState.deletion.deleteWithBurn(node)
+                                    }
+                                }
+                            }
                         }
                     }
             }
@@ -365,10 +431,18 @@ private struct TileView: View {
             .clipShape(RoundedRectangle(cornerRadius: isImageKind ? 0 : 8,
                                         style: .continuous))
             .overlay {
-                if appState.selectedFile?.id == file.id {
-                    RoundedRectangle(cornerRadius: isImageKind ? 0 : 8,
-                                     style: .continuous)
-                        .stroke(Color.accentColor.opacity(0.8), lineWidth: 2)
+                // Selected (multi-select) OR the open file get an accent wash
+                // + border. Inside the scaleEffect below, so they grow with the
+                // hover zoom instead of the image spilling past them. The tint
+                // tracks the system accent (light blue by default).
+                if appState.selectedFiles.contains(file.url.standardizedFileURL.path)
+                    || appState.selectedFile?.id == file.id {
+                    RoundedRectangle(cornerRadius: isImageKind ? 0 : 8, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.22))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: isImageKind ? 0 : 8, style: .continuous)
+                                .stroke(Color.accentColor, lineWidth: 3)
+                        }
                 }
             }
             .scaleEffect(hovering ? 1.025 : 1)

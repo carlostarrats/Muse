@@ -78,6 +78,13 @@ are the load-bearing reference artifacts.
 | Polish 6 — screenshot intent collections + Galaxy taste-map (color by intent) | ✅ shipped | `main` |
 | Polish 7 — grid virtualization (perf) + thumbnail prewarm; cloud/galaxy views removed | ✅ shipped | `main` |
 | Polish 8 — iCloud sync folder (portable `.muse` sidecars, no re-Vision) + macOS share (Share button + "Send to Muse" extension) | ✅ shipped | `feat/icloud-sync-share` |
+| Polish 9 — Page Up/Down grid scrolling (Fn+Arrow on Mac) | ✅ built, unmerged | `feat/page-scroll` |
+| Polish 10 — share a collection as a paginated 11×14 PDF (Save to… / Share menu) | ✅ built, unmerged | `feat/collection-pdf-share` |
+| Polish 11 — grid multi-select + actions (collection/tag/share/move), drag-to-move, Reveal in Finder, native search field | ✅ built, unmerged | `feat/multi-select` |
+
+> **2026-06-16 session — three feature branches off `main`, not yet merged.**
+> Each has its own spec + plan in `docs/superpowers/`. Merge order is
+> independent; reconcile this file's session log + architecture map on merge.
 
 `feat/file-viewer-rewrite` was merged to `main` after Phase 8
 finished — see the merge commit. The branch was kept around as an
@@ -543,6 +550,56 @@ genuinely incompatible with Sparkle, so this was surfaced before any code).
   assets per-tag so cross-tag deltas/old entries would 404). Full release flow:
   `docs/RELEASING.md`; one command: `scripts/release.sh <version> --publish`.
 
+### Three feature branches — 2026-06-16 (off `main`, built + reviewed, unmerged)
+
+A long session that shipped three independent features, each as its own
+branch with a spec + plan under `docs/superpowers/`. All build green; the
+multi-select work went through two adversarial review rounds.
+
+- **Page Up/Down grid scrolling** (`feat/page-scroll`). `Fn+Arrow` (the Mac
+  "Page Up/Down" — most Mac keyboards have no dedicated keys) or real Page
+  keys jump the grid one screenful, in the main/tag/in-collection grids and
+  the Collections page. Pure `PageScroll.newOriginY` math (overlap + clamp,
+  unit-tested) + `PageScrollCatcher`, an NSView that becomes first responder
+  (KeyCaptureView pattern), resolves the backing `NSScrollView` via
+  `enclosingScrollView`, animates the clip view, and `flashScrollers()`.
+  Reclaims focus on a grid click; ignores keys while editing text or with a
+  hero viewer open; forwards non-page keys down the responder chain.
+  Spec/plan: `2026-06-16-collection-pdf-share` siblings.
+
+- **Share a collection as a PDF** (`feat/collection-pdf-share`). A Share
+  control in the in-collection header (left of the trash) opens a **menu**:
+  **Save to…** (`NSSavePanel`, defaulted to Desktop — no new entitlement) and
+  **Share** (unmodified `NSSharingServicePicker`). Both build a paginated
+  **11×14in portrait** PDF of the collection's images — masonry pack, whole
+  images (no crop), title + count at 24pt on page 1 only, column density =
+  the user's `gridColumnCount`. `CollectionPDFLayout` (pure, paginated, no
+  image split across pages, unit-tested) + `CollectionPDFExporter` (ImageIO
+  downsample off-main → CGPDFContext, CoreText header — no AppKit off-main).
+
+- **Grid multi-select + actions** (`feat/multi-select`). Single-click selects
+  (instant, manual double-click detection — no SwiftUI count:1/2 delay),
+  Cmd-click toggles, Shift-click ranges, double-click opens. Selection =
+  `AppState.selectedFiles: Set<String>` of standardized paths (pure
+  `GridSelection` math, unit-tested); accent wash + border inside the tile so
+  it scales with the hover zoom; `.isSelected` VoiceOver trait + spoken count.
+  Selection-aware right-click menu (`SelectionActionsMenu`): **Add to
+  Collection** (`CollectionStore.addFile`), **Add Tag** (existing labels,
+  preloaded into `AppState.allTagLabels` — a context-menu `.task` doesn't fire
+  reliably), **Share**, **Move to Folder** (keyboard/VoiceOver-accessible
+  parallel to drag). **Drag** a selection onto a sidebar folder to **move**
+  (`FileMover` — roots already hold RW security scope, so no per-move scope;
+  failures → alert). **Reveal in Finder** on sidebar folders. **Deselect** via
+  empty-grid tap, the sidebar surface, and an `OutsideClickDeselect` mouse
+  monitor (clicks outside the grid scroll view); also on folder/collection/
+  tag/search switches and Edit ▸ **Deselect All** (⌘⇧A) / **Select All** (⌘A,
+  which defers to a focused text field). The search bar was replaced with a
+  native **`NSSearchField`** (system focus ring, clear button, accessibility;
+  appearance follows the mood). Known limitation: the sidebar drop reads the
+  grid selection, so dragging a *Finder* file onto a sidebar folder would move
+  the grid selection rather than import the dropped file (rare; not fixed to
+  avoid risking the verified in-app drag).
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
@@ -561,7 +618,12 @@ Muse/Muse/
   Models/
     AppState.swift                 @MainActor singleton — roots, active folder,
                                    current files, selected file, sort mode,
-                                   search, collection + tag filters, mood
+                                   search, collection + tag filters, mood. Grid
+                                   MULTI-selection (selectedFiles: Set<String> of
+                                   paths + anchor): applyClick / clearSelection /
+                                   selectAllVisible / effectiveSelectionURLs;
+                                   reloadAfterMove; allTagLabels preload
+                                   (feat/multi-select)
     AssetKind.swift                kind enum + extension/UTType detection
     FileNode.swift                 in-memory enumerated-file value type
     Root.swift                     security-scoped bookmark wrapper
@@ -571,6 +633,9 @@ Muse/Muse/
     Mood.swift                     Light / Dark / Auto (day↔night) / Custom HSB
                                    (AutoTint retired)
   Filesystem/
+    FileMover.swift                move(_:into:) via FileManager.moveItem; skips
+                                   name collisions, returns failures; roots already
+                                   hold RW security scope (feat/multi-select)
     BookmarkStore.swift            UserDefaults-backed root bookmarks; lifecycle
                                    start/stop access for sandbox
     FolderTree.swift               lazy hierarchical tree + FolderReader
@@ -639,13 +704,28 @@ Muse/Muse/
     FontViewerView.swift           process-scope font registration
     ViewerChrome.swift             dimmed bg + close button + Esc dismiss
   Views/
-    SidebarView.swift              multi-root OutlineGroup tree + starred section
+    SidebarView.swift              multi-root OutlineGroup tree + starred section;
+                                   file-URL drop on folder rows MOVES the grid
+                                   selection there (FileMover) with a drop-target
+                                   highlight; Reveal in Finder menu item
+                                   (feat/multi-select)
     GridView.swift                 VIRTUALIZED masonry grid — precomputes tile
                                    frames (MasonryGeometry from AspectRatioCache)
                                    and renders only viewport tiles (+overscan);
                                    column-count slider; tiles fade in as thumbs
                                    land. The ONLY grid view (cloud/galaxy retired
-                                   2026-06-13; water effect removed 2026-06-13)
+                                   2026-06-13; water effect removed 2026-06-13).
+                                   Click = select (instant; Cmd toggles, Shift
+                                   ranges), double-click opens; accent wash+border
+                                   inside the tile (scales w/ hover); .onDrag carries
+                                   the file URL; selection-aware contextMenu
+                                   (feat/multi-select)
+    SelectionMenu.swift            SelectionActionsMenu — Add to Collection / Add
+                                   Tag / Share / Move to Folder over the effective
+                                   selection (feat/multi-select)
+    OutsideClickDeselect.swift     0×0 NSView + window leftMouseDown monitor that
+                                   clears the selection on any click outside the
+                                   grid's enclosingScrollView (feat/multi-select)
     AspectRatioCache.swift         per-file aspect (h÷w) for layout: bulk DB
                                    width/height + ImageIO header fallback, off-main
     CollectionsPage.swift          dedicated Collections page (toolbar
@@ -678,7 +758,13 @@ Muse/Muse/
                                    (Cloud*/Galaxy*/SimilarityLayout/SceneProjection)
                                    were removed 2026-06-13 — see session log.
   Components/
-    SearchBar.swift                debounced FTS5 search, scoped to sidebar folder
+    SearchBar.swift                debounced FTS5 search, scoped to sidebar folder.
+                                   Native NSSearchField (system focus ring, clear
+                                   button, accessibility; appearance follows mood)
+                                   wrapped in NSViewRepresentable (feat/multi-select)
+    GridSelection.swift            pure selection math (single / Cmd-toggle /
+                                   Shift-range → new set + anchor), unit-tested
+                                   (feat/multi-select)
     MasonryGeometry.swift          pure masonry packing (frames + height) from
                                    aspect ratios — feeds GridView's virtualization
                                    (replaced the old MasonryLayout: Layout, deleted

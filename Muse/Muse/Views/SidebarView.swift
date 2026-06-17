@@ -12,6 +12,7 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import AppKit
 
 struct SidebarView: View {
     @EnvironmentObject var appState: AppState
@@ -83,7 +84,13 @@ struct SidebarView: View {
         .frame(minWidth: 220)
         // One continuous card: the opaque surface flows up behind the title
         // bar and curves with the window's top corner, like Lineform.
-        .background(cardColor.ignoresSafeArea())
+        // Tapping the empty sidebar surface deselects the grid (folder rows and
+        // the add button consume their own taps).
+        .background {
+            cardColor.ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { appState.clearSelection() }
+        }
     }
 
     // MARK: - Empty state
@@ -241,6 +248,8 @@ private struct FolderTreeNode: View {
     let depth: Int
 
     @State private var isHovered = false
+    /// True while grid images are being dragged over this folder.
+    @State private var dropTargeted = false
 
     private var hasChildren: Bool { !node.children.isEmpty }
 
@@ -313,7 +322,13 @@ private struct FolderTreeNode: View {
         .frame(height: 28)
         .background {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(rowFill)
+                .fill(dropTargeted ? Color.accentColor.opacity(0.22) : rowFill)
+        }
+        .overlay {
+            if dropTargeted {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .strokeBorder(Color.accentColor, lineWidth: 2)
+            }
         }
         .contentShape(Rectangle())
         .onHover { hovering in
@@ -332,6 +347,19 @@ private struct FolderTreeNode: View {
             }) {
                 Button("Remove Folder") { appState.removeRoot(r) }
             }
+            Divider()
+            Button("Reveal in Finder") {
+                NSWorkspace.shared.activateFileViewerSelecting([node.url])
+            }
+        }
+        // Drop grid images here to move them into this folder. The grid's
+        // .onDrag selects the dragged tile first, so the current selection is
+        // the set to move.
+        .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { _ in
+            let selected = appState.effectiveSelectionURLs(fallback: "")
+            guard !selected.isEmpty else { return false }
+            appState.reloadAfterMove(failed: FileMover.move(selected, into: node.url))
+            return true
         }
     }
 

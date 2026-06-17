@@ -49,6 +49,66 @@ final class AppState: ObservableObject {
     /// Currently selected file (drives preview/detail).
     @Published var selectedFile: FileNode?
 
+    /// Multi-selection in the grid (standardized file paths). Separate from
+    /// `selectedFile`, which is the image OPEN in the hero viewer.
+    @Published var selectedFiles: Set<String> = []
+    /// Anchor for Shift-range selection.
+    @Published var selectionAnchor: String? = nil
+    /// All existing tag labels (vision + manual), preloaded so the selection
+    /// menu can list them synchronously — a context-menu `.task` doesn't fire
+    /// reliably in the NSMenu bridge.
+    @Published var allTagLabels: [String] = []
+
+    func refreshTagLabels() {
+        Task { @MainActor in allTagLabels = await TagStore.shared.allLabels() }
+    }
+    /// Names of files a recent move couldn't relocate (drives an alert).
+    @Published var moveFailureNames: [String] = []
+
+    /// Visible files in grid order, keyed by standardized path — the order
+    /// Shift-range walks.
+    var selectionOrder: [String] {
+        visibleFiles.map { $0.url.standardizedFileURL.path }
+    }
+
+    func applyClick(_ click: GridSelection.Click) {
+        let r = GridSelection.apply(click, to: selectedFiles,
+                                    anchor: selectionAnchor, order: selectionOrder)
+        selectedFiles = r.selection
+        selectionAnchor = r.anchor
+    }
+
+    func clearSelection() {
+        guard !selectedFiles.isEmpty || selectionAnchor != nil else { return }
+        selectedFiles = []
+        selectionAnchor = nil
+    }
+
+    /// Select every visible image (the Edit ▸ Select All command).
+    func selectAllVisible() {
+        let paths = selectionOrder
+        selectedFiles = Set(paths)
+        selectionAnchor = paths.first
+    }
+
+    /// URLs for the effective selection (the selection, or `[fallback]` if the
+    /// fallback path isn't part of the selection). An empty `fallback` yields
+    /// only the current selection.
+    func effectiveSelectionURLs(fallback path: String) -> [URL] {
+        let paths: Set<String>
+        if !path.isEmpty && !selectedFiles.contains(path) {
+            paths = [path]
+        } else {
+            paths = selectedFiles
+        }
+        let byPath = Dictionary(visibleFiles.map { ($0.url.standardizedFileURL.path, $0.url) },
+                                uniquingKeysWith: { a, _ in a })
+        // Resolve from visibleFiles when possible; otherwise rebuild the URL
+        // from the (absolute) path so a selected file that isn't currently in
+        // view is never silently dropped from an action.
+        return paths.map { byPath[$0] ?? URL(fileURLWithPath: $0) }
+    }
+
     /// Set true to ask the hero viewer to run its close flight (Esc path).
     /// The viewer resets it to false in onCloseFinished.
     @Published var viewerClosing = false
@@ -141,6 +201,7 @@ final class AppState: ObservableObject {
     /// member path set asynchronously; always go through this method
     /// rather than setting `activeCollectionID` directly.
     func setActiveCollection(_ id: String?) {
+        clearSelection()
         // ID and member paths land in ONE animated transaction, so the grid
         // cross-fades once to the filtered set — no intermediate frame where
         // the header swapped but the grid hasn't (the old "flash").
@@ -238,6 +299,7 @@ final class AppState: ObservableObject {
     /// Set (or clear, with nil) the tag chip filter — same single-transaction
     /// animated swap as the collection filter.
     func setActiveTag(_ label: String?) {
+        clearSelection()
         let curve = Animation.easeInOut(duration: 0.28)
         tagRequestToken += 1
         guard let label else {
@@ -516,6 +578,7 @@ final class AppState: ObservableObject {
         // (reloadCurrentFiles) and indexing kicks off once files land.
         selectedFolder = folder
         selectedFile = nil
+        clearSelection()
         // A tag filter from the previous folder mustn't empty the new one.
         if activeTagLabel != nil { setActiveTag(nil) }
         startWatching(folder.url)
@@ -598,6 +661,25 @@ final class AppState: ObservableObject {
     /// selection); without it the current list stays put until the new one is
     /// ready (live FSEvents reloads — no flash). `thenIndex` runs the indexing
     /// + thumbnail-prewarm + analysis pass once the files have landed.
+    /// Public reload entry point (e.g. after a drag-move changes the folder).
+    func reloadCurrentFilesPublic() { reloadCurrentFiles(thenIndex: true) }
+
+    /// After a move: clear selection, reload the current folder, and (if any
+    /// failed) surface a brief alert listing the unmoved files.
+    func reloadAfterMove(failed: [URL]) {
+        clearSelection()
+        // If the open viewer's file was moved out from under it, dismiss it
+        // rather than leave a broken image.
+        if let open = selectedFile,
+           !FileManager.default.fileExists(atPath: open.url.path) {
+            selectedFile = nil
+        }
+        reloadCurrentFilesPublic()
+        if !failed.isEmpty {
+            moveFailureNames = failed.map { $0.lastPathComponent }
+        }
+    }
+
     private func reloadCurrentFiles(showLoading: Bool = false, thenIndex: Bool = false) {
         guard let folder = selectedFolder else {
             currentFiles = []
