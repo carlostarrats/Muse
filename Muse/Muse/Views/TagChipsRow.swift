@@ -63,6 +63,13 @@ struct TagChipsRow: View {
                 // jump on selection. (The old inline collections row that the
                 // filtered/unfiltered split accommodated is gone.)
                 .padding(.bottom, 24)
+            } else {
+                // No tags → no chips. Reserve ONLY the chip row's top clearance
+                // (the 10pt gap below the toolbar), NOT the chip + bottom gap, so
+                // the first image row sits right where the chips would — raised,
+                // not the full dead space — while still clearing the floating
+                // toolbar so the top row never hides behind the search bar.
+                Color.clear.frame(height: 10)
             }
         }
         .task(id: reloadKey) { await loadLabels() }
