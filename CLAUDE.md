@@ -813,6 +813,16 @@ it a bug). Proven live: 12 welded identities, e.g. a flavicon screenshot at
   migration; the welded flavicon screenshot's 7 tags are now independent in
   Desktop/flavicon, Saved Inspo, and .Trash/flavicon. Tests: `TagScopeTests`,
   `TagParentDirMigrationTests`. Debug build + full `MuseTests` suite green.
+- **QA review pass (fixed):** an adversarial multi-agent review found ONE
+  remaining `file_id`-only tag read that reached the UI — `ViewerFileDetails`
+  (the hero viewer's tag panel) showed the UNION of a duplicate's tags across
+  folders AND its remove-pill (deletes by row id) could delete a tag belonging
+  to another folder's copy. Now scoped by `parent_dir`
+  (`testTagsScopedToFolderNotDuplicate`). Also dropped a redundant
+  `tags_file_id_idx` and added `TagFolderScopeTests` for the new
+  `inheritVisionTags` / `unionTags` per-folder behaviors. A second review round
+  confirmed the leak class is fully closed (every tag path scoped or a
+  documented global) with build + suite green.
 
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
