@@ -69,6 +69,7 @@ private struct ActiveCollectionHeader: View {
                 EditPill { startEdit() }
             }
             Spacer()
+            ShareCollectionButton(title: loaded.collection.name, count: loaded.aliveCount)
             TrashButton { confirmDelete = true }
         }
         .onChange(of: loaded.collection.id) { _, _ in cancelEdit() }
