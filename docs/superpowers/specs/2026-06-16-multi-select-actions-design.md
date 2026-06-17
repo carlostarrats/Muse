@@ -148,3 +148,15 @@ next to "Remove Folder":
 - Selecting non-image files for these actions (selection is image-grid only;
   the actions target images).
 - Marquee/rubber-band selection (gesture-click selection only).
+
+## Known limitations (as built)
+
+- **Sidebar drop reads the grid selection, not the dropped payload.** Dragging
+  a *Finder* file onto a sidebar folder would move the current grid selection
+  (or no-op if nothing is selected) rather than import the dropped file.
+  Flagged in code review; left as-is to avoid changing the verified in-app
+  drag mechanism. Importing external files isn't a goal of this feature.
+- **Clicking the empty toolbar/title-bar area beside the search field does not
+  deselect** — it's a system `NSToolbar`, not a tappable view. The search
+  field, sidebar, grid, Edit ▸ Deselect All (⌘⇧A), and context switches all
+  clear the selection, so a working spot is always close by.
