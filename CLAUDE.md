@@ -674,6 +674,103 @@ this same machine/Apple ID).
   phantom registrations don't accumulate. A backup of the container's current
   contents was taken to `~/Documents/Muse-iCloud-backup-<timestamp>/`.
 
+### In-place edit refresh — change detection overhaul — 2026-06-17 (on `main`)
+
+Fixed "I crop/edit an image (Apple Preview, Photoshop) and the thumbnail never
+updates — not on edit, not even after removing + re-adding the folder." Root
+cause was **four independent caches keyed purely by file path**, with no
+content/mtime signal, so a file re-saved at the same path served stale data
+forever. User requirement: **parity everywhere — local AND the iCloud "Muse"
+folder must refresh identically.**
+
+- **Root causes (all path-keyed, no change signal):** (1) `ThumbnailCache` key
+  was `url.absoluteString | WxH@scale` — the on-disk PNG persists across launches
+  AND folder remove/re-add (same URL → same key), so the old thumbnail was
+  immortal. (2) The `FolderWatcher` reload passed `thenIndex: false`, so a live
+  edit never re-indexed/re-analyzed/prewarmed — tags/colors/OCR/dimensions stayed
+  frozen, and a newly-added file wasn't tagged until you reselected the folder.
+  (3) `AspectRatioCache.resolved` is permanent per session, so a crop that
+  changed proportions kept the old masonry frame. (4) iCloud files are never
+  re-hashed by `Indexer.isUnchanged` (it trusts the stored hash because iCloud
+  oscillates size/mtime), so iCloud edits didn't re-analyze at all.
+- **The fix (forward code, mirrors the existing local/iCloud split):**
+  - **`ThumbnailCache.invalidate(_ url:)`** drops mem + on-disk PNGs for every
+    rendered variant (`renderedVariants` = 320@2, 160@2 — single source of truth),
+    deleting disk **synchronously** so a re-fetch can't read the stale PNG back.
+    The cache key now normalizes on `standardizedFileURL.path` (NOT absoluteString)
+    so a tile's enumerated URL and an invalidate()/reconstructed-from-path URL hash
+    to the SAME key (a one-time orphan+regen of old PNGs).
+  - **`Indexer`** `reconcile`/`indexFile` now return `Bool` (true = in-place
+    content change), and `indexBatch` returns the changed URLs + gained `force`
+    (re-hash everything, skipping the size/mtime/known-hash shortcut) and `silent`
+    (no progress pill) params. A pure edit-in-place also **clears `analyzed_hash`**
+    so the analyze pass regenerates tags/palette/OCR/dimensions.
+  - **`FolderWatcher`** now delivers the FSEvents **changed paths**; the pure,
+    unit-tested `FolderEventFilter.mediaChanges(paths:folder:recursive:)` keeps
+    only viewable files inside the folder (drops hidden / `.muse` sidecar dirs /
+    out-of-folder / subfolder-when-shallow).
+  - **`AppState`** gained `contentVersion: [path:Int]` + `contentToken(for:)` +
+    `markContentChanged(_:)` (invalidate thumbnails + bump version). The grid
+    tile's load `.task` is keyed on `TileLoadID(url, version)`, so a bump
+    re-decodes the now-fresh bytes. `handleFolderEvent` force-re-hashes ONLY the
+    specifically-changed media (works for both zones — driven by a real FSEvents
+    write, including iCloud sync-in, not by polling oscillating metadata), drops
+    their art, prewarms + re-analyzes (analyzePending self-gates on stale
+    analyzed_hash → covers new AND edited), then reloads the listing for
+    adds/removes/renames. No folder-wide reindex per event.
+  - **iCloud cold-start parity (edits made while Muse was closed):** a fresh
+    folder selection runs a **background, silent, content-hash** verify pass
+    (`scheduleIndexing(verifyICloud:)` → `indexBatch(force:silent:)`) over the
+    iCloud-zone files; only genuinely-changed files get art dropped + re-analyzed.
+- **OVERRIDE of prior guidance (deliberate, user-directed):** the old rule "do
+  NOT re-check iCloud files; trust the stored hash" was about **size/mtime**
+  comparison (which oscillates and would re-index the whole folder every visit).
+  This change does NOT reintroduce size/mtime for iCloud — it uses **content
+  hashing** (reliable) driven by FSEvents (live) + a background verify (cold
+  start). The trade-off is real: the cold-start verify re-reads downloaded iCloud
+  files' bytes once per folder-open (background/silent). Accepted for parity.
+  Live edits in BOTH zones are cheap + reliable via FSEvents.
+- Tests: `FolderEventFilterTests` (pure path filter). Full suite green; Debug
+  build green.
+- **QA review pass (fixed):** (1) the FSEvents callback cast `eventPaths` via
+  `unsafeBitCast(_, to: NSArray.self)`, but without `kFSEventStreamCreateFlagUseCFTypes`
+  the framework delivers a raw C `char**` — undefined behavior (crash/garbage)
+  on the FIRST file change. Added the flag so `eventPaths` is a CFArray of
+  CFString (toll-free bridged). (2) `contentVersion` is now reset on a fresh
+  folder load so it can't accumulate across a long session (the on-disk
+  thumbnail is path-keyed and already regenerated on edit, so the reset can't
+  strand stale art).
+
+### Sort-direction toggle — 2026-06-17 (on `feat/in-place-edit-refresh`)
+
+Every sort mode was locked to one direction (date→newest, name→A→Z, size→largest).
+Added a toolbar **direction arrow** immediately right of the sort menu that flips
+the active mode's order. `AppState.sortReversed` (+ effective `sortAscending` =
+`defaultAscending` XOR reversed) feeds a new `reversed` param on
+`SmartSorter.apply` (it reverses the fully-ordered array — uniform across all
+modes incl. Color/Shape). `SortMode.defaultAscending` drives the arrow (up =
+ascending); `SortMode.directionLabel(ascending:)` gives the mode-aware tooltip
+("Newest first"/"Oldest first", "A → Z"/"Z → A", …). The toggle is global (not
+per-mode) and disabled on the Collections page like the sort menu. Tests:
+`SortDirectionTests`. Build + suite green.
+
+### Cosmetic tidy-ups — 2026-06-17 (on `feat/in-place-edit-refresh`)
+
+Cleared the two `docs/possible-updates.md` code-tidiness items (pure refactors,
+no behavior change; build + full suite green):
+
+- **Split `AppState.swift`** (1012 → 782 LOC). Grid multi-selection moved to
+  `AppState+Selection.swift`; tag/collection filtering moved to
+  `AppState+Filters.swift`. Stored `@Published` state stays in the core class
+  (extensions can't hold stored properties); the only access change was making
+  `collectionRequestToken` / `tagRequestToken` internal (Swift `private` is
+  file-scoped, so the moved methods couldn't otherwise reach them). Methods moved
+  verbatim. `@MainActor` isolation propagates to same-module extensions, so no
+  re-annotation needed.
+- **Renamed `Muse/Fluid/` → `Muse/Effects/`** (held only `FadeOutModifier.swift`;
+  the water/burn shaders are long gone). No code or pbxproj references — it's a
+  filesystem-synchronized group, so the `git mv` is the whole change.
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
@@ -691,13 +788,22 @@ Muse/Muse/
                                    chips; toolbar; menu-bar Tags/Collections
   Models/
     AppState.swift                 @MainActor singleton — roots, active folder,
-                                   current files, selected file, sort mode,
-                                   search, collection + tag filters, mood. Grid
-                                   MULTI-selection (selectedFiles: Set<String> of
-                                   paths + anchor): applyClick / clearSelection /
-                                   selectAllVisible / effectiveSelectionURLs;
-                                   reloadAfterMove; allTagLabels preload
-                                   (feat/multi-select)
+                                   current files, selected file, sort mode +
+                                   direction, search, mood, watcher, indexing.
+                                   The stored @Published state + folder/roots/
+                                   search/watcher/indexing logic; filter + grid-
+                                   selection methods split into the extensions
+                                   below (2026-06-17 tidy-up). reloadAfterMove;
+                                   allTagLabels preload (feat/multi-select)
+    AppState+Selection.swift       extension: grid MULTI-selection (selectedFiles:
+                                   Set<String> of paths + anchor) — applyClick /
+                                   clearSelection / selectAllVisible /
+                                   effectiveSelectionURLs / selectionOrder
+    AppState+Filters.swift         extension: collection + tag-chip filtering —
+                                   visibleFiles / tagSourceFiles / setActive-
+                                   Collection / setActiveTag / removeTag /
+                                   removeFromCollection / setCollectionCover /
+                                   toggleCollectionsPage / bulkTagCommandsAvailable
     AssetKind.swift                kind enum + extension/UTType detection
     FileNode.swift                 in-memory enumerated-file value type
     Root.swift                     security-scoped bookmark wrapper
@@ -713,11 +819,17 @@ Muse/Muse/
     BookmarkStore.swift            UserDefaults-backed root bookmarks; lifecycle
                                    start/stop access for sandbox
     FolderTree.swift               lazy hierarchical tree + FolderReader
-    FolderWatcher.swift            FSEvents-backed live watcher
+    FolderWatcher.swift            FSEvents-backed live watcher; delivers the
+                                   changed paths. FolderEventFilter (pure) keeps
+                                   only viewable in-folder files (drops hidden/
+                                   .muse/out-of-folder) — see 2026-06-17 session
     StarStore.swift                SQLite-backed starred folders
     ThumbnailCache.swift           QLThumbnail + AVAssetImageGenerator (videos);
                                    off-main, ordered (top→bottom) load; 2-tier
-                                   cache (NSCache 512MB cost + on-disk LRU 2GB)
+                                   cache (NSCache 512MB cost + on-disk LRU 2GB).
+                                   Key normalized on standardized path; invalidate(_:)
+                                   drops mem+disk for all renderedVariants so an
+                                   in-place edit regenerates (2026-06-17)
     Sidecar.swift                  portable per-asset metadata value type
                                    (Codable); maps to/from FileRow+TagRow;
                                    deterministic conflict merge (manual-tag wins)
@@ -737,7 +849,10 @@ Muse/Muse/
   Indexing/
     HashService.swift              streaming SHA-256; nil on dataless iCloud reads
     Indexer.swift                  identity reconciliation matrix (§4); size+mtime
-                                   fast path; skips not-downloaded iCloud items
+                                   fast path; skips not-downloaded iCloud items.
+                                   reconcile/indexFile return "content changed",
+                                   indexBatch returns changed URLs + force/silent
+                                   (re-hash for edits + iCloud verify) (2026-06-17)
   Intelligence/
     Vision/
       VisionServices.swift         classify/OCR/faces/feature print/dom color
@@ -857,14 +972,15 @@ Muse/Muse/
                                    PDF (no image split across pages), unit-tested
     CollectionPDFExporter.swift    ImageIO downsample (off-main) → CGPDFContext;
                                    CoreText 11×14 header (feat/collection-pdf-share)
-  Fluid/                           (legacy dir name; water ripple removed
-                                   2026-06-13 and the burn-up delete SHADER
-                                   removed too — NO Metal shaders remain in app)
+  Effects/                         (was Fluid/, renamed 2026-06-17; water ripple
+                                   removed 2026-06-13 and the burn-up delete
+                                   SHADER removed too — NO Metal shaders remain)
     FadeOutModifier.swift          animatable staggered opacity fade for the
                                    delete sequence (replaced the BurnUp shader)
   Settings/
-    SettingsView.swift             placeholder; real Preferences pane is
-                                   future work
+    SettingsView.swift             vestigial placeholder view; no Preferences
+                                   pane is planned (settings live in the
+                                   sidebar / toolbar / menus)
   Muse.entitlements                app-sandbox + user-selected.read-write +
                                    bookmarks.app-scope + iCloud Documents +
                                    network.client (Sparkle update fetch ONLY —
@@ -936,7 +1052,8 @@ before implementation.
 1. Open `Muse/Muse.xcodeproj` in Xcode 16+.
 2. Build & run (Cmd+R). The app starts on a clean shell — click
    "Add Folder" in the sidebar to point Muse at any folder on disk.
-3. Toolbar (left → right): sidebar toggle · sort · show-subfolders ·
+3. Toolbar (left → right): sidebar toggle · sort · sort-direction arrow
+   (flips the active mode's order — newest↔oldest, A↔Z, …) · show-subfolders ·
    search (center) · Collections (square.stack.3d.up) · background mood ·
    ⓘ About. (The grid/cloud/galaxy view picker and the water effect were
    removed 2026-06-13; the clear-collection ✕ was removed in favor of back
@@ -953,28 +1070,20 @@ before implementation.
   the pre-rewrite water-toggle commit (older); `feat/file-viewer-rewrite`
   is the source-of-truth branch for the rewrite progression.
 - Test coverage: none. (Test suites are a separate workstream.)
-- Known soft spots:
-  - Code syntax highlighting (renders as plain monospaced for now).
-  - iCloud Drive: dataless files are skipped on index/hash until
-    downloaded (no empty-hash corruption); download-state badges deferred.
-  - Saved smart searches (schema exists; UI is post-v1).
-  - Archive browse-without-extracting (uses Quick Look).
-  - Onboarding flow (separate design pass needed).
-  - Settings/Preferences pane (placeholder only).
-  - Top-edge "gradual blur" effect: attempted and reverted; prototype
-    reference kept at `docs/superpowers/assets/gradual-blur-prototype.html`.
-  - iCloud sidecar hydration — two inherent (by-design, not bugs) behaviors:
-    (1) **OCR full-text search is degraded on hydrate-only devices.** Sidecars
-    don't carry OCR text (large; intentionally excluded), so a device that only
-    hydrated a file (never ran Vision locally) matches FTS on basename + caption
-    only, not OCR'd text. The file is marked analyzed, so it won't re-Vision to
-    recover OCR. Intent IS carried, so intent collections are unaffected.
-    (2) **Duplicate identical content split across subfolders.** Sidecars live
-    in a per-folder `.muse/` keyed by content hash; byte-identical files in
-    different subfolders of the iCloud zone only get a sidecar beside the copy
-    that was analyzed, so the other copy won't hydrate on a fresh device until
-    its own analyze pass runs. A future fix would be a single zone-root `.muse/`
-    index instead of per-folder.
+- Current by-design behaviors (NOT bugs, NOT pending work — documented so a
+  future session doesn't mistake them for defects):
+  - iCloud Drive: dataless (not-yet-downloaded) files are skipped on
+    index/hash until macOS downloads them (avoids empty-hash corruption).
+  - iCloud sidecar hydration — two inherent behaviors: (1) **OCR full-text
+    search is degraded on hydrate-only devices.** Sidecars don't carry OCR text
+    (large; intentionally excluded), so a device that only hydrated a file
+    (never ran Vision locally) matches FTS on basename + caption only, not OCR'd
+    text. The file is marked analyzed, so it won't re-Vision to recover OCR.
+    Intent IS carried, so intent collections are unaffected. (2) **Byte-identical
+    content split across subfolders.** Sidecars live in a per-folder `.muse/`
+    keyed by content hash; identical files in different subfolders of the iCloud
+    zone only get a sidecar beside the copy that was analyzed, so the other copy
+    won't hydrate on a fresh device until its own analyze pass runs.
 
 ## Working with this codebase
 

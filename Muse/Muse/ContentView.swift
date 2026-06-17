@@ -72,10 +72,18 @@ struct ContentView: View {
             }
             .toolbar {
                 // Far left, beside the sidebar toggle — fully separate from search.
+                // Sort mode + its direction arrow share ONE item (an HStack) so
+                // macOS renders them as a single "sorting" cluster — otherwise
+                // separate adjacent items fuse the arrow into the folder
+                // (show-subfolders) cluster on its right.
                 ToolbarItem(placement: .navigation) {
-                    sortMenu
-                        // Sorting is meaningless on the Collections card grid.
-                        .disabled(isCollectionsPage)
+                    HStack(spacing: 2) {
+                        sortMenu
+                        // Flip the active sort mode's direction (newest↔oldest, A↔Z, …).
+                        sortDirectionButton
+                    }
+                    // Sorting is meaningless on the Collections card grid.
+                    .disabled(isCollectionsPage)
                 }
 
                 // Its own item (own surface), sitting next to sort.
@@ -236,6 +244,20 @@ struct ContentView: View {
             Image(systemName: "arrow.up.and.down.text.horizontal")
         }
         .help("Sort: \(appState.sortMode.displayName)")
+    }
+
+    /// Flips the current sort mode's direction. The arrow points up for an
+    /// ascending order, down for descending; the tooltip spells out what that
+    /// means for the active mode (e.g. "Newest first" vs "Oldest first").
+    private var sortDirectionButton: some View {
+        Button {
+            appState.toggleSortDirection()
+        } label: {
+            Image(systemName: appState.sortAscending ? "arrow.up" : "arrow.down")
+        }
+        .help(appState.sortMode.directionLabel(ascending: appState.sortAscending))
+        .accessibilityLabel("Sort direction: "
+                            + appState.sortMode.directionLabel(ascending: appState.sortAscending))
     }
 
     @ViewBuilder

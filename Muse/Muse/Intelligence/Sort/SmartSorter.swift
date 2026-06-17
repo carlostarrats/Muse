@@ -36,6 +36,28 @@ enum SortMode: String, CaseIterable, Identifiable {
         default: return false
         }
     }
+
+    /// The direction this mode sorts in by DEFAULT (when `sortReversed` is
+    /// false) — matches the comparators in `SmartSorter.apply`. Drives the
+    /// toolbar direction arrow (up = ascending).
+    var defaultAscending: Bool {
+        switch self {
+        case .name, .kind, .dominantColor: return true   // A→Z / first bucket first
+        case .dateModified, .dateCreated, .size, .shape: return false // newest/largest/widest first
+        }
+    }
+
+    /// Human-readable description of the CURRENT direction, for the arrow's
+    /// tooltip. `ascending` is the effective direction (default XOR reversed).
+    func directionLabel(ascending: Bool) -> String {
+        switch self {
+        case .dateModified, .dateCreated: return ascending ? "Oldest first" : "Newest first"
+        case .name, .kind:                return ascending ? "A → Z" : "Z → A"
+        case .size:                       return ascending ? "Smallest first" : "Largest first"
+        case .shape:                      return ascending ? "Tall → wide" : "Wide → tall"
+        case .dominantColor:              return ascending ? "Ascending" : "Descending"
+        }
+    }
 }
 
 // Nonisolated: pure value-type sorting plus thread-safe DB reads
@@ -43,10 +65,18 @@ enum SortMode: String, CaseIterable, Identifiable {
 // thread-safe). This lets folder loads run the sort off the main thread.
 nonisolated enum SmartSorter {
 
-    /// Sort (and optionally group) files. For smart sorts, looks up the
-    /// indexed FileRow and uses its data; falls back to a stable date-modified
-    /// order for any files not yet indexed.
-    static func apply(_ mode: SortMode, to files: [FileNode]) -> [FileNode] {
+    /// Sort files by `mode`. `reversed` flips the result so any mode can run
+    /// in either direction (the toolbar direction arrow). Reversing the fully
+    /// ordered array works uniformly across every mode — including the
+    /// index-aware Color/Shape sorts and their date tiebreaks.
+    static func apply(_ mode: SortMode, to files: [FileNode],
+                      reversed: Bool = false) -> [FileNode] {
+        let result = ordered(mode, files)
+        return reversed ? result.reversed() : result
+    }
+
+    /// The mode's natural order (its `defaultAscending` direction).
+    private static func ordered(_ mode: SortMode, _ files: [FileNode]) -> [FileNode] {
         switch mode {
         case .dateModified:
             return files.sorted { ($0.modifiedAt ?? .distantPast) > ($1.modifiedAt ?? .distantPast) }

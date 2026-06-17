@@ -42,6 +42,32 @@ final class AppState: ObservableObject {
     /// Files in the selected folder (or, if recursive, including subfolders).
     @Published var currentFiles: [FileNode] = []
 
+    /// Per-path content version, bumped when a file's bytes change in place
+    /// (crop, edit-and-save, iCloud sync-in). The grid tile keys its
+    /// thumbnail-load task on this, so a bump re-decodes the now-fresh bytes —
+    /// the cache having already been invalidated for that path. Path-based
+    /// (not node id) so it survives the FileNode being rebuilt by a reload.
+    @Published private(set) var contentVersion: [String: Int] = [:]
+
+    /// Cache-busting token the grid folds into its tile-load task id.
+    func contentToken(for file: FileNode) -> Int {
+        contentVersion[file.url.standardizedFileURL.path] ?? 0
+    }
+
+    /// Mark files whose CONTENT changed in place: drop their cached thumbnails
+    /// (memory + disk, synchronously) and bump their version so any visible
+    /// tile re-decodes. Re-analysis is handled separately (the indexer cleared
+    /// `analyzed_hash`, so the analyze pass regenerates tags/colors/dimensions).
+    private func markContentChanged(_ paths: [String]) {
+        guard !paths.isEmpty else { return }
+        for raw in paths {
+            let url = URL(fileURLWithPath: raw)
+            let std = url.standardizedFileURL.path
+            ThumbnailCache.shared.invalidate(url)
+            contentVersion[std, default: 0] += 1
+        }
+    }
+
     /// True while a freshly-selected folder is being enumerated off-main, so
     /// the grid can show a skeleton instead of a frozen click.
     @Published var isLoadingFolder = false
@@ -65,49 +91,9 @@ final class AppState: ObservableObject {
     /// Names of files a recent move couldn't relocate (drives an alert).
     @Published var moveFailureNames: [String] = []
 
-    /// Visible files in grid order, keyed by standardized path — the order
-    /// Shift-range walks.
-    var selectionOrder: [String] {
-        visibleFiles.map { $0.url.standardizedFileURL.path }
-    }
-
-    func applyClick(_ click: GridSelection.Click) {
-        let r = GridSelection.apply(click, to: selectedFiles,
-                                    anchor: selectionAnchor, order: selectionOrder)
-        selectedFiles = r.selection
-        selectionAnchor = r.anchor
-    }
-
-    func clearSelection() {
-        guard !selectedFiles.isEmpty || selectionAnchor != nil else { return }
-        selectedFiles = []
-        selectionAnchor = nil
-    }
-
-    /// Select every visible image (the Edit ▸ Select All command).
-    func selectAllVisible() {
-        let paths = selectionOrder
-        selectedFiles = Set(paths)
-        selectionAnchor = paths.first
-    }
-
-    /// URLs for the effective selection (the selection, or `[fallback]` if the
-    /// fallback path isn't part of the selection). An empty `fallback` yields
-    /// only the current selection.
-    func effectiveSelectionURLs(fallback path: String) -> [URL] {
-        let paths: Set<String>
-        if !path.isEmpty && !selectedFiles.contains(path) {
-            paths = [path]
-        } else {
-            paths = selectedFiles
-        }
-        let byPath = Dictionary(visibleFiles.map { ($0.url.standardizedFileURL.path, $0.url) },
-                                uniquingKeysWith: { a, _ in a })
-        // Resolve from visibleFiles when possible; otherwise rebuild the URL
-        // from the (absolute) path so a selected file that isn't currently in
-        // view is never silently dropped from an action.
-        return paths.map { byPath[$0] ?? URL(fileURLWithPath: $0) }
-    }
+    // Grid multi-selection helpers (selectionOrder / applyClick /
+    // clearSelection / selectAllVisible / effectiveSelectionURLs) live in
+    // AppState+Selection.swift.
 
     /// Set true to ask the hero viewer to run its close flight (Esc path).
     /// The viewer resets it to false in onCloseFinished.
@@ -128,6 +114,22 @@ final class AppState: ObservableObject {
 
     /// Active sort mode (default = date modified desc per Q24 generalist).
     @Published var sortMode: SortMode = .dateModified
+
+    /// Flip the active sort mode's natural order (the toolbar direction arrow).
+    /// false = each mode's default (newest/largest/A→Z first); true reverses.
+    @Published var sortReversed = false
+
+    /// Effective ascending/descending of the current mode (default XOR
+    /// reversed). Drives the toolbar arrow (up = ascending) + its tooltip.
+    var sortAscending: Bool {
+        sortReversed ? !sortMode.defaultAscending : sortMode.defaultAscending
+    }
+
+    /// Flip sort direction and re-order the visible files in place.
+    func toggleSortDirection() {
+        sortReversed.toggle()
+        resort()
+    }
 
     /// Whether the right-side detail panel (tags, metadata) is visible.
     /// Presents the duplicates review sheet (set by findDuplicatesInCurrentFolder).
@@ -167,87 +169,14 @@ final class AppState: ObservableObject {
     /// in-collection back arrow returns here rather than to the main grid.
     @Published var showingCollections = false
 
-    /// Open/close the Collections page. Always clears any active collection
-    /// filter so opening lands on the card grid (not inside a collection).
-    /// The crossfade is driven by the view layer (ContentView animates on
-    /// `isCollectionsPage`), so this just flips the flags.
-    func toggleCollectionsPage() {
-        showingCollections.toggle()
-        setActiveCollection(nil)
-    }
-
-    /// Files the grid should show: the active collection's members when
-    /// inside a collection, else the current folder's files; the tag chip
-    /// filter narrows either.
-    var visibleFiles: [FileNode] {
-        // search results are global; collection/tag filters apply to browsing only
-        if isSearchActive { return currentFiles }
-        var files = activeCollectionFiles ?? currentFiles
-        if let tagPaths = activeTagPaths {
-            files = files.filter { tagPaths.contains($0.url.standardizedFileURL.path) }
-        }
-        return files
-    }
-
-    /// Files the tag chips derive their labels from: the active collection's
-    /// members (library-wide) when inside a collection, else the current
-    /// folder's files. Deliberately the UNFILTERED set, so selecting a tag
-    /// doesn't collapse the chip list down to just that tag.
-    var tagSourceFiles: [FileNode] {
-        activeCollectionFiles ?? currentFiles
-    }
-
-    /// Set (or clear, with nil) the active collection filter. Loads the
-    /// member path set asynchronously; always go through this method
-    /// rather than setting `activeCollectionID` directly.
-    func setActiveCollection(_ id: String?) {
-        clearSelection()
-        // ID and member paths land in ONE animated transaction, so the grid
-        // cross-fades once to the filtered set — no intermediate frame where
-        // the header swapped but the grid hasn't (the old "flash").
-        let curve = Animation.easeInOut(duration: 0.28)
-        collectionRequestToken += 1
-        guard let id else {
-            withAnimation(curve) {
-                activeCollectionID = nil
-                activeCollectionPaths = nil
-                activeCollectionFiles = nil
-            }
-            return
-        }
-        let token = collectionRequestToken
-        Task { @MainActor in
-            guard let q = Database.shared.dbQueue else {
-                // Honor the same stale-pick guard as the success path below —
-                // a newer pick that landed while this ran must not be clobbered.
-                guard token == collectionRequestToken else { return }
-                activeCollectionID = id
-                activeCollectionPaths = []
-                activeCollectionFiles = []
-                return
-            }
-            let paths = (try? await CollectionStore.alivePaths(
-                queue: q, collectionID: id
-            )) ?? []
-            // Members that still exist on disk, library-wide, sorted by
-            // the active sort mode.
-            let nodes = SmartSorter.apply(sortMode, to: paths.compactMap { path in
-                FileManager.default.fileExists(atPath: path)
-                    ? FileNode(url: URL(fileURLWithPath: path)) : nil
-            })
-            // Don't clobber a newer selection that landed while loading.
-            if token == collectionRequestToken {
-                withAnimation(curve) {
-                    activeCollectionID = id
-                    activeCollectionPaths = Set(paths)
-                    activeCollectionFiles = nodes
-                }
-            }
-        }
-    }
+    // Collection filtering (toggleCollectionsPage / visibleFiles /
+    // tagSourceFiles / setActiveCollection / setCollectionCover) and the tag
+    // filter (setActiveTag / removeTag / removeFromCollection) live in
+    // AppState+Filters.swift.
 
     /// Monotonic token so a slow collection load can't clobber a newer pick.
-    private var collectionRequestToken = 0
+    /// Not `private`: read/written by `setActiveCollection` in AppState+Filters.swift.
+    var collectionRequestToken = 0
 
     // MARK: - Tag chip filter (main grid)
 
@@ -268,129 +197,12 @@ final class AppState: ObservableObject {
     @Published var collectionDeleteRequest = false
     @Published var deleteAllTagsRequest = false
     @Published var regenerateTagsRequest = false
-    private var tagRequestToken = 0
+    /// Monotonic token so a slow tag-filter load can't clobber a newer pick.
+    /// Not `private`: read/written by `setActiveTag` in AppState+Filters.swift.
+    var tagRequestToken = 0
 
-    /// Whether the bulk-tag menu commands (Delete All / Regenerate) may fire.
-    /// Their confirmation alerts live on TagChipsRow, which is unmounted during
-    /// search and on the Collections card page — firing a request there would
-    /// be a silent no-op that pops a ghost alert later when the row remounts.
-    /// Gate the menu items to exactly where TagChipsRow is mounted (a real
-    /// folder grid or inside a collection) with files present.
-    var bulkTagCommandsAvailable: Bool {
-        !currentFiles.isEmpty
-            && !isSearchActive
-            && !(showingCollections && activeCollectionID == nil)
-    }
-
-    /// Set the active collection's cover to the given file (right-click on a
-    /// tile, or the Edit-menu command). One cover per collection; replaces any
-    /// previous choice. No-op outside a collection or for an unindexed file.
-    func setCollectionCover(_ file: FileNode) {
-        guard let cid = activeCollectionID,
-              let q = Database.shared.dbQueue else { return }
-        let path = file.url.path
-        Task { @MainActor in
-            guard let fid = try? await CollectionStore.fileID(queue: q, path: path) else { return }
-            try? await CollectionStore.setCover(queue: q, id: cid, fileID: fid)
-            await CollectionsEngine.shared.reload()
-        }
-    }
-
-    /// Remove `label` from `urls` (the right-clicked tile or the whole
-    /// selection). Tags are auto-generated, but this leaves the files marked
-    /// analyzed — same as Delete All Tags — so the pipeline never regenerates
-    /// the tag. If the grid is filtered to this tag, the affected tiles drop
-    /// out immediately and the chip counts refresh.
-    func removeTag(_ label: String, fromURLs urls: [URL]) {
-        guard !urls.isEmpty else { return }
-        let removed = Set(urls.map { $0.standardizedFileURL.path })
-        Task { @MainActor in
-            await TagStore.shared.removeLabel(label, fromURLs: urls)
-            tagsVersion &+= 1
-            if activeTagLabel == label {
-                // If nothing here would still carry the tag, the chip is gone
-                // and the grid would be stranded empty — go straight back to
-                // "All" in ONE transaction (same crossfade as switching tags),
-                // rather than emptying the grid first and then repopulating.
-                let anyLeft = visibleFiles.contains {
-                    !removed.contains($0.url.standardizedFileURL.path)
-                }
-                if !anyLeft {
-                    setActiveTag(nil)
-                    return
-                }
-                activeTagPaths?.subtract(removed)
-            }
-            clearSelection()
-        }
-    }
-
-    /// Remove `urls` from collection `id` (the right-clicked tile or the whole
-    /// selection). Collections are manual, so the removal simply sticks (an
-    /// exclusion is also recorded as a safeguard). If that collection is open,
-    /// the affected tiles drop out immediately.
-    func removeFromCollection(_ id: String, urls: [URL]) {
-        guard !urls.isEmpty, let q = Database.shared.dbQueue else { return }
-        let paths = urls.map { $0.standardizedFileURL.path }
-        let removed = Set(paths)
-        Task { @MainActor in
-            let ids = (try? await CollectionStore.fileIDs(queue: q, paths: paths)) ?? []
-            for fid in ids {
-                try? await CollectionStore.removeFile(queue: q, fileID: fid, collectionID: id)
-            }
-            await CollectionsEngine.shared.reload()
-            if activeCollectionID == id {
-                // If removal empties the open collection it disappears from the
-                // engine (its header stops rendering) and the grid would be
-                // stranded with no back arrow — return to the library in one
-                // transaction, mirroring the tag path.
-                let anyLeft = (activeCollectionFiles ?? []).contains {
-                    !removed.contains($0.url.standardizedFileURL.path)
-                }
-                if !anyLeft {
-                    setActiveCollection(nil)
-                    return
-                }
-                activeCollectionPaths?.subtract(removed)
-                activeCollectionFiles?.removeAll {
-                    removed.contains($0.url.standardizedFileURL.path)
-                }
-            }
-            clearSelection()
-        }
-    }
-
-    /// Set (or clear, with nil) the tag chip filter — same single-transaction
-    /// animated swap as the collection filter.
-    func setActiveTag(_ label: String?) {
-        clearSelection()
-        let curve = Animation.easeInOut(duration: 0.28)
-        tagRequestToken += 1
-        guard let label else {
-            withAnimation(curve) {
-                activeTagLabel = nil
-                activeTagPaths = nil
-            }
-            return
-        }
-        let token = tagRequestToken
-        Task { @MainActor in
-            guard let q = Database.shared.dbQueue else { return }
-            let paths: [String] = (try? await q.read { db in
-                try String.fetchAll(db, sql: """
-                    SELECT p.absolute_path FROM paths p
-                    JOIN tags t ON t.file_id = p.file_id
-                    WHERE p.is_alive = 1 AND t.label = ?
-                    """, arguments: [label])
-            }) ?? []
-            if token == tagRequestToken {
-                withAnimation(curve) {
-                    activeTagLabel = label
-                    activeTagPaths = Set(paths)
-                }
-            }
-        }
-    }
+    // The tag/collection filter logic and bulkTagCommandsAvailable /
+    // setCollectionCover live in AppState+Filters.swift.
 
     // MARK: - Burn-up delete (polish spec §4)
 
@@ -646,7 +458,7 @@ final class AppState: ObservableObject {
         // A tag filter from the previous folder mustn't empty the new one.
         if activeTagLabel != nil { setActiveTag(nil) }
         startWatching(folder.url)
-        reloadCurrentFiles(showLoading: true, thenIndex: true)
+        reloadCurrentFiles(showLoading: true, thenIndex: true, verifyICloud: true)
     }
 
     /// Scan the current folder's images for duplicates, then present the
@@ -673,7 +485,13 @@ final class AppState: ObservableObject {
     /// is cancelled only on explicit removal, not on every switch.
     private var indexingTask: Task<Void, Never>?
 
-    private func scheduleIndexing(for url: URL) {
+    /// - verifyICloud: run the background content-verify pass over the iCloud
+    ///   files (catches edits made while the app was closed — iCloud
+    ///   size/mtime oscillates so the normal fast path can't notice). Only the
+    ///   FRESH folder selection asks for this; live FSEvents reloads handle
+    ///   their specific changed files directly and must not re-hash the whole
+    ///   iCloud folder on every event.
+    private func scheduleIndexing(for url: URL, verifyICloud: Bool = false) {
         let files = currentFiles
         let icloud = iCloudFolderURL
         indexingTask = Task.detached(priority: .userInitiated) {
@@ -681,7 +499,10 @@ final class AppState: ObservableObject {
                 guard f.kind != .folder, f.kind.hasNativeViewer || f.kind == .archive else { return nil }
                 return (f.url, f.kind)
             }
-            await Indexer.shared.indexBatch(pairs, priority: .high)
+            // Local edits made while closed surface here (size/mtime changed),
+            // as do brand-new files. Drop stale art for the ones that changed.
+            let changed = await Indexer.shared.indexBatch(pairs, priority: .high)
+            await MainActor.run { self.markContentChanged(changed.map { $0.path }) }
             if Task.isCancelled { return }
             let imageURLs = files
                 .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
@@ -697,6 +518,24 @@ final class AppState: ObservableObject {
             await SidecarHydrator.hydrate(urls: imageURLs, folder: icloud)
             if Task.isCancelled { return }
             await AnalyzePipeline.shared.analyzePending(in: imageURLs)
+            if Task.isCancelled { return }
+
+            // iCloud cold-start parity: re-hash the iCloud-zone files to catch
+            // edits/syncs that landed while Muse was closed. Background +
+            // silent (no pill) and content-hash based — NOT size/mtime, which
+            // oscillates on iCloud. Only the files that truly changed get their
+            // art dropped + a re-analyze; an unchanged folder is just reads.
+            guard verifyICloud, let icloud else { return }
+            let icloudPairs = pairs.filter {
+                $0.0.standardizedFileURL.path.hasPrefix(icloud.standardizedFileURL.path + "/")
+            }
+            guard !icloudPairs.isEmpty else { return }
+            let icloudChanged = await Indexer.shared.indexBatch(
+                icloudPairs, priority: .background, force: true, silent: true)
+            if Task.isCancelled || icloudChanged.isEmpty { return }
+            await MainActor.run { self.markContentChanged(icloudChanged.map { $0.path }) }
+            await ThumbnailCache.shared.prewarmToDisk(icloudChanged)
+            await AnalyzePipeline.shared.analyzePending(in: icloudChanged)
         }
     }
 
@@ -744,7 +583,8 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func reloadCurrentFiles(showLoading: Bool = false, thenIndex: Bool = false) {
+    private func reloadCurrentFiles(showLoading: Bool = false, thenIndex: Bool = false,
+                                    verifyICloud: Bool = false) {
         guard let folder = selectedFolder else {
             currentFiles = []
             isLoadingFolder = false
@@ -757,6 +597,7 @@ final class AppState: ObservableObject {
         let showSub = showSubfolders
         let showHid = showHidden
         let mode = sortMode
+        let reversed = sortReversed
 
         // Reuse unchanged nodes so live reloads keep tile @State (thumbnails,
         // in-flight animations). A fresh selection clears instead — nothing to
@@ -770,6 +611,11 @@ final class AppState: ObservableObject {
             // weight (and could mis-seed a hero open for a stale path).
             // Bounds tileFrames to roughly one folder's worth of tiles.
             tileFrames.removeAll()
+            // Same rationale for the per-path content versions: they only need
+            // to live as long as the folder is on screen (an edit already
+            // regenerated the on-disk thumbnail under its path key), so reset
+            // here rather than let the dict accumulate across a long session.
+            contentVersion.removeAll()
         } else {
             existing = Dictionary(currentFiles.map { ($0.url, $0) },
                                   uniquingKeysWith: { a, _ in a })
@@ -787,13 +633,13 @@ final class AppState: ObservableObject {
                 }
                 return fresh
             }
-            let sorted = SmartSorter.apply(mode, to: merged)
+            let sorted = SmartSorter.apply(mode, to: merged, reversed: reversed)
             await MainActor.run {
                 // A newer selection started while we were loading — drop this.
                 guard token == self.folderLoadToken else { return }
                 self.currentFiles = sorted
                 self.isLoadingFolder = false
-                if thenIndex { self.scheduleIndexing(for: folderURL) }
+                if thenIndex { self.scheduleIndexing(for: folderURL, verifyICloud: verifyICloud) }
             }
         }
     }
@@ -801,9 +647,9 @@ final class AppState: ObservableObject {
     func resort() {
         // Don't re-sort search results; they maintain relevance ranking
         guard !isSearchActive else { return }
-        currentFiles = SmartSorter.apply(sortMode, to: currentFiles)
+        currentFiles = SmartSorter.apply(sortMode, to: currentFiles, reversed: sortReversed)
         if let collectionFiles = activeCollectionFiles {
-            activeCollectionFiles = SmartSorter.apply(sortMode, to: collectionFiles)
+            activeCollectionFiles = SmartSorter.apply(sortMode, to: collectionFiles, reversed: sortReversed)
         }
     }
 
@@ -892,13 +738,45 @@ final class AppState: ObservableObject {
 
     private func startWatching(_ url: URL) {
         if watcher == nil {
-            watcher = FolderWatcher { [weak self] in
+            watcher = FolderWatcher { [weak self] changedPaths in
                 // Search results aren't folder contents — a disk event must
                 // not replace them with the watched folder's listing.
                 guard let self, !self.isSearchActive else { return }
-                self.reloadCurrentFiles()
+                self.handleFolderEvent(changedPaths: changedPaths)
             }
         }
         watcher?.watch(url: url, recursive: showSubfolders)
+    }
+
+    /// A live disk change landed. Two jobs: (1) refresh the specific media
+    /// files that changed — re-hash them (forced, so iCloud's oscillating
+    /// metadata can't hide a real edit), drop their stale thumbnails, and
+    /// re-analyze new/edited ones; (2) reflect adds/removes/renames in the
+    /// grid listing. No folder-wide reindex — only the touched files do work.
+    private func handleFolderEvent(changedPaths: [String]) {
+        guard let folder = selectedFolder else { return }
+        let media = FolderEventFilter.mediaChanges(
+            paths: changedPaths, folder: folder.url, recursive: showSubfolders)
+        let existing = media.filter { FileManager.default.fileExists(atPath: $0) }
+        if !existing.isEmpty {
+            Task.detached(priority: .userInitiated) {
+                let pairs = existing.map { p -> (URL, AssetKind) in
+                    let u = URL(fileURLWithPath: p)
+                    return (u, AssetKind.detect(at: u))
+                }
+                // force: a same-path edit (and every iCloud edit) wouldn't be
+                // caught by the size/mtime fast path. silent: no progress pill
+                // for a handful of files.
+                let changed = await Indexer.shared.indexBatch(
+                    pairs, priority: .high, force: true, silent: true)
+                await MainActor.run { self.markContentChanged(changed.map { $0.path }) }
+                let urls = existing.map { URL(fileURLWithPath: $0) }
+                // prewarm covers brand-new files; analyzePending self-gates on
+                // a stale analyzed_hash, so it re-tags new + edited only.
+                await ThumbnailCache.shared.prewarmToDisk(urls)
+                await AnalyzePipeline.shared.analyzePending(in: urls)
+            }
+        }
+        reloadCurrentFiles()
     }
 }

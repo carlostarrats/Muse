@@ -406,6 +406,13 @@ struct GridView: View {
     }
 }
 
+/// Identity for a tile's thumbnail-load task: re-fetch when the file changes
+/// path OR when its content version bumps (an in-place edit / iCloud sync).
+private struct TileLoadID: Hashable {
+    let url: URL
+    let version: Int
+}
+
 private struct TileView: View {
     @EnvironmentObject var appState: AppState
     let file: FileNode
@@ -474,7 +481,10 @@ private struct TileView: View {
             .opacity(deletion.burningPaths.contains(file.url.path) ? 0 : 1)
             .animation(.easeOut(duration: 0.3),
                        value: deletion.burningPaths.contains(file.url.path))
-            .task(id: file.url) {
+            // Re-runs when the URL changes OR the file's content version bumps
+            // (an in-place edit / iCloud sync). The cache was already
+            // invalidated for that path, so this re-decode pulls fresh bytes.
+            .task(id: TileLoadID(url: file.url, version: appState.contentToken(for: file))) {
                 // 320 matches the hero viewer's first cache probe, so the open
                 // flight starts from this exact bitmap with zero wait.
                 // Retry on nil so a tile never stays grey: ImageIO carries the

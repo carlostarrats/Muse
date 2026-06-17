@@ -11,12 +11,44 @@
 import Foundation
 import CoreServices
 
+/// Pure helpers for turning a raw FSEvents path list into the set of media
+/// files inside a folder that actually warrant a refresh. Kept separate +
+/// nonisolated so it's unit-testable without an FSEvents stream.
+nonisolated enum FolderEventFilter {
+    /// Keep only paths that are (a) directly inside `folder` (or, when
+    /// `recursive`, anywhere beneath it), (b) not hidden and not inside a
+    /// dotfile directory like `.muse` (sidecar writes must not trigger a
+    /// content refresh), and (c) a kind Muse can view. Returns standardized
+    /// paths, de-duplicated.
+    static func mediaChanges(paths: [String], folder: URL,
+                             recursive: Bool) -> [String] {
+        let folderPath = folder.standardizedFileURL.path
+        var seen = Set<String>()
+        var out: [String] = []
+        for raw in paths {
+            let std = URL(fileURLWithPath: raw).standardizedFileURL.path
+            guard std.hasPrefix(folderPath + "/") else { continue }
+            let relative = String(std.dropFirst(folderPath.count + 1))
+            let components = relative.split(separator: "/")
+            // Any hidden component (the file itself or an ancestor like
+            // `.muse`) → ignore. Sidecars + thumbnails live behind dotdirs.
+            if components.contains(where: { $0.hasPrefix(".") }) { continue }
+            // Non-recursive watch: only direct children count.
+            if !recursive && components.count != 1 { continue }
+            guard AssetKind.detect(at: URL(fileURLWithPath: std)).hasNativeViewer
+            else { continue }
+            if seen.insert(std).inserted { out.append(std) }
+        }
+        return out
+    }
+}
+
 final class FolderWatcher {
     private var stream: FSEventStreamRef?
-    private let onChange: () -> Void
+    private let onChange: ([String]) -> Void
     private let queue: DispatchQueue
 
-    init(onChange: @escaping () -> Void) {
+    init(onChange: @escaping ([String]) -> Void) {
         self.onChange = onChange
         self.queue = DispatchQueue(label: "muse.folderwatcher", qos: .utility)
     }
@@ -34,14 +66,24 @@ final class FolderWatcher {
         let flags: FSEventStreamCreateFlags = UInt32(
             kFSEventStreamCreateFlagFileEvents |
             kFSEventStreamCreateFlagNoDefer |
-            kFSEventStreamCreateFlagWatchRoot
+            kFSEventStreamCreateFlagWatchRoot |
+            // REQUIRED for the eventPaths cast below: without this flag the
+            // framework delivers eventPaths as a raw C `char**`, and
+            // reinterpreting that as an NSArray is undefined behavior (crash /
+            // garbage). With it, eventPaths is a CFArray of CFString (toll-free
+            // bridged to NSArray), so the unsafeBitCast is valid.
+            kFSEventStreamCreateFlagUseCFTypes
         )
         let interval: CFTimeInterval = 0.3 // coalesce changes for 300ms
 
-        let callback: FSEventStreamCallback = { _, info, _, _, _, _ in
+        let callback: FSEventStreamCallback = { _, info, numEvents, eventPaths, _, _ in
             guard let info else { return }
             let watcher = Unmanaged<FolderWatcher>.fromOpaque(info).takeUnretainedValue()
-            watcher.fire()
+            // kFSEventStreamCreateFlagUseCFTypes guarantees a CFArray of
+            // CFString here (toll-free bridged to NSArray of String).
+            let paths = (unsafeBitCast(eventPaths, to: NSArray.self) as? [String]) ?? []
+            _ = numEvents
+            watcher.fire(paths: paths)
         }
 
         guard let s = FSEventStreamCreate(
@@ -75,9 +117,9 @@ final class FolderWatcher {
         stream = nil
     }
 
-    private func fire() {
+    private func fire(paths: [String]) {
         DispatchQueue.main.async { [onChange] in
-            onChange()
+            onChange(paths)
         }
     }
 

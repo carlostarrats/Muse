@@ -6,19 +6,18 @@ review notes in the 2026-06-16 session logs). Don't cut a release just for these
 fold any of them into a future release when you're already touching that area or
 have other changes worth shipping.
 
-_Last reviewed: 2026-06-16, after the v1.0.7 release._
+_Last reviewed: 2026-06-17. Both code-tidiness items below were completed on
+2026-06-17 (see that CLAUDE.md session log)._
 
-## Code tidiness (cosmetic only)
+## Code tidiness (cosmetic only) — ✅ DONE 2026-06-17
 
-- **Split `AppState.swift` (~900 LOC).** It's the central `@MainActor` state
-  object and the single largest file. Not a problem, but if it keeps growing,
-  pull cohesive chunks into extensions — e.g. `AppState+Filters.swift` for the
-  tag-chip + collection filter logic (`setActiveTag` / `setActiveCollection` /
-  `removeTag` / `removeFromCollection` / `visibleFiles`). Purely organizational.
-- **Rename `Muse/Fluid/` → `Muse/Effects/`.** The directory is a vestige of the
-  removed water-ripple effect and now holds only `FadeOutModifier.swift`, so the
-  name no longer matches its contents. Trivial (it's a filesystem-synchronized
-  group — just move the file and the group name).
+- ~~**Split `AppState.swift` (~900 LOC).**~~ ✅ Pulled the grid-selection helpers
+  into `AppState+Selection.swift` and the tag/collection filter logic into
+  `AppState+Filters.swift` (the two request tokens became internal so the moved
+  methods can reach them). Core file 1012 → 782 LOC.
+- ~~**Rename `Muse/Fluid/` → `Muse/Effects/`.**~~ ✅ Renamed (it held only
+  `FadeOutModifier.swift`); no code/pbxproj references needed updating since it's
+  a filesystem-synchronized group.
 
 ## Features / decisions deferred
 
@@ -33,6 +32,7 @@ _Last reviewed: 2026-06-16, after the v1.0.7 release._
 
 ---
 
-For the longer-standing product backlog — code syntax highlighting, saved smart
-searches, a real Preferences pane, onboarding, archive browse-without-extract —
-see **"Known soft spots"** in CLAUDE.md.
+Earlier "soft spots" (code syntax highlighting, saved smart searches, a
+Preferences pane, onboarding, a top-edge gradual-blur effect) were reviewed on
+2026-06-17 and **dropped — not wanted.** CLAUDE.md's only remaining note in that
+area is a short list of current iCloud by-design behaviors (not pending work).

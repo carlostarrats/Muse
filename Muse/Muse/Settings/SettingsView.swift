@@ -2,9 +2,10 @@
 //  SettingsView.swift
 //  Muse
 //
-//  Phase 0 placeholder. Phase 6 builds out the real preferences pane:
-//  roots management, sort/view defaults, AI master kill, dedup
-//  thresholds, thumbnail cache size, hidden-files toggle.
+//  Vestigial placeholder. No dedicated Preferences pane is planned —
+//  settings live in the sidebar / toolbar / menus instead (roots, sort +
+//  direction, show-subfolders, show-hidden, background mood). Kept only so
+//  the Settings scene has something to render.
 //
 
 import SwiftUI
