@@ -169,15 +169,10 @@ enum CollectionStore {
         return id
     }
 
-    /// Removes the collection and its memberships. Files are untouched.
-    static func delete(queue: DatabaseQueue, id: String) async throws {
-        try await queue.write { db in
-            try db.execute(sql: "DELETE FROM collection_members WHERE collection_id = ?",
-                           arguments: [id])
-            try db.execute(sql: "DELETE FROM collections WHERE id = ?",
-                           arguments: [id])
-        }
-    }
+    // NOTE: there is intentionally no hard-delete. Collections are auto-
+    // generated, so a row-delete silently regenerates on the next analyze.
+    // Deletion goes through setHidden(true) (the durable "don't rebuild"
+    // tombstone) — see ActiveCollectionHeader/CollectionCard.deleteCollection.
 
     /// Set (or replace) a collection's chosen cover image. One per collection.
     static func setCover(queue: DatabaseQueue, id: String, fileID: String) async throws {

@@ -131,7 +131,7 @@ private struct AddCollectionButton: View {
         Button(action: action) {
             Image(systemName: "plus")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(hovering ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                .foregroundStyle(hovering ? .primary : .secondary)
                 .frame(width: 40, height: 40)
                 .background(Circle().fill(.primary.opacity(hovering ? 0.16 : 0.08)))
         }
