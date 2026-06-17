@@ -28,6 +28,9 @@ final class CollectionsEngine: ObservableObject {
     }
 
     func recluster() async {
+        // Auto-collections is opt-out (Preferences). Off → no new clustering;
+        // existing collections remain, and the user can still build their own.
+        guard AppSettings.autoCollections else { return }
         guard let q = Database.shared.dbQueue, !isClustering else { return }
         isClustering = true
         defer { isClustering = false }
