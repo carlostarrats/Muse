@@ -297,8 +297,9 @@ final class Database {
 
             try db.execute(sql: "DROP TABLE tags;")
             try db.execute(sql: "ALTER TABLE tags_new RENAME TO tags;")
-            try db.execute(sql:
-                "CREATE INDEX tags_file_id_idx ON tags(file_id);")
+            // No separate file_id index needed: UNIQUE(file_id, parent_dir,
+            // label) already creates a file_id-leading index that serves
+            // `WHERE file_id = ?` / `IN (...)` lookups.
         }
 
         return migrator

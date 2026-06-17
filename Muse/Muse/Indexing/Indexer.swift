@@ -255,7 +255,8 @@ actor Indexer {
     /// `from` to `to`; on (file_id, label) conflict keep the existing row if
     /// it's manual, or replace it with the manual incoming row, otherwise
     /// ignore the incoming.
-    private static func unionTags(db: GRDB.Database, fromFileID: String, toFileID: String) throws {
+    // internal (not private) so MuseTests can exercise the per-folder merge.
+    static func unionTags(db: GRDB.Database, fromFileID: String, toFileID: String) throws {
         let fromTags = try TagRow.filter(TagRow.Columns.file_id == fromFileID).fetchAll(db)
         for var t in fromTags {
             // Conflict is per (file_id, parent_dir): the same physical file at
@@ -292,7 +293,8 @@ actor Indexer {
     /// tags are per-folder and are NOT inherited. No-op if this folder already
     /// has tags, or if the content was never analyzed (the analyze pass will
     /// then write to every alive folder).
-    private static func inheritVisionTags(db: GRDB.Database, fileID: String, toDir: String) throws {
+    // internal (not private) so MuseTests can exercise the inheritance rule.
+    static func inheritVisionTags(db: GRDB.Database, fileID: String, toDir: String) throws {
         let hasHere = try TagRow
             .filter(TagRow.Columns.file_id == fileID)
             .filter(TagRow.Columns.parent_dir == toDir)

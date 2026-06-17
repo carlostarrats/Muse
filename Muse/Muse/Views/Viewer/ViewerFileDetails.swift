@@ -21,7 +21,13 @@ struct ViewerFileDetails {
             let palette: [String] = f.palette
                 .flatMap { $0.data(using: .utf8) }
                 .flatMap { try? JSONDecoder().decode([String].self, from: $0) } ?? []
-            let tags = try TagRow.filter(Column("file_id") == fid)
+            // Tags are per-folder: scope to THIS file's folder so the viewer
+            // never shows (or, via the remove-pill, deletes) a duplicate's tags
+            // from another folder. `path` is the stored absolute_path matched
+            // above, so its parent matches the tags' parent_dir key.
+            let dir = TagScope.parentDir(ofPath: path)
+            let tags = try TagRow
+                .filter(Column("file_id") == fid && Column("parent_dir") == dir)
                 .order(Column("label")).fetchAll(db)
             let cols = try CollectionRow.fetchAll(db, sql: """
                 SELECT c.* FROM collections c
