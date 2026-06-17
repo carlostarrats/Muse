@@ -86,7 +86,7 @@ struct TagChipsRow: View {
             Button("Delete", role: .destructive) { commitDelete() }
             Button("Cancel", role: .cancel) { appState.tagDeleteRequest = nil }
         } message: {
-            Text("The tag is removed from every image. Your images stay on disk.")
+            Text("Removes “\(appState.tagDeleteRequest ?? "")” from the images in this view. Other folders keep their tags. Your images stay on disk.")
         }
         .alert("Delete all tags in this folder?", isPresented: $appState.deleteAllTagsRequest) {
             Button("Delete All", role: .destructive) { commitDeleteAllTags() }
@@ -117,11 +117,11 @@ struct TagChipsRow: View {
     private func commitDelete() {
         guard let label = appState.tagDeleteRequest else { return }
         appState.tagDeleteRequest = nil
-        Task { @MainActor in
-            await TagStore.shared.deleteLabel(label)
-            if appState.activeTagLabel == label { appState.setActiveTag(nil) }
-            appState.tagsVersion += 1
-        }
+        // Scope the delete to the current view's files (this folder, or this
+        // collection's members) — NOT the whole library. Tags belong to a file
+        // in its folder; deleting here must never touch other folders.
+        let urls = appState.tagSourceFiles.map { $0.url }
+        appState.removeTag(label, fromURLs: urls)
     }
 
     private func commitDeleteAllTags() {

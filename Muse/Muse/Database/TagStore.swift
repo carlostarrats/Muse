@@ -121,19 +121,6 @@ final class TagStore: ObservableObject {
         }
     }
 
-    /// Removes a label from every file in the library.
-    func deleteLabel(_ label: String) async {
-        guard let queue = Database.shared.dbQueue else { return }
-        do {
-            try await queue.write { db in
-                try db.execute(sql: "DELETE FROM tags WHERE label = ?",
-                               arguments: [label])
-            }
-        } catch {
-            print("[TagStore] deleteLabel failed: \(error)")
-        }
-    }
-
     /// Delete every tag (manual + vision) for the given file URLs. Scoped by
     /// resolving each URL to its alive file_id. Deliberately does NOT touch
     /// analyzed_hash, so the automatic analysis pipeline will not resurrect
