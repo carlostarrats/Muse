@@ -56,6 +56,10 @@ Read this before making any non-trivial change. The identity
 reconciliation matrix in §4 and the FileNode lifecycle table in §3.1
 are the load-bearing reference artifacts.
 
+- `docs/possible-updates.md` — low-priority, non-blocking backlog (cosmetic
+  code tidiness + deferred decisions). Nothing here is a problem; fold items in
+  opportunistically when shipping something else. Don't cut a release for them.
+
 ## Implementation status
 
 | Phase | Status | Branch where it landed |
