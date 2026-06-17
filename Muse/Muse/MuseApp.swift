@@ -120,6 +120,14 @@ struct MuseApp: App {
                 }
                 .disabled(appState.activeTagLabel == nil)
 
+                Button("Remove Tag from Selection") {
+                    if let label = appState.activeTagLabel {
+                        appState.removeTag(label,
+                                           fromURLs: appState.effectiveSelectionURLs(fallback: ""))
+                    }
+                }
+                .disabled(appState.activeTagLabel == nil || appState.selectedFiles.isEmpty)
+
                 Divider()
 
                 Button("Clear Tag Filter") {
@@ -151,6 +159,14 @@ struct MuseApp: App {
                     appState.collectionDeleteRequest = true
                 }
                 .disabled(appState.activeCollectionID == nil)
+
+                Button("Remove Selection from Collection") {
+                    if let cid = appState.activeCollectionID {
+                        appState.removeFromCollection(cid,
+                                                      urls: appState.effectiveSelectionURLs(fallback: ""))
+                    }
+                }
+                .disabled(appState.activeCollectionID == nil || appState.selectedFiles.isEmpty)
 
                 Divider()
 
