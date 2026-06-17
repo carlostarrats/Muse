@@ -771,6 +771,34 @@ no behavior change; build + full suite green):
   the water/burn shaders are long gone). No code or pbxproj references — it's a
   filesystem-synchronized group, so the `git mv` is the whole change.
 
+### Collection delete (no Hide) + auto-organization opt-outs — 2026-06-17 (on `feat/collections-delete-and-settings`)
+
+Removed the confusing "Hide Collection" action and added Preferences toggles to
+stop forcing auto-organization on the user.
+
+- **Delete replaces Hide.** Right-clicking a collection card now offers
+  **Delete Collection…** (warning modal) instead of "Hide Collection"; the
+  in-collection trash button uses the same path. Both call
+  `CollectionStore.setHidden(true)` — the durable suppression that survives
+  reclustering — because collections are AUTO-GENERATED: a plain row-delete
+  (`CollectionStore.delete`) silently regenerates on the next analyze (stable
+  intent ids re-insert; emergent clusters re-match), whereas `is_hidden`
+  persists (the recluster upsert never touches it, and `currentMembership`
+  still anchors the cluster identity). The `is_hidden` flag is now purely an
+  internal "don't auto-rebuild" tombstone — there is NO user-facing hide, no
+  hidden-collections list, no un-delete. (`CollectionStore.delete` is now
+  unused by the UI but kept.)
+- **Auto-organization is opt-out** (`AppSettings`, two `UserDefaults` keys,
+  both default ON, surfaced in the Preferences window). "Automatically tag new
+  images" gates `AnalyzePipeline.analyzePending` (all three automatic callers:
+  folder load + folder-watcher events); "Automatically organize into
+  collections" gates `CollectionsEngine.recluster` (covers the analyze-pass and
+  IntentBackfill triggers). Off → newly indexed folders stay viewable but are
+  not auto-tagged/clustered; **existing tags/collections are untouched** (the
+  toggle gates only the automatic pass, and analysis is incremental), and the
+  **manual** paths still work (Analyze / Regenerate Tags; hand-made
+  collections). Global + future-only by construction — no per-folder state.
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
@@ -978,9 +1006,15 @@ Muse/Muse/
     FadeOutModifier.swift          animatable staggered opacity fade for the
                                    delete sequence (replaced the BurnUp shader)
   Settings/
-    SettingsView.swift             vestigial placeholder view; no Preferences
-                                   pane is planned (settings live in the
-                                   sidebar / toolbar / menus)
+    AppSettings.swift              UserDefaults accessors for the automatic-
+                                   organization opt-outs (autoTag /
+                                   autoCollections, both default ON); read by
+                                   AnalyzePipeline + CollectionsEngine
+    SettingsView.swift             Preferences window (app menu → Settings…,
+                                   ⌘,): the two auto-organization toggles
+                                   (auto-tag new images / auto-organize into
+                                   collections). Other settings still live in
+                                   the sidebar / toolbar / menus
   Muse.entitlements                app-sandbox + user-selected.read-write +
                                    bookmarks.app-scope + iCloud Documents +
                                    network.client (Sparkle update fetch ONLY —
