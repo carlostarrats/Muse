@@ -67,6 +67,7 @@ struct GridView: View {
                     // it can measure the grid's bounds.
                     OutsideClickDeselect(onOutsideClick: { appState.clearSelection() })
                         .frame(width: 0, height: 0)
+                        .accessibilityHidden(true)
                     // The in-collection header scrolls away with the page —
                     // only the tag chips above stay pinned. Shows whenever a
                     // collection is active, even with a tag filter on (so you
@@ -196,7 +197,11 @@ struct GridView: View {
                     .offset(x: rect.minX, y: rect.minY)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(file.basename)
-                    .accessibilityAddTraits(.isButton)
+                    // Expose selection to VoiceOver, not just via the color/border.
+                    .accessibilityAddTraits(
+                        appState.selectedFiles.contains(file.url.standardizedFileURL.path)
+                            ? [.isButton, .isSelected] : .isButton)
+                    .accessibilityHint("Double-tap to open. Right-click for actions.")
                     .contextMenu {
                         let p = file.url.standardizedFileURL.path
                         // Single-image items show only when the effective

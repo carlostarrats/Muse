@@ -40,6 +40,30 @@ struct SelectionActionsMenu: View {
             }
         }
         Button("Share") { share() }
+        Menu("Move to Folder") {
+            let folders = moveDestinations
+            if folders.isEmpty {
+                Button("No folders") {}.disabled(true)
+            } else {
+                ForEach(folders, id: \.url) { dest in
+                    Button(dest.name) { move(to: dest.url) }
+                }
+            }
+        }
+    }
+
+    /// Top-level folders the selection can be moved into — the keyboard/
+    /// VoiceOver alternative to dragging onto the sidebar.
+    private var moveDestinations: [(name: String, url: URL)] {
+        appState.bookmarks.roots.compactMap { root in
+            guard let url = appState.bookmarks.url(for: root) else { return nil }
+            return (url.lastPathComponent, url)
+        }
+    }
+
+    private func move(to dest: URL) {
+        let moving = urls
+        appState.reloadAfterMove(failed: FileMover.move(moving, into: dest))
     }
 
     private func addToCollection(_ collectionID: String) {
