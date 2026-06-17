@@ -726,6 +726,13 @@ Muse/Muse/
     OutsideClickDeselect.swift     0×0 NSView + window leftMouseDown monitor that
                                    clears the selection on any click outside the
                                    grid's enclosingScrollView (feat/multi-select)
+    PageScrollCatcher.swift        first-responder NSView giving the grid +
+                                   Collections page native Page Up/Down (Fn+Arrow
+                                   or real Page keys) via enclosingScrollView +
+                                   PageScroll math (feat/page-scroll)
+    ShareCollectionButton.swift    in-collection header menu — Save to… (NSSavePanel,
+                                   Desktop) / Share (NSSharingServicePicker); builds
+                                   an 11×14 paginated PDF (feat/collection-pdf-share)
     AspectRatioCache.swift         per-file aspect (h÷w) for layout: bulk DB
                                    width/height + ImageIO header fallback, off-main
     CollectionsPage.swift          dedicated Collections page (toolbar
@@ -765,10 +772,17 @@ Muse/Muse/
     GridSelection.swift            pure selection math (single / Cmd-toggle /
                                    Shift-range → new set + anchor), unit-tested
                                    (feat/multi-select)
+    PageScroll.swift               pure Page Up/Down math (newOriginY: overlap +
+                                   clamp), unit-tested (feat/page-scroll)
     MasonryGeometry.swift          pure masonry packing (frames + height) from
                                    aspect ratios — feeds GridView's virtualization
                                    (replaced the old MasonryLayout: Layout, deleted
                                    2026-06-13 — a custom Layout can't virtualize)
+  Export/
+    CollectionPDFLayout.swift      pure paginated masonry pack for the collection
+                                   PDF (no image split across pages), unit-tested
+    CollectionPDFExporter.swift    ImageIO downsample (off-main) → CGPDFContext;
+                                   CoreText 11×14 header (feat/collection-pdf-share)
   Fluid/                           (legacy dir name; water ripple removed
                                    2026-06-13 and the burn-up delete SHADER
                                    removed too — NO Metal shaders remain in app)
