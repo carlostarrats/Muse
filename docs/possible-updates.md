@@ -32,7 +32,12 @@ _Last reviewed: 2026-06-17. Both code-tidiness items below were completed on
 
 ---
 
-Earlier "soft spots" (code syntax highlighting, saved smart searches, a
-Preferences pane, onboarding, a top-edge gradual-blur effect) were reviewed on
-2026-06-17 and **dropped — not wanted.** CLAUDE.md's only remaining note in that
-area is a short list of current iCloud by-design behaviors (not pending work).
+Earlier "soft spots" (code syntax highlighting, saved smart searches,
+onboarding, a top-edge gradual-blur effect) were reviewed on 2026-06-17 and
+**dropped — not wanted.** CLAUDE.md's only remaining note in that area is a
+short list of current iCloud by-design behaviors (not pending work).
+
+A focused **Preferences pane DID ship** 2026-06-17 (app menu → Settings…, ⌘,) —
+just the auto-tag / auto-collections opt-out toggles (`AppSettings` /
+`SettingsView`). A broader settings pane beyond those toggles is still not
+planned; other settings continue to live in the sidebar / toolbar / menus.

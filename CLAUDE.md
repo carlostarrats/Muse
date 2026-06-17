@@ -348,6 +348,9 @@ Two folder-scoped Tags menu commands and a progress pill (spec:
   incremental (a fully-tagged folder is a no-op). Tags are content-identity
   keyed (by `file_id`), so this matches the app's existing tag model: a
   byte-identical duplicate in another folder shares the same tag rows.
+  **(SUPERSEDED 2026-06-17:** tags are now per `(file_id, parent_dir)` — a
+  duplicate in another folder has its own tags. See the per-file-tags session
+  log.)
 - **"Organizing…" pill** — `ContentView` now observes
   `CollectionsEngine.isClustering` and shows the same glass capsule during the
   post-analyze recluster, closing the previously-invisible gap between the
@@ -1022,10 +1025,14 @@ Muse/Muse/
                                    width/height + ImageIO header fallback, off-main
     CollectionsPage.swift          dedicated Collections page (toolbar
                                    square.stack.3d.up): "Collections" header (back
-                                   arrow, no edit/trash) + 4-up alphabetical card
-                                   grid that resizes to fit, scrolls vertically
-    CollectionsRow.swift           in-collection header only (back/rename/count/
-                                   delete); the all-collections cards moved to
+                                   arrow + a far-right "+" New Collection button,
+                                   trash-button sized) over a 4-up alphabetical
+                                   card grid that resizes to fit, scrolls vertically
+                                   (createManual → "Collection N")
+    CollectionsRow.swift           in-collection header (back/rename/count) +
+                                   the CollectionCard (right-click → Delete). Delete
+                                   is DURABLE via setHidden — no user-facing Hide
+                                   (2026-06-17); the all-collections cards moved to
                                    CollectionsPage 2026-06-13
     TagChipsRow.swift              tag chips; filter + management. Scopes to the
                                    active collection's members inside one, else the
@@ -1124,7 +1131,12 @@ MuseShareExtension/                (separate app-extension target) "Send to Muse
   edit). See the 2026-06-17 per-file-tags session log.
 - **Analysis is automatic + incremental** — it runs after indexing for
   files whose `analyzed_hash` ≠ `content_hash` (new/changed only); never
-  re-processes unchanged files. There is no user-facing "Analyze" button.
+  re-processes unchanged files. **Auto-tagging and auto-collections are
+  opt-out** in Preferences (⌘, → `AppSettings`, both default ON): off → newly
+  added folders stay viewable but aren't auto-processed, while existing data is
+  untouched and the manual paths still work (menu-bar Regenerate Tags;
+  hand-made collections via the Collections-page **+**). There's no prominent
+  "Analyze" toolbar button — the automatic pass is the front door.
 - **Files are never deleted, only moved to Trash** via
   `NSWorkspace.shared.recycle`. Don't `unlink` user files. Ever.
 - **No editing UI** — every "edit this" path goes through Open With…
@@ -1178,7 +1190,11 @@ before implementation.
 - Branch state: `main` is now at the merged tip; `dev` is preserved at
   the pre-rewrite water-toggle commit (older); `feat/file-viewer-rewrite`
   is the source-of-truth branch for the rewrite progression.
-- Test coverage: none. (Test suites are a separate workstream.)
+- Test coverage: a real unit-test suite exists (`MuseTests`, ~36 files) —
+  pure logic, schema migrations, and store/model behaviors (e.g. tag scoping +
+  the `v7` migration, collection identity/membership, manual-collection naming,
+  sort/selection/page-scroll math, palette/color/intent). UI views aren't
+  unit-tested. Run with `xcodebuild -scheme Muse test`; keep it green.
 - Current by-design behaviors (NOT bugs, NOT pending work — documented so a
   future session doesn't mistake them for defects):
   - iCloud Drive: dataless (not-yet-downloaded) files are skipped on
