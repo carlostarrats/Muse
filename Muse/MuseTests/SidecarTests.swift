@@ -57,9 +57,9 @@ extension SidecarTests {
             analyzed_hash: "abc123", intent: "recipe", intent_model_version: "iv1"
         )
         let tags = [
-            TagRow(id: "t1", file_id: "f1", label: "dog", source: "vision",
+            TagRow(id: "t1", file_id: "f1", parent_dir: "/d", label: "dog", source: "vision",
                    confidence: 0.8, model_version: "v1"),
-            TagRow(id: "t2", file_id: "f1", label: "fav", source: "manual",
+            TagRow(id: "t2", file_id: "f1", parent_dir: "/d", label: "fav", source: "manual",
                    confidence: nil, model_version: nil),
         ]
         let sc = Sidecar.build(from: file, tags: tags, updatedAt: 555)
@@ -102,9 +102,10 @@ extension SidecarTests {
     func testTagRowsFactory() {
         let sc = sampleSidecar()
         var counter = 0
-        let rows = sc.tagRows(fileID: "f1") { counter += 1; return "id\(counter)" }
+        let rows = sc.tagRows(fileID: "f1", parentDir: "/d") { counter += 1; return "id\(counter)" }
         XCTAssertEqual(rows.count, 2)
         XCTAssertEqual(rows[0].file_id, "f1")
+        XCTAssertEqual(rows[0].parent_dir, "/d")
         XCTAssertEqual(Set(rows.map(\.id)), ["id1", "id2"])
     }
 }

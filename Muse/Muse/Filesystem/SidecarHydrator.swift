@@ -35,21 +35,24 @@ enum SidecarHydrator {
             guard let info else { continue }
             guard let sidecar = SidecarStore.read(forAsset: url, contentHash: info.hash),
                   sidecar.analyzed_hash == info.hash else { continue }
-            await apply(sidecar, fileID: info.id, basename: url.lastPathComponent, queue: queue)
+            await apply(sidecar, fileID: info.id, parentDir: TagScope.parentDir(of: url),
+                        basename: url.lastPathComponent, queue: queue)
         }
     }
 
-    private static func apply(_ sidecar: Sidecar, fileID: String,
+    private static func apply(_ sidecar: Sidecar, fileID: String, parentDir: String,
                               basename: String, queue: DatabaseQueue) async {
         try? await queue.write { db in
             if var file = try FileRow.filter(FileRow.Columns.id == fileID).fetchOne(db) {
                 sidecar.apply(onto: &file)
                 try file.update(db)
             }
-            // Tags: insert sidecar tags, honoring manual-beats-vision (Q32).
-            for t in sidecar.tagRows(fileID: fileID, makeID: { UUID().uuidString }) {
+            // Tags: insert sidecar tags scoped to this folder, honoring
+            // manual-beats-vision (Q32) per (file_id, parent_dir).
+            for t in sidecar.tagRows(fileID: fileID, parentDir: parentDir, makeID: { UUID().uuidString }) {
                 if let existing = try TagRow
                     .filter(TagRow.Columns.file_id == fileID)
+                    .filter(TagRow.Columns.parent_dir == parentDir)
                     .filter(TagRow.Columns.label == t.label).fetchOne(db) {
                     if existing.source != "manual" && t.source == "manual" {
                         var u = existing; u.source = "manual"; u.confidence = nil

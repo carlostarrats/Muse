@@ -808,6 +808,59 @@ stop forcing auto-organization on the user.
   selection action; rename via the in-collection header. `HeaderIconButton` is
   now non-private (the page reuses it).
 
+### Per-file tags — identity de-welding — 2026-06-17 (on `feat/per-file-tags`)
+
+Fixed "deleting a tag in one folder removes it from a duplicate in another
+folder," and removed the library-wide tag delete. Root cause: tags hung off
+`file_id` (content hash), so byte-identical files in two folders shared ONE
+set of tag rows (documented previously as an invariant — the user considers
+it a bug). Proven live: 12 welded identities, e.g. a flavicon screenshot at
+3 paths sharing 7 tags. Spec:
+`docs/superpowers/specs/2026-06-17-per-file-tags-design.md`.
+
+- **Decision — tags belong to `(file_id, parent_dir)`** (the file IN its
+  folder), not to content alone. `TagScope` is the single source of truth for
+  the parent-folder key. Chosen over per-path-id because rename-in-place then
+  preserves tags for free (same content + same folder) while a duplicate in
+  another folder is independent — no fragile rename detection. Edit-in-place
+  resets tags (hash changes → new scope), matching the existing edit-refresh.
+- **Part A (shippable alone):** removed `TagStore.deleteLabel`
+  (`DELETE FROM tags WHERE label = ?`, library-wide) that the right-click
+  tag-chip "Delete Tag" called. It now deletes only the current view's files
+  (`tagSourceFiles`) via the existing scoped path; dialog copy updated.
+- **Part B:** migration `v7_tag_parent_dir` adds `parent_dir`, fans each
+  existing tag out across the distinct alive parent folders of its `file_id`
+  (preserves everything currently visible; first scope reuses the original
+  id), and swaps `UNIQUE(file_id,label)` → `UNIQUE(file_id,parent_dir,label)`.
+  `TagStore` reads/writes scope by `parent_dir`; `deleteAllTags`/`removeLabel`
+  no longer leak to duplicates. `AnalyzePipeline` writes vision tags per alive
+  folder, the regenerate "tagless" gate is per-folder, and the sidecar exports
+  only its folder's tags. `Indexer.unionTags` is folder-aware; a brand-new
+  duplicate path inherits the file's VISION tags for its own folder (manual
+  tags are not inherited — they're per-folder). `TagChipsRow` aggregation +
+  `setActiveTag` grid filter scope by folder.
+- **Scope note (deliberate):** only TAGS are per-file. Content-derived
+  metadata (palette/caption/dimensions/intent/feature_print/FTS/embeddings)
+  stays keyed by `file_id` — identical for identical pixels, not user-editable,
+  and auto-splits on edit. Making it per-file would mean tearing down
+  `content_hash UNIQUE` (dedup, iCloud sidecar, FTS, embeddings) for zero
+  observable difference. SearchService tag-match still resolves all copies of
+  a matching file_id (shared with FTS/semantic) — left as-is (accepted).
+- **Verified on the live DB:** 0 of 8116 (file_id,label) pairs lost after
+  migration; the welded flavicon screenshot's 7 tags are now independent in
+  Desktop/flavicon, Saved Inspo, and .Trash/flavicon. Tests: `TagScopeTests`,
+  `TagParentDirMigrationTests`. Debug build + full `MuseTests` suite green.
+- **QA review pass (fixed):** an adversarial multi-agent review found ONE
+  remaining `file_id`-only tag read that reached the UI — `ViewerFileDetails`
+  (the hero viewer's tag panel) showed the UNION of a duplicate's tags across
+  folders AND its remove-pill (deletes by row id) could delete a tag belonging
+  to another folder's copy. Now scoped by `parent_dir`
+  (`testTagsScopedToFolderNotDuplicate`). Also dropped a redundant
+  `tags_file_id_idx` and added `TagFolderScopeTests` for the new
+  `inheritVisionTags` / `unionTags` per-folder behaviors. A second review round
+  confirmed the leak class is fully closed (every tag path scoped or a
+  documented global) with build + suite green.
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
@@ -880,7 +933,13 @@ Muse/Muse/
     Database.swift                 GRDB queue + migrations (v1…v5_intent)
     Records.swift                  FileRow (+analyzed_hash, +intent), PathRow, TagRow, etc.
     SearchService.swift            FTS5 + tag-label search (sidebar-folder scope)
-    TagStore.swift                 manual/vision tag CRUD + global rename/delete
+    TagScope.swift                 parent-folder key derivation — tags are
+                                   per (file_id, parent_dir), not per content
+                                   hash (2026-06-17). Single source of truth used
+                                   by the migration, TagStore, AnalyzePipeline
+    TagStore.swift                 manual/vision tag CRUD scoped by (file_id,
+                                   parent_dir); library-wide rename (spelling)
+                                   kept, library-wide DELETE removed (2026-06-17)
     Housekeeping.swift             launch prune: index data for files unreachable
                                    from any sidebar folder, unseen >180 days
   Indexing/
@@ -1053,9 +1112,16 @@ MuseShareExtension/                (separate app-extension target) "Send to Muse
 - **GRDB rows are inserted as `var`** — `MutablePersistableRecord.insert`
   mutates `id` in place. `let` rows fail to compile.
 - **Manual tags beat vision tags** on label conflict (Q32). Enforced
-  via `UNIQUE(file_id, label)` + branching in `Indexer.unionTags` and
-  `AnalyzePipeline.analyzeOne`. This is what makes automatic re-analysis
-  safe — it can never undo a user's tag edit.
+  via `UNIQUE(file_id, parent_dir, label)` + branching in
+  `Indexer.unionTags` and `AnalyzePipeline.analyzeOne`. This is what makes
+  automatic re-analysis safe — it can never undo a user's tag edit.
+- **Tags are per-file-LOCATION, not per content hash** (2026-06-17). A tag
+  belongs to `(file_id, parent_dir)` — the same content in another folder
+  is a different image with its own tags; deletes never leak across
+  folders. Derive the folder key via `TagScope`. There is NO library-wide
+  tag delete. Content-derived metadata (palette/caption/dims/intent) stays
+  content-keyed by design (identical for identical pixels; auto-splits on
+  edit). See the 2026-06-17 per-file-tags session log.
 - **Analysis is automatic + incremental** — it runs after indexing for
   files whose `analyzed_hash` ≠ `content_hash` (new/changed only); never
   re-processes unchanged files. There is no user-facing "Analyze" button.

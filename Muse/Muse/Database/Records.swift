@@ -65,6 +65,10 @@ struct TagRow: Codable, FetchableRecord, MutablePersistableRecord {
 
     var id: String
     var file_id: String
+    /// Parent folder of the file this tag belongs to. Tags are per-location:
+    /// the same content in another folder is a different image with its own
+    /// tags. Nil only for orphaned tags (no alive path) — never surfaced.
+    var parent_dir: String?
     var label: String
     var source: String
     var confidence: Double?
@@ -72,6 +76,7 @@ struct TagRow: Codable, FetchableRecord, MutablePersistableRecord {
 
     enum Columns {
         static let file_id = Column("file_id")
+        static let parent_dir = Column("parent_dir")
         static let label = Column("label")
         static let source = Column("source")
     }

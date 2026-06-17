@@ -123,14 +123,39 @@ final class AnalyzePipeline: ObservableObject {
         if Task.isCancelled { return }
         let paths = urls.map { $0.standardizedFileURL.path }
         guard !paths.isEmpty else { return }
-        let tagless: Set<String> = (try? await queue.read { db in
+        // "Tagless" is per FOLDER now: a file is tagless here if it has no tag
+        // scoped to (file_id, this folder), even if a duplicate in another
+        // folder is tagged. Computed in Swift since SQLite has no dirname().
+        let tagless: Set<String> = (try? await queue.read { db -> Set<String> in
             let marks = databaseQuestionMarks(count: paths.count)
-            return try Set(String.fetchAll(db, sql: """
-                SELECT p.absolute_path FROM paths p
-                WHERE p.is_alive = 1
-                  AND p.absolute_path IN (\(marks))
-                  AND NOT EXISTS (SELECT 1 FROM tags t WHERE t.file_id = p.file_id)
-                """, arguments: StatementArguments(paths)))
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT absolute_path, file_id FROM paths
+                WHERE is_alive = 1 AND file_id IS NOT NULL
+                  AND absolute_path IN (\(marks))
+            """, arguments: StatementArguments(paths))
+            let fileIDs = Array(Set(rows.compactMap { $0["file_id"] as String? }))
+            var tagged = Set<String>()   // "file_id\0parent_dir" that carry a tag
+            if !fileIDs.isEmpty {
+                let fmarks = databaseQuestionMarks(count: fileIDs.count)
+                let scopeRows = try Row.fetchAll(db, sql: """
+                    SELECT DISTINCT file_id, parent_dir FROM tags
+                    WHERE file_id IN (\(fmarks))
+                """, arguments: StatementArguments(fileIDs))
+                for r in scopeRows {
+                    if let fid: String = r["file_id"], let dir: String = r["parent_dir"] {
+                        tagged.insert(fid + "\u{0}" + dir)
+                    }
+                }
+            }
+            var result = Set<String>()
+            for r in rows {
+                guard let p: String = r["absolute_path"],
+                      let fid: String = r["file_id"] else { continue }
+                if !tagged.contains(fid + "\u{0}" + TagScope.parentDir(ofPath: p)) {
+                    result.insert(p)
+                }
+            }
+            return result
         }) ?? []
         guard !tagless.isEmpty else { return }
         let taglessURLs = urls.filter { tagless.contains($0.standardizedFileURL.path) }
@@ -194,10 +219,15 @@ final class AnalyzePipeline: ObservableObject {
         guard ICloudZone.contains(url, folder: iCloudFolder) else { return }
         guard let queue = Database.shared.dbQueue else { return }
         let now = Int64(Date().timeIntervalSince1970)
+        let dir = TagScope.parentDir(of: url)
         let bundle: (FileRow, [TagRow])? = try? await queue.read { db -> (FileRow, [TagRow])? in
             guard let file = try FileRow.filter(FileRow.Columns.id == fileID).fetchOne(db)
             else { return nil }
-            let tags = try TagRow.filter(TagRow.Columns.file_id == fileID).fetchAll(db)
+            // Sidecar lives in this file's folder → carry only this folder's tags.
+            let tags = try TagRow
+                .filter(TagRow.Columns.file_id == fileID)
+                .filter(TagRow.Columns.parent_dir == dir)
+                .fetchAll(db)
             return (file, tags)
         }
         guard let (file, tags) = bundle,
@@ -264,32 +294,50 @@ final class AnalyzePipeline: ObservableObject {
                     try file.update(db)
                 }
 
-                // Insert vision tags (manual-beats-vision per Q32 — ignore on conflict if a
-                // manual tag already exists for this label).
-                for tag in out.tags {
-                    if let existing = try TagRow
-                        .filter(TagRow.Columns.file_id == fileID)
-                        .filter(TagRow.Columns.label == tag.label)
-                        .fetchOne(db) {
-                        if existing.source != "manual" {
-                            // Update confidence + provenance
-                            var t = existing
-                            t.confidence = tag.confidence
-                            t.source = tag.source
-                            t.model_version = taggerVersion
-                            try t.update(db)
+                // Vision tags apply to EVERY folder this content lives in
+                // (identical pixels → identical vision tags), independently per
+                // folder so a manual edit in one folder doesn't touch another.
+                // Manual tags always win (Q32), scoped per (file_id, parent_dir).
+                var aliveDirs = Set<String>()
+                let dirRows = try Row.fetchAll(db, sql: """
+                    SELECT DISTINCT absolute_path FROM paths
+                    WHERE file_id = ? AND is_alive = 1
+                """, arguments: [fileID])
+                for row in dirRows {
+                    if let p: String = row["absolute_path"] {
+                        aliveDirs.insert(TagScope.parentDir(ofPath: p))
+                    }
+                }
+                if aliveDirs.isEmpty { aliveDirs.insert(TagScope.parentDir(of: url)) }
+
+                for dir in aliveDirs {
+                    for tag in out.tags {
+                        if let existing = try TagRow
+                            .filter(TagRow.Columns.file_id == fileID)
+                            .filter(TagRow.Columns.parent_dir == dir)
+                            .filter(TagRow.Columns.label == tag.label)
+                            .fetchOne(db) {
+                            if existing.source != "manual" {
+                                // Update confidence + provenance
+                                var t = existing
+                                t.confidence = tag.confidence
+                                t.source = tag.source
+                                t.model_version = taggerVersion
+                                try t.update(db)
+                            }
+                            // Manual tag: leave alone
+                        } else {
+                            var t = TagRow(
+                                id: UUID().uuidString,
+                                file_id: fileID,
+                                parent_dir: dir,
+                                label: tag.label,
+                                source: tag.source,
+                                confidence: tag.confidence,
+                                model_version: taggerVersion
+                            )
+                            try t.insert(db)
                         }
-                        // Manual tag: leave alone
-                    } else {
-                        var t = TagRow(
-                            id: UUID().uuidString,
-                            file_id: fileID,
-                            label: tag.label,
-                            source: tag.source,
-                            confidence: tag.confidence,
-                            model_version: taggerVersion
-                        )
-                        try t.insert(db)
                     }
                 }
 

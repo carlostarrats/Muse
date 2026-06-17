@@ -235,6 +235,73 @@ final class Database {
             }
         }
 
+        migrator.registerMigration("v7_tag_parent_dir") { db in
+            // Tags become per-file-LOCATION. A tag's identity changes from
+            // file_id (content) to (file_id, parent_dir) — the same content in
+            // a different folder is a different image with its own tags. Rebuild
+            // the table (SQLite can't drop an inline UNIQUE) and FAN OUT each
+            // existing tag across the distinct alive parent folders of its
+            // file_id, so everything currently visible is preserved and only
+            // then diverges. A tag whose file has no alive path keeps a NULL
+            // parent_dir (harmless: it never surfaces; housekeeping prunes it).
+            try db.execute(sql: """
+                CREATE TABLE tags_new (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    file_id TEXT NOT NULL,
+                    parent_dir TEXT,
+                    label TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    confidence REAL,
+                    model_version TEXT,
+                    FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
+                    UNIQUE (file_id, parent_dir, label)
+                );
+            """)
+
+            // Build file_id -> {parent_dir} from alive paths once.
+            var dirsByFile: [String: Set<String>] = [:]
+            let pathRows = try Row.fetchAll(db, sql: """
+                SELECT file_id, absolute_path FROM paths
+                WHERE is_alive = 1 AND file_id IS NOT NULL
+            """)
+            for row in pathRows {
+                guard let fid: String = row["file_id"],
+                      let path: String = row["absolute_path"] else { continue }
+                dirsByFile[fid, default: []].insert(TagScope.parentDir(ofPath: path))
+            }
+
+            // Fan each existing tag out across its file's alive parent folders.
+            // The FIRST scope reuses the original tag id (no churn for the common
+            // single-folder case); extra duplicate-folder copies get fresh ids.
+            let tagRows = try Row.fetchAll(db, sql:
+                "SELECT id, file_id, label, source, confidence, model_version FROM tags")
+            for row in tagRows {
+                guard let originalID: String = row["id"],
+                      let fid: String = row["file_id"],
+                      let label: String = row["label"],
+                      let source: String = row["source"] else { continue }
+                let confidence: Double? = row["confidence"]
+                let modelVersion: String? = row["model_version"]
+                let dirs = dirsByFile[fid].map(Array.init(_:)) ?? []
+                // No alive path -> single NULL-scoped row (preserve, don't surface).
+                let scopes: [String?] = dirs.isEmpty ? [nil] : dirs.map { $0 }
+                for (i, dir) in scopes.enumerated() {
+                    try db.execute(sql: """
+                        INSERT OR IGNORE INTO tags_new
+                            (id, file_id, parent_dir, label, source, confidence, model_version)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, arguments: [i == 0 ? originalID : UUID().uuidString,
+                                     fid, dir, label, source, confidence, modelVersion])
+                }
+            }
+
+            try db.execute(sql: "DROP TABLE tags;")
+            try db.execute(sql: "ALTER TABLE tags_new RENAME TO tags;")
+            // No separate file_id index needed: UNIQUE(file_id, parent_dir,
+            // label) already creates a file_id-leading index that serves
+            // `WHERE file_id = ?` / `IN (...)` lookups.
+        }
+
         return migrator
     }
 }

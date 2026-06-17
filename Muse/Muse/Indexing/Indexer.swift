@@ -186,6 +186,8 @@ actor Indexer {
                 var refreshed = target
                 refreshed.last_seen_at = now
                 try refreshed.update(db)
+                try inheritVisionTags(db: db, fileID: target.id,
+                                      toDir: TagScope.parentDir(ofPath: absPath))
                 return false
             }
             // Otherwise: brand-new path pointing at known content
@@ -200,6 +202,8 @@ actor Indexer {
             var refreshed = target
             refreshed.last_seen_at = now
             try refreshed.update(db)
+            try inheritVisionTags(db: db, fileID: target.id,
+                                  toDir: TagScope.parentDir(ofPath: absPath))
             return false
         }
 
@@ -251,12 +255,15 @@ actor Indexer {
     /// `from` to `to`; on (file_id, label) conflict keep the existing row if
     /// it's manual, or replace it with the manual incoming row, otherwise
     /// ignore the incoming.
-    private static func unionTags(db: GRDB.Database, fromFileID: String, toFileID: String) throws {
+    // internal (not private) so MuseTests can exercise the per-folder merge.
+    static func unionTags(db: GRDB.Database, fromFileID: String, toFileID: String) throws {
         let fromTags = try TagRow.filter(TagRow.Columns.file_id == fromFileID).fetchAll(db)
         for var t in fromTags {
-            // Does target already have this label?
+            // Conflict is per (file_id, parent_dir): the same physical file at
+            // the same path keeps its folder scope when it re-links to `to`.
             if let existing = try TagRow
                 .filter(TagRow.Columns.file_id == toFileID)
+                .filter(TagRow.Columns.parent_dir == t.parent_dir)
                 .filter(TagRow.Columns.label == t.label)
                 .fetchOne(db) {
                 if t.source == "manual" && existing.source != "manual" {
@@ -271,11 +278,39 @@ actor Indexer {
             } else {
                 t.id = UUID().uuidString
                 t.file_id = toFileID
+                // parent_dir preserved — the folder didn't change.
                 try t.insert(db)
             }
         }
         // Delete the originals once unioned
         try TagRow.filter(TagRow.Columns.file_id == fromFileID).deleteAll(db)
+    }
+
+    /// A brand-new path of already-known content inherits the file's VISION
+    /// tags for ITS folder (identical pixels → identical vision tags), so a
+    /// duplicate copied into a new folder isn't blank even though the file is
+    /// already analyzed (the analyze pass skips it on analyzed_hash). Manual
+    /// tags are per-folder and are NOT inherited. No-op if this folder already
+    /// has tags, or if the content was never analyzed (the analyze pass will
+    /// then write to every alive folder).
+    // internal (not private) so MuseTests can exercise the inheritance rule.
+    static func inheritVisionTags(db: GRDB.Database, fileID: String, toDir: String) throws {
+        let hasHere = try TagRow
+            .filter(TagRow.Columns.file_id == fileID)
+            .filter(TagRow.Columns.parent_dir == toDir)
+            .fetchCount(db)
+        if hasHere > 0 { return }
+        let visionTags = try TagRow
+            .filter(TagRow.Columns.file_id == fileID)
+            .filter(TagRow.Columns.source != "manual")
+            .fetchAll(db)
+        var seen = Set<String>()
+        for var t in visionTags {
+            guard seen.insert(t.label).inserted else { continue }
+            t.id = UUID().uuidString
+            t.parent_dir = toDir
+            try t.insert(db)
+        }
     }
 
     private static func pruneIfOrphaned(db: GRDB.Database, fileID: String) throws {
