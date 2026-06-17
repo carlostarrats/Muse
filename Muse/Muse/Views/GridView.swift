@@ -26,12 +26,26 @@ struct GridView: View {
     /// a lone `onTapGesture` fires immediately, with no SwiftUI count:1-vs-2
     /// disambiguation delay. A second quick tap on the same tile opens it.
     @State private var lastTapPath: String?
-    @State private var lastTapAt: Date = .distantPast
+    /// Hardware timestamp (seconds since boot) of the last tap's originating
+    /// event — NOT a wall-clock `Date`. See `handleTileTap`.
+    @State private var lastTapAt: TimeInterval = 0
 
     private func handleTileTap(_ file: FileNode) {
         let p = file.url.standardizedFileURL.path
-        let now = Date()
-        if lastTapPath == p, now.timeIntervalSince(lastTapAt) < 0.35 {
+        // Measure the gap from the originating EVENT's hardware timestamp
+        // (seconds since boot), not from `Date()` sampled when this handler
+        // runs. On a slow machine the first click's selection can stall the
+        // main thread long enough that the second click's handler is delivered
+        // late — `Date()` would then time the handler latency, not the user's
+        // actual click cadence, and miss the double-click (the "double-click
+        // does nothing" bug older Intel Macs hit in a filtered tag/collection
+        // view). The event timestamp reflects when the click physically
+        // happened, so it's immune to that stall. The window also honors the
+        // user's System Settings double-click speed, floored at the old 0.35s
+        // so it's never stricter than before.
+        let now = NSApp.currentEvent?.timestamp ?? ProcessInfo.processInfo.systemUptime
+        let window = max(NSEvent.doubleClickInterval, 0.35)
+        if lastTapPath == p, now - lastTapAt < window {
             lastTapPath = nil
             appState.selectedFile = file          // double-click → open
             return
@@ -61,6 +75,21 @@ struct GridView: View {
             let contentWidth = max(0, geo.size.width - contentInset * 2)
 
             ScrollView {
+                ZStack(alignment: .topLeading) {
+                // Reliable deselect surface spanning the full scroll content,
+                // the top inset included. Sits BEHIND the tiles — they keep
+                // their own select taps; a tap on empty space here clears the
+                // selection. Without it the grid's top inset doesn't deselect
+                // on the no-tags layout, where that strip sits right under the
+                // toolbar instead of behind the tag chips (which deselect via
+                // OutsideClickDeselect). Keeps deselect identical with or
+                // without tags. The ScrollView `.background` tap below is
+                // viewport-pinned and unreliable for in-content clicks — this
+                // is the content-level equivalent that actually fires.
+                Color.clear
+                    .frame(maxWidth: .infinity, minHeight: geo.size.height, alignment: .top)
+                    .contentShape(Rectangle())
+                    .onTapGesture { appState.clearSelection() }
                 VStack(alignment: .leading, spacing: 0) {
                     // Page Up / Page Down scrolls the grid a screenful at a
                     // time. Inactive while a hero viewer covers the grid.
@@ -108,6 +137,7 @@ struct GridView: View {
                             .id("\(appState.activeCollectionID ?? "")|\(appState.activeTagLabel ?? "")")
                             .transition(.opacity)
                     }
+                }
                 }
             }
             .coordinateSpace(name: "gridScroll")
