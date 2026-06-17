@@ -103,7 +103,10 @@ final class AppState: ObservableObject {
         }
         let byPath = Dictionary(visibleFiles.map { ($0.url.standardizedFileURL.path, $0.url) },
                                 uniquingKeysWith: { a, _ in a })
-        return paths.compactMap { byPath[$0] }
+        // Resolve from visibleFiles when possible; otherwise rebuild the URL
+        // from the (absolute) path so a selected file that isn't currently in
+        // view is never silently dropped from an action.
+        return paths.map { byPath[$0] ?? URL(fileURLWithPath: $0) }
     }
 
     /// Set true to ask the hero viewer to run its close flight (Esc path).
@@ -665,6 +668,12 @@ final class AppState: ObservableObject {
     /// failed) surface a brief alert listing the unmoved files.
     func reloadAfterMove(failed: [URL]) {
         clearSelection()
+        // If the open viewer's file was moved out from under it, dismiss it
+        // rather than leave a broken image.
+        if let open = selectedFile,
+           !FileManager.default.fileExists(atPath: open.url.path) {
+            selectedFile = nil
+        }
         reloadCurrentFilesPublic()
         if !failed.isEmpty {
             moveFailureNames = failed.map { $0.lastPathComponent }
