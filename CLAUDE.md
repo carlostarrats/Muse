@@ -741,6 +741,19 @@ folder must refresh identically.**
   thumbnail is path-keyed and already regenerated on edit, so the reset can't
   strand stale art).
 
+### Sort-direction toggle — 2026-06-17 (on `feat/in-place-edit-refresh`)
+
+Every sort mode was locked to one direction (date→newest, name→A→Z, size→largest).
+Added a toolbar **direction arrow** immediately right of the sort menu that flips
+the active mode's order. `AppState.sortReversed` (+ effective `sortAscending` =
+`defaultAscending` XOR reversed) feeds a new `reversed` param on
+`SmartSorter.apply` (it reverses the fully-ordered array — uniform across all
+modes incl. Color/Shape). `SortMode.defaultAscending` drives the arrow (up =
+ascending); `SortMode.directionLabel(ascending:)` gives the mode-aware tooltip
+("Newest first"/"Oldest first", "A → Z"/"Z → A", …). The toggle is global (not
+per-mode) and disabled on the Collections page like the sort menu. Tests:
+`SortDirectionTests`. Build + suite green.
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
@@ -1012,7 +1025,8 @@ before implementation.
 1. Open `Muse/Muse.xcodeproj` in Xcode 16+.
 2. Build & run (Cmd+R). The app starts on a clean shell — click
    "Add Folder" in the sidebar to point Muse at any folder on disk.
-3. Toolbar (left → right): sidebar toggle · sort · show-subfolders ·
+3. Toolbar (left → right): sidebar toggle · sort · sort-direction arrow
+   (flips the active mode's order — newest↔oldest, A↔Z, …) · show-subfolders ·
    search (center) · Collections (square.stack.3d.up) · background mood ·
    ⓘ About. (The grid/cloud/galaxy view picker and the water effect were
    removed 2026-06-13; the clear-collection ✕ was removed in favor of back

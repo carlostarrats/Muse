@@ -155,6 +155,22 @@ final class AppState: ObservableObject {
     /// Active sort mode (default = date modified desc per Q24 generalist).
     @Published var sortMode: SortMode = .dateModified
 
+    /// Flip the active sort mode's natural order (the toolbar direction arrow).
+    /// false = each mode's default (newest/largest/A→Z first); true reverses.
+    @Published var sortReversed = false
+
+    /// Effective ascending/descending of the current mode (default XOR
+    /// reversed). Drives the toolbar arrow (up = ascending) + its tooltip.
+    var sortAscending: Bool {
+        sortReversed ? !sortMode.defaultAscending : sortMode.defaultAscending
+    }
+
+    /// Flip sort direction and re-order the visible files in place.
+    func toggleSortDirection() {
+        sortReversed.toggle()
+        resort()
+    }
+
     /// Whether the right-side detail panel (tags, metadata) is visible.
     /// Presents the duplicates review sheet (set by findDuplicatesInCurrentFolder).
     @Published var duplicatesSheetVisible = false
@@ -260,7 +276,7 @@ final class AppState: ObservableObject {
             let nodes = SmartSorter.apply(sortMode, to: paths.compactMap { path in
                 FileManager.default.fileExists(atPath: path)
                     ? FileNode(url: URL(fileURLWithPath: path)) : nil
-            })
+            }, reversed: sortReversed)
             // Don't clobber a newer selection that landed while loading.
             if token == collectionRequestToken {
                 withAnimation(curve) {
@@ -811,6 +827,7 @@ final class AppState: ObservableObject {
         let showSub = showSubfolders
         let showHid = showHidden
         let mode = sortMode
+        let reversed = sortReversed
 
         // Reuse unchanged nodes so live reloads keep tile @State (thumbnails,
         // in-flight animations). A fresh selection clears instead — nothing to
@@ -846,7 +863,7 @@ final class AppState: ObservableObject {
                 }
                 return fresh
             }
-            let sorted = SmartSorter.apply(mode, to: merged)
+            let sorted = SmartSorter.apply(mode, to: merged, reversed: reversed)
             await MainActor.run {
                 // A newer selection started while we were loading — drop this.
                 guard token == self.folderLoadToken else { return }
@@ -860,9 +877,9 @@ final class AppState: ObservableObject {
     func resort() {
         // Don't re-sort search results; they maintain relevance ranking
         guard !isSearchActive else { return }
-        currentFiles = SmartSorter.apply(sortMode, to: currentFiles)
+        currentFiles = SmartSorter.apply(sortMode, to: currentFiles, reversed: sortReversed)
         if let collectionFiles = activeCollectionFiles {
-            activeCollectionFiles = SmartSorter.apply(sortMode, to: collectionFiles)
+            activeCollectionFiles = SmartSorter.apply(sortMode, to: collectionFiles, reversed: sortReversed)
         }
     }
 
