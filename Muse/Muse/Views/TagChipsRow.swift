@@ -192,6 +192,20 @@ struct TagChipsRow: View {
             tags = []
             return
         }
+
+        // Fast path — a single, non-recursive folder (not inside a collection,
+        // not showing subfolders) has ONE constant parent_dir, so the per-label
+        // counts come straight from a SQL GROUP BY instead of fetching every tag
+        // row for every file and counting them in Swift. This is the path a normal
+        // folder switch hits, and where the grid waited longest before it could
+        // reveal — so cutting it shortens the brief "empty" gap before the folder
+        // appears (most noticeable in a large library).
+        if appState.activeCollectionID == nil, !appState.showSubfolders {
+            let dir = TagScope.parentDir(ofPath: paths[0])
+            revealTags(from: await folderLabelCounts(paths: paths, parentDir: dir, queue: q))
+            return
+        }
+
         var counts: [String: Int] = [:]
         for start in stride(from: 0, to: paths.count, by: 500) {
             let chunk = Array(paths[start..<min(start + 500, paths.count)])
@@ -232,13 +246,52 @@ struct TagChipsRow: View {
         // list hid tags with no other way to reach them. Most-used first, with
         // an alphabetical tiebreak so equal-count tags keep a stable order
         // (no shuffling between reloads).
-        tags = counts
+        revealTags(from: counts)
+    }
+
+    /// Order the counted labels (most-used first, alphabetical tiebreak) and
+    /// reveal the row + the grid's images together, already sized — so a tagged
+    /// folder shows its chips FIRST and the images never render up top and then
+    /// get shoved down. `tagRowReady` ungates the grid (see GridView); the row's
+    /// height and the grid reveal land in one animated transaction.
+    private func revealTags(from counts: [String: Int]) {
+        let ordered = counts
             .sorted {
                 $0.value != $1.value
                     ? $0.value > $1.value
                     : $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending
             }
             .map { (label: $0.key, count: $0.value) }
+        withAnimation(.easeInOut(duration: AppState.navTransition)) {
+            tags = ordered
+            appState.tagRowReady = true
+        }
+    }
+
+    /// Per-label counts for a single non-recursive folder via SQL GROUP BY — the
+    /// fast path. `parentDir` is the folder's tag scope (constant for all its
+    /// files), and `paths` restricts the count to the files actually present, so
+    /// a chip can never filter the grid down to empty.
+    private func folderLabelCounts(paths: [String], parentDir: String,
+                                   queue: DatabaseQueue) async -> [String: Int] {
+        (try? await queue.read { db -> [String: Int] in
+            var out: [String: Int] = [:]
+            for start in stride(from: 0, to: paths.count, by: 800) {
+                let chunk = Array(paths[start..<min(start + 800, paths.count)])
+                let marks = databaseQuestionMarks(count: chunk.count)
+                let rows = try Row.fetchAll(db, sql: """
+                    SELECT t.label AS label, COUNT(DISTINCT p.file_id) AS c
+                    FROM paths p JOIN tags t ON t.file_id = p.file_id
+                    WHERE p.is_alive = 1 AND t.parent_dir = ? AND p.absolute_path IN (\(marks))
+                    GROUP BY t.label
+                    """, arguments: StatementArguments([parentDir] + chunk))
+                for r in rows {
+                    guard let label: String = r["label"], let c: Int = r["c"] else { continue }
+                    out[label, default: 0] += c
+                }
+            }
+            return out
+        }) ?? [:]
     }
 }
 

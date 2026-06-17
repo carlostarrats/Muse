@@ -112,10 +112,19 @@ struct GridView: View {
                     }
                     if appState.visibleFiles.isEmpty {
                         if appState.isLoadingFolder {
-                            skeletonGrid(width: contentWidth)
+                            // Calm background while the folder enumerates — no fake
+                            // skeleton tiles, which would sit at a top position the
+                            // tag row later shifts. Content appears already in place.
+                            Color.clear
                         } else {
                             emptyState
                         }
+                    } else if !(appState.isSearchActive || appState.tagRowReady) {
+                        // Files are ready but the tag row hasn't sized yet — hold on
+                        // the background so the images don't render at the top and
+                        // then get shoved down when the chips appear. The row loads
+                        // first; the images reveal already in place below it.
+                        Color.clear
                     } else {
                         masonryCanvas(viewportHeight: geo.size.height)
                             .frame(width: contentWidth, height: totalHeight,

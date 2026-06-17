@@ -40,7 +40,9 @@ final class AppState: ObservableObject {
     @Published var selectedFolder: FolderNode?
 
     /// Files in the selected folder (or, if recursive, including subfolders).
-    @Published var currentFiles: [FileNode] = []
+    @Published var currentFiles: [FileNode] = [] {
+        didSet { _visibleFilesValid = false }
+    }
 
     /// Per-path content version, bumped when a file's bytes change in place
     /// (crop, edit-and-save, iCloud sync-in). The grid tile keys its
@@ -71,6 +73,13 @@ final class AppState: ObservableObject {
     /// True while a freshly-selected folder is being enumerated off-main, so
     /// the grid can show a skeleton instead of a frozen click.
     @Published var isLoadingFolder = false
+
+    /// True once the tag-chip row has loaded its labels for the freshly-selected
+    /// folder. The grid holds its images back until this flips true, so a tagged
+    /// folder's chips appear FIRST and the images reveal already sized below them
+    /// — they never render at the top and then get shoved down. Reset to false on
+    /// each fresh folder pick; set true by TagChipsRow when its labels land.
+    @Published var tagRowReady = false
 
     /// Currently selected file (drives preview/detail).
     @Published var selectedFile: FileNode?
@@ -139,7 +148,9 @@ final class AppState: ObservableObject {
     @Published var searchQuery: String = ""
 
     /// True when search results, not folder contents, are showing in the grid.
-    @Published var isSearchActive: Bool = false
+    @Published var isSearchActive: Bool = false {
+        didSet { _visibleFilesValid = false }
+    }
 
     /// Search scope, chosen in the search field's magnifier menu. false = the
     /// selected folder (the default), true = the whole library. Drives both the
@@ -168,7 +179,9 @@ final class AppState: ObservableObject {
     /// FileNodes for ALL of the active collection's members, across every
     /// folder — a collection is a library-wide view, not an intersection
     /// with whatever folder happens to be selected in the sidebar.
-    @Published var activeCollectionFiles: [FileNode]? = nil
+    @Published var activeCollectionFiles: [FileNode]? = nil {
+        didSet { _visibleFilesValid = false }
+    }
 
     /// True when the dedicated Collections page (grid of all collection
     /// cards) is showing. Toggled by the toolbar's collections icon. When a
@@ -191,7 +204,9 @@ final class AppState: ObservableObject {
     /// Active tag-chip filter; nil = "All". Set via `setActiveTag`.
     @Published var activeTagLabel: String?
     /// Alive paths of files carrying `activeTagLabel`; nil = no filter.
-    @Published var activeTagPaths: Set<String>?
+    @Published var activeTagPaths: Set<String>? {
+        didSet { _visibleFilesValid = false }
+    }
     /// Bumped after any tag mutation (add/rename/delete) so the chip row
     /// and other tag-derived UI reload.
     @Published var tagsVersion = 0
@@ -208,6 +223,26 @@ final class AppState: ObservableObject {
     /// Monotonic token so a slow tag-filter load can't clobber a newer pick.
     /// Not `private`: read/written by `setActiveTag` in AppState+Filters.swift.
     var tagRequestToken = 0
+
+    // MARK: - Derived: visibleFiles cache
+
+    /// Memoized backing for `visibleFiles` (computed in AppState+Filters.swift).
+    /// The grid reads `visibleFiles` several times per render and on every
+    /// layout recompute; re-running the tag filter — which standardizes the
+    /// path of every file in the folder (~1700 in a big library) — each time
+    /// put an O(n) hitch on the main thread right as a switch was animating.
+    /// These are invalidated via `didSet` on the four inputs (currentFiles,
+    /// activeCollectionFiles, activeTagPaths, isSearchActive), so the filter
+    /// runs once per change and every read after is O(1). Internal (not
+    /// private) because the computed property lives in the extension file.
+    var _visibleFilesCache: [FileNode] = []
+    var _visibleFilesValid = false
+
+    /// Shared duration for navigation crossfades — the Collections page⇄grid
+    /// swap, the collection/tag filter swaps, and search enter/exit. Kept short
+    /// so the brief moment where two image-heavy grids composite at once (the
+    /// crossfade) is over quickly and switching pages feels near-instant.
+    static let navTransition: Double = 0.2
 
     // The tag/collection filter logic and bulkTagCommandsAvailable /
     // setCollectionCover live in AppState+Filters.swift.
@@ -468,9 +503,14 @@ final class AppState: ObservableObject {
         // Collections page, end any active search (and reset its scope to the
         // folder default), and drop the previous folder's tag filter so it can't
         // empty the new one. Lands on the folder's "All" tags view.
+        // Tear the old view down INSTANTLY (animated: false) so it doesn't
+        // animate away in visible steps — tags collapsing, content sliding up,
+        // the collection/page clearing — before the new folder appears. The old
+        // view vanishes in one frame; then the folder fades in (tag row first,
+        // images already in place below it).
         if showingCollections { showingCollections = false }
-        if activeCollectionID != nil { setActiveCollection(nil) }
-        if activeTagLabel != nil { setActiveTag(nil) }
+        if activeCollectionID != nil { setActiveCollection(nil, animated: false) }
+        if activeTagLabel != nil { setActiveTag(nil, animated: false) }
         // Clear the search inline (not via clearSearch(), which would trigger a
         // second, skeleton-less reload on top of the one below). A stale search
         // would otherwise leave the query in the field, the grid showing search
@@ -631,6 +671,9 @@ final class AppState: ObservableObject {
             existing = [:]
             currentFiles = []
             isLoadingFolder = true
+            // Hold the grid's images until the tag row loads, so a tagged folder
+            // reveals its chips first and the images appear already in place.
+            tagRowReady = false
             // Fresh folder: the old folder's recorded tile frames are dead
             // weight (and could mis-seed a hero open for a stale path).
             // Bounds tileFrames to roughly one folder's worth of tiles.
@@ -749,7 +792,9 @@ final class AppState: ObservableObject {
             let isDir = v?.isDirectory == true
             let isPackage = v?.isPackage == true
             if isDir && !isPackage { continue }
-            nodes.append(FileNode(url: child))
+            // Known to be a file/package — classify directly, skipping
+            // AssetKind.detect's redundant per-file fileExists stat.
+            nodes.append(FileNode(url: child, kind: AssetKind.classify(url: child, fallback: .unknown)))
         }
         return nodes
     }

@@ -27,6 +27,14 @@ struct ContentView: View {
             && !appState.isSearchActive
     }
 
+    /// Collections-page⇄grid swap: the outgoing screen is removed INSTANTLY and
+    /// only the incoming fades in (over the background). With no overlap, the two
+    /// dissimilar layouts never blend into a "ghost" — leaving Collections, the
+    /// cards vanish at once and the folder fades up in their place.
+    private static var pageReveal: AnyTransition {
+        .asymmetric(insertion: .opacity, removal: .identity)
+    }
+
     var body: some View {
         ZStack {
         NavigationSplitView {
@@ -42,7 +50,7 @@ struct ContentView: View {
                         if isCollectionsPage {
                             // Dedicated Collections page — no tag chips here.
                             CollectionsPage()
-                                .transition(.opacity)
+                                .transition(Self.pageReveal)
                         } else {
                             // Chips stay pinned — on the main grid AND inside a
                             // collection (so tags filter within a collection).
@@ -56,17 +64,21 @@ struct ContentView: View {
                                 }
                                 GridView()
                             }
-                            .transition(.opacity)
+                            .transition(Self.pageReveal)
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(appState.moodPalette.background)
                     .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
-                    // Crossfade between the Collections page and the grid as a
-                    // single unit whenever the active experience changes.
-                    .animation(.easeInOut(duration: 0.3), value: isCollectionsPage)
-                    .animation(.easeInOut(duration: 0.25), value: appState.isSearchActive)
-                    .animation(.easeInOut(duration: 0.25), value: appState.activeCollectionID)
+                    // Search enter/exit still crossfades via this ambient animation.
+                    .animation(.easeInOut(duration: AppState.navTransition), value: appState.isSearchActive)
+                    // NOTE: deliberately NO ambient animation on isCollectionsPage or
+                    // activeCollectionID. Those transitions are driven explicitly by
+                    // withAnimation inside toggleCollectionsPage / setActiveCollection /
+                    // setActiveTag, so a FOLDER switch can tear the old tag/collection
+                    // view down INSTANTLY (animated: false) — it vanishes in one frame
+                    // instead of animating away in visible steps before the new folder
+                    // fades in.
                 }
 
             }
