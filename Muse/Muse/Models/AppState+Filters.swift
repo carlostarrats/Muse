@@ -10,6 +10,7 @@
 
 import Foundation
 import SwiftUI
+import GRDB
 
 extension AppState {
 
@@ -202,12 +203,22 @@ extension AppState {
         let token = tagRequestToken
         Task { @MainActor in
             guard let q = Database.shared.dbQueue else { return }
-            let paths: [String] = (try? await q.read { db in
-                try String.fetchAll(db, sql: """
-                    SELECT p.absolute_path FROM paths p
-                    JOIN tags t ON t.file_id = p.file_id
+            let paths: [String] = (try? await q.read { db -> [String] in
+                // A path matches only if the tag is scoped to ITS folder —
+                // tags are per-location, so a duplicate sharing the file_id in
+                // an untagged folder must not be pulled in.
+                let rows = try Row.fetchAll(db, sql: """
+                    SELECT p.absolute_path AS ap, t.parent_dir AS pd
+                    FROM paths p JOIN tags t ON t.file_id = p.file_id
                     WHERE p.is_alive = 1 AND t.label = ?
                     """, arguments: [label])
+                var out: [String] = []
+                for r in rows {
+                    guard let ap: String = r["ap"] else { continue }
+                    let pd: String? = r["pd"]
+                    if pd == TagScope.parentDir(ofPath: ap) { out.append(ap) }
+                }
+                return out
             }) ?? []
             if token == tagRequestToken {
                 withAnimation(curve) {

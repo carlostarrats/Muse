@@ -188,14 +188,36 @@ struct TagChipsRow: View {
         var counts: [String: Int] = [:]
         for start in stride(from: 0, to: paths.count, by: 500) {
             let chunk = Array(paths[start..<min(start + 500, paths.count)])
-            let rows: [(String, Int)] = (try? await q.read { db in
+            let rows: [(String, Int)] = (try? await q.read { db -> [(String, Int)] in
                 let marks = databaseQuestionMarks(count: chunk.count)
-                return try Row.fetchAll(db, sql: """
-                    SELECT t.label, COUNT(DISTINCT t.file_id) AS c
-                    FROM tags t JOIN paths p ON p.file_id = t.file_id
-                    WHERE p.is_alive = 1 AND p.absolute_path IN (\(marks))
-                    GROUP BY t.label
-                    """, arguments: StatementArguments(chunk)).map { ($0["label"], $0["c"]) }
+                // The (file_id, parent_dir) scopes actually present in THIS view —
+                // tags are per-folder, so a duplicate's tag in another folder must
+                // not surface here even though it shares the file_id.
+                let pathRows = try Row.fetchAll(db, sql: """
+                    SELECT file_id, absolute_path FROM paths
+                    WHERE is_alive = 1 AND file_id IS NOT NULL AND absolute_path IN (\(marks))
+                """, arguments: StatementArguments(chunk))
+                var scopeKeys = Set<String>()
+                var fileIDs = Set<String>()
+                for r in pathRows {
+                    guard let fid: String = r["file_id"],
+                          let p: String = r["absolute_path"] else { continue }
+                    fileIDs.insert(fid)
+                    scopeKeys.insert(fid + "\u{0}" + TagScope.parentDir(ofPath: p))
+                }
+                guard !fileIDs.isEmpty else { return [] }
+                let fmarks = databaseQuestionMarks(count: fileIDs.count)
+                let tagRows = try Row.fetchAll(db, sql: """
+                    SELECT label, file_id, parent_dir FROM tags WHERE file_id IN (\(fmarks))
+                """, arguments: StatementArguments(Array(fileIDs)))
+                var perLabel: [String: Set<String>] = [:]
+                for tr in tagRows {
+                    guard let label: String = tr["label"], let fid: String = tr["file_id"],
+                          let dir: String = tr["parent_dir"] else { continue }
+                    let key = fid + "\u{0}" + dir
+                    if scopeKeys.contains(key) { perLabel[label, default: []].insert(key) }
+                }
+                return perLabel.map { ($0.key, $0.value.count) }
             }) ?? []
             for (label, count) in rows { counts[label, default: 0] += count }
         }

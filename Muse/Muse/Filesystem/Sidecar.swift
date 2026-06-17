@@ -91,11 +91,12 @@ extension Sidecar {
         file.intent_model_version = intent_model_version
     }
 
-    /// Materialize TagRows for a given file id. `makeID` supplies unique row
-    /// ids (UUID in production, deterministic in tests).
-    nonisolated func tagRows(fileID: String, makeID: () -> String) -> [TagRow] {
+    /// Materialize TagRows for a given file id, scoped to `parentDir` (the
+    /// folder this sidecar lives in — tags are per-location). `makeID` supplies
+    /// unique row ids (UUID in production, deterministic in tests).
+    nonisolated func tagRows(fileID: String, parentDir: String?, makeID: () -> String) -> [TagRow] {
         tags.map {
-            TagRow(id: makeID(), file_id: fileID, label: $0.label,
+            TagRow(id: makeID(), file_id: fileID, parent_dir: parentDir, label: $0.label,
                    source: $0.source, confidence: $0.confidence,
                    model_version: $0.model_version)
         }
