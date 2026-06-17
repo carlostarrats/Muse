@@ -122,7 +122,11 @@ private struct ActiveCollectionHeader: View {
         Task { @MainActor in
             appState.setActiveCollection(nil)
             if let q = Database.shared.dbQueue {
-                try? await CollectionStore.delete(queue: q, id: id)
+                // Durable delete: marks the collection so the auto-organizer
+                // never rebuilds it. A plain row-delete would silently come
+                // back on the next analyze (it's auto-generated). No "Hide"
+                // surface — from the user's side it's simply deleted.
+                try? await CollectionStore.setHidden(queue: q, id: id, hidden: true)
                 await CollectionsEngine.shared.reload()
             }
         }
@@ -225,6 +229,7 @@ struct CollectionCard: View {
     static let defaultCoverSize = CGSize(width: 240, height: 120)
 
     @State private var hovering = false
+    @State private var confirmDelete = false
 
     private var isActive: Bool {
         appState.activeCollectionID == loaded.collection.id
@@ -271,20 +276,32 @@ struct CollectionCard: View {
             appState.setActiveCollection(loaded.collection.id)
         }
         .contextMenu {
-            Button("Hide Collection") {
-                let id = loaded.collection.id
-                Task { @MainActor in
-                    if let q = Database.shared.dbQueue {
-                        try? await CollectionStore.setHidden(queue: q, id: id, hidden: true)
-                    }
-                    if appState.activeCollectionID == id {
-                        appState.setActiveCollection(nil)
-                    }
-                    await CollectionsEngine.shared.reload()
-                }
+            Button("Delete Collection…", role: .destructive) {
+                confirmDelete = true
             }
         }
+        .alert("Delete “\(loaded.collection.name)”?", isPresented: $confirmDelete) {
+            Button("Delete", role: .destructive) { deleteCollection() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The collection is removed. Your images stay on disk.")
+        }
         .help(loaded.collection.name)
+    }
+
+    private func deleteCollection() {
+        let id = loaded.collection.id
+        Task { @MainActor in
+            if appState.activeCollectionID == id {
+                appState.setActiveCollection(nil)
+            }
+            if let q = Database.shared.dbQueue {
+                // Durable delete (see ActiveCollectionHeader.deleteCollection):
+                // marks it so the auto-organizer never rebuilds it. No "Hide".
+                try? await CollectionStore.setHidden(queue: q, id: id, hidden: true)
+                await CollectionsEngine.shared.reload()
+            }
+        }
     }
 }
 

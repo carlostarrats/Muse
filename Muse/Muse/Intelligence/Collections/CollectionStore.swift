@@ -9,6 +9,26 @@
 import Foundation
 import GRDB
 
+/// Default naming for hand-made collections: "Collection 1", "Collection 2", …
+/// The next number is one past the highest existing "Collection N" (across all
+/// collections, so numbers never collide), with gaps ignored.
+enum ManualCollectionName {
+    static let prefix = "Collection "
+
+    static func next(existing names: [String]) -> String {
+        let maxN = names.compactMap(number(in:)).max() ?? 0
+        return "\(prefix)\(maxN + 1)"
+    }
+
+    /// The N in "Collection N", or nil if the name isn't of that exact form.
+    static func number(in name: String) -> Int? {
+        guard name.hasPrefix(prefix) else { return nil }
+        let suffix = name.dropFirst(prefix.count)
+        guard !suffix.isEmpty, suffix.allSatisfy(\.isNumber) else { return nil }
+        return Int(suffix)
+    }
+}
+
 enum CollectionStore {
     struct Loaded {
         var collection: CollectionRow
@@ -130,15 +150,29 @@ enum CollectionStore {
         }
     }
 
-    /// Removes the collection and its memberships. Files are untouched.
-    static func delete(queue: DatabaseQueue, id: String) async throws {
+    /// Create an empty, hand-made collection auto-named "Collection N".
+    /// Marked model_version = 'manual' so the auto-organizer never reclusters
+    /// or prunes it (it's protected + shown even while empty). Returns its id.
+    /// Name choice + insert happen in one write so concurrent adds can't collide.
+    @discardableResult
+    static func createManual(queue: DatabaseQueue) async throws -> String {
+        let id = UUID().uuidString
+        let now = Int64(Date().timeIntervalSince1970)
         try await queue.write { db in
-            try db.execute(sql: "DELETE FROM collection_members WHERE collection_id = ?",
-                           arguments: [id])
-            try db.execute(sql: "DELETE FROM collections WHERE id = ?",
-                           arguments: [id])
+            let names = try String.fetchAll(db, sql: "SELECT name FROM collections")
+            let name = ManualCollectionName.next(existing: names)
+            try db.execute(sql: """
+                INSERT INTO collections (id, name, is_hidden, model_version, created_at, updated_at)
+                VALUES (?, ?, 0, 'manual', ?, ?)
+                """, arguments: [id, name, now, now])
         }
+        return id
     }
+
+    // NOTE: there is intentionally no hard-delete. Collections are auto-
+    // generated, so a row-delete silently regenerates on the next analyze.
+    // Deletion goes through setHidden(true) (the durable "don't rebuild"
+    // tombstone) — see ActiveCollectionHeader/CollectionCard.deleteCollection.
 
     /// Set (or replace) a collection's chosen cover image. One per collection.
     static func setCover(queue: DatabaseQueue, id: String, fileID: String) async throws {
@@ -200,7 +234,10 @@ enum CollectionStore {
                 return Loaded(collection: row, memberIDs: members, aliveCount: alive,
                               coverFileID: row.cover_file_id)
             }
-            .filter { $0.aliveCount > 0 }                      // nothing on disk → hidden
+            // Auto collections with nothing on disk are hidden; hand-made
+            // ('manual') collections stay visible even while empty, so a just-
+            // created one shows up and can be populated.
+            .filter { $0.aliveCount > 0 || $0.collection.model_version == "manual" }
             .sorted { $0.aliveCount > $1.aliveCount }          // biggest first
         }
     }

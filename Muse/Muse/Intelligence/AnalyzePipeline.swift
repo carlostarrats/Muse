@@ -76,6 +76,10 @@ final class AnalyzePipeline: ObservableObject {
     /// analyzed_hash is missing or stale (new or edited images). Runs
     /// after every index pass — analyzing twice is a provable no-op.
     func analyzePending(in urls: [URL]) async {
+        // Automatic tagging is opt-out (Preferences). Off → newly indexed
+        // images stay viewable but untagged; the user can still Analyze /
+        // Regenerate a folder by hand.
+        guard AppSettings.autoTag else { return }
         guard let queue = Database.shared.dbQueue else { return }
         // A pass may already be running (e.g. the previous folder's) —
         // wait our turn instead of silently skipping this folder. Bail if the
