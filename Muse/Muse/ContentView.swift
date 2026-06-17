@@ -189,6 +189,18 @@ struct ContentView: View {
         // Selection belongs to the grid: entering or leaving search clears it,
         // so actions never operate on images the search has hidden.
         .onChange(of: appState.isSearchActive) { _, _ in appState.clearSelection() }
+        // Speak the running selection count for VoiceOver users as it changes.
+        .onChange(of: appState.selectedFiles.count) { _, count in
+            guard count > 0 else { return }
+            let message = count == 1 ? "1 image selected" : "\(count) images selected"
+            NSAccessibility.post(
+                element: NSApp.mainWindow as Any,
+                notification: .announcementRequested,
+                userInfo: [
+                    .announcement: message,
+                    .priority: NSAccessibilityPriorityLevel.high.rawValue
+                ])
+        }
         .overlay(alignment: .bottom) {
             if analyzePipeline.isRunning {
                 analyzeStatusBanner
