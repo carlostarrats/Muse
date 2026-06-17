@@ -82,11 +82,25 @@ struct CollectionsPage: View {
             }
             Text("Collections")
                 .font(.system(size: 42, weight: .semibold))
+            HeaderIconButton(systemName: "plus", help: "New Collection") {
+                createCollection()
+            }
             Spacer()
         }
         .padding(.horizontal, 14)
         .padding(.top, 14)
         .padding(.bottom, 48)
+    }
+
+    /// Create an empty, hand-made collection (auto-named "Collection N"). It
+    /// shows as a card immediately; open it to rename, or add images via "Add
+    /// to Collection" from a selection.
+    private func createCollection() {
+        Task { @MainActor in
+            guard let q = Database.shared.dbQueue else { return }
+            _ = try? await CollectionStore.createManual(queue: q)
+            await CollectionsEngine.shared.reload()
+        }
     }
 
     private var emptyState: some View {
