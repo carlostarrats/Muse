@@ -25,7 +25,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # Multi-resolution TIFF (600x400 @1x + 1200x800 @2x) so Finder renders the
 # background at 600x400 points, crisp on Retina, with no cropping. Rebuild it
 # from dmg/dmg-background.jpg with scripts/make-dmg-background.sh.
-BG="$REPO_ROOT/dmg/dmg-background.tiff"
+BG="$REPO_ROOT/dmg/dmg-background.png"
 
 if [[ ! -d "$APP" ]]; then
   echo "error: app not found at '$APP'" >&2
@@ -73,8 +73,8 @@ sed -i '' 's/\(set text size to TEXT_SIZE\)/\1\
   --window-pos 200 120 \
   --window-size 600 400 \
   --icon-size 128 \
-  --icon "Muse.app" 165 200 \
-  --app-drop-link 435 200 \
+  --icon "Muse.app" 165 170 \
+  --app-drop-link 435 170 \
   --hide-extension "Muse.app" \
   --no-internet-enable \
   "$OUT" \
