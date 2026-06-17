@@ -600,6 +600,48 @@ multi-select work went through two adversarial review rounds.
   the grid selection rather than import the dropped file (rare; not fixed to
   avoid risking the verified in-app drag).
 
+### iCloud dev-container isolation (data-loss safeguard) — 2026-06-16 (on `safety/icloud-dev-container-isolation`)
+
+Hardened against an iCloud purge risk inherent to app-private ubiquity
+containers (the failure mode that lost files in another local-first app on
+this same machine/Apple ID).
+
+- **The risk.** Muse's single "Muse" folder lives in an app-private iCloud
+  container (`iCloud.com.tarrats.Muse`, `NSUbiquitousContainerIsDocumentScope-
+  Public = true`) and holds the user's *actual files* + `.muse` sidecars. The
+  lifetime of an app-private container's Documents is tied to the app's install
+  state: if macOS's `bird` daemon decides the app was uninstalled, it purges the
+  container server-side (propagating the delete to every device). The trigger is
+  instances of the bundle id repeatedly appearing/disappearing — exactly what a
+  dev machine produces (DerivedData rebuilds, `/private/tmp` builds, mounted/
+  unmounted release DMGs, Trash). `lsregister` showed dozens of `com.tarrats.Muse`
+  bundles registered here, all claiming the one production container, built with
+  mixed identities (adhoc / Apple Development / Developer ID).
+- **The fix — isolate Debug from the production container.** Debug builds now
+  sign with **`Muse/Muse-Debug.entitlements`** and **`MuseShareExtension/
+  MuseShareExtension-Debug.entitlements`**, which are the production entitlements
+  **minus the three iCloud keys** (`icloud-container-identifiers`,
+  `icloud-services`, `ubiquity-container-identifiers`). So local dev builds no
+  longer *claim* the container, and their constant churn can't mark it
+  uninstalled. Verified: the built Debug app has no iCloud/ubiquity entitlements
+  (sandbox + app group intact). `CODE_SIGN_ENTITLEMENTS` is set per-config in
+  `project.pbxproj` (Debug → `-Debug` files, Release → the originals); signing is
+  Automatic, and dropping a capability needs no portal change.
+- **Production / App Store untouched.** Release keeps `Muse.entitlements` (with
+  iCloud) exactly as before, so the Developer-ID build — and a future Mac App
+  Store target, which would reuse the same bundle id + container — share one
+  container and one set of user data. The isolation is Debug-only.
+- **Other levers (already in good shape).** Updates ship via **Sparkle only**
+  (atomic in-place swap preserves app identity — never instruct users to drag a
+  new DMG over the old app). Eviction under storage pressure is NOT a data-loss
+  path here: Muse already tolerates dataless iCloud files (skips them until
+  downloaded), so the "keep-downloaded" marking isn't needed. Release builds are
+  notarized + stapled by `release.sh`.
+- **Operational note for the developer.** Don't run Release/DMG builds that claim
+  the container any more than necessary, and eject release DMGs + empty Trash so
+  phantom registrations don't accumulate. A backup of the container's current
+  contents was taken to `~/Documents/Muse-iCloud-backup-<timestamp>/`.
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```

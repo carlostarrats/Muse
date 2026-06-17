@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- DEBUG ONLY. iCloud is deliberately OMITTED here so that local dev
+	     builds never claim the production iCloud container
+	     (iCloud.com.tarrats.Muse). The constant build/run/delete churn of dev
+	     builds is exactly what can make iCloud's daemon think the app was
+	     uninstalled and purge a user's files server-side. Release builds keep
+	     iCloud via Muse.entitlements, and a future App Store target inherits
+	     that same production entitlements file — so production user data is
+	     untouched by this isolation. Keep this file in sync with the non-iCloud
+	     keys of Muse.entitlements. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+	<array>
+		<string>com.tarrats.Muse-spks</string>
+		<string>com.tarrats.Muse-spki</string>
+	</array>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.tarrats.Muse</string>
+	</array>
+	<key>com.apple.security.files.bookmarks.app-scope</key>
+	<true/>
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+</dict>
+</plist>
