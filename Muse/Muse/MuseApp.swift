@@ -126,7 +126,8 @@ struct MuseApp: App {
                                            fromURLs: appState.effectiveSelectionURLs(fallback: ""))
                     }
                 }
-                .disabled(appState.activeTagLabel == nil || appState.selectedFiles.isEmpty)
+                .disabled(appState.activeTagLabel == nil || appState.selectedFiles.isEmpty
+                          || appState.isSearchActive)
 
                 Divider()
 
@@ -166,7 +167,8 @@ struct MuseApp: App {
                                                       urls: appState.effectiveSelectionURLs(fallback: ""))
                     }
                 }
-                .disabled(appState.activeCollectionID == nil || appState.selectedFiles.isEmpty)
+                .disabled(appState.activeCollectionID == nil || appState.selectedFiles.isEmpty
+                          || appState.isSearchActive)
 
                 Divider()
 

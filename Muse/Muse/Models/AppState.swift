@@ -340,6 +340,17 @@ final class AppState: ObservableObject {
             }
             await CollectionsEngine.shared.reload()
             if activeCollectionID == id {
+                // If removal empties the open collection it disappears from the
+                // engine (its header stops rendering) and the grid would be
+                // stranded with no back arrow — return to the library in one
+                // transaction, mirroring the tag path.
+                let anyLeft = (activeCollectionFiles ?? []).contains {
+                    !removed.contains($0.url.standardizedFileURL.path)
+                }
+                if !anyLeft {
+                    setActiveCollection(nil)
+                    return
+                }
                 activeCollectionPaths?.subtract(removed)
                 activeCollectionFiles?.removeAll {
                     removed.contains($0.url.standardizedFileURL.path)

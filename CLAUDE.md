@@ -600,6 +600,34 @@ multi-select work went through two adversarial review rounds.
   the grid selection rather than import the dropped file (rare; not fixed to
   avoid risking the verified in-app drag).
 
+### Tag chip fixes + remove-from-tag/collection — 2026-06-16 (on `fix/tag-chip-count-overlap`, merged into `safety/icloud-dev-container-isolation`)
+
+Live UI session on the tag chip row and grid context actions:
+
+- **Tag chip count overlap fixed.** On hover the chip reveals its count; long
+  labels (e.g. `illustration`, `people`) overlapped the number. Root cause: the
+  chip only made room by shrinking its two neighbors, capped at a 50pt `floor`,
+  so when neighbors were short it couldn't widen enough. Fix in `ChipFlow`
+  (`TagChipsRow.swift`): the hovered chip now grows by an ADAPTIVE amount
+  (`growForHovered` = measured count width + 5pt, so the word↔number gap is
+  uniform for `1` and `1234`) and ALWAYS by the full amount; neighbors yield down
+  to a 30pt floor and any shortfall widens the row (`sizeThatFits` returns the
+  real width). No overlap regardless of label/count length.
+- **All tags shown.** Removed the top-30 display cap (tags past 30 were
+  unreachable — the chip row is the only tag browser). Row shows every tag in the
+  current folder/collection, most-used first, alphabetical tiebreak, horizontally
+  scrollable.
+- **Remove from tag / collection.** Right-click a tile while viewing a tag →
+  "Remove Tag «label»"; inside a collection → "Remove from Collection «name»".
+  Menu-bar equivalents in Tags/Collections (gated to that context + a selection,
+  excluded during search). Both act on the effective selection via new
+  `AppState.removeTag(_:fromURLs:)` / `removeFromCollection(_:urls:)`.
+  `TagStore.removeLabel` leaves `analyzed_hash` untouched so the auto-tagger
+  never regenerates a removed tag; `CollectionStore.removeFile` records an
+  exclusion so the removal sticks. When a removal empties the active tag OR the
+  open collection, the view returns to All / the library in a single transaction
+  (no stranded empty page).
+
 ### iCloud dev-container isolation (data-loss safeguard) — 2026-06-16 (on `safety/icloud-dev-container-isolation`)
 
 Hardened against an iCloud purge risk inherent to app-private ubiquity
