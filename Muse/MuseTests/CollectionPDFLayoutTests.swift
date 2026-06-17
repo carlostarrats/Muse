@@ -54,4 +54,33 @@ final class CollectionPDFLayoutTests: XCTestCase {
         // (792 - 72 - 12*2) / 3 = 232
         XCTAssertEqual(pages[0].placements[0].rect.width, 232, accuracy: 0.5)
     }
+
+    // 11x14in @ 72dpi, 3 columns, 16pt caption strip below each image.
+    private let captionGeo = CollectionPDFLayout.Geometry(
+        pageSize: CGSize(width: 792, height: 1008),
+        margin: 36, columns: 3, gutter: 12, firstPageHeaderHeight: 46,
+        captionHeight: 16)
+
+    func testCaptionHeightReservedPerTile() {
+        let pages = CollectionPDFLayout.paginate(aspects: [1.0], geometry: captionGeo)
+        let pl = pages[0].placements[0]
+        // Image = columnWidth(232) × aspect(1); tile = image + 16pt caption.
+        XCTAssertEqual(pl.rect.width, 232, accuracy: 0.5)
+        XCTAssertEqual(pl.rect.height, 232 + 16, accuracy: 0.5)
+    }
+
+    func testCaptionedTilesStayWithinPageAndPlaceEveryImage() {
+        let pages = CollectionPDFLayout.paginate(
+            aspects: Array(repeating: 1.2, count: 30), geometry: captionGeo)
+        let contentBottom = captionGeo.pageSize.height - captionGeo.margin
+        for (p, page) in pages.enumerated() {
+            let top = captionGeo.margin + (p == 0 ? captionGeo.firstPageHeaderHeight : 0)
+            for pl in page.placements {
+                XCTAssertGreaterThanOrEqual(pl.rect.minY, top - 0.5)
+                XCTAssertLessThanOrEqual(pl.rect.maxY, contentBottom + 0.5)
+            }
+        }
+        let indices = pages.flatMap { $0.placements.map(\.index) }.sorted()
+        XCTAssertEqual(indices, Array(0..<30))
+    }
 }

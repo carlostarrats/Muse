@@ -27,12 +27,17 @@ enum CollectionPDFLayout {
         var columns: Int                    // tiles per row (>= 1)
         var gutter: CGFloat                 // gap between tiles
         var firstPageHeaderHeight: CGFloat  // reserved at top of page 1 only
+        /// Strip reserved BELOW each image for its filename caption (0 = none).
+        /// The Placement rect covers the whole tile (image + this strip); the
+        /// exporter draws the image in the top portion and the caption here.
+        var captionHeight: CGFloat = 0
     }
 
     /// Pack `aspects` (height ÷ width per image) into pages. Each tile keeps
-    /// its image's shape (tile height = columnWidth × aspect) so nothing is
-    /// cropped. A tile taller than a page's content area is capped to fit one
-    /// page. No image is ever split across a page boundary.
+    /// its image's shape (image height = columnWidth × aspect) so nothing is
+    /// cropped, plus a `captionHeight` strip below for the filename. A tile
+    /// taller than a page's content area is capped to fit one page. No tile is
+    /// ever split across a page boundary.
     static func paginate(aspects: [CGFloat], geometry g: Geometry) -> [Page] {
         guard !aspects.isEmpty else { return [] }
         let cols = max(1, g.columns)
@@ -52,10 +57,16 @@ enum CollectionPDFLayout {
         var colHeights = [CGFloat](repeating: 0, count: cols)
         var firstPage = true
 
+        // Whole-tile height = the image (columnWidth × aspect) plus the
+        // caption strip below it, capped so a single tile still fits one page.
+        func tileHeight(aspect: CGFloat, avail: CGFloat) -> CGFloat {
+            min(columnWidth * aspect + g.captionHeight, avail)
+        }
+
         for (i, rawAspect) in aspects.enumerated() {
             let aspect = rawAspect > 0 ? rawAspect : 1
             var avail = available(firstPage: firstPage)
-            var tileH = min(columnWidth * aspect, avail)
+            var tileH = tileHeight(aspect: aspect, avail: avail)
 
             // Shortest column.
             var col = 0
@@ -70,7 +81,7 @@ enum CollectionPDFLayout {
                 firstPage = false
                 col = 0
                 avail = available(firstPage: firstPage)
-                tileH = min(columnWidth * aspect, avail)
+                tileH = tileHeight(aspect: aspect, avail: avail)
             }
 
             let x = g.margin + CGFloat(col) * (columnWidth + g.gutter)

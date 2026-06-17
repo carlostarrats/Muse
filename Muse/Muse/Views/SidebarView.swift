@@ -253,7 +253,17 @@ private struct FolderTreeNode: View {
 
     private var hasChildren: Bool { !node.children.isEmpty }
 
-    private var isSelected: Bool { appState.selectedFolder?.id == node.id }
+    private var isSelected: Bool {
+        // Cross-folder views have no "current" folder, so hide the highlight:
+        // the Collections page, a single collection, and a library-wide ("All")
+        // search. A "This folder" search keeps the highlight — the folder IS the
+        // scope. `selectedFolder` itself is untouched, so Back/clear restores it.
+        if appState.showingCollections || appState.activeCollectionID != nil {
+            return false
+        }
+        if appState.isSearchActive && appState.searchAllFolders { return false }
+        return appState.selectedFolder?.id == node.id
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {

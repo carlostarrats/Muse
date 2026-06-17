@@ -141,6 +141,14 @@ final class AppState: ObservableObject {
     /// True when search results, not folder contents, are showing in the grid.
     @Published var isSearchActive: Bool = false
 
+    /// Search scope, chosen in the search field's magnifier menu. false = the
+    /// selected folder (the default), true = the whole library. Drives both the
+    /// query scope (`runSearch`) and whether the sidebar shows a folder as
+    /// selected (an "All" search is cross-folder, so no folder is current).
+    /// Persists across search clears, but resets to false when you navigate into
+    /// a folder (`select(folder:)`) — a deliberate folder pick scopes to it.
+    @Published var searchAllFolders: Bool = false
+
 
     /// Global (window) frames of grid tiles, keyed by file path. Used as the
     /// hero-transition source rect. Deliberately NOT @Published — frames
@@ -455,8 +463,24 @@ final class AppState: ObservableObject {
         selectedFolder = folder
         selectedFile = nil
         clearSelection()
-        // A tag filter from the previous folder mustn't empty the new one.
+        // Tapping a folder takes you INTO that folder's normal view, leaving any
+        // cross-folder context behind: exit a single collection or the
+        // Collections page, end any active search (and reset its scope to the
+        // folder default), and drop the previous folder's tag filter so it can't
+        // empty the new one. Lands on the folder's "All" tags view.
+        if showingCollections { showingCollections = false }
+        if activeCollectionID != nil { setActiveCollection(nil) }
         if activeTagLabel != nil { setActiveTag(nil) }
+        // Clear the search inline (not via clearSearch(), which would trigger a
+        // second, skeleton-less reload on top of the one below). A stale search
+        // would otherwise leave the query in the field, the grid showing search
+        // results, and — for an "All" search — this folder un-highlighted.
+        if isSearchActive || !searchQuery.isEmpty {
+            searchRequestToken += 1   // invalidate any in-flight search result
+            searchQuery = ""
+            isSearchActive = false
+        }
+        searchAllFolders = false      // a deliberate folder pick defaults to it
         startWatching(folder.url)
         reloadCurrentFiles(showLoading: true, thenIndex: true, verifyICloud: true)
     }
@@ -667,10 +691,11 @@ final class AppState: ObservableObject {
         }
         searchRequestToken += 1
         let token = searchRequestToken
-        // Search always scopes to the folder selected in the sidebar;
-        // with nothing selected, fall back to the whole indexed library.
+        // Scope follows the magnifier menu: "All" searches the whole indexed
+        // library; "This folder" (default) scopes to the selected folder, and
+        // falls back to everywhere when nothing is selected.
         let scope: SearchScope
-        if let folder = selectedFolder {
+        if !searchAllFolders, let folder = selectedFolder {
             scope = .currentFolder(folder.url)
         } else {
             scope = .everywhere

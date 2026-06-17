@@ -864,6 +864,94 @@ it a bug). Proven live: 12 welded identities, e.g. a flavicon screenshot at
   confirmed the leak class is fully closed (every tag path scoped or a
   documented global) with build + suite green.
 
+### Three small fixes: deselect parity · PDF filenames · double-click on old Macs — 2026-06-17 (on `feat/next-9`)
+
+A live bug/feature pass — three independent fixes, build + full `MuseTests`
+suite green, each adversarially reviewed (two parallel reviewers, no blockers/
+majors found):
+
+- **Deselect parity, no-tags vs tags** (`GridView.swift`). Clicking the empty
+  strip at the top of the grid deselected the current image when the folder had
+  tags but NOT when it had none. Root cause: that strip is only a reliable
+  deselect zone when the tag-chip row occupies it — the chip row sits OUTSIDE
+  the grid scroll view, so `OutsideClickDeselect` (the AppKit mouse monitor)
+  fires there. With no tags the chip row collapses (`fix/grid-top-inset-no-tags`
+  raised the images) and that strip becomes live grid top-inset, whose only
+  deselect was the ScrollView `.background` tap — viewport-pinned and unreliable
+  for in-content clicks (which is exactly why `masonryCanvas` already adds its
+  OWN `Color.clear` deselect behind the tiles). Fix: wrap the scroll content in
+  a `ZStack` with a content-level `Color.clear` deselect surface spanning the
+  full content (`minHeight: geo.size.height`), BEHIND the tile VStack — tiles
+  keep their own select taps (they're in front; SwiftUI hit-tests front-to-back,
+  so no tile/drag swallowing), empty space clears. Deselect is now identical
+  with or without tags. No scroll-behavior regression (`minHeight` grows the
+  ZStack to the taller of viewport vs. real content; never forces extra scroll).
+- **Filenames under images in the collection PDF** (`CollectionPDFLayout.swift`,
+  `CollectionPDFExporter.swift`). Each image in the exported 11×14 PDF now shows
+  its filename centered below it, end-truncated with an ellipsis (`…`) via
+  CoreText `CTLineCreateTruncatedLine` so it never exceeds the image width or
+  wraps to a second line. `Geometry` gained `captionHeight` (defaulted to 0 —
+  existing tests/behavior untouched); `paginate` reserves that strip per tile
+  (whole-tile height = `columnWidth*aspect + captionHeight`, still capped to one
+  page) so captions never collide with the next masonry row. The exporter splits
+  each placement rect into image area (top) + caption strip (bottom) and draws
+  the caption with CoreText only (off-main-safe). Verified end-to-end by
+  rendering a sample PDF (long names truncate, Unicode names render, short names
+  show in full). Tests: `testCaptionHeightReservedPerTile`,
+  `testCaptionedTilesStayWithinPageAndPlaceEveryImage`.
+- **Double-click-to-open failing on older Macs in tag/collection views**
+  (`GridView.swift`). A friend on a 2018 Intel MacBook Pro (Sequoia) couldn't
+  open an image by double-clicking inside a tag-filtered grid — nothing
+  happened. Root cause: `handleTileTap`'s manual double-click detector measured
+  the gap with `Date()` sampled when the HANDLER runs. On slow hardware the
+  first click's selection stalls the main thread; the second click's handler is
+  then delivered late, so `Date()` timed the handler latency (>0.35s) instead of
+  the user's actual click cadence, and the double-click was dropped. Fix: measure
+  from the originating event's hardware timestamp (`NSApp.currentEvent?.timestamp`,
+  seconds since boot — immune to the stall; fallback `ProcessInfo.systemUptime`,
+  same clock) and widen the window to `max(NSEvent.doubleClickInterval, 0.35)`
+  (honors the user's System Settings double-click speed, never stricter than
+  before). This is the ONLY double-click-to-open path (shared by the main grid
+  and the in-collection grid), so collections are covered too; collection CARDS
+  open on a single tap and were never affected. Not reproducible on Apple Silicon
+  (the main thread never stalls long enough) — a pure timing fix that removes the
+  hardware dependency rather than just widening a threshold.
+
+### Cross-folder views drop the sidebar highlight + search scope picker — 2026-06-17 (on `feat/next-9`)
+
+The sidebar kept a folder visually selected even inside the Collections page /
+a single collection (both cross-folder, library-wide views), implying the
+current folder mattered when it didn't. Fixed, plus a related search-scope
+control. Build + full `MuseTests` suite green; two parallel adversarial reviews
+(no blockers/majors — one review-found `select(folder:)` issue fixed below):
+
+- **No folder highlight in cross-folder views** (`SidebarView` `isSelected`).
+  Returns false on the Collections page, inside a single collection, AND during
+  a library-wide ("All") search. A "This folder" search keeps the highlight (the
+  folder IS the scope). `selectedFolder` itself is untouched, so Back/clear
+  restores it. The drag-to-move drop-target highlight (`dropTargeted`) is
+  independent of `isSelected`, so folders stay drop targets in a collection.
+- **Tapping a folder exits any cross-folder context** (`AppState.select(folder:)`).
+  Now also clears `showingCollections` + `activeCollectionID` (leaves a
+  collection / the Collections page), ends any active search inline (NOT via
+  `clearSearch()`, which would double-reload — a review-found fix; a stale search
+  otherwise left the query in the field, the grid on results, and the folder
+  un-highlighted), and resets `searchAllFolders` to the folder default. Lands on
+  the folder's normal "All" view. (Going Back instead still returns to the
+  previously-selected folder — `selectedFolder` was always preserved.)
+- **Search scope picker** (`SearchBar`, `AppState.searchAllFolders` + `runSearch`).
+  The search field's magnifier dropdown (native `searchMenuTemplate`, no recents)
+  offers **All** vs **This Folder**. Default stays **This folder** (no change to
+  prior default behavior — search was already folder-scoped); "All" searches the
+  whole indexed library and suppresses the folder highlight. Switching scope
+  re-runs an active search. `searchAllFolders` persists across search clears but
+  resets when you navigate into a folder. The 250ms debounce is cancelled on an
+  external query-clear so a just-dismissed search can't re-fire.
+- **Search field text inset** (`InsetSearchField`/`InsetSearchFieldCell`): the
+  editable text starts ~4px right of the system default via a `searchTextRect`
+  override. (The magnifier + menu chevron are ONE system-drawn glyph — the gap
+  between them isn't adjustable from layout rects, so that was left native.)
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
@@ -996,7 +1084,10 @@ Muse/Muse/
                                    file-URL drop on folder rows MOVES the grid
                                    selection there (FileMover) with a drop-target
                                    highlight; Reveal in Finder menu item
-                                   (feat/multi-select)
+                                   (feat/multi-select). No folder shows as selected
+                                   in cross-folder views — Collections page, a
+                                   single collection, or an "All"-scope search
+                                   (2026-06-17); the drop highlight is independent
     GridView.swift                 VIRTUALIZED masonry grid — precomputes tile
                                    frames (MasonryGeometry from AspectRatioCache)
                                    and renders only viewport tiles (+overscan);
@@ -1004,10 +1095,16 @@ Muse/Muse/
                                    land. The ONLY grid view (cloud/galaxy retired
                                    2026-06-13; water effect removed 2026-06-13).
                                    Click = select (instant; Cmd toggles, Shift
-                                   ranges), double-click opens; accent wash+border
+                                   ranges), double-click opens (gap timed from the
+                                   EVENT's hardware timestamp, not Date() at
+                                   handler-run, so a main-thread stall on slow Macs
+                                   can't drop it — 2026-06-17); accent wash+border
                                    inside the tile (scales w/ hover); .onDrag carries
                                    the file URL; selection-aware contextMenu
-                                   (feat/multi-select)
+                                   (feat/multi-select). A content-level Color.clear
+                                   deselect surface behind the tiles makes the empty
+                                   top inset deselect with OR without the tag chips
+                                   (2026-06-17)
     SelectionMenu.swift            SelectionActionsMenu — Add to Collection / Add
                                    Tag / Share / Move to Folder over the effective
                                    selection (feat/multi-select)
@@ -1057,10 +1154,14 @@ Muse/Muse/
                                    (Cloud*/Galaxy*/SimilarityLayout/SceneProjection)
                                    were removed 2026-06-13 — see session log.
   Components/
-    SearchBar.swift                debounced FTS5 search, scoped to sidebar folder.
-                                   Native NSSearchField (system focus ring, clear
-                                   button, accessibility; appearance follows mood)
-                                   wrapped in NSViewRepresentable (feat/multi-select)
+    SearchBar.swift                debounced FTS5 search. Native NSSearchField
+                                   (system focus ring, clear button, accessibility;
+                                   appearance follows mood) wrapped in
+                                   NSViewRepresentable (feat/multi-select). Magnifier
+                                   dropdown picks scope — All vs This Folder (default
+                                   This Folder); drives AppState.searchAllFolders +
+                                   runSearch (2026-06-17). InsetSearchFieldCell nudges
+                                   the text ~4px right
     GridSelection.swift            pure selection math (single / Cmd-toggle /
                                    Shift-range → new set + anchor), unit-tested
                                    (feat/multi-select)
@@ -1072,9 +1173,14 @@ Muse/Muse/
                                    2026-06-13 — a custom Layout can't virtualize)
   Export/
     CollectionPDFLayout.swift      pure paginated masonry pack for the collection
-                                   PDF (no image split across pages), unit-tested
+                                   PDF (no image split across pages), unit-tested;
+                                   each tile reserves a captionHeight strip below
+                                   the image for its filename (2026-06-17)
     CollectionPDFExporter.swift    ImageIO downsample (off-main) → CGPDFContext;
                                    CoreText 11×14 header (feat/collection-pdf-share)
+                                   + a centered, ellipsis-truncated filename caption
+                                   under each image (CTLineCreateTruncatedLine,
+                                   2026-06-17)
   Effects/                         (was Fluid/, renamed 2026-06-17; water ripple
                                    removed 2026-06-13 and the burn-up delete
                                    SHADER removed too — NO Metal shaders remain)
