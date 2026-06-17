@@ -22,14 +22,20 @@ struct SearchBar: View {
         NativeSearchField(
             text: $text,
             scheme: appState.moodPalette.scheme,
+            allFolders: appState.searchAllFolders,
             onChange: handleChange,
-            onSubmit: { fire(query: $0) }
+            onSubmit: { fire(query: $0) },
+            onScopeChange: handleScopeChange
         )
         .frame(minWidth: 320, maxWidth: 640)
         // Programmatic searches (e.g. viewer tag taps) push their query into the
         // field for display; the search itself was already run by the caller.
         .onChange(of: appState.searchQuery) { _, newValue in
             if text != newValue { text = newValue }
+            // An external clear (e.g. selecting a folder) must also kill any
+            // in-flight debounce, or a search the user just dismissed would
+            // fire ~250ms later and re-activate with a now-cleared query.
+            if newValue.isEmpty { debounceTask?.cancel() }
         }
     }
 
@@ -41,6 +47,15 @@ struct SearchBar: View {
         } else {
             debounceAndRun(query: newValue)
         }
+    }
+
+    /// Magnifier menu picked a new scope (All vs This folder). Re-run an active
+    /// search immediately under the new scope; an idle search just stores it.
+    private func handleScopeChange(_ allFolders: Bool) {
+        guard appState.searchAllFolders != allFolders else { return }
+        appState.searchAllFolders = allFolders
+        let q = appState.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        if appState.isSearchActive, !q.isEmpty { fire(query: q) }
     }
 
     // MARK: - Debounce
@@ -60,22 +75,51 @@ struct SearchBar: View {
     }
 }
 
+/// NSSearchField with the editable text started a few px right of the system
+/// default. (The magnifier + menu chevron are one system-drawn glyph, so the
+/// gap between them can't be nudged from here.)
+private final class InsetSearchField: NSSearchField {
+    override class var cellClass: AnyClass? {
+        get { InsetSearchFieldCell.self }
+        set { }
+    }
+}
+
+private final class InsetSearchFieldCell: NSSearchFieldCell {
+    /// Start the search text ~4px right of the system default.
+    private let textRightShift: CGFloat = 4
+
+    override func searchTextRect(forBounds rect: NSRect) -> NSRect {
+        var r = super.searchTextRect(forBounds: rect)
+        r.origin.x += textRightShift
+        r.size.width -= textRightShift
+        return r
+    }
+}
+
 /// The native AppKit search field wrapped for SwiftUI. Brings the system focus
 /// ring, the native clear button, and accessibility; its appearance is forced
 /// to the app's current mood (light/dark) so it matches the surrounding colors.
 private struct NativeSearchField: NSViewRepresentable {
     @Binding var text: String
     var scheme: ColorScheme
+    /// Current scope: true = whole library ("All"), false = the selected folder.
+    var allFolders: Bool
     var onChange: (String) -> Void
     var onSubmit: (String) -> Void
+    var onScopeChange: (Bool) -> Void
 
     func makeNSView(context: Context) -> NSSearchField {
-        let field = NSSearchField()
+        let field = InsetSearchField()
         field.placeholderString = "Search files, tags, captions…"
         field.delegate = context.coordinator
         field.sendsSearchStringImmediately = false
         field.sendsWholeSearchString = false
         field.focusRingType = .default
+        // The magnifier-icon dropdown: "All" vs "This Folder". Setting a
+        // template (with no Recents tags) shows the dropdown triangle and our
+        // two scope items, no recent-searches machinery.
+        field.searchMenuTemplate = context.coordinator.makeScopeMenu()
         return field
     }
 
@@ -83,13 +127,44 @@ private struct NativeSearchField: NSViewRepresentable {
         context.coordinator.parent = self
         if field.stringValue != text { field.stringValue = text }
         field.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
+        // Keep the menu's checkmark in sync with the current scope (the field
+        // copies the template each time it shows it, so updating the template
+        // items here is reflected on the next open).
+        context.coordinator.syncScopeState(allFolders: allFolders)
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     final class Coordinator: NSObject, NSSearchFieldDelegate {
         var parent: NativeSearchField
+        private weak var allItem: NSMenuItem?
+        private weak var folderItem: NSMenuItem?
         init(_ parent: NativeSearchField) { self.parent = parent }
+
+        /// Two-item scope menu shown under the magnifier icon.
+        func makeScopeMenu() -> NSMenu {
+            let menu = NSMenu()
+            let all = NSMenuItem(title: "All", action: #selector(pickAll), keyEquivalent: "")
+            all.target = self
+            let folder = NSMenuItem(title: "This Folder", action: #selector(pickFolder), keyEquivalent: "")
+            folder.target = self
+            menu.addItem(all)
+            menu.addItem(folder)
+            allItem = all
+            folderItem = folder
+            syncScopeState(allFolders: parent.allFolders)
+            return menu
+        }
+
+        func syncScopeState(allFolders: Bool) {
+            allItem?.state = allFolders ? .on : .off
+            folderItem?.state = allFolders ? .off : .on
+        }
+
+        // Update the template checkmark immediately too, so it's correct even
+        // if a future change sets the scope without re-rendering this view.
+        @objc private func pickAll() { syncScopeState(allFolders: true); parent.onScopeChange(true) }
+        @objc private func pickFolder() { syncScopeState(allFolders: false); parent.onScopeChange(false) }
 
         func controlTextDidChange(_ obj: Notification) {
             guard let field = obj.object as? NSSearchField else { return }

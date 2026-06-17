@@ -917,6 +917,41 @@ majors found):
   (the main thread never stalls long enough) — a pure timing fix that removes the
   hardware dependency rather than just widening a threshold.
 
+### Cross-folder views drop the sidebar highlight + search scope picker — 2026-06-17 (on `feat/next-9`)
+
+The sidebar kept a folder visually selected even inside the Collections page /
+a single collection (both cross-folder, library-wide views), implying the
+current folder mattered when it didn't. Fixed, plus a related search-scope
+control. Build + full `MuseTests` suite green; two parallel adversarial reviews
+(no blockers/majors — one review-found `select(folder:)` issue fixed below):
+
+- **No folder highlight in cross-folder views** (`SidebarView` `isSelected`).
+  Returns false on the Collections page, inside a single collection, AND during
+  a library-wide ("All") search. A "This folder" search keeps the highlight (the
+  folder IS the scope). `selectedFolder` itself is untouched, so Back/clear
+  restores it. The drag-to-move drop-target highlight (`dropTargeted`) is
+  independent of `isSelected`, so folders stay drop targets in a collection.
+- **Tapping a folder exits any cross-folder context** (`AppState.select(folder:)`).
+  Now also clears `showingCollections` + `activeCollectionID` (leaves a
+  collection / the Collections page), ends any active search inline (NOT via
+  `clearSearch()`, which would double-reload — a review-found fix; a stale search
+  otherwise left the query in the field, the grid on results, and the folder
+  un-highlighted), and resets `searchAllFolders` to the folder default. Lands on
+  the folder's normal "All" view. (Going Back instead still returns to the
+  previously-selected folder — `selectedFolder` was always preserved.)
+- **Search scope picker** (`SearchBar`, `AppState.searchAllFolders` + `runSearch`).
+  The search field's magnifier dropdown (native `searchMenuTemplate`, no recents)
+  offers **All** vs **This Folder**. Default stays **This folder** (no change to
+  prior default behavior — search was already folder-scoped); "All" searches the
+  whole indexed library and suppresses the folder highlight. Switching scope
+  re-runs an active search. `searchAllFolders` persists across search clears but
+  resets when you navigate into a folder. The 250ms debounce is cancelled on an
+  external query-clear so a just-dismissed search can't re-fire.
+- **Search field text inset** (`InsetSearchField`/`InsetSearchFieldCell`): the
+  editable text starts ~4px right of the system default via a `searchTextRect`
+  override. (The magnifier + menu chevron are ONE system-drawn glyph — the gap
+  between them isn't adjustable from layout rects, so that was left native.)
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
@@ -1049,7 +1084,10 @@ Muse/Muse/
                                    file-URL drop on folder rows MOVES the grid
                                    selection there (FileMover) with a drop-target
                                    highlight; Reveal in Finder menu item
-                                   (feat/multi-select)
+                                   (feat/multi-select). No folder shows as selected
+                                   in cross-folder views — Collections page, a
+                                   single collection, or an "All"-scope search
+                                   (2026-06-17); the drop highlight is independent
     GridView.swift                 VIRTUALIZED masonry grid — precomputes tile
                                    frames (MasonryGeometry from AspectRatioCache)
                                    and renders only viewport tiles (+overscan);
@@ -1116,10 +1154,14 @@ Muse/Muse/
                                    (Cloud*/Galaxy*/SimilarityLayout/SceneProjection)
                                    were removed 2026-06-13 — see session log.
   Components/
-    SearchBar.swift                debounced FTS5 search, scoped to sidebar folder.
-                                   Native NSSearchField (system focus ring, clear
-                                   button, accessibility; appearance follows mood)
-                                   wrapped in NSViewRepresentable (feat/multi-select)
+    SearchBar.swift                debounced FTS5 search. Native NSSearchField
+                                   (system focus ring, clear button, accessibility;
+                                   appearance follows mood) wrapped in
+                                   NSViewRepresentable (feat/multi-select). Magnifier
+                                   dropdown picks scope — All vs This Folder (default
+                                   This Folder); drives AppState.searchAllFolders +
+                                   runSearch (2026-06-17). InsetSearchFieldCell nudges
+                                   the text ~4px right
     GridSelection.swift            pure selection math (single / Cmd-toggle /
                                    Shift-range → new set + anchor), unit-tested
                                    (feat/multi-select)
