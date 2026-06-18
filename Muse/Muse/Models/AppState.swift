@@ -884,6 +884,17 @@ final class AppState: ObservableObject {
                 return fresh
             }
             let sorted = SmartSorter.apply(mode, to: merged, reversed: reversed)
+            // Reconcile externally-deleted files on a fresh folder open: flip
+            // DB rows for files that vanished from disk to is_alive=0, so they
+            // stop leaking into search (blank tiles) + collection counts. Runs
+            // BEFORE the chip counts below so those exclude the dead files too.
+            var reconciledDead = 0
+            if freshSelect, let dbQueue {
+                let present = Set(raw.map { $0.url.standardizedFileURL.path })
+                reconciledDead = PathReconciler.reconcile(
+                    folder: folderURL, recursive: showSub,
+                    present: present, queue: dbQueue)
+            }
             var chipRows: [(label: String, count: Int)] = []
             if freshSelect, let dbQueue {
                 let tagPaths = sorted.map { $0.url.standardizedFileURL.path }
@@ -913,6 +924,12 @@ final class AppState: ObservableObject {
                     self.reloadTagChips()
                 }
                 if thenIndex { self.scheduleIndexing(for: folderURL, verifyICloud: verifyICloud) }
+                // Marking ghosts dead shrinks alive-aware collection counts;
+                // refresh the published cards so a stale count (e.g. "5" for a
+                // collection with 1 real member) corrects immediately.
+                if reconciledDead > 0 {
+                    Task { await CollectionsEngine.shared.reload() }
+                }
             }
         }
     }
