@@ -334,8 +334,11 @@ struct HeroImageViewer: View {
         appState.clearSelection()
         withAnimation(.easeOut(duration: 0.12)) { chromeVisible = false }
         backdropVisible = false   // fades out during the close flight
-        // Bring the toolbar back now so it fades in with the flight instead
-        // of popping after it; the grid shift it causes is retargeted.
+        // Bring the toolbar back now so it returns with the flight (the "never
+        // gone" feel) rather than popping in after. The Escape path sets the
+        // same flag up front (in ContentView) so both close paths return the nav
+        // identically. (Accepts the slight search-bar shadow flash as the trade
+        // for a consistent, instant return — see the 2026-06-18 session.)
         withAnimation(.easeInOut(duration: 0.35)) { appState.viewerDismissing = true }
         isClosing = true
     }

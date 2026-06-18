@@ -1498,6 +1498,45 @@ and fixed, then re-verified).
   (pure-view a11y metadata + menu wiring over the already-tested
   `BookmarkStore.reorder`); build + full suite green.
 
+### Search-bar width + standardized hero-close nav — 2026-06-18 (on `feat/next-18`)
+
+Two small live UI fixes. Build + full `MuseTests` suite green.
+
+- **Search bar back to a fixed 320pt** (`SearchBar.swift`). The a11y pass had
+  dropped it 320 → 280, but the `.principal` toolbar slot centers the field and
+  sizes it to its content clamped to `minWidth` — the centered slot does NOT
+  stretch/shrink with the window, so the field is fixed-width regardless of the
+  value. True window-responsive scaling isn't achievable there without
+  `maxWidth: .infinity`, which expands aggressively and collapses the side
+  buttons into the `»` overflow. So per the user's preference, reverted to a
+  fixed 320 (a non-scaling 280 bought nothing).
+- **Both hero-close paths return the nav identically** (`ContentView.swift`).
+  The X button calls `HeroImageViewer.startClose()` synchronously (in the
+  button's event transaction), so `viewerDismissing = true` flips up front and
+  the toolbar/search bar returns instantly with the flight ("never gone"). The
+  Escape path went `viewerClosing = true` → `.onChange` → `startClose()`, and
+  that extra hop made the nav return a beat later ("delayed/abrupt"). Fix: the
+  ContentView Escape handler now sets `viewerDismissing = true` (animated) up
+  front in the same transaction as `viewerClosing`, so Escape matches X. Net
+  behavioral change is just this one line + the 320; `startClose` itself is
+  unchanged (comment-only).
+- **The search-bar "flash" investigation (documented so it isn't re-chased).**
+  A long systematic-debugging pass (screen-recorded at 120fps, per-region luma
+  analysis) traced a "very slight app-wide brightness flash" on close to the
+  **native toolbar/search field materializing over the still-fading dark
+  backdrop** as it returns during the flight — the search field's shadows are
+  revealed mid-fade. It is INHERENT to having the nav present during the close:
+  the macOS toolbar pops in (it can't truly fade), and keeping it always-present
+  to avoid the pop shows empty grey item "wells" over the hero (rejected).
+  Tried + rejected: a window-bg/SwiftUI backstop (flash isn't grey-window), a
+  solid-color backdrop (not the vibrancy material), faster backdrop fade-out
+  (backdrop already fully faded before unmount — not the cause), an
+  always-present toolbar with faded contents (empty wells), and "toolbar returns
+  only after the image lands" (no flash, but the user disliked losing the
+  instant return). DECISION: keep the instant return on both paths and accept
+  the very slight flash — the flash and the "never gone" feel are the same
+  event. Do not reintroduce the always-present-toolbar or after-land approaches.
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```

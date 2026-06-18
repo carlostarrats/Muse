@@ -27,7 +27,13 @@ struct SearchBar: View {
             onSubmit: { fire(query: $0) },
             onScopeChange: handleScopeChange
         )
-        .frame(minWidth: 280, maxWidth: 640)
+        // .principal centers this item and sizes it to its content clamped to
+        // minWidth — the centered slot doesn't stretch/shrink with the window,
+        // so the field sits at a fixed width regardless. Window-responsive
+        // scaling isn't achievable here without maxWidth: .infinity, which would
+        // expand aggressively and collapse the side buttons into the » overflow.
+        // Fixed at 320 (preferred over a non-scaling 280).
+        .frame(minWidth: 320, maxWidth: 640)
         // Programmatic searches (e.g. viewer tag taps) push their query into the
         // field for display; the search itself was already run by the caller.
         .onChange(of: appState.searchQuery) { _, newValue in

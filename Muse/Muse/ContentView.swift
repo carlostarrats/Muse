@@ -169,10 +169,11 @@ struct ContentView: View {
             // Must hide in the same transaction the viewer mounts: the stage
             // computes its fit center from the overlay size, and a later hide
             // moves that center mid-flight (the image visibly arcs).
-            // It returns when the close flight *starts* (viewerDismissing),
-            // fading in alongside the flight rather than popping after it;
-            // HeroStage retargets mid-close, so the grid shifting down under
-            // the returning toolbar still lands the image on its tile.
+            // It returns when the close *starts* (viewerDismissing) so the nav is
+            // there with the flight rather than popping in after. BOTH close
+            // paths set viewerDismissing up front — the X button via
+            // startClose(), Escape via the handler above — so they return the nav
+            // identically.
             .toolbar(appState.selectedFile == nil || appState.viewerDismissing
                      ? .automatic : .hidden,
                      for: .windowToolbar)
@@ -198,6 +199,15 @@ struct ContentView: View {
                    selected.kind == .image || selected.kind == .raw
                        || selected.kind == .psd {
                     // Hero viewer: run the return flight instead of popping.
+                    // Set viewerDismissing up front, in THIS transaction, so the
+                    // toolbar/nav returns immediately — same as the X button,
+                    // which calls startClose() synchronously. Going only through
+                    // viewerClosing → onChange → startClose added a hop that made
+                    // the Escape nav return a beat later ("delayed/abrupt"); this
+                    // standardizes both close paths to the instant return.
+                    withAnimation(.easeInOut(duration: 0.35)) {
+                        appState.viewerDismissing = true
+                    }
                     appState.viewerClosing = true
                 } else if appState.selectedFile != nil {
                     appState.selectedFile = nil
