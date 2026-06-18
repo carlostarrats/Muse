@@ -238,8 +238,25 @@ final class AppState: ObservableObject {
     /// iCloud home; Rename is gated to non-iCloud folders by the callers.
     @Published var newSubfolderRequest: FolderNode?
     @Published var folderRenameRequest: FolderNode?
+    /// Shared text-field draft for the create/rename dialogs, seeded by the
+    /// request helpers below (one dialog is open at a time). Seeding here — not
+    /// via a view `.onChange` on node identity — means re-targeting the SAME
+    /// folder still resets the field correctly.
+    @Published var folderNameDraft = ""
     /// Set to a message to surface a folder-op failure alert.
     @Published var folderOpError: String?
+
+    /// Present the New Subfolder dialog for `node` (empty draft).
+    func requestNewSubfolder(_ node: FolderNode) {
+        folderNameDraft = ""
+        newSubfolderRequest = node
+    }
+
+    /// Present the Rename dialog for `node` (draft pre-filled with its name).
+    func requestRenameFolder(_ node: FolderNode) {
+        folderNameDraft = node.displayName
+        folderRenameRequest = node
+    }
     /// Monotonic token so a slow tag-filter load can't clobber a newer pick.
     /// Not `private`: read/written by `setActiveTag` in AppState+Filters.swift.
     var tagRequestToken = 0
@@ -697,9 +714,9 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// Rename `node`'s folder on disk and migrate the index + tags so nothing
-    /// is orphaned. Roots repoint their bookmark; subfolders reload from their
-    /// parent. The iCloud home is never renamed (callers gate it).
+    /// Rename `node`'s folder on disk and migrate the index + tags + pins so
+    /// nothing is orphaned. Roots repoint their bookmark; subfolders reload from
+    /// their parent. The iCloud home is never renamed (callers gate it).
     func renameFolder(_ node: FolderNode, to name: String) {
         let oldURL = node.url
         switch FolderOps.rename(oldURL, to: name) {
@@ -708,10 +725,10 @@ final class AppState: ObservableObject {
         case .success(let newURL):
             // No-op rename (same name) — FolderOps returns the original URL.
             guard newURL.standardizedFileURL != oldURL.standardizedFileURL else { return }
-            migratePaths(old: oldURL.standardizedFileURL.path,
-                         new: newURL.standardizedFileURL.path)
+            let oldPath = oldURL.standardizedFileURL.path
+            let newPath = newURL.standardizedFileURL.path
 
-            let wasSelected = selectedFolder?.url.standardizedFileURL == oldURL.standardizedFileURL
+            // Sidebar refresh (disk already moved; these are synchronous).
             if node.isRoot, let root = bookmarks.roots.first(where: {
                 bookmarks.url(for: $0) == oldURL
             }) {
@@ -724,11 +741,33 @@ final class AppState: ObservableObject {
                 node.parent?.reloadChildren()
             }
 
-            // Reselect by URL if the renamed folder was the active one.
-            if wasSelected {
-                DispatchQueue.main.async { [weak self] in
-                    guard let self else { return }
-                    if let n = self.findNode(withURL: newURL) { self.select(folder: n) }
+            // Does the active selection sit AT or UNDER the renamed folder?
+            // (renaming an ancestor of the open folder must follow it, not
+            // strand the grid on a now-nonexistent path).
+            let selPath = selectedFolder?.url.standardizedFileURL.path
+            let selectedWasRoot = selectedFolder?.isRoot ?? false
+            let newSelPath: String? = selPath.flatMap {
+                FolderRenameMigration.rewrite(path: $0, old: oldPath, new: newPath)
+            }
+
+            // Migrate the DB FIRST, then reselect — the reselect triggers a
+            // re-index of the new location, which must not run before the
+            // path/tag rows are rewritten (a half-migrated state loses tags and
+            // could collide on the alive-path unique index).
+            Task { [weak self] in
+                let ok = await Self.migratePaths(old: oldPath, new: newPath,
+                                                 newName: newURL.lastPathComponent)
+                guard let self else { return }
+                if !ok {
+                    self.folderOpError = "The folder was renamed, but updating its tags failed."
+                }
+                self.tagsVersion &+= 1
+                self.stars.load()   // refresh pin paths/labels after migration
+                if let newSelPath {
+                    let url = URL(fileURLWithPath: newSelPath)
+                    let node = self.findNode(withURL: url)
+                        ?? FolderNode(url: url, isRoot: selectedWasRoot && newSelPath == newPath)
+                    self.select(folder: node)
                 }
             }
         }
@@ -747,29 +786,19 @@ final class AppState: ObservableObject {
         return nil
     }
 
-    /// Rewrite stored path prefixes after a folder rename: paths.absolute_path
-    /// and tags.parent_dir for the folder itself and everything beneath it.
-    /// file_id-keyed data (files, collections, FTS, embeddings) is unaffected.
-    /// Prefix match uses SUBSTR (not LIKE) so "%"/"_" in paths can't break it
-    /// and a sibling like "…/OldStuff" is never caught by old "…/Old".
-    private func migratePaths(old: String, new: String) {
-        guard let queue = Database.shared.dbQueue else { return }
-        Task { [weak self] in
-            try? await queue.write { db in
-                try db.execute(sql: """
-                    UPDATE paths
-                    SET absolute_path = ? || SUBSTR(absolute_path, LENGTH(?) + 1)
-                    WHERE absolute_path = ?
-                       OR SUBSTR(absolute_path, 1, LENGTH(?) + 1) = ? || '/'
-                    """, arguments: [new, old, old, old, old])
-                try db.execute(sql: """
-                    UPDATE tags
-                    SET parent_dir = ? || SUBSTR(parent_dir, LENGTH(?) + 1)
-                    WHERE parent_dir = ?
-                       OR SUBSTR(parent_dir, 1, LENGTH(?) + 1) = ? || '/'
-                    """, arguments: [new, old, old, old, old])
+    /// Rewrite stored path prefixes after a folder rename (paths.absolute_path,
+    /// tags.parent_dir, starred_folders) in one transaction. Off the main actor;
+    /// returns false on failure so the caller can surface it. The actual SQL
+    /// lives in `FolderRenameMigration.apply` so it is unit-testable.
+    private static func migratePaths(old: String, new: String, newName: String) async -> Bool {
+        guard let queue = Database.shared.dbQueue else { return false }
+        do {
+            try await queue.write { db in
+                try FolderRenameMigration.apply(db, old: old, new: new, newName: newName)
             }
-            self?.tagsVersion &+= 1   // self is @MainActor; this hops back on-main
+            return true
+        } catch {
+            return false
         }
     }
 

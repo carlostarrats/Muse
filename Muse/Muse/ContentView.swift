@@ -18,8 +18,6 @@ struct ContentView: View {
     @ObservedObject private var collectionsEngine = CollectionsEngine.shared
     @State private var moodPickerShown = false
     @State private var infoShown = false
-    @State private var newSubfolderName = ""
-    @State private var renameFolderName = ""
 
     /// The Collections page is the card grid — showing collections with no
     /// single collection drilled into (and not while searching).
@@ -205,38 +203,33 @@ struct ContentView: View {
             Text(appState.moveFailureNames.joined(separator: "\n"))
         }
         // Folder management dialogs — driven by AppState requests (shared by the
-        // sidebar context menu and the menu-bar Edit menu). FolderNode is a
-        // class (not Equatable), so observe its identity for onChange.
-        .onChange(of: appState.newSubfolderRequest.map(ObjectIdentifier.init)) { _, id in
-            if id != nil { newSubfolderName = "" }
-        }
+        // sidebar context menu and the menu-bar Edit menu). The text field binds
+        // to appState.folderNameDraft, which the request helpers seed, so a
+        // re-targeted same folder still resets the field.
         .alert("New Subfolder", isPresented: Binding(
             get: { appState.newSubfolderRequest != nil },
             set: { if !$0 { appState.newSubfolderRequest = nil } }
         )) {
-            TextField("Folder name", text: $newSubfolderName)
+            TextField("Folder name", text: $appState.folderNameDraft)
             Button("Create") {
                 if let node = appState.newSubfolderRequest {
                     appState.newSubfolderRequest = nil
-                    appState.createSubfolder(named: newSubfolderName, in: node)
+                    appState.createSubfolder(named: appState.folderNameDraft, in: node)
                 }
             }
             Button("Cancel", role: .cancel) { appState.newSubfolderRequest = nil }
         } message: {
             Text("Creates a new folder inside “\(appState.newSubfolderRequest?.displayName ?? "")”.")
         }
-        .onChange(of: appState.folderRenameRequest.map(ObjectIdentifier.init)) { _, id in
-            if id != nil { renameFolderName = appState.folderRenameRequest?.displayName ?? "" }
-        }
         .alert("Rename Folder", isPresented: Binding(
             get: { appState.folderRenameRequest != nil },
             set: { if !$0 { appState.folderRenameRequest = nil } }
         )) {
-            TextField("Folder name", text: $renameFolderName)
+            TextField("Folder name", text: $appState.folderNameDraft)
             Button("Rename") {
                 if let node = appState.folderRenameRequest {
                     appState.folderRenameRequest = nil
-                    appState.renameFolder(node, to: renameFolderName)
+                    appState.renameFolder(node, to: appState.folderNameDraft)
                 }
             }
             Button("Cancel", role: .cancel) { appState.folderRenameRequest = nil }

@@ -20,8 +20,11 @@ enum FolderOps {
     static func sanitize(_ raw: String) -> Result<String, OpError> {
         let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if name.isEmpty { return .failure(.emptyName) }
-        if name == "." || name == ".." { return .failure(.invalidName) }
         if name.contains("/") || name.contains(":") { return .failure(.invalidName) }
+        // A leading dot makes the folder hidden (and covers "." / ".."). The
+        // sidebar loads with showHidden:false, so such a folder would be created
+        // but never appear — reject it rather than silently vanish.
+        if name.hasPrefix(".") { return .failure(.invalidName) }
         return .success(name)
     }
 
@@ -52,10 +55,18 @@ enum FolderOps {
             let target = parent.appendingPathComponent(name, isDirectory: true)
             // Compare by resolved path: `target` is built with isDirectory:true
             // (trailing slash), so a raw URL equality would miss the no-op case.
-            if target.standardizedFileURL.path == folder.standardizedFileURL.path {
+            let targetPath = target.standardizedFileURL.path
+            let folderPath = folder.standardizedFileURL.path
+            if targetPath == folderPath {
                 return .success(folder)   // no change
             }
-            if FileManager.default.fileExists(atPath: target.path) { return .failure(.collision) }
+            // A case-only rename ("Photos" → "photos") collides with itself on a
+            // case-insensitive volume (the default). Allow it — moveItem performs
+            // the case change — instead of rejecting it as a duplicate.
+            let caseOnly = targetPath.lowercased() == folderPath.lowercased()
+            if !caseOnly && FileManager.default.fileExists(atPath: target.path) {
+                return .failure(.collision)
+            }
             do {
                 try FileManager.default.moveItem(at: folder, to: target)
                 return .success(target)

@@ -99,14 +99,14 @@ struct MuseApp: App {
 
                 Button("New Subfolder…") {
                     if let folder = appState.selectedFolder {
-                        appState.newSubfolderRequest = folder
+                        appState.requestNewSubfolder(folder)
                     }
                 }
                 .disabled(appState.selectedFolder == nil)
 
                 Button("Rename Folder…") {
                     if let folder = appState.selectedFolder {
-                        appState.folderRenameRequest = folder
+                        appState.requestRenameFolder(folder)
                     }
                 }
                 .disabled(appState.selectedFolder == nil

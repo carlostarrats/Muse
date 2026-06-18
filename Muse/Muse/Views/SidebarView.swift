@@ -358,10 +358,10 @@ private struct FolderTreeNode: View {
                 Button("Remove Folder") { appState.removeRoot(r) }
             }
             Divider()
-            Button("New Subfolder…") { appState.newSubfolderRequest = node }
+            Button("New Subfolder…") { appState.requestNewSubfolder(node) }
             // The iCloud "Muse" home is app-managed — not renamable.
             if node.url != appState.iCloudFolderURL {
-                Button("Rename Folder…") { appState.folderRenameRequest = node }
+                Button("Rename Folder…") { appState.requestRenameFolder(node) }
             }
             Divider()
             Button("Reveal in Finder") {

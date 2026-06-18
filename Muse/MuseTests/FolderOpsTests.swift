@@ -28,6 +28,20 @@ final class FolderOpsTests: XCTestCase {
         XCTAssertEqual(FolderOps.sanitize("a:b"), .failure(.invalidName))
         XCTAssertEqual(FolderOps.sanitize(".."), .failure(.invalidName))
     }
+    func testSanitizeRejectsLeadingDot() {
+        XCTAssertEqual(FolderOps.sanitize("."), .failure(.invalidName))
+        XCTAssertEqual(FolderOps.sanitize(".secret"), .failure(.invalidName))
+        XCTAssertEqual(FolderOps.sanitize(".env"), .failure(.invalidName))
+    }
+    func testRenameCaseOnly() throws {
+        // On the default case-insensitive volume, "Same" → "same" must succeed
+        // (a case change), not be rejected as a self-collision.
+        let src = tmp.appendingPathComponent("CaseName")
+        try FileManager.default.createDirectory(at: src, withIntermediateDirectories: false)
+        let dst = try XCTUnwrap(try? FolderOps.rename(src, to: "casename").get())
+        XCTAssertEqual(dst.lastPathComponent, "casename")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dst.path))
+    }
     func testSanitizeTrimsWhitespace() {
         XCTAssertEqual(FolderOps.sanitize("  Photos  "), .success("Photos"))
     }
