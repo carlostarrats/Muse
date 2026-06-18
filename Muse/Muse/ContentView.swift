@@ -18,6 +18,8 @@ struct ContentView: View {
     @ObservedObject private var collectionsEngine = CollectionsEngine.shared
     @State private var moodPickerShown = false
     @State private var infoShown = false
+    @State private var newSubfolderName = ""
+    @State private var renameFolderName = ""
 
     /// The Collections page is the card grid — showing collections with no
     /// single collection drilled into (and not while searching).
@@ -201,6 +203,53 @@ struct ContentView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(appState.moveFailureNames.joined(separator: "\n"))
+        }
+        // Folder management dialogs — driven by AppState requests (shared by the
+        // sidebar context menu and the menu-bar Edit menu). FolderNode is a
+        // class (not Equatable), so observe its identity for onChange.
+        .onChange(of: appState.newSubfolderRequest.map(ObjectIdentifier.init)) { _, id in
+            if id != nil { newSubfolderName = "" }
+        }
+        .alert("New Subfolder", isPresented: Binding(
+            get: { appState.newSubfolderRequest != nil },
+            set: { if !$0 { appState.newSubfolderRequest = nil } }
+        )) {
+            TextField("Folder name", text: $newSubfolderName)
+            Button("Create") {
+                if let node = appState.newSubfolderRequest {
+                    appState.newSubfolderRequest = nil
+                    appState.createSubfolder(named: newSubfolderName, in: node)
+                }
+            }
+            Button("Cancel", role: .cancel) { appState.newSubfolderRequest = nil }
+        } message: {
+            Text("Creates a new folder inside “\(appState.newSubfolderRequest?.displayName ?? "")”.")
+        }
+        .onChange(of: appState.folderRenameRequest.map(ObjectIdentifier.init)) { _, id in
+            if id != nil { renameFolderName = appState.folderRenameRequest?.displayName ?? "" }
+        }
+        .alert("Rename Folder", isPresented: Binding(
+            get: { appState.folderRenameRequest != nil },
+            set: { if !$0 { appState.folderRenameRequest = nil } }
+        )) {
+            TextField("Folder name", text: $renameFolderName)
+            Button("Rename") {
+                if let node = appState.folderRenameRequest {
+                    appState.folderRenameRequest = nil
+                    appState.renameFolder(node, to: renameFolderName)
+                }
+            }
+            Button("Cancel", role: .cancel) { appState.folderRenameRequest = nil }
+        } message: {
+            Text("Renames the folder on disk. Tags and collections are kept.")
+        }
+        .alert("Folder", isPresented: Binding(
+            get: { appState.folderOpError != nil },
+            set: { if !$0 { appState.folderOpError = nil } }
+        )) {
+            Button("OK", role: .cancel) { appState.folderOpError = nil }
+        } message: {
+            Text(appState.folderOpError ?? "")
         }
         // Preload the tag-label list for the selection menu, and keep it fresh
         // as tags change.
