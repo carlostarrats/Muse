@@ -1191,6 +1191,39 @@ Build + full `MuseTests` suite green.
   case-only-rename false collision, hidden-name silent create, and a stale-target
   UNIQUE rollback. Final verdict: ready to merge; build + full `MuseTests` green.
 
+### Hero-close deselect + collection-card hover veil — 2026-06-17 (on `feat/next-14`)
+
+Two small live UI fixes. Build + full `MuseTests` suite green; two parallel
+adversarial reviews + a fix-verification round (the one IMPORTANT finding is
+folded in).
+
+- **Hero close no longer flashes the tile's selected state.** Closing the hero
+  image viewer (Esc / ✕ / backdrop tap) used to land the underlying grid tile in
+  its *selected* look — image shrunk inward 10pt + selection ring — for a moment
+  before deselecting, reading as a stray hover/outline flash. Two root causes:
+  (1) `TileView.isSelected` (`GridView.swift`) included `|| selectedFile?.id ==
+  file.id`, which (since `FileNode.id` is a per-instance UUID and the opened tile
+  is that same instance) was true *exactly* when the tile is already hidden by the
+  `selectedFile?.url == file.url` opacity gate — visually dead, but it kept
+  `isSelected` true through the whole return flight; (2) nothing cleared
+  `selectedFiles` on close (the first click of the opening double-click had
+  single-selected the file), so the revealed tile stayed selected. Fix: dropped
+  the dead `selectedFile?.id` clause, and `HeroImageViewer.startClose()` now calls
+  `appState.clearSelection()` *first* — while the tile is still hidden — so the
+  0.15s deselect animation finishes invisibly during the ~0.34s flight and the
+  tile reveals at normal size, unselected. Also satisfies "Esc leaves nothing
+  selected." For parity (review-found IMPORTANT), `completeDelete` and the
+  mid-burn `onDisappear` also `clearSelection()` the just-trashed file, so an
+  **Undo** can't restore a tile already wearing the ring. The error
+  ("Couldn't move to Trash") path deliberately leaves the selection intact.
+- **Collection cards hover like the grid tiles.** `CollectionCard`
+  (`CollectionsRow.swift`) replaced the `.scaleEffect(1.025)` hover-grow with the
+  grid's calm dark veil — a rounded-rect black overlay at 0.2 opacity, gated
+  `hovering && !isActive` (the active card's accent border is its cue), drawn
+  under both the hairline and accent borders. Cards are one-click (drill into the
+  collection), so no resize. A `RoundedRectangle().fill` self-clips to its path,
+  so no black bleeds past the cover's rounded corners.
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```

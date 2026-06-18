@@ -461,10 +461,14 @@ private struct TileView: View {
     /// Tint laid over the selected (shrunken) image, in the ring's color.
     private static let selectionTintOpacity = 0.18
 
-    /// True when this tile is multi-selected OR is the open file.
+    /// True when this tile is multi-selected. (We deliberately do NOT treat the
+    /// open file as selected: while a viewer is up its tile is hidden via the
+    /// opacity gate below, so the `selectedFile` clause could only ever mark an
+    /// invisible tile — and it made the close flight land the tile in its
+    /// shrunk+ring selected state for a frame before `selectedFiles` cleared,
+    /// reading as a stray hover/outline flash.)
     private var isSelected: Bool {
         appState.selectedFiles.contains(file.url.standardizedFileURL.path)
-            || appState.selectedFile?.id == file.id
     }
 
     /// Ring + tint color, decided once from the app background mood.

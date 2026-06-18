@@ -248,6 +248,14 @@ struct CollectionCard: View {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
                 )
+                // Calm dark veil on hover, same as the grid tiles — no resize.
+                // Suppressed on the active card (its accent border is the cue).
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.black)
+                        .opacity((hovering && !isActive) ? 0.2 : 0)
+                        .allowsHitTesting(false)
+                )
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .strokeBorder(
@@ -256,8 +264,6 @@ struct CollectionCard: View {
                         )
                 )
                 .shadow(color: Color.black.opacity(0.09), radius: 4, x: 0, y: 1.5)
-                // Same gentle lift as the grid tiles below on hover.
-                .scaleEffect(hovering ? 1.025 : 1)
                 .animation(.easeOut(duration: 0.18), value: hovering)
                 .onHover { hovering = $0 }
             HStack(alignment: .firstTextBaseline, spacing: 6) {

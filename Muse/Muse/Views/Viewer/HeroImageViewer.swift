@@ -124,6 +124,9 @@ struct HeroImageViewer: View {
                         let ticket = try await TrashManager.trash(url)
                         appState.currentFiles.removeAll { $0.url == url }
                         if appState.selectedFile?.url == url { appState.selectedFile = nil }
+                        // Clear the stale selection on the trashed file so an
+                        // Undo doesn't restore a tile already wearing the ring.
+                        appState.clearSelection()
                         appState.deletion.toast = ToastData(message: "Moved to Trash",
                                                             actionLabel: "Undo") {
                             appState.deletion.restore(ticket: ticket,
@@ -323,6 +326,12 @@ struct HeroImageViewer: View {
 
     private func startClose() {
         guard !isClosing, !burning, burnProgress <= 0 else { return }
+        // Drop the grid selection now, while the tile is still hidden behind the
+        // flight. Its 0.15s deselect animation finishes invisibly during the
+        // 0.34s return flight, so the tile reveals at normal size (no shrink,
+        // no ring) instead of flashing its selected state on landing. Also
+        // satisfies "closing with Esc leaves nothing selected."
+        appState.clearSelection()
         withAnimation(.easeOut(duration: 0.12)) { chromeVisible = false }
         backdropVisible = false   // fades out during the close flight
         // Bring the toolbar back now so it fades in with the flight instead
@@ -386,6 +395,11 @@ struct HeroImageViewer: View {
             appState.viewerDismissing = false
             backdropVisible = false
             appState.selectedFile = nil
+            // Drop the grid selection too: it pointed at the just-trashed file.
+            // Without this the stale path survives in `selectedFiles`, so an
+            // Undo would restore the tile already wearing the selection ring —
+            // the same stray-selection flash the close fix removes for Esc.
+            appState.clearSelection()
         } catch {
             withAnimation(.easeOut(duration: 0.18)) {
                 toast = ToastData(message: "Couldn't move to Trash")
