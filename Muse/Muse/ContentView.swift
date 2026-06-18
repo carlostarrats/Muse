@@ -170,10 +170,12 @@ struct ContentView: View {
             // computes its fit center from the overlay size, and a later hide
             // moves that center mid-flight (the image visibly arcs).
             // It returns when the close *starts* (viewerDismissing) so the nav is
-            // there with the flight rather than popping in after. BOTH close
-            // paths set viewerDismissing up front — the X button via
-            // startClose(), Escape via the handler above — so they return the nav
-            // identically.
+            // there with the flight rather than popping in after. viewerDismissing
+            // is set in ONE place — startClose() — which both close paths funnel
+            // through: the X button calls it directly, Escape via the viewerClosing
+            // onChange. The Escape handler must NOT set viewerDismissing itself; a
+            // second, separate write there toggled the toolbar mid-transaction and
+            // regressed Escape into needing two presses (see the 2026-06-18 fix).
             .toolbar(appState.selectedFile == nil || appState.viewerDismissing
                      ? .automatic : .hidden,
                      for: .windowToolbar)
