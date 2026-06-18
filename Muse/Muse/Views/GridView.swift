@@ -21,6 +21,16 @@ struct GridView: View {
     @State private var newTagText = ""
     /// User-set images-per-row, persisted; the bottom-right slider drives it.
     @AppStorage("gridColumnCount") private var gridColumns = 4
+    /// Off-by-default: show each file's name under its tile.
+    @AppStorage(AppSettings.showFileNamesKey) private var showFileNames = false
+    /// Fixed under-tile caption strip height (one line of `.caption`), constant
+    /// across column counts — matches the collection-PDF export's fixed caption.
+    private let captionStripHeight: CGFloat = 18
+
+    /// The caption height actually reserved this render (0 when names are off).
+    private var effectiveCaptionHeight: CGFloat {
+        showFileNames ? captionStripHeight : 0
+    }
 
     /// Manual double-click detection so single-click selection is INSTANT —
     /// a lone `onTapGesture` fires immediately, with no SwiftUI count:1-vs-2
@@ -191,6 +201,11 @@ struct GridView: View {
                     recompute(width: contentWidth)
                 }
             }
+            .onChange(of: showFileNames) { _, _ in
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    recompute(width: contentWidth)
+                }
+            }
             .onChange(of: aspects.version) { _, _ in
                 recompute(width: contentWidth)
             }
@@ -220,6 +235,8 @@ struct GridView: View {
                 let rect = frames[i]
                 let file = files[i]
                 TileView(file: file, order: i, deletion: appState.deletion,
+                         showFileNames: showFileNames,
+                         captionHeight: effectiveCaptionHeight,
                          reportAspect: { [weak aspects] ratio in
                              aspects?.report(aspect: ratio,
                                               forStandardizedPath: file.url.standardizedFileURL.path)
@@ -310,7 +327,8 @@ struct GridView: View {
         let result = MasonryGeometry.compute(aspects: ratios,
                                              columns: gridColumns,
                                              width: width,
-                                             spacing: spacing)
+                                             spacing: spacing,
+                                             captionHeight: effectiveCaptionHeight)
         frames = result.frames
         totalHeight = result.totalHeight
         layoutWidth = width
@@ -418,6 +436,10 @@ private struct TileView: View {
     /// order, so a cold folder fills top-to-bottom.
     var order: Int = 0
     @ObservedObject var deletion: DeleteCoordinator
+    /// Whether to show a filename caption strip below the tile.
+    var showFileNames: Bool = false
+    /// Reserved caption strip height (0 when names are off).
+    var captionHeight: CGFloat = 0
     /// Reports the decoded thumbnail's exact aspect back to the layout so the
     /// tile frame matches the image (no grey letterbox).
     var reportAspect: (CGFloat) -> Void = { _ in }
@@ -430,16 +452,80 @@ private struct TileView: View {
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+            imageContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if showFileNames {
+                Text(file.basename)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .frame(height: captionHeight)
+                    .padding(.horizontal, 4)
+            }
+        }
+        .scaleEffect(hovering ? 1.025 : 1)
+        .animation(.easeOut(duration: 0.18), value: hovering)
+        .onHover { hovering = $0 }
+        // Prototype's hidden-cell: the tile vanishes while its image is
+        // flying/open so no ghost copy sits behind the hero stage.
+        .opacity(appState.selectedFile?.url == file.url ? 0 : 1)
+        // Never animated: the restore must land in the same frame the hero
+        // unmounts (see the close-flight note in the original code).
+        .animation(nil, value: appState.selectedFile?.url)
+        // Delete = a quiet fade-out.
+        .opacity(deletion.burningPaths.contains(file.url.path) ? 0 : 1)
+        .animation(.easeOut(duration: 0.3),
+                   value: deletion.burningPaths.contains(file.url.path))
+        // Re-runs when the URL changes OR the file's content version bumps
+        // (an in-place edit / iCloud sync).
+        .task(id: TileLoadID(url: file.url, version: appState.contentToken(for: file))) {
+            // 320 matches the hero viewer's first cache probe, so the open
+            // flight starts from this exact bitmap with zero wait. Retry on nil
+            // so a tile never stays grey: the QuickLook fallback (PDF, SVG,
+            // fonts…) can transiently fail under load — a short backoff recovers
+            // it instead of leaving a dead box.
+            for attempt in 0..<4 {
+                if let img = await ThumbnailCache.shared.thumbnail(
+                    for: file.url,
+                    size: CGSize(width: 320, height: 320),
+                    order: order
+                ) {
+                    // Correct the tile's aspect from the real image BEFORE
+                    // showing it, so the frame is already right when the image
+                    // lands. Image kinds only: non-image cards keep their fixed
+                    // labeled-card aspect (a QuickLook doc/icon thumbnail's
+                    // proportions must not resize the card).
+                    if isImageKind, img.size.width > 0 {
+                        reportAspect(img.size.height / img.size.width)
+                    }
+                    thumbnail = img
+                    return
+                }
+                if Task.isCancelled { return }
+                if attempt < 3 {
+                    try? await Task.sleep(nanoseconds: UInt64(300_000_000) * UInt64(attempt + 1))
+                }
+            }
+        }
+    }
+
+    /// The image area: the thumbnail/preview/card, clipped, with the selection
+    /// overlay and the global-frame reporter for the hero open/close flight.
+    /// The caption strip (if any) sits below this, OUTSIDE the selection border.
+    private var imageContent: some View {
         tile
-            // Images sit square-cornered (edge-to-edge jigsaw pieces); only
-            // the non-image file cards keep the rounded card look.
+            // Images sit square-cornered (edge-to-edge jigsaw pieces); only the
+            // non-image file cards keep the rounded card look.
             .clipShape(RoundedRectangle(cornerRadius: isImageKind ? 0 : 8,
                                         style: .continuous))
             .overlay {
-                // Selected (multi-select) OR the open file get an accent wash
-                // + border. Inside the scaleEffect below, so they grow with the
-                // hover zoom instead of the image spilling past them. The tint
-                // tracks the system accent (light blue by default).
+                // Selected (multi-select) OR the open file get an accent wash +
+                // border, wrapping the image area only (Finder-style; the label
+                // below stays unbordered). Inside the scaleEffect so it grows
+                // with the hover zoom.
                 if appState.selectedFiles.contains(file.url.standardizedFileURL.path)
                     || appState.selectedFile?.id == file.id {
                     RoundedRectangle(cornerRadius: isImageKind ? 0 : 8, style: .continuous)
@@ -450,17 +536,6 @@ private struct TileView: View {
                         }
                 }
             }
-            .scaleEffect(hovering ? 1.025 : 1)
-            .animation(.easeOut(duration: 0.18), value: hovering)
-            .onHover { hovering = $0 }
-            // Prototype's hidden-cell: the tile vanishes while its image is
-            // flying/open so no ghost copy sits behind the hero stage.
-            .opacity(appState.selectedFile?.url == file.url ? 0 : 1)
-            // Never animated: the restore must land in the same frame the
-            // hero unmounts — ContentView's 0.18s selectedFile animation
-            // otherwise fades the tile back in, a visible blink after the
-            // close flight lands.
-            .animation(nil, value: appState.selectedFile?.url)
             .background(
                 GeometryReader { proxy in
                     Color.clear
@@ -473,65 +548,18 @@ private struct TileView: View {
                         }
                 }
             )
-            // Delete = a quiet fade-out (no burn/fire shader). The coordinator
-            // marks the path, the tile fades to 0, then it's removed and the
-            // grid closes the gap.
-            .opacity(deletion.burningPaths.contains(file.url.path) ? 0 : 1)
-            .animation(.easeOut(duration: 0.3),
-                       value: deletion.burningPaths.contains(file.url.path))
-            // Re-runs when the URL changes OR the file's content version bumps
-            // (an in-place edit / iCloud sync). The cache was already
-            // invalidated for that path, so this re-decode pulls fresh bytes.
-            .task(id: TileLoadID(url: file.url, version: appState.contentToken(for: file))) {
-                // 320 matches the hero viewer's first cache probe, so the open
-                // flight starts from this exact bitmap with zero wait.
-                // Retry on nil so a tile never stays grey: ImageIO carries the
-                // image path reliably, but the QuickLook fallback (PDF, SVG,
-                // fonts…) can transiently fail under load — a short backoff
-                // recovers it instead of leaving a dead box.
-                for attempt in 0..<4 {
-                    if let img = await ThumbnailCache.shared.thumbnail(
-                        for: file.url,
-                        size: CGSize(width: 320, height: 320),
-                        order: order
-                    ) {
-                        // Correct the tile's aspect from the real image BEFORE
-                        // showing it, so the frame is already right when the
-                        // image lands — it fills, never letterboxed in grey.
-                        // Image kinds only: non-image cards keep their fixed
-                        // labeled-card aspect (a QuickLook doc thumbnail's
-                        // proportions must not resize the card).
-                        if isImageKind, img.size.width > 0 {
-                            reportAspect(img.size.height / img.size.width)
-                        }
-                        thumbnail = img
-                        return
-                    }
-                    if Task.isCancelled { return }
-                    // No backoff after the final attempt — it would just stall
-                    // a permanently-unrenderable tile for nothing.
-                    if attempt < 3 {
-                        try? await Task.sleep(nanoseconds: UInt64(300_000_000) * UInt64(attempt + 1))
-                    }
-                }
-            }
     }
 
     /// Images: natural aspect, fitted into the precomputed jigsaw frame.
-    /// Other kinds: a compact labeled card so files stay identifiable.
+    /// Other kinds: a grey card showing the native macOS icon / content preview.
     @ViewBuilder
     private var tile: some View {
         if isImageKind {
-            // Placeholder stays put; the decoded image fades IN over it when
-            // it lands, so a cold grid resolves as a soft fade rather than
-            // hard tiles snapping in top-to-bottom.
+            // Placeholder stays put; the decoded image fades IN over it when it
+            // lands, so a cold grid resolves as a soft fade.
             ZStack {
                 Rectangle()
                     .fill(appState.moodPalette.tileFill)
-                // While the thumbnail generates, the grey placeholder sweeps
-                // with the same loading sheen as the folder skeleton — so any
-                // grey a user sees is alive, never a dead box. Removed the
-                // instant the image lands.
                 if thumbnail == nil {
                     let tuning = shimmerTuning(
                         isCustom: appState.mood == .custom,
@@ -550,19 +578,51 @@ private struct TileView: View {
             }
             .animation(.easeOut(duration: 0.28), value: thumbnail != nil)
         } else {
-            VStack(spacing: 8) {
-                Image(systemName: iconName(for: file.kind))
-                    .font(.system(size: 30))
-                    .foregroundStyle(.secondary)
-                Text(file.basename)
-                    .font(.caption)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .padding(.horizontal, 10)
+            // Non-image card: the QuickLook image is the real macOS TYPE ICON
+            // (zip/dmg/folder) or a CONTENT preview (PDF/doc), centered and
+            // scaled to fit. Falls back to an SF Symbol only while loading / if
+            // QuickLook genuinely fails.
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(appState.moodPalette.tileFill)
+                if showFileNames {
+                    // Name lives below the card (the body caption); show the
+                    // icon/preview using the whole card.
+                    cardIcon
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(12)
+                } else {
+                    // Name sits inside the card near the bottom; the centered
+                    // icon/preview fills the area above it and never overlaps
+                    // (they're stacked, not layered).
+                    VStack(spacing: 6) {
+                        cardIcon
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        Text(file.basename)
+                            .font(.caption)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .padding(10)
+                }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(appState.moodPalette.tileFill))
+        }
+    }
+
+    /// The native macOS icon / content preview when QuickLook has delivered it,
+    /// otherwise the kind's SF Symbol as a transient fallback.
+    @ViewBuilder
+    private var cardIcon: some View {
+        if let img = thumbnail {
+            Image(nsImage: img)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+        } else {
+            Image(systemName: iconName(for: file.kind))
+                .font(.system(size: 30))
+                .foregroundStyle(.secondary)
         }
     }
 
