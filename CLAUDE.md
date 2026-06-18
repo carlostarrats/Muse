@@ -1416,6 +1416,24 @@ Build + full `MuseTests` suite green.
     copy and ignores later mutations. A scope change now reinstalls a FRESH
     template (correct checkmarks), tracked by `Coordinator.appliedAllFolders` so
     it only rebuilds on a real change.
+- **QA — two parallel adversarial reviews + a fix-verification round.** Found and
+  fixed two real issues in the reconcile:
+  - **(Critical) False-empty mass-delete.** `FolderReader.files` /
+    `enumerateRecursive` return `[]` for BOTH a genuinely-empty folder AND a
+    failed read (transient permission loss, or an iCloud folder not materialized
+    on a cold launch). Reconciling on a false-empty marked the WHOLE folder's
+    `is_alive` rows dead — the iCloud data-loss class this project guards against.
+    Fix: when `present` is empty, a directory probe gates the reconcile — a read
+    that THROWS (the path failed reads take to return `[]`) → skip; a genuinely
+    readable-but-empty folder → reconcile (cleans its ghosts). Probe only runs on
+    the empty path (short-circuit), off-main in the load task.
+  - **(Important) `markDead` not chunked.** A single `IN (?,…)` over >999 vanished
+    paths exceeds `SQLITE_MAX_VARIABLE_NUMBER`, throws, and (under `try?`) silently
+    cleans nothing — failing on the large-deletion case the feature exists for.
+    Fix: chunk at 500 (matches the codebase), summed in one transaction. Test:
+    `testMarkDeadChunksPastSQLiteVariableLimit` (1500 paths).
+  - The verification round confirmed both closed with no regression (precedence,
+    chunk math, atomicity, threading all checked). Full `MuseTests` suite green.
 
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
@@ -1514,7 +1532,11 @@ Muse/Muse/
                                    folder load (stops ghost rows leaking into
                                    search as blank tiles + inflating collection
                                    counts); guards old-style evicted iCloud
-                                   placeholders, no data migration — 2026-06-18
+                                   placeholders, markDead chunked at 500. The
+                                   caller (AppState) skips reconcile on a
+                                   false-empty enumeration (failed/unmaterialized
+                                   read) so it can't mass-delete. No data
+                                   migration — 2026-06-18
     FolderStatCache.swift          @MainActor cache of FolderStat per top-level
                                    folder; off-main compute, live via FSEvents over
                                    all roots (debounced), set-diff so a reorder
