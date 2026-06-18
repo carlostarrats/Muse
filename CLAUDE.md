@@ -155,6 +155,13 @@ The four most critical are also saved as Claude memories (linked).
   (the macOS toolbar can't fade). Accepted. Do NOT reintroduce the
   always-present-toolbar (shows empty item wells over the hero) or the
   return-after-land approach (kills the instant feel) — both were tried.
+  **Escape must fire ONLY `viewerClosing = true`** and let `startClose()` (run
+  via HeroImageViewer's `viewerClosing` onChange) own the whole close — including
+  setting `viewerDismissing` itself, exactly as the X button does. A pass that
+  ALSO set `viewerDismissing` up front in ContentView's Escape handler (to shave
+  the onChange hop's "beat") made Escape need TWO presses: the nav returned but
+  the close didn't complete. Don't add a separate `viewerDismissing` write to the
+  Escape path — route everything through the one flag (fixed 2026-06-18).
 - **Collection "delete" = `setHidden(true)`** (durable tombstone the recluster
   upserts never clear), NOT a row delete (which silently regenerates).
 - **Bulk tag delete leaves `analyzed_hash` untouched** so the auto-tagger never
@@ -225,6 +232,9 @@ The four most critical are also saved as Claude memories (linked).
   reorder keyboard path (Move Up/Down).
 - **2026-06-18** `feat/next-18` — search bar back to fixed 320; both hero-close
   paths return the nav identically (Escape matches X); close-flash decision.
+- **2026-06-18** `main` (release v1.1.2) — fix the next-18 regression: Escape
+  needed two presses. ContentView's Escape handler now fires only
+  `viewerClosing`; `startClose()` owns the whole close (matches X).
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 

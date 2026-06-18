@@ -1447,3 +1447,25 @@ Two small live UI fixes. Build + full `MuseTests` suite green.
   instant return). DECISION: keep the instant return on both paths and accept
   the very slight flash — the flash and the "never gone" feel are the same
   event. Do not reintroduce the always-present-toolbar or after-land approaches.
+
+## 2026-06-18 — `main` / release v1.1.2 — hero-close Escape regression fix
+
+- **Escape-to-close needed two presses (regression from the next-18 change
+  above).** The next-18 "standardize nav return" pass had ContentView's Escape
+  handler set `viewerDismissing = true` (animated) up front in the same
+  transaction as `viewerClosing = true`, to shave the `.onChange` hop's "beat."
+  That extra, separate `@Published` write — which toggles the toolbar
+  mid-transaction — regressed Escape into needing TWO presses: the first press
+  returned the nav over the hero but the close itself didn't complete; a second
+  Escape was needed to actually dismiss. The X button was never affected because
+  it funnels the whole close through a single trigger (`startClose()`), which
+  sets `viewerDismissing` and `isClosing` together.
+- **Fix:** ContentView's Escape handler now fires ONLY `viewerClosing = true`
+  and lets `startClose()` (run via HeroImageViewer's `viewerClosing` onChange)
+  own the entire close, including bringing the nav back itself — exactly as the
+  X button does. Both paths are now truly identical. The only behavioral
+  trade-off is the one next-18 tried to remove: on Escape the nav returns one
+  render hop later than on the X button (cosmetic). Verified: rebuilt Debug,
+  hero now closes on a single Escape. Recorded as a durable "must not break" in
+  CLAUDE.md (don't add a separate `viewerDismissing` write to the Escape path).
+- Released as **v1.1.2** (direct distribution + Sparkle; `scripts/release.sh`).

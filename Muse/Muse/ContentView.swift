@@ -199,15 +199,16 @@ struct ContentView: View {
                    selected.kind == .image || selected.kind == .raw
                        || selected.kind == .psd {
                     // Hero viewer: run the return flight instead of popping.
-                    // Set viewerDismissing up front, in THIS transaction, so the
-                    // toolbar/nav returns immediately — same as the X button,
-                    // which calls startClose() synchronously. Going only through
-                    // viewerClosing → onChange → startClose added a hop that made
-                    // the Escape nav return a beat later ("delayed/abrupt"); this
-                    // standardizes both close paths to the instant return.
-                    withAnimation(.easeInOut(duration: 0.35)) {
-                        appState.viewerDismissing = true
-                    }
+                    // Fire the SINGLE trigger (viewerClosing) and let startClose()
+                    // — run via HeroImageViewer's viewerClosing onChange — own the
+                    // whole close, including bringing the nav back (it sets
+                    // viewerDismissing itself). This is exactly what the X button
+                    // does. A previous pass also set viewerDismissing here, up
+                    // front, to shave the onChange hop's "beat"; that extra,
+                    // separate @Published write (toolbar toggles mid-transaction)
+                    // regressed Escape into needing TWO presses — the nav returned
+                    // but the close didn't complete. Route everything through the
+                    // one flag so both paths are truly identical.
                     appState.viewerClosing = true
                 } else if appState.selectedFile != nil {
                     appState.selectedFile = nil
