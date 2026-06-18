@@ -94,16 +94,18 @@ struct ContentView: View {
                         // Flip the active sort mode's direction (newest↔oldest, A↔Z, …).
                         sortDirectionButton
                     }
-                    // Sorting is meaningless on the Collections card grid.
-                    .disabled(isCollectionsPage)
+                    // Sorting is meaningless on the Collections card grid, and
+                    // it doesn't apply to search results (ranked by relevance).
+                    .disabled(isCollectionsPage || appState.isSearchActive)
                 }
 
                 // Tag-chip sort order (Most Used / A→Z) — its own item, sitting
                 // between the grid sort cluster and the show-subfolders toggle.
                 ToolbarItem(placement: .navigation) {
                     tagSortMenu
-                        // The tag chips don't show on the Collections card page.
-                        .disabled(isCollectionsPage)
+                        // The tag chips don't show on the Collections card page
+                        // or during a search.
+                        .disabled(isCollectionsPage || appState.isSearchActive)
                 }
 
                 // Its own item (own surface), sitting next to sort.
@@ -117,6 +119,9 @@ struct ContentView: View {
                     .onChange(of: appState.showSubfolders) { _, _ in
                         appState.toggleSubfolders()
                     }
+                    // Toggling subfolders mid-search re-loads the whole folder
+                    // listing, dropping you out of the results — confusing.
+                    .disabled(appState.isSearchActive)
                 }
 
                 ToolbarItem(placement: .principal) {

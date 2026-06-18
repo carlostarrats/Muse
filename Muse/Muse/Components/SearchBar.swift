@@ -119,7 +119,8 @@ private struct NativeSearchField: NSViewRepresentable {
         // The magnifier-icon dropdown: "All" vs "This Folder". Setting a
         // template (with no Recents tags) shows the dropdown triangle and our
         // two scope items, no recent-searches machinery.
-        field.searchMenuTemplate = context.coordinator.makeScopeMenu()
+        field.searchMenuTemplate = context.coordinator.makeScopeMenu(allFolders: allFolders)
+        context.coordinator.appliedAllFolders = allFolders
         return field
     }
 
@@ -127,44 +128,44 @@ private struct NativeSearchField: NSViewRepresentable {
         context.coordinator.parent = self
         if field.stringValue != text { field.stringValue = text }
         field.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
-        // Keep the menu's checkmark in sync with the current scope (the field
-        // copies the template each time it shows it, so updating the template
-        // items here is reflected on the next open).
-        context.coordinator.syncScopeState(allFolders: allFolders)
+        // Keep the menu's checkmark in sync with the current scope. The field
+        // caches its own copy of the template and won't re-read mutated items,
+        // so on a scope change we hand it a FRESH template (with the right
+        // checkmarks) — reassigning forces the field to rebuild the menu.
+        if context.coordinator.appliedAllFolders != allFolders {
+            field.searchMenuTemplate = context.coordinator.makeScopeMenu(allFolders: allFolders)
+            context.coordinator.appliedAllFolders = allFolders
+        }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     final class Coordinator: NSObject, NSSearchFieldDelegate {
         var parent: NativeSearchField
-        private weak var allItem: NSMenuItem?
-        private weak var folderItem: NSMenuItem?
+        /// The scope the currently-installed template reflects, so updateNSView
+        /// only rebuilds (and reassigns) the menu when it actually changes.
+        var appliedAllFolders: Bool?
         init(_ parent: NativeSearchField) { self.parent = parent }
 
-        /// Two-item scope menu shown under the magnifier icon.
-        func makeScopeMenu() -> NSMenu {
+        /// A fresh two-item scope menu with the checkmark on the active scope.
+        func makeScopeMenu(allFolders: Bool) -> NSMenu {
             let menu = NSMenu()
             let all = NSMenuItem(title: "All", action: #selector(pickAll), keyEquivalent: "")
             all.target = self
+            all.state = allFolders ? .on : .off
             let folder = NSMenuItem(title: "This Folder", action: #selector(pickFolder), keyEquivalent: "")
             folder.target = self
+            folder.state = allFolders ? .off : .on
             menu.addItem(all)
             menu.addItem(folder)
-            allItem = all
-            folderItem = folder
-            syncScopeState(allFolders: parent.allFolders)
             return menu
         }
 
-        func syncScopeState(allFolders: Bool) {
-            allItem?.state = allFolders ? .on : .off
-            folderItem?.state = allFolders ? .off : .on
-        }
-
-        // Update the template checkmark immediately too, so it's correct even
-        // if a future change sets the scope without re-rendering this view.
-        @objc private func pickAll() { syncScopeState(allFolders: true); parent.onScopeChange(true) }
-        @objc private func pickFolder() { syncScopeState(allFolders: false); parent.onScopeChange(false) }
+        // The checkmark refresh rides the resulting scope change: onScopeChange
+        // flips appState.searchAllFolders → updateNSView reinstalls a fresh
+        // template with the correct checkmarks.
+        @objc private func pickAll() { parent.onScopeChange(true) }
+        @objc private func pickFolder() { parent.onScopeChange(false) }
 
         func controlTextDidChange(_ obj: Notification) {
             guard let field = obj.object as? NSSearchField else { return }
