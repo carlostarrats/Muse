@@ -1289,6 +1289,58 @@ before fixing, per systematic debugging.
   or documented; the verification pass confirmed the fixes introduce no
   regression to the normal drag.
 
+### Sidebar folder sort modes + live file counts — 2026-06-18 (on `feat/next-15`)
+
+Added a sort control + a live per-folder count to the sidebar's top-level
+folders (spec: `docs/superpowers/specs/2026-06-18-folder-sort-and-counts-design.md`,
+plan: `docs/superpowers/plans/2026-06-18-folder-sort-and-counts.md`). Built via
+subagent-driven development (4 tasks, each spec+quality reviewed + a final
+whole-feature review on opus + one review-fix). Build + full `MuseTests` green.
+
+- **Sort control** — a `Sort: <mode> ▾` menu at the top of the sidebar
+  (`SidebarView.sortHeader`): **Manual** (default) · **Name** (A→Z, localized) ·
+  **Date Modified** (newest first) · **Size** (largest first), checkmark on
+  active, persisted via `AppSettings.folderSortMode`. Pure comparator
+  `FolderSort.order` (`Models/FolderSortMode.swift`) — name tiebreak, missing-stat
+  sorts last — unit-tested.
+- **Manual stays draggable; sorted modes are READ-ONLY.** The live drag-reorder
+  gesture is gated to Manual (`reorder:` passed to `FolderTreeNode` only when
+  `sortMode == .manual`); Name/Date/Size show a sorted *copy*
+  (`displayedReorderableNodes`) and never mutate the manual order
+  (`BookmarkStore.roots`). So a sort never overwrites your hand arrangement.
+- **Live per-folder count** at the row's trailing edge. It follows the
+  show-subfolders toggle so it always matches the grid: off → immediate files,
+  on → recursive files. On hover in Manual mode the count swaps in place for the
+  ≡ grip (`showGrip = reorder != nil && isHovered && !isReordering`); during a
+  drag the in-list row falls back to the count (the grip rides the floating
+  overlay). The iCloud row shows a count, no grip; subfolders show neither.
+- **Size + Date Modified are recursive aggregates** (toggle-independent): total
+  bytes of all files under the folder, and the newest mtime anywhere under it
+  (NOT the folder's own inode date — deep changes don't bubble up). The COUNT is
+  viewable/grid-files; size sums all files. All from one walk per folder.
+- **`FolderStat` + `FolderStats.compute`** (`Filesystem/FolderStat.swift`, pure +
+  nonisolated): immediate + recursive counts, recursive size, recursive latest
+  mtime; mirrors the grid's file notion (every non-folder entry; packages count
+  as files, not descended-as-folders) so the count matches exactly. Unit-tested.
+- **`FolderStatCache`** (`Filesystem/FolderStatCache.swift`, `@MainActor`): caches
+  a stat per top-level folder, computes off-main, and keeps stats LIVE via a
+  single FSEvents watch over ALL root paths (`FolderWatcher.watch(urls:)`, new
+  overload). A content change anywhere under a root recomputes just that root
+  (debounced ~0.4s). `AppState` owns it, drives `update(roots:)` from
+  `rebuildRootNodes` (launch + roots add/remove + iCloud discovery), and forwards
+  its `objectWillChange` (like `stars`) so the sidebar re-renders.
+- **Perf (review fix):** `update(roots:)` only restarts the watcher + recomputes
+  on a real root-SET change (a `watchedPaths` set diff) and only walks
+  newly-added roots — so a drag-reorder (same roots, same contents) does zero
+  re-walks and zero watcher restarts. A late detached recompute can't resurrect
+  a removed root's stat. Toggling show-subfolders is recompute-free (both counts
+  live in the cached stat). `compute` passes `showHidden: false` (commented:
+  must track `AppState.showHidden` if that ever becomes user-facing).
+- **Known limitation (placement always correct; only in-flight visuals/edge
+  cases):** for a long *scrolled* root list, off-screen roots aren't measured by
+  `LazyVStack` so a count may lag until visible; otherwise counts refresh within
+  ~0.5s of a change.
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
@@ -1318,7 +1370,9 @@ Muse/Muse/
                                    chip data — tagChipRows + reloadTagChips()
                                    (computed inline by the folder load so files +
                                    chips publish together); tagRowReady gate
-                                   (feat/next-10)
+                                   (feat/next-10). Owns folderStats
+                                   (FolderStatCache) — driven from rebuildRootNodes,
+                                   changes forwarded like stars (2026-06-18)
     AppState+Selection.swift       extension: grid MULTI-selection (selectedFiles:
                                    Set<String> of paths + anchor) — applyClick /
                                    clearSelection / selectAllVisible /
@@ -1340,6 +1394,10 @@ Muse/Muse/
                                    "burn"; the Metal burn shader is gone)
     Mood.swift                     Light / Dark / Auto (day↔night) / Custom HSB
                                    (AutoTint retired)
+    FolderSortMode.swift           sidebar folder sort: FolderSortMode enum
+                                   (manual/name/dateModified/size) + pure
+                                   FolderSort.order comparator (name tiebreak,
+                                   missing-stat last) — 2026-06-18
   Filesystem/
     FileMover.swift                move(_:into:) via FileManager.moveItem; skips
                                    name collisions, returns failures; roots already
@@ -1364,7 +1422,19 @@ Muse/Muse/
     FolderWatcher.swift            FSEvents-backed live watcher; delivers the
                                    changed paths. FolderEventFilter (pure) keeps
                                    only viewable in-folder files (drops hidden/
-                                   .muse/out-of-folder) — see 2026-06-17 session
+                                   .muse/out-of-folder) — see 2026-06-17 session.
+                                   watch(urls:) overload watches many roots at once
+                                   (sidebar folder-stat cache — 2026-06-18)
+    FolderStat.swift               pure FolderStat (immediate+recursive file counts,
+                                   recursive size, recursive latest mtime) +
+                                   FolderStats.compute/root(containing:); mirrors the
+                                   grid's file notion so sidebar counts match
+                                   (2026-06-18)
+    FolderStatCache.swift          @MainActor cache of FolderStat per top-level
+                                   folder; off-main compute, live via FSEvents over
+                                   all roots (debounced), set-diff so a reorder
+                                   doesn't re-walk; AppState owns + forwards changes
+                                   (2026-06-18)
     StarStore.swift                SQLite-backed starred folders
     ThumbnailCache.swift           QLThumbnail + AVAssetImageGenerator (videos);
                                    off-main, ordered (top→bottom) load; 2-tier
@@ -1462,7 +1532,13 @@ Muse/Muse/
                                    the dragged row is hidden in place + drawn as an
                                    opaque on-top overlay following the cursor, the
                                    others part to open a gap, commit is non-animated
-                                   (2026-06-18 — see that session log)
+                                   (2026-06-18 — see that session log). A "Sort:
+                                   <mode> ▾" header (Manual/Name/Date Modified/Size)
+                                   orders the top-level folders; Manual is draggable,
+                                   sorted modes are read-only; each top-level row
+                                   shows a live file count (AppState.folderStats)
+                                   that swaps for the grip on hover in Manual
+                                   (2026-06-18)
     GridView.swift                 VIRTUALIZED masonry grid — precomputes tile
                                    frames (MasonryGeometry from AspectRatioCache)
                                    and renders only viewport tiles (+overscan);
@@ -1578,7 +1654,8 @@ Muse/Muse/
                                    autoCollections, both default ON); read by
                                    AnalyzePipeline + CollectionsEngine. Plus
                                    showFileNames (default OFF; read by GridView —
-                                   feat/next-11)
+                                   feat/next-11). Plus folderSortMode (default
+                                   manual; sidebar folder sort — 2026-06-18)
     SettingsView.swift             Preferences window (app menu → Settings…,
                                    ⌘,): the two auto-organization toggles
                                    (auto-tag new images / auto-organize into
