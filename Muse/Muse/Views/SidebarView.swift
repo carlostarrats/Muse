@@ -545,7 +545,7 @@ private struct FolderTreeNode: View {
                         if let topLevelCount {
                             Text("\(topLevelCount)")
                                 .font(.system(size: 11))
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(.secondary)
                                 .monospacedDigit()
                                 .opacity(showGrip ? 0 : 1)
                         }
