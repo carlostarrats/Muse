@@ -101,7 +101,9 @@ next to the mood/palette code or in a small new file.
 ## Tunable constants (dev-only, locked for production)
 
 These are internal constants I tune to nail the look, then hardcode to final
-values. They are NOT user-facing and ship no settings UI:
+values. They are NOT user-facing and ship no settings UI. The estimates below
+are the pre-tuning starting points; the **locked final values** (tuned live with
+the user) follow.
 
 - Hover veil opacity (~0.12) and animation duration.
 - Selection image inset / shrink amount (a few points).
@@ -109,6 +111,25 @@ values. They are NOT user-facing and ship no settings UI:
 - Ring thickness.
 - Selection tint opacity.
 - "Colorful" saturation threshold (~0.20).
+
+**Locked final values** (the `private static let`s on `TileView` in
+`GridView.swift`):
+
+- `hoverVeilOpacity = 0.2`
+- `selectionInset = 10` (pt the image shrinks per side)
+- `ringInset = 0` (ring hugs the tile edge)
+- `ringWidth = 2.5`
+- `ringCornerRadius = 8`
+- `selectionTintOpacity = 0.18`
+- `colorfulSaturationThreshold = 0.20` (in `SelectionStyle`)
+
+**Known invariant:** the selection ring/shrink animates on `isSelected`, which
+is `selectedFiles.contains(path) || selectedFile?.id == file.id`. The grid's
+open path (`handleTileTap`) always selects a tile (`applyClick(.single)`) before
+opening it, so an open tile is always in `selectedFiles` and `isSelected` stays
+true across the hero open/close — preserving the same-frame hidden-cell handoff
+(no post-close ring fade). Any future "open without selecting" path must keep
+that relationship (or scope the `isSelected` animation away from the close).
 
 ## Non-goals / unchanged
 

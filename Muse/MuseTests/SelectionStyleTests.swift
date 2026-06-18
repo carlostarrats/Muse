@@ -30,11 +30,28 @@ final class SelectionStyleTests: XCTestCase {
         XCTAssertEqual(SelectionStyle.accent(forBackground: bg), .white)
     }
 
-    // The chosen ring always clears WCAG AA (>= 4.5:1) on colorful backgrounds.
+    // The saturation gate is a hard cliff at colorfulSaturationThreshold.
+    // Just below it stays neutral (blue); at/above it goes colorful (black/white).
+    func testSaturationThresholdBoundary() {
+        // saturation = (max - min) / max. With max = 1.0:
+        //   min 0.81 → sat 0.19 (< 0.20) → neutral → blue
+        //   min 0.79 → sat 0.21 (>= 0.20) → colorful → black/white
+        XCTAssertLessThan(SelectionStyle.saturation(rgb(1.0, 0.9, 0.81)),
+                          SelectionStyle.colorfulSaturationThreshold)
+        XCTAssertEqual(SelectionStyle.accent(forBackground: rgb(1.0, 0.9, 0.81)), .systemBlue)
+
+        XCTAssertGreaterThanOrEqual(SelectionStyle.saturation(rgb(1.0, 0.9, 0.79)),
+                                    SelectionStyle.colorfulSaturationThreshold)
+        XCTAssertNotEqual(SelectionStyle.accent(forBackground: rgb(1.0, 0.9, 0.79)), .systemBlue)
+    }
+
+    // The chosen ring always clears WCAG AA (>= 4.5:1) on colorful backgrounds,
+    // including the luminance extremes (very dark + very bright saturated hues).
     func testChosenAccentClearsAAOnColorfulBackgrounds() {
         let colorful = [rgb(0.6, 0.9, 0.6), rgb(0.3, 0.0, 0.4),
                         rgb(0.0, 0.5, 0.5), rgb(0.9, 0.2, 0.2),
-                        rgb(0.2, 0.2, 0.9), rgb(0.95, 0.85, 0.1)]
+                        rgb(0.2, 0.2, 0.9), rgb(0.95, 0.85, 0.1),
+                        rgb(0.0, 0.0, 0.6), rgb(1.0, 1.0, 0.0)]
         for bg in colorful {
             let bgL = SelectionStyle.relativeLuminance(bg)
             let chosenL: Double
