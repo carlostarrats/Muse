@@ -46,4 +46,40 @@ final class FolderSortTests: XCTestCase {
         XCTAssertEqual(names(FolderSort.order(items, by: .size), items),
                        ["big", "mid", "small", "none"])
     }
+
+    func testEmptyInput() {
+        for mode in FolderSortMode.allCases {
+            XCTAssertEqual(FolderSort.order([], by: mode), [])
+        }
+    }
+
+    func testEqualMetricBreaksByName() {
+        // Equal sizes → name tiebreak (A→Z).
+        let sizeItems = [item("beta", stat: stat(size: 50)),
+                         item("alpha", stat: stat(size: 50))]
+        XCTAssertEqual(names(FolderSort.order(sizeItems, by: .size), sizeItems),
+                       ["alpha", "beta"])
+        // Equal dates → name tiebreak.
+        let d = Date()
+        let dateItems = [item("beta", stat: stat(modified: d)),
+                         item("alpha", stat: stat(modified: d))]
+        XCTAssertEqual(names(FolderSort.order(dateItems, by: .dateModified), dateItems),
+                       ["alpha", "beta"])
+    }
+
+    func testSortModePersistsThroughUserDefaults() {
+        let key = AppSettings.folderSortModeKey
+        let original = UserDefaults.standard.string(forKey: key)
+        defer {
+            if let original { UserDefaults.standard.set(original, forKey: key) }
+            else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+        for mode in FolderSortMode.allCases {
+            AppSettings.folderSortMode = mode
+            XCTAssertEqual(AppSettings.folderSortMode, mode, "round-trip failed for \(mode)")
+        }
+        // Unset → defaults to .manual.
+        UserDefaults.standard.removeObject(forKey: key)
+        XCTAssertEqual(AppSettings.folderSortMode, .manual)
+    }
 }

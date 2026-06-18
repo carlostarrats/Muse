@@ -48,9 +48,7 @@ final class FolderStatCache: ObservableObject {
     }
 
     private func handle(paths: [String]) {
-        let affected = Set(paths.compactMap {
-            FolderStats.root(containing: $0, in: roots)?.standardizedFileURL.path
-        })
+        let affected = Set(paths.compactMap { rootForMediaChange($0) })
         guard !affected.isEmpty else { return }
         pending.formUnion(affected)
         debounce?.cancel()
@@ -62,6 +60,25 @@ final class FolderStatCache: ObservableObject {
         }
         debounce = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
+    }
+
+    /// The watched root containing `path`, but only for a change Muse's count
+    /// cares about: ignore hidden / dotfile-segment paths (e.g. `.muse` sidecars
+    /// written on every analyze pass, `.DS_Store`). The recursive walk uses
+    /// `skipsHiddenFiles`, so such changes never alter the count — mapping them to
+    /// a root would just schedule a redundant full re-walk (and a spurious
+    /// re-render) on every analyze. Returns the standardized root path, or nil.
+    private func rootForMediaChange(_ path: String) -> String? {
+        guard let root = FolderStats.root(containing: path, in: roots) else { return nil }
+        let rootPath = root.standardizedFileURL.path
+        let std = URL(fileURLWithPath: path).standardizedFileURL.path
+        if std.hasPrefix(rootPath + "/") {
+            let relative = std.dropFirst(rootPath.count + 1)
+            if relative.split(separator: "/").contains(where: { $0.hasPrefix(".") }) {
+                return nil
+            }
+        }
+        return rootPath
     }
 
     private func recompute(_ root: URL) {
