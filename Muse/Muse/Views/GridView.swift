@@ -517,10 +517,9 @@ private struct TileView: View {
     /// The caption strip (if any) sits below this, OUTSIDE the selection border.
     private var imageContent: some View {
         tile
-            // Images sit square-cornered (edge-to-edge jigsaw pieces); only the
-            // non-image file cards keep the rounded card look.
-            .clipShape(RoundedRectangle(cornerRadius: isImageKind ? 0 : 8,
-                                        style: .continuous))
+            // Every tile is square-cornered (edge-to-edge jigsaw pieces) — the
+            // non-image cards' grey backing matches the photos, no rounding.
+            .clipShape(Rectangle())
             .overlay {
                 // Selected (multi-select) OR the open file get an accent wash +
                 // border, wrapping the image area only (Finder-style; the label
@@ -528,10 +527,10 @@ private struct TileView: View {
                 // with the hover zoom.
                 if appState.selectedFiles.contains(file.url.standardizedFileURL.path)
                     || appState.selectedFile?.id == file.id {
-                    RoundedRectangle(cornerRadius: isImageKind ? 0 : 8, style: .continuous)
+                    Rectangle()
                         .fill(Color.accentColor.opacity(0.22))
                         .overlay {
-                            RoundedRectangle(cornerRadius: isImageKind ? 0 : 8, style: .continuous)
+                            Rectangle()
                                 .stroke(Color.accentColor, lineWidth: 3)
                         }
                 }
@@ -583,7 +582,7 @@ private struct TileView: View {
             // scaled to fit. Falls back to an SF Symbol only while loading / if
             // QuickLook genuinely fails.
             ZStack {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                Rectangle()
                     .fill(appState.moodPalette.tileFill)
                 if showFileNames {
                     // Name lives below the card (the body caption); show the
