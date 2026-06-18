@@ -83,6 +83,30 @@ final class FolderRenameMigrationSQLTests: XCTestCase {
         }
     }
 
+    func testApplyClearsStaleTargetPinAndStillMigrates() throws {
+        // A stale pin sitting at the rename TARGET must not roll back the
+        // legitimate paths/tags migration via the shared transaction.
+        let q = try freshQueue()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at) VALUES ('f1','h1','image',0)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('p1','f1','/a/Old/x.png',1)")
+            try db.execute(sql: "INSERT INTO tags (id, file_id, label, source, confidence, parent_dir) VALUES ('t1','f1','blue','manual',NULL,'/a/Old')")
+            // stale pin already at the destination, plus the live source pin
+            try db.execute(sql: "INSERT INTO starred_folders (id, absolute_path, display_name, added_at) VALUES ('stale','/a/New','New',0)")
+            try db.execute(sql: "INSERT INTO starred_folders (id, absolute_path, display_name, added_at) VALUES ('s1','/a/Old','Old',0)")
+
+            try FolderRenameMigration.apply(db, old: "/a/Old", new: "/a/New", newName: "New")
+        }
+        try q.read { db in
+            // paths + tags migrated (transaction did NOT roll back)
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT absolute_path FROM paths WHERE id='p1'"), "/a/New/x.png")
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT parent_dir FROM tags WHERE id='t1'"), "/a/New")
+            // exactly one pin at /a/New — the migrated source pin; the stale one cleared
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM starred_folders WHERE absolute_path='/a/New'"), 1)
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT id FROM starred_folders WHERE absolute_path='/a/New'"), "s1")
+        }
+    }
+
     func testApplyHandlesSqlWildcardsInPath() throws {
         let q = try freshQueue()
         try q.write { db in

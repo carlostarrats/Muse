@@ -36,6 +36,25 @@ enum FolderRenameMigration {
     /// an exact `= :old` branch), NOT `LIKE`, so "%"/"_" in paths can't break it
     /// and a sibling like "…/OldStuff" is never caught by old "…/Old".
     static func apply(_ db: GRDB.Database, old: String, new: String, newName: String) throws {
+        // The destination did NOT exist on disk before this rename (FolderOps
+        // refuses a name collision), so any DB rows already under the NEW prefix
+        // are stale leftovers from a previously-deleted folder. Clear them first
+        // so the rewrites below can't hit a UNIQUE collision and roll back the
+        // whole (paths + tags) transaction: starred_folders.absolute_path is
+        // UNIQUE and pins are never auto-pruned, and paths has an alive-path
+        // unique index. Binary collation means a case-only rename's source rows
+        // (different case) are not matched here.
+        try db.execute(sql: """
+            DELETE FROM starred_folders
+            WHERE absolute_path = ?
+               OR SUBSTR(absolute_path, 1, LENGTH(?) + 1) = ? || '/'
+            """, arguments: [new, new, new])
+        try db.execute(sql: """
+            UPDATE paths SET is_alive = 0
+            WHERE is_alive = 1
+              AND (absolute_path = ? OR SUBSTR(absolute_path, 1, LENGTH(?) + 1) = ? || '/')
+            """, arguments: [new, new, new])
+
         try db.execute(sql: """
             UPDATE paths
             SET absolute_path = ? || SUBSTR(absolute_path, LENGTH(?) + 1)
