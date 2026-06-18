@@ -85,6 +85,7 @@ are the load-bearing reference artifacts.
 | Polish 9 — Page Up/Down grid scrolling (Fn+Arrow on Mac) | ✅ built, unmerged | `feat/page-scroll` |
 | Polish 10 — share a collection as a paginated 11×14 PDF (Save to… / Share menu) | ✅ built, unmerged | `feat/collection-pdf-share` |
 | Polish 11 — grid multi-select + actions (collection/tag/share/move), drag-to-move, Reveal in Finder, native search field | ✅ built, unmerged | `feat/multi-select` |
+| Polish 12 — folder ops (new subfolder + rename w/ DB migration) + hero Share/Open-With dropdown + Info modal refresh | ✅ built, unmerged | `feat/folder-ops-and-share` |
 
 > **2026-06-16 session — three feature branches off `main`, not yet merged.**
 > Each has its own spec + plan in `docs/superpowers/`. Merge order is
@@ -1104,6 +1105,92 @@ Reworked the grid tile's hover + selection feel (spec:
   `private static let`s on `TileView`) — dev-tuned then hardcoded, no settings
   UI (the user explicitly wanted no in-app controls).
 
+### Folder ops (new subfolder / rename) + hero Share dropdown — 2026-06-17 (on `feat/folder-ops-and-share`)
+
+Spec: `docs/superpowers/specs/2026-06-17-folder-ops-and-share-dropdown-design.md`,
+plan: `docs/superpowers/plans/2026-06-17-folder-ops-and-share-dropdown.md`.
+Build + full `MuseTests` suite green.
+
+- **New Subfolder + Rename Folder** in the sidebar (right-click) and the Edit
+  menu. Both use **dialog prompts** (matching "Rename Tag…"), routed through
+  `AppState.newSubfolderRequest` / `folderRenameRequest` + a single host
+  `.alert` block on `ContentView` (so the context menu and menu command share
+  one dialog). New Subfolder is offered on **every** folder incl. the iCloud
+  "Muse" home (users may nest there); Rename is offered on every user folder
+  **except** the iCloud home (it's app-managed). Top-level creation stays
+  add-existing-only via the **+ Add Folder** button — there is deliberately no
+  "new empty folder at the top level."
+- **Pure ops** in `Filesystem/FolderOps.swift` (`sanitize` / `createSubfolder` /
+  `rename` → `Result<URL, OpError>`; rejects empty / "/" / ":" / "." / "..",
+  never overwrites on collision, rename-to-same-name is a no-op success).
+  Roots already hold RW security scope, so create/move need no per-op scope.
+- **Rename migrates the DB so nothing is orphaned.** A successful disk rename
+  rewrites the stored **path prefixes** in `paths.absolute_path`,
+  `tags.parent_dir`, AND `starred_folders` (pin path + the renamed folder's own
+  label) — all path-keyed tables. So manual tags AND pins survive (tags are
+  keyed `(file_id, parent_dir)`; pins are never auto-pruned, so they must be
+  migrated explicitly). Collections / FTS / analysis are `file_id`-keyed
+  (content hash) and need no migration. The SQL lives in
+  `FolderRenameMigration.apply(_:old:new:newName:)` (one transaction) and is
+  **unit-tested directly against an in-memory GRDB** (`FolderRenameMigrationSQLTests`);
+  the pure rule `FolderRenameMigration.rewrite(path:old:new:)` mirrors it. The
+  prefix match uses `SUBSTR(col,1,LENGTH(:old)+1) = :old || '/'` (plus exact
+  `= :old`), **not** `LIKE`, so "%"/"_" in paths can't break it and a sibling
+  like "…/OldStuff" is never caught by old "…/Old".
+  - **Ordering / atomicity (review-hardened).** `apply` first **clears stale
+    rows already under the NEW prefix** (deletes orphan pins, deactivates orphan
+    alive `paths`) so a forgotten pin / dead row can't collide on a UNIQUE
+    constraint and roll back the whole transaction. The destination didn't exist
+    on disk (FolderOps refuses a real collision), so those rows are stale —
+    EXCEPT a case-only rename, which is safe because every index + the pre-clear
+    use BINARY collation (the source's other-case rows aren't matched). The
+    migration is `await`-ed to completion **before** the post-rename
+    reselect/re-index, so the re-index can't insert alive rows at the new path
+    ahead of the rewrite. Failure surfaces a `folderOpError` (no silent `try?`).
+- **Tree refresh.** `FolderNode` gained a weak `parent` ref + `reloadChildren()`
+  (re-reads children even when already loaded). Subfolder rename →
+  `node.parent?.reloadChildren()`; **root** rename →
+  `BookmarkStore.rootRenamed(_:to:)` mints a fresh security-scoped bookmark from
+  the new URL (the inode-based old scope still covers the moved folder), swaps
+  access, and updates the stored `Root` display name → the `$roots` sink
+  rebuilds the sidebar (the renamed root's subtree collapses — fresh node). If
+  the selected folder is the renamed one **or an ancestor of it**, the grid is
+  reselected at the rewritten path after the migration (best-effort tree node,
+  else a transient node) so it's never stranded on a dead path.
+- **Native-style Open With (shared).** `OpenWithItems` (in `OpenWithMenu.swift`)
+  renders the registered apps with their **real macOS icons** (`NSWorkspace.icon`),
+  the **default app first + marked "(default)"**, and an **"Other…"** picker —
+  reading like Finder's submenu. The app list is computed **synchronously** in
+  the body: a context-menu `.task` doesn't fire reliably, which is why the grid
+  tile's "Open With" submenu was empty before (only "Open" / "Reveal" showed).
+  Both the grid tile context menu (`OpenWithMenu`) and the hero Share dropdown
+  reuse `OpenWithItems`.
+- **Hero Share → dropdown.** `Views/Viewer/ShareButton.swift` is a `Menu`
+  (styled like `ShareCollectionButton`): **Share** (unchanged
+  `NSSharingServicePicker`), **Open**, and **Open With ▸** (`OpenWithItems`).
+  The 38pt glass circle + icon are unchanged at rest.
+- **Menu-bar parity.** File menu gained **Open** + **Open With ▸** for the
+  selected single image. The grid right-click **Open With** is the shared
+  `GridView` menu (covers the main, tag, and in-collection grids).
+- **New Subfolder does not navigate.** After creating, the sidebar reveals the
+  new folder (parent reloaded + expanded) but the grid stays on the current
+  folder — `createSubfolder` no longer selects the new child.
+- **Info modal** refreshed + enlarged (540×640 → 600×720): folders
+  (new subfolder/rename/reorder/pin/remove), multi-select + grid actions,
+  hero Open With, collection-PDF share, search scope, sort direction, grid file
+  names/density, a new **Settings** section (auto-organization opt-outs), and a
+  fix to the stale Updates copy ("it asks first" — the consent prompt was
+  removed; checks are silent).
+- Tests: `FolderOpsTests` (validation incl. leading-dot + case-only rename),
+  `FolderRenameMigrationTests` (pure rewrite rule + `FolderRenameMigrationSQLTests`
+  running the real migration SQL against an in-memory GRDB: paths/tags/pins,
+  sibling-safety, SQL wildcards, stale-target-pin no-rollback, case-only rename).
+- **QA:** three adversarial review rounds (parallel reviewers) + fixes — the
+  rounds found and closed: un-migrated pins, fire-and-forget migration racing the
+  re-index on the alive-path unique index, ancestor-of-selection stranding,
+  case-only-rename false collision, hidden-name silent create, and a stale-target
+  UNIQUE rollback. Final verdict: ready to merge; build + full `MuseTests` green.
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
@@ -1159,9 +1246,23 @@ Muse/Muse/
     FileMover.swift                move(_:into:) via FileManager.moveItem; skips
                                    name collisions, returns failures; roots already
                                    hold RW security scope (feat/multi-select)
+    FolderOps.swift                pure create/rename folder on disk (sanitize +
+                                   createSubfolder + rename → Result<URL,OpError>);
+                                   no overwrite on collision; allows case-only
+                                   rename; rejects leading-dot/hidden names
+                                   (feat/folder-ops-and-share)
+    FolderRenameMigration.swift    folder-rename DB rewrite: pure rewrite() rule +
+                                   apply(db:old:new:newName:) running the actual
+                                   SQL over paths.absolute_path / tags.parent_dir /
+                                   starred_folders in one transaction (clears stale
+                                   rows at the destination first to avoid a UNIQUE
+                                   rollback). SQL unit-tested in-memory.
     BookmarkStore.swift            UserDefaults-backed root bookmarks; lifecycle
-                                   start/stop access for sandbox
-    FolderTree.swift               lazy hierarchical tree + FolderReader
+                                   start/stop access for sandbox. rootRenamed(_:to:)
+                                   repoints a renamed root's bookmark + display name
+    FolderTree.swift               lazy hierarchical tree + FolderReader; FolderNode
+                                   has a weak parent + reloadChildren() (refresh after
+                                   create/rename — feat/folder-ops-and-share)
     FolderWatcher.swift            FSEvents-backed live watcher; delivers the
                                    changed paths. FolderEventFilter (pure) keeps
                                    only viewable in-folder files (drops hidden/

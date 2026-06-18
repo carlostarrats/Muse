@@ -113,6 +113,40 @@ final class BookmarkStore: ObservableObject {
         save()
     }
 
+    // MARK: - Rename
+
+    /// After a ROOT folder is renamed on disk, repoint its bookmark + display
+    /// name to the new location. Security-scoped bookmarks are inode-based and
+    /// survive a same-volume rename, so the existing active scope still covers
+    /// the moved folder; we mint a fresh bookmark from `newURL` (accessible via
+    /// that live scope), swap access, and update the stored Root. Returns false
+    /// if a new bookmark could not be created (access then stays on the old
+    /// URL, which the caller surfaces as an error).
+    @discardableResult
+    func rootRenamed(_ root: Root, to newURL: URL) -> Bool {
+        guard let data = try? newURL.bookmarkData(
+            options: [.withSecurityScope],
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        ) else { return false }
+
+        // Drop the old scope, then build + activate the renamed root.
+        if let old = accessedURLs[root.id] {
+            old.stopAccessingSecurityScopedResource()
+            accessedURLs.removeValue(forKey: root.id)
+        }
+        let renamed = Root(id: root.id,
+                           displayName: newURL.lastPathComponent,
+                           bookmarkData: data,
+                           addedAt: root.addedAt)
+        activate(renamed)   // resolves newURL + starts access + sets accessedURLs
+        if let i = roots.firstIndex(of: root) {
+            roots[i] = renamed   // @Published willSet → AppState rebuilds the tree
+        }
+        save()
+        return true
+    }
+
     // MARK: - Access
 
     /// Returns the resolved URL for a root, or nil if the bookmark is stale or

@@ -21,6 +21,10 @@ final class FolderNode: ObservableObject, Identifiable {
     @Published var isLoaded: Bool = false
     @Published var isExpanded: Bool = false
 
+    /// Parent node, set when this node is created as a child. Lets a rename
+    /// refresh the right subtree (`node.parent?.reloadChildren()`).
+    private(set) weak var parent: FolderNode?
+
     init(url: URL, displayName: String? = nil, isRoot: Bool = false) {
         self.id = UUID()
         self.url = url
@@ -42,11 +46,22 @@ final class FolderNode: ObservableObject, Identifiable {
         let folders = entries.compactMap { childURL -> FolderNode? in
             let values = try? childURL.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
             guard values?.isDirectory == true, values?.isPackage != true else { return nil }
-            return FolderNode(url: childURL)
+            let child = FolderNode(url: childURL)
+            child.parent = self
+            return child
         }
         .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
 
         children = folders
+    }
+
+    /// Re-read immediate children even if already loaded — used after creating
+    /// or renaming a subfolder so the new/renamed row appears. Resets the
+    /// guard and reloads; callers reselect by URL where needed.
+    func reloadChildren(showHidden: Bool = false) {
+        isLoaded = false
+        children = []
+        loadChildrenIfNeeded(showHidden: showHidden)
     }
 }
 

@@ -202,6 +202,48 @@ struct ContentView: View {
         } message: {
             Text(appState.moveFailureNames.joined(separator: "\n"))
         }
+        // Folder management dialogs — driven by AppState requests (shared by the
+        // sidebar context menu and the menu-bar Edit menu). The text field binds
+        // to appState.folderNameDraft, which the request helpers seed, so a
+        // re-targeted same folder still resets the field.
+        .alert("New Subfolder", isPresented: Binding(
+            get: { appState.newSubfolderRequest != nil },
+            set: { if !$0 { appState.newSubfolderRequest = nil } }
+        )) {
+            TextField("Folder name", text: $appState.folderNameDraft)
+            Button("Create") {
+                if let node = appState.newSubfolderRequest {
+                    appState.newSubfolderRequest = nil
+                    appState.createSubfolder(named: appState.folderNameDraft, in: node)
+                }
+            }
+            Button("Cancel", role: .cancel) { appState.newSubfolderRequest = nil }
+        } message: {
+            Text("Creates a new folder inside “\(appState.newSubfolderRequest?.displayName ?? "")”.")
+        }
+        .alert("Rename Folder", isPresented: Binding(
+            get: { appState.folderRenameRequest != nil },
+            set: { if !$0 { appState.folderRenameRequest = nil } }
+        )) {
+            TextField("Folder name", text: $appState.folderNameDraft)
+            Button("Rename") {
+                if let node = appState.folderRenameRequest {
+                    appState.folderRenameRequest = nil
+                    appState.renameFolder(node, to: appState.folderNameDraft)
+                }
+            }
+            Button("Cancel", role: .cancel) { appState.folderRenameRequest = nil }
+        } message: {
+            Text("Renames the folder on disk. Tags and collections are kept.")
+        }
+        .alert("Folder", isPresented: Binding(
+            get: { appState.folderOpError != nil },
+            set: { if !$0 { appState.folderOpError = nil } }
+        )) {
+            Button("OK", role: .cancel) { appState.folderOpError = nil }
+        } message: {
+            Text(appState.folderOpError ?? "")
+        }
         // Preload the tag-label list for the selection menu, and keep it fresh
         // as tags change.
         .task { appState.refreshTagLabels() }
