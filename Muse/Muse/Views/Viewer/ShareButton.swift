@@ -16,27 +16,15 @@ import AppKit
 struct ShareButton: View {
     let url: URL
     @State private var hovering = false
-    @State private var apps: [URL] = []
 
     var body: some View {
         Menu {
             Button("Share") { share() }
-            Menu("Open With") {
-                Button("Open") { NSWorkspace.shared.open(url) }
-                Button("Reveal in Finder") {
-                    NSWorkspace.shared.activateFileViewerSelecting([url])
-                }
-                if !apps.isEmpty {
-                    Divider()
-                    ForEach(apps, id: \.self) { appURL in
-                        Button(appURL.deletingPathExtension().lastPathComponent) {
-                            NSWorkspace.shared.open(
-                                [url], withApplicationAt: appURL,
-                                configuration: NSWorkspace.OpenConfiguration()) { _, _ in }
-                        }
-                    }
-                }
-            }
+            Divider()
+            Button("Open") { NSWorkspace.shared.open(url) }
+            // Native-style Open With submenu (app icons + default + Other…),
+            // shared with the grid tile context menu.
+            Menu("Open With") { OpenWithItems(url: url) }
         } label: {
             Image(systemName: "square.and.arrow.up")
                 .font(.system(size: 13, weight: .semibold))
@@ -50,7 +38,6 @@ struct ShareButton: View {
         .fixedSize()
         .onHover { hovering = $0 }
         .help("Share")
-        .task(id: url) { apps = OpenWithMenu.applications(for: url) }
     }
 
     private func share() {

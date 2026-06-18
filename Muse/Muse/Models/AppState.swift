@@ -689,14 +689,11 @@ final class AppState: ObservableObject {
         switch FolderOps.createSubfolder(named: name, in: node.url) {
         case .failure(let e):
             folderOpError = Self.message(for: e, verb: "create")
-        case .success(let newURL):
+        case .success:
+            // Reveal the new folder in the sidebar but DON'T navigate into it —
+            // the user stays on whatever they're currently viewing.
             node.reloadChildren()
             node.isExpanded = true
-            if let child = node.children.first(where: {
-                $0.url.standardizedFileURL == newURL.standardizedFileURL
-            }) {
-                select(folder: child)
-            }
         }
     }
 
