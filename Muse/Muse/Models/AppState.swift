@@ -99,6 +99,12 @@ final class AppState: ObservableObject {
     @Published var tagSortMode: TagSortMode = AppSettings.tagSortMode
     private var tagSortModeCancellable: AnyCancellable?
 
+    /// Sidebar top-level folder sort (Manual / Name / Date / Size). Persisted in
+    /// AppSettings. Lives here (not just in SidebarView) so the Edit-menu
+    /// Move Up/Down items can reactively gate on Manual mode — see MuseApp.
+    @Published var folderSortMode: FolderSortMode = AppSettings.folderSortMode
+    private var folderSortModeCancellable: AnyCancellable?
+
     /// Currently selected file (drives preview/detail).
     @Published var selectedFile: FileNode?
 
@@ -425,6 +431,12 @@ final class AppState: ObservableObject {
                 // self.tagSortMode is still the old value at this point.
                 self?.reloadTagChips(sortModeOverride: mode)
             }
+
+        // Folder-sort-mode change → persist. The sidebar re-renders off the
+        // @Published change; nothing else to recompute here.
+        folderSortModeCancellable = $folderSortMode
+            .dropFirst()
+            .sink { mode in AppSettings.folderSortMode = mode }
 
         // App Intents wiring
         NotificationCenter.default.addObserver(

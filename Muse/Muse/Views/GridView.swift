@@ -497,6 +497,9 @@ private struct TileView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
                     .frame(height: captionHeight)
                     .padding(.horizontal, 4)
+                // (The whole tile is one a11y element via
+                // .accessibilityElement(children: .ignore) in GridView's body,
+                // so this caption is already excluded from VoiceOver.)
             }
         }
         .onHover { hovering = $0 }

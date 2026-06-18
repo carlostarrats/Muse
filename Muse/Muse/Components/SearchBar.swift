@@ -27,7 +27,7 @@ struct SearchBar: View {
             onSubmit: { fire(query: $0) },
             onScopeChange: handleScopeChange
         )
-        .frame(minWidth: 320, maxWidth: 640)
+        .frame(minWidth: 280, maxWidth: 640)
         // Programmatic searches (e.g. viewer tag taps) push their query into the
         // field for display; the search itself was already run by the caller.
         .onChange(of: appState.searchQuery) { _, newValue in

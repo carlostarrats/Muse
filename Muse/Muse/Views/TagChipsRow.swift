@@ -294,6 +294,9 @@ private struct TagChip: View {
                                          : AnyShapeStyle(.secondary))
                         .padding(.trailing, 14)
                         .transition(.opacity)
+                        // The count is a hover-only visual; VoiceOver gets it
+                        // via the chip's accessibilityValue below instead.
+                        .accessibilityHidden(true)
                 }
             }
         }
@@ -301,5 +304,8 @@ private struct TagChip: View {
         .contentShape(Capsule(style: .continuous))
         .onHover { onHover(index, $0) }
         .help(isSelected ? "Clear tag filter" : "Show files tagged \(label)")
+        // Surface the file count to VoiceOver — it's otherwise only revealed
+        // on mouse hover, so screen-reader users couldn't reach it.
+        .accessibilityValue(count.map { "\($0) files" } ?? "")
     }
 }

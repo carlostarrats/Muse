@@ -18,8 +18,10 @@ struct SidebarView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.colorScheme) private var colorScheme
 
-    /// Active top-level folder sort mode (persisted via AppSettings).
-    @State private var sortMode: FolderSortMode = AppSettings.folderSortMode
+    /// Active top-level folder sort mode. Lives on AppState (persisted via
+    /// AppSettings there) so the Edit-menu Move Up/Down items share one
+    /// reactive source with the sidebar.
+    private var sortMode: FolderSortMode { appState.folderSortMode }
 
     /// The root currently being dragged for manual reordering (live gesture).
     @State private var draggingRoot: Root?
@@ -178,8 +180,8 @@ struct SidebarView: View {
     }
 
     private func setSortMode(_ mode: FolderSortMode) {
-        AppSettings.folderSortMode = mode
-        withAnimation(.easeInOut(duration: 0.2)) { sortMode = mode }
+        // AppState persists to AppSettings via its sink; just publish the change.
+        withAnimation(.easeInOut(duration: 0.2)) { appState.folderSortMode = mode }
     }
 
     /// Top-level rows in display order: BookmarkStore order for Manual, otherwise
@@ -603,6 +605,37 @@ private struct FolderTreeNode: View {
             } else if let r = appState.bookmarks.roots.first(where: {
                 appState.bookmarks.url(for: $0) == node.url
             }) {
+                // Keyboard/VoiceOver-accessible parallel to drag-to-reorder
+                // (the grip is mouse-only). `reorder != nil` means this is a
+                // reorderable root in Manual sort — the sorted modes are
+                // read-only, so Move Up/Down only appears then.
+                if reorder != nil {
+                    // Index into the DISPLAYED roots (resolved bookmarks only),
+                    // matching the drag path — a root whose bookmark didn't
+                    // resolve is hidden from the sidebar, so indexing the full
+                    // bookmarks.roots could make a move appear to do nothing.
+                    let list = appState.rootNodes.compactMap { n in
+                        appState.bookmarks.roots.first {
+                            appState.bookmarks.url(for: $0) == n.url
+                        }
+                    }
+                    let idx = list.firstIndex(of: r)
+                    Button("Move Up") {
+                        if let i = idx, i > 0 {
+                            appState.bookmarks.reorder(r, relativeTo: list[i - 1],
+                                                       placeAfter: false)
+                        }
+                    }
+                    .disabled((idx ?? 0) <= 0)
+                    Button("Move Down") {
+                        if let i = idx, i < list.count - 1 {
+                            appState.bookmarks.reorder(r, relativeTo: list[i + 1],
+                                                       placeAfter: true)
+                        }
+                    }
+                    .disabled(idx == nil || idx! >= list.count - 1)
+                    Divider()
+                }
                 Button("Remove Folder") { appState.removeRoot(r) }
             }
             Divider()

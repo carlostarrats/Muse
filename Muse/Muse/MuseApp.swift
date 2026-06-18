@@ -30,6 +30,41 @@ struct MuseApp: App {
         }
     }
 
+    /// The reorderable roots in displayed order — resolved bookmarks only, so it
+    /// matches what the sidebar shows and the drag path uses (a root whose
+    /// bookmark didn't resolve is hidden and must not shift the index).
+    private var displayedReorderableRoots: [Root] {
+        appState.rootNodes.compactMap { node in
+            appState.bookmarks.roots.first {
+                appState.bookmarks.url(for: $0) == node.url
+            }
+        }
+    }
+
+    /// The selected root's index in the manual reorder order (nil if not a
+    /// reorderable root). Backs the Edit-menu Move Up/Down gating.
+    private var selectedRootIndex: Int? {
+        guard let r = selectedRoot else { return nil }
+        return displayedReorderableRoots.firstIndex(of: r)
+    }
+
+    /// Reorder is only meaningful in Manual sort with more than one root.
+    private var canReorderSelectedRoot: Bool {
+        appState.folderSortMode == .manual
+            && selectedRoot != nil
+            && displayedReorderableRoots.count > 1
+    }
+
+    /// Move the selected root one slot earlier (-1) or later (+1) in the manual
+    /// order — the keyboard/menu parallel to the sidebar's drag-to-reorder.
+    private func moveSelectedRoot(by delta: Int) {
+        let list = displayedReorderableRoots
+        guard let r = selectedRoot, let i = list.firstIndex(of: r),
+              list.indices.contains(i + delta) else { return }
+        appState.bookmarks.reorder(r, relativeTo: list[i + delta],
+                                   placeAfter: delta > 0)
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -87,6 +122,15 @@ struct MuseApp: App {
                     }
                 }
                 .disabled(selectedRoot == nil)
+
+                // Keyboard/menu parallel to the sidebar's mouse-only
+                // drag-to-reorder (closes the reorder accessibility gap).
+                Button("Move Folder Up") { moveSelectedRoot(by: -1) }
+                    .disabled(!canReorderSelectedRoot || (selectedRootIndex ?? 0) <= 0)
+                Button("Move Folder Down") { moveSelectedRoot(by: 1) }
+                    .disabled(!canReorderSelectedRoot
+                              || selectedRootIndex == nil
+                              || selectedRootIndex! >= displayedReorderableRoots.count - 1)
 
                 Button("Set as Collection Cover") {
                     if let file = appState.selectedFile {

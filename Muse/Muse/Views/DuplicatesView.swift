@@ -133,8 +133,18 @@ struct DuplicatesView: View {
                         .padding(.vertical, 3)
                         .background(.green, in: Capsule())
                         .padding(.top, 8)
+                        // Decorative — keeper status is carried by the
+                        // focusable thumbnail's accessibilityLabel below, not
+                        // by color alone. (A disabled control's hint is
+                        // unreachable to VoiceOver, so it can't live there.)
+                        .accessibilityHidden(true)
                 }
             }
+            // The keeper is the one row whose Delete toggle is disabled; surface
+            // WHY on a focusable, enabled element so VoiceOver can reach it.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(member.isSuggestedKeeper ? "Suggested keeper" : "")
+            .accessibilityHidden(!member.isSuggestedKeeper)
             Text(member.url.lastPathComponent)
                 .font(.caption2)
                 .lineLimit(1)

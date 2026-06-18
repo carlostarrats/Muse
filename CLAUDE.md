@@ -1435,6 +1435,69 @@ Build + full `MuseTests` suite green.
   - The verification round confirmed both closed with no regression (precedence,
     chunk math, atomicity, threading all checked). Full `MuseTests` suite green.
 
+### Accessibility pass on post-2026-06-13 UI + reorder keyboard path — 2026-06-18 (on `feat/next-17`)
+
+An accessibility audit of every UI surface added since the last full WCAG AA
+pass (2026-06-13), plus a small search-bar tweak. Build + full `MuseTests` suite
+green; two adversarial review rounds (the MAJOR + MINORs below were review-found
+and fixed, then re-verified).
+
+- **Search bar min width 320 → 280** (`SearchBar.swift`). The `.principal`
+  toolbar item is centered in the leftover space between the leading/trailing
+  toolbar groups (native macOS — NOT window-centered), and the old 320pt floor
+  made the toolbar collapse the side buttons into the `»` overflow sooner as the
+  window narrowed. 280 lets the field yield ~40pt before the buttons collapse;
+  the off-center rest position is inherent to `.principal` and unchanged.
+- **Three VoiceOver information gaps fixed** (visuals untouched — pure a11y
+  metadata): (1) **tag-chip counts** were hover-only (`TagChipsRow`), so
+  screen-reader users couldn't reach them — now surfaced as the chip's
+  `accessibilityValue` ("N files"); the decorative hover number is
+  `accessibilityHidden`. (2) **grid file-name caption** was redundant — the tile
+  is already one a11y element via `.accessibilityElement(children: .ignore)` with
+  `accessibilityLabel(file.basename)`, which already excludes the caption (so the
+  initial "hide the caption" change was reverted as a no-op; just a clarifying
+  comment remains). (3) **Duplicates "KEEP"** was conveyed by color + a
+  silently-disabled checkbox only. The FIRST attempt (hide the badge + put the
+  reason on the disabled Toggle's `accessibilityHint`) was a **review-caught
+  MAJOR**: macOS VoiceOver doesn't reliably focus disabled controls and hints are
+  off by default, so that LOST the info entirely. Correct fix: the keeper status
+  rides a focusable, enabled element — the thumbnail ZStack is collapsed
+  (`accessibilityElement(children: .ignore)`) and labeled "Suggested keeper" on
+  keeper rows (hidden on non-keepers); the Delete toggle stays a sibling below,
+  independently operable.
+- **Verified NOT broken** (no change needed): the grid selection redesign still
+  exposes `.isSelected` (selection isn't color-only); all new icon-only buttons
+  (sort-direction, tag-sort, collections "+", hero Share/Open-With,
+  share-collection) carry `.help`, the codebase's established + sufficient macOS
+  VoiceOver-naming pattern.
+- **Reorder was mouse-only — the one real WCAG 2.1.1 (Keyboard) gap — now
+  closed.** The sidebar's drag-to-reorder grip had no keyboard/VoiceOver
+  equivalent (it's a bare `DragGesture`, deliberately NOT `.onDrag` which ate
+  clicks — see the 2026-06-18 sidebar session). Added **Move Up / Move Down** to
+  the folder right-click menu (`FolderTreeNode` in `SidebarView`) and **Move
+  Folder Up / Down** to the Edit menu (`MuseApp`), both gated to Manual sort and
+  edge-disabled, reusing the identity-based `BookmarkStore.reorder(_:relativeTo:
+  placeAfter:)` — the drag gesture is untouched. The context menu gates on the
+  existing `reorder != nil` signal (non-nil ⟺ Manual + reorderable root); the
+  Edit menu gates on `AppState.folderSortMode == .manual`.
+  - **Folder sort mode promoted to `AppState.folderSortMode`** (`@Published`,
+    persisted via a Combine sink mirroring `tagSortMode`; the sink captures no
+    `self`, so no `[weak self]` needed). It lived in `SidebarView`'s local
+    `@State`; the Edit-menu gating needs one reactive source shared with the
+    sidebar, which now reads it via a computed `sortMode` and writes through
+    `setSortMode`. Sidebar behavior is unchanged.
+  - **Both keyboard paths index the DISPLAYED (resolved-bookmark) root order**,
+    not the full `bookmarks.roots` — matching the drag path and what the user
+    sees, so a root whose security-scoped bookmark fails to resolve (and is
+    hidden from the sidebar) can't make a move appear to do nothing or leave an
+    edge button enabled-but-inert (both were review-found MINORs).
+- **QA — two adversarial review rounds + fixes.** Round 1 found the Duplicates
+  MAJOR (disabled-control hint) + the reorder list-divergence MINOR; round 2
+  confirmed those closed and caught one stray `bookmarks.roots.count` vs
+  `displayedReorderableRoots.count` boundary mismatch (fixed). No new tests
+  (pure-view a11y metadata + menu wiring over the already-tested
+  `BookmarkStore.reorder`); build + full suite green.
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
@@ -1466,7 +1529,11 @@ Muse/Muse/
                                    chips publish together); tagRowReady gate
                                    (feat/next-10). Owns folderStats
                                    (FolderStatCache) — driven from rebuildRootNodes,
-                                   changes forwarded like stars (2026-06-18)
+                                   changes forwarded like stars (2026-06-18). Owns
+                                   folderSortMode (@Published, persisted via a
+                                   Combine sink) so the sidebar + the Edit-menu
+                                   Move Up/Down reorder share one reactive source
+                                   (feat/next-17)
     AppState+Selection.swift       extension: grid MULTI-selection (selectedFiles:
                                    Set<String> of paths + anchor) — applyClick /
                                    clearSelection / selectAllVisible /
@@ -1646,7 +1713,11 @@ Muse/Muse/
                                    sorted modes are read-only; each top-level row
                                    shows a live file count (AppState.folderStats)
                                    that swaps for the grip on hover in Manual
-                                   (2026-06-18)
+                                   (2026-06-18). Right-click Move Up/Down (+ Edit-
+                                   menu Move Folder Up/Down) is the keyboard/
+                                   VoiceOver parallel to the mouse-only drag, gated
+                                   to Manual sort, indexing the displayed resolved-
+                                   bookmark order (feat/next-17)
     GridView.swift                 VIRTUALIZED masonry grid — precomputes tile
                                    frames (MasonryGeometry from AspectRatioCache)
                                    and renders only viewport tiles (+overscan);
