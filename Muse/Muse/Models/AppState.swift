@@ -385,6 +385,11 @@ final class AppState: ObservableObject {
         }
 
         rebuildRootNodes()
+        // Keep this a plain synchronous sink (no `.receive(on:)`): the sidebar's
+        // reorder commit clears its drag offsets in the SAME transaction that
+        // mutates `bookmarks.roots`, relying on `rootNodes` rebuilding synchronously
+        // so the new order and the cleared offsets land together (no one-frame
+        // snap-back). See SidebarView.commitReorder.
         bookmarksCancellable = bookmarks.$roots
             .sink { [weak self] newRoots in self?.rebuildRootNodes(roots: newRoots) }
         // `stars` is a nested ObservableObject; without forwarding its changes,

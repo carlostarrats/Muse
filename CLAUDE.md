@@ -1224,6 +1224,71 @@ folded in).
   collection), so no resize. A `RoundedRectangle().fill` self-clips to its path,
   so no black bleeds past the cover's rounded corners.
 
+### Sidebar folder-click reliability + reorder rebuilt as a live gesture — 2026-06-18 (on `feat/next-15`)
+
+Chased a rare "clicking a top-level folder doesn't select on the first try" bug
+and, in doing so, rebuilt sidebar folder reordering end-to-end (all in
+`SidebarView.swift`; one comment added to `AppState.swift`). Each root cause was
+confirmed empirically (instrumented logging / one-variable diagnostic builds)
+before fixing, per systematic debugging.
+
+- **Click-twice was SwiftUI `.onDrag`.** Top-level rows were drag-to-reorder via
+  `.onDrag`, which installs an AppKit drag source on the shared hosting view and
+  intercepts mouse-down across the WHOLE row — a click with a hair of movement
+  was read as a (cancelled) drag and the selection tap was dropped. Proven by a
+  diagnostic build with `.onDrag` removed (clicks became 100% reliable).
+  `simultaneousGesture(TapGesture)` did NOT fix it (the interception is below
+  SwiftUI's gesture layer), and confining `.onDrag` to a small grip subview also
+  didn't (same shared hosting view). **Do NOT reintroduce `.onDrag` on sidebar
+  rows.**
+- **Reorder is now a live `DragGesture`, not pasteboard drag-and-drop.** A trailing
+  grip (shown on hover) drives a `DragGesture` in a named coordinate space
+  (`reorderSpace`). The dragged row is hidden in place (its layout slot stays so
+  the others can part around it) and an **opaque copy** (`draggedRowOverlay`,
+  grip included) is drawn as a ScrollView overlay following the cursor — because
+  **`LazyVStack` ignores `.zIndex`**, a top overlay is the only reliable way to
+  keep the dragged row above the rows it passes (zIndex made it translucent when
+  moving DOWN — later rows painted over it). The other rows **part** to open a gap
+  (`rowShift`), and a faint insertion line marks the gap as an overshoot cue.
+- **Two earlier dead-ends, documented so they aren't retried.** (1) The previous
+  pasteboard reorder could move a folder DOWN but never UP — the per-row
+  `.onDrop(of:[.text])` (reorder) was **shadowed** by the row's
+  `.onDrop(of:[.fileURL])` (move grid images in), so reorder drops only ever
+  reached the end-zone (append). Going live-gesture removed the `.text` drop
+  entirely, so the fileURL move drop is unshadowed again. (2) A floating drag
+  *image* (the pasteboard preview / a rendered chip) looked like a detached
+  tooltip; the rows-part-to-make-way model with an opaque in-list-styled overlay
+  is what reads as "the row itself moving."
+- **Slot math uses a drag-start frame snapshot** (`dragStartFrames`), NOT live
+  frames: `.offset` *does* change a row's `frame(in: .named(reorderSpace))`
+  (confirmed by logging — the dragged row's measured frame tracked its offset),
+  so reading live frames back into the slot computation would feed back on itself.
+  The dragged row is excluded from the slot/line math (`otherReorderRoots`). The
+  insertion **line** position deliberately uses LIVE `rootFrames` so it sits at
+  the *parted* gap.
+- **Commit is non-animated** (`Transaction.disablesAnimations`): after parting the
+  rows are already in their final visual positions, so reordering the array +
+  clearing the offsets in one transaction leaves everything in place and the
+  dropped row simply appears in the gap — no snap-back / pass-through. This relies
+  on `bookmarks.$roots` delivering **synchronously** (the AppState sink has no
+  `.receive(on:)`); a note was added at that sink so it isn't made async.
+- **Polish:** hover fill (and the grip) are suppressed on rows the dragged row
+  passes over (a `sidebarReordering` environment flag); the grip is only
+  hit-testable while visible-or-dragging so the invisible strip can't swallow
+  scroll-drags; a safety net resets drag state if the dragged root vanishes
+  mid-drag (gesture `.onEnded` may not fire on teardown); long folder names
+  truncate before the grip.
+- **Known limitation (placement stays correct — `commitReorder` is identity-based;
+  only in-flight visuals degrade):** reorder is tuned for COLLAPSED top-level
+  folders (the common case). Dragging a folder while it's *expanded*, or within a
+  long *scrolled* root list (off-screen rows aren't measured by `LazyVStack`), can
+  show an oversized/misaligned gap.
+- **QA:** build + full `MuseTests` suite green; three adversarial review passes
+  (two parallel finders + a fix-verification pass). The finders' MAJORs
+  (stuck-state on interrupted gesture, off-screen/expanded edge cases) were fixed
+  or documented; the verification pass confirmed the fixes introduce no
+  regression to the normal drag.
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
@@ -1391,7 +1456,13 @@ Muse/Muse/
                                    (feat/multi-select). No folder shows as selected
                                    in cross-folder views — Collections page, a
                                    single collection, or an "All"-scope search
-                                   (2026-06-17); the drop highlight is independent
+                                   (2026-06-17); the drop highlight is independent.
+                                   Top-level reorder is a LIVE DragGesture off a
+                                   trailing grip (NOT .onDrag, which ate clicks):
+                                   the dragged row is hidden in place + drawn as an
+                                   opaque on-top overlay following the cursor, the
+                                   others part to open a gap, commit is non-animated
+                                   (2026-06-18 — see that session log)
     GridView.swift                 VIRTUALIZED masonry grid — precomputes tile
                                    frames (MasonryGeometry from AspectRatioCache)
                                    and renders only viewport tiles (+overscan);
