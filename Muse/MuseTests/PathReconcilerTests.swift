@@ -1,0 +1,120 @@
+import XCTest
+import GRDB
+@testable import Muse
+
+/// Pure-logic + DB tests for the ghost-row reconciler. The pure scope/diff
+/// helpers need no disk; the DB tests run the real SQL against an in-memory
+/// GRDB migrated to the current schema.
+final class PathReconcilerTests: XCTestCase {
+    private let folder = "/Users/me/Inspo"
+
+    // MARK: - Pure scope
+
+    func testInScopeNonRecursiveDirectChildrenOnly() {
+        let alive = ["/Users/me/Inspo/a.jpg",
+                     "/Users/me/Inspo/sub/b.jpg",
+                     "/Users/me/Other/c.jpg",
+                     "/Users/me/Inspo.jpg"]           // sibling, not a child
+        XCTAssertEqual(PathReconciler.inScope(alive, folder: folder, recursive: false),
+                       ["/Users/me/Inspo/a.jpg"])
+    }
+
+    func testInScopeRecursiveKeepsSubtree() {
+        let alive = ["/Users/me/Inspo/a.jpg",
+                     "/Users/me/Inspo/sub/b.jpg",
+                     "/Users/me/Other/c.jpg"]
+        XCTAssertEqual(Set(PathReconciler.inScope(alive, folder: folder, recursive: true)),
+                       ["/Users/me/Inspo/a.jpg", "/Users/me/Inspo/sub/b.jpg"])
+    }
+
+    // MARK: - Pure diff
+
+    func testVanishedReturnsMissingOnly() {
+        let scope = ["/Users/me/Inspo/a.jpg", "/Users/me/Inspo/gone.jpg"]
+        let present: Set<String> = ["/Users/me/Inspo/a.jpg"]
+        XCTAssertEqual(PathReconciler.vanished(inScope: scope, present: present),
+                       ["/Users/me/Inspo/gone.jpg"])
+    }
+
+    func testVanishedEmptyWhenAllPresent() {
+        let scope = ["/Users/me/Inspo/a.jpg"]
+        XCTAssertTrue(PathReconciler.vanished(inScope: scope,
+                                              present: ["/Users/me/Inspo/a.jpg"]).isEmpty)
+    }
+
+    // MARK: - DB helpers
+
+    private func makeQueue() throws -> DatabaseQueue {
+        let q = try DatabaseQueue()
+        try Database.makeMigrator().migrate(q)
+        return q
+    }
+
+    private func insertAlivePath(_ q: DatabaseQueue, _ path: String) throws {
+        try q.write { db in
+            try db.execute(sql: """
+                INSERT INTO paths (id, file_id, absolute_path, bookmark_data, is_alive)
+                VALUES (?, NULL, ?, NULL, 1)
+                """, arguments: [UUID().uuidString, path])
+        }
+    }
+
+    private func isAlive(_ q: DatabaseQueue, _ path: String) throws -> Int? {
+        try q.read { db in
+            try Int.fetchOne(db,
+                sql: "SELECT is_alive FROM paths WHERE absolute_path = ?",
+                arguments: [path])
+        }
+    }
+
+    // MARK: - DB ops
+
+    func testMarkDeadFlipsOnlyNamedRows() throws {
+        let q = try makeQueue()
+        try insertAlivePath(q, "/Users/me/Inspo/a.jpg")
+        try insertAlivePath(q, "/Users/me/Inspo/gone.jpg")
+
+        let n = PathReconciler.markDead(["/Users/me/Inspo/gone.jpg"], queue: q)
+        XCTAssertEqual(n, 1)
+        XCTAssertEqual(try isAlive(q, "/Users/me/Inspo/a.jpg"), 1)
+        XCTAssertEqual(try isAlive(q, "/Users/me/Inspo/gone.jpg"), 0)
+
+        // Idempotent: a second pass changes nothing.
+        XCTAssertEqual(PathReconciler.markDead(["/Users/me/Inspo/gone.jpg"], queue: q), 0)
+    }
+
+    func testReconcileMarksMissingDeadKeepsPresent() throws {
+        let q = try makeQueue()
+        try insertAlivePath(q, "/Users/me/Inspo/a.jpg")
+        try insertAlivePath(q, "/Users/me/Inspo/gone.jpg")
+        try insertAlivePath(q, "/Users/me/Other/x.jpg")   // out of scope — untouched
+
+        let n = PathReconciler.reconcile(
+            folder: URL(fileURLWithPath: "/Users/me/Inspo"),
+            recursive: false,
+            present: ["/Users/me/Inspo/a.jpg"],
+            queue: q)
+
+        XCTAssertEqual(n, 1)
+        XCTAssertEqual(try isAlive(q, "/Users/me/Inspo/a.jpg"), 1)
+        XCTAssertEqual(try isAlive(q, "/Users/me/Inspo/gone.jpg"), 0)
+        XCTAssertEqual(try isAlive(q, "/Users/me/Other/x.jpg"), 1)
+    }
+
+    func testReconcileNonRecursiveIgnoresSubfolderFiles() throws {
+        let q = try makeQueue()
+        try insertAlivePath(q, "/Users/me/Inspo/a.jpg")
+        try insertAlivePath(q, "/Users/me/Inspo/sub/deep.jpg")   // in subtree, not direct child
+
+        // Non-recursive: subfolder file is out of scope and must stay alive even
+        // though it's absent from the (shallow) present set.
+        let n = PathReconciler.reconcile(
+            folder: URL(fileURLWithPath: "/Users/me/Inspo"),
+            recursive: false,
+            present: ["/Users/me/Inspo/a.jpg"],
+            queue: q)
+
+        XCTAssertEqual(n, 0)
+        XCTAssertEqual(try isAlive(q, "/Users/me/Inspo/sub/deep.jpg"), 1)
+    }
+}

@@ -1,0 +1,109 @@
+//
+//  PathReconciler.swift
+//  Muse
+//
+//  Reconciles the index against the filesystem: marks DB path rows DEAD when
+//  the file they point at has vanished from disk (deleted or moved out of the
+//  folder externally). Without this, a removed file's `is_alive = 1` row
+//  lingers forever — leaking into search as a blank, unrenderable tile and
+//  inflating collection counts. The normal grid hides this (it enumerates the
+//  disk); search + collection counts query the DB by `is_alive`, so the ghost
+//  rows surface there.
+//
+//  Driven per-folder on a fresh selection — the off-main folder load already
+//  enumerates the folder, so the "present" set is free. Self-heals as the user
+//  browses; no library-wide sweep, no data migration.
+//
+
+import Foundation
+import GRDB
+
+nonisolated enum PathReconciler {
+
+    // MARK: - Pure scope + diff (unit-tested)
+
+    /// Of `alivePaths`, the ones belonging to `folder` at the current depth:
+    /// recursive → anywhere beneath it; non-recursive → direct children only.
+    /// Standardized-path in, standardized-path out. Mirrors FolderEventFilter's
+    /// scope rule so "what the grid shows" and "what we reconcile" agree.
+    static func inScope(_ alivePaths: [String], folder: String,
+                        recursive: Bool) -> [String] {
+        let prefix = folder + "/"
+        return alivePaths.filter { path in
+            guard path.hasPrefix(prefix) else { return false }
+            if recursive { return true }
+            let relative = path.dropFirst(prefix.count)
+            return !relative.contains("/")    // direct child only
+        }
+    }
+
+    /// In-scope alive paths whose file is no longer in the enumerated set.
+    static func vanished(inScope: [String], present: Set<String>) -> [String] {
+        inScope.filter { !present.contains($0) }
+    }
+
+    // MARK: - Filesystem guard
+
+    /// An OLD-STYLE evicted iCloud file shows a hidden `.<name>.icloud`
+    /// placeholder instead of its real name, so the enumeration (which skips
+    /// hidden files) won't list it — but it is NOT gone. Keep such rows alive.
+    /// Modern dataless-in-place files keep their real name and ARE enumerated,
+    /// so they never reach this guard.
+    static func isEvictedPlaceholder(_ path: String) -> Bool {
+        let url = URL(fileURLWithPath: path)
+        let name = url.lastPathComponent
+        let placeholder = url.deletingLastPathComponent()
+            .appendingPathComponent(".\(name).icloud")
+        return FileManager.default.fileExists(atPath: placeholder.path)
+    }
+
+    // MARK: - DB
+
+    /// Every alive path under `folder` (prefix match bounds the read to the
+    /// folder's subtree, not the whole library). LENGTH/SUBSTR computed in SQL
+    /// so character semantics match (mirrors FolderRenameMigration's approach).
+    static func aliveUnder(folder: String, queue: DatabaseQueue) -> [String] {
+        let prefix = folder + "/"
+        return (try? queue.read { db in
+            try String.fetchAll(db, sql: """
+                SELECT absolute_path FROM paths
+                WHERE is_alive = 1 AND SUBSTR(absolute_path, 1, LENGTH(?)) = ?
+                """, arguments: [prefix, prefix])
+        }) ?? []
+    }
+
+    /// Flip the named alive paths to dead in one write. Returns the number of
+    /// rows that were alive (and are now dead) — counted up front so the result
+    /// is exact and idempotent without relying on driver change-counts.
+    @discardableResult
+    static func markDead(_ paths: [String], queue: DatabaseQueue) -> Int {
+        guard !paths.isEmpty else { return 0 }
+        return (try? queue.write { db -> Int in
+            let marks = databaseQuestionMarks(count: paths.count)
+            let n = try Int.fetchOne(db, sql: """
+                SELECT COUNT(*) FROM paths
+                WHERE is_alive = 1 AND absolute_path IN (\(marks))
+                """, arguments: StatementArguments(paths)) ?? 0
+            if n > 0 {
+                try db.execute(sql: """
+                    UPDATE paths SET is_alive = 0
+                    WHERE is_alive = 1 AND absolute_path IN (\(marks))
+                    """, arguments: StatementArguments(paths))
+            }
+            return n
+        }) ?? 0
+    }
+
+    /// Full per-folder reconcile. `present` = standardized paths the folder
+    /// enumeration found. Returns the number of rows marked dead.
+    @discardableResult
+    static func reconcile(folder: URL, recursive: Bool,
+                          present: Set<String>, queue: DatabaseQueue) -> Int {
+        let folderPath = folder.standardizedFileURL.path
+        let alive = aliveUnder(folder: folderPath, queue: queue)
+        let scoped = inScope(alive, folder: folderPath, recursive: recursive)
+        let gone = vanished(inScope: scoped, present: present)
+            .filter { !isEvictedPlaceholder($0) }
+        return markDead(gone, queue: queue)
+    }
+}
