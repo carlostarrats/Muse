@@ -447,6 +447,35 @@ private struct TileView: View {
     @State private var thumbnail: NSImage?
     @State private var hovering = false
 
+    // MARK: - Selection / hover styling (dev-tunable; locked for production)
+    /// Hover veil over an unselected tile (no size change).
+    private static let hoverVeilOpacity = 0.12
+    /// How far the image shrinks on each side when selected (reveals the gap).
+    private static let selectionInset: CGFloat = 6
+    /// How far the ring sits inside the tile's outer edge.
+    private static let ringInset: CGFloat = 2
+    /// Ring stroke thickness.
+    private static let ringWidth: CGFloat = 2.5
+    /// Ring corner radius. Set to 0 for a square ring.
+    private static let ringCornerRadius: CGFloat = 6
+    /// Tint laid over the selected (shrunken) image, in the ring's color.
+    private static let selectionTintOpacity = 0.18
+
+    /// True when this tile is multi-selected OR is the open file.
+    private var isSelected: Bool {
+        appState.selectedFiles.contains(file.url.standardizedFileURL.path)
+            || appState.selectedFile?.id == file.id
+    }
+
+    /// Ring + tint color, decided once from the app background mood.
+    private var ringColor: Color {
+        switch SelectionStyle.accent(forBackground: appState.moodPalette.backgroundRGB) {
+        case .systemBlue: return Color.accentColor
+        case .black:      return Color.black
+        case .white:      return Color.white
+        }
+    }
+
     private var isImageKind: Bool {
         file.kind == .image || file.kind == .raw || file.kind == .psd || file.kind == .svg
     }
@@ -466,8 +495,6 @@ private struct TileView: View {
                     .padding(.horizontal, 4)
             }
         }
-        .scaleEffect(hovering ? 1.025 : 1)
-        .animation(.easeOut(duration: 0.18), value: hovering)
         .onHover { hovering = $0 }
         // Prototype's hidden-cell: the tile vanishes while its image is
         // flying/open so no ghost copy sits behind the hero stage.
@@ -516,37 +543,52 @@ private struct TileView: View {
     /// overlay and the global-frame reporter for the hero open/close flight.
     /// The caption strip (if any) sits below this, OUTSIDE the selection border.
     private var imageContent: some View {
-        tile
-            // Every tile is square-cornered (edge-to-edge jigsaw pieces) — the
-            // non-image cards' grey backing matches the photos, no rounding.
-            .clipShape(Rectangle())
-            .overlay {
-                // Selected (multi-select) OR the open file get an accent wash +
-                // border, wrapping the image area only (Finder-style; the label
-                // below stays unbordered). Inside the scaleEffect so it grows
-                // with the hover zoom.
-                if appState.selectedFiles.contains(file.url.standardizedFileURL.path)
-                    || appState.selectedFile?.id == file.id {
-                    Rectangle()
-                        .fill(Color.accentColor.opacity(0.22))
-                        .overlay {
-                            Rectangle()
-                                .stroke(Color.accentColor, lineWidth: 3)
-                        }
-                }
+        ZStack {
+            // When selected, the gap between the shrunken image and the ring
+            // shows the app background (same color as the grid gutter), so the
+            // image reads as lifted into the ring.
+            if isSelected {
+                Rectangle().fill(appState.moodPalette.background)
             }
-            .background(
-                GeometryReader { proxy in
-                    Color.clear
-                        // Global tile frame feeds the hero open/close flight.
-                        .onAppear {
-                            appState.tileFrames[file.url.path] = proxy.frame(in: .global)
-                        }
-                        .onChange(of: proxy.frame(in: .global)) { _, f in
-                            appState.tileFrames[file.url.path] = f
-                        }
+
+            // The image. Square-cornered, natural aspect; shrinks inward when
+            // selected to reveal the gap. The selection tint rides on top of it.
+            tile
+                .clipShape(Rectangle())
+                .overlay {
+                    if isSelected {
+                        Rectangle().fill(ringColor.opacity(Self.selectionTintOpacity))
+                    }
                 }
-            )
+                .padding(isSelected ? Self.selectionInset : 0)
+
+            // Hover veil — unselected tiles only; a calm dark wash, no resize.
+            Rectangle()
+                .fill(Color.black)
+                .opacity((hovering && !isSelected) ? Self.hoverVeilOpacity : 0)
+                .allowsHitTesting(false)
+
+            // The padded ring, just inside the tile's outer edge.
+            if isSelected {
+                RoundedRectangle(cornerRadius: Self.ringCornerRadius, style: .continuous)
+                    .strokeBorder(ringColor, lineWidth: Self.ringWidth)
+                    .padding(Self.ringInset)
+            }
+        }
+        .animation(.easeOut(duration: 0.18), value: hovering)
+        .animation(.easeOut(duration: 0.15), value: isSelected)
+        .background(
+            GeometryReader { proxy in
+                Color.clear
+                    // Global tile frame feeds the hero open/close flight.
+                    .onAppear {
+                        appState.tileFrames[file.url.path] = proxy.frame(in: .global)
+                    }
+                    .onChange(of: proxy.frame(in: .global)) { _, f in
+                        appState.tileFrames[file.url.path] = f
+                    }
+            }
+        )
     }
 
     /// Images: natural aspect, fitted into the precomputed jigsaw frame.
