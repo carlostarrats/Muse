@@ -421,7 +421,9 @@ final class AppState: ObservableObject {
             .dropFirst()
             .sink { [weak self] mode in
                 AppSettings.tagSortMode = mode
-                self?.reloadTagChips()
+                // Pass `mode` explicitly: $tagSortMode fires in willSet, so
+                // self.tagSortMode is still the old value at this point.
+                self?.reloadTagChips(sortModeOverride: mode)
             }
 
         // App Intents wiring
@@ -954,7 +956,12 @@ final class AppState: ObservableObject {
     /// and live folder reloads. A fresh folder SELECT instead computes the chips
     /// inline in `reloadCurrentFiles`, so files + chips reveal together (and that
     /// path, not this one, manages the `tagRowReady` gate).
-    func reloadTagChips() {
+    /// `sortModeOverride` is supplied by the `$tagSortMode` sink: `@Published`
+    /// fires in `willSet`, so when the sink runs `self.tagSortMode` still holds
+    /// the OLD value — reading it here would order the chips one selection
+    /// behind (the "backwards" bug). The sink passes the delivered new value;
+    /// every other caller reads the (already-committed) property.
+    func reloadTagChips(sortModeOverride: TagSortMode? = nil) {
         tagChipToken &+= 1
         let token = tagChipToken
         let scope = tagSourceFiles
@@ -966,7 +973,7 @@ final class AppState: ObservableObject {
         }
         let paths = scope.map { $0.url.standardizedFileURL.path }
         let simpleDir = (!inCollection && !recursive) ? TagScope.parentDir(ofPath: paths[0]) : nil
-        let tagSort = tagSortMode
+        let tagSort = sortModeOverride ?? tagSortMode
         Task.detached(priority: .userInitiated) {
             let rows = TagChipLoader.ordered(
                 TagChipLoader.counts(paths: paths, simpleFolderDir: simpleDir, queue: queue),

@@ -133,6 +133,10 @@ struct ContentView: View {
                         Image(systemName: "square.stack.3d.up")
                     }
                     .help("Collections")
+                    // Toggling collections mid-search yanks you out of the
+                    // search and (in a library-wide search) re-highlights a
+                    // folder — confusing. Disable until the search is cleared.
+                    .disabled(appState.isSearchActive)
                 }
 
                 // Mood and info grouped together as one cluster (macOS fuses
