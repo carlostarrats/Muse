@@ -1352,6 +1352,55 @@ whole-feature review on opus + one review-fix). Build + full `MuseTests` green.
   the spec's literal wording), ~0.7s in-app-mutation lag (spec-acceptable),
   `LazyVStack` doesn't slide-animate a sort reorder.
 
+### Ghost-row reconcile + tag-chip sort control — 2026-06-18 (on `feat/next-16`)
+
+Spec approved live; plan: `docs/superpowers/plans/2026-06-18-ghost-rows-and-tag-sort.md`.
+Build + full `MuseTests` suite green.
+
+- **The bug (TWO symptoms, ONE root cause).** Searching "photo" returned many
+  blank document-icon tiles, and the "Conversations" collection card said 5 but
+  opened showing 1. Verified against the live DB + disk: `IMG_0466.jpg` and 4 of
+  the 5 `Conversations` members were **gone from disk** yet still `is_alive=1`,
+  fully analyzed. The Indexer only ever reconciles files **present** on disk —
+  nothing marks a file dead when it's deleted/moved OUT of a folder externally
+  (the grid hides this because it enumerates the disk, but **search**
+  (`SearchService` resolves alive paths) and **collection counts**
+  (`CollectionStore.fetchAll` COUNT DISTINCT alive `file_id`) query by
+  `is_alive`, so the ghost rows leaked through — as unrenderable blank tiles in
+  search, and as an inflated card count vs. the existence-filtered opened list).
+- **Fix — `PathReconciler`** (`Filesystem/PathReconciler.swift`, pure + DB,
+  unit-tested). On a **fresh folder selection only** (per the user's "per-folder
+  on load" choice — self-heals as you browse, no startup cost), inside the
+  existing off-main folder load: diff the enumerated on-disk set against the DB's
+  alive rows **scoped to that folder** (`inScope` mirrors `FolderEventFilter`'s
+  recursive/direct-child rule) and flip the vanished rows to `is_alive=0`
+  (`markDead`, counted via a pre-SELECT so it's exact + idempotent). Runs BEFORE
+  the tag-chip counts compute (so chips exclude the dead files too) and refreshes
+  the collection cards (`CollectionsEngine.shared.reload()`) when anything died,
+  so a stale "5" corrects immediately (and a now-1-member intent collection falls
+  below the ≥3 threshold and drops on the next organize pass).
+  - **Evicted-iCloud guard:** modern dataless-in-place files keep their real name
+    and ARE enumerated (safe); an OLD-STYLE `.<name>.icloud` placeholder is hidden
+    (not enumerated) but NOT gone — `isEvictedPlaceholder` detects the sibling and
+    keeps the row alive. Only genuinely-absent files die. This is filesystem
+    PRESENCE only — NOT a size/mtime poll (does not violate the iCloud
+    content-refresh override; that ban was about metadata oscillation).
+  - **No data migration** (per `muse-fix-code-not-my-data`): the forward code
+    reconciles on visit; the user's existing ghosts clear the moment the folder
+    is opened. Search-relevance left as-is (user's choice: keep OCR text matches —
+    "photo" matching screenshots that contain the word "Photo" is intended).
+- **Tag-chip sort control** (Task 3). New `TagSortMode` enum (`Models/`,
+  `.count`/`.alphabetical`) + `AppSettings.tagSortMode` (mirrors `folderSortMode`,
+  default `.count`). `AppState.tagSortMode` is `@Published`; a change sinks →
+  persist + `reloadTagChips()`. `TagChipLoader.ordered(_:sortMode:)` now branches
+  (Most Used = count desc, alpha tiebreak; A→Z = label only) and feeds BOTH chip
+  call sites (the inline folder-load path + `reloadTagChips`). Toolbar gains a
+  `tag`-icon `Menu` (`ContentView.tagSortMenu`) placed between the grid sort
+  cluster and the show-subfolders toggle, disabled on the Collections page.
+- Tests: `PathReconcilerTests` (scope/diff pure + in-memory GRDB markDead/
+  reconcile incl. non-recursive subfolder safety), `TagChipLoaderOrderTests`
+  (count vs alpha vs default). Full suite green.
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
@@ -1409,6 +1458,9 @@ Muse/Muse/
                                    (manual/name/dateModified/size) + pure
                                    FolderSort.order comparator (name tiebreak,
                                    missing-stat last) — 2026-06-18
+    TagSortMode.swift              tag-chip sort order: .count (Most Used, default)
+                                   / .alphabetical (A→Z). Drives
+                                   TagChipLoader.ordered(_:sortMode:) — 2026-06-18
   Filesystem/
     FileMover.swift                move(_:into:) via FileManager.moveItem; skips
                                    name collisions, returns failures; roots already
@@ -1441,6 +1493,12 @@ Muse/Muse/
                                    FolderStats.compute/root(containing:); mirrors the
                                    grid's file notion so sidebar counts match
                                    (2026-06-18)
+    PathReconciler.swift           pure scope/diff + DB ops that mark a folder's
+                                   externally-deleted files is_alive=0 on a fresh
+                                   folder load (stops ghost rows leaking into
+                                   search as blank tiles + inflating collection
+                                   counts); guards old-style evicted iCloud
+                                   placeholders, no data migration — 2026-06-18
     FolderStatCache.swift          @MainActor cache of FolderStat per top-level
                                    folder; off-main compute, live via FSEvents over
                                    all roots (debounced), set-diff so a reorder
