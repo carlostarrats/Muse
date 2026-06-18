@@ -74,12 +74,24 @@ final class AppState: ObservableObject {
     /// the grid can show a skeleton instead of a frozen click.
     @Published var isLoadingFolder = false
 
-    /// True once the tag-chip row has loaded its labels for the freshly-selected
-    /// folder. The grid holds its images back until this flips true, so a tagged
-    /// folder's chips appear FIRST and the images reveal already sized below them
-    /// — they never render at the top and then get shoved down. Reset to false on
-    /// each fresh folder pick; set true by TagChipsRow when its labels land.
-    @Published var tagRowReady = false
+    /// Gate that holds the grid's images during a FRESH folder load until the
+    /// chips are computed, so a tagged folder reveals its chips and images
+    /// together (no render-at-top-then-shove-down). It is false ONLY during that
+    /// brief window: `reloadCurrentFiles(showLoading:)` sets it false, and the
+    /// inline chip computation sets it back true in the SAME publish as the files.
+    /// Default true, so every other context — collections, a cold launch before a
+    /// folder is picked, leaving search — renders immediately (never stuck blank).
+    @Published var tagRowReady = true
+
+    /// Tag-chip labels (with counts) for the files currently in view — the model
+    /// owns this; `TagChipsRow` only renders it. Computed off-main by the folder
+    /// load (inline, so it publishes with `currentFiles`), `setActiveCollection`,
+    /// and the `tagsVersion` sink (tag edits). See `reloadTagChips`.
+    @Published var tagChipRows: [(label: String, count: Int)] = []
+    /// Monotonic token so a slow chip load can't clobber a newer scope.
+    private var tagChipToken = 0
+    /// Reloads the chips whenever a tag is added / removed / renamed.
+    private var tagsVersionCancellable: AnyCancellable?
 
     /// Currently selected file (drives preview/detail).
     @Published var selectedFile: FileNode?
@@ -322,6 +334,9 @@ final class AppState: ObservableObject {
             guard let self else { return }
             self.currentFiles.removeAll { $0.url == url }
             if self.selectedFile?.url == url { self.selectedFile = nil }
+            // The in-view file set shrank — refresh the chip counts (a tag that
+            // only lived on the deleted file should drop out).
+            self.reloadTagChips()
         }
         deletion.onRestore = { [weak self] node in
             guard let self else { return }
@@ -340,6 +355,8 @@ final class AppState: ObservableObject {
                   !self.currentFiles.contains(where: { $0.url == node.url }) else { return }
             self.currentFiles.append(node)
             self.resort()
+            // A restored file may bring its tags back into view — refresh chips.
+            self.reloadTagChips()
         }
 
         rebuildRootNodes()
@@ -351,6 +368,14 @@ final class AppState: ObservableObject {
         // it so Pin/Unpin shows immediately.
         starsCancellable = stars.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
+
+        // Any tag edit (add / remove / rename / regenerate, from anywhere) bumps
+        // tagsVersion — re-derive the chip labels from one place instead of each
+        // call site doing it. dropFirst so the initial value doesn't fire a load
+        // before a folder is even selected.
+        tagsVersionCancellable = $tagsVersion
+            .dropFirst()
+            .sink { [weak self] _ in self?.reloadTagChips() }
 
         // App Intents wiring
         NotificationCenter.default.addObserver(
@@ -485,6 +510,7 @@ final class AppState: ObservableObject {
             selectedFolder = nil
             currentFiles = []
             selectedFile = nil
+            reloadTagChips()
         }
         rebuildRootNodes()
     }
@@ -688,6 +714,13 @@ final class AppState: ObservableObject {
                                   uniquingKeysWith: { a, _ in a })
         }
 
+        // A fresh SELECT (showLoading) always lands on a folder with no collection
+        // active — select(folder:) cleared it — so its chips come from this folder.
+        // Compute them in the SAME off-main pass as enumeration and publish them
+        // with currentFiles, so files + chips + the reveal land in ONE update —
+        // no SwiftUI round-trip waiting for the chip row's loader to wake up.
+        let freshSelect = showLoading
+        let dbQueue = Database.shared.dbQueue
         Task.detached(priority: .userInitiated) {
             let raw = showSub
                 ? Self.enumerateRecursive(at: folderURL, showHidden: showHid)
@@ -701,15 +734,70 @@ final class AppState: ObservableObject {
                 return fresh
             }
             let sorted = SmartSorter.apply(mode, to: merged, reversed: reversed)
+            var chipRows: [(label: String, count: Int)] = []
+            if freshSelect, let dbQueue {
+                let tagPaths = sorted.map { $0.url.standardizedFileURL.path }
+                if let first = tagPaths.first {
+                    let simpleDir = showSub ? nil : TagScope.parentDir(ofPath: first)
+                    chipRows = TagChipLoader.ordered(
+                        TagChipLoader.counts(paths: tagPaths, simpleFolderDir: simpleDir, queue: dbQueue))
+                }
+            }
             await MainActor.run {
                 // A newer selection started while we were loading — drop this.
                 guard token == self.folderLoadToken else { return }
                 self.currentFiles = sorted
                 self.isLoadingFolder = false
+                if freshSelect {
+                    // Supersede any in-flight chip load, then reveal files + chips
+                    // in one animated transaction.
+                    self.bumpTagChipToken()
+                    withAnimation(.easeInOut(duration: AppState.navTransition)) {
+                        self.tagChipRows = chipRows
+                        self.tagRowReady = true
+                    }
+                } else {
+                    // Live reload (FSEvents / subfolders toggle / clear search):
+                    // the grid is already shown, so just refresh the chips for the
+                    // current scope (no gate).
+                    self.reloadTagChips()
+                }
                 if thenIndex { self.scheduleIndexing(for: folderURL, verifyICloud: verifyICloud) }
             }
         }
     }
+
+    /// Recompute the tag-chip labels for the CURRENT scope (the active
+    /// collection's members, else the selected folder) off the main thread, then
+    /// publish them. The shared entry point for collection changes, tag edits,
+    /// and live folder reloads. A fresh folder SELECT instead computes the chips
+    /// inline in `reloadCurrentFiles`, so files + chips reveal together (and that
+    /// path, not this one, manages the `tagRowReady` gate).
+    func reloadTagChips() {
+        tagChipToken &+= 1
+        let token = tagChipToken
+        let scope = tagSourceFiles
+        let recursive = showSubfolders
+        let inCollection = activeCollectionID != nil
+        guard let queue = Database.shared.dbQueue, !scope.isEmpty else {
+            tagChipRows = []
+            return
+        }
+        let paths = scope.map { $0.url.standardizedFileURL.path }
+        let simpleDir = (!inCollection && !recursive) ? TagScope.parentDir(ofPath: paths[0]) : nil
+        Task.detached(priority: .userInitiated) {
+            let rows = TagChipLoader.ordered(
+                TagChipLoader.counts(paths: paths, simpleFolderDir: simpleDir, queue: queue))
+            await MainActor.run {
+                guard token == self.tagChipToken else { return }
+                withAnimation(.easeInOut(duration: AppState.navTransition)) {
+                    self.tagChipRows = rows
+                }
+            }
+        }
+    }
+
+    private func bumpTagChipToken() { tagChipToken &+= 1 }
 
     func resort() {
         // Don't re-sort search results; they maintain relevance ranking

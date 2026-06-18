@@ -372,47 +372,6 @@ struct GridView: View {
         .help("Images per row")
     }
 
-    /// Shimmering placeholder tiles shown the instant a folder is selected,
-    /// while its contents enumerate off-main — so clicking a folder feels
-    /// immediate instead of a frozen pause followed by a sudden pop-in.
-    private func skeletonGrid(width: CGFloat) -> some View {
-        // Varied heights evoke the jigsaw without needing real dimensions.
-        let ratios: [CGFloat] = [1.3, 0.8, 1.0, 1.5, 0.7, 1.15, 0.9, 1.25]
-        let cols = max(1, gridColumns)
-        let columnWidth = max(1, (width - CGFloat(cols - 1) * spacing) / CGFloat(cols))
-
-        // Inverted, mood-aware sweep: a translucent BLACK band (a soft shadow)
-        // travels through each tile — never a bright streak. It's blurred so the
-        // gradient steps dither out (no banding), and the whole stack is drawn
-        // below 1 opacity so a colored background tints through. Per-mood shadow
-        // strength + stack opacity were tuned live (skeleton-shimmer-preview.html).
-        let palette = appState.moodPalette
-        let tuning = shimmerTuning(isCustom: appState.mood == .custom,
-                                   isDark: palette.scheme == .dark)
-
-        return HStack(alignment: .top, spacing: spacing) {
-            ForEach(0..<cols, id: \.self) { col in
-                VStack(spacing: spacing) {
-                    ForEach(0..<5, id: \.self) { row in
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(palette.tileFill)
-                            .overlay {
-                                ShimmerBand(peak: tuning.peak,
-                                            shoulder: tuning.shoulder)
-                            }
-                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            .frame(height: columnWidth * ratios[(col * 5 + row) % ratios.count])
-                    }
-                }
-                .frame(width: columnWidth)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(contentInset)
-        .opacity(tuning.stackOpacity)
-        .transition(.opacity)
-    }
-
     @ViewBuilder
     private var emptyState: some View {
         // A plain empty folder shows nothing — just blank space. Only the

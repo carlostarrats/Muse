@@ -82,10 +82,16 @@ extension AppState {
                     activeCollectionPaths = nil
                     activeCollectionFiles = nil
                 }
+                // Backed out of a collection (the grid returns to the folder) —
+                // re-scope the chips to the folder. The folder's grid is already
+                // loaded, so no gate.
+                reloadTagChips()
             } else {
                 activeCollectionID = nil
                 activeCollectionPaths = nil
                 activeCollectionFiles = nil
+                // animated:false means a folder SELECT is in progress; that load
+                // computes the chips inline, so don't double-load here.
             }
             return
         }
@@ -98,6 +104,7 @@ extension AppState {
                 activeCollectionID = id
                 activeCollectionPaths = []
                 activeCollectionFiles = []
+                reloadTagChips()
                 return
             }
             let paths = (try? await CollectionStore.alivePaths(
@@ -116,6 +123,8 @@ extension AppState {
                     activeCollectionPaths = Set(paths)
                     activeCollectionFiles = nodes
                 }
+                // Re-scope the chips to the collection's members (library-wide).
+                reloadTagChips()
             }
         }
     }
@@ -207,6 +216,9 @@ extension AppState {
                 activeCollectionFiles?.removeAll {
                     removed.contains($0.url.standardizedFileURL.path)
                 }
+                // Collection membership shrank — refresh the chip counts (removing
+                // from a collection doesn't bump tagsVersion, so do it explicitly).
+                reloadTagChips()
             }
             clearSelection()
         }
