@@ -1142,15 +1142,24 @@ Build + full `MuseTests` suite green.
   access, and updates the stored `Root` display name → the `$roots` sink
   rebuilds the sidebar. If the renamed folder was selected, it's reselected by
   URL after the rebuild.
-- **Hero Share → dropdown.** `Views/Viewer/ShareButton.swift` is now a `Menu`
-  (styled like `ShareCollectionButton`) offering **Share** (unchanged
-  `NSSharingServicePicker`) and **Open With ▸** (Open / Reveal in Finder /
-  registered apps via the existing `OpenWithMenu.applications(for:)`). The 38pt
-  glass circle + icon are unchanged at rest.
+- **Native-style Open With (shared).** `OpenWithItems` (in `OpenWithMenu.swift`)
+  renders the registered apps with their **real macOS icons** (`NSWorkspace.icon`),
+  the **default app first + marked "(default)"**, and an **"Other…"** picker —
+  reading like Finder's submenu. The app list is computed **synchronously** in
+  the body: a context-menu `.task` doesn't fire reliably, which is why the grid
+  tile's "Open With" submenu was empty before (only "Open" / "Reveal" showed).
+  Both the grid tile context menu (`OpenWithMenu`) and the hero Share dropdown
+  reuse `OpenWithItems`.
+- **Hero Share → dropdown.** `Views/Viewer/ShareButton.swift` is a `Menu`
+  (styled like `ShareCollectionButton`): **Share** (unchanged
+  `NSSharingServicePicker`), **Open**, and **Open With ▸** (`OpenWithItems`).
+  The 38pt glass circle + icon are unchanged at rest.
 - **Menu-bar parity.** File menu gained **Open** + **Open With ▸** for the
-  selected single image (the menu-bar equivalent of the grid/hero Open With).
-  The grid right-click **Open With** already existed (shared `GridView` covers
-  the main, tag, and in-collection grids) — verified, not rebuilt.
+  selected single image. The grid right-click **Open With** is the shared
+  `GridView` menu (covers the main, tag, and in-collection grids).
+- **New Subfolder does not navigate.** After creating, the sidebar reveals the
+  new folder (parent reloaded + expanded) but the grid stays on the current
+  folder — `createSubfolder` no longer selects the new child.
 - **Info modal** refreshed + enlarged (540×640 → 600×720): folders
   (new subfolder/rename/reorder/pin/remove), multi-select + grid actions,
   hero Open With, collection-PDF share, search scope, sort direction, grid file
