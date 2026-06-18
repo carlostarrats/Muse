@@ -1024,6 +1024,49 @@ and re-verified — see below).
   doesn't refresh chips until a folder revisit; a cross-chunk duplicate
   over-count) — identical to the old code, not regressions.
 
+### Grid file names + native macOS file visuals — 2026-06-17 (on `feat/next-11`)
+
+Two related grid changes (spec:
+`docs/superpowers/specs/2026-06-17-grid-file-names-design.md`, plan:
+`docs/superpowers/plans/2026-06-17-grid-file-names.md`). Built via subagent-
+driven development (3 tasks, each task-reviewed + a final whole-branch review);
+build + full `MuseTests` suite green.
+
+- **Non-image tiles now show the real macOS visual.** The grid's non-image card
+  path used to render a flat SF Symbol and *ignore* the fetched QuickLook
+  thumbnail entirely. Root fix is two parts: (1) `ThumbnailCache.generate()`
+  requests `representationTypes: .all` (was `.thumbnail`) from
+  `QLThumbnailGenerator`, so `generateBestRepresentation` returns a real CONTENT
+  preview when one exists (PDF first page, text/office doc render) AND falls back
+  to the native macOS TYPE ICON (zip/dmg/app, vector-backed multi-res) instead of
+  nil → grey tile; content is still preferred over the icon, so files that
+  already rendered are unchanged. (2) `GridView`'s `TileView` now DISPLAYS that
+  image (`cardIcon` → `Image(nsImage:)`, `scaledToFit`, centered), with the SF
+  Symbol kept only as a transient loading/failure fallback. Video/audio cards
+  also get their QuickLook preview now.
+- **"Show file names" setting** (`AppSettings.showFileNames`, key `showFileNames`,
+  default **OFF**; surfaced in the Preferences "Grid" section). OFF (default):
+  photos show no text; non-image cards show the icon centered with the filename
+  INSIDE near the bottom (single line, tail-ellipsis, width = tile width). ON:
+  every tile gets the filename caption BELOW it and non-image cards drop the
+  internal name (icon only). Toggling re-packs the grid live.
+- **Layout via `MasonryGeometry.captionHeight`** — a new trailing `captionHeight:
+  CGFloat = 0` param adds a fixed strip (≈18pt, constant across column counts) to
+  each tile's frame height, mirroring `CollectionPDFLayout.captionHeight`. Frames
+  stay the single source of truth, so virtualization is untouched; `TileView`
+  splits the frame into an image area (top) + caption strip (bottom). The
+  selection accent wash+border wraps the **image area only** (Finder-style; the
+  caption sits below it, unbordered), and the hero open/close flight reads the
+  image-area global frame. `AspectRatioCache` is unchanged (non-image cards keep
+  their fixed `1/1.4` aspect; the caption is added uniformly by the geometry).
+- **All grid tiles are square-cornered.** The non-image cards' grey backing was
+  briefly rounded (cornerRadius 8); changed to square (`Rectangle()`) to match
+  the edge-to-edge photo tiles — clipShape, selection overlay, and the card fill.
+- **Collection-PDF export is deliberately untouched** — it always renders
+  filenames regardless of the setting (`Export/CollectionPDFLayout.swift` /
+  `CollectionPDFExporter.swift`). Tests: `MasonryGeometryTests` (caption-strip
+  reservation, totalHeight, no-overlap, captionHeight:0 regression).
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
@@ -1092,7 +1135,10 @@ Muse/Muse/
                                    cache (NSCache 512MB cost + on-disk LRU 2GB).
                                    Key normalized on standardized path; invalidate(_:)
                                    drops mem+disk for all renderedVariants so an
-                                   in-place edit regenerates (2026-06-17)
+                                   in-place edit regenerates (2026-06-17). Non-image
+                                   path requests QuickLook .all → real macOS type
+                                   icon / content preview, not just .thumbnail
+                                   (feat/next-11)
     Sidecar.swift                  portable per-asset metadata value type
                                    (Codable); maps to/from FileRow+TagRow;
                                    deterministic conflict merge (manual-tag wins)
@@ -1191,7 +1237,12 @@ Muse/Muse/
                                    (feat/multi-select). A content-level Color.clear
                                    deselect surface behind the tiles makes the empty
                                    top inset deselect with OR without the tag chips
-                                   (2026-06-17)
+                                   (2026-06-17). Non-image tiles render the native
+                                   macOS icon/preview (cardIcon, SF Symbol only as a
+                                   loading fallback); optional "Show file names" caption
+                                   below each tile (MasonryGeometry.captionHeight strip;
+                                   internal card name when off) — all tiles square-
+                                   cornered (feat/next-11)
     SelectionMenu.swift            SelectionActionsMenu — Add to Collection / Add
                                    Tag / Share / Move to Folder over the effective
                                    selection (feat/multi-select)
@@ -1260,7 +1311,10 @@ Muse/Muse/
     MasonryGeometry.swift          pure masonry packing (frames + height) from
                                    aspect ratios — feeds GridView's virtualization
                                    (replaced the old MasonryLayout: Layout, deleted
-                                   2026-06-13 — a custom Layout can't virtualize)
+                                   2026-06-13 — a custom Layout can't virtualize).
+                                   captionHeight param reserves a fixed per-tile
+                                   caption strip for under-tile file names
+                                   (feat/next-11)
   Export/
     CollectionPDFLayout.swift      pure paginated masonry pack for the collection
                                    PDF (no image split across pages), unit-tested;
@@ -1280,12 +1334,16 @@ Muse/Muse/
     AppSettings.swift              UserDefaults accessors for the automatic-
                                    organization opt-outs (autoTag /
                                    autoCollections, both default ON); read by
-                                   AnalyzePipeline + CollectionsEngine
+                                   AnalyzePipeline + CollectionsEngine. Plus
+                                   showFileNames (default OFF; read by GridView —
+                                   feat/next-11)
     SettingsView.swift             Preferences window (app menu → Settings…,
                                    ⌘,): the two auto-organization toggles
                                    (auto-tag new images / auto-organize into
-                                   collections). Other settings still live in
-                                   the sidebar / toolbar / menus
+                                   collections) + a "Grid" section with the
+                                   "Show file names" toggle (feat/next-11).
+                                   Other settings still live in the sidebar /
+                                   toolbar / menus
   Muse.entitlements                app-sandbox + user-selected.read-write +
                                    bookmarks.app-scope + iCloud Documents +
                                    network.client (Sparkle update fetch ONLY —

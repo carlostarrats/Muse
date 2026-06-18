@@ -14,6 +14,7 @@ import SwiftUI
 struct SettingsView: View {
     @AppStorage(AppSettings.autoTagKey) private var autoTag = true
     @AppStorage(AppSettings.autoCollectionsKey) private var autoCollections = true
+    @AppStorage(AppSettings.showFileNamesKey) private var showFileNames = false
 
     var body: some View {
         Form {
@@ -26,6 +27,16 @@ struct SettingsView: View {
                 Text("Applies to folders added from now on. Tags and collections "
                      + "you already have are kept. You can still analyze a folder "
                      + "or build your own collections by hand at any time.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Show file names", isOn: $showFileNames)
+            } header: {
+                Text("Grid")
+            } footer: {
+                Text("Show each file's name beneath its thumbnail in the grid.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }

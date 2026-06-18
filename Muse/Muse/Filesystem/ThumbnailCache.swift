@@ -316,11 +316,19 @@ final class ThumbnailCache: ObservableObject {
         }
 
         // Everything else (PDF, SVG, fonts, 3D, office, archives) → QuickLook.
+        // `.all` (not just `.thumbnail`) so QuickLook returns its best available
+        // representation: a real CONTENT preview when one exists (PDF first page,
+        // text/office doc render) AND falls back to the native macOS TYPE ICON
+        // when there isn't (zip, dmg, generic binary) — those system icons are
+        // vector-backed multi-res assets, so they stay crisp at any tile size.
+        // Without the icon fallback these files returned nil → permanently grey
+        // tiles. generateBestRepresentation still prefers a content thumbnail
+        // over the icon, so files that DID render are unchanged.
         let request = QLThumbnailGenerator.Request(
             fileAt: url,
             size: size,
             scale: scale,
-            representationTypes: .thumbnail
+            representationTypes: .all
         )
         return await withCheckedContinuation { continuation in
             QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { rep, _ in

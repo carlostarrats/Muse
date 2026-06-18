@@ -31,10 +31,13 @@ enum MasonryGeometry {
     ///   - columns: number of columns (clamped to ≥ 1).
     ///   - width: total available width for the grid.
     ///   - spacing: gap between tiles, horizontally and vertically.
+    ///   - captionHeight: a fixed strip added to every tile's height
+    ///     (for an under-tile filename caption). 0 = no caption (default).
     static func compute(aspects: [CGFloat],
                         columns: Int,
                         width: CGFloat,
-                        spacing: CGFloat) -> Result {
+                        spacing: CGFloat,
+                        captionHeight: CGFloat = 0) -> Result {
         let cols = max(1, columns)
         guard !aspects.isEmpty, width > 0 else {
             return Result(frames: [], totalHeight: 0)
@@ -56,7 +59,7 @@ enum MasonryGeometry {
                 col = c
             }
 
-            let height = max(1, columnWidth * (aspect > 0 ? aspect : 1))
+            let height = max(1, columnWidth * (aspect > 0 ? aspect : 1)) + captionHeight
             let x = CGFloat(col) * (columnWidth + spacing)
             let y = columnHeights[col]
             frames.append(CGRect(x: x, y: y, width: columnWidth, height: height))
