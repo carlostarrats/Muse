@@ -35,4 +35,15 @@ enum AppSettings {
     static var showFileNames: Bool {
         UserDefaults.standard.object(forKey: showFileNamesKey) as? Bool ?? false
     }
+
+    static let folderSortModeKey = "folderSortMode"
+
+    /// Sidebar top-level folder sort mode. Default `.manual`. Unset → manual.
+    static var folderSortMode: FolderSortMode {
+        get {
+            (UserDefaults.standard.string(forKey: folderSortModeKey))
+                .flatMap(FolderSortMode.init(rawValue:)) ?? .manual
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: folderSortModeKey) }
+    }
 }
