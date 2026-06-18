@@ -54,7 +54,12 @@ final class FolderWatcher {
     }
 
     func watch(url: URL, recursive: Bool = false) {
+        watch(urls: [url], recursive: recursive)
+    }
+
+    func watch(urls: [URL], recursive: Bool = false) {
         stop()
+        guard !urls.isEmpty else { return }
         var context = FSEventStreamContext(
             version: 0,
             info: Unmanaged.passUnretained(self).toOpaque(),
@@ -62,7 +67,7 @@ final class FolderWatcher {
             release: nil,
             copyDescription: nil
         )
-        let pathsToWatch = [url.path] as CFArray
+        let pathsToWatch = urls.map(\.path) as CFArray
         let flags: FSEventStreamCreateFlags = UInt32(
             kFSEventStreamCreateFlagFileEvents |
             kFSEventStreamCreateFlagNoDefer |

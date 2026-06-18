@@ -24,6 +24,8 @@ final class AppState: ObservableObject {
 
     let bookmarks = BookmarkStore()
     let stars = StarStore()
+    /// Live per-top-level-folder stats for the sidebar counts + sort.
+    let folderStats = FolderStatCache()
 
     /// Currently active root (the one whose tree is in the sidebar).
     @Published var activeRoot: Root?
@@ -351,6 +353,7 @@ final class AppState: ObservableObject {
     private var watcher: FolderWatcher?
     private var bookmarksCancellable: AnyCancellable?
     private var starsCancellable: AnyCancellable?
+    private var folderStatsCancellable: AnyCancellable?
 
     init() {
         updateAutoMoodTimer()
@@ -397,6 +400,8 @@ final class AppState: ObservableObject {
         // pinned/unpinned until some other AppState change republishes. Forward
         // it so Pin/Unpin shows immediately.
         starsCancellable = stars.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+        folderStatsCancellable = folderStats.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
 
         // Any tag edit (add / remove / rename / regenerate, from anywhere) bumps
@@ -492,6 +497,7 @@ final class AppState: ObservableObject {
         if activeRoot == nil, let first = sourceRoots.first {
             select(rootForFirstFolder: first)
         }
+        folderStats.update(roots: rootNodes.map(\.url))
     }
 
     /// Resolve the iCloud folder once at launch and surface it in the sidebar.
