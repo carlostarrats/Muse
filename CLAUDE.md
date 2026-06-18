@@ -1340,6 +1340,17 @@ whole-feature review on opus + one review-fix). Build + full `MuseTests` green.
   cases):** for a long *scrolled* root list, off-screen roots aren't measured by
   `LazyVStack` so a count may lag until visible; otherwise counts refresh within
   ~0.5s of a change.
+- **QA — independent review pass (2 parallel reviewers + a fix-verification):**
+  both returned "ready to merge, no Critical." Fixed: `FolderStatCache.handle`
+  now drops hidden/dotfile-segment changes (`rootForMediaChange`) — `.muse`
+  sidecars are written inside every root on each analyze pass, and without the
+  filter each one triggered a redundant full re-walk + spurious re-render (the
+  walk uses `skipsHiddenFiles`, so they never change the count). Added the
+  spec-required sort-mode `UserDefaults` round-trip test + empty-input and
+  equal-metric name-tiebreak coverage. Deferred (non-blocking, documented):
+  packages are descended-into (matches the grid — the binding invariant — over
+  the spec's literal wording), ~0.7s in-app-mutation lag (spec-acceptable),
+  `LazyVStack` doesn't slide-animate a sort reorder.
 
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
@@ -1433,8 +1444,9 @@ Muse/Muse/
     FolderStatCache.swift          @MainActor cache of FolderStat per top-level
                                    folder; off-main compute, live via FSEvents over
                                    all roots (debounced), set-diff so a reorder
-                                   doesn't re-walk; AppState owns + forwards changes
-                                   (2026-06-18)
+                                   doesn't re-walk, ignores dotfile/.muse changes
+                                   (rootForMediaChange); AppState owns + forwards
+                                   changes (2026-06-18)
     StarStore.swift                SQLite-backed starred folders
     ThumbnailCache.swift           QLThumbnail + AVAssetImageGenerator (videos);
                                    off-main, ordered (top→bottom) load; 2-tier
