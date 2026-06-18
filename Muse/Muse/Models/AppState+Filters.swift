@@ -21,7 +21,11 @@ extension AppState {
     /// The crossfade is driven by the view layer (ContentView animates on
     /// `isCollectionsPage`), so this just flips the flags.
     func toggleCollectionsPage() {
-        showingCollections.toggle()
+        // Drives the page fade (ContentView.pageReveal) now that there's no
+        // ambient animation on isCollectionsPage.
+        withAnimation(.easeInOut(duration: AppState.navTransition)) {
+            showingCollections.toggle()
+        }
         setActiveCollection(nil)
     }
 
@@ -29,13 +33,25 @@ extension AppState {
     /// inside a collection, else the current folder's files; the tag chip
     /// filter narrows either.
     var visibleFiles: [FileNode] {
+        // Memoized: recomputed only after one of the four inputs changes (they
+        // invalidate the cache via didSet in AppState). The grid reads this many
+        // times per render; without the cache the tag filter below re-standardized
+        // every path on every read. See `_visibleFilesCache`.
+        if _visibleFilesValid { return _visibleFilesCache }
+        let result: [FileNode]
         // search results are global; collection/tag filters apply to browsing only
-        if isSearchActive { return currentFiles }
-        var files = activeCollectionFiles ?? currentFiles
-        if let tagPaths = activeTagPaths {
-            files = files.filter { tagPaths.contains($0.url.standardizedFileURL.path) }
+        if isSearchActive {
+            result = currentFiles
+        } else {
+            var files = activeCollectionFiles ?? currentFiles
+            if let tagPaths = activeTagPaths {
+                files = files.filter { tagPaths.contains($0.url.standardizedFileURL.path) }
+            }
+            result = files
         }
-        return files
+        _visibleFilesCache = result
+        _visibleFilesValid = true
+        return result
     }
 
     /// Files the tag chips derive their labels from: the active collection's
@@ -49,18 +65,33 @@ extension AppState {
     /// Set (or clear, with nil) the active collection filter. Loads the
     /// member path set asynchronously; always go through this method
     /// rather than setting `activeCollectionID` directly.
-    func setActiveCollection(_ id: String?) {
+    func setActiveCollection(_ id: String?, animated: Bool = true) {
         clearSelection()
         // ID and member paths land in ONE animated transaction, so the grid
         // cross-fades once to the filtered set — no intermediate frame where
         // the header swapped but the grid hasn't (the old "flash").
-        let curve = Animation.easeInOut(duration: 0.28)
+        let curve = Animation.easeInOut(duration: AppState.navTransition)
         collectionRequestToken += 1
         guard let id else {
-            withAnimation(curve) {
+            // Clearing as part of a folder switch is INSTANT (animated: false) so
+            // the collection view doesn't tear down in a visible step before the
+            // new folder fades in; a normal back-out animates.
+            if animated {
+                withAnimation(curve) {
+                    activeCollectionID = nil
+                    activeCollectionPaths = nil
+                    activeCollectionFiles = nil
+                }
+                // Backed out of a collection (the grid returns to the folder) —
+                // re-scope the chips to the folder. The folder's grid is already
+                // loaded, so no gate.
+                reloadTagChips()
+            } else {
                 activeCollectionID = nil
                 activeCollectionPaths = nil
                 activeCollectionFiles = nil
+                // animated:false means a folder SELECT is in progress; that load
+                // computes the chips inline, so don't double-load here.
             }
             return
         }
@@ -73,6 +104,7 @@ extension AppState {
                 activeCollectionID = id
                 activeCollectionPaths = []
                 activeCollectionFiles = []
+                reloadTagChips()
                 return
             }
             let paths = (try? await CollectionStore.alivePaths(
@@ -91,6 +123,8 @@ extension AppState {
                     activeCollectionPaths = Set(paths)
                     activeCollectionFiles = nodes
                 }
+                // Re-scope the chips to the collection's members (library-wide).
+                reloadTagChips()
             }
         }
     }
@@ -182,6 +216,9 @@ extension AppState {
                 activeCollectionFiles?.removeAll {
                     removed.contains($0.url.standardizedFileURL.path)
                 }
+                // Collection membership shrank — refresh the chip counts (removing
+                // from a collection doesn't bump tagsVersion, so do it explicitly).
+                reloadTagChips()
             }
             clearSelection()
         }
@@ -189,12 +226,20 @@ extension AppState {
 
     /// Set (or clear, with nil) the tag chip filter — same single-transaction
     /// animated swap as the collection filter.
-    func setActiveTag(_ label: String?) {
+    func setActiveTag(_ label: String?, animated: Bool = true) {
         clearSelection()
-        let curve = Animation.easeInOut(duration: 0.28)
+        let curve = Animation.easeInOut(duration: AppState.navTransition)
         tagRequestToken += 1
         guard let label else {
-            withAnimation(curve) {
+            // Clearing as part of a folder switch is INSTANT (animated: false), so
+            // the selected-tag view vanishes in one frame rather than animating
+            // away before the new folder appears.
+            if animated {
+                withAnimation(curve) {
+                    activeTagLabel = nil
+                    activeTagPaths = nil
+                }
+            } else {
                 activeTagLabel = nil
                 activeTagPaths = nil
             }

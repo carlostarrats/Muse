@@ -70,7 +70,9 @@ nonisolated enum FolderReader {
             let isPackage = values?.isPackage == true
             // Skip plain directories; treat packages (like .app) as files.
             if isDir && !isPackage { return nil }
-            return FileNode(url: url)
+            // We already know this is a file/package, so classify directly and
+            // skip AssetKind.detect's redundant fileExists stat.
+            return FileNode(url: url, kind: AssetKind.classify(url: url, fallback: .unknown))
         }
         return nodes.sorted { lhs, rhs in
             // Default sort: date modified desc (generalist persona, Q24).

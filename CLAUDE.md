@@ -952,6 +952,78 @@ control. Build + full `MuseTests` suite green; two parallel adversarial reviews
   override. (The magnifier + menu chevron are ONE system-drawn glyph — the gap
   between them isn't adjustable from layout rects, so that was left native.)
 
+### Transition smoothness + folder-switch perf + tag-chip model refactor — 2026-06-17 (on `feat/next-10`)
+
+A long live-tuning + profiling + refactor pass on page/folder transitions and
+the folder-switch latency. Build + full `MuseTests` suite green; two independent
+adversarial reviews + a fix-verification pass (the one MAJOR they found is fixed
+and re-verified — see below).
+
+- **Unified, snappier nav crossfades.** All navigation transitions now share one
+  short duration, `AppState.navTransition` (0.2s): the Collections-page⇄grid
+  swap, the collection/tag filter swaps, search enter/exit. (Mood 0.35s and the
+  hero-viewer open/close 0.18s are NOT nav transitions — left as-is.)
+- **`AppState.visibleFiles` memoized.** It was a computed property re-running the
+  tag filter (standardizing ~1700 paths) on every access, and the grid reads it
+  several times per render + on every layout recompute. Now cached, invalidated
+  via `didSet` on its four inputs (`currentFiles`, `activeCollectionFiles`,
+  `activeTagPaths`, `isSearchActive` — in-place Optional/array mutations fire
+  didSet too, so it can't go stale).
+- **Collections→folder no longer "ghosts."** The page swap is a fade-THROUGH,
+  not a blend: `ContentView.pageReveal` = `.asymmetric(insertion: .opacity,
+  removal: .identity)` — the outgoing screen is removed INSTANTLY and only the
+  incoming fades in, so the two dissimilar layouts never double-expose. The
+  ambient `.animation(value:)` on `isCollectionsPage`/`activeCollectionID` were
+  removed; those transitions are now driven explicitly by `withAnimation` inside
+  `toggleCollectionsPage`/`setActiveCollection`/`setActiveTag` (the `isSearchActive`
+  + mood ambient animations stayed).
+- **Folder switch tears the old view down INSTANTLY.** `setActiveTag` /
+  `setActiveCollection` gained an `animated` param; `select(folder:)` clears the
+  old tag/collection/page with `animated: false` (no `withAnimation`), so the old
+  view vanishes in ONE frame instead of animating away in visible steps (tags
+  collapsing → content sliding up → page leaving) before the new folder appears.
+- **The grid loads the nav first, then the images — no shove-down.** A tagged
+  folder used to render its images at the top and then get pushed down when the
+  chips appeared. Now the folder load computes the tag chips in the SAME off-main
+  pass as enumeration and publishes files + chips together, so the chips are
+  sized when the images first render. `tagRowReady` is a gate that holds the
+  images only during the brief fresh-load window (default TRUE — every other
+  context renders immediately; set false at the top of
+  `reloadCurrentFiles(showLoading:)` and back true in that method's inline
+  publish). During enumeration the grid shows the calm background (the old
+  masonry skeleton was removed — it sat where the tag row later shifts).
+- **Tag-chip loading moved into the MODEL (the big refactor, both speed + code
+  health).** The chips used to load themselves inside `TagChipsRow` via a
+  `.task(id: reloadKey)` that ran a DB query — a ~52ms SwiftUI round-trip on
+  every folder switch (publish files → re-render → the view's task wakes →
+  query → reveal). Now:
+  - `TagChipLoader` (new, `Database/`) is the SINGLE shared query logic: a fast
+    single-folder `GROUP BY` path (one constant `parent_dir`) + the general
+    per-file-scope path (collections / recursive). Pure, nonisolated, sync reads.
+  - `AppState` owns `tagChipRows` (`@Published`) + `reloadTagChips()`; the fresh
+    folder load computes them inline (the round-trip is gone), and a `$tagsVersion`
+    sink + `setActiveCollection` + `removeFromCollection` + deletion
+    onRemove/onRestore + `removeRoot` are the other triggers. `TagChipsRow` is now
+    a pure renderer of `appState.tagChipRows` (no DB code).
+- **Measured folder-switch latency** (warm, ~2k-file tagged folder, profiled with
+  temporary stderr instrumentation, since removed): tag query 53ms→12ms
+  (GROUP BY), enumeration 47ms→40ms (skip `AssetKind.detect`'s redundant per-file
+  `fileExists` stat via `FileNode(url:kind:)` + `AssetKind.classify`), and the
+  ~52ms SwiftUI round-trip eliminated by the inline-chips refactor → total gap
+  ~120ms → ~60ms. (First-touch-per-session is still ~3× slower — cold OS
+  filesystem/thumbnail/DB caches; that's physical I/O, not optimized. The OS
+  cache survives app quit/relaunch but not a reboot/memory-pressure.)
+- **QA — two adversarial reviews + a verification pass.** Review found ONE major:
+  opening a collection before any folder had loaded showed a blank grid, because
+  the gate (`tagRowReady`) was only ever set true by the folder-select path.
+  Fixed by defaulting `tagRowReady = true` and deleting the never-used `reveal:`
+  parameter from `reloadTagChips`. A follow-up review confirmed the fix and that
+  a superseded/cancelled fresh select can't leave the gate stuck (the false-set
+  is synchronous at method entry; only the token-winning select publishes, always
+  setting it true). Remaining items are minor + pre-existing (auto-analysis
+  doesn't refresh chips until a folder revisit; a cross-chunk duplicate
+  over-count) — identical to the old code, not regressions.
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
@@ -975,7 +1047,13 @@ Muse/Muse/
                                    search/watcher/indexing logic; filter + grid-
                                    selection methods split into the extensions
                                    below (2026-06-17 tidy-up). reloadAfterMove;
-                                   allTagLabels preload (feat/multi-select)
+                                   allTagLabels preload (feat/multi-select).
+                                   Memoized visibleFiles; navTransition (0.2s
+                                   shared nav-crossfade duration); owns the tag-
+                                   chip data — tagChipRows + reloadTagChips()
+                                   (computed inline by the folder load so files +
+                                   chips publish together); tagRowReady gate
+                                   (feat/next-10)
     AppState+Selection.swift       extension: grid MULTI-selection (selectedFiles:
                                    Set<String> of paths + anchor) — applyClick /
                                    clearSelection / selectAllVisible /
@@ -985,8 +1063,12 @@ Muse/Muse/
                                    Collection / setActiveTag / removeTag /
                                    removeFromCollection / setCollectionCover /
                                    toggleCollectionsPage / bulkTagCommandsAvailable
-    AssetKind.swift                kind enum + extension/UTType detection
-    FileNode.swift                 in-memory enumerated-file value type
+    AssetKind.swift                kind enum + extension/UTType detection;
+                                   classify(url:) skips detect's fileExists stat
+                                   (used by FolderReader for fast enumeration)
+    FileNode.swift                 in-memory enumerated-file value type;
+                                   init(url:kind:) takes a precomputed kind so
+                                   enumeration skips the per-file fileExists stat
     Root.swift                     security-scoped bookmark wrapper
     DeleteCoordinator.swift        delete state machine (trash + undo toast);
                                    drives a fade-out (internals still named
@@ -1031,6 +1113,11 @@ Muse/Muse/
     TagStore.swift                 manual/vision tag CRUD scoped by (file_id,
                                    parent_dir); library-wide rename (spelling)
                                    kept, library-wide DELETE removed (2026-06-17)
+    TagChipLoader.swift            single shared query logic for the grid's tag-
+                                   chip labels (fast single-folder GROUP BY +
+                                   general per-file-scope path). Pure/nonisolated;
+                                   AppState owns + calls it, the view only renders
+                                   the result (feat/next-10)
     Housekeeping.swift             launch prune: index data for files unreachable
                                    from any sidebar folder, unseen >180 days
   Indexing/
@@ -1131,9 +1218,12 @@ Muse/Muse/
                                    is DURABLE via setHidden — no user-facing Hide
                                    (2026-06-17); the all-collections cards moved to
                                    CollectionsPage 2026-06-13
-    TagChipsRow.swift              tag chips; filter + management. Scopes to the
-                                   active collection's members inside one, else the
-                                   folder (AppState.tagSourceFiles)
+    TagChipsRow.swift              tag chips; filter + management. A pure RENDERER
+                                   of AppState.tagChipRows now (the model loads
+                                   them via TagChipLoader — feat/next-10); keeps
+                                   hover-count layout (ChipFlow) + rename/delete
+                                   dialogs. Scope (collection members vs folder) is
+                                   decided by AppState.tagSourceFiles
     MoodPickerView.swift           background popover (Light/Dark/Auto/Custom)
     InfoSheet.swift                ⓘ About-Muse modal (behavior + privacy)
     KeyCaptureView.swift           NSView arrow/return capture (hero flips)

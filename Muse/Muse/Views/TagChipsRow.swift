@@ -15,17 +15,17 @@
 
 import SwiftUI
 import AppKit
-import GRDB
 
 struct TagChipsRow: View {
     @EnvironmentObject var appState: AppState
-    @State private var tags: [(label: String, count: Int)] = []
     @State private var hovered: Int? = nil
     @State private var renameText = ""
 
+    /// The chip labels are loaded and owned by AppState (computed as part of the
+    /// folder load so files + chips reveal together); this view only renders them.
+    private var tags: [(label: String, count: Int)] { appState.tagChipRows }
+
     var body: some View {
-        // ZStack, not Group: an empty Group has no children, so .task
-        // would never fire and the labels would never load.
         ZStack {
             if !tags.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -72,7 +72,6 @@ struct TagChipsRow: View {
                 Color.clear.frame(height: 10)
             }
         }
-        .task(id: reloadKey) { await loadLabels() }
         .onChange(of: appState.tagRenameRequest) { _, label in
             if let label { renameText = label }
         }
@@ -173,73 +172,6 @@ struct TagChipsRow: View {
         return ceil(s.size(withAttributes: attrs).width)
     }
 
-    /// Reload when tags mutate, the sidebar selection changes, the folder's
-    /// contents land/refresh, or the active collection changes (the chips
-    /// re-scope to the collection's members inside one).
-    private var reloadKey: String {
-        "\(appState.tagsVersion)|\(appState.activeCollectionID ?? appState.selectedFolder?.url.path ?? "")|\(appState.tagSourceFiles.count)"
-    }
-
-    /// Tag labels (with counts) for EXACTLY the files the grid can show — the
-    /// collection's members inside a collection, else the current folder.
-    /// Deriving from in-memory files (not a DB folder query) means a chip can
-    /// never filter down to an empty grid: a tag with no visible images
-    /// simply has no chip.
-    private func loadLabels() async {
-        guard let q = Database.shared.dbQueue else { return }
-        let paths = appState.tagSourceFiles.map { $0.url.standardizedFileURL.path }
-        guard !paths.isEmpty else {
-            tags = []
-            return
-        }
-        var counts: [String: Int] = [:]
-        for start in stride(from: 0, to: paths.count, by: 500) {
-            let chunk = Array(paths[start..<min(start + 500, paths.count)])
-            let rows: [(String, Int)] = (try? await q.read { db -> [(String, Int)] in
-                let marks = databaseQuestionMarks(count: chunk.count)
-                // The (file_id, parent_dir) scopes actually present in THIS view —
-                // tags are per-folder, so a duplicate's tag in another folder must
-                // not surface here even though it shares the file_id.
-                let pathRows = try Row.fetchAll(db, sql: """
-                    SELECT file_id, absolute_path FROM paths
-                    WHERE is_alive = 1 AND file_id IS NOT NULL AND absolute_path IN (\(marks))
-                """, arguments: StatementArguments(chunk))
-                var scopeKeys = Set<String>()
-                var fileIDs = Set<String>()
-                for r in pathRows {
-                    guard let fid: String = r["file_id"],
-                          let p: String = r["absolute_path"] else { continue }
-                    fileIDs.insert(fid)
-                    scopeKeys.insert(fid + "\u{0}" + TagScope.parentDir(ofPath: p))
-                }
-                guard !fileIDs.isEmpty else { return [] }
-                let fmarks = databaseQuestionMarks(count: fileIDs.count)
-                let tagRows = try Row.fetchAll(db, sql: """
-                    SELECT label, file_id, parent_dir FROM tags WHERE file_id IN (\(fmarks))
-                """, arguments: StatementArguments(Array(fileIDs)))
-                var perLabel: [String: Set<String>] = [:]
-                for tr in tagRows {
-                    guard let label: String = tr["label"], let fid: String = tr["file_id"],
-                          let dir: String = tr["parent_dir"] else { continue }
-                    let key = fid + "\u{0}" + dir
-                    if scopeKeys.contains(key) { perLabel[label, default: []].insert(key) }
-                }
-                return perLabel.map { ($0.key, $0.value.count) }
-            }) ?? []
-            for (label, count) in rows { counts[label, default: 0] += count }
-        }
-        // Show EVERY tag in scope (the row scrolls horizontally) — capping the
-        // list hid tags with no other way to reach them. Most-used first, with
-        // an alphabetical tiebreak so equal-count tags keep a stable order
-        // (no shuffling between reloads).
-        tags = counts
-            .sorted {
-                $0.value != $1.value
-                    ? $0.value > $1.value
-                    : $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending
-            }
-            .map { (label: $0.key, count: $0.value) }
-    }
 }
 
 // MARK: - Layout
