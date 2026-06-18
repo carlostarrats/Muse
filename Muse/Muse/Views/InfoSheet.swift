@@ -34,26 +34,28 @@ struct InfoSheet: View {
                         never moves or changes them.
                         """)
                     rowDivider
-                    section("Library & indexing", """
-                        Add folders from the sidebar and Muse indexes them \
-                        automatically — the status pills at the bottom show \
-                        the progress. Drag your folders up or down to put the \
-                        ones you care about on top. To keep a buried subfolder \
-                        within reach, right-click it and Pin — a shortcut \
-                        appears in the Pinned section at the top (top-level \
-                        folders are already there, so they aren't pinnable). \
-                        Your files are never modified; deleting always means \
-                        moving to the Trash, and it's undoable.
+                    section("Library & folders", """
+                        Add folders from the sidebar with the Add Folder \
+                        button — Muse indexes them automatically (the status \
+                        pills at the bottom show progress). Drag folders up or \
+                        down to reorder them. Right-click a folder to make a \
+                        New Subfolder, Rename it, Reveal it in Finder, or — \
+                        for a buried subfolder — Pin it to the top. Right-click \
+                        a top-level folder to Remove it from Muse. Your files \
+                        are never modified; deleting means moving to the Trash, \
+                        and it's undoable.
                         """)
                     rowDivider
-                    section("Viewing files", """
+                    section("Viewing & selecting", """
                         Muse opens almost anything in place: images, PDFs, \
                         video, audio, fonts, Markdown, and code or text. Click \
-                        an image for a full-screen hero view with zoom, pan, \
-                        and a side panel of its details. Anything Muse doesn't \
-                        have a dedicated viewer for falls back to Quick Look — \
-                        and you can always right-click and Open With another \
-                        app.
+                        an image for a full-screen view with zoom, pan, and a \
+                        details panel; its Share button also offers Open With. \
+                        Select images in the grid with a click, ⌘-click, or \
+                        Shift-click, then right-click for actions — move to a \
+                        folder, add to a collection, add a tag, share, or Open \
+                        With. Anything without a dedicated viewer falls back to \
+                        Quick Look.
                         """)
                     rowDivider
                     section("Analysis", """
@@ -88,9 +90,12 @@ struct InfoSheet: View {
                         or inside the viewer.
                         """)
                     rowDivider
-                    section("Search", """
-                        Searches the folder selected in the sidebar — names, \
-                        tags, captions, and text found inside images.
+                    section("Search & sort", """
+                        Search by name, tags, captions, and text found inside \
+                        images. The magnifier menu scopes the search to the \
+                        current folder or your whole library. Sort by date, \
+                        name, size, color, or shape, and use the arrow beside \
+                        the sort menu to flip the direction.
                         """)
                     rowDivider
                     section("Duplicates", """
@@ -101,10 +106,11 @@ struct InfoSheet: View {
                         """)
                     rowDivider
                     section("Sharing", """
-                        Share an image straight from the viewer — AirDrop, \
-                        Mail, Messages, or Save to Files. From Finder, \
-                        right-click any file and choose Share → Muse to send \
-                        it into your iCloud folder.
+                        Share an image from the viewer — AirDrop, Mail, \
+                        Messages, or Save to Files — or share a whole \
+                        collection as a PDF from its header. From Finder, \
+                        right-click any file and choose Share → Muse to send it \
+                        into your iCloud folder.
                         """)
                     rowDivider
                     section("iCloud sync", """
@@ -116,18 +122,27 @@ struct InfoSheet: View {
                         network calls.
                         """)
                     rowDivider
-                    section("Background", """
-                        The palette button offers Light, Dark, Auto (light by \
-                        day, dark at night), and a custom color via the \
-                        sliders.
+                    section("Grid & appearance", """
+                        Set the grid density with the slider at the bottom \
+                        right, and turn on file names under tiles in Settings. \
+                        The palette button sets the background: Light, Dark, \
+                        Auto (light by day, dark at night), or a custom color.
+                        """)
+                    rowDivider
+                    section("Settings", """
+                        Muse organizes automatically, but you're in control: in \
+                        Settings (⌘,) you can turn off automatic tagging or \
+                        automatic collections. Existing tags and collections \
+                        stay; only future automatic work is paused, and the \
+                        manual commands still work.
                         """)
                     rowDivider
                     section("Updates", """
                         Muse is distributed directly (not via the App Store) \
-                        and keeps itself up to date with Sparkle. Choose Muse ▸ \
-                        Check for Updates… any time, or let it check on its own \
-                        — it asks first. New versions are downloaded over HTTPS \
-                        and cryptographically verified before installing.
+                        and keeps itself up to date with Sparkle. It checks \
+                        quietly in the background, or choose Muse ▸ Check for \
+                        Updates… any time. New versions are downloaded over \
+                        HTTPS and cryptographically verified before installing.
                         """)
                     rowDivider
                     section("Open source", """
@@ -149,7 +164,7 @@ struct InfoSheet: View {
             }
         }
         .padding(28)
-        .frame(width: 540, height: 640)
+        .frame(width: 600, height: 720)
     }
 
     /// Hairline between section rows.
