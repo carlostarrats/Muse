@@ -1400,6 +1400,22 @@ Build + full `MuseTests` suite green.
 - Tests: `PathReconcilerTests` (scope/diff pure + in-memory GRDB markDead/
   reconcile incl. non-recursive subfolder safety), `TagChipLoaderOrderTests`
   (count vs alpha vs default). Full suite green.
+- **Live-review fixes (same session):**
+  - **Tag-sort was one selection behind** — `$tagSortMode` fires in `willSet`,
+    so the sink's `reloadTagChips()` read the OLD `self.tagSortMode` and ordered
+    the chips backwards. `reloadTagChips(sortModeOverride:)` now takes the value
+    the publisher delivered (same `willSet` gotcha noted at the `bookmarks.$roots`
+    sink).
+  - **Controls that fight an active search are disabled while searching** — the
+    grid sort cluster (menu + direction arrow), the tag-sort menu, the
+    show-subfolders toggle (it re-loaded the whole folder listing, dropping you
+    out of results), and the Collections toolbar button (toggling it yanked you
+    out + re-highlighted a folder). All gated on `AppState.isSearchActive`.
+  - **Search scope checkmark didn't move** — the All/This-Folder magnifier menu
+    mutated the `searchMenuTemplate`'s items, but `NSSearchField` caches its own
+    copy and ignores later mutations. A scope change now reinstalls a FRESH
+    template (correct checkmarks), tracked by `Coordinator.appliedAllFolders` so
+    it only rebuilds on a real change.
 
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
