@@ -107,6 +107,28 @@ final class FolderRenameMigrationSQLTests: XCTestCase {
         }
     }
 
+    func testApplyCaseOnlyRenameMigratesSourceRows() throws {
+        // A case-only rename (/a/Photos → /a/photos) on a case-insensitive
+        // volume: the binary pre-clear must NOT touch the source rows, and the
+        // rewrites must re-key them to the new case.
+        let q = try freshQueue()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at) VALUES ('f1','h1','image',0)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('p1','f1','/a/Photos/x.png',1)")
+            try db.execute(sql: "INSERT INTO tags (id, file_id, label, source, confidence, parent_dir) VALUES ('t1','f1','blue','manual',NULL,'/a/Photos')")
+            try db.execute(sql: "INSERT INTO starred_folders (id, absolute_path, display_name, added_at) VALUES ('s1','/a/Photos','Photos',0)")
+
+            try FolderRenameMigration.apply(db, old: "/a/Photos", new: "/a/photos", newName: "photos")
+        }
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT absolute_path FROM paths WHERE id='p1'"), "/a/photos/x.png")
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT is_alive FROM paths WHERE id='p1'"), 1)  // not deactivated
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT parent_dir FROM tags WHERE id='t1'"), "/a/photos")
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT absolute_path FROM starred_folders WHERE id='s1'"), "/a/photos")
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT display_name FROM starred_folders WHERE id='s1'"), "photos")
+        }
+    }
+
     func testApplyHandlesSqlWildcardsInPath() throws {
         let q = try freshQueue()
         try q.write { db in

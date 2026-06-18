@@ -36,14 +36,21 @@ enum FolderRenameMigration {
     /// an exact `= :old` branch), NOT `LIKE`, so "%"/"_" in paths can't break it
     /// and a sibling like "…/OldStuff" is never caught by old "…/Old".
     static func apply(_ db: GRDB.Database, old: String, new: String, newName: String) throws {
-        // The destination did NOT exist on disk before this rename (FolderOps
-        // refuses a name collision), so any DB rows already under the NEW prefix
-        // are stale leftovers from a previously-deleted folder. Clear them first
-        // so the rewrites below can't hit a UNIQUE collision and roll back the
-        // whole (paths + tags) transaction: starred_folders.absolute_path is
-        // UNIQUE and pins are never auto-pruned, and paths has an alive-path
-        // unique index. Binary collation means a case-only rename's source rows
-        // (different case) are not matched here.
+        // Except for a case-only rename (which FolderOps allows on a
+        // case-insensitive volume), the destination did NOT exist on disk, so
+        // any DB rows already under the NEW prefix are stale leftovers from a
+        // previously-deleted folder. Clear them first so the rewrites below
+        // can't hit a UNIQUE collision and roll back the whole (paths + tags)
+        // transaction: starred_folders.absolute_path is UNIQUE and pins are
+        // never auto-pruned, and paths has an alive-path unique index.
+        //
+        // These pre-clears (and every index involved) use BINARY collation, so
+        // for a case-only rename the source rows ("/a/Photos") never match the
+        // NEW prefix ("/a/photos") — the pre-clear is a safe no-op and the
+        // rewrites still produce binary-distinct rows (no collision).
+        // DO NOT make this case-insensitive (NOCASE) or extend it to delete
+        // tags at the destination: that WOULD destroy the source rows in a
+        // case-only rename.
         try db.execute(sql: """
             DELETE FROM starred_folders
             WHERE absolute_path = ?
