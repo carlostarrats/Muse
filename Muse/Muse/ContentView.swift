@@ -98,6 +98,14 @@ struct ContentView: View {
                     .disabled(isCollectionsPage)
                 }
 
+                // Tag-chip sort order (Most Used / A→Z) — its own item, sitting
+                // between the grid sort cluster and the show-subfolders toggle.
+                ToolbarItem(placement: .navigation) {
+                    tagSortMenu
+                        // The tag chips don't show on the Collections card page.
+                        .disabled(isCollectionsPage)
+                }
+
                 // Its own item (own surface), sitting next to sort.
                 ToolbarItem(placement: .navigation) {
                     Toggle(isOn: $appState.showSubfolders) {
@@ -298,6 +306,25 @@ struct ContentView: View {
             Image(systemName: "arrow.up.and.down.text.horizontal")
         }
         .help("Sort: \(appState.sortMode.displayName)")
+    }
+
+    /// Orders the tag chips above the grid: Most Used (count) or A→Z.
+    private var tagSortMenu: some View {
+        Menu {
+            Picker("Tag order", selection: Binding(
+                get: { appState.tagSortMode },
+                set: { appState.tagSortMode = $0 }
+            )) {
+                ForEach(TagSortMode.allCases) { mode in
+                    Text(mode.label).tag(mode)
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            Image(systemName: "tag")
+        }
+        .help("Tag order: \(appState.tagSortMode.label)")
     }
 
     /// Flips the current sort mode's direction. The arrow points up for an

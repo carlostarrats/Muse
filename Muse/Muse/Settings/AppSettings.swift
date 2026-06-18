@@ -46,4 +46,15 @@ enum AppSettings {
         }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: folderSortModeKey) }
     }
+
+    static let tagSortModeKey = "tagSortMode"
+
+    /// Tag-chip row sort order. Default `.count` (most-used first). Unset → count.
+    static var tagSortMode: TagSortMode {
+        get {
+            (UserDefaults.standard.string(forKey: tagSortModeKey))
+                .flatMap(TagSortMode.init(rawValue:)) ?? .count
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: tagSortModeKey) }
+    }
 }

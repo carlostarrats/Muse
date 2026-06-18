@@ -94,6 +94,10 @@ final class AppState: ObservableObject {
     private var tagChipToken = 0
     /// Reloads the chips whenever a tag is added / removed / renamed.
     private var tagsVersionCancellable: AnyCancellable?
+    /// Tag-chip sort order (Most Used / A→Z). Persisted in AppSettings; a change
+    /// re-orders the chip row in place via the sink in init.
+    @Published var tagSortMode: TagSortMode = AppSettings.tagSortMode
+    private var tagSortModeCancellable: AnyCancellable?
 
     /// Currently selected file (drives preview/detail).
     @Published var selectedFile: FileNode?
@@ -411,6 +415,14 @@ final class AppState: ObservableObject {
         tagsVersionCancellable = $tagsVersion
             .dropFirst()
             .sink { [weak self] _ in self?.reloadTagChips() }
+
+        // Tag-sort-mode change → persist + re-order the chip row in place.
+        tagSortModeCancellable = $tagSortMode
+            .dropFirst()
+            .sink { [weak self] mode in
+                AppSettings.tagSortMode = mode
+                self?.reloadTagChips()
+            }
 
         // App Intents wiring
         NotificationCenter.default.addObserver(
@@ -838,6 +850,7 @@ final class AppState: ObservableObject {
         let showHid = showHidden
         let mode = sortMode
         let reversed = sortReversed
+        let tagSort = tagSortMode
 
         // Reuse unchanged nodes so live reloads keep tile @State (thumbnails,
         // in-flight animations). A fresh selection clears instead — nothing to
@@ -901,7 +914,8 @@ final class AppState: ObservableObject {
                 if let first = tagPaths.first {
                     let simpleDir = showSub ? nil : TagScope.parentDir(ofPath: first)
                     chipRows = TagChipLoader.ordered(
-                        TagChipLoader.counts(paths: tagPaths, simpleFolderDir: simpleDir, queue: dbQueue))
+                        TagChipLoader.counts(paths: tagPaths, simpleFolderDir: simpleDir, queue: dbQueue),
+                        sortMode: tagSort)
                 }
             }
             await MainActor.run {
@@ -952,9 +966,11 @@ final class AppState: ObservableObject {
         }
         let paths = scope.map { $0.url.standardizedFileURL.path }
         let simpleDir = (!inCollection && !recursive) ? TagScope.parentDir(ofPath: paths[0]) : nil
+        let tagSort = tagSortMode
         Task.detached(priority: .userInitiated) {
             let rows = TagChipLoader.ordered(
-                TagChipLoader.counts(paths: paths, simpleFolderDir: simpleDir, queue: queue))
+                TagChipLoader.counts(paths: paths, simpleFolderDir: simpleDir, queue: queue),
+                sortMode: tagSort)
             await MainActor.run {
                 guard token == self.tagChipToken else { return }
                 withAnimation(.easeInOut(duration: AppState.navTransition)) {

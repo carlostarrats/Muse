@@ -31,15 +31,24 @@ nonisolated enum TagChipLoader {
         return general(paths: paths, queue: queue)
     }
 
-    /// Most-used first, alphabetical tiebreak (a stable order between reloads).
-    static func ordered(_ counts: [String: Int]) -> [(label: String, count: Int)] {
-        counts
-            .sorted {
+    /// Ordered chips. `.count` = most-used first, alphabetical tiebreak (a
+    /// stable order between reloads); `.alphabetical` = A→Z by label.
+    static func ordered(_ counts: [String: Int],
+                        sortMode: TagSortMode = .count) -> [(label: String, count: Int)] {
+        let sorted: [(key: String, value: Int)]
+        switch sortMode {
+        case .count:
+            sorted = counts.sorted {
                 $0.value != $1.value
                     ? $0.value > $1.value
                     : $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending
             }
-            .map { (label: $0.key, count: $0.value) }
+        case .alphabetical:
+            sorted = counts.sorted {
+                $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending
+            }
+        }
+        return sorted.map { (label: $0.key, count: $0.value) }
     }
 
     // MARK: - Query paths
