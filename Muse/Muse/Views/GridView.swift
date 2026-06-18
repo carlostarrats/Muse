@@ -449,15 +449,15 @@ private struct TileView: View {
 
     // MARK: - Selection / hover styling (dev-tunable; locked for production)
     /// Hover veil over an unselected tile (no size change).
-    private static let hoverVeilOpacity = 0.12
+    private static let hoverVeilOpacity = 0.2
     /// How far the image shrinks on each side when selected (reveals the gap).
-    private static let selectionInset: CGFloat = 6
+    private static let selectionInset: CGFloat = 10
     /// How far the ring sits inside the tile's outer edge.
-    private static let ringInset: CGFloat = 2
+    private static let ringInset: CGFloat = 0
     /// Ring stroke thickness.
     private static let ringWidth: CGFloat = 2.5
     /// Ring corner radius. Set to 0 for a square ring.
-    private static let ringCornerRadius: CGFloat = 6
+    private static let ringCornerRadius: CGFloat = 8
     /// Tint laid over the selected (shrunken) image, in the ring's color.
     private static let selectionTintOpacity = 0.18
 

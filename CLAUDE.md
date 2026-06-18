@@ -1067,6 +1067,43 @@ build + full `MuseTests` suite green.
   `CollectionPDFExporter.swift`). Tests: `MasonryGeometryTests` (caption-strip
   reservation, totalHeight, no-overlap, captionHeight:0 regression).
 
+### Grid hover + selection redesign — 2026-06-17 (on `feat/next-12`)
+
+Reworked the grid tile's hover + selection feel (spec:
+`docs/superpowers/specs/2026-06-17-grid-selection-redesign-design.md`, plan:
+`docs/superpowers/plans/2026-06-17-grid-selection-redesign.md`). Build + full
+`MuseTests` suite green; final visual values tuned live with the user.
+
+- **Hover → a calm dark veil, no grow.** The old `scaleEffect(1.025)` hover-grow
+  is gone. An unselected tile on hover now gets a subtle black veil
+  (`hoverVeilOpacity = 0.2`) over the image, no size change. A hovered, already-
+  selected tile keeps only the selection look (veil gated on `!isSelected`).
+- **Selection → a padded, mood-adaptive ring (not the old flush accent).** The
+  old edge-to-edge `accentColor`-0.22 wash + 3pt accent stroke is replaced: the
+  image **shrinks** inward (`selectionInset = 10`pt per side, keeping its natural
+  aspect — only the CORNERS are square, the image is NOT forced to 1:1), the
+  revealed gap shows the app background (`moodPalette.background`, same as the
+  grid gutter), and a slightly-rounded ring (`ringCornerRadius = 8`,
+  `ringWidth = 2.5`, `ringInset = 0` so it hugs the tile edge) is stroked around
+  it with a subtle color tint (`selectionTintOpacity = 0.18`) over the image. All
+  in `TileView.imageContent` (now a `ZStack`: bg fill → padded image+tint →
+  hover veil → ring). The tile FRAME, masonry packing, virtualization, hero
+  open/close frame reporter, VoiceOver `.isSelected`, drag, and double-click are
+  untouched — only the image's displayed size changes within the fixed frame.
+- **Ring/tint color is a whole-grid rule from the background mood** (NOT
+  per-image), in the pure `Models/SelectionStyle.swift` (`SelectionAccent` +
+  `SelectionStyle.accent(forBackground: MoodRGB)`): a **neutral** background
+  (Light/Dark/Auto, plus any low-saturation Custom — HSB saturation <
+  `colorfulSaturationThreshold = 0.20`) → `Color.accentColor` (blue, today's
+  look); a **colorful** Custom mood → black OR white, whichever has the higher
+  WCAG contrast against the background (the max of the two always clears AA
+  4.5:1), so the ring never vanishes into a same-hue background. Tests:
+  `SelectionStyleTests` (neutral→blue, light-colorful→black, dark-colorful→white,
+  chosen ring clears AA on a spread of saturated colors).
+- **The visual magic numbers are locked production constants** (the `Self.`
+  `private static let`s on `TileView`) — dev-tuned then hardcoded, no settings
+  UI (the user explicitly wanted no in-app controls).
+
 ## Architecture map (current — see the 2026-06-12 session log for deltas)
 
 ```
