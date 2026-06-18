@@ -75,22 +75,31 @@ nonisolated enum PathReconciler {
     /// Flip the named alive paths to dead in one write. Returns the number of
     /// rows that were alive (and are now dead) — counted up front so the result
     /// is exact and idempotent without relying on driver change-counts.
+    ///
+    /// Chunked at 500 bindings to stay under SQLite's `SQLITE_MAX_VARIABLE_NUMBER`
+    /// (matches the rest of the codebase) — a large deletion (a whole subfolder's
+    /// worth at once) must not blow the variable limit and silently no-op.
     @discardableResult
     static func markDead(_ paths: [String], queue: DatabaseQueue) -> Int {
         guard !paths.isEmpty else { return 0 }
         return (try? queue.write { db -> Int in
-            let marks = databaseQuestionMarks(count: paths.count)
-            let n = try Int.fetchOne(db, sql: """
-                SELECT COUNT(*) FROM paths
-                WHERE is_alive = 1 AND absolute_path IN (\(marks))
-                """, arguments: StatementArguments(paths)) ?? 0
-            if n > 0 {
-                try db.execute(sql: """
-                    UPDATE paths SET is_alive = 0
+            var total = 0
+            for start in stride(from: 0, to: paths.count, by: 500) {
+                let chunk = Array(paths[start..<min(start + 500, paths.count)])
+                let marks = databaseQuestionMarks(count: chunk.count)
+                let n = try Int.fetchOne(db, sql: """
+                    SELECT COUNT(*) FROM paths
                     WHERE is_alive = 1 AND absolute_path IN (\(marks))
-                    """, arguments: StatementArguments(paths))
+                    """, arguments: StatementArguments(chunk)) ?? 0
+                if n > 0 {
+                    try db.execute(sql: """
+                        UPDATE paths SET is_alive = 0
+                        WHERE is_alive = 1 AND absolute_path IN (\(marks))
+                        """, arguments: StatementArguments(chunk))
+                }
+                total += n
             }
-            return n
+            return total
         }) ?? 0
     }
 

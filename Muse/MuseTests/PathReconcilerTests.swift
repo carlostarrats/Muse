@@ -101,6 +101,20 @@ final class PathReconcilerTests: XCTestCase {
         XCTAssertEqual(try isAlive(q, "/Users/me/Other/x.jpg"), 1)
     }
 
+    func testMarkDeadChunksPastSQLiteVariableLimit() throws {
+        // >999 paths in one call would blow SQLITE_MAX_VARIABLE_NUMBER if the IN
+        // clause weren't chunked — the silent-no-op bug. Insert 1500 alive rows
+        // and mark them all dead in a single call.
+        let q = try makeQueue()
+        let paths = (0..<1500).map { "/Users/me/Inspo/f\($0).jpg" }
+        for p in paths { try insertAlivePath(q, p) }
+
+        let n = PathReconciler.markDead(paths, queue: q)
+        XCTAssertEqual(n, 1500)
+        XCTAssertEqual(try isAlive(q, "/Users/me/Inspo/f0.jpg"), 0)
+        XCTAssertEqual(try isAlive(q, "/Users/me/Inspo/f1499.jpg"), 0)
+    }
+
     func testReconcileNonRecursiveIgnoresSubfolderFiles() throws {
         let q = try makeQueue()
         try insertAlivePath(q, "/Users/me/Inspo/a.jpg")

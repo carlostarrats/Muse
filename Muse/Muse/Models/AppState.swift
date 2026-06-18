@@ -906,9 +906,23 @@ final class AppState: ObservableObject {
             var reconciledDead = 0
             if freshSelect, let dbQueue {
                 let present = Set(raw.map { $0.url.standardizedFileURL.path })
-                reconciledDead = PathReconciler.reconcile(
-                    folder: folderURL, recursive: showSub,
-                    present: present, queue: dbQueue)
+                // Guard against a FAILED / not-yet-materialized enumeration:
+                // FolderReader returns [] both for a genuinely empty folder AND a
+                // read failure (transient permission loss, or an iCloud folder
+                // whose container hasn't materialized on a cold launch). Marking
+                // the WHOLE folder's rows dead on a false-empty is exactly the
+                // iCloud data-loss class we guard against — so when nothing
+                // enumerated, probe the directory: only a confirmed-readable
+                // (genuinely empty) folder is safe to reconcile.
+                let trustworthy = !present.isEmpty
+                    || (try? FileManager.default.contentsOfDirectory(
+                            at: folderURL, includingPropertiesForKeys: nil,
+                            options: showHid ? [] : [.skipsHiddenFiles])) != nil
+                if trustworthy {
+                    reconciledDead = PathReconciler.reconcile(
+                        folder: folderURL, recursive: showSub,
+                        present: present, queue: dbQueue)
+                }
             }
             var chipRows: [(label: String, count: Int)] = []
             if freshSelect, let dbQueue {
