@@ -232,6 +232,14 @@ final class AppState: ObservableObject {
     @Published var collectionDeleteRequest = false
     @Published var deleteAllTagsRequest = false
     @Published var regenerateTagsRequest = false
+
+    /// Folder-management dialogs (shared by the sidebar context menu and the
+    /// menu-bar Edit menu). New Subfolder is allowed on any folder incl. the
+    /// iCloud home; Rename is gated to non-iCloud folders by the callers.
+    @Published var newSubfolderRequest: FolderNode?
+    @Published var folderRenameRequest: FolderNode?
+    /// Set to a message to surface a folder-op failure alert.
+    @Published var folderOpError: String?
     /// Monotonic token so a slow tag-filter load can't clobber a newer pick.
     /// Not `private`: read/written by `setActiveTag` in AppState+Filters.swift.
     var tagRequestToken = 0
@@ -670,6 +678,111 @@ final class AppState: ObservableObject {
         reloadCurrentFilesPublic()
         if !failed.isEmpty {
             moveFailureNames = failed.map { $0.lastPathComponent }
+        }
+    }
+
+    // MARK: - Folder management
+
+    /// Create a subfolder inside `node` on disk, then refresh the tree and
+    /// drill into the new folder. Surfaces failures via `folderOpError`.
+    func createSubfolder(named name: String, in node: FolderNode) {
+        switch FolderOps.createSubfolder(named: name, in: node.url) {
+        case .failure(let e):
+            folderOpError = Self.message(for: e, verb: "create")
+        case .success(let newURL):
+            node.reloadChildren()
+            node.isExpanded = true
+            if let child = node.children.first(where: {
+                $0.url.standardizedFileURL == newURL.standardizedFileURL
+            }) {
+                select(folder: child)
+            }
+        }
+    }
+
+    /// Rename `node`'s folder on disk and migrate the index + tags so nothing
+    /// is orphaned. Roots repoint their bookmark; subfolders reload from their
+    /// parent. The iCloud home is never renamed (callers gate it).
+    func renameFolder(_ node: FolderNode, to name: String) {
+        let oldURL = node.url
+        switch FolderOps.rename(oldURL, to: name) {
+        case .failure(let e):
+            folderOpError = Self.message(for: e, verb: "rename")
+        case .success(let newURL):
+            // No-op rename (same name) — FolderOps returns the original URL.
+            guard newURL.standardizedFileURL != oldURL.standardizedFileURL else { return }
+            migratePaths(old: oldURL.standardizedFileURL.path,
+                         new: newURL.standardizedFileURL.path)
+
+            let wasSelected = selectedFolder?.url.standardizedFileURL == oldURL.standardizedFileURL
+            if node.isRoot, let root = bookmarks.roots.first(where: {
+                bookmarks.url(for: $0) == oldURL
+            }) {
+                // rootRenamed mutates bookmarks.roots → the $roots sink rebuilds
+                // rootNodes with the new URL/name.
+                if !bookmarks.rootRenamed(root, to: newURL) {
+                    folderOpError = "Couldn’t finish renaming the folder."
+                }
+            } else {
+                node.parent?.reloadChildren()
+            }
+
+            // Reselect by URL if the renamed folder was the active one.
+            if wasSelected {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    if let n = self.findNode(withURL: newURL) { self.select(folder: n) }
+                }
+            }
+        }
+    }
+
+    /// Find a loaded node by URL across all root trees (best-effort; only walks
+    /// already-loaded children). Used to reselect after a rename.
+    private func findNode(withURL url: URL) -> FolderNode? {
+        let target = url.standardizedFileURL
+        func walk(_ n: FolderNode) -> FolderNode? {
+            if n.url.standardizedFileURL == target { return n }
+            for c in n.children { if let hit = walk(c) { return hit } }
+            return nil
+        }
+        for r in rootNodes { if let hit = walk(r) { return hit } }
+        return nil
+    }
+
+    /// Rewrite stored path prefixes after a folder rename: paths.absolute_path
+    /// and tags.parent_dir for the folder itself and everything beneath it.
+    /// file_id-keyed data (files, collections, FTS, embeddings) is unaffected.
+    /// Prefix match uses SUBSTR (not LIKE) so "%"/"_" in paths can't break it
+    /// and a sibling like "…/OldStuff" is never caught by old "…/Old".
+    private func migratePaths(old: String, new: String) {
+        guard let queue = Database.shared.dbQueue else { return }
+        Task { [weak self] in
+            try? await queue.write { db in
+                try db.execute(sql: """
+                    UPDATE paths
+                    SET absolute_path = ? || SUBSTR(absolute_path, LENGTH(?) + 1)
+                    WHERE absolute_path = ?
+                       OR SUBSTR(absolute_path, 1, LENGTH(?) + 1) = ? || '/'
+                    """, arguments: [new, old, old, old, old])
+                try db.execute(sql: """
+                    UPDATE tags
+                    SET parent_dir = ? || SUBSTR(parent_dir, LENGTH(?) + 1)
+                    WHERE parent_dir = ?
+                       OR SUBSTR(parent_dir, 1, LENGTH(?) + 1) = ? || '/'
+                    """, arguments: [new, old, old, old, old])
+            }
+            self?.tagsVersion &+= 1   // self is @MainActor; this hops back on-main
+        }
+    }
+
+    /// User-facing folder-op error copy.
+    private static func message(for error: FolderOps.OpError, verb: String) -> String {
+        switch error {
+        case .emptyName:   return "Please enter a folder name."
+        case .invalidName: return "A folder name can’t contain “/” or “:”."
+        case .collision:   return "A folder with that name already exists here."
+        case .ioError:     return "Couldn’t \(verb) the folder. You may not have permission."
         }
     }
 
