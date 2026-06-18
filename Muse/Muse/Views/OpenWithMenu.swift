@@ -64,13 +64,22 @@ struct OpenWithItems: View {
                     Text(appURL.deletingPathExtension().lastPathComponent
                          + (appURL.standardizedFileURL == defaultApp ? " (default)" : ""))
                 } icon: {
-                    Image(nsImage: NSWorkspace.shared.icon(forFile: appURL.path))
+                    Image(nsImage: Self.menuIcon(for: appURL))
                         .renderingMode(.original)
                 }
             }
         }
         if !ordered.isEmpty { Divider() }
         Button("Other…") { chooseOther() }
+    }
+
+    /// App icon sized to a native menu glyph (~16pt) — the raw NSWorkspace icon
+    /// is 32pt+, which inflates every menu row.
+    private static func menuIcon(for appURL: URL) -> NSImage {
+        let icon = NSWorkspace.shared.icon(forFile: appURL.path)
+        let small = icon.copy() as! NSImage
+        small.size = NSSize(width: 16, height: 16)
+        return small
     }
 
     private func open(with appURL: URL) {
