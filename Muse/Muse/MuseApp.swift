@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 @main
 struct MuseApp: App {
@@ -93,6 +94,23 @@ struct MuseApp: App {
                     }
                 }
                 .disabled(appState.activeCollectionID == nil || appState.selectedFile == nil)
+
+                Divider()
+
+                Button("New Subfolder…") {
+                    if let folder = appState.selectedFolder {
+                        appState.newSubfolderRequest = folder
+                    }
+                }
+                .disabled(appState.selectedFolder == nil)
+
+                Button("Rename Folder…") {
+                    if let folder = appState.selectedFolder {
+                        appState.folderRenameRequest = folder
+                    }
+                }
+                .disabled(appState.selectedFolder == nil
+                          || appState.selectedFolder?.url == appState.iCloudFolderURL)
             }
 
             // Library tools live in the File menu.
@@ -101,6 +119,26 @@ struct MuseApp: App {
                 Button("Find Duplicates in Folder") {
                     appState.findDuplicatesInCurrentFolder()
                 }
+
+                Divider()
+
+                Button("Open") {
+                    if let url = appState.selectedFile?.url { NSWorkspace.shared.open(url) }
+                }
+                .disabled(appState.selectedFile == nil)
+
+                Menu("Open With") {
+                    if let url = appState.selectedFile?.url {
+                        ForEach(OpenWithMenu.applications(for: url), id: \.self) { appURL in
+                            Button(appURL.deletingPathExtension().lastPathComponent) {
+                                NSWorkspace.shared.open(
+                                    [url], withApplicationAt: appURL,
+                                    configuration: NSWorkspace.OpenConfiguration()) { _, _ in }
+                            }
+                        }
+                    }
+                }
+                .disabled(appState.selectedFile == nil)
             }
 
             // Menu-bar equivalents of the chip context menu — keyboard and
