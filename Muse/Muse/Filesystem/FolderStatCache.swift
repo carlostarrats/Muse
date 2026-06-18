@@ -17,6 +17,7 @@ final class FolderStatCache: ObservableObject {
 
     private var roots: [URL] = []
     private var watcher: FolderWatcher?
+    private var watchedPaths: Set<String> = []
     private var pending: Set<String> = []
     private var debounce: DispatchWorkItem?
 
@@ -24,20 +25,26 @@ final class FolderStatCache: ObservableObject {
         stats[url.standardizedFileURL.path]
     }
 
-    /// Point the cache at the current top-level folders: (re)start the watcher,
-    /// drop stats for folders that went away, and recompute each root. Safe to
-    /// call repeatedly (launch + whenever the roots change).
+    /// Point the cache at the current top-level folders: drop stats for folders
+    /// that went away, restart the watcher only when the root-path SET actually
+    /// changed (a drag-reorder with the same folders must NOT rebuild the watcher
+    /// or re-walk any root), and recompute only newly added roots.
     func update(roots newRoots: [URL]) {
         roots = newRoots.map { $0.standardizedFileURL }
-        let live = Set(roots.map(\.path))
-        stats = stats.filter { live.contains($0.key) }
+        let newKeys = Set(roots.map(\.path))
+        stats = stats.filter { newKeys.contains($0.key) }
 
-        watcher = FolderWatcher { [weak self] paths in
-            self?.handle(paths: paths)   // delivered on main by FolderWatcher.fire
+        if newKeys != watchedPaths {
+            watcher = FolderWatcher { [weak self] paths in
+                self?.handle(paths: paths)   // delivered on main by FolderWatcher.fire
+            }
+            watcher?.watch(urls: roots)
+            watchedPaths = newKeys
         }
-        watcher?.watch(urls: roots)
 
-        for r in roots { recompute(r) }
+        // Only recompute roots not already cached; existing roots stay live via
+        // the watcher and must not be re-walked on every publish (e.g. reorder).
+        for r in roots where stats[r.standardizedFileURL.path] == nil { recompute(r) }
     }
 
     private func handle(paths: [String]) {
@@ -60,8 +67,14 @@ final class FolderStatCache: ObservableObject {
     private func recompute(_ root: URL) {
         let key = root.standardizedFileURL.path
         Task.detached(priority: .utility) { [weak self] in
+            // Passes showHidden: false (the default). If a "show hidden files"
+            // option ever becomes user-facing, this must read AppState.showHidden
+            // so the sidebar count stays in sync with the grid.
             let stat = FolderStats.compute(folder: root)
-            await MainActor.run { self?.stats[key] = stat }
+            await MainActor.run {
+                guard let self, self.roots.contains(where: { $0.path == key }) else { return }
+                self.stats[key] = stat
+            }
         }
     }
 }
