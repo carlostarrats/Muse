@@ -18,6 +18,9 @@ struct SidebarView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.colorScheme) private var colorScheme
 
+    /// Active top-level folder sort mode (persisted via AppSettings).
+    @State private var sortMode: FolderSortMode = AppSettings.folderSortMode
+
     /// The root currently being dragged for manual reordering (live gesture).
     @State private var draggingRoot: Root?
     /// Insertion slot (0...count) the dragged folder would land at; drives the line.
@@ -53,13 +56,15 @@ struct SidebarView: View {
             if appState.rootNodes.isEmpty && appState.stars.starred.isEmpty {
                 emptyState
             } else {
+                sortHeader
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 1) {
                         // The iCloud "Muse" folder is the fixed home — always on
                         // top, not reorderable — with a gap below it separating
                         // it from the local folders.
                         if let icloud = iCloudNode {
-                            FolderTreeNode(node: icloud, depth: 0)
+                            FolderTreeNode(node: icloud, depth: 0,
+                                           topLevelCount: topLevelCount(for: icloud))
                             Color.clear.frame(height: 12)
                         }
 
@@ -69,7 +74,7 @@ struct SidebarView: View {
                             }
                         }
 
-                        ForEach(Array(reorderableNodes.enumerated()),
+                        ForEach(Array(displayedReorderableNodes.enumerated()),
                                 id: \.element.id) { pair in
                             rootRow(pair.element, index: pair.offset)
                         }
@@ -137,6 +142,64 @@ struct SidebarView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.horizontal, 16)
         .padding(.top, 10)
+    }
+
+    // MARK: - Sort header
+
+    private var sortHeader: some View {
+        HStack {
+            Menu {
+                ForEach(FolderSortMode.allCases) { mode in
+                    Button { setSortMode(mode) } label: {
+                        if sortMode == mode {
+                            Label(mode.label, systemImage: "checkmark")
+                        } else {
+                            Text(mode.label)
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text("Sort: \(sortMode.label)")
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 8)
+        .padding(.bottom, 2)
+    }
+
+    private func setSortMode(_ mode: FolderSortMode) {
+        AppSettings.folderSortMode = mode
+        withAnimation(.easeInOut(duration: 0.2)) { sortMode = mode }
+    }
+
+    /// Top-level rows in display order: BookmarkStore order for Manual, otherwise
+    /// the comparator over name + cached stat.
+    private var displayedReorderableNodes: [FolderNode] {
+        let nodes = reorderableNodes
+        guard sortMode != .manual else { return nodes }
+        let items = nodes.map {
+            FolderSort.Item(id: $0.id, name: $0.displayName,
+                            stat: appState.folderStats.stat(for: $0.url))
+        }
+        let byId = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
+        return FolderSort.order(items, by: sortMode).compactMap { byId[$0] }
+    }
+
+    /// The toggle-scoped count to display for a top-level folder, or nil if its
+    /// stat hasn't been computed yet.
+    private func topLevelCount(for node: FolderNode) -> Int? {
+        guard let stat = appState.folderStats.stat(for: node.url) else { return nil }
+        return appState.showSubfolders ? stat.recursiveFileCount : stat.immediateFileCount
     }
 
     /// The bookmark Root backing a top-level node, if it's a user folder that
@@ -248,7 +311,9 @@ struct SidebarView: View {
     @ViewBuilder
     private func rootRow(_ node: FolderNode, index: Int) -> some View {
         if let model = reorderableRoot(for: node) {
-            FolderTreeNode(node: node, depth: 0, reorder: ReorderContext(
+            FolderTreeNode(node: node, depth: 0,
+                           topLevelCount: topLevelCount(for: node),
+                           reorder: sortMode == .manual ? ReorderContext(
                 onChanged: { value in
                     if draggingRoot?.id != model.id {
                         // Need a layout snapshot to compute slots; if none has
@@ -267,7 +332,7 @@ struct SidebarView: View {
                     }
                 },
                 onEnded: { _ in commitReorder(moving: model) }
-            ))
+            ) : nil)
                 // Report this row's static frame (consumed via the drag-start
                 // snapshot) for the slot + parting math.
                 .background(
@@ -284,7 +349,7 @@ struct SidebarView: View {
                 .offset(y: isDraggingRoot(model) ? 0 : rowShift(forIndex: index))
                 .opacity(isDraggingRoot(model) ? 0 : 1)
         } else {
-            FolderTreeNode(node: node, depth: 0)
+            FolderTreeNode(node: node, depth: 0, topLevelCount: topLevelCount(for: node))
         }
     }
 
@@ -382,6 +447,9 @@ private struct FolderTreeNode: View {
     @Environment(\.sidebarReordering) private var isReordering
     @ObservedObject var node: FolderNode
     let depth: Int
+    /// Toggle-scoped file count to show at the trailing edge (top-level rows
+    /// only); nil for subfolders or before the stat is computed.
+    var topLevelCount: Int? = nil
     /// Non-nil only for reorderable top-level folders: supplies the reorder drag
     /// gesture handlers for the trailing grip. nil for subfolders + the iCloud
     /// home (not reorderable).
@@ -467,33 +535,38 @@ private struct FolderTreeNode: View {
                         .foregroundStyle(.secondary)
                 }
 
-                // Drag-to-reorder grip (top-level reorderable folders only).
-                // Visible on hover; its 16pt is always reserved so the row never
-                // shifts and the name truncates before it. A live DragGesture (NOT
-                // pasteboard .onDrag) drives the reorder, so the real row lifts and
-                // follows the cursor (see SidebarView.rootRow). highPriorityGesture
-                // beats the ScrollView's scroll; a plain click still selects.
-                if let reorder {
-                    Image(systemName: "line.3.horizontal")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 16, height: 22)
-                        .opacity(isHovered && !isReordering ? 1 : 0)
-                        .contentShape(Rectangle())
-                        // Only interactive while visible (on hover); otherwise the
-                        // invisible 16pt strip would swallow scroll-drags that
-                        // start on the row's trailing edge. Keep it interactive
-                        // while a reorder is in flight too, so an active drag isn't
-                        // cancelled if the cursor leaves the (hidden) dragged row.
-                        .allowsHitTesting(isHovered || isReordering)
-                        .highPriorityGesture(
-                            DragGesture(minimumDistance: 3,
-                                        coordinateSpace: .named(SidebarView.reorderSpace))
-                                .onChanged { reorder.onChanged($0) }
-                                .onEnded { reorder.onEnded($0) }
-                        )
-                        .onTapGesture { appState.select(folder: node) }
-                        .help("Drag to reorder")
+                // Trailing slot: the file count, which swaps in place for the
+                // drag grip on hover (Manual mode only — `reorder` is non-nil only
+                // then). During a drag the grip is shown via the floating overlay,
+                // so in-list rows fall back to the count.
+                if topLevelCount != nil || reorder != nil {
+                    let showGrip = reorder != nil && isHovered && !isReordering
+                    ZStack(alignment: .trailing) {
+                        if let topLevelCount {
+                            Text("\(topLevelCount)")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.tertiary)
+                                .monospacedDigit()
+                                .opacity(showGrip ? 0 : 1)
+                        }
+                        if let reorder {
+                            Image(systemName: "line.3.horizontal")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 16, height: 22)
+                                .opacity(showGrip ? 1 : 0)
+                                .contentShape(Rectangle())
+                                .allowsHitTesting(isHovered || isReordering)
+                                .highPriorityGesture(
+                                    DragGesture(minimumDistance: 3,
+                                                coordinateSpace: .named(SidebarView.reorderSpace))
+                                        .onChanged { reorder.onChanged($0) }
+                                        .onEnded { reorder.onEnded($0) }
+                                )
+                                .onTapGesture { appState.select(folder: node) }
+                                .help("Drag to reorder")
+                        }
+                    }
                 }
             }
             .contentShape(Rectangle())
