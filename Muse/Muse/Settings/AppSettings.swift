@@ -17,6 +17,7 @@ import Foundation
 enum AppSettings {
     static let autoTagKey = "autoTagNewImages"
     static let autoCollectionsKey = "autoOrganizeCollections"
+    static let showFileNamesKey = "showFileNames"
 
     /// Automatically run the Vision pass (tags/caption/colors/OCR) on newly
     /// indexed images. Default true. Unset → treated as on.
@@ -27,5 +28,11 @@ enum AppSettings {
     /// Automatically cluster files into collections. Default true. Unset → on.
     static var autoCollections: Bool {
         UserDefaults.standard.object(forKey: autoCollectionsKey) as? Bool ?? true
+    }
+
+    /// Show each file's name beneath its thumbnail in the grid. Default false.
+    /// Unset → treated as off.
+    static var showFileNames: Bool {
+        UserDefaults.standard.object(forKey: showFileNamesKey) as? Bool ?? false
     }
 }
