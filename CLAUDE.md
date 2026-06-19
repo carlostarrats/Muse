@@ -128,6 +128,13 @@ The four most critical are also saved as Claude memories (linked).
   verify on cold folder open) — deliberate, don't revert. Memory:
   `muse-icloud-content-refresh-override`. The zero-byte-hash guard in
   `HashService.sha256` must stay (its loss welded 900+ files onto one row).
+- **Classification never reads dataless iCloud bytes.** `AssetKind`'s ImageIO
+  header sniff (the extensionless/unknown-extension image fallback, feat/next-27)
+  guards on `.ubiquitousItemDownloadingStatusKey` and skips not-downloaded
+  placeholders — reading their bytes would force a download just to classify a
+  file the user is only browsing past. Don't drop the guard; the file
+  reclassifies once it's local. Same spirit as `Indexer.isDataless` / the
+  `HashService` dataless-nil rule.
 - **Tags are per `(file_id, parent_dir)`**, not per content hash. A duplicate in
   another folder has its own tags; deletes never leak across folders; there is
   NO library-wide tag delete. Other content-derived metadata (palette/caption/
@@ -363,6 +370,24 @@ The four most critical are also saved as Claude memories (linked).
   toolbar; identical sweep, Reduce-Motion parity preserved. One file
   (`Views/GridView.swift`). Build + full test suite green; independent review
   clean. See the durable gotcha above + that session log.
+- **2026-06-19** `feat/next-27` — extensionless images shown as broken "?" file
+  cards. A real JPEG saved with an Instagram alt-text filename overran the APFS
+  255-byte limit, which truncated off its `.jpg`. With no usable extension macOS
+  reports it as `public.data`/"Document", so `AssetKind` classified it `.unknown`:
+  the grid drew a generic "?" doc card and a click opened the bare `ViewerChrome`
+  fallback (filename title strip + "?" placeholder, no tags/info/Reveal) instead
+  of the hero. `AssetKind.swift`'s comment claimed magic-byte sniffing but the
+  code only read the OS content-type (which gives up at `public.data`). Fix: a
+  last-resort ImageIO header sniff (`CGImageSourceGetType`) in `classifyByUTType`
+  when extension + content-type name no handled kind, so a truncated-extension or
+  unrecognized-extension image (`.jpg_large`, `.dat`) classifies as `.image` —
+  one change fixes BOTH the grid tile (ThumbnailCache also keys off `detect`, so
+  `.image` → ImageIO thumbnail) and the hero route. Guards against reading
+  dataless iCloud placeholders (`.ubiquitousItemDownloadingStatusKey`) so
+  classification never forces a download. User file left untouched (no rename).
+  New `AssetKindTests.swift` (7 cases: extensionless/unrecognized-ext image +
+  non-image, truncated-Instagram shape, normal `.jpg`). Build + full suite green
+  (260); two independent review rounds clean. See the durable gotcha above.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
@@ -418,7 +443,16 @@ Muse/Muse/
                                    toggleCollectionsPage / bulkTagCommandsAvailable
     AssetKind.swift                kind enum + extension/UTType detection;
                                    classify(url:) skips detect's fileExists stat
-                                   (used by FolderReader for fast enumeration)
+                                   (used by FolderReader for fast enumeration).
+                                   When extension + OS content-type don't name a
+                                   handled kind (empty/unknown ext → public.data),
+                                   a last-resort ImageIO header sniff
+                                   (CGImageSourceGetType) classifies images that
+                                   lost their extension — a truncated 255-byte
+                                   filename that dropped ".jpg", or a web save like
+                                   ".jpg_large". SKIPS dataless iCloud placeholders
+                                   (never force a download to classify) — feat/
+                                   next-27
     FileNode.swift                 in-memory enumerated-file value type;
                                    init(url:kind:) takes a precomputed kind so
                                    enumeration skips the per-file fileExists stat
