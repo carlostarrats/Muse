@@ -1602,3 +1602,63 @@ Two small live UI fixes. Build + full `MuseTests` suite green.
   green (0 failures, incl. the 6 new `CollectionSortTests`). Spec + plan:
   `docs/superpowers/specs/2026-06-18-collections-page-sort-design.md`,
   `docs/superpowers/plans/2026-06-18-collections-page-sort.md`.
+
+## 2026-06-18 — `feat/next-21` — global Image Layout (masonry + fixed ratios)
+
+- **The grid can now lay out images in a fixed aspect ratio, globally.** A new
+  toolbar button (`square.grid.2x2`, between Collections and the mood button)
+  opens a modal that picks the layout for **every** grid — all-tags, a single
+  tag, inside a collection. Masonry stays the default; the alternatives are 11
+  fixed ratios (1:1, 9:16, 16:9, 4:5, 5:4, 6:7, 7:6, 2:3, 3:2, 3:4, 4:3).
+- **No new geometry engine.** Key realization: feeding `MasonryGeometry.compute`
+  a *uniform* aspect array makes its shortest-column packer lay out an exact
+  row-major grid. So `GridView.recompute()` just branches: a fixed layout passes
+  `Array(repeating: imageLayout.aspect!, count:)`; masonry passes per-image
+  ratios from `AspectRatioCache` as before. The masonry path is byte-for-byte
+  unchanged. `UniformGridLayoutTests` locks the uniform-aspect → aligned-grid
+  invariant (a characterization test on existing `MasonryGeometry` behavior).
+- **No cropping.** A fixed-ratio tile is bigger/smaller than the image, but
+  `TileView.tile` already draws `Rectangle().fill(moodPalette.tileFill)` (the
+  zip/non-image grey) behind a `.aspectRatio(.fit)` image — so the image
+  letterboxes inside the tile with grey fill, for free. Selection ring, hover
+  veil, captions, virtualization, delete all carry over untouched.
+- **One perf guard:** `onChange(of: aspects.version)` now early-returns when a
+  fixed layout is active — a decoded thumbnail reporting its real ratio must NOT
+  relayout a uniform grid (it would churn every frame). In masonry (`aspect ==
+  nil`) it recomputes on every decode exactly as before. A separate
+  `onChange(of: appState.imageLayout)` recomputes (animated, like the column
+  slider) on a layout switch, so the grid re-lays-out live behind the open modal.
+- **Model + persistence:** `Models/ImageLayout.swift` — `enum ImageLayout: String,
+  CaseIterable` (declaration order == modal display order), with `displayName`,
+  `aspect` (height÷width; ratio names are width:height, so 9:16 → 16/9 tall),
+  `iconKind`, and `resolve(_:)` (default masonry). Persisted via
+  `AppSettings.imageLayout` and mirrored on `AppState.imageLayout` (@Published,
+  `didSet` write-back — the `mood` pattern). Unit-tested (`ImageLayoutTests`, 8).
+- **The modal** (`Views/ImageLayoutSheet.swift`): InfoSheet chrome (600×720, 24pt
+  title, shared close button), a 4-col `LazyVGrid` of the 12 `ImageLayout` tiles,
+  then a "Common Sizes" reference list. `LayoutTile` mirrors a grid tile's
+  selection but **blue-only** (the modal isn't mood-colored): square grey box →
+  on select the square fill shrinks/insets to blue with the gap showing through,
+  inside a rounded **8pt** ring (matching the grid). `FlatButtonStyle` removes the
+  plain-button pressed darken so it goes straight hover→blue. `LayoutIconView`
+  draws the 4 generic 44×44 previews (mason / square / portrait / landscape) all
+  at one footprint. Tuned over several rounds with the user (uniform icon size,
+  grid-style inset selection, no press state, square fill + curved ring only).
+- **Cleanup:** the circular hover-✕ was copy-pasted in InfoSheet and the new
+  sheet → extracted `Views/SheetCloseButton.swift`, now used by both.
+- **Scope note (by design, not a gap):** the collection **PDF export** keeps its
+  own masonry pack (it's a print layout, not an on-screen grid); the hero viewer
+  fills (single image, not a grid). "Every grid" means the browsing grids.
+- **Review:** four finder passes (line-by-line / removed-behavior + cross-file /
+  cleanup + conventions) found **no correctness bugs** — masonry preserved, guard
+  correct in every path, aspect math right, no force-unwrap/NaN/id-collision, and
+  the virtualization rule intact (the modal's `LazyVGrid` is over 12 fixed cases,
+  not the file set). Refuted: "use `SelectionStyle.accent()` not blue" — the
+  modal is deliberately blue-only per the design and sits on a non-mood sheet.
+  Applied the one real finding (the duplicated close button).
+- **Verification:** Debug build green; full `xcodebuild -scheme Muse test` suite
+  green (0 failures, incl. 8 `ImageLayoutTests` + 2 `UniformGridLayoutTests`).
+  Visually QA'd in the running app: toolbar button placement, fixed-ratio grid
+  (uniform tall tiles, no crop, grey letterbox), and the modal selection. Spec +
+  plan: `docs/superpowers/specs/2026-06-18-image-layout-design.md`,
+  `docs/superpowers/plans/2026-06-18-image-layout.md`.

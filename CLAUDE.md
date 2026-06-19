@@ -248,6 +248,17 @@ The four most critical are also saved as Claude memories (linked).
   unit-tested); `AppState.collectionSortMode`/`collectionSortReversed`
   (@Published, persisted in `AppSettings`), independent of the grid sort. Spec +
   plan in `docs/superpowers/`.
+- **2026-06-18** `feat/next-21` — global Image Layout: a new toolbar grid button
+  (between Collections and the mood button) opens an InfoSheet-styled modal that
+  picks how images lay out on every grid — masonry (default) or one of 11 fixed
+  aspect ratios. New `ImageLayout` enum (unit-tested) + `AppSettings.imageLayout`
+  / `AppState.imageLayout` (@Published, persisted). Fixed ratios feed
+  `MasonryGeometry` a uniform aspect (which packs an exact row-major grid — no
+  new geometry engine), and the tile's existing `tileFill` grey behind a `.fit`
+  image letterboxes without cropping. The modal (`ImageLayoutSheet`) mirrors a
+  grid tile's selection (square fill shrinks/insets to blue inside a rounded 8pt
+  ring). Extracted the shared `SheetCloseButton` (was copied in InfoSheet). Spec
+  + plan in `docs/superpowers/`.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
@@ -316,6 +327,12 @@ Muse/Muse/
     TagSortMode.swift              tag-chip sort order: .count (Most Used, default)
                                    / .alphabetical (A→Z). Drives
                                    TagChipLoader.ordered(_:sortMode:) — 2026-06-18
+    ImageLayout.swift              global grid image layout: .masonry (default) +
+                                   11 fixed aspect-ratio cases. Each exposes
+                                   displayName, aspect (h÷w, nil for masonry),
+                                   iconKind (the 4 generic modal previews) +
+                                   resolve(_:) default-masonry parse. Unit-tested
+                                   (feat/next-21)
   Filesystem/
     FileMover.swift                move(_:into:) via FileManager.moveItem; skips
                                    name collisions, returns failures; roots already
@@ -496,7 +513,27 @@ Muse/Muse/
                                    loading fallback); optional "Show file names" caption
                                    below each tile (MasonryGeometry.captionHeight strip;
                                    internal card name when off) — all tiles square-
-                                   cornered (feat/next-11)
+                                   cornered (feat/next-11). recompute() branches on
+                                   AppState.imageLayout: a fixed ratio feeds
+                                   MasonryGeometry a UNIFORM aspect array (which
+                                   packs an exact row-major grid — no new geometry),
+                                   the .fit image letterboxing on tileFill grey
+                                   without cropping; masonry uses per-image aspects
+                                   as before. The aspects.version onChange is guarded
+                                   off in fixed layouts (per-image ratios can't
+                                   change a uniform grid) — feat/next-21
+    ImageLayoutSheet.swift         the grid-button modal (InfoSheet chrome) that
+                                   sets AppState.imageLayout — a 4-col grid of the 12
+                                   ImageLayout tiles (LayoutTile mirrors a grid
+                                   tile's selection: square fill shrinks/insets to
+                                   blue inside a rounded 8pt ring; FlatButtonStyle
+                                   kills the pressed darken) over a "Common Sizes"
+                                   reference list. LayoutIconView draws the 4 generic
+                                   44×44 previews (mason/square/portrait/landscape).
+                                   Live-applies behind the open sheet (feat/next-21)
+    SheetCloseButton.swift         shared circular hover-✕ for modal sheets (Esc via
+                                   cancelAction); used by InfoSheet + ImageLayoutSheet
+                                   (extracted from InfoSheet — feat/next-21)
     SelectionMenu.swift            SelectionActionsMenu — Add to Collection /
                                    New Collection from Selection (opens a "Name
                                    Collection" .alert; prompt-first — paths are
@@ -542,7 +579,8 @@ Muse/Muse/
                                    dialogs. Scope (collection members vs folder) is
                                    decided by AppState.tagSourceFiles
     MoodPickerView.swift           background popover (Light/Dark/Auto/Custom)
-    InfoSheet.swift                ⓘ About-Muse modal (behavior + privacy)
+    InfoSheet.swift                ⓘ About-Muse modal (behavior + privacy); uses
+                                   the shared SheetCloseButton (feat/next-21)
     KeyCaptureView.swift           NSView arrow/return capture (hero flips)
     BreadcrumbView.swift           path breadcrumb (kept; not in toolbar)
     OpenWithMenu.swift             NSWorkspace registered apps via LaunchServices
@@ -606,7 +644,9 @@ Muse/Muse/
                                    manual; sidebar folder sort — 2026-06-18). Plus
                                    collectionSortMode (default name) +
                                    collectionSortReversed (default false;
-                                   Collections-page card sort — feat/next-20)
+                                   Collections-page card sort — feat/next-20). Plus
+                                   imageLayout (default masonry; global grid layout,
+                                   mirrored on AppState — feat/next-21)
     SettingsView.swift             Preferences window (app menu → Settings…,
                                    ⌘,): the two auto-organization toggles
                                    (auto-tag new images / auto-organize into
@@ -699,7 +739,8 @@ before implementation.
    "Add Folder" in the sidebar to point Muse at any folder on disk.
 3. Toolbar (left → right): sidebar toggle · sort · sort-direction arrow
    (flips the active mode's order — newest↔oldest, A↔Z, …) · show-subfolders ·
-   search (center) · Collections (square.stack.3d.up) · background mood ·
+   search (center) · Collections (square.stack.3d.up) · Image Layout
+   (square.grid.2x2) · background mood ·
    ⓘ About. (The grid/cloud/galaxy view picker and the water effect were
    removed 2026-06-13; the clear-collection ✕ was removed in favor of back
    arrows.) Find Duplicates lives in the File menu; Pin/Unpin Folder and
