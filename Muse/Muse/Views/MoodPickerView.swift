@@ -88,8 +88,8 @@ struct MoodPickerView: View {
 
                 if appState.imageLayout == .masonry {
                     Text("Masonry always uses Auto. Pick a fixed ratio to choose a backdrop.")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.tertiary)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }

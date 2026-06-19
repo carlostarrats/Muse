@@ -21,7 +21,7 @@ enum ImageLayout: String, CaseIterable, Identifiable {
     /// Label on the modal tile; for ratios it's also the size key.
     var displayName: String {
         switch self {
-        case .masonry: return "Mason"
+        case .masonry: return "Masonry"
         case .r1x1:  return "1:1"
         case .r9x16: return "9:16"
         case .r16x9: return "16:9"

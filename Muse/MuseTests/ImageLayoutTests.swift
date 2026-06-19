@@ -5,7 +5,7 @@ final class ImageLayoutTests: XCTestCase {
 
     func testAllCasesOrderMatchesWireframe() {
         XCTAssertEqual(ImageLayout.allCases.map(\.displayName),
-                       ["Mason", "1:1", "9:16", "16:9",
+                       ["Masonry", "1:1", "9:16", "16:9",
                         "4:5", "5:4", "6:7", "7:6",
                         "2:3", "3:2", "3:4", "4:3"])
     }
