@@ -3,8 +3,9 @@
 //  Muse
 //
 //  Picks the global image layout (masonry default + fixed ratios). Styled to
-//  match InfoSheet (24pt title, circular hover-X). Selecting a tile sets the
-//  layout immediately — the grid re-lays-out live behind the open sheet.
+//  match InfoSheet (same 600×720 frame, 24pt title, circular hover-X).
+//  Selecting a tile sets the layout immediately — the grid re-lays-out live
+//  behind the open sheet.
 //
 
 import SwiftUI
@@ -24,14 +25,14 @@ struct ImageLayoutSheet: View {
                 Spacer()
                 CloseButton { isPresented = false }
             }
-            Text("Select an image layout. Applies globally")
+            Text("Choose how images are arranged. Applies to every grid.")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .padding(.top, 4)
                 .padding(.bottom, 20)
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 28) {
                     LazyVGrid(columns: columns, spacing: 14) {
                         ForEach(ImageLayout.allCases) { layout in
                             LayoutTile(
@@ -47,7 +48,7 @@ struct ImageLayoutSheet: View {
             }
         }
         .padding(28)
-        .frame(width: 640, height: 860)
+        .frame(width: 600, height: 720)
     }
 
     // MARK: - Common Sizes
@@ -56,16 +57,16 @@ struct ImageLayoutSheet: View {
         ("1:1", "Square medium format, iPhone"),
         ("2:3", "Sony, Canon, Nikon, 35mm film"),
         ("3:4", "iPhone, Google Pixel, Samsung Galaxy, OnePlus"),
-        ("4:5", "Instagram, Large format film"),
+        ("4:5", "Instagram, large format film"),
         ("6:7", "Medium format"),
-        ("9:16", "Video on most phones with camera support also"),
+        ("9:16", "Vertical video on most phones"),
     ]
 
     private var commonSizes: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Common Sizes:")
+            Text("Common Sizes")
                 .font(.system(size: 15, weight: .semibold))
-                .padding(.bottom, 6)
+                .padding(.bottom, 16)
             ForEach(Array(sizes.enumerated()), id: \.offset) { idx, row in
                 if idx > 0 { Divider().padding(.vertical, 12) }
                 HStack(alignment: .firstTextBaseline, spacing: 16) {
@@ -102,10 +103,10 @@ struct ImageLayoutSheet: View {
     }
 }
 
-/// One selectable layout tile. Mirrors the grid tile's selection feel but is
-/// blue-only (the modal's single color change): selected → blue tint fill, blue
-/// ring (8pt continuous corners), blue label, inset content; unselected → grey
-/// tileFill box with a hover veil.
+/// One selectable layout tile. Mirrors a grid tile's selection exactly, but
+/// blue-only: hovering darkens (veil); selecting shrinks the inner fill inward
+/// (the gap reveals the sheet behind it), turns it blue, and draws the blue
+/// ring at the outer edge. There is no intermediate pressed/darkened state.
 private struct LayoutTile: View {
     let layout: ImageLayout
     let isSelected: Bool
@@ -114,111 +115,118 @@ private struct LayoutTile: View {
 
     @State private var hovering = false
 
-    // Match TileView's locked selection constants.
+    // Match TileView's locked selection feel.
     private static let hoverVeilOpacity = 0.2
-    private static let selectionInset: CGFloat = 8
+    private static let selectionInset: CGFloat = 10
     private static let ringWidth: CGFloat = 2.5
-    private static let ringCornerRadius: CGFloat = 8
-    private static let selectionTintOpacity = 0.18
+    private static let corner: CGFloat = 10
 
     private var blue: Color { Color.accentColor }
 
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 10) {
-                Text(layout.displayName)
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(isSelected ? blue : .primary)
-                LayoutIconView(kind: layout.iconKind,
-                               color: isSelected ? blue : .secondary)
-                    .frame(width: 56, height: 48)
-            }
-            .padding(isSelected ? Self.selectionInset : 0)
-            .frame(maxWidth: .infinity)
-            .frame(height: 132)
-            .background(
-                RoundedRectangle(cornerRadius: Self.ringCornerRadius, style: .continuous)
-                    .fill(isSelected ? blue.opacity(Self.selectionTintOpacity) : tileFill)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: Self.ringCornerRadius, style: .continuous)
+            ZStack {
+                // Inner fill: full-size grey when unselected; shrinks inward and
+                // turns blue when selected (the inset gap shows the sheet behind).
+                RoundedRectangle(cornerRadius: Self.corner, style: .continuous)
+                    .fill(isSelected ? blue.opacity(0.18) : tileFill)
+                    .padding(isSelected ? Self.selectionInset : 0)
+
+                // Label + icon, shrinking with the fill when selected.
+                VStack(spacing: 10) {
+                    Text(layout.displayName)
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(isSelected ? blue : .primary)
+                    LayoutIconView(kind: layout.iconKind,
+                                   color: isSelected ? blue : .secondary)
+                        .frame(width: 55, height: 55)
+                }
+                .padding(isSelected ? Self.selectionInset : 0)
+
+                // Hover veil — unselected only; a calm dark wash, no resize.
+                RoundedRectangle(cornerRadius: Self.corner, style: .continuous)
                     .fill(Color.black)
                     .opacity((hovering && !isSelected) ? Self.hoverVeilOpacity : 0)
                     .allowsHitTesting(false)
-            )
-            .overlay(
-                Group {
-                    if isSelected {
-                        RoundedRectangle(cornerRadius: Self.ringCornerRadius, style: .continuous)
-                            .strokeBorder(blue, lineWidth: Self.ringWidth)
-                    }
+
+                // Ring at the outer edge when selected.
+                if isSelected {
+                    RoundedRectangle(cornerRadius: Self.corner, style: .continuous)
+                        .strokeBorder(blue, lineWidth: Self.ringWidth)
                 }
-            )
-            .clipShape(RoundedRectangle(cornerRadius: Self.ringCornerRadius, style: .continuous))
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 120)
+            .contentShape(Rectangle())
             .animation(.easeOut(duration: 0.18), value: hovering)
             .animation(.easeOut(duration: 0.15), value: isSelected)
         }
-        .buttonStyle(.plain)
+        // No pressed-state dimming — straight from hover to the blue selection.
+        .buttonStyle(FlatButtonStyle())
         .onHover { hovering = $0 }
         .accessibilityLabel("\(layout.displayName) layout")
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
-/// One of the four generic preview graphics, drawn from simple cells so all
-/// four share the same overall footprint. Quick context for the ratio, not a
-/// literal preview.
+/// A button style with no pressed appearance (the default plain style dims its
+/// label on mouse-down, which read as a grey flash before the blue selection).
+private struct FlatButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+    }
+}
+
+/// One of the four generic preview graphics. All draw inside the same fixed
+/// 55×55 frame and fill it, so the group reads as one consistent size while
+/// each cell's shape still reflects the ratio (tall = portrait, wide =
+/// landscape). Quick context for the ratio, not a literal preview.
 private struct LayoutIconView: View {
     let kind: LayoutIconKind
     let color: Color
 
+    private let gap: CGFloat = 3
+
     var body: some View {
-        GeometryReader { geo in
-            let s = min(geo.size.width, geo.size.height)
-            switch kind {
-            case .square:    cellGrid(cols: 3, rows: 3, cellAspect: 1, side: s)
-            case .portrait:  cellGrid(cols: 4, rows: 3, cellAspect: 1.7, side: s)
-            case .landscape: cellGrid(cols: 3, rows: 4, cellAspect: 0.55, side: s)
-            case .mason:     masonGrid(side: s)
-            }
+        switch kind {
+        case .square:    grid(cols: 3, rows: 3)
+        case .portrait:  grid(cols: 4, rows: 3)
+        case .landscape: grid(cols: 3, rows: 4)
+        case .mason:     mason
         }
     }
 
-    /// A `cols × rows` grid of identical cells (cellAspect = height ÷ width).
-    private func cellGrid(cols: Int, rows: Int, cellAspect: CGFloat, side: CGFloat) -> some View {
-        let gap: CGFloat = 3
-        return VStack(spacing: gap) {
+    /// `cols × rows` cells that expand to fill the icon frame — so each cell's
+    /// shape reflects the ratio (square / portrait / landscape).
+    private func grid(cols: Int, rows: Int) -> some View {
+        VStack(spacing: gap) {
             ForEach(0..<rows, id: \.self) { _ in
                 HStack(spacing: gap) {
                     ForEach(0..<cols, id: \.self) { _ in
-                        RoundedRectangle(cornerRadius: 1.5)
-                            .fill(color)
-                            .aspectRatio(1 / cellAspect, contentMode: .fit)
+                        RoundedRectangle(cornerRadius: 1.5).fill(color)
                     }
                 }
             }
         }
-        .frame(width: side, height: side)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// The masonry pattern: 4 columns of staggered bar heights.
-    private func masonGrid(side: CGFloat) -> some View {
-        let gap: CGFloat = 3
-        // Per-column relative bar heights (sum drives the stagger).
-        let cols: [[CGFloat]] = [[0.55, 0.41], [0.30, 0.66], [0.66, 0.30], [0.41, 0.55]]
-        return HStack(spacing: gap) {
-            ForEach(0..<cols.count, id: \.self) { c in
-                VStack(spacing: gap) {
-                    ForEach(0..<cols[c].count, id: \.self) { r in
-                        RoundedRectangle(cornerRadius: 1.5)
-                            .fill(color)
-                            .frame(height: side * cols[c][r])
+    /// The masonry pattern: 4 columns of staggered bar heights, filling the frame.
+    private var mason: some View {
+        GeometryReader { geo in
+            let h = geo.size.height
+            // Per-column relative bar heights (sum + gap ≈ frame height).
+            let cols: [[CGFloat]] = [[0.53, 0.40], [0.30, 0.63], [0.63, 0.30], [0.40, 0.53]]
+            HStack(spacing: gap) {
+                ForEach(0..<cols.count, id: \.self) { c in
+                    VStack(spacing: gap) {
+                        ForEach(0..<cols[c].count, id: \.self) { r in
+                            RoundedRectangle(cornerRadius: 1.5)
+                                .fill(color)
+                                .frame(height: h * cols[c][r])
+                        }
                     }
                 }
             }
         }
-        .frame(width: side, height: side)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
