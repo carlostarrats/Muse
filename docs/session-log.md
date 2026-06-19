@@ -1994,3 +1994,98 @@ per-mount state) with no regressions. The live glitch itself could not be
 re-observed on the development machine (warm caches → no shimmer active during a
 resize); the on-device way to confirm is to clear the thumbnail cache or open a
 fresh folder, then drag the column slider while tiles are still shimmering.
+
+---
+
+### Extensionless image classification — 2026-06-19 (on `feat/next-27`)
+
+**Symptom.** In a cross-folder tag view the user hit a tile rendered as a generic
+"?" document card (folded-corner doc icon) with a very long filename caption.
+Clicking it didn't open the hero viewer — it opened a bare modal: a title strip
+with the long filename at the very top and the same "?" placeholder in a white
+box, no tags, no info column, no Reveal-in-Finder. A second file behaved the same.
+
+**Investigation.** Screenshot 1 was not the hero at all — it's the `ViewerChrome`
++ `QuickLookFallback` path used for **non-image** kinds (title capsule at top +
+QuickLook preview, which for an unpreviewable file shows the "?" placeholder).
+Screenshot 2 was the grid's **file-card** rendering (icon + filename caption),
+also a non-image path. So the real question was why an apparent image was treated
+as a non-image.
+
+The long caption text wasn't in the DB (`paths`/`caption` both missed — the
+"Knight"/"Candy" hits were a false positive on a different typeface file).
+Spotlight (`mdfind`) found the file in the iCloud `Saved Inspo` folder. Its name
+is the **entire Instagram alt-text** — **254 bytes**, right at the APFS 255-byte
+filename limit — and the `.jpg` extension had been **truncated off** at save time;
+the name now ends `…BROOK…` with no extension. `file` confirmed it's a real JPEG
+(420×525); `mdls` reported `kMDItemContentType = public.data`,
+`kMDItemKind = "Document"` (Finder shows the same generic doc icon). A Swift probe
+nailed it:
+
+```
+pathExtension  = ''                 ← Foundation finds no extension (trailing " BROOK…" isn't a valid one)
+contentType    = public.data        ← OS calls it generic data, conforms .image = false
+ImageIO type   = public.jpeg        ← but the bytes ARE a JPEG
+```
+
+**Root cause.** `AssetKind.classify` → `classifyByUTType` resolved the file's type
+via `url.resourceValues(.contentTypeKey)`, which returns `public.data` for an
+extensionless file. `public.data` conforms to none of the handled categories, so
+it returned the `.unknown` fallback. The file's header doc-comment *claimed*
+"content sniffing (UTType / magic bytes)" but the code never actually read the
+bytes. So a valid image that lost its extension was permanently misclassified —
+file-card in the grid, `ViewerChrome` fallback on open.
+
+**Decision — don't rename the file.** Adding the extension back would mean
+renaming the user's file on disk, which violates the "never modify user data"
+rule (and risks iCloud/Finder reference breakage). The fix makes Muse *robust to*
+these files instead.
+
+**Fix (TDD, `Models/AssetKind.swift`).** When neither the extension nor the OS
+content-type names a handled kind, fall back to a real ImageIO header sniff
+(`CGImageSourceCreateWithURL` → `CGImageSourceGetType`) and map the result. An
+image whose extension was truncated off, or saved with an unrecognized extension
+(Twitter's `.jpg_large`, a bare `.dat`), now classifies as `.image`. Refactor
+split the conformance ladder into a reusable `mapped(from:)` (order preserved
+verbatim: raw → image → pdf → movie → audio → sourceCode → plainText → archive →
+font), so all previously-recognized types are byte-for-byte unchanged — the sniff
+is strictly a last resort on the otherwise-`.unknown` branch.
+
+**One change fixes both surfaces.** `ThumbnailCache.generate` also calls
+`AssetKind.detect` and routes `.image`/`.raw`/`.psd` through ImageIO
+(`imageIOThumbnail`), which decodes the extensionless JPEG fine — so the grid tile
+becomes a real full-bleed image thumbnail. And `ViewerRouter` sends `.image` to
+the real `HeroImageViewer` (info column, tags, Share/Open-With/Reveal). No
+ThumbnailCache or ViewerRouter edit needed.
+
+**Review-driven hardening (two independent review rounds).**
+- **Dataless iCloud guard.** The sniff reads bytes; on a not-yet-downloaded
+  iCloud placeholder that would force a download just to classify a file the user
+  is browsing past — contradicting the app's "skip dataless on index/enumerate"
+  rule (the buggy file lives in iCloud). `typeFromImageContent` now short-circuits
+  via `isDataless(url)` (`.ubiquitousItemDownloadingStatusKey == .notDownloaded`),
+  mirroring `Indexer.isDataless`; a dataless file stays `fallback` until local,
+  then re-enumeration reclassifies it. Recorded as a durable gotcha.
+- **Scope made intentional.** The sniff also runs for unrecognized **non-empty**
+  extensions (not just empty) — kept deliberately (covers `.jpg_large` web saves),
+  documented in the code, and tested both ways. An extension allow-list was
+  rejected as fragile (would silently miss the next odd truncation). Cost is a
+  header-only read on the rare unmatched branch; a recognized extension hits
+  `byExtension` and never reaches it, so normal folders pay nothing.
+
+**Availability.** `CGImageSource*` (ImageIO, since macOS 10.x) and `UTType(_:)`
+(macOS 11+) are well below the 14.6 minimum, so this works across the full
+supported range including Sequoia.
+
+**Tests.** New `MuseTests/AssetKindTests.swift` (7 cases): extensionless JPEG/PNG
+→ `.image`; the real truncated-Instagram name shape (asserts empty `pathExtension`
+precondition) → `.image`; normal `.jpg` still `.image`; extensionless non-image
+→ `.unknown`; unrecognized-extension image (`.jpg_large`) → `.image`;
+unrecognized-extension non-image → `.unknown`. Each image case reliably fails
+pre-fix (`public.data` → `.unknown`).
+
+**Verification.** Watched the RED (3 extensionless-image cases failing) → GREEN.
+Full suite green: 260 tests, 0 failures (`** TEST SUCCEEDED **`), clean build.
+Two adversarial review rounds: all should-fix items resolved, no correctness
+regressions; remaining notes were LOW-perf/informational and consciously
+accepted. User's file left untouched on disk.

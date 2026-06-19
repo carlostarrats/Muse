@@ -9,6 +9,7 @@
 
 import Foundation
 import UniformTypeIdentifiers
+import ImageIO
 
 enum AssetKind: String, Codable, Equatable, Hashable, CaseIterable {
     case image
@@ -64,9 +65,32 @@ extension AssetKind {
     }
 
     private nonisolated static func classifyByUTType(url: URL, fallback: AssetKind) -> AssetKind {
-        guard let type = UTType(filenameExtension: url.pathExtension) ?? typeFromContent(url: url) else {
-            return fallback
+        if let type = UTType(filenameExtension: url.pathExtension) ?? typeFromContent(url: url),
+           let mapped = mapped(from: type) {
+            return mapped
         }
+        // The OS gave up — neither the extension nor the OS content-type names a
+        // kind we handle (for an extensionless file `contentType` is typically
+        // `public.data`). Sniff the header bytes as a last resort: an image whose
+        // extension was truncated off (a long Instagram alt-text filename that
+        // overran the 255-byte limit, dropping ".jpg") or saved with an
+        // unrecognized extension (Twitter's ".jpg_large", a bare ".dat") still
+        // decodes here, so it's shown as the image it is — full-bleed in the grid
+        // and in the hero viewer — rather than as an unknown file card.
+        //
+        // Cost: a header-only read (no pixel decode) that runs ONLY on this
+        // unmatched branch — a recognized extension hits `byExtension` and never
+        // reaches here, so a normal folder pays nothing. We accept the read on
+        // the rare unmapped file rather than maintain a fragile extension
+        // allow-list that would silently miss the next odd truncation.
+        if let sniffed = typeFromImageContent(url: url), let mapped = mapped(from: sniffed) {
+            return mapped
+        }
+        return fallback
+    }
+
+    /// Map a resolved UTType onto an AssetKind, or nil if it's none we handle.
+    private nonisolated static func mapped(from type: UTType) -> AssetKind? {
         if type.conforms(to: .rawImage) { return .raw }
         if type.conforms(to: .image) { return .image }
         if type.conforms(to: .pdf) { return .pdf }
@@ -76,11 +100,35 @@ extension AssetKind {
         if type.conforms(to: .plainText) { return .text }
         if type.conforms(to: .archive) { return .archive }
         if type.conforms(to: .font) { return .font }
-        return fallback
+        return nil
     }
 
     private nonisolated static func typeFromContent(url: URL) -> UTType? {
         try? url.resourceValues(forKeys: [.contentTypeKey]).contentType
+    }
+
+    /// Header-only image-format sniff via ImageIO (reads bytes, not the name).
+    /// Returns nil for non-image content. Available since macOS 10.x, so this
+    /// works on the app's full supported range (14.6 → Sequoia → current).
+    ///
+    /// Skips not-yet-downloaded iCloud placeholders: reading their bytes would
+    /// force a download just to classify a file the user is only browsing past,
+    /// which violates the app's "never read dataless iCloud items on
+    /// index/enumerate" rule. Such a file stays `fallback` until it's local,
+    /// then re-enumeration reclassifies it.
+    private nonisolated static func typeFromImageContent(url: URL) -> UTType? {
+        if isDataless(url) { return nil }
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let uti = CGImageSourceGetType(source) else { return nil }
+        return UTType(uti as String)
+    }
+
+    /// Dataless iCloud placeholder — no local bytes to read yet. Mirrors
+    /// `Indexer.isDataless`; kept here so classification never triggers a
+    /// download. (Both read `.ubiquitousItemDownloadingStatusKey`.)
+    private nonisolated static func isDataless(_ url: URL) -> Bool {
+        (try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]))?
+            .ubiquitousItemDownloadingStatus == .notDownloaded
     }
 
     /// macOS package directories that should be treated as opaque files (don't descend).
