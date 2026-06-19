@@ -20,11 +20,26 @@ final class CollectionsEngine: ObservableObject {
     @Published var collections: [CollectionStore.Loaded] = []
     @Published var isClustering = false
 
+    /// Standardized paths of the active roots, pushed by AppState whenever the
+    /// root list changes. The badge/card count is narrowed to members under one
+    /// of these so it matches what the grid can actually show (Lever 1 of the
+    /// 2026-06-19 count-vs-contents fix). Empty until AppState pushes them.
+    private var rootPaths: [String] = []
+
     private init() {}
+
+    /// AppState calls this from rebuildRootNodes so the reachability-aware count
+    /// always reflects the current roots. Re-counts (reloads) on a real change.
+    func setRoots(_ urls: [URL]) {
+        let paths = urls.map { $0.standardizedFileURL.path }
+        guard paths != rootPaths else { return }
+        rootPaths = paths
+        Task { await reload() }
+    }
 
     func reload() async {
         guard let q = Database.shared.dbQueue else { return }
-        collections = (try? await CollectionStore.fetchAll(queue: q)) ?? []
+        collections = (try? await CollectionStore.fetchAll(queue: q, rootPaths: rootPaths)) ?? []
     }
 
     func recluster() async {

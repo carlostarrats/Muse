@@ -388,6 +388,30 @@ The four most critical are also saved as Claude memories (linked).
   New `AssetKindTests.swift` (7 cases: extensionless/unrecognized-ext image +
   non-image, truncated-Instagram shape, normal `.jpg`). Build + full suite green
   (260); two independent review rounds clean. See the durable gotcha above.
+- **2026-06-19** `feat/next-28` — collection "shows N but opens empty": a count-
+  vs-contents source split. The badge read `CollectionStore.fetchAll`'s pure
+  `is_alive=1` count from a cached `CollectionsEngine` snapshot; the opened grid
+  read a live `alivePaths` + `fileExists` set — so a stale snapshot (or an
+  out-of-root member the sandbox can't show, e.g. `~/Downloads/social.jpg`) read
+  as "15 over empty." **Lever 1 (shipped, TDD):** `fetchAll(rootPaths:)` now counts
+  alive member PATHS narrowed to those under an active root (pure
+  `CollectionStore.isUnderAnyRoot` prefix rule; empty roots → plain-count
+  fallback); `CollectionsEngine.setRoots` holds the roots (pushed by
+  `AppState.rebuildRootNodes`) and feeds the count. The grid side
+  (`setActiveCollection`) applies the SAME `isUnderAnyRoot` filter before its
+  `fileExists` node build, so badge and grid share one predicate (grid ≤ badge via
+  the extra `fileExists`); the count is per-PATH (`DISTINCT absolute_path`, matching
+  the grid's per-path tiles). So the badge can never claim a number the grid can't
+  back up and the out-of-root phantom counts in neither. New
+  `CollectionCountReachabilityTests.swift` (8 cases); two review rounds clean.
+  **Lever 2 (deferred):** the
+  transient churn's leading cause is a partial iCloud enumeration on a post-update
+  cold launch dropping not-yet-materialized files from `is_alive` (the existing
+  `PathReconciler` `trustworthy` probe guards only the FULLY-empty case). Per the
+  spec's gate ("confirm the trigger before hardening this data-loss-sensitive
+  path"), only a diagnostic `print("[PathReconciler] …")` on mark-dead was added —
+  the partial-materialization guard awaits a confirmed repro. Full suite green
+  (259). Spec: `docs/superpowers/specs/2026-06-19-collection-count-vs-contents-mismatch-design.md`.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 

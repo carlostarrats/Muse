@@ -110,9 +110,18 @@ extension AppState {
             let paths = (try? await CollectionStore.alivePaths(
                 queue: q, collectionID: id
             )) ?? []
-            // Members that still exist on disk, library-wide, sorted by
-            // the active sort mode.
-            let nodes = SmartSorter.apply(sortMode, to: paths.compactMap { path in
+            // Narrow to members under an active root FIRST, using the SAME rule
+            // as the badge count (CollectionStore.isUnderAnyRoot) — so the grid
+            // and the count agree. A member outside every root (e.g. a stray
+            // ~/Downloads file) can't be shown by the sandbox, so it must not
+            // appear here or inflate the count. Empty roots → no filter, matching
+            // fetchAll's fallback. See the 2026-06-19 count-vs-contents fix.
+            let rootPaths = rootNodes.map { $0.url.standardizedFileURL.path }
+            let reachable = rootPaths.isEmpty
+                ? paths
+                : paths.filter { CollectionStore.isUnderAnyRoot($0, roots: rootPaths) }
+            // Members that still exist on disk, sorted by the active sort mode.
+            let nodes = SmartSorter.apply(sortMode, to: reachable.compactMap { path in
                 FileManager.default.fileExists(atPath: path)
                     ? FileNode(url: URL(fileURLWithPath: path)) : nil
             }, reversed: sortReversed)
@@ -120,7 +129,7 @@ extension AppState {
             if token == collectionRequestToken {
                 withAnimation(curve) {
                     activeCollectionID = id
-                    activeCollectionPaths = Set(paths)
+                    activeCollectionPaths = Set(reachable)
                     activeCollectionFiles = nodes
                 }
                 // Re-scope the chips to the collection's members (library-wide).

@@ -2089,3 +2089,81 @@ Full suite green: 260 tests, 0 failures (`** TEST SUCCEEDED **`), clean build.
 Two adversarial review rounds: all should-fix items resolved, no correctness
 regressions; remaining notes were LOW-perf/informational and consciously
 accepted. User's file left untouched on disk.
+
+### Collection "shows N but opens empty" — count-vs-contents fix — 2026-06-19 (on `feat/next-28`)
+
+**Symptom.** A collection's card/header showed a member count (e.g. "Shopping
+15") but opening it landed on an empty/partial grid. Transient and self-healing
+(by the time the user re-checked, all 15 were present and every card had
+thumbnails). **NOT** the old ghost-row bug (`PathReconciler` already fixes
+deleted-from-disk rows): every member existed on disk and was fully downloaded.
+Full investigation + plan in
+`docs/superpowers/specs/2026-06-19-collection-count-vs-contents-mismatch-design.md`.
+
+**Root cause — a count-vs-contents source split.** The badge and the opened grid
+read different sources at different times:
+- **Badge** = `CollectionsRow` → `CollectionStore.fetchAll`'s `aliveCount`, a pure
+  `is_alive=1` DB count served from `CollectionsEngine.collections` (an in-memory
+  snapshot refreshed only on `reload()`).
+- **Grid** = `AppState+Filters.setActiveCollection` → live `alivePaths` →
+  `fileExists` filter → sort.
+
+So a stale snapshot (or any disagreement) reads as "15 over empty." Two genuinely
+wrong details fed it: (1) `/Users/…/Downloads/social.jpg` was an alive member
+**outside every added root** — the badge counted it (DB-only) but the sandbox can
+never display a file outside its roots, a permanent phantom; (2) the leading
+theory for the transient churn is that a post-update cold launch enumerates an
+iCloud folder **partially**, dropping not-yet-materialized files from `is_alive`
+until a later complete pass restores them (the badge "15" then being a stale
+pre-flip snapshot).
+
+**Lever 1 — unify the count onto a live, reachability-aware source (shipped, TDD).**
+`CollectionStore.fetchAll` gained a `rootPaths: [String] = []` parameter and now
+counts alive member **paths** (matching the grid's per-path display) narrowed to
+those **under an active root** via a new pure `CollectionStore.isUnderAnyRoot`
+(prefix rule, no disk access: a root or its descendants, rejecting sibling
+prefixes like `…/Inspo Extra`). Empty `rootPaths` (before AppState has pushed the
+roots) falls back to the plain alive count so nothing zeroes out. `CollectionsEngine`
+holds the active root paths (`setRoots(_:)`, re-counts on change) and passes them
+into `fetchAll`; `AppState.rebuildRootNodes` pushes `rootNodes.map(\.url)` into the
+engine alongside the existing `folderStats.update`. **The grid side was unified to
+the SAME rule** (review round 1): `AppState+Filters.setActiveCollection` now filters
+the collection's `alivePaths` through `isUnderAnyRoot` (against the standardized
+`rootNodes` paths, same empty-roots fallback) BEFORE the `fileExists` node build, so
+an out-of-root member can't appear in the grid either. Net: badge and grid share
+one predicate — the badge can never claim a number the grid can't back up (during
+churn both drop together, then return to 15 — an honest, self-healing number), and
+the out-of-root Downloads phantom counts in neither. Grid ≤ badge by construction
+(grid additionally requires `fileExists`); the remaining gap (an under-root file
+that's transiently dataless) is exactly the Lever 2 case. The count also switched
+from `COUNT(DISTINCT file_id)` to a per-PATH count (`DISTINCT absolute_path`) so a
+byte-exact duplicate that the grid renders as N tiles counts as N, not 1; the
+`paths(absolute_path) WHERE is_alive=1` partial unique index guarantees the count's
+path set and the grid's `alivePaths` set are identical. New
+`MuseTests/CollectionCountReachabilityTests.swift` (8 cases: the pure rule incl.
+sibling-prefix/empty-roots/long-iCloud-path, out-of-root excluded, empty-roots
+fallback, all-out-of-root auto collection dropping from `fetchAll`, and the
+duplicate-path per-path count). Existing `fetchAll(queue:)` callers/tests are
+unaffected (defaulted param → fallback path). Two independent review rounds: round
+1 found the badge/grid rule divergence (fixed) + asked for the duplicate-path test
+(added); round 2 verified the fixes and returned clean.
+
+**Lever 2 — diagnostic only; hardening deliberately deferred.** The spec's Plan
+step 0 gates the data-loss-sensitive `PathReconciler` change on a confirmed
+trigger ("do not guess and harden the wrong thing"), which needs a live
+post-update cold-launch repro. Added ONE diagnostic `print("[PathReconciler] …")`
+in `reconcile` that logs the folder, how many rows the pass would flip, the
+`present` count, and a few sample filenames whenever it marks rows dead — so the
+user can reproduce and confirm it's the Saved Inspo iCloud files being dropped on
+a partial enumeration. The partial-materialization guard (extending the existing
+fully-empty `trustworthy` probe in `AppState` to the partial case) is **not**
+implemented yet — a blind version risks reintroducing the very iCloud ghost-row
+bug `PathReconciler` exists to fix. Pick up there once the log confirms the
+trigger.
+
+**Verification.** Watched RED (new tests fail to compile — `isUnderAnyRoot` /
+`rootPaths` missing) → GREEN. Full `MuseTests` suite green (**261 tests**, 0
+failures, `** TEST SUCCEEDED **`) after the review-round fixes. Files touched:
+`CollectionStore.swift`, `CollectionsEngine.swift`, `AppState.swift` (setRoots
+push), `AppState+Filters.swift` (grid reachability filter), `PathReconciler.swift`
+(diagnostic), + the new test file.

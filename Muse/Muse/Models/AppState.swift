@@ -594,6 +594,10 @@ final class AppState: ObservableObject {
             select(rootForFirstFolder: first)
         }
         folderStats.update(roots: rootNodes.map(\.url))
+        // Keep the collection count reachability-aware: the badge/card count is
+        // narrowed to members under an active root so it matches what the grid
+        // can show (Lever 1, 2026-06-19 count-vs-contents fix).
+        CollectionsEngine.shared.setRoots(rootNodes.map(\.url))
     }
 
     /// Resolve the iCloud folder once at launch and surface it in the sidebar.

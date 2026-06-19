@@ -113,6 +113,17 @@ nonisolated enum PathReconciler {
         let scoped = inScope(alive, folder: folderPath, recursive: recursive)
         let gone = vanished(inScope: scoped, present: present)
             .filter { !isEvictedPlaceholder($0) }
+        // DIAGNOSTIC (2026-06-19, Lever 2 step 0): before hardening the reconcile
+        // against partial iCloud materialization, confirm the trigger is real —
+        // i.e. that a post-update cold launch is what marks the Saved Inspo iCloud
+        // files dead on a partial enumeration. Log the folder, how many rows this
+        // pass would flip, and a few sample paths. Remove (or fold into the guard)
+        // once the partial-materialization fix lands. See the spec's Plan step 0.
+        if !gone.isEmpty {
+            let samples = gone.prefix(5).map { URL(fileURLWithPath: $0).lastPathComponent }
+            print("[PathReconciler] marking \(gone.count) dead under \(folderPath) "
+                  + "(present=\(present.count), recursive=\(recursive)); samples: \(samples)")
+        }
         return markDead(gone, queue: queue)
     }
 }

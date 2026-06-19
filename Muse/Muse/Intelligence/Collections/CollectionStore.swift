@@ -217,7 +217,21 @@ enum CollectionStore {
         }
     }
 
-    static func fetchAll(queue: DatabaseQueue) async throws -> [Loaded] {
+    /// True if `path` is one of `roots` or lies beneath one — a pure prefix rule
+    /// with no disk access. "/a/Inspo" matches "/a/Inspo" and "/a/Inspo/x.jpg"
+    /// but NOT the sibling "/a/Inspo Extra/x.jpg". Empty roots match nothing.
+    static func isUnderAnyRoot(_ path: String, roots: [String]) -> Bool {
+        roots.contains { path == $0 || path.hasPrefix($0 + "/") }
+    }
+
+    /// `rootPaths` = standardized active root paths. When non-empty, `aliveCount`
+    /// counts only members the grid could actually show — alive AND under a root —
+    /// so the badge can never claim a number the opened grid can't back up, and an
+    /// out-of-root file (e.g. ~/Downloads/social.jpg, unshowable by the sandbox)
+    /// stops inflating the count. Empty `rootPaths` (before AppState has pushed the
+    /// roots) falls back to the plain alive count so nothing zeroes out. See the
+    /// 2026-06-19 "shows N but opens empty" fix (Lever 1).
+    static func fetchAll(queue: DatabaseQueue, rootPaths: [String] = []) async throws -> [Loaded] {
         try await queue.read { db in
             let rows = try CollectionRow
                 .filter(Column("is_hidden") == 0)
@@ -226,11 +240,16 @@ enum CollectionStore {
                 let members = try String.fetchAll(db, sql:
                     "SELECT file_id FROM collection_members WHERE collection_id = ?",
                     arguments: [row.id])
-                let alive = try Int.fetchOne(db, sql: """
-                    SELECT COUNT(DISTINCT p.file_id) FROM paths p
+                // Count alive member PATHS (what the grid renders per-path), then
+                // narrow to those under an active root when the roots are known.
+                let alivePaths = try String.fetchAll(db, sql: """
+                    SELECT DISTINCT p.absolute_path FROM paths p
                     JOIN collection_members m ON m.file_id = p.file_id
                     WHERE m.collection_id = ? AND p.is_alive = 1
-                    """, arguments: [row.id]) ?? 0
+                    """, arguments: [row.id])
+                let alive = rootPaths.isEmpty
+                    ? alivePaths.count
+                    : alivePaths.filter { isUnderAnyRoot($0, roots: rootPaths) }.count
                 return Loaded(collection: row, memberIDs: members, aliveCount: alive,
                               coverFileID: row.cover_file_id)
             }
