@@ -78,4 +78,12 @@ enum AppSettings {
         get { UserDefaults.standard.bool(forKey: collectionSortReversedKey) }
         set { UserDefaults.standard.set(newValue, forKey: collectionSortReversedKey) }
     }
+
+    static let imageLayoutKey = "imageLayout"
+
+    /// Global image layout for every grid. Default `.masonry`. Unset → masonry.
+    static var imageLayout: ImageLayout {
+        get { ImageLayout.resolve(UserDefaults.standard.string(forKey: imageLayoutKey)) }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: imageLayoutKey) }
+    }
 }

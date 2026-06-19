@@ -393,6 +393,14 @@ final class AppState: ObservableObject {
         }
     }
 
+    // MARK: - Image layout
+
+    /// Global image layout for every grid (masonry default + fixed ratios).
+    /// Persisted; GridView watches it and re-lays-out instantly.
+    @Published var imageLayout: ImageLayout = AppSettings.imageLayout {
+        didSet { AppSettings.imageLayout = imageLayout }
+    }
+
     // MARK: - Watcher
 
     private var watcher: FolderWatcher?
