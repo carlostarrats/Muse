@@ -230,6 +230,11 @@ extension AppState {
     /// (preserves the right-clicked-but-unselected-tile case); no DB write
     /// happens until confirm.
     func requestNewCollection(fallback path: String? = nil) {
+        // Ordering matters: set pendingNewCollectionPaths BEFORE the @Published
+        // newCollectionRequest. The alert's message reads pendingNewCollectionPaths
+        // (which isn't @Published), and it's newCollectionRequest's change that
+        // drives body re-eval / presentation — so the paths must already hold their
+        // final value when the message renders.
         pendingNewCollectionPaths = path.map { p in
             effectiveSelectionURLs(fallback: p).map { $0.standardizedFileURL.path }
         } ?? []
@@ -240,6 +245,10 @@ extension AppState {
     /// Create a collection under the typed name. A blank/whitespace name creates
     /// nothing. Seeds it with the captured selection when there is one.
     func confirmNewCollection() {
+        // Capture paths/name into locals BEFORE clearing state: setting
+        // newCollectionRequest = false drives the alert's binding setter, which
+        // calls cancelNewCollection() and wipes pendingNewCollectionPaths/draft.
+        // The locals are value-type copies, so the in-flight Task is unaffected.
         let paths = pendingNewCollectionPaths
         let name = newCollectionNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         newCollectionRequest = false
