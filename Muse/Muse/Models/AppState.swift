@@ -258,6 +258,16 @@ final class AppState: ObservableObject {
     /// Set to a message to surface a folder-op failure alert.
     @Published var folderOpError: String?
 
+    /// Presentation flag for the "Name Collection" modal (new-collection-from-
+    /// selection). The collection is created only on confirm — see
+    /// confirmNewCollection() in AppState+Filters.
+    @Published var newCollectionRequest = false
+    /// Bound to the modal's TextField; starts empty (placeholder shown).
+    @Published var newCollectionNameDraft = ""
+    /// File paths captured at right-click time, created into a collection on
+    /// confirm. Stored (not @Published) — extensions can't add stored props.
+    var pendingNewCollectionPaths: [String] = []
+
     /// Present the New Subfolder dialog for `node` (empty draft).
     func requestNewSubfolder(_ node: FolderNode) {
         folderNameDraft = ""

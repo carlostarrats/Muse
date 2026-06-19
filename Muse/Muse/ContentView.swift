@@ -274,6 +274,16 @@ struct ContentView: View {
         } message: {
             Text(appState.folderOpError ?? "")
         }
+        .alert("Name Collection", isPresented: Binding(
+            get: { appState.newCollectionRequest },
+            set: { if !$0 { appState.cancelNewCollection() } }
+        )) {
+            TextField("Collection name", text: $appState.newCollectionNameDraft)
+            Button("Create") { appState.confirmNewCollection() }
+            Button("Cancel", role: .cancel) { appState.cancelNewCollection() }
+        } message: {
+            Text("Creates a collection from the selected images.")
+        }
         // Preload the tag-label list for the selection menu, and keep it fresh
         // as tags change.
         .task { appState.refreshTagLabels() }

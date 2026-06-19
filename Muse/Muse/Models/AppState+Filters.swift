@@ -224,6 +224,44 @@ extension AppState {
         }
     }
 
+    /// Open the "Name Collection" prompt for a new collection built from the
+    /// effective selection. Captures the paths now (preserves the right-clicked-
+    /// but-unselected-tile case); no DB write happens until confirm.
+    func requestNewCollection(fallback path: String) {
+        pendingNewCollectionPaths = effectiveSelectionURLs(fallback: path)
+            .map { $0.standardizedFileURL.path }
+        newCollectionNameDraft = ""
+        newCollectionRequest = true
+    }
+
+    /// Create the collection from the captured selection under the typed name.
+    /// A blank/whitespace name or an empty selection creates nothing.
+    func confirmNewCollection() {
+        let paths = pendingNewCollectionPaths
+        let name = newCollectionNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        newCollectionRequest = false
+        pendingNewCollectionPaths = []
+        guard !name.isEmpty, !paths.isEmpty else { return }
+        Task { @MainActor in
+            guard let q = Database.shared.dbQueue else { return }
+            let ids = (try? await CollectionStore.fileIDs(queue: q, paths: paths)) ?? []
+            guard !ids.isEmpty else { return }
+            guard let newID = try? await CollectionStore.createManual(queue: q) else { return }
+            try? await CollectionStore.rename(queue: q, id: newID, name: name)
+            for id in ids {
+                try? await CollectionStore.addFile(queue: q, fileID: id, collectionID: newID)
+            }
+            await CollectionsEngine.shared.reload()
+        }
+    }
+
+    /// Dismiss the prompt without creating anything.
+    func cancelNewCollection() {
+        newCollectionRequest = false
+        pendingNewCollectionPaths = []
+        newCollectionNameDraft = ""
+    }
+
     /// Set (or clear, with nil) the tag chip filter — same single-transaction
     /// animated swap as the collection filter.
     func setActiveTag(_ label: String?, animated: Bool = true) {

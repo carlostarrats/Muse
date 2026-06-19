@@ -31,7 +31,7 @@ struct SelectionActionsMenu: View {
                 }
             }
         }
-        Button("New Collection from Selection") { newCollectionFromSelection() }
+        Button("New Collection from Selection") { appState.requestNewCollection(fallback: path) }
         Menu("Add Tag") {
             if appState.allTagLabels.isEmpty {
                 Button("No tags") {}.disabled(true)
@@ -97,23 +97,6 @@ struct SelectionActionsMenu: View {
             let ids = (try? await CollectionStore.fileIDs(queue: q, paths: paths)) ?? []
             for id in ids {
                 try? await CollectionStore.addFile(queue: q, fileID: id, collectionID: collectionID)
-            }
-            await CollectionsEngine.shared.reload()
-        }
-    }
-
-    /// Create a brand-new auto-named ("Collection N") collection from the
-    /// effective selection, then add the selected files to it. Mirrors
-    /// addToCollection, but creates the destination first.
-    private func newCollectionFromSelection() {
-        let paths = urls.map { $0.standardizedFileURL.path }
-        Task { @MainActor in
-            guard let q = Database.shared.dbQueue else { return }
-            let ids = (try? await CollectionStore.fileIDs(queue: q, paths: paths)) ?? []
-            guard !ids.isEmpty else { return }   // don't create an empty collection on a failed lookup
-            guard let newID = try? await CollectionStore.createManual(queue: q) else { return }
-            for id in ids {
-                try? await CollectionStore.addFile(queue: q, fileID: id, collectionID: newID)
             }
             await CollectionsEngine.shared.reload()
         }
