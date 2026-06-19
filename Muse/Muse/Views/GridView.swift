@@ -775,14 +775,22 @@ fileprivate struct ShimmerBand: View {
                 // raked 10° off vertical rather than a straight vertical wipe.
                 .rotationEffect(.degrees(10))
                 .offset(x: -1.15 * bandW + phase * 2.65 * bandW, y: -60)
+                // Scope the perpetual sweep to THIS band's `phase`. A global
+                // withAnimation(.repeatForever) in onAppear leaks its transaction:
+                // when the grid relayouts (e.g. a column-slider drag) while tiles
+                // are still loading, the AppKit-hosted toolbar items get
+                // repositioned in the same update cycle and SwiftUI sweeps their
+                // move into this never-ending 1.8s linear animation — the trailing
+                // toolbar icons then drift up/down forever (2026-06-19 toolbar-drift
+                // bug). The value-scoped .animation modifier confines the repeat to
+                // this subtree. Reduce Motion → no animation (the sheen stays static
+                // but still reads as loading).
+                .animation(reduceMotion ? nil
+                           : .linear(duration: 1.8).repeatForever(autoreverses: false),
+                           value: phase)
         }
         .onAppear {
-            phase = 0
-            // Reduce Motion: leave the sheen static (still reads as loading).
-            guard !reduceMotion else { return }
-            withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
-                phase = 1
-            }
+            phase = reduceMotion ? 0 : 1
         }
     }
 }

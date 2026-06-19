@@ -1914,3 +1914,83 @@ action re-exposing the otherwise right-click-only delete.
 **Verification.** Debug build green; full test suite green. Changes are declarative
 a11y modifiers with no visual footprint, so build + tests are the verification; a
 live VoiceOver pass (manual screen-reader interaction) was not automatable here.
+
+## 2026-06-19 — `fix/toolbar-icon-drift` — toolbar icons drift during grid resize
+
+**Symptom (from a tester's screen recording).** On a 2018 Intel MacBook Pro
+(Sequoia), three of the four trailing toolbar icons — Image Layout, mood
+(paintpalette), and About (info) — drifted vertically up and down in a slow,
+repeating loop while the tester resized the grid (the column-count slider) during
+a search ("cassette"). The Collections icon (the first trailing item) stayed put.
+Intermittent; neither the tester nor the owner could reliably reproduce it on
+demand.
+
+**Investigation (frame-by-frame on the recording).** Cropped the toolbar icon
+strip and measured each icon's top-edge Y per frame:
+
+- Collections: rock-steady the entire clip.
+- Image Layout / mood / info: a **perfectly linear, non-autoreversing sawtooth** —
+  glide down ~13 px over ~1.8 s, instant snap back to the top, repeat identically
+  3–4 times.
+
+That waveform is not human input (too metronomic and linear); it is a
+self-running animation. Collections and Image Layout are *code-identical* (both a
+`Button` + `.moodToolbarIcon` + `.disabled(isSearchActive)`), yet one is stable
+and the others drift — so the cause is not a per-icon modifier but something
+*positional* (the first trailing item is the layout anchor; the items after it get
+repositioned). Grepping for repeating animations found exactly one match:
+`GridView.swift` `ShimmerBand` — `withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false))`.
+The `1.8 s` linear non-autoreversing curve is a byte-for-byte match for the
+measured sawtooth.
+
+**Root cause.** `ShimmerBand` (the loading sheen drawn on every placeholder image
+tile while its thumbnail decodes) started its sweep with the **global**
+`withAnimation(...)` inside `.onAppear`. `withAnimation` writes the animation onto
+the *current transaction*, and `.repeatForever` keeps that animation perpetually
+live. When the grid relayouts **while thumbnails are still loading** (column-slider
+drag in a search, with placeholder tiles on screen), SwiftUI re-evaluates
+`ContentView` and repositions the AppKit-hosted toolbar items in the same update
+cycles where shimmer bands are (re)starting their repeat-forever animation — and
+sweeps the toolbar items' position changes into that leaked, never-ending 1.8 s
+linear animation. The first trailing item (Collections) is the anchor with no
+position delta, so it is immune; the items after it drift.
+
+Why it's intermittent and Intel-specific: the leak needs a live shimmer (an
+undecoded thumbnail) present *during* a relayout. The tester's 2018 Intel Mac
+decodes thumbnails slowly, so shimmers stay alive long enough to overlap a resize,
+and the slow relayout spans more update cycles. On faster hardware with warm
+thumbnail caches there is usually no active shimmer during a resize, so it doesn't
+manifest — which is exactly why it couldn't be reproduced on demand.
+
+**Fix (one file, `Views/GridView.swift`).** Replaced the global `withAnimation` in
+`ShimmerBand.onAppear` with a **value-scoped** `.animation(_:value:)` modifier on
+the band's Rectangle, keyed on `phase`:
+
+```swift
+.animation(reduceMotion ? nil
+           : .linear(duration: 1.8).repeatForever(autoreverses: false),
+           value: phase)
+.onAppear { phase = reduceMotion ? 0 : 1 }
+```
+
+`.animation(_:value:)` confines the animation to the band's own subtree and to
+changes of `phase`; it never writes to the shared transaction, so the
+repeat-forever sweep can no longer bleed into the toolbar (or any sibling view).
+The visible sweep is identical (`phase` 0→1, linear, looping). Reduce Motion still
+yields a static band (animation `nil`, `phase` left at 0), matching the prior
+`guard !reduceMotion` behavior. Per-mount `@State phase` is unchanged — each band
+mounts fresh while `thumbnail == nil` and is torn down when the image lands.
+
+**Gotcha recorded.** Never drive a perpetual animation with a global
+`withAnimation(....repeatForever(...))` in `.onAppear`. The repeat-forever
+transaction stays live and leaks into any view repositioned in the same update
+cycle — most visibly the AppKit-hosted window toolbar. Use the value-scoped
+`.animation(_:value:)` modifier so the repeat is confined to its own subtree.
+
+**Verification.** Debug build green; full test suite green (all `MuseTests` +
+UI tests passed, 0 failures). An independent review confirmed the SwiftUI
+semantics (scoped repeat-forever, leak elimination, Reduce-Motion parity, clean
+per-mount state) with no regressions. The live glitch itself could not be
+re-observed on the development machine (warm caches → no shimmer active during a
+resize); the on-device way to confirm is to clear the thumbnail cache or open a
+fresh folder, then drag the column slider while tiles are still shimmering.
