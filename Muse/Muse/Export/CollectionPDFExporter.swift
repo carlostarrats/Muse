@@ -39,19 +39,36 @@ enum CollectionPDFExporter {
             let maxPixel = Int((columnWidth * 2).rounded(.up))   // crisp without bloat
 
             // Load downsampled, orientation-corrected images + their aspect +
-            // filename (drawn as a caption under each image).
+            // filename (drawn as a caption under each image). Images decode fast
+            // via ImageIO; everything else (zip/pdf/doc…) falls back to
+            // QuickLook's macOS type icon / content preview, exactly like the
+            // grid's non-image cards. Decode with bounded concurrency (the
+            // QuickLook fallback is a per-file XPC round-trip; serial would make
+            // a file-card-heavy export feel hung) and reassemble in input order.
+            let maxConcurrent = 8
+            var slots = [CGImage?](repeating: nil, count: urls.count)
+            await withTaskGroup(of: (Int, CGImage?).self) { group in
+                var next = 0
+                func schedule(_ i: Int) {
+                    let url = urls[i]
+                    group.addTask {
+                        if let cg = imageIOThumbnail(url, maxPixel: maxPixel) { return (i, cg) }
+                        return (i, await quickLookThumbnail(url, maxPixel: maxPixel))
+                    }
+                }
+                while next < min(maxConcurrent, urls.count) { schedule(next); next += 1 }
+                for await (i, cg) in group {
+                    slots[i] = cg
+                    if next < urls.count { schedule(next); next += 1 }
+                }
+            }
             var images: [(cg: CGImage, aspect: CGFloat, name: String)] = []
             images.reserveCapacity(urls.count)
-            for url in urls {
-                // Images decode fast via ImageIO; everything else (zip/pdf/doc…)
-                // falls back to QuickLook's macOS type icon / content preview,
-                // exactly like the grid's non-image cards.
-                var cg = imageIOThumbnail(url, maxPixel: maxPixel)
-                if cg == nil { cg = await quickLookThumbnail(url, maxPixel: maxPixel) }
+            for (i, cg) in slots.enumerated() {
                 guard let cg else { continue }
                 let w = CGFloat(cg.width), h = CGFloat(cg.height)
                 guard w > 0, h > 0 else { continue }
-                images.append((cg, h / w, url.lastPathComponent))
+                images.append((cg, h / w, urls[i].lastPathComponent))
             }
             guard !images.isEmpty else { return nil }
 

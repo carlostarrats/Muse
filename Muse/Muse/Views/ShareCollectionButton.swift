@@ -60,8 +60,7 @@ struct ShareCollectionButton: View {
         let urls = exportURLs
         let layoutAspect = appState.imageLayout.aspect
         let backdrop = appState.effectiveTileBackground
-            .backdropRGB(for: appState.moodPalette)
-            .map { CGColor(red: $0.r, green: $0.g, blue: $0.b, alpha: 1) }
+            .backdropRGB(for: appState.moodPalette)?.cgColor
         return await CollectionPDFExporter.makePDF(
             urls: urls, title: title, count: urls.count, columns: gridColumns,
             layoutAspect: layoutAspect, tileBackdrop: backdrop)

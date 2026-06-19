@@ -15,6 +15,9 @@ struct MoodRGB: Equatable {
     var g: Double
     var b: Double
     var color: Color { Color(red: r, green: g, blue: b) }
+    /// sRGB CGColor — matches `color`'s sRGB space so an exported PDF backdrop
+    /// renders the same hue as the on-screen tile.
+    var cgColor: CGColor { CGColor(srgbRed: r, green: g, blue: b, alpha: 1) }
 }
 
 struct MoodPalette: Equatable {
