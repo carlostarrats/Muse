@@ -86,4 +86,12 @@ enum AppSettings {
         get { ImageLayout.resolve(UserDefaults.standard.string(forKey: imageLayoutKey)) }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: imageLayoutKey) }
     }
+
+    static let tileBackgroundKey = "tileBackground"
+
+    /// Global grid tile backdrop. Default `.auto` (follows the mood). Unset → auto.
+    static var tileBackground: TileBackground {
+        get { TileBackground.resolve(UserDefaults.standard.string(forKey: tileBackgroundKey)) }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: tileBackgroundKey) }
+    }
 }

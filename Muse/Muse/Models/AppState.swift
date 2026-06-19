@@ -401,6 +401,17 @@ final class AppState: ObservableObject {
         didSet { AppSettings.imageLayout = imageLayout }
     }
 
+    // MARK: - Tile background
+
+    /// Global backdrop behind grid content (None / Auto / Light / Dark Grey /
+    /// Black). Persisted; GridView reads `tileFill`.
+    @Published var tileBackground: TileBackground = AppSettings.tileBackground {
+        didSet { AppSettings.tileBackground = tileBackground }
+    }
+
+    /// The resolved tile backdrop for the current mood + selection.
+    var tileFill: Color { tileBackground.fill(for: moodPalette) }
+
     // MARK: - Watcher
 
     private var watcher: FolderWatcher?
