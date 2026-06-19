@@ -19,7 +19,7 @@ struct InfoSheet: View {
                 Text("About Muse")
                     .font(.system(size: 24, weight: .semibold))
                 Spacer()
-                CloseButton { isPresented = false }
+                SheetCloseButton { isPresented = false }
             }
             .padding(.bottom, 20)
 
@@ -171,27 +171,6 @@ struct InfoSheet: View {
     private var rowDivider: some View {
         Divider()
             .padding(.vertical, 16)
-    }
-
-    /// Circular ✕, hover-brightening — same family as the app's other
-    /// round controls. Esc also closes.
-    private struct CloseButton: View {
-        var action: () -> Void
-        @State private var hovering = false
-
-        var body: some View {
-            Button(action: action) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(hovering ? .primary : .secondary)
-                    .frame(width: 26, height: 26)
-                    .background(Circle().fill(.primary.opacity(hovering ? 0.16 : 0.08)))
-            }
-            .buttonStyle(.plain)
-            .onHover { hovering = $0 }
-            .keyboardShortcut(.cancelAction)
-            .help("Close")
-        }
     }
 
     private func section(_ title: String, _ body: String) -> some View {

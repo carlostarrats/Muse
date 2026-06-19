@@ -23,7 +23,7 @@ struct ImageLayoutSheet: View {
                 Text("Image Layout")
                     .font(.system(size: 24, weight: .semibold))
                 Spacer()
-                CloseButton { isPresented = false }
+                SheetCloseButton { isPresented = false }
             }
             Text("Choose how images are arranged. Applies to every grid.")
                 .font(.system(size: 13))
@@ -82,25 +82,6 @@ struct ImageLayoutSheet: View {
         }
     }
 
-    /// Circular ✕, hover-brightening — identical to InfoSheet's. Esc also closes.
-    private struct CloseButton: View {
-        var action: () -> Void
-        @State private var hovering = false
-
-        var body: some View {
-            Button(action: action) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(hovering ? .primary : .secondary)
-                    .frame(width: 26, height: 26)
-                    .background(Circle().fill(.primary.opacity(hovering ? 0.16 : 0.08)))
-            }
-            .buttonStyle(.plain)
-            .onHover { hovering = $0 }
-            .keyboardShortcut(.cancelAction)
-            .help("Close")
-        }
-    }
 }
 
 /// One selectable layout tile. Mirrors a grid tile's selection exactly, but
