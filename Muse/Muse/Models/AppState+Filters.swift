@@ -224,32 +224,36 @@ extension AppState {
         }
     }
 
-    /// Open the "Name Collection" prompt for a new collection built from the
-    /// effective selection. Captures the paths now (preserves the right-clicked-
-    /// but-unselected-tile case); no DB write happens until confirm.
-    func requestNewCollection(fallback path: String) {
-        pendingNewCollectionPaths = effectiveSelectionURLs(fallback: path)
-            .map { $0.standardizedFileURL.path }
+    /// Open the "Name Collection" prompt. With a fallback path, seed the new
+    /// collection from the effective selection (grid right-click); with nil,
+    /// create an empty collection (Collections-page "+"). Captures the paths now
+    /// (preserves the right-clicked-but-unselected-tile case); no DB write
+    /// happens until confirm.
+    func requestNewCollection(fallback path: String? = nil) {
+        pendingNewCollectionPaths = path.map { p in
+            effectiveSelectionURLs(fallback: p).map { $0.standardizedFileURL.path }
+        } ?? []
         newCollectionNameDraft = ""
         newCollectionRequest = true
     }
 
-    /// Create the collection from the captured selection under the typed name.
-    /// A blank/whitespace name or an empty selection creates nothing.
+    /// Create a collection under the typed name. A blank/whitespace name creates
+    /// nothing. Seeds it with the captured selection when there is one.
     func confirmNewCollection() {
         let paths = pendingNewCollectionPaths
         let name = newCollectionNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         newCollectionRequest = false
         pendingNewCollectionPaths = []
-        guard !name.isEmpty, !paths.isEmpty else { return }
+        guard !name.isEmpty else { return }
         Task { @MainActor in
             guard let q = Database.shared.dbQueue else { return }
-            let ids = (try? await CollectionStore.fileIDs(queue: q, paths: paths)) ?? []
-            guard !ids.isEmpty else { return }
             guard let newID = try? await CollectionStore.createManual(queue: q) else { return }
             try? await CollectionStore.rename(queue: q, id: newID, name: name)
-            for id in ids {
-                try? await CollectionStore.addFile(queue: q, fileID: id, collectionID: newID)
+            if !paths.isEmpty {
+                let ids = (try? await CollectionStore.fileIDs(queue: q, paths: paths)) ?? []
+                for id in ids {
+                    try? await CollectionStore.addFile(queue: q, fileID: id, collectionID: newID)
+                }
             }
             await CollectionsEngine.shared.reload()
         }

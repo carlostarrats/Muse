@@ -282,7 +282,9 @@ struct ContentView: View {
             Button("Create") { appState.confirmNewCollection() }
             Button("Cancel", role: .cancel) { appState.cancelNewCollection() }
         } message: {
-            Text("Creates a collection from the selected images.")
+            Text(appState.pendingNewCollectionPaths.isEmpty
+                 ? "Creates a new collection."
+                 : "Creates a collection from the selected images.")
         }
         // Preload the tag-label list for the selection menu, and keep it fresh
         // as tags change.

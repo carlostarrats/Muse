@@ -91,15 +91,10 @@ struct CollectionsPage: View {
         .padding(.bottom, 48)
     }
 
-    /// Create an empty, hand-made collection (auto-named "Collection N"). It
-    /// shows as a card immediately; open it to rename, or add images via "Add
-    /// to Collection" from a selection.
+    /// Open the shared "Name Collection" modal (empty selection → empty named
+    /// collection). Unified with the grid's "New Collection from Selection".
     private func createCollection() {
-        Task { @MainActor in
-            guard let q = Database.shared.dbQueue else { return }
-            _ = try? await CollectionStore.createManual(queue: q)
-            await CollectionsEngine.shared.reload()
-        }
+        appState.requestNewCollection()
     }
 
     private var emptyState: some View {
