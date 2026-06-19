@@ -41,42 +41,56 @@ struct CollectionsPage: View {
     }
 
     var body: some View {
-        GeometryReader { geo in
-            // Width that makes exactly `columns` cards (plus gaps + insets)
-            // fill the viewport. Cards resize with the window.
-            let available = max(0, geo.size.width
-                                - hInset * 2
-                                - hGap * CGFloat(columns - 1))
-            let cardWidth = available / CGFloat(columns)
-            // Cover keeps the card's 2:1 mosaic aspect.
-            let cover = CGSize(width: cardWidth, height: cardWidth / 2)
+        VStack(spacing: 0) {
+            // The Collections page has no tag chips, but it must clip on scroll
+            // exactly like the grid. The grid sits below TagChipsRow, whose
+            // no-tags branch reserves a 10pt clearance below the floating
+            // toolbar; because the grid's ScrollView clips to its own frame,
+            // content is CUT OFF at that boundary instead of sliding up under
+            // the toolbar. Reserve the same 10pt above this page's ScrollView so
+            // its clip boundary matches — cards cut off below the toolbar rather
+            // than scrolling up under it. This makes the no-tags cutoff
+            // universal, and aligns the "Collections" title with the
+            // in-collection header (which sits below the same reserve). Shares
+            // TagChipsRow's constant so the two reserves can never drift apart.
+            Color.clear.frame(height: TagChipsRow.noTagsTopClearance)
+            GeometryReader { geo in
+                // Width that makes exactly `columns` cards (plus gaps + insets)
+                // fill the viewport. Cards resize with the window.
+                let available = max(0, geo.size.width
+                                    - hInset * 2
+                                    - hGap * CGFloat(columns - 1))
+                let cardWidth = available / CGFloat(columns)
+                // Cover keeps the card's 2:1 mosaic aspect.
+                let cover = CGSize(width: cardWidth, height: cardWidth / 2)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    // Page Up / Page Down scrolls the cards a screenful at a time.
-                    PageScrollCatcher(isActive: { appState.selectedFile == nil })
-                        .frame(width: 0, height: 0)
-                    header
-                    if sorted.isEmpty {
-                        emptyState
-                    } else {
-                        LazyVGrid(
-                            columns: Array(
-                                repeating: GridItem(.fixed(cardWidth), spacing: hGap),
-                                count: columns),
-                            alignment: .leading,
-                            spacing: vGap
-                        ) {
-                            ForEach(sorted, id: \.collection.id) { loaded in
-                                CollectionCard(loaded: loaded, coverSize: cover)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Page Up / Page Down scrolls the cards a screenful at a time.
+                        PageScrollCatcher(isActive: { appState.selectedFile == nil })
+                            .frame(width: 0, height: 0)
+                        header
+                        if sorted.isEmpty {
+                            emptyState
+                        } else {
+                            LazyVGrid(
+                                columns: Array(
+                                    repeating: GridItem(.fixed(cardWidth), spacing: hGap),
+                                    count: columns),
+                                alignment: .leading,
+                                spacing: vGap
+                            ) {
+                                ForEach(sorted, id: \.collection.id) { loaded in
+                                    CollectionCard(loaded: loaded, coverSize: cover)
+                                }
                             }
+                            .padding(.horizontal, hInset)
+                            // Matches the in-collection grid's top content inset
+                            // (20) so the gap under the title is identical there
+                            // (header's 48 + the grid's 20).
+                            .padding(.top, 20)
+                            .padding(.bottom, 24)
                         }
-                        .padding(.horizontal, hInset)
-                        // Matches the in-collection grid's top content inset
-                        // (20) so the gap under the title is identical there
-                        // (header's 48 + the grid's 20).
-                        .padding(.top, 20)
-                        .padding(.bottom, 24)
                     }
                 }
             }

@@ -21,6 +21,14 @@ struct TagChipsRow: View {
     @State private var hovered: Int? = nil
     @State private var renameText = ""
 
+    /// Top clearance reserved below the floating toolbar when there are no tag
+    /// chips (the no-tags branch below). Because each scroll surface clips to
+    /// its own frame, reserving this above the scroll view makes content cut off
+    /// at the toolbar edge instead of sliding up under it. `CollectionsPage`
+    /// reserves the SAME amount so its no-tags cutoff matches the grid's — they
+    /// must stay equal, so both read this one constant.
+    static let noTagsTopClearance: CGFloat = 10
+
     /// The chip labels are loaded and owned by AppState (computed as part of the
     /// folder load so files + chips reveal together); this view only renders them.
     private var tags: [(label: String, count: Int)] { appState.tagChipRows }
@@ -69,7 +77,7 @@ struct TagChipsRow: View {
                 // the first image row sits right where the chips would — raised,
                 // not the full dead space — while still clearing the floating
                 // toolbar so the top row never hides behind the search bar.
-                Color.clear.frame(height: 10)
+                Color.clear.frame(height: Self.noTagsTopClearance)
             }
         }
         .onChange(of: appState.tagRenameRequest) { _, label in
