@@ -567,6 +567,12 @@ private struct FolderTreeNode: View {
                                 )
                                 .onTapGesture { appState.select(folder: node) }
                                 .help("Drag to reorder")
+                                // Mouse-only drag affordance; its tap just
+                                // re-selects the row (already reachable) and the
+                                // accessible reorder path is the Edit-menu Move
+                                // Folder Up/Down. Exposing an undraggable "grip"
+                                // to VoiceOver would only add a dead control.
+                                .accessibilityHidden(true)
                         }
                     }
                 }

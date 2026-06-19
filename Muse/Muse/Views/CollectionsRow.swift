@@ -171,6 +171,7 @@ private struct HeaderIconButton: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help(help)
+        .accessibilityLabel(help)
     }
 }
 
@@ -190,6 +191,7 @@ private struct TrashButton: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help("Delete collection")
+        .accessibilityLabel("Delete collection")
     }
 }
 
@@ -211,6 +213,7 @@ struct BackArrowButton: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help(help)
+        .accessibilityLabel(help)
     }
 }
 
@@ -293,6 +296,17 @@ struct CollectionCard: View {
             Text("The collection is removed. Your images stay on disk.")
         }
         .help(loaded.collection.name)
+        // The card is a tap target (not a Button), so VoiceOver saw two loose
+        // texts with no action. Collapse it into one activatable element: name +
+        // count as the label, the active card announced as selected, the tap as
+        // the primary action, and the context-menu Delete re-exposed as a named
+        // action (otherwise unreachable without a right-click).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(loaded.collection.name), \(loaded.aliveCount) "
+                            + (loaded.aliveCount == 1 ? "item" : "items"))
+        .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction { appState.setActiveCollection(loaded.collection.id) }
+        .accessibilityAction(named: "Delete Collection") { confirmDelete = true }
     }
 
     private func deleteCollection() {

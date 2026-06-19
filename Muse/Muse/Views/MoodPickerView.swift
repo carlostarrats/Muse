@@ -163,6 +163,8 @@ private struct MoodSwatch<Fill: View>: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
+        // Selection is conveyed only by the ring color — surface it to VoiceOver.
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -191,6 +193,12 @@ private struct TileSwatch: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
+        // Disambiguate from the mood swatches above ("Auto"/"Light" collide) and
+        // expose the selected state, which is otherwise ring-color-only. The
+        // label override alone replaces the Text-derived name on a Button while
+        // keeping its activation — no children:.ignore (which would drop it).
+        .accessibilityLabel("Tile background: \(option.displayName)")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     @ViewBuilder

@@ -120,6 +120,9 @@ struct ContentView: View {
                     .help(appState.showSubfolders
                           ? "Hide files inside subfolders"
                           : "Show files inside subfolders")
+                    // Icon-only toggle: give VoiceOver a stable name (its on/off
+                    // state is announced by the toggle itself).
+                    .accessibilityLabel("Show files in subfolders")
                     .onChange(of: appState.showSubfolders) { _, _ in
                         appState.toggleSubfolders()
                     }
@@ -143,6 +146,7 @@ struct ContentView: View {
                             .moodToolbarIcon(appState.moodPalette)
                     }
                     .help("Collections")
+                    .accessibilityLabel("Collections")
                     // Toggling collections mid-search yanks you out of the
                     // search and (in a library-wide search) re-highlights a
                     // folder — confusing. Disable until the search is cleared.
@@ -160,6 +164,9 @@ struct ContentView: View {
                             .moodToolbarIcon(appState.moodPalette)
                     }
                     .help("Image Layout")
+                    // Icon-only button: give VoiceOver an explicit name (the
+                    // SF Symbol's derived label reads "square grid 2x2").
+                    .accessibilityLabel("Image Layout")
                     // Same as Collections: layout has no meaning over ranked
                     // search results.
                     .disabled(appState.isSearchActive)
@@ -180,6 +187,7 @@ struct ContentView: View {
                             .moodToolbarIcon(appState.moodPalette)
                     }
                     .help("About Muse — how indexing, analysis, collections, and tags work")
+                    .accessibilityLabel("About Muse")
                 }
             }
             // Transparent title bar so the sidebar card flows continuously up
@@ -379,6 +387,7 @@ struct ContentView: View {
                 .moodToolbarIcon(appState.moodPalette)
         }
         .help("Sort: \(isCollectionsPage ? appState.collectionSortMode.displayName : appState.sortMode.displayName)")
+        .accessibilityLabel("Sort")
     }
 
     /// Orders the tag chips above the grid: Most Used (count) or A→Z.
@@ -399,6 +408,7 @@ struct ContentView: View {
                 .moodToolbarIcon(appState.moodPalette)
         }
         .help("Tag order: \(appState.tagSortMode.label)")
+        .accessibilityLabel("Tag order")
     }
 
     /// Flips the active sort mode's direction. On the Collections page it flips
@@ -431,6 +441,7 @@ struct ContentView: View {
         }
         .toggleStyle(.button)
         .help("Background: \(appState.mood.displayName)")
+        .accessibilityLabel("Background")
         .popover(isPresented: $moodPickerShown, arrowEdge: .bottom) {
             MoodPickerView()
                 .environmentObject(appState)

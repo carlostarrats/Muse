@@ -144,5 +144,6 @@ private struct AddCollectionButton: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help("New Collection")
+        .accessibilityLabel("New Collection")
     }
 }

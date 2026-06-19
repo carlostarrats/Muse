@@ -38,6 +38,7 @@ struct ShareButton: View {
         .fixedSize()
         .onHover { hovering = $0 }
         .help("Share")
+        .accessibilityLabel("Share")
     }
 
     private func share() {

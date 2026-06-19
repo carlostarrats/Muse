@@ -307,5 +307,7 @@ private struct TagChip: View {
         // Surface the file count to VoiceOver — it's otherwise only revealed
         // on mouse hover, so screen-reader users couldn't reach it.
         .accessibilityValue(count.map { "\($0) files" } ?? "")
+        // The active-filter chip reads as filled visually only — announce it.
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

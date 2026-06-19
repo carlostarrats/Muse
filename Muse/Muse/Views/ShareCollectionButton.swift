@@ -54,6 +54,7 @@ struct ShareCollectionButton: View {
         .onHover { hovering = $0 }
         .disabled(preparing || count == 0 || exportURLs.isEmpty)
         .help("Share collection")
+        .accessibilityLabel("Share collection")
     }
 
     private func makePDF() async -> URL? {

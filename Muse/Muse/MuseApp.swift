@@ -233,6 +233,15 @@ struct MuseApp: App {
 
             // Same for collections — enabled while inside one.
             CommandMenu("Collections") {
+                // Keyboard/VoiceOver parallel to the grid right-click's "New
+                // Collection from Selection" (which is otherwise mouse-only).
+                Button("New Collection from Selection…") {
+                    appState.requestNewCollection(fallback: "")
+                }
+                .disabled(appState.selectedFiles.isEmpty)
+
+                Divider()
+
                 Button("Rename Collection…") {
                     appState.collectionRenameRequest = true
                 }
