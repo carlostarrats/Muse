@@ -54,7 +54,7 @@ struct ImageLayoutSheet: View {
     // MARK: - Common Sizes
 
     private let sizes: [(String, String)] = [
-        ("1:1", "Square medium format, iPhone"),
+        ("1:1", "Square medium format"),
         ("2:3", "Sony, Canon, Nikon, 35mm film"),
         ("3:4", "iPhone, Google Pixel, Samsung Galaxy, OnePlus"),
         ("4:5", "Instagram, large format film"),
@@ -115,22 +115,28 @@ private struct LayoutTile: View {
 
     @State private var hovering = false
 
-    // Match TileView's locked selection feel.
+    // Match TileView's locked selection feel: 8pt continuous ring, square image.
     private static let hoverVeilOpacity = 0.2
     private static let selectionInset: CGFloat = 10
     private static let ringWidth: CGFloat = 2.5
-    private static let corner: CGFloat = 10
+    private static let ringCorner: CGFloat = 8
 
     private var blue: Color { Color.accentColor }
 
     var body: some View {
         Button(action: onTap) {
             ZStack {
-                // Inner fill: full-size grey when unselected; shrinks inward and
-                // turns blue when selected (the inset gap shows the sheet behind).
-                RoundedRectangle(cornerRadius: Self.corner, style: .continuous)
-                    .fill(isSelected ? blue.opacity(0.18) : tileFill)
-                    .padding(isSelected ? Self.selectionInset : 0)
+                // Inner fill. Unselected: full-size rounded grey box. Selected:
+                // shrinks inward and turns blue with SQUARE corners (like the
+                // grid's image), the inset gap revealing the sheet behind it.
+                if isSelected {
+                    Rectangle()
+                        .fill(blue.opacity(0.18))
+                        .padding(Self.selectionInset)
+                } else {
+                    RoundedRectangle(cornerRadius: Self.ringCorner, style: .continuous)
+                        .fill(tileFill)
+                }
 
                 // Label + icon, shrinking with the fill when selected.
                 VStack(spacing: 10) {
@@ -139,19 +145,19 @@ private struct LayoutTile: View {
                         .foregroundStyle(isSelected ? blue : .primary)
                     LayoutIconView(kind: layout.iconKind,
                                    color: isSelected ? blue : .secondary)
-                        .frame(width: 55, height: 55)
+                        .frame(width: 44, height: 44)
                 }
                 .padding(isSelected ? Self.selectionInset : 0)
 
                 // Hover veil — unselected only; a calm dark wash, no resize.
-                RoundedRectangle(cornerRadius: Self.corner, style: .continuous)
+                RoundedRectangle(cornerRadius: Self.ringCorner, style: .continuous)
                     .fill(Color.black)
                     .opacity((hovering && !isSelected) ? Self.hoverVeilOpacity : 0)
                     .allowsHitTesting(false)
 
-                // Ring at the outer edge when selected.
+                // Ring at the outer edge when selected — matches the grid's 8pt.
                 if isSelected {
-                    RoundedRectangle(cornerRadius: Self.corner, style: .continuous)
+                    RoundedRectangle(cornerRadius: Self.ringCorner, style: .continuous)
                         .strokeBorder(blue, lineWidth: Self.ringWidth)
                 }
             }
