@@ -126,17 +126,13 @@ private struct LayoutTile: View {
     var body: some View {
         Button(action: onTap) {
             ZStack {
-                // Inner fill. Unselected: full-size rounded grey box. Selected:
-                // shrinks inward and turns blue with SQUARE corners (like the
-                // grid's image), the inset gap revealing the sheet behind it.
-                if isSelected {
-                    Rectangle()
-                        .fill(blue.opacity(0.18))
-                        .padding(Self.selectionInset)
-                } else {
-                    RoundedRectangle(cornerRadius: Self.ringCorner, style: .continuous)
-                        .fill(tileFill)
-                }
+                // Inner fill — SQUARE corners, like a grid tile. Full-size grey
+                // when unselected; on select it shrinks inward and turns blue
+                // (the inset gap revealing the sheet), so the square box visibly
+                // scales down inside the rounded ring.
+                Rectangle()
+                    .fill(isSelected ? blue.opacity(0.18) : tileFill)
+                    .padding(isSelected ? Self.selectionInset : 0)
 
                 // Label + icon, shrinking with the fill when selected.
                 VStack(spacing: 10) {
@@ -150,7 +146,7 @@ private struct LayoutTile: View {
                 .padding(isSelected ? Self.selectionInset : 0)
 
                 // Hover veil — unselected only; a calm dark wash, no resize.
-                RoundedRectangle(cornerRadius: Self.ringCorner, style: .continuous)
+                Rectangle()
                     .fill(Color.black)
                     .opacity((hovering && !isSelected) ? Self.hoverVeilOpacity : 0)
                     .allowsHitTesting(false)
