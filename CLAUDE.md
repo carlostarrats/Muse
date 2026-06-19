@@ -178,6 +178,15 @@ The four most critical are also saved as Claude memories (linked).
   single 2-copy group), and cross-group pre-seed conflicts are reconciled by
   `rescued`. Don't reintroduce a per-`first`-group check — it lets overlapping
   groups bypass the guarantee.
+- **Never drive a perpetual animation with a global `withAnimation(....repeatForever(...))`
+  in `.onAppear`.** The repeat-forever transaction stays live and leaks into ANY
+  view repositioned in the same update cycle — most visibly the AppKit-hosted
+  window toolbar. `GridView`'s `ShimmerBand` (loading sheen) did exactly this, and
+  during a grid relayout while thumbnails were still loading (column-slider drag in
+  a search) the trailing toolbar icons drifted up/down in a perpetual 1.8s linear
+  sawtooth on slow/Intel hardware. Use the value-scoped `.animation(_:value:)`
+  modifier (keyed on the animated `@State`) so the repeat is confined to its own
+  subtree. Fixed 2026-06-19; see that session log.
 
 ### Session index (detail in `docs/session-log.md`)
 
@@ -337,6 +346,23 @@ The four most critical are also saved as Claude memories (linked).
   and keeps the action; and `.help` + `.accessibilityHint` both write macOS AXHelp,
   so keep one (kept `.help` for the truncation tooltip). Additive a11y annotations
   only — no layout/behavior change. Build + full test suite green.
+- **2026-06-19** `fix/toolbar-icon-drift` — toolbar icons drift during grid resize.
+  A tester's recording showed three trailing toolbar icons (Image Layout, mood,
+  About) drifting vertically in a perpetual ~1.8s linear sawtooth while resizing
+  the grid (column slider) mid-search; Collections (the anchor item) stayed put.
+  Frame-by-frame measurement matched the waveform to `GridView`'s `ShimmerBand`
+  loading sheen, which drove its sweep with a GLOBAL
+  `withAnimation(.linear(1.8).repeatForever(autoreverses:false))` in `.onAppear`.
+  That repeat-forever transaction stays live and leaks: when the grid relayouts
+  while thumbnails are still loading, SwiftUI repositions the AppKit-hosted toolbar
+  items in the same update cycle and sweeps their move into the never-ending
+  animation (the anchor item has no delta, so it's immune). Intel/slow-hardware
+  prone — needs a live shimmer present during a relayout, which warm caches on
+  fast Macs avoid. Fix: scoped the sweep to a value-keyed `.animation(_:value:)`
+  modifier on the band (`value: phase`), so the repeat can't bleed into the
+  toolbar; identical sweep, Reduce-Motion parity preserved. One file
+  (`Views/GridView.swift`). Build + full test suite green; independent review
+  clean. See the durable gotcha above + that session log.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
