@@ -667,13 +667,24 @@ private struct TileView: View {
                             .font(.caption)
                             .lineLimit(1)
                             .truncationMode(.tail)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(cardNameColor)
                             .frame(maxWidth: .infinity)
                     }
                     .padding(10)
                 }
             }
         }
+    }
+
+    /// Readable color for the card's internal filename, adapting to the effective
+    /// tile backdrop (light text on a dark backdrop, dark on light). None has no
+    /// backdrop, so it follows the page (mood) background instead.
+    private var cardNameColor: Color {
+        let rgb = appState.effectiveTileBackground.backdropRGB(for: appState.moodPalette)
+            ?? appState.moodPalette.backgroundRGB
+        return SelectionStyle.relativeLuminance(rgb) < 0.5
+            ? Color.white.opacity(0.9)
+            : Color.black.opacity(0.55)
     }
 
     /// The native macOS icon / content preview when QuickLook has delivered it,

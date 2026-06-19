@@ -38,7 +38,7 @@ struct ImageLayoutSheet: View {
                             LayoutTile(
                                 layout: layout,
                                 isSelected: appState.imageLayout == layout,
-                                tileFill: appState.moodPalette.tileFill
+                                tileFill: Mood.paperPalette.tileFill
                             ) { appState.imageLayout = layout }
                         }
                     }
@@ -119,9 +119,9 @@ private struct LayoutTile: View {
                 VStack(spacing: 10) {
                     Text(layout.displayName)
                         .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(isSelected ? blue : .primary)
+                        .foregroundStyle(isSelected ? blue : Color.black.opacity(0.85))
                     LayoutIconView(kind: layout.iconKind,
-                                   color: isSelected ? blue : .secondary)
+                                   color: isSelected ? blue : Color.black.opacity(0.45))
                         .frame(width: 44, height: 44)
                 }
                 .padding(isSelected ? Self.selectionInset : 0)

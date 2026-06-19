@@ -83,6 +83,15 @@ struct MoodPickerView: View {
                     Divider().frame(height: 52)
                     tileGroup("Static", options: [.light, .darkGrey, .black])
                 }
+                .opacity(appState.imageLayout == .masonry ? 0.4 : 1)
+                .disabled(appState.imageLayout == .masonry)
+
+                if appState.imageLayout == .masonry {
+                    Text("Masonry always uses Auto. Pick a fixed ratio to choose a backdrop.")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
         .padding(16)
@@ -98,7 +107,7 @@ struct MoodPickerView: View {
             HStack(spacing: 10) {
                 ForEach(options) { option in
                     TileSwatch(option: option,
-                               isSelected: appState.tileBackground == option,
+                               isSelected: appState.effectiveTileBackground == option,
                                moodFill: appState.moodPalette.tileFill,
                                action: { appState.tileBackground = option })
                 }
@@ -178,6 +187,7 @@ private struct TileSwatch: View {
                     .font(.system(size: 9, weight: .medium))
                     .foregroundStyle(isSelected ? .primary : .secondary)
             }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }

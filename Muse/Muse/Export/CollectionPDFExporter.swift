@@ -2,15 +2,18 @@
 //  CollectionPDFExporter.swift
 //  Muse
 //
-//  Builds a paginated 11x14in PDF of a collection's images (whole images,
-//  masonry pack, page-1 title block) and writes it to a temp file. Heavy work
-//  (ImageIO decode + PDF draw) runs off the main thread. Returns the file URL.
+//  Builds a paginated 11x14in PDF of a collection's members (images decoded via
+//  ImageIO; non-image file cards rendered via QuickLook — the macOS type icon /
+//  content preview, mirroring the grid), masonry/ratio pack, page-1 title block,
+//  and writes it to a temp file. Heavy work (decode + PDF draw) runs off the main
+//  thread. Returns the file URL.
 //
 
 import CoreGraphics
 import ImageIO
 import CoreText
 import Foundation
+import QuickLookThumbnailing
 
 enum CollectionPDFExporter {
 
@@ -40,13 +43,12 @@ enum CollectionPDFExporter {
             var images: [(cg: CGImage, aspect: CGFloat, name: String)] = []
             images.reserveCapacity(urls.count)
             for url in urls {
-                guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { continue }
-                let opts: [CFString: Any] = [
-                    kCGImageSourceCreateThumbnailFromImageAlways: true,
-                    kCGImageSourceCreateThumbnailWithTransform: true,
-                    kCGImageSourceThumbnailMaxPixelSize: maxPixel
-                ]
-                guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { continue }
+                // Images decode fast via ImageIO; everything else (zip/pdf/doc…)
+                // falls back to QuickLook's macOS type icon / content preview,
+                // exactly like the grid's non-image cards.
+                var cg = imageIOThumbnail(url, maxPixel: maxPixel)
+                if cg == nil { cg = await quickLookThumbnail(url, maxPixel: maxPixel) }
+                guard let cg else { continue }
                 let w = CGFloat(cg.width), h = CGFloat(cg.height)
                 guard w > 0, h > 0 else { continue }
                 images.append((cg, h / w, url.lastPathComponent))
@@ -129,6 +131,28 @@ enum CollectionPDFExporter {
             guard data.write(to: outURL, atomically: true) else { return nil }
             return outURL
         }.value
+    }
+
+    /// Downsampled, orientation-corrected image thumbnail via ImageIO, or nil
+    /// when the file isn't an ImageIO-decodable image (e.g. zip/pdf/doc).
+    private static func imageIOThumbnail(_ url: URL, maxPixel: Int) -> CGImage? {
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        let opts: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary)
+    }
+
+    /// The macOS type icon / content preview for a non-image file, via QuickLook
+    /// (`.all` → same source as the grid's cards). Runs off the main thread.
+    private static func quickLookThumbnail(_ url: URL, maxPixel: Int) async -> CGImage? {
+        let size = CGSize(width: maxPixel, height: maxPixel)
+        let req = QLThumbnailGenerator.Request(
+            fileAt: url, size: size, scale: 1, representationTypes: .all)
+        let rep = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: req)
+        return rep?.cgImage
     }
 
     /// "Title  count" at 24pt, top-left of the content box. PDF (bottom-left)

@@ -177,3 +177,32 @@ per-image backdrop color. Paper stays white.
   they opt into a static tone.
 - The per-image backdrop is meaningful even in masonry export for images with
   transparency (e.g. PNG logos), where the color shows through the image.
+
+## Revisions (round 2 — post-implementation review)
+
+These refinements were made after driving the first build:
+
+1. **Masonry uses Auto only.** Masonry has no letterbox, so the static tones
+   wouldn't read anyway. When `imageLayout == .masonry` the effective backdrop
+   is forced to Auto and the picker's options are disabled (dimmed) with a note
+   ("Masonry always uses Auto. Pick a fixed ratio to choose a backdrop."). The
+   stored `tileBackground` is preserved, so switching back to a ratio restores
+   the prior pick. Implemented as `AppState.effectiveTileBackground` — used by
+   `tileFill`, the grid card text color, the picker highlight, and the export.
+2. **None swatch hit target.** The transparent "None" glyph wasn't hit-testable
+   over its empty area — added `.contentShape(Rectangle())` to the swatch so the
+   whole graphic + label is tappable (matching the other swatches).
+3. **File-card filename auto-contrast.** The card's internal filename now adapts
+   to the effective backdrop luminance (`SelectionStyle.relativeLuminance`):
+   light text on a dark backdrop, dark on light. None follows the page (mood)
+   background. Fixes unreadable names on Black/Dark Grey backdrops.
+4. **File cards export.** Export now includes non-image members (zip/pdf/doc…),
+   not just images. Folders are excluded. The exporter decodes images via
+   ImageIO and falls back to QuickLook (`QLThumbnailGenerator`, `.all`
+   representation) for everything else — the same macOS type icon / content
+   preview the grid cards show — drawn on the chosen backdrop like any image.
+   `ShareCollectionButton.imageURLs` → `exportURLs` (all non-folder members).
+5. **Image Layout modal is mood-independent.** `ImageLayoutSheet`'s tiles were
+   tinted by the mood (`moodPalette.tileFill`); they now use a fixed default
+   grey (`Mood.paperPalette.tileFill`) with fixed dark label/icon colors, so the
+   modal looks the same regardless of the app color or tile-background choice.

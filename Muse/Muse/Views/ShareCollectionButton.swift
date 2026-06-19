@@ -22,13 +22,11 @@ struct ShareCollectionButton: View {
     @State private var hovering = false
     @State private var preparing = false
 
-    /// The collection's displayed image members, in grid order.
-    private var imageURLs: [URL] {
+    /// The collection's displayed members, in grid order — images and file
+    /// cards alike (folders are excluded; they aren't grid content to export).
+    private var exportURLs: [URL] {
         (appState.activeCollectionFiles ?? []).compactMap { node in
-            switch node.kind {
-            case .image, .raw, .psd: return node.url
-            default: return nil
-            }
+            node.kind == .folder ? nil : node.url
         }
     }
 
@@ -54,14 +52,14 @@ struct ShareCollectionButton: View {
         .buttonStyle(.plain)
         .fixedSize()
         .onHover { hovering = $0 }
-        .disabled(preparing || count == 0 || imageURLs.isEmpty)
+        .disabled(preparing || count == 0 || exportURLs.isEmpty)
         .help("Share collection")
     }
 
     private func makePDF() async -> URL? {
-        let urls = imageURLs
+        let urls = exportURLs
         let layoutAspect = appState.imageLayout.aspect
-        let backdrop = appState.tileBackground
+        let backdrop = appState.effectiveTileBackground
             .backdropRGB(for: appState.moodPalette)
             .map { CGColor(red: $0.r, green: $0.g, blue: $0.b, alpha: 1) }
         return await CollectionPDFExporter.makePDF(
