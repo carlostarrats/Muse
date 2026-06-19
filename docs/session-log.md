@@ -1662,3 +1662,67 @@ Two small live UI fixes. Build + full `MuseTests` suite green.
   (uniform tall tiles, no crop, grey letterbox), and the modal selection. Spec +
   plan: `docs/superpowers/specs/2026-06-18-image-layout-design.md`,
   `docs/superpowers/plans/2026-06-18-image-layout.md`.
+
+## 2026-06-18 — `feat/next-22` — tile background (grid backdrop + PDF export)
+
+- **The grey behind images/file cards is now user-selectable, globally.** A new
+  "Tile Background" section in the mood popover (`MoodPickerView`) sets the
+  backdrop independent of the app mood: **None** (transparent), **Auto** (follows
+  the mood tile color — the default, so existing users see no change), and three
+  fixed neutrals **Light** `#FAFAFA` / **Dark Grey** `#555555` / **Black**
+  `#0D0D0D`. Motivation: a grey image on the grey backdrop disappears; the fix is
+  tonal, so neutral densities beat a custom color picker (it would mostly make
+  things worse). Grouped Automatic vs Static; the Auto swatch shows the live mood
+  color (so it visibly changes), None is a slash glyph.
+- **Model:** `Models/TileBackground.swift` — `enum TileBackground: String,
+  CaseIterable` with `displayName`, `backdropRGB(for:) -> MoodRGB?` (the single
+  resolver; nil = transparent, auto = mood `tileRGB`, statics = fixed), `fill(for:)
+  -> Color` (`.clear` for None), and `resolve(_:)` (default `.auto`). Persisted via
+  `AppSettings.tileBackground`, mirrored on `AppState.tileBackground` (@Published,
+  `didSet` write-back — the `mood`/`imageLayout` pattern). Unit-tested
+  (`TileBackgroundTests`, 5).
+- **Masonry = Auto only.** Masonry has no letterbox, so it always uses Auto;
+  only fixed ratios honor a static pick. Centralized as
+  `AppState.effectiveTileBackground` (`imageLayout == .masonry ? .auto :
+  tileBackground`) and consumed uniformly by `tileFill`, the picker's selection
+  highlight, the file-card text color, and the export. The stored pick is
+  preserved while in masonry (restores on switching back to a ratio); the picker
+  section dims + disables with a note.
+- **Grid:** `GridView.TileView`'s two `Rectangle().fill(...)` (image tile +
+  file card) now read `appState.tileFill`. The grid *background* (mood) is
+  unchanged. The non-image card's internal filename adapts to the backdrop
+  luminance via `SelectionStyle.relativeLuminance` (`cardNameColor` — light text
+  on dark, dark on light; None follows the page) so names stay readable on
+  Black/Dark Grey.
+- **PDF export now mirrors the on-screen grid** (supersedes next-21's "PDF keeps
+  its own masonry pack" scope note). `CollectionPDFExporter` takes `layoutAspect`
+  + `tileBackdrop`: the **paper page stays white**, but each image's backdrop is
+  filled with the chosen color (None = no fill → white/transparent through PNGs),
+  and a fixed ratio feeds a uniform aspect array so tiles match the grid's ratio.
+  Color fidelity: `MoodRGB.cgColor` (sRGB) matches the on-screen tile hue.
+- **File cards export too.** `ShareCollectionButton.imageURLs` → `exportURLs`
+  (all non-folder members, not just image/raw/psd). The exporter decodes images
+  via ImageIO and falls back to QuickLook (`QLThumbnailGenerator`, `.all` — the
+  same macOS type icon / content preview the grid cards show) for everything
+  else, drawn on the backdrop like any image. Decode runs with **bounded
+  concurrency** (8-wide `withTaskGroup`, order preserved by index) so a
+  file-card-heavy export doesn't serialize N QuickLook XPC round-trips.
+- **Image Layout modal is now mood-independent.** `ImageLayoutSheet`'s tiles were
+  tinted by `moodPalette.tileFill`; they now use a fixed default grey
+  (`Mood.paperPalette.tileFill`) with fixed label/icon colors, so the modal looks
+  the same regardless of the app color or tile-background choice.
+- **Also:** `ImageLayout.masonry` displayName "Mason" → "Masonry"
+  (`ImageLayoutTests` updated). None swatch got `.contentShape(Rectangle())` so
+  the whole swatch is tappable, not just the label.
+- **Review:** three finder passes (correctness / runtime-QA / cleanup-conventions)
+  + a focused verifier on the concurrency refactor. No correctness bugs;
+  effective-routing consistent, persistence sound (no spurious init write-back),
+  aspect/pagination index-aligned. Acted on two findings: serial QuickLook →
+  bounded concurrency, and generic→sRGB CGColor for export hue fidelity. Left by
+  design: picker shows Auto in masonry (intended), white caption band in PDF
+  (paper always white), ThumbnailCache decode duplication (off-main, CGImage,
+  no cache — justified).
+- **Verification:** Debug build green; full `xcodebuild -scheme Muse test` suite
+  green (0 failures, incl. 5 `TileBackgroundTests`). Spec + plan:
+  `docs/superpowers/specs/2026-06-18-tile-background-design.md`,
+  `docs/superpowers/plans/2026-06-18-tile-background.md`.

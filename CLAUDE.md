@@ -86,6 +86,7 @@ are the load-bearing reference artifacts.
 | Polish 10 — share a collection as a paginated 11×14 PDF (Save to… / Share menu) | ✅ built, unmerged | `feat/collection-pdf-share` |
 | Polish 11 — grid multi-select + actions (collection/tag/share/move), drag-to-move, Reveal in Finder, native search field | ✅ built, unmerged | `feat/multi-select` |
 | Polish 12 — folder ops (new subfolder + rename w/ DB migration) + hero Share/Open-With dropdown + Info modal refresh | ✅ built, unmerged | `feat/folder-ops-and-share` |
+| Polish 13 — tile background (global grid backdrop None/Auto/Light/Dark Grey/Black) + collection PDF export reflects the grid (ratio + per-image backdrop; paper stays white) + file cards now export | ✅ built, unmerged | `feat/next-22` |
 
 > **2026-06-16 session — three feature branches off `main`, not yet merged.**
 > Each has its own spec + plan in `docs/superpowers/`. Merge order is
@@ -259,6 +260,19 @@ The four most critical are also saved as Claude memories (linked).
   grid tile's selection (square fill shrinks/insets to blue inside a rounded 8pt
   ring). Extracted the shared `SheetCloseButton` (was copied in InfoSheet). Spec
   + plan in `docs/superpowers/`.
+- **2026-06-18** `feat/next-22` — tile background: the grey behind images/file
+  cards is a global, user-selectable backdrop (`TileBackground` enum: None /
+  Auto / Light / Dark Grey / Black; default Auto = follows mood), set in a new
+  section of the mood popover. Masonry forces Auto
+  (`AppState.effectiveTileBackground`); fixed ratios honor a static pick. Grid
+  tiles draw `AppState.tileFill`; the file-card filename auto-contrasts to the
+  backdrop (`SelectionStyle.relativeLuminance`). The collection PDF export now
+  mirrors the grid — the active ratio + per-image backdrop color, paper page
+  always white — and **file cards export** too (QuickLook icon/preview via the
+  exporter's bounded-concurrency decode). `ImageLayoutSheet` tiles fixed to a
+  mood-independent grey; `ImageLayout.masonry` displayName "Mason" → "Masonry".
+  New `Models/TileBackground.swift` (unit-tested) + `AppSettings.tileBackground`.
+  Spec + plan in `docs/superpowers/`.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
@@ -298,7 +312,11 @@ Muse/Muse/
                                    (feat/next-17). Owns collectionSortMode +
                                    collectionSortReversed (@Published, persisted)
                                    — the Collections-page card sort, independent of
-                                   the grid sortMode (feat/next-20)
+                                   the grid sortMode (feat/next-20). Owns
+                                   tileBackground (@Published, persisted) + the
+                                   computed effectiveTileBackground (masonry→Auto)
+                                   and tileFill (the resolved grid backdrop Color)
+                                   — feat/next-22
     AppState+Selection.swift       extension: grid MULTI-selection (selectedFiles:
                                    Set<String> of paths + anchor) — applyClick /
                                    clearSelection / selectAllVisible /
@@ -327,12 +345,23 @@ Muse/Muse/
     TagSortMode.swift              tag-chip sort order: .count (Most Used, default)
                                    / .alphabetical (A→Z). Drives
                                    TagChipLoader.ordered(_:sortMode:) — 2026-06-18
-    ImageLayout.swift              global grid image layout: .masonry (default) +
-                                   11 fixed aspect-ratio cases. Each exposes
-                                   displayName, aspect (h÷w, nil for masonry),
-                                   iconKind (the 4 generic modal previews) +
-                                   resolve(_:) default-masonry parse. Unit-tested
-                                   (feat/next-21)
+    ImageLayout.swift              global grid image layout: .masonry (default,
+                                   displayName "Masonry") + 11 fixed aspect-ratio
+                                   cases. Each exposes displayName, aspect (h÷w,
+                                   nil for masonry), iconKind (the 4 generic modal
+                                   previews) + resolve(_:) default-masonry parse.
+                                   Unit-tested (feat/next-21)
+    TileBackground.swift           global grid tile BACKDROP (behind images +
+                                   non-image cards): None (transparent) / Auto
+                                   (follows mood tileFill — default) / Light /
+                                   Dark Grey / Black fixed neutrals. backdropRGB(
+                                   for:)->MoodRGB? is the single resolver (nil =
+                                   transparent); fill(for:)->Color (.clear for
+                                   None); resolve(_:) default .auto. Persisted via
+                                   AppSettings.tileBackground, mirrored on
+                                   AppState. Masonry forces Auto via
+                                   AppState.effectiveTileBackground. Unit-tested
+                                   (feat/next-22)
   Filesystem/
     FileMover.swift                move(_:into:) via FileManager.moveItem; skips
                                    name collisions, returns failures; roots already
@@ -530,7 +559,9 @@ Muse/Muse/
                                    kills the pressed darken) over a "Common Sizes"
                                    reference list. LayoutIconView draws the 4 generic
                                    44×44 previews (mason/square/portrait/landscape).
-                                   Live-applies behind the open sheet (feat/next-21)
+                                   Live-applies behind the open sheet (feat/next-21).
+                                   Tiles use a fixed default grey + fixed text
+                                   colors (mood-independent — feat/next-22)
     SheetCloseButton.swift         shared circular hover-✕ for modal sheets (Esc via
                                    cancelAction); used by InfoSheet + ImageLayoutSheet
                                    (extracted from InfoSheet — feat/next-21)
@@ -552,7 +583,12 @@ Muse/Muse/
                                    PageScroll math (feat/page-scroll)
     ShareCollectionButton.swift    in-collection header menu — Save to… (NSSavePanel,
                                    Desktop) / Share (NSSharingServicePicker); builds
-                                   an 11×14 paginated PDF (feat/collection-pdf-share)
+                                   an 11×14 paginated PDF (feat/collection-pdf-share).
+                                   exportURLs = all non-folder members (file cards
+                                   included, not just images); passes the active
+                                   imageLayout.aspect + effectiveTileBackground
+                                   backdrop (sRGB cgColor) into the exporter so the
+                                   PDF mirrors the grid (feat/next-22)
     AspectRatioCache.swift         per-file aspect (h÷w) for layout: bulk DB
                                    width/height + ImageIO header fallback, off-main
     CollectionsPage.swift          dedicated Collections page (toolbar
@@ -578,7 +614,11 @@ Muse/Muse/
                                    hover-count layout (ChipFlow) + rename/delete
                                    dialogs. Scope (collection members vs folder) is
                                    decided by AppState.tagSourceFiles
-    MoodPickerView.swift           background popover (Light/Dark/Auto/Custom)
+    MoodPickerView.swift           background popover (Light/Dark/Auto/Custom) +
+                                   a "Tile Background" section (None/Auto/Light/
+                                   Dark Grey/Black → AppState.tileBackground;
+                                   disabled→Auto in masonry with a note) — feat/
+                                   next-22
     InfoSheet.swift                ⓘ About-Muse modal (behavior + privacy); uses
                                    the shared SheetCloseButton (feat/next-21)
     KeyCaptureView.swift           NSView arrow/return capture (hero flips)
@@ -628,7 +668,13 @@ Muse/Muse/
                                    CoreText 11×14 header (feat/collection-pdf-share)
                                    + a centered, ellipsis-truncated filename caption
                                    under each image (CTLineCreateTruncatedLine,
-                                   2026-06-17)
+                                   2026-06-17). makePDF(layoutAspect:tileBackdrop:)
+                                   mirrors the grid: fixed ratio → uniform aspect
+                                   array; per-image backdrop fill (paper page stays
+                                   white); non-image files fall back to QuickLook
+                                   (QLThumbnailGenerator .all) so file cards render;
+                                   decode runs 8-wide via withTaskGroup, order
+                                   preserved (feat/next-22)
   Effects/                         (was Fluid/, renamed 2026-06-17; water ripple
                                    removed 2026-06-13 and the burn-up delete
                                    SHADER removed too — NO Metal shaders remain)
@@ -646,7 +692,9 @@ Muse/Muse/
                                    collectionSortReversed (default false;
                                    Collections-page card sort — feat/next-20). Plus
                                    imageLayout (default masonry; global grid layout,
-                                   mirrored on AppState — feat/next-21)
+                                   mirrored on AppState — feat/next-21). Plus
+                                   tileBackground (default auto; global grid tile
+                                   backdrop, mirrored on AppState — feat/next-22)
     SettingsView.swift             Preferences window (app menu → Settings…,
                                    ⌘,): the two auto-organization toggles
                                    (auto-tag new images / auto-organize into
@@ -740,7 +788,8 @@ before implementation.
 3. Toolbar (left → right): sidebar toggle · sort · sort-direction arrow
    (flips the active mode's order — newest↔oldest, A↔Z, …) · show-subfolders ·
    search (center) · Collections (square.stack.3d.up) · Image Layout
-   (square.grid.2x2) · background mood ·
+   (square.grid.2x2) · background mood (paintpalette — popover also holds the
+   Tile Background picker) ·
    ⓘ About. (The grid/cloud/galaxy view picker and the water effect were
    removed 2026-06-13; the clear-collection ✕ was removed in favor of back
    arrows.) Find Duplicates lives in the File menu; Pin/Unpin Folder and
