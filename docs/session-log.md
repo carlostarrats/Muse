@@ -1469,3 +1469,35 @@ Two small live UI fixes. Build + full `MuseTests` suite green.
   hero now closes on a single Escape. Recorded as a durable "must not break" in
   CLAUDE.md (don't add a separate `viewerDismissing` write to the Escape path).
 - Released as **v1.1.2** (direct distribution + Sparkle; `scripts/release.sh`).
+
+## 2026-06-18 — `feat/next-19` — "New Collection from Selection"
+
+- **New right-click action.** The grid tile context menu (`SelectionActionsMenu`
+  in `Views/SelectionMenu.swift`) gains a top-level **"New Collection from
+  Selection"** button, placed immediately under the existing "Add to Collection"
+  submenu. It creates a brand-new collection from the effective selection (the
+  multi-selection, or just the right-clicked tile) and adds those images to it.
+  Purely additive — nothing existing changed behavior; only the file's top doc
+  comment was refreshed (it was stale re: the already-shipped Move-to-Folder and
+  remove actions too).
+- **Reuses the existing building blocks, no new storage logic.** The handler
+  `newCollectionFromSelection()` mirrors `addToCollection(_:)` but creates the
+  destination first: resolve paths→file IDs (`CollectionStore.fileIDs`), then
+  `CollectionStore.createManual` (auto-names `"Collection N"` via
+  `ManualCollectionName.next` inside one atomic write transaction, `model_version
+  = 'manual'`, returns the new id), then `addFile` per file, then
+  `CollectionsEngine.reload()`. One guard the add-to-existing path lacks: if the
+  file-ID lookup is empty, it bails instead of creating an orphan empty
+  collection.
+- **After-create UX:** stay put, no navigation — matches the Collections-page
+  "+" button. The new collection surfaces in the Collections page on the reload.
+- **Why the empty-collection window is safe:** a `'manual'` collection is
+  protected from the recluster's stale-deletion the instant its row exists
+  (`protectedCollectionIDs` covers all `model_version='manual'` rows regardless
+  of membership), so a recluster racing between create and the addFile loop can't
+  drop it. `reload()` is a pure read (`fetchAll`), so it never reclusters/renames
+  the manual collection.
+- **Verification:** Debug build succeeded; full `xcodebuild -scheme Muse test`
+  suite green (28 cases, 0 failures, incl. the manual-collection naming/visibility
+  tests). Independent code review found no blockers. Spec:
+  `docs/superpowers/specs/2026-06-18-new-collection-from-selection-design.md`.

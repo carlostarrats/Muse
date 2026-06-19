@@ -235,6 +235,9 @@ The four most critical are also saved as Claude memories (linked).
 - **2026-06-18** `main` (release v1.1.2) — fix the next-18 regression: Escape
   needed two presses. ContentView's Escape handler now fires only
   `viewerClosing`; `startClose()` owns the whole close (matches X).
+- **2026-06-18** `feat/next-19` — right-click "New Collection from Selection":
+  create an auto-named manual collection from the selected image(s) (additive
+  beside "Add to Collection"; reuses createManual + addFile, no navigation).
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
@@ -478,9 +481,12 @@ Muse/Muse/
                                    below each tile (MasonryGeometry.captionHeight strip;
                                    internal card name when off) — all tiles square-
                                    cornered (feat/next-11)
-    SelectionMenu.swift            SelectionActionsMenu — Add to Collection / Add
-                                   Tag / Share / Move to Folder over the effective
-                                   selection (feat/multi-select)
+    SelectionMenu.swift            SelectionActionsMenu — Add to Collection /
+                                   New Collection from Selection (auto-named
+                                   "Collection N" via createManual, then adds the
+                                   selection — feat/next-19) / Add Tag / Share /
+                                   Move to Folder over the effective selection
+                                   (feat/multi-select)
     OutsideClickDeselect.swift     0×0 NSView + window leftMouseDown monitor that
                                    clears the selection on any click outside the
                                    grid's enclosingScrollView (feat/multi-select)
