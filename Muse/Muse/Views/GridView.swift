@@ -624,7 +624,7 @@ private struct TileView: View {
             // lands, so a cold grid resolves as a soft fade.
             ZStack {
                 Rectangle()
-                    .fill(appState.moodPalette.tileFill)
+                    .fill(appState.tileFill)
                 if thumbnail == nil {
                     let tuning = shimmerTuning(
                         isCustom: appState.mood == .custom,
@@ -649,7 +649,7 @@ private struct TileView: View {
             // QuickLook genuinely fails.
             ZStack {
                 Rectangle()
-                    .fill(appState.moodPalette.tileFill)
+                    .fill(appState.tileFill)
                 if showFileNames {
                     // Name lives below the card (the body caption); show the
                     // icon/preview using the whole card.
