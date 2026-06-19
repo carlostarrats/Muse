@@ -1559,3 +1559,46 @@ Two small live UI fixes. Build + full `MuseTests` suite green.
   green (0 failures). Spec + plan:
   `docs/superpowers/specs/2026-06-18-unify-collections-plus-modal-design.md`,
   `docs/superpowers/plans/2026-06-18-unify-collections-plus-modal.md`.
+
+## 2026-06-18 — `feat/next-20` — sort the Collections page
+
+- **The Collections card grid is now sortable.** It was hardcoded to display
+  alphabetical A→Z; now the existing toolbar **sort menu** + **direction arrow**
+  drive it. On the Collections page the menu lists only the modes that apply to a
+  *group* — **Name / Date Created / Date Modified** — hiding Size/Kind/Color/Shape
+  (per-image properties a collection lacks). The arrow flips each (A→Z/Z→A,
+  Newest/Oldest first), reusing `SortMode.defaultAscending` / `directionLabel`.
+- **Pure helper** (`Intelligence/Collections/CollectionSort.swift`): a
+  `nonisolated enum CollectionSort` with `Item(id/name/createdAt/updatedAt)` and
+  `order(_:by:reversed:)`, mirroring `FolderSort`. Name uses
+  `localizedStandardCompare` (numeric-aware, matching the grid's `.name`); the
+  date modes are newest-first with a name tiebreak; `reversed` flips the whole
+  result (same strategy as `SmartSorter.apply`). Unit-tested in
+  `MuseTests/CollectionSortTests.swift` (6 cases).
+- **State** (`AppState`): `collectionSortMode` (default `.name`) +
+  `collectionSortReversed` (default `false`), both `@Published` and persisted in
+  `AppSettings` via `.dropFirst()` Combine sinks — **independent** of the grid's
+  `sortMode`/`sortReversed`, the same isolation tag/folder sorts already have.
+  Defaulting to Name-not-reversed reproduces the old A→Z exactly.
+  `toggleCollectionSortDirection()` just flips the flag; the card grid re-sorts
+  reactively off the `@Published` change (no `resort()` — unlike the grid there's
+  no stored array). `SortMode.collectionCases = [.name, .dateCreated,
+  .dateModified]` is the menu's source list.
+- **Toolbar** (`ContentView.swift`): `sortMenu` + `sortDirectionButton` are now
+  context-aware via the `isCollectionsPage` ternary (computed `cases` + a
+  computed `Binding`, so the Picker isn't duplicated); the sort cluster's
+  `.disabled(isCollectionsPage || isSearchActive)` relaxed to
+  `.disabled(isSearchActive)`. Drilled INTO a collection or searching falls back
+  to the grid `sortMode` as before. The tag-sort menu stays disabled on the page.
+- **`CollectionsPage.sorted`** maps `engine.collections` → `CollectionSort.Item`,
+  calls `order(...)`, and reorders by the returned ids (`id` is the PK, so the
+  `Dictionary(uniqueKeysWithValues:)` is collision-safe).
+- **Review:** three independent finder passes (correctness / removed-behavior +
+  cross-file / cleanup + conventions) found no correctness bugs; the one applied
+  cleanup collapsed the `sortMenu` if/else into a single computed-binding Picker
+  to match the neighboring ternary style. No CLAUDE.md rule violated, no schema
+  change (`collections.created_at`/`updated_at` already exist).
+- **Verification:** Debug build green; full `xcodebuild -scheme Muse test` suite
+  green (0 failures, incl. the 6 new `CollectionSortTests`). Spec + plan:
+  `docs/superpowers/specs/2026-06-18-collections-page-sort-design.md`,
+  `docs/superpowers/plans/2026-06-18-collections-page-sort.md`.

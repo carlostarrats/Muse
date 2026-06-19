@@ -57,4 +57,25 @@ enum AppSettings {
         }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: tagSortModeKey) }
     }
+
+    static let collectionSortModeKey = "collectionSortMode"
+
+    /// Collections-page sort mode. Default `.name` (A→Z), matching the page's
+    /// original hardcoded order. Unset → name.
+    static var collectionSortMode: SortMode {
+        get {
+            (UserDefaults.standard.string(forKey: collectionSortModeKey))
+                .flatMap(SortMode.init(rawValue:)) ?? .name
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: collectionSortModeKey) }
+    }
+
+    static let collectionSortReversedKey = "collectionSortReversed"
+
+    /// Whether the Collections-page sort is flipped from its mode's natural
+    /// direction. Default false. Unset → false.
+    static var collectionSortReversed: Bool {
+        get { UserDefaults.standard.bool(forKey: collectionSortReversedKey) }
+        set { UserDefaults.standard.set(newValue, forKey: collectionSortReversedKey) }
+    }
 }

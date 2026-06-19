@@ -5,7 +5,8 @@
 //  The dedicated Collections page, reached via the toolbar's collections
 //  icon. A "Collections" header (back arrow, no edit/trash) sits above a
 //  vertically-scrolling grid of cover cards — four per row, resized to fit
-//  the window width, ordered alphabetically. Tapping a card drills into the
+//  the window width, ordered by the toolbar sort (name / date created / date
+//  modified). Tapping a card drills into the
 //  collection (the filtered grid + in-collection header takes over while the
 //  page stays "open", so the in-collection back arrow returns here).
 //
@@ -21,12 +22,22 @@ struct CollectionsPage: View {
     private let vGap: CGFloat = 52
     private let hInset: CGFloat = 14
 
-    /// Collections, A→Z (case-insensitive).
+    /// Collections ordered by the Collections-page sort (Name / Date Created /
+    /// Date Modified + direction). Reactive: changing the toolbar sort or arrow
+    /// updates `appState.collectionSort*`, which re-runs this computed property.
     private var sorted: [CollectionStore.Loaded] {
-        engine.collections.sorted {
-            $0.collection.name.localizedCaseInsensitiveCompare($1.collection.name)
-                == .orderedAscending
+        let loaded = engine.collections
+        let items = loaded.map {
+            CollectionSort.Item(id: $0.collection.id,
+                                name: $0.collection.name,
+                                createdAt: $0.collection.created_at,
+                                updatedAt: $0.collection.updated_at)
         }
+        let orderedIDs = CollectionSort.order(items,
+                                              by: appState.collectionSortMode,
+                                              reversed: appState.collectionSortReversed)
+        let byID = Dictionary(uniqueKeysWithValues: loaded.map { ($0.collection.id, $0) })
+        return orderedIDs.compactMap { byID[$0] }
     }
 
     var body: some View {

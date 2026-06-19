@@ -104,6 +104,8 @@ final class AppState: ObservableObject {
     /// Move Up/Down items can reactively gate on Manual mode — see MuseApp.
     @Published var folderSortMode: FolderSortMode = AppSettings.folderSortMode
     private var folderSortModeCancellable: AnyCancellable?
+    private var collectionSortModeCancellable: AnyCancellable?
+    private var collectionSortReversedCancellable: AnyCancellable?
 
     /// Currently selected file (drives preview/detail).
     @Published var selectedFile: FileNode?
@@ -162,6 +164,29 @@ final class AppState: ObservableObject {
     func toggleSortDirection() {
         sortReversed.toggle()
         resort()
+    }
+
+    /// Collections-page sort mode — independent of the grid `sortMode` so
+    /// sorting collections never disturbs the image grid (same isolation as
+    /// `tagSortMode` / `folderSortMode`). Only `SortMode.collectionCases` are
+    /// ever selectable in the UI. Persisted via a sink in `init`.
+    @Published var collectionSortMode: SortMode = AppSettings.collectionSortMode
+
+    /// Flip the collections sort's natural order (the toolbar arrow, on the
+    /// Collections page). Persisted via a sink in `init`.
+    @Published var collectionSortReversed: Bool = AppSettings.collectionSortReversed
+
+    /// Effective ascending/descending for the Collections page (default XOR
+    /// reversed) — drives the toolbar arrow + tooltip there.
+    var collectionSortAscending: Bool {
+        collectionSortReversed ? !collectionSortMode.defaultAscending
+                               : collectionSortMode.defaultAscending
+    }
+
+    /// Flip the collections sort direction. The card grid re-sorts reactively
+    /// off the `@Published` change — no manual resort needed.
+    func toggleCollectionSortDirection() {
+        collectionSortReversed.toggle()
     }
 
     /// Whether the right-side detail panel (tags, metadata) is visible.
@@ -447,6 +472,15 @@ final class AppState: ObservableObject {
         folderSortModeCancellable = $folderSortMode
             .dropFirst()
             .sink { mode in AppSettings.folderSortMode = mode }
+
+        // Collections-page sort → persist. CollectionsPage re-renders off the
+        // @Published change; nothing else to recompute here.
+        collectionSortModeCancellable = $collectionSortMode
+            .dropFirst()
+            .sink { mode in AppSettings.collectionSortMode = mode }
+        collectionSortReversedCancellable = $collectionSortReversed
+            .dropFirst()
+            .sink { reversed in AppSettings.collectionSortReversed = reversed }
 
         // App Intents wiring
         NotificationCenter.default.addObserver(

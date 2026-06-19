@@ -94,9 +94,10 @@ struct ContentView: View {
                         // Flip the active sort mode's direction (newest↔oldest, A↔Z, …).
                         sortDirectionButton
                     }
-                    // Sorting is meaningless on the Collections card grid, and
-                    // it doesn't apply to search results (ranked by relevance).
-                    .disabled(isCollectionsPage || appState.isSearchActive)
+                    // The sort cluster is live on the Collections page (it sorts
+                    // the cards) and on the grid; only search disables it
+                    // (results are ranked by relevance).
+                    .disabled(appState.isSearchActive)
                 }
 
                 // Tag-chip sort order (Most Used / A→Z) — its own item, sitting
@@ -321,16 +322,28 @@ struct ContentView: View {
 
     @ViewBuilder
     private var sortMenu: some View {
+        // On the Collections page the menu sorts the cards (collection modes
+        // only); elsewhere it sorts the grid (all modes). Mirrors the
+        // `isCollectionsPage` ternary in sortDirectionButton + the help below.
+        let cases = isCollectionsPage ? SortMode.collectionCases : SortMode.allCases
+        let selection = Binding(
+            get: { isCollectionsPage ? appState.collectionSortMode : appState.sortMode },
+            set: { mode in
+                if isCollectionsPage {
+                    appState.collectionSortMode = mode
+                } else {
+                    appState.sortMode = mode
+                    appState.resort()
+                }
+            }
+        )
         Menu {
-            // Picker gives native menu checkmarks (the empty-systemImage
-            // Label hack logged "no symbol named ''" console noise).
-            // One flat list — Color and Shape simply use Analyze data when
-            // it exists, no Standard/Smart ceremony.
-            Picker("Sort", selection: Binding(
-                get: { appState.sortMode },
-                set: { appState.sortMode = $0; appState.resort() }
-            )) {
-                ForEach(SortMode.allCases) { mode in
+            // Picker gives native menu checkmarks (the empty-systemImage Label
+            // hack logged "no symbol named ''" console noise). One flat list —
+            // on the grid, Color and Shape simply use Analyze data when it
+            // exists, no Standard/Smart ceremony.
+            Picker("Sort", selection: selection) {
+                ForEach(cases) { mode in
                     Text(mode.displayName).tag(mode)
                 }
             }
@@ -339,7 +352,7 @@ struct ContentView: View {
         } label: {
             Image(systemName: "arrow.up.and.down.text.horizontal")
         }
-        .help("Sort: \(appState.sortMode.displayName)")
+        .help("Sort: \(isCollectionsPage ? appState.collectionSortMode.displayName : appState.sortMode.displayName)")
     }
 
     /// Orders the tag chips above the grid: Most Used (count) or A→Z.
@@ -361,18 +374,21 @@ struct ContentView: View {
         .help("Tag order: \(appState.tagSortMode.label)")
     }
 
-    /// Flips the current sort mode's direction. The arrow points up for an
-    /// ascending order, down for descending; the tooltip spells out what that
+    /// Flips the active sort mode's direction. On the Collections page it flips
+    /// the collections sort; elsewhere it flips the grid sort. The arrow points
+    /// up for ascending, down for descending; the tooltip spells out what that
     /// means for the active mode (e.g. "Newest first" vs "Oldest first").
     private var sortDirectionButton: some View {
-        Button {
-            appState.toggleSortDirection()
+        let ascending = isCollectionsPage ? appState.collectionSortAscending : appState.sortAscending
+        let mode = isCollectionsPage ? appState.collectionSortMode : appState.sortMode
+        return Button {
+            if isCollectionsPage { appState.toggleCollectionSortDirection() }
+            else { appState.toggleSortDirection() }
         } label: {
-            Image(systemName: appState.sortAscending ? "arrow.up" : "arrow.down")
+            Image(systemName: ascending ? "arrow.up" : "arrow.down")
         }
-        .help(appState.sortMode.directionLabel(ascending: appState.sortAscending))
-        .accessibilityLabel("Sort direction: "
-                            + appState.sortMode.directionLabel(ascending: appState.sortAscending))
+        .help(mode.directionLabel(ascending: ascending))
+        .accessibilityLabel("Sort direction: " + mode.directionLabel(ascending: ascending))
     }
 
     @ViewBuilder

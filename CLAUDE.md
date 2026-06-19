@@ -241,6 +241,13 @@ The four most critical are also saved as Claude memories (linked).
   a "Name Collection" .alert (Rename-Folder pattern) names it on confirm;
   Cancel/blank creates nothing. The Collections-page "+" is unified onto the
   same modal (empty selection → empty named collection).
+- **2026-06-18** `feat/next-20` — Collections-page sort: the toolbar sort menu +
+  direction arrow are now live on the Collections card grid, showing only the
+  modes that apply to a group (Name / Date Created / Date Modified — Size/Kind/
+  Color/Shape hidden). New pure `CollectionSort` helper (mirrors `FolderSort`,
+  unit-tested); `AppState.collectionSortMode`/`collectionSortReversed`
+  (@Published, persisted in `AppSettings`), independent of the grid sort. Spec +
+  plan in `docs/superpowers/`.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
@@ -277,7 +284,10 @@ Muse/Muse/
                                    folderSortMode (@Published, persisted via a
                                    Combine sink) so the sidebar + the Edit-menu
                                    Move Up/Down reorder share one reactive source
-                                   (feat/next-17)
+                                   (feat/next-17). Owns collectionSortMode +
+                                   collectionSortReversed (@Published, persisted)
+                                   — the Collections-page card sort, independent of
+                                   the grid sortMode (feat/next-20)
     AppState+Selection.swift       extension: grid MULTI-selection (selectedFiles:
                                    Set<String> of paths + anchor) — applyClick /
                                    clearSelection / selectAllVisible /
@@ -418,6 +428,9 @@ Muse/Muse/
       CollectionsEngine.swift      two-track recluster: intent collections (typed
                                    screenshots) + emergent (everything else)
       IntentCollections.swift      pure: which intent buckets qualify (≥3 members)
+      CollectionSort.swift         pure Collections-page ordering (Name / Date
+                                   Created / Date Modified + reverse); mirrors
+                                   FolderSort, unit-tested (feat/next-20)
     AnalyzePipeline.swift          AUTOMATIC after indexing — analyzes only stale
                                    analyzed_hash files; writes FileRow, tags, FTS5;
                                    classifies screenshot intent (gated)
@@ -508,8 +521,11 @@ Muse/Muse/
     CollectionsPage.swift          dedicated Collections page (toolbar
                                    square.stack.3d.up): "Collections" header (back
                                    arrow + a far-right "+" New Collection button,
-                                   trash-button sized) over a 4-up alphabetical
-                                   card grid that resizes to fit, scrolls vertically.
+                                   trash-button sized) over a 4-up card grid that
+                                   resizes to fit, scrolls vertically; ordered by
+                                   the toolbar sort (Name / Date Created / Date
+                                   Modified + direction) via CollectionSort,
+                                   defaulting to Name A→Z (feat/next-20).
                                    The "+" opens the shared "Name Collection" modal
                                    (appState.requestNewCollection(), empty selection
                                    → empty named collection) — same flow as the grid's
@@ -587,7 +603,10 @@ Muse/Muse/
                                    AnalyzePipeline + CollectionsEngine. Plus
                                    showFileNames (default OFF; read by GridView —
                                    feat/next-11). Plus folderSortMode (default
-                                   manual; sidebar folder sort — 2026-06-18)
+                                   manual; sidebar folder sort — 2026-06-18). Plus
+                                   collectionSortMode (default name) +
+                                   collectionSortReversed (default false;
+                                   Collections-page card sort — feat/next-20)
     SettingsView.swift             Preferences window (app menu → Settings…,
                                    ⌘,): the two auto-organization toggles
                                    (auto-tag new images / auto-organize into

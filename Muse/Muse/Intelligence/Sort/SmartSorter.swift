@@ -58,6 +58,11 @@ enum SortMode: String, CaseIterable, Identifiable {
         case .dominantColor:              return ascending ? "Ascending" : "Descending"
         }
     }
+
+    /// The sort modes that apply to a *collection* (a group, not a file).
+    /// Size/Kind/Color/Shape are per-image properties a collection lacks, so the
+    /// Collections-page sort menu shows only these three.
+    static let collectionCases: [SortMode] = [.name, .dateCreated, .dateModified]
 }
 
 // Nonisolated: pure value-type sorting plus thread-safe DB reads
