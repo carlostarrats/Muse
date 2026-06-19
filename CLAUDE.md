@@ -87,6 +87,7 @@ are the load-bearing reference artifacts.
 | Polish 11 — grid multi-select + actions (collection/tag/share/move), drag-to-move, Reveal in Finder, native search field | ✅ built, unmerged | `feat/multi-select` |
 | Polish 12 — folder ops (new subfolder + rename w/ DB migration) + hero Share/Open-With dropdown + Info modal refresh | ✅ built, unmerged | `feat/folder-ops-and-share` |
 | Polish 13 — tile background (global grid backdrop None/Auto/Light/Dark Grey/Black) + collection PDF export reflects the grid (ratio + per-image backdrop; paper stays white) + file cards now export | ✅ built, unmerged | `feat/next-22` |
+| Polish 14 — Duplicates modal redesign: grid-style tile selection (blue inset ring, no tint, image fits), KEEP badge follows survivors, suggested deletes pre-selected + overridable, reveal-in-Finder per tile, "never delete a whole group" protection (2-copy swap / 3+ lock) | ✅ built, unmerged | `feat/next-23` |
 
 > **2026-06-16 session — three feature branches off `main`, not yet merged.**
 > Each has its own spec + plan in `docs/superpowers/`. Merge order is
@@ -167,6 +168,14 @@ The four most critical are also saved as Claude memories (linked).
   upserts never clear), NOT a row delete (which silently regenerates).
 - **Bulk tag delete leaves `analyzed_hash` untouched** so the auto-tagger never
   resurrects removed tags; they only return via an explicit Regenerate.
+- **Duplicates modal never fully deletes a group** — at least one copy of every
+  duplicate group is always kept. The delete set is a global `Set<URL>` but a file
+  can be in several groups (byte-exact + filename + visual), so the rule
+  (`DuplicateDeleteRules`) checks EVERY group a file belongs to, not just the
+  first; selecting that would empty a group is refused (3+ copies) or swaps (a
+  single 2-copy group), and cross-group pre-seed conflicts are reconciled by
+  `rescued`. Don't reintroduce a per-`first`-group check — it lets overlapping
+  groups bypass the guarantee.
 
 ### Session index (detail in `docs/session-log.md`)
 
@@ -273,6 +282,19 @@ The four most critical are also saved as Claude memories (linked).
   mood-independent grey; `ImageLayout.masonry` displayName "Mason" → "Masonry".
   New `Models/TileBackground.swift` (unit-tested) + `AppSettings.tileBackground`.
   Spec + plan in `docs/superpowers/`.
+- **2026-06-18** `feat/next-23` — Duplicates modal redesign: each duplicate is a
+  grid-style tile (image fits/no-crop on a transparent square that reveals the
+  card grey; marking for delete insets the image + draws a blue ring, no tint;
+  fixed modal colors, not the mood accent) with a reveal-in-Finder button. The
+  finder's suggested keeper is no longer locked — groups open with non-keeper
+  copies pre-marked for delete (overridable), and the green KEEP badge tracks
+  **survivors** (any tile not marked), so multiple keeps are allowed. A group can
+  never be fully deleted: 3+ copy groups lock the last survivor, a 2-copy group
+  swaps instead (selecting the survivor frees the other). Because one file can be
+  in several groups (byte-exact + filename + visual) over a global delete set, the
+  rule checks **every** group a file is in. Pure `Intelligence/Dedup/DuplicateDeleteRules.swift`
+  (`seed`/`rescued`/`isLocked`/`selecting`, unit-tested) — mirrors `GridSelection`/
+  `CollectionSort`. Only `DuplicatesView.swift` + the helper changed.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
@@ -463,6 +485,15 @@ Muse/Muse/
     Dedup/
       DuplicateFinder.swift        byte-exact + visual + filename clusterers
                                    with smart-suggest only where signal is strong
+      DuplicateDeleteRules.swift   pure delete-selection rules for the Duplicates
+                                   modal: seed (pre-mark non-keepers), rescued
+                                   (un-mark a survivor for any group left fully
+                                   selected — overlapping groups can disagree),
+                                   isLocked + selecting (a group is never fully
+                                   deleted; one file can be in several groups, so
+                                   the rule checks ALL of them; single 2-copy group
+                                   swaps). Unit-tested; mirrors GridSelection
+                                   (feat/next-23)
     Core/
       PaletteExtractor.swift       k-means palette (RGBA-redraw; BGRA bug fixed)
       CollectionNaming.swift       Foundation Models namer (gated) → tag fallback
@@ -627,7 +658,19 @@ Muse/Muse/
     ImageDetailPanel.swift         fit/100% preview overlay
     QuickLookFallback.swift        QLPreviewView wrapper
     ViewerRouter.swift             AssetKind → viewer dispatch
-    DuplicatesView.swift           review pane with delete-to-Trash
+    DuplicatesView.swift           review pane with delete-to-Trash. Each duplicate
+                                   is a grid-style tile (DuplicateImageTile: image
+                                   fits/no-crop on a transparent square → reveals
+                                   the card grey; marking-for-delete insets it +
+                                   blue ring, no tint; fixed colors, not the mood
+                                   accent) + a reveal-in-Finder button. Opens with
+                                   non-keeper copies pre-marked (overridable); the
+                                   KEEP badge tracks survivors (multiple keeps ok).
+                                   All delete-selection rules + the "never fully
+                                   delete a group" guarantee live in the pure
+                                   DuplicateDeleteRules; the view is a thin renderer
+                                   (observes DuplicateFinder via @ObservedObject)
+                                   (feat/next-23)
     Viewer/                        hero image viewer (HeroImageViewer, HeroStage,
                                    ViewerInfoColumn, backdrop, geometry, toast,
                                    PillFlow/PillRowModel)

@@ -1726,3 +1726,61 @@ Two small live UI fixes. Build + full `MuseTests` suite green.
   green (0 failures, incl. 5 `TileBackgroundTests`). Spec + plan:
   `docs/superpowers/specs/2026-06-18-tile-background-design.md`,
   `docs/superpowers/plans/2026-06-18-tile-background.md`.
+
+## 2026-06-18 — `feat/next-23` — Duplicates modal redesign (grid-style selection + keep-one protection)
+
+Reworked the Find-Duplicates review modal (`DuplicatesView`) around four user
+asks. The old modal locked you into the finder's single suggested keeper (its
+Delete toggle was `.disabled(isSuggestedKeeper)`) — you couldn't override it —
+and rendered fill-cropped 140² thumbnails with a checkbox.
+
+- **The keeper is a suggestion, not a lock.** Removed the disabled-keeper toggle.
+  A group now opens with its **non-keeper copies pre-marked for delete** (a smart
+  default), fully overridable. The green **KEEP** badge is no longer pinned to the
+  finder's pick — it tracks **survivors**: any tile not currently marked for
+  delete. Delete the suggested keeper and KEEP jumps to whatever you leave kept;
+  keep several in a 5-copy group → several KEEP badges.
+- **Grid-style selection, modal-fixed colors.** Each duplicate is a `DuplicateImageTile`
+  mirroring a grid tile / the Image Layout modal: image **fits (never crops)** on
+  a square whose backdrop is **transparent**, so letterbox gaps and the selection
+  inset reveal the modal's grey card behind it (not white). Marking for delete
+  insets the image and draws a **blue ring** at the outer edge — **no tint**, so
+  the picture stays fully visible. Colors are fixed (`Color.accentColor`, system
+  greys), NOT the mood-adaptive grid accent — a modal shouldn't shift with the
+  background palette. Click the tile **or** the Delete checkbox; both set the same
+  state. Subtle hover-darken on toggleable, unselected tiles only.
+- **Reveal in Finder per tile.** A frosted magnifier button (top-trailing,
+  mirroring the KEEP badge top-leading) → `NSWorkspace.activateFileViewerSelecting`.
+- **A group can never be fully deleted (protection).** At least one copy always
+  survives. In a 3+ copy group the last survivor is **locked** (disabled checkbox,
+  tap gated, "At least one copy must be kept" tooltip + VoiceOver value); in a
+  **2-copy** group the survivor stays clickable and **swaps** instead (selecting it
+  frees the other), so you don't have to deselect first. To remove the last copy,
+  delete it from the grid or in Finder.
+- **Cross-group correctness (review fix).** `DuplicateFinder` appends byte-exact +
+  filename + visual groups over the same files, so one file can be in multiple
+  groups while the delete set (`selected: Set<URL>`) is global. The "keep one"
+  rule is therefore evaluated against **every** group a file belongs to, not the
+  first — `wouldEmptyAGroup` checks all of them, the swap only fires for a file in
+  a single 2-copy group, and seeding is reconciled by `rescued` (un-marks a
+  survivor for any group left fully selected when overlapping groups disagree).
+  `seedDefaults` also prunes stale selections from a prior scan.
+- **Pure, tested rules.** Extracted `Intelligence/Dedup/DuplicateDeleteRules.swift`
+  (`seed` / `rescued` / `isLocked` / `selecting`) — mirrors the `GridSelection` /
+  `CollectionSort` pattern (pure enum, unit-tested; UI stays a thin renderer).
+  `DuplicateDeleteRulesTests` (17) cover the invariant, the 2-copy swap, locking,
+  and cross-group overlap/rescue. Also added an `@ObservedObject` on the shared
+  `DuplicateFinder` (the old `body` read `.shared.groups` directly and never
+  subscribed) and a VoiceOver `accessibilityAction` on the tile.
+- **Review:** three finder passes (correctness / removed-behavior+cross-file /
+  cleanup-conventions) + an adversarial verifier on the group-aware rules. The
+  cross-group invalidation was the one real bug, now fixed and proven (rescue is
+  remove-only, so a single pass reaches a fixpoint — no loop needed). Left by
+  design: `DuplicateImageTile`/`AsyncThumbnail` don't share `GridView.TileView`
+  (that one is mood-adaptive + grid-coupled; this modal is fixed-color by intent);
+  conservative locking when a file sits in multiple groups (errs toward keeping).
+- **Verification:** Debug build green; full `xcodebuild -scheme Muse test` suite
+  green (0 failures, incl. 17 `DuplicateDeleteRulesTests`). Drove the running app
+  and confirmed the redesign visually (grid-style tiles, KEEP-follows-survivors,
+  blue inset ring, reveal button); UI-automation of a fresh re-scan was blocked by
+  macOS Apple-event TCC, so the seeded-default open state was user-verified.
