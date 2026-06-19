@@ -18,6 +18,7 @@ struct ContentView: View {
     @ObservedObject private var collectionsEngine = CollectionsEngine.shared
     @State private var moodPickerShown = false
     @State private var infoShown = false
+    @State private var imageLayoutShown = false
 
     /// The Collections page is the card grid — showing collections with no
     /// single collection drilled into (and not while searching).
@@ -145,6 +146,21 @@ struct ContentView: View {
                     .disabled(appState.isSearchActive)
                 }
 
+                // Image Layout — sits between Collections and the mood (color)
+                // button. Opens the layout modal; the choice applies to every
+                // grid instantly.
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        imageLayoutShown = true
+                    } label: {
+                        Image(systemName: "square.grid.2x2")
+                    }
+                    .help("Image Layout")
+                    // Same as Collections: layout has no meaning over ranked
+                    // search results.
+                    .disabled(appState.isSearchActive)
+                }
+
                 // Mood and info grouped together as one cluster (macOS fuses
                 // adjacent trailing items; a ToolbarSpacer would separate them
                 // but only with a wider-than-default gap).
@@ -225,6 +241,10 @@ struct ContentView: View {
         }
         .sheet(isPresented: $infoShown) {
             InfoSheet(isPresented: $infoShown)
+        }
+        .sheet(isPresented: $imageLayoutShown) {
+            ImageLayoutSheet(isPresented: $imageLayoutShown)
+                .environmentObject(appState)
         }
         .alert("Couldn’t move some files",
                isPresented: Binding(get: { !appState.moveFailureNames.isEmpty },
