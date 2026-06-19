@@ -239,7 +239,8 @@ The four most critical are also saved as Claude memories (linked).
   create a manual collection from the selected image(s) (additive beside "Add to
   Collection"; reuses createManual + addFile, no navigation). Now prompt-first —
   a "Name Collection" .alert (Rename-Folder pattern) names it on confirm;
-  Cancel/blank creates nothing.
+  Cancel/blank creates nothing. The Collections-page "+" is unified onto the
+  same modal (empty selection → empty named collection).
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
@@ -508,8 +509,11 @@ Muse/Muse/
                                    square.stack.3d.up): "Collections" header (back
                                    arrow + a far-right "+" New Collection button,
                                    trash-button sized) over a 4-up alphabetical
-                                   card grid that resizes to fit, scrolls vertically
-                                   (createManual → "Collection N")
+                                   card grid that resizes to fit, scrolls vertically.
+                                   The "+" opens the shared "Name Collection" modal
+                                   (appState.requestNewCollection(), empty selection
+                                   → empty named collection) — same flow as the grid's
+                                   "New Collection from Selection" (feat/next-19)
     CollectionsRow.swift           in-collection header (back/rename/count) +
                                    the CollectionCard (right-click → Delete). Delete
                                    is DURABLE via setHidden — no user-facing Hide

@@ -1532,3 +1532,30 @@ Two small live UI fixes. Build + full `MuseTests` suite green.
   green (0 failures). Spec + plan:
   `docs/superpowers/specs/2026-06-18-name-collection-modal-design.md`,
   `docs/superpowers/plans/2026-06-18-name-collection-modal.md`.
+
+## 2026-06-18 — `feat/next-19` — unify the Collections-page "+" onto the name modal
+
+- **One create-a-collection experience.** The Collections-page **"+"** button no
+  longer creates an auto-named empty collection immediately — it opens the same
+  **"Name Collection"** modal as the grid's "New Collection from Selection"
+  (`CollectionsPage.createCollection()` now just calls
+  `appState.requestNewCollection()`).
+- **Generalized the shared request/confirm** (`AppState+Filters.swift`):
+  `requestNewCollection(fallback path: String? = nil)` — `nil` means no selection
+  (the "+" case, empty `pendingNewCollectionPaths`); a path still captures the
+  effective selection (grid right-click). `confirmNewCollection()` now creates the
+  named collection whenever the name is non-empty and only seeds members when a
+  selection was captured (`if !paths.isEmpty`). Dropping the old
+  empty-selection/empty-ids *create* guards is what lets "+" make an empty named
+  collection; it also makes the right-click path create-on-confirm even if the
+  selected files don't resolve, rather than silently doing nothing.
+- **Adaptive alert copy** (`ContentView.swift`): "Creates a new collection." with
+  no selection, "Creates a collection from the selected images." with one.
+- **Untouched:** the hero viewer's own "add to a new collection" path
+  (`ViewerInfoColumn` → `createManual(queue:name:fileID:)`) keeps its inline name
+  field; only the Collections-page "+" was in scope. Reuses createManual + rename
+  + addFile — no new store API, no schema change.
+- **Verification:** Debug build green; full `xcodebuild -scheme Muse test` suite
+  green (0 failures). Spec + plan:
+  `docs/superpowers/specs/2026-06-18-unify-collections-plus-modal-design.md`,
+  `docs/superpowers/plans/2026-06-18-unify-collections-plus-modal.md`.
