@@ -387,15 +387,19 @@ struct GridView: View {
             Image(systemName: "square.grid.2x2")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
+                // Decorative min/max hint — the slider itself carries the label.
+                .accessibilityHidden(true)
             Slider(value: Binding(
                 get: { Double(gridColumns) },
                 set: { gridColumns = Int($0.rounded()) }
             ), in: 2...8, step: 1)
             .frame(width: 130)
             .controlSize(.small)
+            .accessibilityLabel("Images per row")
             Image(systemName: "square.grid.4x3.fill")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
         }
         // Match the status pills exactly: same 20pt content height + 9pt
         // vertical padding so every bottom capsule is the same height.

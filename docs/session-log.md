@@ -1819,3 +1819,98 @@ whole lagged the background fade.
 - **Verification:** Debug build green; full `xcodebuild -scheme Muse test` suite
   green (0 failures). Drove the running app and confirmed the synchronized recolor
   on Light↔Dark switches.
+
+## 2026-06-18 — `feat/next-25` — accessibility pass on post-`next-17` features
+
+Second accessibility pass (the first, `feat/next-17`, covered the post-2026-06-13
+UI). Scope: everything added since — `feat/next-18` → `feat/next-24` — plus an
+app-wide sweep of icon-only buttons that the audit surfaced. Additive accessibility
+annotations only; no layout or behavior change. Build + full `xcodebuild -scheme
+Muse test` suite green (0 failures).
+
+**1 — New-feature VoiceOver gaps (next-18→24).**
+
+- **Image Layout button (next-21):** icon-only toolbar button had only `.help()`,
+  so VoiceOver fell back to the SF Symbol name ("square grid 2x2"). Added
+  `.accessibilityLabel("Image Layout")`.
+- **Tile Background swatches (next-22):** selection was conveyed by ring color
+  only, and two swatch names ("Auto", "Light") collide with the mood swatches in
+  the same popover. Added `.accessibilityLabel("Tile background: <name>")` +
+  `.isSelected` trait. Gave the older `MoodSwatch` the `.isSelected` trait too for
+  parity.
+- **Duplicates tile (next-23):** the tile sets `.accessibilityElement(children:
+  .ignore)`, which collapsed it into one element and **hid the reveal-in-Finder
+  button from VoiceOver entirely**. Re-exposed it as a named action
+  (`.accessibilityAction(named: "Reveal in Finder")`) — VoiceOver/Full-Keyboard
+  reach it via the actions rotor while the tile's primary action stays "toggle
+  delete".
+- next-18 (search/hero-close), next-20 (collections sort — reuses the already
+  labeled sort controls), next-24 (icon recolor — visual only) needed nothing.
+
+**2 — Menu-bar reach for a mouse-only action (next-19).**
+
+"New Collection from Selection" existed ONLY in the grid right-click menu, so
+keyboard/VoiceOver users had no path to it. Added **"New Collection from
+Selection…"** to the `Collections` menu (`MuseApp.swift`), calling
+`appState.requestNewCollection(fallback: "")` and gated on a non-empty selection
+(so the empty fallback path is never used — `effectiveSelectionURLs` returns the
+selection when `selectedFiles` is non-empty).
+
+**3 — App-wide icon-only-button label sweep.**
+
+`.help()` sets the macOS AXHelp (a hint/tooltip), NOT the VoiceOver *name*. Every
+icon-only `Button`/`Menu`/`Toggle` that relied on `.help()` alone got an explicit
+`.accessibilityLabel`:
+
+- Toolbar: show-subfolders toggle, Collections, About, Sort, Tag order, Background.
+- Collections header (`CollectionsRow`): save/cancel rename (`HeaderIconButton`,
+  label from its `help`), Delete (`TrashButton`), Back arrow (`BackArrowButton`).
+- Collections page "+" (`AddCollectionButton`); hero Share (`ShareButton`) + the
+  palette color swatch ("Copy color #…", named after its copy action); collection
+  Share (`ShareCollectionButton`); the shared sheet close ✕ (`SheetCloseButton`);
+  Duplicates reveal + close ✕.
+- Grid column slider: the two decorative min/max grid icons are
+  `.accessibilityHidden(true)`; the `Slider` itself is labeled "Images per row".
+- Sidebar reorder grip: `.accessibilityHidden(true)` rather than labeled — it's a
+  mouse-only drag affordance whose tap merely re-selects the row (already
+  reachable), and the accessible reorder path is Edit → Move Folder Up/Down.
+  Exposing an undraggable "grip" would only add a dead control.
+- Active tag chip: `.isSelected` trait (the filled-pill state was visual only).
+
+**4 — `CollectionCard` rework (the deeper one).**
+
+The card is a tap target (`.onTapGesture`, not a `Button`), so VoiceOver saw two
+loose `Text`s (name, count) with NO action — unactivatable and unlabeled as a
+control. Collapsed it into one element: `.accessibilityElement(children: .ignore)`,
+`.accessibilityLabel("<name>, <n> item(s)")` (pluralized), `.isButton` (+
+`.isSelected` on the active card, whose state was accent-border-only), a primary
+`.accessibilityAction` that opens the collection, and a named "Delete Collection"
+action re-exposing the otherwise right-click-only delete.
+
+**Pitfalls navigated (logged so the next pass doesn't relearn them):**
+
+- **Never `.accessibilityElement(children: .ignore)` on a `Button`.** It can strip
+  the button's activation action (that's why the non-Button `DuplicateImageTile`
+  and `CollectionCard` must re-add an `.accessibilityAction`). On a real `Button`,
+  `.accessibilityLabel` ALONE overrides the text-derived name and keeps the action
+  — so the Tile Background swatch (a Button) just gets the label, no `children:
+  .ignore`.
+- **`.help` and `.accessibilityHint` both write macOS AXHelp.** Setting both is
+  ambiguous; keep one. On `CollectionCard` the `.help(name)` is the keeper (it
+  drives the tooltip that reveals the full name when it truncates at
+  `.lineLimit(1)`), so the redundant `.accessibilityHint` was dropped — the
+  `.isButton` trait already signals activatability.
+- **Don't override the name of a control that has visible text** (label-in-name):
+  the tag chip and the "Edit" pill keep their text-derived names; only the
+  icon-only controls got explicit labels.
+
+**Files:** `ContentView.swift`, `MuseApp.swift`, `Views/MoodPickerView.swift`,
+`Views/DuplicatesView.swift`, `Views/CollectionsRow.swift`,
+`Views/CollectionsPage.swift`, `Views/ShareCollectionButton.swift`,
+`Views/SheetCloseButton.swift`, `Views/GridView.swift`, `Views/TagChipsRow.swift`,
+`Views/SidebarView.swift`, `Views/Viewer/ShareButton.swift`,
+`Views/Viewer/ViewerInfoColumn.swift`.
+
+**Verification.** Debug build green; full test suite green. Changes are declarative
+a11y modifiers with no visual footprint, so build + tests are the verification; a
+live VoiceOver pass (manual screen-reader interaction) was not automatable here.

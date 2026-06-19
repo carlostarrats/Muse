@@ -497,6 +497,8 @@ private struct ColorSwatch: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help(hex)
+        // Swatch has no text; name it after its action (tapping copies the hex).
+        .accessibilityLabel("Copy color \(hex)")
     }
 
     private var color: Color {

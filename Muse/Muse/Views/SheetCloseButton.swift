@@ -25,5 +25,6 @@ struct SheetCloseButton: View {
         .onHover { hovering = $0 }
         .keyboardShortcut(.cancelAction)
         .help("Close")
+        .accessibilityLabel("Close")
     }
 }

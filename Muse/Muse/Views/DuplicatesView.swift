@@ -244,6 +244,7 @@ private struct CloseXButton: View {
         .onHover { hovering = $0 }
         .keyboardShortcut(.cancelAction)
         .help("Close")
+        .accessibilityLabel("Close")
     }
 }
 
@@ -333,6 +334,12 @@ private struct DuplicateImageTile: View {
         // VoiceOver parity with the click: activating the tile toggles delete
         // (no-op when locked), the same as the Delete checkbox below it.
         .accessibilityAction { if !isLocked { onToggle() } }
+        // children:.ignore above collapses the tile into one element, hiding the
+        // reveal-in-Finder button — re-expose it as a named action so VoiceOver
+        // (and Full Keyboard Access) can still reach it.
+        .accessibilityAction(named: "Reveal in Finder") {
+            NSWorkspace.shared.activateFileViewerSelecting([member.url])
+        }
     }
 }
 
@@ -355,6 +362,7 @@ private struct RevealInFinderButton: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help("Reveal in Finder")
+        .accessibilityLabel("Reveal in Finder")
     }
 }
 

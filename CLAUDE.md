@@ -89,6 +89,7 @@ are the load-bearing reference artifacts.
 | Polish 13 — tile background (global grid backdrop None/Auto/Light/Dark Grey/Black) + collection PDF export reflects the grid (ratio + per-image backdrop; paper stays white) + file cards now export | ✅ built, unmerged | `feat/next-22` |
 | Polish 14 — Duplicates modal redesign: grid-style tile selection (blue inset ring, no tint, image fits), KEEP badge follows survivors, suggested deletes pre-selected + overridable, reveal-in-Finder per tile, "never delete a whole group" protection (2-copy swap / 3+ lock) | ✅ built, unmerged | `feat/next-23` |
 | Polish 15 — synchronized toolbar-icon recolor on mood change (all nav icons flip white↔black together, in lockstep with the background fade; `MoodPalette.iconColor` + `View.moodToolbarIcon`) | ✅ built, unmerged | `feat/next-24` |
+| Polish 16 — accessibility pass on features added since `feat/next-17` (next-18→24): VoiceOver labels/traits, a menu-bar "New Collection from Selection…" command, an icon-only-button label sweep across the whole app, and a `CollectionCard` rework (one activatable element w/ name+count label, selected trait, primary + named-Delete actions) | ✅ shipped | `feat/next-25` |
 
 > **2026-06-16 session — three feature branches off `main`, not yet merged.**
 > Each has its own spec + plan in `docs/superpowers/`. Merge order is
@@ -309,6 +310,33 @@ The four most critical are also saved as Claude memories (linked).
   `Toggle`s (show-subfolders, mood) while "on". A native `Toggle`'s own AppKit
   crossfade is the irreducible floor (accepted). `ContentView.swift` +
   `Models/Mood.swift`; no test (Color equality is unreliable; trivial one-liner).
+- **2026-06-18** `feat/next-25` — accessibility pass on everything added since the
+  last one (`feat/next-17`), i.e. next-18→24. Three parts: (1) **new-feature
+  VoiceOver gaps** — Image Layout toolbar button label (next-21); Tile Background
+  swatches got a disambiguating "Tile background: …" label + `.isSelected` trait
+  (next-22; "Auto"/"Light" collided with the mood swatches); the Duplicates tile's
+  `.accessibilityElement(children: .ignore)` was hiding its reveal-in-Finder button
+  — re-exposed as a named action (next-23). (2) **menu-bar reach** — added
+  "New Collection from Selection…" to the Collections menu (next-19 was grid
+  right-click only, no keyboard/VoiceOver path); gated on a non-empty selection.
+  (3) **app-wide icon-button sweep** — every icon-only `Button`/`Menu`/`Toggle`
+  that had only `.help()` (which sets AXHelp, not the VoiceOver *name*) got an
+  explicit `.accessibilityLabel`: the toolbar (subfolders, Collections, About,
+  Sort, Tag order, Background), Collections header (save/cancel/delete/back),
+  Collections "+", hero Share + color swatch ("Copy color #…"), collection-share,
+  sheet close ✕, Duplicates reveal/close. Decorative grid-slider min/max icons
+  `.accessibilityHidden`; the slider itself labeled "Images per row". The sidebar
+  reorder grip is `.accessibilityHidden` (mouse-only; its tap just re-selects, and
+  the accessible reorder path is Edit → Move Folder Up/Down). The active tag chip
+  got an `.isSelected` trait. Finally the **`CollectionCard`** (a tap target, not a
+  `Button`) was collapsed into ONE activatable element: name+count label, `.isButton`
+  (+`.isSelected` when active), a primary `.accessibilityAction` for open, and a
+  named "Delete Collection" action re-exposing the right-click-only delete. Pitfall
+  avoided: never put `.accessibilityElement(children: .ignore)` on a `Button` (it can
+  drop the activation) — on a Button, `.accessibilityLabel` alone overrides the name
+  and keeps the action; and `.help` + `.accessibilityHint` both write macOS AXHelp,
+  so keep one (kept `.help` for the truncation tooltip). Additive a11y annotations
+  only — no layout/behavior change. Build + full test suite green.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
