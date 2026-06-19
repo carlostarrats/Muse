@@ -114,6 +114,8 @@ struct ContentView: View {
                 ToolbarItem(placement: .navigation) {
                     Toggle(isOn: $appState.showSubfolders) {
                         Image(systemName: "rectangle.stack")
+                            .moodToolbarIcon(appState.moodPalette,
+                                             selected: appState.showSubfolders)
                     }
                     .help(appState.showSubfolders
                           ? "Hide files inside subfolders"
@@ -138,6 +140,7 @@ struct ContentView: View {
                         appState.toggleCollectionsPage()
                     } label: {
                         Image(systemName: "square.stack.3d.up")
+                            .moodToolbarIcon(appState.moodPalette)
                     }
                     .help("Collections")
                     // Toggling collections mid-search yanks you out of the
@@ -154,6 +157,7 @@ struct ContentView: View {
                         imageLayoutShown = true
                     } label: {
                         Image(systemName: "square.grid.2x2")
+                            .moodToolbarIcon(appState.moodPalette)
                     }
                     .help("Image Layout")
                     // Same as Collections: layout has no meaning over ranked
@@ -173,6 +177,7 @@ struct ContentView: View {
                         infoShown = true
                     } label: {
                         Image(systemName: "info.circle")
+                            .moodToolbarIcon(appState.moodPalette)
                     }
                     .help("About Muse — how indexing, analysis, collections, and tags work")
                 }
@@ -371,6 +376,7 @@ struct ContentView: View {
             .labelsHidden()
         } label: {
             Image(systemName: "arrow.up.and.down.text.horizontal")
+                .moodToolbarIcon(appState.moodPalette)
         }
         .help("Sort: \(isCollectionsPage ? appState.collectionSortMode.displayName : appState.sortMode.displayName)")
     }
@@ -390,6 +396,7 @@ struct ContentView: View {
             .labelsHidden()
         } label: {
             Image(systemName: "tag")
+                .moodToolbarIcon(appState.moodPalette)
         }
         .help("Tag order: \(appState.tagSortMode.label)")
     }
@@ -406,6 +413,7 @@ struct ContentView: View {
             else { appState.toggleSortDirection() }
         } label: {
             Image(systemName: ascending ? "arrow.up" : "arrow.down")
+                .moodToolbarIcon(appState.moodPalette)
         }
         .help(mode.directionLabel(ascending: ascending))
         .accessibilityLabel("Sort direction: " + mode.directionLabel(ascending: ascending))
@@ -419,6 +427,7 @@ struct ContentView: View {
         // toolbar button's behavior. No custom chrome.
         Toggle(isOn: $moodPickerShown) {
             Image(systemName: "paintpalette")
+                .moodToolbarIcon(appState.moodPalette, selected: moodPickerShown)
         }
         .toggleStyle(.button)
         .help("Background: \(appState.mood.displayName)")
@@ -483,6 +492,20 @@ struct ContentView: View {
         statusPill(label: "Organizing…", progress: 1)
     }
 
+}
+
+private extension View {
+    /// Mood-driven toolbar icon color + the SAME implicit animation the
+    /// background uses (`ContentView` body, keyed on `moodPalette`). Riding
+    /// `setMood`'s `withAnimation` transaction instead let the recolor reach
+    /// the AppKit-hosted toolbar a beat after the background; keying the icons
+    /// to the identical value/curve makes every icon flip together AND in
+    /// lockstep with the background fade. `selected` keeps a toggle's native
+    /// white-on-accent look (popover/subfolders "on").
+    func moodToolbarIcon(_ palette: MoodPalette, selected: Bool = false) -> some View {
+        foregroundStyle(selected ? Color.white : palette.iconColor)
+            .animation(.easeInOut(duration: 0.35), value: palette)
+    }
 }
 
 /// Observes the DeleteCoordinator directly — nested ObservableObjects

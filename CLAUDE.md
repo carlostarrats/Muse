@@ -88,6 +88,7 @@ are the load-bearing reference artifacts.
 | Polish 12 — folder ops (new subfolder + rename w/ DB migration) + hero Share/Open-With dropdown + Info modal refresh | ✅ built, unmerged | `feat/folder-ops-and-share` |
 | Polish 13 — tile background (global grid backdrop None/Auto/Light/Dark Grey/Black) + collection PDF export reflects the grid (ratio + per-image backdrop; paper stays white) + file cards now export | ✅ built, unmerged | `feat/next-22` |
 | Polish 14 — Duplicates modal redesign: grid-style tile selection (blue inset ring, no tint, image fits), KEEP badge follows survivors, suggested deletes pre-selected + overridable, reveal-in-Finder per tile, "never delete a whole group" protection (2-copy swap / 3+ lock) | ✅ built, unmerged | `feat/next-23` |
+| Polish 15 — synchronized toolbar-icon recolor on mood change (all nav icons flip white↔black together, in lockstep with the background fade; `MoodPalette.iconColor` + `View.moodToolbarIcon`) | ✅ built, unmerged | `feat/next-24` |
 
 > **2026-06-16 session — three feature branches off `main`, not yet merged.**
 > Each has its own spec + plan in `docs/superpowers/`. Merge order is
@@ -295,6 +296,19 @@ The four most critical are also saved as Claude memories (linked).
   rule checks **every** group a file is in. Pure `Intelligence/Dedup/DuplicateDeleteRules.swift`
   (`seed`/`rescued`/`isLocked`/`selecting`, unit-tested) — mirrors `GridSelection`/
   `CollectionSort`. Only `DuplicatesView.swift` + the helper changed.
+- **2026-06-18** `feat/next-24` — synchronized toolbar-icon recolor on mood
+  change: the nav toolbar icons inherited the system label color, so a
+  `preferredColorScheme` flip recolored each native `NSToolbarItem` on AppKit's
+  own per-item crossfade timeline (staggered) and the group lagged the background
+  fade. Now each icon is colored EXPLICITLY from the mood (`MoodPalette.iconColor`
+  = white in dark scheme / black in light) via a file-private
+  `View.moodToolbarIcon(_:selected:)` that pairs it with the SAME
+  `.animation(.easeInOut(duration: 0.35), value: moodPalette)` the background uses
+  — every icon flips together and in lockstep with the fade. Applied to all eight
+  toolbar icons; `selected:` preserves the native white-on-accent look for the two
+  `Toggle`s (show-subfolders, mood) while "on". A native `Toggle`'s own AppKit
+  crossfade is the irreducible floor (accepted). `ContentView.swift` +
+  `Models/Mood.swift`; no test (Color equality is unreliable; trivial one-liner).
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 

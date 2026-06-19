@@ -1784,3 +1784,38 @@ and rendered fill-cropped 140² thumbnails with a checkbox.
   and confirmed the redesign visually (grid-style tiles, KEEP-follows-survivors,
   blue inset ring, reveal button); UI-automation of a fresh re-scan was blocked by
   macOS Apple-event TCC, so the seeded-default open state was user-verified.
+
+## 2026-06-18 — `feat/next-24` — synchronized toolbar-icon recolor on mood change
+
+Small UI-polish pass. On a background-mood change the navigation **toolbar icons**
+flip white↔black at slightly **different moments** (staggered), and the group as a
+whole lagged the background fade.
+
+- **Cause.** The toolbar icons carried no explicit color — they inherited the
+  system **label color**, which flips when `preferredColorScheme(moodPalette.scheme)`
+  changes (`ContentView` line ~340). Each toolbar item is its own native
+  `NSToolbarItem` (a bridged `NSHostingView`), and AppKit runs an **appearance
+  crossfade per item** on the scheme flip — those crossfades aren't synchronized,
+  hence the stagger. The whole group also trailed the background because the icons
+  only recolored via AppKit's appearance change, not the SwiftUI mood animation.
+- **Fix.** Drive the icon color **explicitly** from the mood and animate it with
+  the **same `.animation(.easeInOut(duration: 0.35), value: moodPalette)`** the
+  background already uses (`ContentView` body, line ~73). New
+  `MoodPalette.iconColor` (`.white` in a dark scheme, `.black` in light) + a
+  file-private `View.moodToolbarIcon(_:selected:)` helper that pairs the color with
+  that animation. Applied to all eight toolbar icons (sort, tag-sort, sort-
+  direction, show-subfolders, Collections, Image Layout, mood, info). For the two
+  `Toggle`s (`showSubfolders`, mood `paintpalette`) `selected:` keeps the native
+  white-on-accent icon while "on"; "off" follows the mood in step with the rest.
+  The search field manages its own appearance (`SearchBar`) and isn't touched.
+- **Outcome / ceiling.** Icons now recolor together and in lockstep with the
+  background. A native `Toggle`'s own AppKit crossfade can't be fully suppressed
+  from SwiftUI, so a hair of softness on the toggles is the floor — declared
+  acceptable rather than rebuilding the toolbar as custom views (over-engineering
+  for a sub-second transition). No unit test: `iconColor` returns a SwiftUI `Color`
+  whose equality is unreliable to assert, and the logic is a trivial one-liner —
+  the behavior is visually verified. Two files changed (`ContentView.swift`,
+  `Models/Mood.swift`).
+- **Verification:** Debug build green; full `xcodebuild -scheme Muse test` suite
+  green (0 failures). Drove the running app and confirmed the synchronized recolor
+  on Light↔Dark switches.

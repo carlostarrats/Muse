@@ -27,6 +27,16 @@ struct MoodPalette: Equatable {
 
     var background: Color { backgroundRGB.color }
     var tileFill: Color { tileRGB.color }
+
+    /// Toolbar/navigation icon color, driven EXPLICITLY by the mood (not the
+    /// environment `colorScheme`). Letting the icons inherit the label color
+    /// means an appearance flip (`preferredColorScheme`) recolors each native
+    /// toolbar item on AppKit's own per-item crossfade timeline — they change
+    /// white↔black at slightly different moments (staggered). Coloring every
+    /// icon from this single value — see `View.moodToolbarIcon`, which pairs it
+    /// with the same `.animation(value:)` the background uses — flips them all
+    /// together and in lockstep with the background fade.
+    var iconColor: Color { scheme == .dark ? .white : .black }
 }
 
 enum Mood: String, CaseIterable, Identifiable {
