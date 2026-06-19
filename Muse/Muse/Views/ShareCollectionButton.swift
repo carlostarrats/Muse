@@ -60,8 +60,13 @@ struct ShareCollectionButton: View {
 
     private func makePDF() async -> URL? {
         let urls = imageURLs
+        let layoutAspect = appState.imageLayout.aspect
+        let backdrop = appState.tileBackground
+            .backdropRGB(for: appState.moodPalette)
+            .map { CGColor(red: $0.r, green: $0.g, blue: $0.b, alpha: 1) }
         return await CollectionPDFExporter.makePDF(
-            urls: urls, title: title, count: urls.count, columns: gridColumns)
+            urls: urls, title: title, count: urls.count, columns: gridColumns,
+            layoutAspect: layoutAspect, tileBackdrop: backdrop)
     }
 
     private func save() async {

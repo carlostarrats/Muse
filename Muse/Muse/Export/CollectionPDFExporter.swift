@@ -17,7 +17,8 @@ enum CollectionPDFExporter {
     /// Build the PDF for `urls` (image files, in display order). `count` is the
     /// number shown beside the title. `columns` mirrors the grid density.
     /// Returns a temp-file URL, or nil if nothing could be rendered.
-    static func makePDF(urls: [URL], title: String, count: Int, columns: Int) async -> URL? {
+    static func makePDF(urls: [URL], title: String, count: Int, columns: Int,
+                        layoutAspect: CGFloat?, tileBackdrop: CGColor?) async -> URL? {
         await Task.detached(priority: .userInitiated) { () -> URL? in
             let pageSize = CGSize(width: 792, height: 1008)   // 11x14in @ 72dpi
             let margin: CGFloat = 36
@@ -56,7 +57,12 @@ enum CollectionPDFExporter {
                 pageSize: pageSize, margin: margin, columns: cols,
                 gutter: gutter, firstPageHeaderHeight: headerHeight,
                 captionHeight: captionHeight)
-            let pages = CollectionPDFLayout.paginate(aspects: images.map(\.aspect), geometry: geo)
+            // Mirror the on-screen grid: a fixed ratio gives every tile a
+            // uniform aspect (even row-major grid); masonry uses each image's
+            // own aspect.
+            let aspects: [CGFloat] = layoutAspect.map { Array(repeating: $0, count: images.count) }
+                ?? images.map(\.aspect)
+            let pages = CollectionPDFLayout.paginate(aspects: aspects, geometry: geo)
             let captionFont = CTFontCreateUIFontForLanguage(.system, captionFontSize, nil)
                 ?? CTFontCreateWithName("Helvetica" as CFString, captionFontSize, nil)
 
@@ -91,6 +97,15 @@ enum CollectionPDFExporter {
                         width: imageRect.width, height: imageRect.height)
                     let fit = aspectFit(imageW: CGFloat(img.width),
                                         imageH: CGFloat(img.height), in: flipped)
+                    // Per-image backdrop (mirrors the grid tile fill). nil = no
+                    // fill, so the white paper shows through (transparent). The
+                    // image is drawn on top; for a fixed ratio it letterboxes
+                    // over this fill, for masonry the image covers it (the fill
+                    // shows only through transparent images).
+                    if let tileBackdrop {
+                        ctx.setFillColor(tileBackdrop)
+                        ctx.fill(flipped)
+                    }
                     ctx.draw(img, in: fit)
 
                     // Filename caption, centered under the image, truncated with
