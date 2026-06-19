@@ -207,7 +207,16 @@ struct GridView: View {
                 }
             }
             .onChange(of: aspects.version) { _, _ in
+                // Fixed-ratio layouts ignore per-image aspects, so a decoded
+                // thumbnail reporting its real ratio must NOT trigger a relayout
+                // (it would churn the whole grid for no visual change).
+                guard appState.imageLayout.aspect == nil else { return }
                 recompute(width: contentWidth)
+            }
+            .onChange(of: appState.imageLayout) { _, _ in
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    recompute(width: contentWidth)
+                }
             }
         }
     }
@@ -323,7 +332,15 @@ struct GridView: View {
             layoutWidth = width
             return
         }
-        let ratios = files.map { aspects.aspect(for: $0) }
+        // Fixed-ratio layouts give every tile one aspect (uniform aspects make
+        // MasonryGeometry pack a row-major grid); masonry uses each image's
+        // natural ratio from the cache.
+        let ratios: [CGFloat]
+        if let fixed = appState.imageLayout.aspect {
+            ratios = Array(repeating: fixed, count: files.count)
+        } else {
+            ratios = files.map { aspects.aspect(for: $0) }
+        }
         let result = MasonryGeometry.compute(aspects: ratios,
                                              columns: gridColumns,
                                              width: width,
