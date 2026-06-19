@@ -1501,3 +1501,34 @@ Two small live UI fixes. Build + full `MuseTests` suite green.
   suite green (28 cases, 0 failures, incl. the manual-collection naming/visibility
   tests). Independent code review found no blockers. Spec:
   `docs/superpowers/specs/2026-06-18-new-collection-from-selection-design.md`.
+
+## 2026-06-18 — `feat/next-19` — name-it modal for new collection
+
+- **Follow-up to the above.** Creating a collection from the selection now
+  **prompts for a name** instead of auto-naming silently. Right-click "New
+  Collection from Selection" opens a **"Name Collection"** modal — the same
+  native `.alert` + `TextField` pattern as the sidebar's Rename Folder dialog
+  (`ContentView.swift`, beside the Rename-Folder alert). Field starts empty with
+  a "Collection name" placeholder; **Create** (default — Return confirms) /
+  **Cancel**.
+- **Prompt-first, so Cancel creates nothing.** The effective selection's file
+  paths are captured at right-click time (`AppState.requestNewCollection(fallback:)`
+  → `pendingNewCollectionPaths`), and **no DB write happens until confirm**.
+  `confirmNewCollection()` trims the name, bails on blank/empty-selection, then
+  `createManual` → `rename(to: typedName)` → `addFile` loop → `reload()`.
+  `cancelNewCollection()` just clears the pending state. This avoids the
+  create-then-delete dance (and the `setHidden` tombstone that a collection
+  "delete" would leave) that an after-the-fact prompt would have needed.
+- **State lives in AppState** (`newCollectionRequest`, `newCollectionNameDraft`,
+  `pendingNewCollectionPaths`) with the actions in `AppState+Filters.swift`,
+  mirroring how `renameFolder` is structured. The old view-local
+  `newCollectionFromSelection()` immediate-create helper was removed from
+  `SelectionMenu.swift`; the button now calls `appState.requestNewCollection`.
+- **Reuse:** `createManual` (auto-name + atomic insert) + `CollectionStore.rename`
+  (plain UPDATE) + `addFile`; no new store API. Duplicate collection names are
+  allowed (matches the existing inline collection rename — no uniqueness check);
+  validation is non-empty only.
+- **Verification:** Debug build green; full `xcodebuild -scheme Muse test` suite
+  green (0 failures). Spec + plan:
+  `docs/superpowers/specs/2026-06-18-name-collection-modal-design.md`,
+  `docs/superpowers/plans/2026-06-18-name-collection-modal.md`.

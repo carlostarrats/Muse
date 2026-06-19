@@ -236,8 +236,10 @@ The four most critical are also saved as Claude memories (linked).
   needed two presses. ContentView's Escape handler now fires only
   `viewerClosing`; `startClose()` owns the whole close (matches X).
 - **2026-06-18** `feat/next-19` — right-click "New Collection from Selection":
-  create an auto-named manual collection from the selected image(s) (additive
-  beside "Add to Collection"; reuses createManual + addFile, no navigation).
+  create a manual collection from the selected image(s) (additive beside "Add to
+  Collection"; reuses createManual + addFile, no navigation). Now prompt-first —
+  a "Name Collection" .alert (Rename-Folder pattern) names it on confirm;
+  Cancel/blank creates nothing.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
@@ -482,11 +484,14 @@ Muse/Muse/
                                    internal card name when off) — all tiles square-
                                    cornered (feat/next-11)
     SelectionMenu.swift            SelectionActionsMenu — Add to Collection /
-                                   New Collection from Selection (auto-named
-                                   "Collection N" via createManual, then adds the
-                                   selection — feat/next-19) / Add Tag / Share /
-                                   Move to Folder over the effective selection
-                                   (feat/multi-select)
+                                   New Collection from Selection (opens a "Name
+                                   Collection" .alert; prompt-first — paths are
+                                   captured on right-click and the collection is
+                                   created only on confirm via
+                                   AppState.confirmNewCollection, Cancel/blank
+                                   creates nothing — feat/next-19) / Add Tag /
+                                   Share / Move to Folder over the effective
+                                   selection (feat/multi-select)
     OutsideClickDeselect.swift     0×0 NSView + window leftMouseDown monitor that
                                    clears the selection on any click outside the
                                    grid's enclosingScrollView (feat/multi-select)
