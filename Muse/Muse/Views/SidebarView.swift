@@ -36,6 +36,22 @@ struct SidebarView: View {
     /// reading them back would feed back into the computation.
     @State private var dragStartFrames: [UUID: CGRect] = [:]
 
+    // MARK: Collections-in-sidebar (opt-in)
+
+    /// When on, the sidebar shows a second COLLECTIONS section beneath FOLDERS.
+    /// Off = the sidebar is exactly the original folders-only experience.
+    @AppStorage(AppSettings.showCollectionsInSidebarKey) private var showCollectionsInSidebar = false
+    @ObservedObject private var collectionsEngine = CollectionsEngine.shared
+    @AppStorage("sidebarFoldersCollapsed") private var foldersCollapsed = false
+    @AppStorage("sidebarCollectionsCollapsed") private var collectionsCollapsed = false
+
+    // Collection reorder drag — a flat-list mirror of the folder reorder above.
+    @State private var draggingCollectionID: String?
+    @State private var collectionDropTarget: Int?
+    @State private var collectionDragOffset: CGFloat = 0
+    @State private var collectionFrames: [String: CGRect] = [:]
+    @State private var collectionDragStartFrames: [String: CGRect] = [:]
+
     /// Height of a single collapsed folder row.
     fileprivate static let rowHeight: CGFloat = 28
     /// Named coordinate space shared by the reorder drag gesture and the row
@@ -57,67 +73,14 @@ struct SidebarView: View {
         VStack(spacing: 0) {
             if appState.rootNodes.isEmpty && appState.stars.starred.isEmpty {
                 emptyState
+            } else if showCollectionsInSidebar {
+                twoSectionScroll
             } else {
                 sortHeader
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 1) {
-                        // The iCloud "Muse" folder is the fixed home — always on
-                        // top, not reorderable — with a gap below it separating
-                        // it from the local folders.
-                        if let icloud = iCloudNode {
-                            FolderTreeNode(node: icloud, depth: 0,
-                                           topLevelCount: topLevelCount(for: icloud))
-                            Color.clear.frame(height: 12)
-                        }
-
-                        if !appState.stars.starred.isEmpty {
-                            ForEach(appState.stars.starred) { star in
-                                StarRow(star: star)
-                            }
-                        }
-
-                        ForEach(Array(displayedReorderableNodes.enumerated()),
-                                id: \.element.id) { pair in
-                            rootRow(pair.element, index: pair.offset)
-                        }
-                        // Catch-area below the last folder so a drag released in
-                        // the empty space underneath still lands at the bottom.
-                        if !reorderableNodes.isEmpty { endDropZone }
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.top, 6)
-                    .padding(.bottom, 12)
-                }
-                .scrollContentBackground(.hidden)
-                .coordinateSpace(name: Self.reorderSpace)
-                .onPreferenceChange(RootFramePreference.self) { rootFrames = $0 }
-                .environment(\.sidebarReordering, draggingRoot != nil)
-                // Safety net: if the dragged root disappears mid-drag (removed
-                // elsewhere, or its node rebuilt) the gesture's .onEnded may never
-                // fire, which would otherwise strand the sidebar in drag state
-                // (rows parted, hover/grip suppressed, overlay drawn).
-                .onChange(of: reorderableNodes.map(\.id)) { _, _ in
-                    if draggingRoot != nil, draggedIndex == nil { resetDrag() }
-                }
-                // Backup insertion line (helps when you overshoot the gap).
-                .overlay(alignment: .top) {
-                    if draggingRoot != nil, let y = insertionLineY() {
-                        insertionLine.offset(y: y - 1).allowsHitTesting(false)
-                    }
-                }
-                // Opaque floating copy of the dragged row, on top of everything.
-                .overlay(alignment: .top) {
-                    if let dragging = draggingRoot, let f = dragStartFrames[dragging.id] {
-                        draggedRowOverlay(dragging)
-                            .offset(y: f.minY + dragOffset)
-                            .allowsHitTesting(false)
-                    }
-                }
+                foldersScroll
             }
 
-            AddFolderPillButton { appState.pickAndAddRoot() }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+            bottomBar
         }
         .frame(minWidth: 220)
         // One continuous card: the opaque surface flows up behind the title
@@ -128,6 +91,328 @@ struct SidebarView: View {
             cardColor.ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture { appState.clearSelection() }
+        }
+    }
+
+    // MARK: - Folder list (shared by both layouts)
+
+    /// The folder tree content (iCloud home, stars, reorderable roots). Extracted
+    /// so both the folders-only ScrollView and the two-section ScrollView reuse it.
+    @ViewBuilder private var folderList: some View {
+        LazyVStack(alignment: .leading, spacing: 1) {
+            // The iCloud "Muse" folder is the fixed home — always on top, not
+            // reorderable — with a gap below it separating it from local folders.
+            if let icloud = iCloudNode {
+                FolderTreeNode(node: icloud, depth: 0,
+                               topLevelCount: topLevelCount(for: icloud))
+                Color.clear.frame(height: 12)
+            }
+
+            if !appState.stars.starred.isEmpty {
+                ForEach(appState.stars.starred) { star in
+                    StarRow(star: star)
+                }
+            }
+
+            ForEach(Array(displayedReorderableNodes.enumerated()),
+                    id: \.element.id) { pair in
+                rootRow(pair.element, index: pair.offset)
+            }
+            // Catch-area below the last folder so a drag released in the empty
+            // space underneath still lands at the bottom.
+            if !reorderableNodes.isEmpty { endDropZone }
+        }
+        .padding(.horizontal, 8)
+        .padding(.top, 6)
+        .padding(.bottom, 12)
+    }
+
+    /// Folders-only scroll (setting OFF) — the original experience.
+    private var foldersScroll: some View {
+        ScrollView { folderList }
+            .scrollContentBackground(.hidden)
+            .coordinateSpace(name: Self.reorderSpace)
+            .onPreferenceChange(RootFramePreference.self) { rootFrames = $0 }
+            .environment(\.sidebarReordering, draggingRoot != nil)
+            // Safety net: if the dragged root disappears mid-drag the gesture's
+            // .onEnded may never fire, stranding the sidebar in drag state.
+            .onChange(of: reorderableNodes.map(\.id)) { _, _ in
+                if draggingRoot != nil, draggedIndex == nil { resetDrag() }
+            }
+            .overlay(alignment: .top) { folderInsertionOverlay }
+            .overlay(alignment: .top) { folderDraggedOverlay }
+    }
+
+    /// Backup insertion line for the folder reorder (helps on overshoot).
+    @ViewBuilder private var folderInsertionOverlay: some View {
+        if draggingRoot != nil, let y = insertionLineY() {
+            insertionLine.offset(y: y - 1).allowsHitTesting(false)
+        }
+    }
+
+    /// Opaque floating copy of the dragged folder row, above everything.
+    @ViewBuilder private var folderDraggedOverlay: some View {
+        if let dragging = draggingRoot, let f = dragStartFrames[dragging.id] {
+            draggedRowOverlay(dragging)
+                .offset(y: f.minY + dragOffset)
+                .allowsHitTesting(false)
+        }
+    }
+
+    // MARK: - Two-section layout (setting ON)
+
+    /// FOLDERS + COLLECTIONS in one scroll so they scroll together; the bottom
+    /// pill row stays pinned (it lives outside this view, in `body`).
+    private var twoSectionScroll: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                SectionHeader(title: "FOLDERS", collapsed: $foldersCollapsed)
+                if !foldersCollapsed {
+                    sortHeader
+                    folderList
+                }
+                Color.clear.frame(height: 14)
+                SectionHeader(title: "COLLECTIONS", collapsed: $collectionsCollapsed)
+                if !collectionsCollapsed {
+                    collectionsSortHeader
+                    collectionsList
+                }
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .coordinateSpace(name: Self.reorderSpace)
+        .onPreferenceChange(RootFramePreference.self) { rootFrames = $0 }
+        .onPreferenceChange(CollectionFramePreference.self) { collectionFrames = $0 }
+        .environment(\.sidebarReordering, draggingRoot != nil || draggingCollectionID != nil)
+        .onChange(of: reorderableNodes.map(\.id)) { _, _ in
+            if draggingRoot != nil, draggedIndex == nil { resetDrag() }
+        }
+        .onChange(of: appState.sidebarCollections.map { $0.collection.id }) { _, _ in
+            if draggingCollectionID != nil, draggedCollectionIndex == nil { resetCollectionDrag() }
+        }
+        .overlay(alignment: .top) { folderInsertionOverlay }
+        .overlay(alignment: .top) { folderDraggedOverlay }
+        .overlay(alignment: .top) { collectionInsertionOverlay }
+        .overlay(alignment: .top) { collectionDraggedOverlay }
+    }
+
+    // MARK: - Collections sort header
+
+    private var collectionsSortHeader: some View {
+        HStack {
+            Menu {
+                ForEach(SidebarCollectionSortMode.allCases) { mode in
+                    Button { setCollectionSortMode(mode) } label: {
+                        if appState.sidebarCollectionSortMode == mode {
+                            Label(mode.label, systemImage: "checkmark")
+                        } else {
+                            Text(mode.label)
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text("Sort: \(appState.sidebarCollectionSortMode.label)")
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .accessibilityLabel("Sort collections")
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 4)
+        .padding(.bottom, 2)
+    }
+
+    private func setCollectionSortMode(_ mode: SidebarCollectionSortMode) {
+        withAnimation(.easeInOut(duration: 0.2)) { appState.sidebarCollectionSortMode = mode }
+    }
+
+    // MARK: - Collections list
+
+    @ViewBuilder private var collectionsList: some View {
+        LazyVStack(alignment: .leading, spacing: 1) {
+            ForEach(Array(appState.sidebarCollections.enumerated()),
+                    id: \.element.collection.id) { pair in
+                collectionRow(pair.element, index: pair.offset)
+            }
+            if !appState.sidebarCollections.isEmpty { endDropZone }
+        }
+        .padding(.horizontal, 8)
+        .padding(.top, 6)
+        .padding(.bottom, 12)
+    }
+
+    /// One collection row, wired for Manual drag-reorder (a flat-list mirror of
+    /// `rootRow`): the dragged row is hidden in place while an opaque copy follows
+    /// the cursor; others part around the gap.
+    @ViewBuilder
+    private func collectionRow(_ loaded: CollectionStore.Loaded, index: Int) -> some View {
+        let id = loaded.collection.id
+        CollectionSidebarRow(
+            loaded: loaded,
+            index: index,
+            count: appState.sidebarCollections.count,
+            manual: appState.sidebarCollectionSortMode == .manual,
+            reorder: appState.sidebarCollectionSortMode == .manual ? ReorderContext(
+                onChanged: { value in
+                    if draggingCollectionID != id {
+                        guard !collectionFrames.isEmpty else { return }
+                        draggingCollectionID = id
+                        collectionDragStartFrames = collectionFrames
+                    }
+                    collectionDragOffset = value.translation.height
+                    let newTarget = collectionReorderSlot(forY: value.location.y)
+                    if newTarget != collectionDropTarget {
+                        withAnimation(.easeInOut(duration: 0.16)) { collectionDropTarget = newTarget }
+                    }
+                },
+                onEnded: { _ in commitCollectionReorder(movingID: id) }
+            ) : nil
+        )
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: CollectionFramePreference.self,
+                    value: [id: geo.frame(in: .named(Self.reorderSpace))])
+            }
+        )
+        .offset(y: draggingCollectionID == id ? 0 : collectionRowShift(forIndex: index))
+        .opacity(draggingCollectionID == id ? 0 : 1)
+    }
+
+    // MARK: - Collection reorder math (mirrors the folder reorder)
+
+    /// Ordered collection ids EXCLUDING the dragged one.
+    private var otherCollectionIDs: [String] {
+        appState.sidebarCollections.map { $0.collection.id }
+            .filter { $0 != draggingCollectionID }
+    }
+
+    private var draggedCollectionIndex: Int? {
+        guard let id = draggingCollectionID else { return nil }
+        return appState.sidebarCollections.firstIndex { $0.collection.id == id }
+    }
+
+    private func collectionRowShift(forIndex i: Int) -> CGFloat {
+        guard let d = draggedCollectionIndex, let target = collectionDropTarget, i != d else { return 0 }
+        let pitch = (draggingCollectionID.flatMap { collectionDragStartFrames[$0]?.height }
+                     ?? Self.rowHeight) + 1
+        let removedIndex = i < d ? i : i - 1
+        var shift: CGFloat = 0
+        if i > d { shift -= pitch }
+        if removedIndex >= target { shift += pitch }
+        return shift
+    }
+
+    private func collectionReorderSlot(forY y: CGFloat) -> Int {
+        let others = otherCollectionIDs
+        for (i, cid) in others.enumerated() {
+            guard let f = collectionDragStartFrames[cid] else { continue }
+            if y < f.midY { return i }
+        }
+        return others.count
+    }
+
+    private func collectionInsertionLineY() -> CGFloat? {
+        guard let target = collectionDropTarget else { return nil }
+        let others = otherCollectionIDs
+        guard !others.isEmpty else { return nil }
+        if target >= others.count {
+            return others.last.flatMap { collectionFrames[$0]?.maxY }
+        }
+        return collectionFrames[others[target]]?.minY
+    }
+
+    private func commitCollectionReorder(movingID: String) {
+        let target = collectionDropTarget
+        let others = otherCollectionIDs
+        guard let target else { resetCollectionDrag(); return }
+        // Build the final id order, then persist + reset in a non-animated
+        // transaction (rows are already in their final visual positions).
+        var newOrder = others
+        let insertAt = min(target, newOrder.count)
+        newOrder.insert(movingID, at: insertAt)
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) {
+            appState.reorderSidebarCollections(newOrder)
+            resetCollectionDrag()
+        }
+    }
+
+    private func resetCollectionDrag() {
+        draggingCollectionID = nil
+        collectionDropTarget = nil
+        collectionDragOffset = 0
+        collectionDragStartFrames = [:]
+    }
+
+    @ViewBuilder private var collectionInsertionOverlay: some View {
+        if draggingCollectionID != nil, let y = collectionInsertionLineY() {
+            insertionLine.offset(y: y - 1).allowsHitTesting(false)
+        }
+    }
+
+    @ViewBuilder private var collectionDraggedOverlay: some View {
+        if let id = draggingCollectionID,
+           let loaded = appState.sidebarCollections.first(where: { $0.collection.id == id }),
+           let f = collectionDragStartFrames[id] {
+            draggedCollectionOverlay(loaded)
+                .offset(y: f.minY + collectionDragOffset)
+                .allowsHitTesting(false)
+        }
+    }
+
+    /// Opaque copy of the dragged collection row (mirrors `draggedRowOverlay`).
+    private func draggedCollectionOverlay(_ loaded: CollectionStore.Loaded) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "square.stack.3d.up")
+                .font(.system(size: 12, weight: .semibold))
+                .frame(width: 20)
+            Text(loaded.collection.name)
+                .font(.system(size: 13))
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 16, height: 22)
+        }
+        .padding(.horizontal, 8)
+        .frame(height: Self.rowHeight)
+        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(cardColor))
+        .scaleEffect(1.02)
+        .shadow(color: .black.opacity(0.22), radius: 6, y: 3)
+        .padding(.horizontal, 8)
+    }
+
+    // MARK: - Bottom bar
+
+    /// One "Add Folder" pill when off; two compact pills (Add Folder + Add
+    /// Collection) when the Collections section is shown.
+    @ViewBuilder private var bottomBar: some View {
+        if showCollectionsInSidebar {
+            HStack(spacing: 10) {
+                AddPillButton(systemImage: "folder", label: "Add Folder") {
+                    appState.pickAndAddRoot()
+                }
+                AddPillButton(systemImage: "square.stack.3d.up", label: "Add Collection") {
+                    appState.requestNewCollection()
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        } else {
+            AddFolderPillButton { appState.pickAndAddRoot() }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
         }
     }
 
@@ -781,4 +1066,233 @@ private struct AddFolderPillButton: View {
 private struct ReorderContext {
     let onChanged: (DragGesture.Value) -> Void
     let onEnded: (DragGesture.Value) -> Void
+}
+
+// MARK: - Collection row frame collection
+
+/// Collects each collection row's frame (in `SidebarView.reorderSpace`) so the
+/// collection reorder drag can map a vertical position to an insertion slot.
+private struct CollectionFramePreference: PreferenceKey {
+    static let defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
+// MARK: - Section header
+
+/// A gray uppercase section label with a trailing circular collapse/expand
+/// button — the +/× toggle from the hero viewer, tuned for the light sidebar.
+/// `+` when collapsed, rotates 45°→`×` when expanded; same spring motion.
+private struct SectionHeader: View {
+    let title: String
+    @Binding var collapsed: Bool
+    @State private var hovering = false
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button {
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
+                    collapsed.toggle()
+                }
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.secondary.opacity(hovering ? 1.0 : 0.8))
+                    .frame(width: 18, height: 18)
+                    .background(Circle().fill(Color.primary.opacity(hovering ? 0.16 : 0.08)))
+                    .rotationEffect(.degrees(collapsed ? 0 : 45))   // + collapsed, × expanded
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(collapsed ? "Expand \(title.capitalized)"
+                                          : "Collapse \(title.capitalized)")
+            .onHover { hovering = $0 }
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 8)
+        .padding(.bottom, 2)
+    }
+}
+
+// MARK: - Collection sidebar row
+
+/// One collection in the sidebar's COLLECTIONS section: stack icon, name, and
+/// alive-image count. Click activates it in the grid (like the Collections
+/// page); right-click renames/deletes/moves; in Manual sort a trailing grip
+/// (swapping with the count on hover) drives the live drag-reorder.
+private struct CollectionSidebarRow: View {
+    @EnvironmentObject var appState: AppState
+    @Environment(\.sidebarReordering) private var isReordering
+    let loaded: CollectionStore.Loaded
+    let index: Int
+    let count: Int
+    let manual: Bool
+    var reorder: ReorderContext? = nil
+
+    @State private var isHovered = false
+    @State private var confirmDelete = false
+
+    private var id: String { loaded.collection.id }
+
+    private var isSelected: Bool {
+        appState.activeCollectionID == id && !appState.showingCollections
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "square.stack.3d.up")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor)
+                                            : AnyShapeStyle(.primary))
+                .frame(width: 20)
+
+            Text(loaded.collection.name)
+                .font(.system(size: 13))
+                .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor)
+                                            : AnyShapeStyle(.primary))
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer(minLength: 6)
+
+            // Trailing slot: the count, swapping in place for the drag grip on
+            // hover (Manual only). During a drag the floating overlay shows the
+            // grip, so in-list rows fall back to the count.
+            let showGrip = reorder != nil && isHovered && !isReordering
+            ZStack(alignment: .trailing) {
+                Text("\(loaded.aliveCount)")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .opacity(showGrip ? 0 : 1)
+                if let reorder {
+                    Image(systemName: "line.3.horizontal")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 16, height: 22)
+                        .opacity(showGrip ? 1 : 0)
+                        .contentShape(Rectangle())
+                        .allowsHitTesting(isHovered || isReordering)
+                        .highPriorityGesture(
+                            DragGesture(minimumDistance: 3,
+                                        coordinateSpace: .named(SidebarView.reorderSpace))
+                                .onChanged { reorder.onChanged($0) }
+                                .onEnded { reorder.onEnded($0) }
+                        )
+                        .onTapGesture { appState.setActiveCollection(id) }
+                        .help("Drag to reorder")
+                        .accessibilityHidden(true)
+                }
+            }
+        }
+        .padding(.horizontal, 8)
+        .frame(height: 28)
+        .background {
+            RoundedRectangle(cornerRadius: 6, style: .continuous).fill(rowFill)
+        }
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.12)) { isHovered = hovering }
+        }
+        .onTapGesture { appState.setActiveCollection(id) }
+        .contextMenu {
+            Button("Rename…") {
+                appState.setActiveCollection(id)
+                appState.collectionRenameRequest = true
+            }
+            Button("Delete…") { confirmDelete = true }
+            if manual {
+                Divider()
+                Button("Move Up") { appState.moveSidebarCollection(id: id, by: -1) }
+                    .disabled(index <= 0)
+                Button("Move Down") { appState.moveSidebarCollection(id: id, by: 1) }
+                    .disabled(index >= count - 1)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(loaded.collection.name), \(loaded.aliveCount) "
+                            + (loaded.aliveCount == 1 ? "item" : "items"))
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction { appState.setActiveCollection(id) }
+        .accessibilityAction(named: "Rename Collection") {
+            appState.setActiveCollection(id)
+            appState.collectionRenameRequest = true
+        }
+        .accessibilityAction(named: "Delete Collection") { confirmDelete = true }
+        .accessibilityAction(named: "Move Up") {
+            if manual { appState.moveSidebarCollection(id: id, by: -1) }
+        }
+        .accessibilityAction(named: "Move Down") {
+            if manual { appState.moveSidebarCollection(id: id, by: 1) }
+        }
+        .alert("Delete Collection", isPresented: $confirmDelete) {
+            Button("Delete", role: .destructive) {
+                let cid = id
+                Task { @MainActor in
+                    guard let q = Database.shared.dbQueue else { return }
+                    if appState.activeCollectionID == cid { appState.setActiveCollection(nil) }
+                    try? await CollectionStore.setHidden(queue: q, id: cid, hidden: true)
+                    await CollectionsEngine.shared.reload()
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("The collection is removed everywhere. Your images stay on disk.")
+        }
+    }
+
+    private var rowFill: Color {
+        if isSelected { return Color.accentColor.opacity(0.14) }
+        let showHover = isHovered && !isReordering
+        return Color.primary.opacity(showHover ? SidebarView.rowHoverFillOpacity : 0)
+    }
+}
+
+// MARK: - Compact add pill (two-up bottom bar)
+
+/// Icon-only "+ <glyph>" capsule for the two-up bottom bar (Add Folder / Add
+/// Collection). Mirrors AddFolderPillButton's fill so the two read as a set.
+private struct AddPillButton: View {
+    let systemImage: String
+    let label: String
+    let action: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "plus")
+                Image(systemName: systemImage)
+            }
+            .font(.system(size: 12, weight: .medium))
+            .frame(maxWidth: .infinity)
+            .frame(height: 28)
+        }
+        .buttonStyle(.plain)
+        .background { Capsule(style: .continuous).fill(fillColor) }
+        .foregroundStyle(textColor)
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.12)) { isHovered = hovering }
+        }
+        .accessibilityLabel(label)
+    }
+
+    private var fillColor: Color {
+        Color(nsColor: NSColor(calibratedWhite: usesDark
+            ? (isHovered ? 1.0 : 0.92)
+            : (isHovered ? 0.12 : 0.20),
+            alpha: 1))
+    }
+
+    private var textColor: Color {
+        Color(nsColor: NSColor(calibratedWhite: usesDark ? 0.10 : 1.0, alpha: 1))
+    }
+
+    private var usesDark: Bool { colorScheme == .dark }
 }
