@@ -114,4 +114,18 @@ final class FileMetadataTests: XCTestCase {
     func testMediaMetadataEmptyWhenNoDuration() {
         XCTAssertEqual(FileMetadata.mediaMetadata(durationSeconds: nil), FileMetadata.empty)
     }
+
+    // MARK: formatModifiedDate
+    func testFormatModifiedDateMediumNoTime() {
+        var c = DateComponents(); c.year = 2026; c.month = 6; c.day = 17
+        let date = Calendar(identifier: .gregorian).date(from: c)!
+        let s = FileMetadata.formatModifiedDate(date)
+        XCTAssertNotNil(s)
+        XCTAssertTrue(s!.contains("2026"), "expected year in \(s!)")
+        // Date-only (timeStyle .none): no AM/PM time component.
+        XCTAssertFalse(s!.contains("AM") || s!.contains("PM"), "expected no time in \(s!)")
+    }
+    func testFormatModifiedDateNil() {
+        XCTAssertNil(FileMetadata.formatModifiedDate(nil))
+    }
 }

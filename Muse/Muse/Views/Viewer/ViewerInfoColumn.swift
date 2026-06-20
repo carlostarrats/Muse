@@ -106,8 +106,10 @@ struct ViewerInfoColumn<Chrome: View>: View {
     }
 
     private var infoLine: String {
+        // Just size · dimensions here — dates live in the INFO card now, where
+        // they're labeled (Taken / Modified), so there's no ambiguous bare date.
         var parts: [String] = []
-        let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+        let values = try? url.resourceValues(forKeys: [.fileSizeKey])
         if let bytes = details?.sizeBytes ?? (values?.fileSize).map(Int64.init) {
             let f = ByteCountFormatter()
             f.allowedUnits = .useMB
@@ -116,11 +118,6 @@ struct ViewerInfoColumn<Chrome: View>: View {
         }
         if let px = details?.pixelSize {
             parts.append("\(Int(px.width))×\(Int(px.height)) px")
-        }
-        if let date = values?.contentModificationDate {
-            let df = DateFormatter()
-            df.dateStyle = .medium
-            parts.append(df.string(from: date))
         }
         return parts.joined(separator: " · ")
     }
@@ -272,12 +269,8 @@ struct ViewerInfoColumn<Chrome: View>: View {
                     .accessibilityElement(children: .combine)
                 }
                 if let coord = metadata.coordinate {
-                    HoverTextButton(label: "Open in Maps") {
-                        let u = "maps://?ll=\(coord.lat),\(coord.long)"
-                        if let url = URL(string: u) { NSWorkspace.shared.open(url) }
-                    }
-                    .padding(.top, 2)
-                    .accessibilityLabel("Open location in Maps")
+                    OpenInMapsButton(coordinate: coord)
+                        .padding(.top, 2)
                 }
             }
         }
@@ -516,6 +509,32 @@ private struct HoverTextButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
+    }
+}
+
+/// "Open in Maps" link-button: an underlined label + a small upper-right arrow
+/// so it reads as an action without being a heavy filled button. Hands off to
+/// Maps.app via a `maps://` URL (no in-app map — that would be a network fetch).
+private struct OpenInMapsButton: View {
+    let coordinate: Coordinate
+    @State private var hovering = false
+
+    var body: some View {
+        Button {
+            let u = "maps://?ll=\(coordinate.lat),\(coordinate.long)"
+            if let url = URL(string: u) { NSWorkspace.shared.open(url) }
+        } label: {
+            HStack(spacing: 4) {
+                Text("Open in Maps").underline()
+                Image(systemName: "arrow.up.forward")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(hovering ? .white : .white.opacity(0.7))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityLabel("Open location in Maps")
     }
 }
 

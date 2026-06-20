@@ -15,7 +15,7 @@ import ImageIO
 import PDFKit
 import AVFoundation
 
-struct InfoRow: Identifiable, Equatable {
+nonisolated struct InfoRow: Identifiable, Equatable {
     let id: UUID
     let label: String
     let value: String
@@ -30,12 +30,12 @@ struct InfoRow: Identifiable, Equatable {
     }
 }
 
-struct Coordinate: Equatable {
+nonisolated struct Coordinate: Equatable {
     let lat: Double
     let long: Double
 }
 
-struct FileMetadata: Equatable {
+nonisolated struct FileMetadata: Equatable {
     var rows: [InfoRow]
     var coordinate: Coordinate?
 
@@ -158,6 +158,18 @@ struct FileMetadata: Equatable {
         return FileMetadata(rows: [InfoRow("Duration", d)], coordinate: nil)
     }
 
+    // MARK: - Pure file-attribute formatting
+
+    /// Filesystem modification date as a medium date with NO time, to match the
+    /// other INFO date rows' density (e.g. "Jun 17, 2026"). nil when no date.
+    static func formatModifiedDate(_ date: Date?) -> String? {
+        guard let date else { return nil }
+        let df = DateFormatter()
+        df.dateStyle = .medium
+        df.timeStyle = .none
+        return df.string(from: date)
+    }
+
     // MARK: - IO loader (not unit-tested: CG/PDFKit/AVFoundation layer)
 
     /// Read header metadata off-main for `url`, dispatched by `kind`. Returns
@@ -171,16 +183,27 @@ struct FileMetadata: Equatable {
             return .empty
         }
         return await Task.detached(priority: .userInitiated) { () -> FileMetadata in
+            var result: FileMetadata
             switch kind {
             case .image, .raw, .psd:
-                return loadImage(url: url)
+                result = loadImage(url: url)
             case .pdf:
-                return loadPDF(url: url)
+                result = loadPDF(url: url)
             case .video, .audio:
-                return await loadMedia(url: url)
+                result = await loadMedia(url: url)
             default:
-                return .empty
+                result = .empty
             }
+            // The Modified date applies to EVERY file — it's a filesystem
+            // attribute, not a byte read — so it's appended last for all kinds.
+            // This is why the INFO card now shows for any non-dataless file, not
+            // only those carrying photo/PDF/AV metadata.
+            if let mod = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate,
+               let s = formatModifiedDate(mod) {
+                result.rows.append(InfoRow("Modified", s))
+            }
+            return result
         }.value
     }
 
