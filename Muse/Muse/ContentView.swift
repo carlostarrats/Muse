@@ -495,8 +495,11 @@ struct ContentView: View {
                                  selected: filterPopoverShown || appState.gridFilter.isActive)
         }
         .toggleStyle(.button)
-        .help("Filter")
+        .help(appState.gridFilter.isActive ? "Filter (active)" : "Filter")
         .accessibilityLabel("Filter")
+        // The toggle's "on" state doubles for popover-open, so announce the
+        // actual filter state separately (keeps the stable name "Filter").
+        .accessibilityValue(appState.gridFilter.isActive ? "Active" : "Off")
         .popover(isPresented: $filterPopoverShown, arrowEdge: .bottom) {
             GridFilterPopover()
                 .environmentObject(appState)

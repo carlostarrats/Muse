@@ -430,6 +430,9 @@ final class AppState: ObservableObject {
         didSet {
             AppSettings.gridFilter = gridFilter
             _visibleFilesValid = false
+            // Deselect anything the new filter hides so a filter-hidden file
+            // can't ride along into a selection action (see pruneSelectionToVisible).
+            pruneSelectionToVisible()
         }
     }
 

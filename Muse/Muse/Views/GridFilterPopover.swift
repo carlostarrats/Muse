@@ -61,6 +61,9 @@ struct GridFilterPopover: View {
         Text(title)
             .font(.system(size: 10, weight: .semibold))
             .foregroundStyle(.secondary)
+            // Navigable via VoiceOver's heading rotor (matches the next-34
+            // sidebar SectionHeader convention).
+            .accessibilityAddTraits(.isHeader)
     }
 
     // MARK: - Bindings
