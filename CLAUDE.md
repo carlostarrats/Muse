@@ -249,6 +249,17 @@ The four most critical are also saved as Claude memories (linked).
   `FolderRenameMigration`, and — since `feat/next-35` — `SearchService`'s "This
   Folder" scope, which was the one outlier). Use the same rule for any new
   containment check.
+- **`BookmarkStore.addRoot` must `activate(root)` BEFORE `roots.append(root)`.**
+  Appending publishes `$roots`, whose AppState sink rebuilds the sidebar
+  SYNCHRONOUSLY (the documented no-`.receive(on:)` rule). `rebuildRootNodes`
+  drops any root whose `bookmarks.url(for:)` is nil, and `url(for:)` reads
+  `accessedURLs`, populated only by `activate`. So if `activate` runs AFTER the
+  append, the synchronous rebuild can't resolve the just-added root's URL and
+  silently drops its node — each later add catches the PREVIOUS folder, so only
+  the LAST-added root vanishes (an iCloud folder, in the repro). `pickAndAddRoot`
+  masked this with an explicit post-add rebuild; the reconnect wizard (sink-only)
+  didn't. Activating first makes the synchronous rebuild resolve every new root.
+  Don't reorder back. Fixed 2026-06-20 (`feat/next-37`).
 
 ### Session index (detail in `docs/session-log.md`)
 
@@ -649,6 +660,33 @@ The four most critical are also saved as Claude memories (linked).
   deadlock-free). No new tests (one-line predicate matching an already-tested
   convention, view-lifecycle teardown, DB config). Five files. Spec/audit narrative
   in `docs/session-log.md`.
+- **2026-06-20** `feat/next-37` — Library Backup & Restore. Two explicit, legible
+  actions in the Muse app menu: **Back Up Muse…** exports one self-contained
+  `.muselibrary` JSON file (folders, collections, tags manual+AI, stars, AI-derived
+  metadata; excludes thumbnails + heavy OCR text), and **Restore from Backup…**
+  opens a locked, `InfoSheet`-sized **Reconnect wizard**. Because the OS-hidden
+  `.muse/` sidecars can't be assumed to travel, the backup is the ONLY thing
+  carried over and is fully self-contained. Identity is the existing SHA-256
+  **content hash**: collection membership/cover/exclusions are re-keyed from the
+  per-machine `FileRow.id` (a UUID, not portable) to content hash on export and
+  back on import. The wizard lists the backed-up folders; the user locates each
+  ONE AT A TIME (folders can live anywhere — there is deliberately NO master
+  "point at one parent / Reconnect All", which assumed a single location), and
+  locating a folder reconnects it immediately: index through the real `Indexer`
+  (creates rows by content hash), match the archive's occurrences by hash
+  (filename fallback, surfaced as "N by name — check", not silently trusted),
+  apply metadata + tags (re-keyed to the new `parent_dir`, manual-beats-vision),
+  then materialize collections + stars and `await CollectionsEngine.shared.reload()`.
+  **The live library never shows ghosts:** an auto collection that reconnects to
+  zero files is dropped; a hand-made OR hidden (deleted-tombstone) collection is
+  preserved; partial collections show only reconnected members. Restore RECONCILES
+  (doesn't overwrite): files on disk not in the backup index + analyze fresh via
+  the normal pipeline. Pure cores are unit-tested (`BackupArchive` round-trip,
+  `BackupBuilder` re-keying, `ReconnectMatcher`, `CollectionMaterializer`,
+  `ReconnectApplier`); the wizard/model are integration. Two code-review passes +
+  one systematic-debugging session (the iCloud-folder-vanishing bug → the
+  `BookmarkStore` activate-before-append fix, see the durable gotcha). Build + full
+  suite green. Spec + plan in `docs/superpowers/`; narrative in `docs/session-log.md`.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
@@ -764,7 +802,10 @@ Muse/Muse/
                                    rollback). SQL unit-tested in-memory.
     BookmarkStore.swift            UserDefaults-backed root bookmarks; lifecycle
                                    start/stop access for sandbox. rootRenamed(_:to:)
-                                   repoints a renamed root's bookmark + display name
+                                   repoints a renamed root's bookmark + display name.
+                                   addRoot ACTIVATES before appending so the
+                                   synchronous $roots-sink rebuild can resolve the
+                                   new root's URL (feat/next-37 — see durable gotcha)
     FolderTree.swift               lazy hierarchical tree + FolderReader; FolderNode
                                    has a weak parent + reloadChildren() (refresh after
                                    create/rename — feat/folder-ops-and-share)
@@ -1020,7 +1061,16 @@ Muse/Muse/
                                    disabled→Auto in masonry with a note) — feat/
                                    next-22
     InfoSheet.swift                ⓘ About-Muse modal (behavior + privacy); uses
-                                   the shared SheetCloseButton (feat/next-21)
+                                   the shared SheetCloseButton (feat/next-21). Has a
+                                   "Back Up & Restore" section (feat/next-37)
+    Backup/
+      ReconnectWizard.swift        the locked Restore sheet (InfoSheet chrome
+                                   600×720, no ✕ — Done only, disabled while a folder
+                                   is reconnecting). Folder rows with per-row Locate…
+                                   (reconnect immediately) + ✓/flagged/failed status;
+                                   collections readout in a separated card. Renders
+                                   ReconnectModel; matching/applying is all in the
+                                   pure Backup/ cores (feat/next-37)
     KeyCaptureView.swift           NSView arrow/return capture (hero flips)
     BreadcrumbView.swift           path breadcrumb (kept; not in toolbar)
     OpenWithMenu.swift             NSWorkspace registered apps via LaunchServices
@@ -1078,6 +1128,43 @@ Muse/Muse/
                                    captionHeight param reserves a fixed per-tile
                                    caption strip for under-tile file names
                                    (feat/next-11)
+  Backup/                          (feat/next-37) Library Backup & Restore. Export
+                                   one self-contained `.muselibrary` file +
+                                   reconnect it on another Mac by content hash.
+    BackupArchive.swift            pure Codable model (BackupArchive + BackupRoot/
+                                   File/Occurrence/Member/Collection/Star); reuses
+                                   Sidecar for content-level per-file metadata.
+                                   Membership/cover re-keyed to content_hash here
+                                   (FileRow.id UUID isn't portable). Unit-tested
+    BackupDocument.swift           encode/decode the archive ↔ Data (JSON);
+                                   `.muselibrary`; rejects schema mismatch
+    BackupBuilder.swift            DB → BackupArchive (off-main read). Only files
+                                   with an alive path are exported; membership/
+                                   cover/exclusions re-keyed to content_hash and
+                                   gated to backed-up hashes (internally consistent).
+                                   Unit-tested
+    ReconnectMatcher.swift         pure: classify archive occurrences vs the disk
+                                   files the indexer hashed — exact (content hash)
+                                   first for ALL occurrences, then filename
+                                   fallback, else unmatched; no disk file used
+                                   twice. Unit-tested
+    CollectionMaterializer.swift   pure: archive collections → rows to create,
+                                   re-keying hash→file_id. "No dead collections":
+                                   drops empty AUTO+visible; KEEPS empty manual OR
+                                   hidden (deleted tombstone, so recluster can't
+                                   resurrect). Unit-tested
+    ReconnectApplier.swift         DB writer: applyMeta (FileRow meta + tags at the
+                                   NEW parent_dir, manual-beats-vision + FTS mirror)
+                                   / applyCollections (materialize + upsert, members/
+                                   exclusions, ON CONFLICT preserves is_hidden) /
+                                   applyStars / currentFileIDForHash. Unit-tested
+    ReconnectModel.swift           @MainActor wizard model. Per folder (located one
+                                   at a time, anywhere): dedup-add as root, index via
+                                   Indexer.indexBatch, read disk files back, match,
+                                   applyMeta (capturing failures → .failed status;
+                                   name-only surfaced as flagged), applyCollections +
+                                   applyStars, CollectionsEngine.reload(), then
+                                   analyzePending reconciles new/changed files
   Export/
     CollectionPDFLayout.swift      pure paginated masonry pack for the collection
                                    PDF (no image split across pages), unit-tested;

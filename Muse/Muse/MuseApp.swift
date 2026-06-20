@@ -99,6 +99,9 @@ struct MuseApp: App {
             // "About Muse" — the conventional spot every Mac app uses.
             CommandGroup(after: .appInfo) {
                 CheckForUpdatesView(updater: updater.controller.updater)
+                Divider()
+                Button("Back Up Muse…") { appState.exportBackup() }
+                Button("Restore from Backup…") { appState.beginRestorePicker() }
             }
 
             // Settings is an in-app modal sheet (dimmed + centered like the

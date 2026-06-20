@@ -2645,3 +2645,78 @@ in this codebase; the pure cores they touch were already covered). Five files:
 `Database/SearchService.swift`, `Database/Database.swift`,
 `Intelligence/AnalyzePipeline.swift`, `Models/AppState.swift`,
 `Viewers/FontViewerView.swift`.
+
+## 2026-06-20 — `feat/next-37` — Library Backup & Restore
+
+**The gap.** A user spends months building Muse — folders, auto + manual tags,
+curated collections — but none of that lives in the files; it lives in the local
+SQLite DB. Buy a new Mac, copy the *files* over, redownload Muse → it starts
+blank. The existing iCloud `.muse/` sidecars carry most per-file metadata but
+(a) are OS-hidden so a normal "copy my photos" drops them, and (b) carry no
+collections. So migration must assume **nothing survives except a file the user
+deliberately exported**.
+
+**Shape (brainstormed with the user, spec in `docs/superpowers/specs/`).** Two
+explicit Muse-menu actions. **Back Up Muse…** writes one self-contained
+`.muselibrary` JSON (folders, collections incl. covers/exclusions/hidden
+tombstones, tags manual+AI, stars, AI-derived metadata; excludes thumbnails +
+heavy OCR text). **Restore from Backup…** opens a locked, `InfoSheet`-sized
+**Reconnect wizard**. Identity is the existing SHA-256 **content hash** — the one
+durable, portable key — so collection membership/cover/exclusions are re-keyed
+from the per-machine `FileRow.id` UUID (NOT portable) to content hash on export
+and back on import.
+
+**The wizard flow went through real iteration with the user.** First built with a
+"point at one parent folder → auto-map all → Reconnect All" batch. The user
+rejected it: folders can live **anywhere** on the new Mac (one was `~/Desktop`,
+another deep in iCloud Drive), so a single-parent assumption is wrong, and a
+master "do all" is confusing. Final design: the wizard lists the backed-up
+folders; the user **locates each one at a time**, and locating reconnects that
+folder immediately — index through the real `Indexer.indexBatch` (which creates
+`files`/`paths` rows by content hash — reusing the app's identity machinery, not
+a second hashing path), read the indexed disk files back, match the archive's
+occurrences by content hash (filename fallback), apply metadata + tags (re-keyed
+to the file's NEW `parent_dir`, manual-beats-vision), materialize collections +
+stars, reload the engine. The wizard is `InfoSheet`-sized (600×720), has **no ✕
+— a single Done button** (disabled while a folder is reconnecting), and the
+collections progress sits in its own separated card.
+
+**Invariants.** The live library NEVER shows ghosts: an AUTO collection that
+reconnects to zero files is dropped, but a hand-made OR hidden (deleted-tombstone)
+collection is preserved (so re-clustering on the new Mac can't resurrect a
+user-deleted collection under its stable id); partial collections show only their
+reconnected members. Restore RECONCILES rather than overwrites — files on disk
+that aren't in the backup index + analyze fresh via the normal pipeline. Pure
+cores are unit-tested: `BackupArchive` round-trip, `BackupBuilder` re-keying,
+`ReconnectMatcher` (exact-before-name, no double-use), `CollectionMaterializer`
+(no-dead-collections rules incl. the hidden-tombstone case), `ReconnectApplier`.
+
+**The bug that needed systematic debugging.** After reconnecting two folders the
+wizard showed both ✓ but the **last-added (iCloud) folder never appeared in the
+sidebar**. Diagnostics (routed to a container-tmp file, since a sandboxed GUI
+build's `print`/`NSLog` weren't reaching the host) showed both roots were created
+with valid, resolved URLs (`totalRoots=2`) — yet `rebuildRootNodes` logged
+`rootURLs=["…/INSPO", "nil"]`: `bookmarks.url(for:)` returned nil for the
+just-added root at rebuild time. Root cause: `BookmarkStore.addRoot` did
+`roots.append(root)` (which fires the `$roots` sink → a SYNCHRONOUS sidebar
+rebuild) **before** `activate(root)` populated `accessedURLs`. So the rebuild
+couldn't resolve the new root's URL and dropped its node; each later add caught
+the *previous* folder, so only the last-added root vanished. `pickAndAddRoot`
+masked this with an explicit post-add rebuild; the sink-only reconnect path
+didn't. Fix: activate BEFORE the append (one-line reorder), which fixes every
+add-root caller. Now a durable gotcha in CLAUDE.md.
+
+**Review loop.** Three parallel reviewers (correctness/DB, concurrency/SwiftUI,
+privacy-invariants) → fixes: live collections now `await
+CollectionsEngine.shared.reload()` after the writes (the early addRoot-triggered
+reload raced ahead of them); DB write failures surface a `.failed` status instead
+of a false ✓; name-only matches are surfaced ("N by name — check") instead of
+silently trusted; hidden tombstones preserved when empty; duplicate roots deduped
+on repeated restore; Done disabled mid-work. A second verification pass returned
+ready-to-merge. Build + full unit suite green throughout. Privacy/data-loss
+invariants confirmed intact: zero network (the only writes are the DB + the one
+user-chosen `.muselibrary`), Trash-only deletes untouched, iCloud dataless files
+not force-downloaded on reconnect enumeration (the `Indexer`/`AssetKind` guards
+cover it). New code under `Muse/Muse/Backup/` + `Views/Backup/ReconnectWizard.swift`;
+menu in `MuseApp.swift`; export/restore entry points + the `BookmarkStore` fix.
+Spec + plan in `docs/superpowers/`.
