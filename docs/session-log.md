@@ -2387,3 +2387,54 @@ XCTest format ("… passed on 'My Mac - Muse (pid)'"), so it has no per-bundle
 auto-generated scheme, so verify with the plain `test` action or class-level
 `-only-testing`. The Collections page is untouched. Spec + plan in
 `docs/superpowers/`.
+
+**QA iteration (live testing in the running app).** Several rounds of tester
+feedback on the running build, each fixed and rebuilt:
+
+- **Settings → in-app modal.** The tester wanted Settings to look like the other
+  modals (dimmed tint, centered) rather than the native Preferences window. The
+  `Settings {}` scene was removed; `CommandGroup(replacing: .appSettings)` now opens
+  a `.sheet` bound to `AppState.settingsShown` (⌘, preserved). `SettingsView` gained
+  a `@Binding isPresented` + header + `SheetCloseButton` (the InfoSheet chrome), and
+  is sized to content (`.frame(width: 600).fixedSize(vertical:)`) so every section
+  shows without a tall empty sheet.
+- **Section collapse felt instant, +/× didn't spin.** Root cause: the collapse flags
+  were `@AppStorage`, and a `withAnimation` transaction doesn't carry into a
+  UserDefaults publish. Switched them to plain `@State` seeded from / persisted to
+  `UserDefaults` (via `.onChange`); the `SectionHeader` toggle is now wrapped in
+  `withAnimation(.spring…)`, so the spin AND the content show/hide animate together
+  like the hero modal.
+- **Collection rows sat too far left / didn't line up with folders, and the grip +
+  right-click Move/Rename "weren't there."** `CollectionSidebarRow` had diverged
+  structurally from the proven `FolderTreeNode` row. Reworked it to mirror the folder
+  row exactly: a leading invisible chevron-width spacer, icon `frame(width: 18)`,
+  `.padding(.horizontal, 6)`, the tap on the inner content with hover + context menu
+  on the outer. Icons/text now align with the folders, and the grip-on-hover +
+  Rename/Delete/Move-Up/Down menu behave like folders.
+- **Dropping a dragged collection flashed** — the row visibly caught up a frame
+  late. `reorderSidebarCollections` was doing an async DB write + engine reload, so
+  the commit's non-animated transaction cleared the lift offset BEFORE the new order
+  arrived. Fixed by applying the new order to the in-memory
+  `CollectionsEngine.collections` `sort_order` SYNCHRONOUSLY (then persisting async,
+  dropping the reload) — exactly how the folder reorder leans on `bookmarks.$roots`
+  delivering synchronously. (Recorded as a durable gotcha.)
+- **Changing the sort dropdown flew rows in from above** instead of reordering in
+  place. The collections list was a `LazyVStack` over `Array(enumerated())`; SwiftUI
+  treated the reorder as insert/remove and flew the rows. Switched to a NON-lazy
+  `VStack` iterated directly by `collection.id`, with a list-scoped
+  `.animation(.easeInOut, value: sidebarCollectionSortMode)` (and dropped the global
+  `withAnimation`, which had animated the surrounding VStack). Rows now move in place
+  like folders. (Also a durable gotcha.)
+- **Sidebar didn't highlight the collection you were in** when you opened it from a
+  card on the Collections page. `isSelected` had a `&& !showingCollections` guard
+  that suppressed the highlight there. Dropped it — `isSelected` is now just
+  `activeCollectionID == id`, so the active collection highlights regardless of entry
+  path (folders stay de-highlighted while a collection is active, so no clash).
+- **Move Up/Down parity:** wrapped the menu/keyboard `moveSidebarCollection` reorder
+  in `withAnimation` so it slides like the drag (the in-memory reorder is synchronous,
+  so it animates cleanly) — an independent code-review Minor.
+
+After the QA round: full app build green, full suite green (280 unit cases + 4 UI,
+0 failures), independent code review clean (no Critical/Important). The default
+(setting OFF) sidebar is byte-for-byte the original, and the Add Folder pill stays
+pinned below the scroll in both states.
