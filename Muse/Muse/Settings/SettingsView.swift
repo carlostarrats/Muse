@@ -15,6 +15,7 @@ struct SettingsView: View {
     @AppStorage(AppSettings.autoTagKey) private var autoTag = true
     @AppStorage(AppSettings.autoCollectionsKey) private var autoCollections = true
     @AppStorage(AppSettings.showFileNamesKey) private var showFileNames = false
+    @AppStorage(AppSettings.showCollectionsInSidebarKey) private var showCollectionsInSidebar = false
 
     var body: some View {
         Form {
@@ -37,6 +38,17 @@ struct SettingsView: View {
                 Text("Grid")
             } footer: {
                 Text("Show each file's name beneath its thumbnail in the grid.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Show Collections in the Sidebar", isOn: $showCollectionsInSidebar)
+            } header: {
+                Text("Sidebar")
+            } footer: {
+                Text("Show your collections as a collapsible section beneath the "
+                     + "folders, with their own sort order.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
