@@ -1068,7 +1068,7 @@ final class AppState: ObservableObject {
         Task.detached(priority: .userInitiated) {
             let raw = showSub
                 ? Self.enumerateRecursive(at: folderURL, showHidden: showHid)
-                : FolderReader.files(in: folderURL, showHidden: showHid)
+                : FolderReader.files(in: folderURL, showHidden: showHid, includeFolders: true)
             let merged = raw.map { fresh -> FileNode in
                 if let old = existing[fresh.url],
                    old.modifiedAt == fresh.modifiedAt,
@@ -1077,7 +1077,10 @@ final class AppState: ObservableObject {
                 }
                 return fresh
             }
-            let sorted = SmartSorter.apply(mode, to: merged, reversed: reversed)
+            // Folders first (Finder pattern), each group in the active sort order.
+            // No-op in the recursive view (no folder nodes there).
+            let sorted = FolderOrdering.foldersFirst(
+                SmartSorter.apply(mode, to: merged, reversed: reversed))
             // Reconcile externally-deleted files on a fresh folder open: flip
             // DB rows for files that vanished from disk to is_alive=0, so they
             // stop leaking into search (blank tiles) + collection counts. Runs
@@ -1185,7 +1188,8 @@ final class AppState: ObservableObject {
     func resort() {
         // Don't re-sort search results; they maintain relevance ranking
         guard !isSearchActive else { return }
-        currentFiles = SmartSorter.apply(sortMode, to: currentFiles, reversed: sortReversed)
+        currentFiles = FolderOrdering.foldersFirst(
+            SmartSorter.apply(sortMode, to: currentFiles, reversed: sortReversed))
         if let collectionFiles = activeCollectionFiles {
             activeCollectionFiles = SmartSorter.apply(sortMode, to: collectionFiles, reversed: sortReversed)
         }
