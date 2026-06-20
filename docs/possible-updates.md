@@ -90,3 +90,33 @@ data types `nonisolated`, and move main-actor helpers off the hot nonisolated
 paths (or make the callers properly `await` them). Worth a dedicated
 concurrency-cleanup pass before any attempt to adopt the Swift 6 language mode;
 fold opportunistically when touching the affected files.
+
+---
+
+## Folders as grid cards (show + count subfolders) — DEFERRED FEATURE (noted 2026-06-20)
+
+Surfaced right after the `feat/next-39` count fix. Today the grid and the sidebar
+file count are **files-only**: `FolderReader.files()` skips plain directories
+(`if isDir && !isPackage { return nil }`) and `FolderStats.compute` counts only
+non-folders. So a folder with 34 files + 4 subfolders shows **34** in Muse but
+**38** in Finder — and the 4 subfolders, though present in the sidebar tree,
+neither show in the grid nor count.
+
+**Desired behavior (user, 2026-06-20):** "count and show everything — folders are
+just another file-card type." So:
+- Render immediate **subfolders as folder cards** in the grid (reuse the existing
+  non-image file-card path; `AssetKind.folder` → macOS folder icon via QuickLook).
+- **Count them** in `FolderStat` so the sidebar number matches Finder (and the
+  grid). Update the "mirrors the grid's file notion" contract to include folders.
+- The **"show subfolders" toggle keeps controlling CONTENTS**, not the cards:
+  toggle OFF → show folder cards but NOT their contents (existing recursion off);
+  toggle ON → recurse into contents (existing behavior). Reconcile whether folder
+  cards still show while recursing (likely no — you're viewing contents).
+- **Clicking a folder card navigates into it** (set it active, sidebar follows) —
+  `AssetKind.folder` has no native viewer, so the hero/open path must branch to
+  navigation instead. New interaction wiring.
+
+Scope touches `FolderReader.files`, `FolderStat.compute` (+ its tests),
+`GridView` (folder-card rendering + navigate-on-open), and the subfolders-toggle
+interaction. Needs its own brainstorm → spec → plan (the click/navigation +
+toggle reconciliation are the real design questions). Not started.
