@@ -789,9 +789,23 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Starred-folder scopes we've already begun accessing this session. Each
+    /// `startAccessingSecurityScopedResource()` increments a kernel refcount with
+    /// no matching stop here (the folder is meant to stay reachable while it's
+    /// pinned), so without de-duping, re-opening the same pin leaks a scope every
+    /// time. Bounding to one start per distinct path caps it.
+    private var startedStarredScopes = Set<String>()
+
     func openStarred(_ star: StarStore.StarredFolder) {
         guard let url = stars.resolveURL(for: star) else { return }
-        _ = url.startAccessingSecurityScopedResource()
+        let path = url.standardizedFileURL.path
+        // Start the scope once per distinct path, and only RECORD it as started
+        // when the start actually succeeds — so a transient first-open failure
+        // doesn't permanently skip the retry on a later open this session.
+        if !startedStarredScopes.contains(path),
+           url.startAccessingSecurityScopedResource() {
+            startedStarredScopes.insert(path)
+        }
         let node = FolderNode(url: url, displayName: star.displayName)
         select(folder: node)
     }

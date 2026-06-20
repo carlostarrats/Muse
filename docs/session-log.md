@@ -2545,3 +2545,103 @@ diff returned ship — no Critical/Important findings; it confirmed the
 builder/API coexistence (via the clean build), the exact bounds-parity with the
 context menu, and that `.isHeader` on the Text doesn't interfere with the collapse
 Button. One file: `Views/SidebarView.swift`.
+
+## 2026-06-19 — `feat/next-35` — codebase health/security review + fixes
+
+A comprehensive read-only audit of the whole app (≈120 source files / 17.7k LOC)
+fanned out across six dimensions — memory/resource leaks + retain cycles,
+concurrency/data races, security/privacy, SQLite/GRDB correctness, filesystem +
+data-loss safety, and pure-logic/crash risk — followed by an adversarial review of
+the resulting diff. The headline finding: the codebase is healthy. Every
+load-bearing invariant was verified intact against source: zero network surface
+except Sparkle (tree-wide grep for `URLSession`/`dataTask`/`NWConnection`/`http`
+came back empty), SVG/Markdown viewers hard-block remote loads (WKWebView JS off,
+file-read scoped to the asset's own folder), files only ever go to Trash via
+`recycle` (no `unlink`/`removeItem` on user files anywhere), all SQL is parameterized
+with FTS5 input sanitized, path-traversal is blocked in folder ops + the rename
+migration, and the content-hash iCloud detection / zero-byte hash guard /
+dataless-placeholder skips / PathReconciler false-empty guard are all present. No
+retain cycles and no memory-safety data races were found (the GRDB-serialized queue
+plus thorough `@MainActor` + token-guard discipline cover those classes).
+
+**Five fixes landed** (build + full unit suite green throughout; adversarial diff
+review returned no Critical/High regressions):
+
+1. **`Database/SearchService.swift` — search "This Folder" scope (HIGH, real
+   wrong-results bug).** The scope filter used a bare `path.hasPrefix(prefix)`, so
+   searching inside `/a/Inspo` also returned DB-ranked hits from the sibling
+   `/a/Inspo Extra/…` (the enumerated-extras branch below it was already correctly
+   scoped, which masked the bug as intermittent). Changed to
+   `$0 == prefix || $0.hasPrefix(prefix + "/")`, matching the `+ "/"` rule the rest
+   of the codebase already uses (`Housekeeping`, `CollectionStore.isUnderAnyRoot`,
+   `ICloudZone`, `PathReconciler`, `FolderRenameMigration`).
+
+2. **`Intelligence/AnalyzePipeline.swift` — analyze-pass wake-race (MEDIUM).** The
+   two queue-and-wait entry points (`analyzePending`, `regenerateTagless`) gated on
+   a `while isRunning { await Task.sleep }` busy-wait. When the running pass cleared
+   `isRunning`, EVERY sleeping waiter woke, all saw `isRunning == false`, and all
+   proceeded — two passes ran at once (clobbering the "N of M" progress counters and
+   letting `cancelActivePass()`, fired when a folder is removed, halt the wrong
+   pass). Added a synchronous `passClaimed` claim + `acquirePass()` helper: a waiter
+   loops on `isRunning || passClaimed` and, because there's no `await` between the
+   gate check and `passClaimed = true`, only the first woken waiter on the main
+   actor can take it. The claim is held (via `defer { passClaimed = false }`) for the
+   whole wrapper method — bridging the window between the inner `analyze(folder:)`
+   clearing `isRunning` and the wrapper returning — so a second waiter can't slip
+   past. `analyze(folder:)`/`analyze(file:)` deliberately do NOT consult
+   `passClaimed`, so a claiming wrapper calling into them can't deadlock; the cancel
+   path returns before the claim, so it never leaks the flag. This is a new durable
+   gotcha (see CLAUDE.md).
+
+3. **`Models/AppState.swift` — `openStarred` security-scope leak (LOW; flagged by
+   two independent auditors).** Opening a pinned/starred folder called
+   `startAccessingSecurityScopedResource()` with no matching stop (the scope is meant
+   to persist while the folder is browsed), so re-opening the same pin leaked a
+   kernel scope refcount every time. Now de-duped to one start per distinct path via
+   a `startedStarredScopes` set, and the path is recorded only when the start
+   actually succeeds (so a transient first-open failure doesn't permanently skip the
+   retry that session).
+
+4. **`Viewers/FontViewerView.swift` — process-font registration leak (LOW).**
+   Previewing a font called `CTFontManagerRegisterFontsForURL(_, .process, _)` with
+   no matching unregister, so the process font table accumulated a registration per
+   distinct font viewed. `registerFont()` now returns whether THIS call actually
+   registered (CoreText returns false for an already-registered URL), and the
+   `.task(id: url)` unregisters on teardown — only what it added. Holds the
+   registration alive with a `while !Task.isCancelled { try? await Task.sleep(5s) }`
+   cancellation-poll rather than `Task.sleep(.max)` (whose ≈584-year deadline can
+   overflow and return early on some runtimes, which would unregister the font while
+   it's still on screen). `.task(id:)` cancels on both view-disappear and url-change,
+   and cancellation interrupts the sleep immediately, so the defer fires promptly.
+
+5. **`Database/Database.swift` — explicit FK enforcement (defensive).**
+   `Housekeeping.pruneUnreachable` deletes only `files`/`paths`/`tags`/`files_fts`
+   and relies on `ON DELETE CASCADE` to clear `embeddings`/`collection_members`/
+   `duplicate_members`. SQLite enforces foreign keys only per-connection and OFF by
+   default; GRDB's default `Configuration` already turns them ON (so this worked),
+   but the dependency was implicit. Set `Configuration.foreignKeysEnabled = true`
+   explicitly at `DatabaseQueue` creation so a future framework-default change can't
+   silently turn every prune into an orphan-row generator. Verified a behavior no-op
+   (GRDB default was already true; the migrator's deferred-then-`checkForeignKeys`
+   path is unchanged).
+
+**Deliberately not changed.** The perf items the audit surfaced — semantic search
+loads + cosine-scores every embedding blob per keystroke (`SemanticSearch`), tag
+search is a leading-wildcard `LIKE "%x%"` full scan, `CollectionStore.fetchAll` is
+N+2 queries per reload — are real but consistent with the documented personal-scale
+assumption; they're scaling concerns, not correctness bugs, and out of scope for a
+correctness pass (revisit only if libraries grow large). The non-issue findings
+(`as! NSImage` on `NSImage.copy()` which always returns NSImage; un-clamped
+luminance/HSB reachable only via hand-edited UserDefaults) were confirmed safe and
+left alone.
+
+**Verification.** Build green and full unit suite green (`** TEST SUCCEEDED **`)
+after every fix; an independent adversarial review of the complete diff confirmed no
+Critical/High regression — specifically that the FK change is a runtime no-op and the
+`acquirePass` gate is deadlock-free and correctly closes the documented double-pass
+race. No new tests (the changes are either a one-line predicate matching an
+already-tested convention, view-lifecycle teardown, or DB-config — none unit-tested
+in this codebase; the pure cores they touch were already covered). Five files:
+`Database/SearchService.swift`, `Database/Database.swift`,
+`Intelligence/AnalyzePipeline.swift`, `Models/AppState.swift`,
+`Viewers/FontViewerView.swift`.

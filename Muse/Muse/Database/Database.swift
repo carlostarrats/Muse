@@ -42,7 +42,14 @@ final class Database {
         let dbURL = dir.appendingPathComponent("muse.sqlite")
 
         do {
-            let queue = try DatabaseQueue(path: dbURL.path)
+            // Enforce foreign keys explicitly. GRDB enables them by default, but
+            // Housekeeping's prune deletes only `files`/`paths`/`tags`/`files_fts`
+            // and relies on ON DELETE CASCADE to clear embeddings,
+            // collection_members, and duplicate_members — so make that load-bearing
+            // dependency explicit rather than implicit in a framework default.
+            var config = Configuration()
+            config.foreignKeysEnabled = true
+            let queue = try DatabaseQueue(path: dbURL.path, configuration: config)
             try Self.makeMigrator().migrate(queue)
             self.dbQueue = queue
         } catch {
