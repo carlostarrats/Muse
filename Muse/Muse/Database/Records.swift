@@ -123,6 +123,7 @@ struct CollectionRow: Codable, FetchableRecord, MutablePersistableRecord {
     var created_at: Int64
     var updated_at: Int64
     var cover_file_id: String?      // user-chosen cover; nil = auto (first member)
+    var sort_order: Int = 0         // sidebar-only manual order (v8)
 }
 
 struct CollectionMemberRow: Codable, FetchableRecord, MutablePersistableRecord {
