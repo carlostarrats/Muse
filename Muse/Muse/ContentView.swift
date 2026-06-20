@@ -19,6 +19,7 @@ struct ContentView: View {
     @State private var moodPickerShown = false
     @State private var infoShown = false
     @State private var imageLayoutShown = false
+    @State private var filterPopoverShown = false
 
     /// The Collections page is the card grid — showing collections with no
     /// single collection drilled into (and not while searching).
@@ -99,6 +100,13 @@ struct ContentView: View {
                     // the cards) and on the grid; only search disables it
                     // (results are ranked by relevance).
                     .disabled(appState.isSearchActive)
+                }
+
+                // Faceted filter (kind / date / size). Sits beside the sort
+                // cluster but is its OWN item — deliberately NOT disabled during
+                // search, because the funnel narrows search results too.
+                ToolbarItem(placement: .navigation) {
+                    filterMenu
                 }
 
                 // Tag-chip sort order (Most Used / A→Z) — its own item, sitting
@@ -467,6 +475,32 @@ struct ContentView: View {
         }
         .help(mode.directionLabel(ascending: ascending))
         .accessibilityLabel("Sort direction: " + mode.directionLabel(ascending: ascending))
+    }
+
+    @ViewBuilder
+    private var filterMenu: some View {
+        // Native toolbar Toggle in `.button` style: when "on" it gets the
+        // standard selected fill (solid accent, white icon). We drive "on" from
+        // (popover open) OR (a filter is active) so the engaged blue persists
+        // while a filter is set even with the popover closed — the always-visible
+        // reminder. The setter ignores the incoming value and only toggles the
+        // popover, so a click always opens/closes it (never silently clears the
+        // filter). NOT disabled during search: the funnel narrows results too.
+        Toggle(isOn: Binding(
+            get: { filterPopoverShown || appState.gridFilter.isActive },
+            set: { _ in filterPopoverShown.toggle() }
+        )) {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .moodToolbarIcon(appState.moodPalette,
+                                 selected: filterPopoverShown || appState.gridFilter.isActive)
+        }
+        .toggleStyle(.button)
+        .help("Filter")
+        .accessibilityLabel("Filter")
+        .popover(isPresented: $filterPopoverShown, arrowEdge: .bottom) {
+            GridFilterPopover()
+                .environmentObject(appState)
+        }
     }
 
     @ViewBuilder
