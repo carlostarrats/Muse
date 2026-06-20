@@ -227,9 +227,28 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.18), value: appState.selectedFile?.id)
         .background(
             Button(action: {
-                if let selected = appState.selectedFile,
-                   selected.kind == .image || selected.kind == .raw
-                       || selected.kind == .psd {
+                // Escape backs out of the current focused context, innermost-first
+                // (EscapeResolver). Any open viewer wins outright, so the back-out
+                // chain (collection → Collections page → grid) can never interleave
+                // with the delicate hero close. Each case maps onto the SAME call
+                // the visible back button makes, so behavior stays in parity.
+                let selected = appState.selectedFile
+                let isHero = selected.map {
+                    $0.kind == .image || $0.kind == .raw || $0.kind == .psd
+                } ?? false
+                // "Search present" mirrors selectFolder's teardown check so a
+                // typed-but-not-yet-fired query (debounce in flight) is peeled too.
+                let searchPresent = EscapeResolver.searchPresent(
+                    isSearchActive: appState.isSearchActive,
+                    queryIsEmpty: appState.searchQuery.isEmpty)
+                switch EscapeResolver.action(
+                    hasSelectedFile: selected != nil,
+                    selectedFileIsHero: isHero,
+                    searchActive: searchPresent,
+                    insideCollection: appState.activeCollectionID != nil,
+                    showingCollectionsPage: appState.showingCollections
+                ) {
+                case .closeHero:
                     // Hero viewer: run the return flight instead of popping.
                     // Fire the SINGLE trigger (viewerClosing) and let startClose()
                     // — run via HeroImageViewer's viewerClosing onChange — own the
@@ -242,8 +261,20 @@ struct ContentView: View {
                     // but the close didn't complete. Route everything through the
                     // one flag so both paths are truly identical.
                     appState.viewerClosing = true
-                } else if appState.selectedFile != nil {
+                case .closeViewer:
                     appState.selectedFile = nil
+                case .clearSearch:
+                    // Peel the search first (it left any collection intact), so
+                    // this returns to the collection's members or the folder grid.
+                    appState.clearSearch()
+                case .exitCollection:
+                    // Same as the in-collection header BackArrowButton.
+                    appState.setActiveCollection(nil)
+                case .exitCollectionsPage:
+                    // Same as the Collections-page back arrow.
+                    appState.toggleCollectionsPage()
+                case .none:
+                    break
                 }
             }) { EmptyView() }
                 .keyboardShortcut(.escape, modifiers: [])

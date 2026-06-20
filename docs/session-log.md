@@ -2216,3 +2216,57 @@ reserve; they're independent views. Keep the two reserves on the shared
 navigated to the Collections page, confirmed the title clearance + card grid.
 Files touched: `CollectionsPage.swift`, `TagChipsRow.swift` (the shared constant).
 No test — a pure SwiftUI layout change (UI views aren't unit-tested).
+
+### Escape backs out of a collection / the Collections page — 2026-06-19 (on `feat/next-30`)
+
+**Ask.** Let the Escape key back out of an open collection and the Collections
+page, as a keyboard accelerator alongside the visible back buttons — "if you
+don't want to press the back button." Confirmed it's an accepted macOS pattern
+(Escape = dismiss/cancel/pop the current focused context); shipped as *additive*
+to the back buttons, not a replacement.
+
+**Priority chain (innermost-first), via a pure resolver.** Escape peels exactly
+one layer per press: (1) hero image viewer → its return flight; (2) other viewer
+(PDF/video/…) → dismiss; (3) active/typed search → clear it; (4) inside a
+collection → pop to the Collections page; (5) on the Collections page → return to
+the grid; (6) plain grid → nothing. All decision logic lives in a pure
+`EscapeResolver`/`EscapeAction` (`Components/EscapeAction.swift`), mirroring the
+repo's tested-helper convention (`GridSelection`, `PageScroll`, `CollectionSort`,
+`DuplicateDeleteRules`). `ContentView`'s existing hidden `keyboardShortcut(.escape)`
+Button is now a thin mapper onto the SAME calls the visible back buttons make:
+`.exitCollection` → `setActiveCollection(nil)` (the in-collection `BackArrowButton`),
+`.exitCollectionsPage` → `toggleCollectionsPage()` (the Collections-page back arrow).
+
+**Hero-close path untouched (the load-bearing constraint).** Any selected file
+short-circuits to `.closeHero`/`.closeViewer` BEFORE any back-out case, so the
+new chain can never interleave with the delicate hero close — the `.closeHero`
+case still fires ONLY `viewerClosing = true` and lets `startClose()` own the rest,
+exactly as the 2026-06-18 two-press fix requires. A test
+(`testHeroOpenInsideCollectionStillClosesHero`) locks this even with search +
+collection + page all set.
+
+**QA finding folded in — search sits ABOVE the collection back-out.** `runSearch`
+does NOT clear `activeCollectionID`/`showingCollections` (a search just overrides
+what the grid shows), so you can search *inside* a collection. Peeling the search
+first (`.clearSearch` → `AppState.clearSearch()`, which leaves collection state
+intact) returns you to the collection's own members via `visibleFiles`'
+`activeCollectionFiles ?? currentFiles` fallback — rather than silently dropping
+the collection while results still show (a dead key). "Search present" =
+`isSearchActive || !searchQuery.isEmpty` (mirrors `selectFolder`'s teardown
+check), extracted to a tested `EscapeResolver.searchPresent(...)` so the glue
+isn't an untested boolean.
+
+**Modals are a non-issue.** macOS SwiftUI `.sheet`/`.alert`/`.popover` present in
+separate key windows, so the parent window's `keyboardShortcut(.escape)` Button
+doesn't fire while one is up; the sheets that need Escape carry their own
+`.cancelAction` and the mood popover is AppKit-dismissed. An independent code
+review confirmed this reasoning and returned **ship** with no Critical/Important
+findings (two Minor polish items — the `searchPresent` test and a doc note —
+were both folded in).
+
+**Verification.** TDD throughout (watched each test fail, then pass). New
+`MuseTests/EscapeActionTests.swift` (12 cases: viewer priority, search-before-
+collection ordering, the back-out chain, the `searchPresent` glue). Build +
+full suite green (`** TEST SUCCEEDED **`, 0 failures). Files touched:
+`Components/EscapeAction.swift` (new), `ContentView.swift`,
+`MuseTests/EscapeActionTests.swift` (new).
