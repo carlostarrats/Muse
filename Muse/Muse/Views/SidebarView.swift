@@ -42,8 +42,16 @@ struct SidebarView: View {
     /// Off = the sidebar is exactly the original folders-only experience.
     @AppStorage(AppSettings.showCollectionsInSidebarKey) private var showCollectionsInSidebar = false
     @ObservedObject private var collectionsEngine = CollectionsEngine.shared
-    @AppStorage("sidebarFoldersCollapsed") private var foldersCollapsed = false
-    @AppStorage("sidebarCollectionsCollapsed") private var collectionsCollapsed = false
+    // Plain @State (seeded from + persisted to UserDefaults) rather than
+    // @AppStorage so the collapse can animate via `withAnimation` — a
+    // withAnimation transaction doesn't carry into an @AppStorage publish, which
+    // made the section open/close instant. Keys persist the choice across launches.
+    private static let foldersCollapsedKey = "sidebarFoldersCollapsed"
+    private static let collectionsCollapsedKey = "sidebarCollectionsCollapsed"
+    @State private var foldersCollapsed =
+        UserDefaults.standard.bool(forKey: SidebarView.foldersCollapsedKey)
+    @State private var collectionsCollapsed =
+        UserDefaults.standard.bool(forKey: SidebarView.collectionsCollapsedKey)
 
     // Collection reorder drag — a flat-list mirror of the folder reorder above.
     @State private var draggingCollectionID: String?
@@ -179,6 +187,15 @@ struct SidebarView: View {
                 }
             }
         }
+        // Persist the collapse choices (the flags are plain @State so they can
+        // animate via withAnimation; no container `.animation(value:)` modifier,
+        // which would otherwise spring-animate the sort/reorder list changes too).
+        .onChange(of: foldersCollapsed) { _, v in
+            UserDefaults.standard.set(v, forKey: Self.foldersCollapsedKey)
+        }
+        .onChange(of: collectionsCollapsed) { _, v in
+            UserDefaults.standard.set(v, forKey: Self.collectionsCollapsedKey)
+        }
         .scrollContentBackground(.hidden)
         .coordinateSpace(name: Self.reorderSpace)
         .onPreferenceChange(RootFramePreference.self) { rootFrames = $0 }
@@ -231,30 +248,41 @@ struct SidebarView: View {
     }
 
     private func setCollectionSortMode(_ mode: SidebarCollectionSortMode) {
-        withAnimation(.easeInOut(duration: 0.2)) { appState.sidebarCollectionSortMode = mode }
+        // No global withAnimation: a global transaction animates the whole
+        // surrounding VStack (the folder section + conditional content), which
+        // read as a fly-in. The reorder is animated locally, scoped to the list
+        // (see collectionsList's `.animation(value:)`), so rows just move.
+        appState.sidebarCollectionSortMode = mode
     }
 
     // MARK: - Collections list
 
     @ViewBuilder private var collectionsList: some View {
-        LazyVStack(alignment: .leading, spacing: 1) {
-            ForEach(Array(appState.sidebarCollections.enumerated()),
-                    id: \.element.collection.id) { pair in
-                collectionRow(pair.element, index: pair.offset)
+        // A non-lazy VStack (the collection list is short) iterated DIRECTLY by
+        // collection id — `LazyVStack` + `Array(enumerated())` made SwiftUI treat
+        // a sort reorder as insert/remove and fly rows in from the edge. A stable
+        // identity over a realized stack animates the reorder as in-place moves.
+        VStack(alignment: .leading, spacing: 1) {
+            ForEach(appState.sidebarCollections, id: \.collection.id) { loaded in
+                collectionRow(loaded)
             }
             if !appState.sidebarCollections.isEmpty { endDropZone }
         }
         .padding(.horizontal, 8)
         .padding(.top, 6)
         .padding(.bottom, 12)
+        // Animate the reorder ONLY when the sort mode changes, scoped to this
+        // list — rows move in place instead of the surrounding layout flying in.
+        .animation(.easeInOut(duration: 0.2), value: appState.sidebarCollectionSortMode)
     }
 
     /// One collection row, wired for Manual drag-reorder (a flat-list mirror of
     /// `rootRow`): the dragged row is hidden in place while an opaque copy follows
     /// the cursor; others part around the gap.
     @ViewBuilder
-    private func collectionRow(_ loaded: CollectionStore.Loaded, index: Int) -> some View {
+    private func collectionRow(_ loaded: CollectionStore.Loaded) -> some View {
         let id = loaded.collection.id
+        let index = appState.sidebarCollections.firstIndex { $0.collection.id == id } ?? 0
         CollectionSidebarRow(
             loaded: loaded,
             index: index,
@@ -1097,6 +1125,9 @@ private struct SectionHeader: View {
                 .foregroundStyle(.secondary)
             Spacer()
             Button {
+                // `collapsed` is a plain @State binding, so withAnimation spins
+                // the +/× AND animates the section content show/hide together —
+                // the hero modal's expand/collapse feel.
                 withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
                     collapsed.toggle()
                 }
@@ -1140,57 +1171,74 @@ private struct CollectionSidebarRow: View {
     private var id: String { loaded.collection.id }
 
     private var isSelected: Bool {
-        appState.activeCollectionID == id && !appState.showingCollections
+        // Highlight whenever this collection is the active one — no matter how you
+        // got into it (sidebar click OR a card on the Collections page). A folder
+        // never shows selected while a collection is active, so there's no clash.
+        appState.activeCollectionID == id
     }
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "square.stack.3d.up")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor)
-                                            : AnyShapeStyle(.primary))
-                .frame(width: 20)
+            // Invisible chevron placeholder (matches FolderTreeNode leaves) so a
+            // collection's icon + name line up exactly with the folder rows above.
+            Image(systemName: "chevron.right")
+                .font(.system(size: 10, weight: .semibold))
+                .opacity(0)
+                .frame(width: 10)
+                .accessibilityHidden(true)
 
-            Text(loaded.collection.name)
-                .font(.system(size: 13))
-                .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor)
-                                            : AnyShapeStyle(.primary))
-                .lineLimit(1)
-                .truncationMode(.tail)
+            HStack(spacing: 8) {
+                Image(systemName: "square.stack.3d.up")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor)
+                                                : AnyShapeStyle(.primary))
+                    .frame(width: 18)
 
-            Spacer(minLength: 6)
+                Text(loaded.collection.name)
+                    .font(.system(size: 13))
+                    .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor)
+                                                : AnyShapeStyle(.primary))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
 
-            // Trailing slot: the count, swapping in place for the drag grip on
-            // hover (Manual only). During a drag the floating overlay shows the
-            // grip, so in-list rows fall back to the count.
-            let showGrip = reorder != nil && isHovered && !isReordering
-            ZStack(alignment: .trailing) {
-                Text("\(loaded.aliveCount)")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .opacity(showGrip ? 0 : 1)
-                if let reorder {
-                    Image(systemName: "line.3.horizontal")
-                        .font(.system(size: 11, weight: .semibold))
+                Spacer(minLength: 6)
+
+                // Trailing slot: the count, swapping in place for the drag grip on
+                // hover (Manual only). During a drag the floating overlay shows the
+                // grip, so in-list rows fall back to the count.
+                let showGrip = reorder != nil && isHovered && !isReordering
+                ZStack(alignment: .trailing) {
+                    Text("\(loaded.aliveCount)")
+                        .font(.system(size: 11))
                         .foregroundStyle(.secondary)
-                        .frame(width: 16, height: 22)
-                        .opacity(showGrip ? 1 : 0)
-                        .contentShape(Rectangle())
-                        .allowsHitTesting(isHovered || isReordering)
-                        .highPriorityGesture(
-                            DragGesture(minimumDistance: 3,
-                                        coordinateSpace: .named(SidebarView.reorderSpace))
-                                .onChanged { reorder.onChanged($0) }
-                                .onEnded { reorder.onEnded($0) }
-                        )
-                        .onTapGesture { appState.setActiveCollection(id) }
-                        .help("Drag to reorder")
-                        .accessibilityHidden(true)
+                        .monospacedDigit()
+                        .opacity(showGrip ? 0 : 1)
+                    if let reorder {
+                        Image(systemName: "line.3.horizontal")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 16, height: 22)
+                            .opacity(showGrip ? 1 : 0)
+                            .contentShape(Rectangle())
+                            .allowsHitTesting(isHovered || isReordering)
+                            .highPriorityGesture(
+                                DragGesture(minimumDistance: 3,
+                                            coordinateSpace: .named(SidebarView.reorderSpace))
+                                    .onChanged { reorder.onChanged($0) }
+                                    .onEnded { reorder.onEnded($0) }
+                            )
+                            .onTapGesture { appState.setActiveCollection(id) }
+                            .help("Drag to reorder")
+                            .accessibilityHidden(true)
+                    }
                 }
             }
+            // Plain tap-to-open on the row content (mirrors FolderTreeNode, where
+            // the tap lives on the inner HStack and hover/menu on the outer).
+            .contentShape(Rectangle())
+            .onTapGesture { appState.setActiveCollection(id) }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 6)
         .frame(height: 28)
         .background {
             RoundedRectangle(cornerRadius: 6, style: .continuous).fill(rowFill)
@@ -1199,7 +1247,6 @@ private struct CollectionSidebarRow: View {
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.12)) { isHovered = hovering }
         }
-        .onTapGesture { appState.setActiveCollection(id) }
         .contextMenu {
             Button("Rename…") {
                 appState.setActiveCollection(id)

@@ -12,12 +12,33 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Binding var isPresented: Bool
     @AppStorage(AppSettings.autoTagKey) private var autoTag = true
     @AppStorage(AppSettings.autoCollectionsKey) private var autoCollections = true
     @AppStorage(AppSettings.showFileNamesKey) private var showFileNames = false
     @AppStorage(AppSettings.showCollectionsInSidebarKey) private var showCollectionsInSidebar = false
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Settings")
+                    .font(.system(size: 24, weight: .semibold))
+                Spacer()
+                SheetCloseButton { isPresented = false }
+            }
+            .padding(.horizontal, 28)
+            .padding(.top, 28)
+            .padding(.bottom, 4)
+
+            settingsForm
+        }
+        // Match the Info modal's width, but size the height to the content so
+        // every section is visible without a tall, mostly-empty sheet.
+        .frame(width: 600)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var settingsForm: some View {
         Form {
             Section {
                 Toggle("Automatically tag new images", isOn: $autoTag)
@@ -54,11 +75,10 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 460)
-        .fixedSize(horizontal: false, vertical: true)
+        .scrollContentBackground(.hidden)
     }
 }
 
 #Preview {
-    SettingsView()
+    SettingsView(isPresented: .constant(true))
 }

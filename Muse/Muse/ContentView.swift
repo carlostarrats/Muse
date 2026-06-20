@@ -290,6 +290,9 @@ struct ContentView: View {
             ImageLayoutSheet(isPresented: $imageLayoutShown)
                 .environmentObject(appState)
         }
+        .sheet(isPresented: $appState.settingsShown) {
+            SettingsView(isPresented: $appState.settingsShown)
+        }
         .alert("Couldn’t move some files",
                isPresented: Binding(get: { !appState.moveFailureNames.isEmpty },
                                     set: { if !$0 { appState.moveFailureNames = [] } })) {

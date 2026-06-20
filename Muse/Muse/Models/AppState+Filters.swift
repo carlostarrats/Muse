@@ -362,15 +362,35 @@ extension AppState {
         let to = from + delta
         guard ids.indices.contains(to) else { return }
         ids.swapAt(from, to)
-        reorderSidebarCollections(ids)
+        // Animate so menu/keyboard Move Up/Down slides like the drag (the in-memory
+        // reorder in reorderSidebarCollections is synchronous, so this animates).
+        withAnimation(.easeInOut(duration: 0.2)) {
+            reorderSidebarCollections(ids)
+        }
     }
 
-    /// Commit a new full order (drag result or Move Up/Down) to the DB + reload.
+    /// Commit a new full order (drag result or Move Up/Down). Applies the order
+    /// to the in-memory engine list SYNCHRONOUSLY, then persists async.
+    ///
+    /// The synchronous in-memory update matters: the drag commit clears its lift
+    /// offsets in a non-animated transaction expecting the list to already be in
+    /// the new order (exactly how the folder reorder relies on `bookmarks.$roots`
+    /// delivering synchronously). If we only did the async DB write + reload, the
+    /// offsets would clear a frame before the new order arrived and the dropped
+    /// row would visibly snap/flash to catch up. Updating each collection's
+    /// in-memory `sort_order` reorders `sidebarCollections` (Manual sorts by it)
+    /// in the same transaction.
     func reorderSidebarCollections(_ orderedIDs: [String]) {
+        let rank = Dictionary(uniqueKeysWithValues:
+            orderedIDs.enumerated().map { ($0.element, $0.offset) })
+        for i in CollectionsEngine.shared.collections.indices {
+            if let r = rank[CollectionsEngine.shared.collections[i].collection.id] {
+                CollectionsEngine.shared.collections[i].collection.sort_order = r
+            }
+        }
         Task { @MainActor in
             guard let q = Database.shared.dbQueue else { return }
             try? await CollectionStore.persistOrder(queue: q, orderedIDs: orderedIDs)
-            await CollectionsEngine.shared.reload()
         }
     }
 }

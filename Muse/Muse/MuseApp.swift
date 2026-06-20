@@ -101,6 +101,14 @@ struct MuseApp: App {
                 CheckForUpdatesView(updater: updater.controller.updater)
             }
 
+            // Settings is an in-app modal sheet (dimmed + centered like the
+            // other modals), not the native Preferences window, so replace the
+            // standard "Settings…" item with one that opens the sheet (⌘,).
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") { appState.settingsShown = true }
+                    .keyboardShortcut(",", modifiers: .command)
+            }
+
             // Folder actions on the current selection live in the Edit menu.
             // Image selection commands, like Finder's Edit menu.
             CommandGroup(after: .pasteboard) {
@@ -300,10 +308,7 @@ struct MuseApp: App {
                 .disabled(appState.activeCollectionID == nil)
             }
         }
-
-        Settings {
-            SettingsView()
-                .environmentObject(appState)
-        }
+        // Settings is presented as an in-app modal sheet from ContentView
+        // (see AppState.settingsShown), not the native Preferences window.
     }
 }
