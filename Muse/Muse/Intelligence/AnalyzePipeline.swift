@@ -41,6 +41,30 @@ final class AnalyzePipeline: ObservableObject {
     /// cancelled or `cancelActivePass()` was called.
     private var shouldStop: Bool { cancelRequested || Task.isCancelled }
 
+    /// Synchronous claim guarding the queue-and-wait gate. The old gate only
+    /// looked at `isRunning`, so when a pass ended every sleeping waiter woke,
+    /// all saw `isRunning == false`, and all proceeded — two passes ran at once,
+    /// clobbering progress and letting `cancelActivePass()` hit the wrong pass.
+    /// A waiter now ALSO claims this flag, and because there's no `await`
+    /// between the gate check and the claim, only the first woken waiter on the
+    /// main actor can take it; the rest see it set and keep waiting.
+    private var passClaimed = false
+
+    /// Wait until no pass is running or claimed, then claim atomically. Returns
+    /// false if the caller's task is cancelled while waiting (same bail-out the
+    /// old busy-wait had). The caller MUST clear `passClaimed` (via `defer`)
+    /// once its pass has fully finished. `analyze(folder:)`/`analyze(file:)`
+    /// don't consult `passClaimed`, so a claiming wrapper calling into them
+    /// can't deadlock.
+    private func acquirePass() async -> Bool {
+        while isRunning || passClaimed {
+            if Task.isCancelled { return false }
+            try? await Task.sleep(nanoseconds: 500_000_000)
+        }
+        passClaimed = true   // atomic: no await between the gate check and here
+        return true
+    }
+
     /// Stop whatever pass is currently running (e.g. its folder was removed).
     /// No-op when idle, so it can't poison the next legitimate pass.
     func cancelActivePass() {
@@ -81,14 +105,13 @@ final class AnalyzePipeline: ObservableObject {
         // Regenerate a folder by hand.
         guard AppSettings.autoTag else { return }
         guard let queue = Database.shared.dbQueue else { return }
-        // A pass may already be running (e.g. the previous folder's) —
-        // wait our turn instead of silently skipping this folder. Bail if the
-        // owning task is cancelled (folder removed) so we don't busy-spin.
-        while isRunning {
-            if Task.isCancelled { return }
-            try? await Task.sleep(nanoseconds: 500_000_000)
-        }
-        if Task.isCancelled { return }
+        // A pass may already be running (e.g. the previous folder's) — wait our
+        // turn instead of silently skipping this folder. Bail if the owning task
+        // is cancelled (folder removed) so we don't busy-spin. The claim is held
+        // until this whole method returns so a second waiter can't slip past
+        // during the `await` before `analyze(folder:)` flips `isRunning`.
+        guard await acquirePass() else { return }
+        defer { passClaimed = false }
         let paths = urls.map { $0.standardizedFileURL.path }
         guard !paths.isEmpty else { return }
         let pending: Set<String> = (try? await queue.read { db in
@@ -116,11 +139,8 @@ final class AnalyzePipeline: ObservableObject {
     /// the automatic pipeline.
     func regenerateTagless(in urls: [URL]) async {
         guard let queue = Database.shared.dbQueue else { return }
-        while isRunning {
-            if Task.isCancelled { return }
-            try? await Task.sleep(nanoseconds: 500_000_000)
-        }
-        if Task.isCancelled { return }
+        guard await acquirePass() else { return }
+        defer { passClaimed = false }
         let paths = urls.map { $0.standardizedFileURL.path }
         guard !paths.isEmpty else { return }
         // "Tagless" is per FOLDER now: a file is tagless here if it has no tag

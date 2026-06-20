@@ -226,6 +226,29 @@ The four most critical are also saved as Claude memories (linked).
   a persisted boolean needs to animate (e.g. a sidebar section collapse), back it
   with plain `@State` seeded from / written to `UserDefaults` via `.onChange`, then
   `withAnimation` works; or use a value-scoped `.animation(_:value:)`. (`feat/next-32`.)
+- **`AnalyzePipeline` passes serialize through `acquirePass()`, NOT a bare
+  `while isRunning` busy-wait.** A `while isRunning { await Task.sleep }` gate has a
+  wake-race: when the running pass clears `isRunning`, every sleeping waiter wakes,
+  ALL see `isRunning == false`, and ALL proceed — two passes run at once, clobbering
+  the progress counters and letting `cancelActivePass()` (fired on folder removal)
+  halt the wrong pass. The fix is a synchronous `passClaimed` flag claimed inside
+  `acquirePass()`: the waiter loops on `isRunning || passClaimed` and sets
+  `passClaimed = true` with NO `await` between the check and the set, so on the main
+  actor only the first woken waiter takes it. The claiming wrapper
+  (`analyzePending`/`regenerateTagless`) holds the claim via `defer { passClaimed =
+  false }` for its WHOLE body — bridging the window between the inner `analyze(folder:)`
+  clearing `isRunning` and the wrapper returning. `analyze(folder:)`/`analyze(file:)`
+  must NOT consult `passClaimed` (else a claiming wrapper calling into them
+  deadlocks), and the cancel path must return BEFORE the claim. Don't revert to a
+  plain `isRunning`-only gate. Fixed 2026-06-19 (`feat/next-35`).
+- **Folder/scope path-prefix checks need a trailing `+ "/"`.** A bare
+  `path.hasPrefix(folderPath)` matches a sibling (`/a/Inspo` matches
+  `/a/Inspo Extra/x.jpg`). Every prefix test in the codebase guards with
+  `$0 == prefix || $0.hasPrefix(prefix + "/")` (`Housekeeping`,
+  `CollectionStore.isUnderAnyRoot`, `ICloudZone`, `PathReconciler`,
+  `FolderRenameMigration`, and — since `feat/next-35` — `SearchService`'s "This
+  Folder" scope, which was the one outlier). Use the same rule for any new
+  containment check.
 
 ### Session index (detail in `docs/session-log.md`)
 
@@ -599,6 +622,33 @@ The four most critical are also saved as Claude memories (linked).
   labels + `.isButton`/`.isSelected`, mouse-only grips `.accessibilityHidden`,
   labeled collapse buttons / bottom-bar pills / menu-bar Move Collection commands)
   was already correct.
+- **2026-06-19** `feat/next-35` — codebase health/security review + 5 fixes. A
+  six-dimension read-only audit (memory/leaks, concurrency, security/privacy,
+  SQLite/GRDB, filesystem/data-loss, logic/crash) over the whole app, then an
+  adversarial review of the diff. Verdict: healthy — every load-bearing invariant
+  intact (zero network except Sparkle, Trash-only deletes, remote-load-blocked
+  SVG/Markdown, parameterized SQL, sandbox, path-traversal guards, content-hash
+  iCloud detection + zero-byte hash guard + PathReconciler false-empty guard); no
+  retain cycles, no memory-safety races. **Fixes:** (1) `SearchService` "This Folder"
+  scope used a bare `hasPrefix` → leaked sibling-folder hits (`/a/Inspo` matched
+  `/a/Inspo Extra`); now `== prefix || hasPrefix(prefix + "/")` (HIGH, real
+  wrong-results bug). (2) `AnalyzePipeline` `while isRunning` busy-wait had a
+  wake-race letting two passes run at once + `cancelActivePass()` hit the wrong pass;
+  added a synchronous `passClaimed` claim via `acquirePass()` (MEDIUM — see durable
+  gotcha). (3) `AppState.openStarred` started a security scope never balanced →
+  refcount leak across pin re-opens; de-duped to one start per path, recorded only on
+  success (LOW). (4) `FontViewerView` registered fonts process-wide without
+  unregistering; now unregisters on `.task` teardown (only what it added), via a
+  cancellation-poll not `Task.sleep(.max)` (LOW). (5) `Database` set
+  `Configuration.foreignKeysEnabled = true` explicitly so Housekeeping's
+  cascade-reliant prune can't silently orphan rows if GRDB's default ever changes
+  (defensive no-op). Perf items surfaced (semantic search O(n)/keystroke, tag `LIKE`
+  scan, `CollectionStore` N+2) left as documented personal-scale scaling concerns,
+  not bugs. Build + full unit suite green throughout; adversarial diff review found no
+  Critical/High regression (FK change confirmed a runtime no-op, `acquirePass`
+  deadlock-free). No new tests (one-line predicate matching an already-tested
+  convention, view-lifecycle teardown, DB config). Five files. Spec/audit narrative
+  in `docs/session-log.md`.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 

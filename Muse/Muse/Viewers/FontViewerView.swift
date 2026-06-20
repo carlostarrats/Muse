@@ -53,14 +53,31 @@ struct FontViewerView: View {
         }
         .background(Color(NSColor.textBackgroundColor))
         .task(id: url) {
-            registerFont()
+            // Register on appear; suspend until the task is cancelled (the URL
+            // changes or the view goes away), then unregister so the process
+            // font table doesn't accumulate a registration per font previewed.
+            let didRegister = registerFont()
+            defer {
+                if didRegister {
+                    CTFontManagerUnregisterFontsForURL(url as CFURL, .process, nil)
+                }
+            }
+            // Hold the registration until SwiftUI cancels this task (the view
+            // disappears or `url` changes). Cancellation interrupts the sleep
+            // immediately, firing the defer. Polling a bounded interval avoids
+            // Task.sleep(.max) deadline-overflow returning early on some runtimes.
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+            }
         }
     }
 
-    private func registerFont() {
+    /// Returns whether THIS call registered the font (so teardown only
+    /// unregisters what it added — not a font another open viewer still uses).
+    private func registerFont() -> Bool {
         var err: Unmanaged<CFError>?
         // Process scope keeps the font registered only for this app instance.
-        CTFontManagerRegisterFontsForURL(url as CFURL, .process, &err)
+        let didRegister = CTFontManagerRegisterFontsForURL(url as CFURL, .process, &err)
         // Read the postscript name regardless of register-success (may already be registered).
         if let dataProvider = CGDataProvider(url: url as CFURL),
            let cgFont = CGFont(dataProvider),
@@ -69,5 +86,6 @@ struct FontViewerView: View {
         } else {
             fontName = url.deletingPathExtension().lastPathComponent
         }
+        return didRegister
     }
 }

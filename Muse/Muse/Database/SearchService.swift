@@ -80,8 +80,11 @@ enum SearchService {
         let scopedPaths: [String]
         switch scope {
         case .currentFolder(let url):
+            // Match the folder itself or its descendants — guard with a trailing
+            // separator so a sibling like "/a/Inspo Extra" doesn't match
+            // "/a/Inspo" (the rest of the codebase uses this same `+ "/"` rule).
             let prefix = url.standardizedFileURL.path
-            scopedPaths = absPaths.filter { $0.hasPrefix(prefix) }
+            scopedPaths = absPaths.filter { $0 == prefix || $0.hasPrefix(prefix + "/") }
         case .everywhere:
             scopedPaths = absPaths
         }
