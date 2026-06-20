@@ -2876,3 +2876,16 @@ of this bug — left as a separate performance consideration.
 cap, `flush` helper) + new `Muse/MuseTests/FolderStatSchedulerTests.swift`. Full
 `MuseTests` suite green. (The `MuseUITests` boilerplate `testExample`/`testLaunch`
 fail to *foreground* the app under headless automation — environmental, unrelated.)
+
+### `feat/next-40` — review pass on the next-39 count fix
+
+Independent code review (opus) of the debounce-starvation fix: verdict **ready to
+merge**, no Critical/Important. All four named risks cleared — no runaway flush
+(post-cap `flush()` clears `burstStart`, so the next event re-arms a fresh window
+→ ~maxWait+quiet throttle, not per-event spam), trailing recompute preserved (the
+storm's last event arms a fresh 0.4s debounce), burst/debounce state reset on
+every flush path, and `systemUptime` is the right monotonic seconds clock. One
+actionable Minor applied: the 0.4s/2.0s tuning is now named constants
+(`StatRecomputeScheduler.quiet` / `.maxWait`) with a pointer comment at the
+`handle` call site, instead of implicit default-arg literals. No behavior change;
+MuseTests green.

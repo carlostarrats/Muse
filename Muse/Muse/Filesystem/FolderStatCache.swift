@@ -18,12 +18,19 @@ import Foundation
 /// the current burst has run that long, guaranteeing the count refreshes even
 /// under continuous churn. Mirrors lodash's debounce `{ maxWait }`.
 nonisolated enum StatRecomputeScheduler {
+    /// Trailing debounce: recompute this long after the events stop.
+    static let quiet: TimeInterval = 0.4
+    /// Cap: recompute at least this often while events keep arriving, so a
+    /// sustained stream can't postpone it forever.
+    static let maxWait: TimeInterval = 2.0
+
     enum Decision: Equatable {
         case flushNow
         case debounce(TimeInterval)
     }
     static func decide(burstStart: TimeInterval, now: TimeInterval,
-                       quiet: TimeInterval = 0.4, maxWait: TimeInterval = 2.0) -> Decision {
+                       quiet: TimeInterval = Self.quiet,
+                       maxWait: TimeInterval = Self.maxWait) -> Decision {
         (now - burstStart >= maxWait) ? .flushNow : .debounce(quiet)
     }
 }
@@ -79,6 +86,9 @@ final class FolderStatCache: ObservableObject {
         debounce?.cancel()
         debounce = nil
 
+        // Tuning lives on StatRecomputeScheduler (quiet 0.4s trailing / maxWait
+        // 2.0s cap): debounce after a burst, but flush at least every maxWait so
+        // a continuous stream can't starve the recompute.
         switch StatRecomputeScheduler.decide(burstStart: start, now: now) {
         case .flushNow:
             // Burst has run past the cap — recompute now instead of resetting the
