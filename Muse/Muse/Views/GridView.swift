@@ -322,7 +322,14 @@ struct GridView: View {
                                     uniquingKeysWith: { a, _ in a })
                                 Task { @MainActor in
                                     for url in targets {
-                                        if let node = byPath[url.standardizedFileURL.path] {
+                                        // Never trash a selected folder card — folders
+                                        // stay out of file-only destructive flows (a
+                                        // folder is selectable like a file, so a mixed
+                                        // selection could otherwise recycle a whole
+                                        // subfolder tree). Folder ops live on the
+                                        // folder-card menu (New Subfolder/Rename/Reveal).
+                                        if let node = byPath[url.standardizedFileURL.path],
+                                           node.kind != .folder {
                                             await appState.deletion.deleteWithBurn(node)
                                         }
                                     }
