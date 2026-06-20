@@ -555,6 +555,18 @@ The four most critical are also saved as Claude memories (linked).
   collection opened from a Collections-page card un-highlighted). (6) Collection
   rows mirror the folder row layout exactly (leading chevron-width spacer, icon
   width 18, padding 6) so icons/text line up. Independent review clean.
+- **2026-06-19** `feat/next-33` — Collections-page card restyle (visual only,
+  `Views/CollectionsRow.swift`'s `CollectionCard`): removed the resting drop
+  shadow + fixed grey hairline border; corner radius 10→8 on all four
+  RoundedRectangles (cover clip + 3 overlays) to match the grid's selection ring
+  (`GridView.ringCornerRadius = 8`); re-added the outline as mood-adaptive ("Auto")
+  — `appState.moodPalette.iconColor.opacity(0.05)` (a local per-overlay opacity;
+  `iconColor` untouched, so nothing else changes) with
+  `.animation(.easeInOut(duration: 0.35), value: moodPalette)` so it crossfades
+  with the background like the toolbar icons (next-24) / Image Layout tiles
+  (next-31). The mood `.animation(value:)` sits ABOVE the hover-veil + active-accent
+  overlays so only the outline follows the mood. No test (pure SwiftUI cosmetic;
+  Color equality unreliable). Build + full suite green.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 

@@ -2438,3 +2438,33 @@ After the QA round: full app build green, full suite green (280 unit cases + 4 U
 0 failures), independent code review clean (no Critical/Important). The default
 (setting OFF) sidebar is byte-for-byte the original, and the Add Folder pill stays
 pinned below the scroll in both states.
+
+### Collections-page card restyle — 2026-06-19 (on `feat/next-33`)
+
+**Ask.** Visual-only cleanup of the Collections-page cards (`CollectionCard` in
+`Views/CollectionsRow.swift`), iterated live with the user:
+
+- **Dropped the resting chrome** — removed the soft drop shadow
+  (`.shadow(black 0.09, r4, y1.5)`) and the fixed hairline grey border
+  (`Color.primary.opacity(0.12)`) the cards carried, so a card no longer reads as
+  a lifted object.
+- **Corner radius 10 → 8** on all four `RoundedRectangle`s (cover clip + the three
+  overlays) so the card corners match the main grid's selection ring
+  (`GridView.ringCornerRadius = 8`); all stay `style: .continuous`.
+- **Re-added the outline as mood-adaptive ("Auto")** — instead of a fixed grey, the
+  hairline is `appState.moodPalette.iconColor.opacity(0.05)` (black on light moods,
+  white on dark), paired with
+  `.animation(.easeInOut(duration: 0.35), value: appState.moodPalette)` so it
+  crossfades in lockstep with the background fade, exactly like the toolbar icons
+  (feat/next-24) and the Image Layout tiles (feat/next-31). The `0.05` opacity is a
+  per-overlay local value — `iconColor` itself is untouched, so nothing else in the
+  app changes. (Landed at `0.05` after live tuning: 0.12 → 0.2 → 0.08 → 0.04 →
+  0.05.) The mood `.animation(value:)` is placed ABOVE the hover-veil and active-
+  accent overlays so only the outline follows the mood; the veil keeps its own
+  `.animation(value: hovering)` and the active accent border (system accent,
+  lineWidth 2) is unchanged.
+
+**Verification.** Build + full suite green (`** TEST SUCCEEDED **`). No new test —
+a pure SwiftUI cosmetic change (UI views aren't unit-tested; Color equality is
+unreliable, same call as feat/next-24/next-31). One file:
+`Views/CollectionsRow.swift`.
