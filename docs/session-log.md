@@ -2311,3 +2311,79 @@ new test — a pure SwiftUI cosmetic change (UI views aren't unit-tested, and Co
 equality is unreliable, same call made for feat/next-24). Diff review (all angles,
 manual given the 38-line single-file scope) returned clean. One file:
 `Views/ImageLayoutSheet.swift`.
+
+### Collections in the Sidebar (opt-in) — 2026-06-19 (on `feat/next-32`)
+
+**Ask.** Surface collections in the left sidebar, beneath the folders, gated by a
+new Preferences toggle **"Show Collections in the Sidebar"** (default OFF = the
+current folders-only sidebar, unchanged). ON: a gray **FOLDERS** header and a gray
+**COLLECTIONS** header, each with the hero viewer's circular collapse button
+(`+` collapsed → 45°-rotated `×` expanded, same spring motion/hover). Under
+COLLECTIONS, the collections list — each row a `square.stack.3d.up` icon + name +
+image count — with the same affordances as the folders above: an independent
+sort (incl. Manual drag-reorder), right-click Delete/Rename/Move Up-Down, app-menu
+reach, and full accessibility. Plus a bottom bar that becomes two pills
+(Add Folder + Add Collection). Mockups provided.
+
+**Decisions locked in brainstorming.**
+- The sidebar's order + sort are **completely independent** of the Collections
+  *page*. Even picking Name / Date Created in the sidebar must not touch the page,
+  and dragging in Manual writes a sidebar-only order. (Mirrors how the sidebar
+  folder sort is independent of the grid sort.)
+- Sort modes = the page's three (Name / Date Created / Date Modified) **plus
+  Manual** (Manual is what enables drag + Move Up/Down). No Size (no per-collection
+  size). The +/× header button is collapse-only, NOT a create button.
+- Creation in the sidebar is the new bottom **+ stack** pill → the existing Name
+  Collection modal; new collections land at the bottom of Manual.
+
+**Build (spec + plan → TDD).**
+- New pure `Models/SidebarCollectionSortMode.swift` — enum + `SidebarCollectionSort.order`
+  (Manual by `sort_order`, Name A→Z, dates newest-first, name tiebreaks),
+  unit-tested. Mirrors `FolderSort`/`CollectionSort`.
+- Migration **v8_collection_sort_order**: `collections.sort_order INTEGER NOT NULL
+  DEFAULT 0`, with a deterministic `nonisolated static Database.backfillCollectionSortOrder`
+  (order by `created_at`, then `name`). `CollectionRow.sort_order` (default 0 so
+  existing memberwise constructions still compile). `CollectionStore.nextSortOrder`
+  (`max+1`) is applied in BOTH `createManual` overloads and in `upsert` (the
+  ON-CONFLICT path deliberately leaves `sort_order` untouched so a user's manual
+  arrangement survives reclustering). `CollectionStore.persistOrder(orderedIDs:)`
+  writes `sort_order = index` in one transaction. Two store/migration test files.
+- `AppState.sidebarCollectionSortMode` (@Published, persisted via `didSet` like
+  `imageLayout`); `AppState.sidebarCollections` (the engine's visible collections
+  re-ordered by the sidebar mode); `moveSidebarCollection(id:by:)` (Manual
+  Move Up/Down) + `reorderSidebarCollections(_:)` (persist + reload).
+- `Settings`: the toggle (new "Sidebar" section) + the two AppSettings accessors.
+- `SidebarView` restructure: `folderList` extracted and shared; OFF →
+  `foldersScroll` (the original); ON → `twoSectionScroll` holding both sections in
+  ONE `ScrollView` (collapsible `SectionHeader`s, the folder reorder overlays AND a
+  parallel set of collection reorder overlays). New `CollectionSidebarRow`
+  (icon/name/count, click-to-activate, blue selection when `activeCollectionID ==
+  id && !showingCollections`, context menu, full a11y), a flat-list collection
+  reorder (its own drag state + `CollectionFramePreference`, mirroring the root
+  reorder math/overlay), `collectionsSortHeader`, and a `bottomBar` that swaps the
+  single pill for two compact `AddPillButton`s. `SectionHeader` reuses the hero
+  `PlusCircleButton` shape tuned for the light sidebar (secondary glyph on a faint
+  `Color.primary` circle).
+- `MuseApp`: **Move Collection Up/Down** added to the Collections command menu,
+  gated on `showCollectionsInSidebar` + Manual + an active collection (the active
+  collection is the move target).
+
+**Why a flat-list reorder mirror, not a shared engine.** The root reorder
+machinery is tied to `Root`/`FolderNode` with hierarchy, the iCloud home, stars,
+and expandable children. Collections are a flat list of `CollectionStore.Loaded`
+keyed by string id, so a parallel (simpler) copy of the same live-drag pattern —
+hidden source row + opaque floating overlay (LazyVStack ignores zIndex) + parting
+offsets + insertion line, all in the shared `reorderSpace` — was cleaner than
+generalizing the folder code. Move Up/Down + `persistOrder` guarantee correctness
+even if the in-flight visuals degrade on a long scrolled list (same caveat the
+folder reorder documents).
+
+**Verification.** Full app build `** BUILD SUCCEEDED **`; full suite
+`** TEST SUCCEEDED **` — 280 unit cases (incl. the 7 new) + the 4 UI tests, 0
+failures. Note: `xcodebuild -scheme Muse test` runs MuseTests via the streaming
+XCTest format ("… passed on 'My Mac - Muse (pid)'"), so it has no per-bundle
+"Executed N tests" line — only the legacy MuseUITests bundle prints that;
+`-only-testing:MuseTests` (bundle granularity) matches nothing under the
+auto-generated scheme, so verify with the plain `test` action or class-level
+`-only-testing`. The Collections page is untouched. Spec + plan in
+`docs/superpowers/`.

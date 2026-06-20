@@ -476,6 +476,39 @@ The four most critical are also saved as Claude memories (linked).
   toolbar icons (feat/next-24). Selection blue + ring unchanged (system accent).
   Pure SwiftUI cosmetic; one file (`Views/ImageLayoutSheet.swift`); no test (Color
   equality is unreliable). Build + full suite green (260); diff review clean.
+- **2026-06-19** `feat/next-32` — Collections in the Sidebar (opt-in). A new
+  Preferences toggle **"Show Collections in the Sidebar"** (`AppSettings.
+  showCollectionsInSidebar`, default OFF — OFF is byte-for-byte the original
+  folders-only sidebar) adds a second section beneath the folders. ON: a gray
+  **FOLDERS** and **COLLECTIONS** header, each with the hero viewer's circular
+  collapse button (`+` collapsed → 45°-rotated `×` expanded, same spring), and
+  both sections live in ONE `ScrollView` so they scroll together (the bottom
+  pill row is pinned outside it). Each collection row shows a `square.stack.3d.up`
+  icon, name, and the reachability-aware alive count; clicking it activates the
+  collection in the grid (`setActiveCollection`) and shows the blue selection
+  highlight (folders already suppress theirs while a collection is active). The
+  COLLECTIONS section has its OWN sort (`AppState.sidebarCollectionSortMode`:
+  Manual / Name / Date Created / Date Modified) **fully independent of the
+  Collections-page sort** — even Date Created in the sidebar never reorders the
+  page. Manual order is persisted via a new `collections.sort_order` column
+  (migration **v8**, deterministic created-at/name back-fill; new collections
+  append at `max+1` in `createManual`/`upsert`); `CollectionStore.persistOrder`
+  writes a full id order. Reorder is the SAME live drag as folders (trailing grip
+  on hover swapping with the count, hidden row + floating overlay, insertion
+  line — a flat-list mirror in `SidebarView`) plus right-click **Move Up/Down**
+  and app-menu **Move Collection Up/Down** (Collections menu, gated to ON +
+  Manual + an active collection). Row context menu: Rename… (activates +
+  `collectionRenameRequest`), Delete… (durable `setHidden`, same confirm copy),
+  Move Up/Down. Full a11y: one activatable element per row (name+count label,
+  `.isButton`/`.isSelected`, named Rename/Delete/Move actions); grip stays
+  mouse-only/`accessibilityHidden` like the folder grip. Bottom bar: OFF = the
+  single "Add Folder" pill; ON = two compact `+ folder` / `+ stack` pills, the
+  stack opening the existing Name Collection modal (`requestNewCollection`),
+  appending at the bottom of Manual. New pure `Models/SidebarCollectionSortMode.swift`
+  (`SidebarCollectionSort`, unit-tested) + `SidebarCollectionSortTests` /
+  `CollectionSortOrderMigrationTests` / `CollectionReorderStoreTests`. The
+  Collections PAGE is untouched. Build + full suite green (280 unit cases);
+  spec + plan in `docs/superpowers/`.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
