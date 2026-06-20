@@ -333,4 +333,64 @@ extension AppState {
             }
         }
     }
+
+    // MARK: - Sidebar collections (independent of the Collections page)
+
+    /// The engine's visible collections, ordered by the sidebar's own sort mode
+    /// (`sidebarCollectionSortMode`) — never the Collections-page sort. The
+    /// sidebar UI reads this; it re-runs when CollectionsEngine publishes.
+    var sidebarCollections: [CollectionStore.Loaded] {
+        let loaded = CollectionsEngine.shared.collections
+        let items = loaded.map {
+            SidebarCollectionSort.Item(id: $0.collection.id,
+                                       name: $0.collection.name,
+                                       createdAt: $0.collection.created_at,
+                                       updatedAt: $0.collection.updated_at,
+                                       sortOrder: $0.collection.sort_order)
+        }
+        let orderedIDs = SidebarCollectionSort.order(items, by: sidebarCollectionSortMode)
+        let byID = Dictionary(uniqueKeysWithValues: loaded.map { ($0.collection.id, $0) })
+        return orderedIDs.compactMap { byID[$0] }
+    }
+
+    /// Move a collection one slot in Manual mode (Move Up/Down). No-op otherwise
+    /// or at the ends.
+    func moveSidebarCollection(id: String, by delta: Int) {
+        guard sidebarCollectionSortMode == .manual else { return }
+        var ids = sidebarCollections.map { $0.collection.id }
+        guard let from = ids.firstIndex(of: id) else { return }
+        let to = from + delta
+        guard ids.indices.contains(to) else { return }
+        ids.swapAt(from, to)
+        // Animate so menu/keyboard Move Up/Down slides like the drag (the in-memory
+        // reorder in reorderSidebarCollections is synchronous, so this animates).
+        withAnimation(.easeInOut(duration: 0.2)) {
+            reorderSidebarCollections(ids)
+        }
+    }
+
+    /// Commit a new full order (drag result or Move Up/Down). Applies the order
+    /// to the in-memory engine list SYNCHRONOUSLY, then persists async.
+    ///
+    /// The synchronous in-memory update matters: the drag commit clears its lift
+    /// offsets in a non-animated transaction expecting the list to already be in
+    /// the new order (exactly how the folder reorder relies on `bookmarks.$roots`
+    /// delivering synchronously). If we only did the async DB write + reload, the
+    /// offsets would clear a frame before the new order arrived and the dropped
+    /// row would visibly snap/flash to catch up. Updating each collection's
+    /// in-memory `sort_order` reorders `sidebarCollections` (Manual sorts by it)
+    /// in the same transaction.
+    func reorderSidebarCollections(_ orderedIDs: [String]) {
+        let rank = Dictionary(uniqueKeysWithValues:
+            orderedIDs.enumerated().map { ($0.element, $0.offset) })
+        for i in CollectionsEngine.shared.collections.indices {
+            if let r = rank[CollectionsEngine.shared.collections[i].collection.id] {
+                CollectionsEngine.shared.collections[i].collection.sort_order = r
+            }
+        }
+        Task { @MainActor in
+            guard let q = Database.shared.dbQueue else { return }
+            try? await CollectionStore.persistOrder(queue: q, orderedIDs: orderedIDs)
+        }
+    }
 }

@@ -94,4 +94,23 @@ enum AppSettings {
         get { TileBackground.resolve(UserDefaults.standard.string(forKey: tileBackgroundKey)) }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: tileBackgroundKey) }
     }
+
+    static let showCollectionsInSidebarKey = "showCollectionsInSidebar"
+
+    /// Show the Collections section in the sidebar. Default false. Unset → off.
+    static var showCollectionsInSidebar: Bool {
+        UserDefaults.standard.object(forKey: showCollectionsInSidebarKey) as? Bool ?? false
+    }
+
+    static let sidebarCollectionSortModeKey = "sidebarCollectionSortMode"
+
+    /// Sidebar Collections-section sort. Default `.manual`. Independent of the
+    /// Collections-page sort. Unset → manual.
+    static var sidebarCollectionSortMode: SidebarCollectionSortMode {
+        get {
+            (UserDefaults.standard.string(forKey: sidebarCollectionSortModeKey))
+                .flatMap(SidebarCollectionSortMode.init(rawValue:)) ?? .manual
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: sidebarCollectionSortModeKey) }
+    }
 }

@@ -41,16 +41,37 @@ enum CollectionStore {
         var coverFileID: String?
     }
 
+    /// Next bottom slot for a new collection (max existing + 1; 0 if empty).
+    static func nextSortOrder(_ db: GRDB.Database) throws -> Int {
+        (try Int.fetchOne(db, sql: "SELECT MAX(sort_order) FROM collections") ?? -1) + 1
+    }
+
+    /// Write sort_order = index for each id, in one transaction. The sidebar
+    /// computes the final order (drag / Move Up-Down) and calls this. Used only
+    /// by the sidebar's COLLECTIONS section; the Collections page is unaffected.
+    static func persistOrder(queue: DatabaseQueue, orderedIDs: [String]) async throws {
+        try await queue.write { db in
+            for (i, id) in orderedIDs.enumerated() {
+                try db.execute(sql: "UPDATE collections SET sort_order = ? WHERE id = ?",
+                               arguments: [i, id])
+            }
+        }
+    }
+
     static func upsert(queue: DatabaseQueue, id: String, name: String,
                        memberIDs: [String], modelVersion: String) async throws {
         let now = Int64(Date().timeIntervalSince1970)
         try await queue.write { db in
+            // New auto collections append at the bottom; the ON CONFLICT path
+            // deliberately leaves sort_order untouched so a user's manual
+            // arrangement survives reclustering.
+            let order = try nextSortOrder(db)
             try db.execute(sql: """
-                INSERT INTO collections (id, name, is_hidden, model_version, created_at, updated_at)
-                VALUES (?, ?, 0, ?, ?, ?)
+                INSERT INTO collections (id, name, is_hidden, model_version, created_at, updated_at, sort_order)
+                VALUES (?, ?, 0, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET name = excluded.name,
                     model_version = excluded.model_version, updated_at = excluded.updated_at
-                """, arguments: [id, name, modelVersion, now, now])
+                """, arguments: [id, name, modelVersion, now, now, order])
             // Only auto members are rebuilt; manual adds survive reclustering.
             try db.execute(sql: """
                 DELETE FROM collection_members WHERE collection_id = ? AND added_by = 'auto'
@@ -120,10 +141,11 @@ enum CollectionStore {
         let id = UUID().uuidString
         let now = Int64(Date().timeIntervalSince1970)
         try await queue.write { db in
+            let order = try nextSortOrder(db)
             try db.execute(sql: """
-                INSERT INTO collections (id, name, is_hidden, model_version, created_at, updated_at)
-                VALUES (?, ?, 0, 'manual', ?, ?)
-                """, arguments: [id, name, now, now])
+                INSERT INTO collections (id, name, is_hidden, model_version, created_at, updated_at, sort_order)
+                VALUES (?, ?, 0, 'manual', ?, ?, ?)
+                """, arguments: [id, name, now, now, order])
             try db.execute(sql: """
                 INSERT INTO collection_members (collection_id, file_id, added_by) VALUES (?, ?, 'manual')
                 """, arguments: [id, fileID])
@@ -161,10 +183,11 @@ enum CollectionStore {
         try await queue.write { db in
             let names = try String.fetchAll(db, sql: "SELECT name FROM collections")
             let name = ManualCollectionName.next(existing: names)
+            let order = try nextSortOrder(db)
             try db.execute(sql: """
-                INSERT INTO collections (id, name, is_hidden, model_version, created_at, updated_at)
-                VALUES (?, ?, 0, 'manual', ?, ?)
-                """, arguments: [id, name, now, now])
+                INSERT INTO collections (id, name, is_hidden, model_version, created_at, updated_at, sort_order)
+                VALUES (?, ?, 0, 'manual', ?, ?, ?)
+                """, arguments: [id, name, now, now, order])
         }
         return id
     }

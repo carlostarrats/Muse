@@ -302,6 +302,28 @@ final class Database {
             // `WHERE file_id = ?` / `IN (...)` lookups.
         }
 
+        migrator.registerMigration("v8_collection_sort_order") { db in
+            // Sidebar-only manual ordering for collections. Independent of the
+            // Collections PAGE sort. New rows append (max+1) via CollectionStore.
+            try db.alter(table: "collections") { t in
+                t.add(column: "sort_order", .integer).notNull().defaults(to: 0)
+            }
+            try Database.backfillCollectionSortOrder(db)
+        }
+
         return migrator
+    }
+
+    /// Assign collections.sort_order = 0,1,2,… ordered by created_at then name,
+    /// so an existing library gets a stable manual baseline. Idempotent.
+    /// `nonisolated` to match `makeMigrator()` (callable from the migration
+    /// closure + tests on a possibly @MainActor `Database`).
+    nonisolated static func backfillCollectionSortOrder(_ db: GRDB.Database) throws {
+        let ids = try String.fetchAll(db, sql:
+            "SELECT id FROM collections ORDER BY created_at ASC, name ASC")
+        for (i, id) in ids.enumerated() {
+            try db.execute(sql: "UPDATE collections SET sort_order = ? WHERE id = ?",
+                           arguments: [i, id])
+        }
     }
 }

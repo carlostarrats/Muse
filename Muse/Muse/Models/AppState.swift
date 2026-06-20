@@ -270,6 +270,10 @@ final class AppState: ObservableObject {
     @Published var deleteAllTagsRequest = false
     @Published var regenerateTagsRequest = false
 
+    /// Presents the Settings modal (an in-app sheet, not the native Preferences
+    /// window). Set from the app menu (⌘,); ContentView owns the `.sheet`.
+    @Published var settingsShown = false
+
     /// Folder-management dialogs (shared by the sidebar context menu and the
     /// menu-bar Edit menu). New Subfolder is allowed on any folder incl. the
     /// iCloud home; Rename is gated to non-iCloud folders by the callers.
@@ -407,6 +411,16 @@ final class AppState: ObservableObject {
     /// Black). Persisted; GridView reads `tileFill`.
     @Published var tileBackground: TileBackground = AppSettings.tileBackground {
         didSet { AppSettings.tileBackground = tileBackground }
+    }
+
+    // MARK: - Sidebar collections
+
+    /// How the sidebar's COLLECTIONS section is ordered. Persisted; INDEPENDENT
+    /// of the Collections-page sort (`collectionSortMode`). Manual = the user's
+    /// drag arrangement (collections.sort_order). See SidebarCollectionSort.
+    @Published var sidebarCollectionSortMode: SidebarCollectionSortMode =
+        AppSettings.sidebarCollectionSortMode {
+        didSet { AppSettings.sidebarCollectionSortMode = sidebarCollectionSortMode }
     }
 
     /// Masonry has no letterbox, so it always uses Auto; only fixed ratios honor

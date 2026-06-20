@@ -65,6 +65,19 @@ struct MuseApp: App {
                                    placeAfter: delta > 0)
     }
 
+    // Keyboard/VoiceOver parallel to the sidebar's mouse-only collection drag —
+    // only meaningful when the Collections section is shown, in Manual sort,
+    // with a collection open (the active one is the move target).
+    private var sidebarManualMoveEnabled: Bool {
+        AppSettings.showCollectionsInSidebar
+            && appState.sidebarCollectionSortMode == .manual
+            && appState.activeCollectionID != nil
+    }
+    private var sidebarActiveCollectionIndex: Int? {
+        guard let id = appState.activeCollectionID else { return nil }
+        return appState.sidebarCollections.firstIndex { $0.collection.id == id }
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -86,6 +99,14 @@ struct MuseApp: App {
             // "About Muse" — the conventional spot every Mac app uses.
             CommandGroup(after: .appInfo) {
                 CheckForUpdatesView(updater: updater.controller.updater)
+            }
+
+            // Settings is an in-app modal sheet (dimmed + centered like the
+            // other modals), not the native Preferences window, so replace the
+            // standard "Settings…" item with one that opens the sheet (⌘,).
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") { appState.settingsShown = true }
+                    .keyboardShortcut(",", modifiers: .command)
             }
 
             // Folder actions on the current selection live in the Edit menu.
@@ -252,6 +273,24 @@ struct MuseApp: App {
                 }
                 .disabled(appState.activeCollectionID == nil)
 
+                // Sidebar-only manual reorder (parallels the mouse-only drag).
+                Button("Move Collection Up") {
+                    if let id = appState.activeCollectionID {
+                        appState.moveSidebarCollection(id: id, by: -1)
+                    }
+                }
+                .disabled(!sidebarManualMoveEnabled || (sidebarActiveCollectionIndex ?? 0) <= 0)
+
+                Button("Move Collection Down") {
+                    if let id = appState.activeCollectionID {
+                        appState.moveSidebarCollection(id: id, by: 1)
+                    }
+                }
+                .disabled(!sidebarManualMoveEnabled
+                          || sidebarActiveCollectionIndex == nil
+                          || (sidebarActiveCollectionIndex ?? Int.max)
+                             >= appState.sidebarCollections.count - 1)
+
                 Button("Remove Selection from Collection") {
                     if let cid = appState.activeCollectionID {
                         appState.removeFromCollection(cid,
@@ -269,10 +308,7 @@ struct MuseApp: App {
                 .disabled(appState.activeCollectionID == nil)
             }
         }
-
-        Settings {
-            SettingsView()
-                .environmentObject(appState)
-        }
+        // Settings is presented as an in-app modal sheet from ContentView
+        // (see AppState.settingsShown), not the native Preferences window.
     }
 }

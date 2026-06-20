@@ -205,6 +205,27 @@ The four most critical are also saved as Claude memories (linked).
   (the grid AND `CollectionsPage`) needs its own reserve; they're independent
   views. Keep the two reserves on the shared `TagChipsRow.noTagsTopClearance`
   constant so they can't drift. Fixed 2026-06-19 (`feat/next-29`); see that log.
+- **Sidebar live-drag reorder must commit the new order SYNCHRONOUSLY, and the
+  reorderable list must be a NON-lazy stack.** Two hard-won rules from the sidebar
+  Collections reorder (`feat/next-32`), mirroring the folder reorder: (1) the drag
+  commit clears its lift offsets in a `withTransaction(disablesAnimations)` block
+  that ASSUMES the list is already in the new order — so the reorder has to land in
+  that same synchronous transaction. The folder path gets this free because
+  `bookmarks.$roots` delivers synchronously; the collection path had to update the
+  in-memory `CollectionsEngine.collections` `sort_order` in place SYNCHRONOUSLY
+  (then persist to SQLite async, no reload) — an async DB-write-then-reload made the
+  dropped row snap/flash a frame late. (2) A reorderable `ForEach` must be a plain
+  `VStack` iterated DIRECTLY by a stable id (`id: \.collection.id`), NOT a
+  `LazyVStack` over `Array(enumerated())` — the lazy+enumerated combo makes SwiftUI
+  treat a sort reorder as insert/remove and fly rows in from the edge instead of
+  moving them in place. Animate the reorder with a list-scoped `.animation(_:value:)`
+  keyed to the sort mode, never a global `withAnimation` (which animates the whole
+  surrounding layout). See the 2026-06-19 `feat/next-32` session log.
+- **`withAnimation` does NOT animate an `@AppStorage`-backed change** — the
+  UserDefaults publish lands outside the transaction, so the change is instant. If
+  a persisted boolean needs to animate (e.g. a sidebar section collapse), back it
+  with plain `@State` seeded from / written to `UserDefaults` via `.onChange`, then
+  `withAnimation` works; or use a value-scoped `.animation(_:value:)`. (`feat/next-32`.)
 
 ### Session index (detail in `docs/session-log.md`)
 
@@ -476,6 +497,64 @@ The four most critical are also saved as Claude memories (linked).
   toolbar icons (feat/next-24). Selection blue + ring unchanged (system accent).
   Pure SwiftUI cosmetic; one file (`Views/ImageLayoutSheet.swift`); no test (Color
   equality is unreliable). Build + full suite green (260); diff review clean.
+- **2026-06-19** `feat/next-32` — Collections in the Sidebar (opt-in). A new
+  Preferences toggle **"Show Collections in the Sidebar"** (`AppSettings.
+  showCollectionsInSidebar`, default OFF — OFF is byte-for-byte the original
+  folders-only sidebar) adds a second section beneath the folders. ON: a gray
+  **FOLDERS** and **COLLECTIONS** header, each with the hero viewer's circular
+  collapse button (`+` collapsed → 45°-rotated `×` expanded, same spring), and
+  both sections live in ONE `ScrollView` so they scroll together (the bottom
+  pill row is pinned outside it). Each collection row shows a `square.stack.3d.up`
+  icon, name, and the reachability-aware alive count; clicking it activates the
+  collection in the grid (`setActiveCollection`) and shows the blue selection
+  highlight (folders already suppress theirs while a collection is active). The
+  COLLECTIONS section has its OWN sort (`AppState.sidebarCollectionSortMode`:
+  Manual / Name / Date Created / Date Modified) **fully independent of the
+  Collections-page sort** — even Date Created in the sidebar never reorders the
+  page. Manual order is persisted via a new `collections.sort_order` column
+  (migration **v8**, deterministic created-at/name back-fill; new collections
+  append at `max+1` in `createManual`/`upsert`); `CollectionStore.persistOrder`
+  writes a full id order. Reorder is the SAME live drag as folders (trailing grip
+  on hover swapping with the count, hidden row + floating overlay, insertion
+  line — a flat-list mirror in `SidebarView`) plus right-click **Move Up/Down**
+  and app-menu **Move Collection Up/Down** (Collections menu, gated to ON +
+  Manual + an active collection). Row context menu: Rename… (activates +
+  `collectionRenameRequest`), Delete… (durable `setHidden`, same confirm copy),
+  Move Up/Down. Full a11y: one activatable element per row (name+count label,
+  `.isButton`/`.isSelected`, named Rename/Delete/Move actions); grip stays
+  mouse-only/`accessibilityHidden` like the folder grip. Bottom bar: OFF = the
+  single "Add Folder" pill; ON = two compact `+ folder` / `+ stack` pills, the
+  stack opening the existing Name Collection modal (`requestNewCollection`),
+  appending at the bottom of Manual. New pure `Models/SidebarCollectionSortMode.swift`
+  (`SidebarCollectionSort`, unit-tested) + `SidebarCollectionSortTests` /
+  `CollectionSortOrderMigrationTests` / `CollectionReorderStoreTests`. The
+  Collections PAGE is untouched. Build + full suite green (280 unit cases);
+  spec + plan in `docs/superpowers/`. **QA follow-up (same branch):** (1)
+  **Settings is now an in-app modal sheet** (dimmed + centered like the About/
+  Image-Layout modals), not the native Preferences window — the `Settings {}`
+  scene was removed and `CommandGroup(replacing: .appSettings)` opens a `.sheet`
+  bound to `AppState.settingsShown` (⌘, preserved); `SettingsView` takes a
+  `@Binding isPresented` + `SheetCloseButton`, sized to content at 600 wide.
+  (2) **Collapse animates like the hero** — the section collapse flags are plain
+  `@State` (seeded from / persisted to UserDefaults) NOT `@AppStorage`, so
+  `withAnimation` on the +/× toggle animates the spin AND the content show/hide
+  (a withAnimation transaction doesn't carry into an @AppStorage publish — it was
+  instant before). (3) **Drag-drop no longer flashes** — `reorderSidebarCollections`
+  applies the new order to the in-memory `CollectionsEngine.collections`
+  `sort_order` SYNCHRONOUSLY (then persists async, no reload), so the commit's
+  non-animated transaction sees the new order immediately (mirrors how the folder
+  reorder relies on `bookmarks.$roots` delivering synchronously; the async-then-
+  reload version snapped a frame late). (4) **Sort-change no longer flies in** —
+  the collections list is a NON-lazy `VStack` iterated DIRECTLY by `collection.id`
+  (was `LazyVStack` + `Array(enumerated())`, which made SwiftUI treat a reorder as
+  insert/remove and fly rows from the edge), with a list-scoped
+  `.animation(value: sidebarCollectionSortMode)` instead of a global withAnimation
+  (which animated the whole surrounding VStack). (5) **Sidebar highlight follows
+  the active collection** — `CollectionSidebarRow.isSelected` is just
+  `activeCollectionID == id` (dropped a `!showingCollections` guard that left a
+  collection opened from a Collections-page card un-highlighted). (6) Collection
+  rows mirror the folder row layout exactly (leading chevron-width spacer, icon
+  width 18, padding 6) so icons/text line up. Independent review clean.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
@@ -941,13 +1020,19 @@ Muse/Muse/
                                    mirrored on AppState — feat/next-21). Plus
                                    tileBackground (default auto; global grid tile
                                    backdrop, mirrored on AppState — feat/next-22)
-    SettingsView.swift             Preferences window (app menu → Settings…,
-                                   ⌘,): the two auto-organization toggles
+    SettingsView.swift             Settings as an IN-APP MODAL SHEET (not the
+                                   native Preferences window) — dimmed + centered
+                                   like InfoSheet; opened by AppState.settingsShown
+                                   from CommandGroup(replacing: .appSettings) (⌘,),
+                                   takes a @Binding isPresented + SheetCloseButton,
+                                   sized to content at 600 wide (feat/next-32).
+                                   Sections: the two auto-organization toggles
                                    (auto-tag new images / auto-organize into
-                                   collections) + a "Grid" section with the
-                                   "Show file names" toggle (feat/next-11).
-                                   Other settings still live in the sidebar /
-                                   toolbar / menus
+                                   collections), a "Grid" section with the
+                                   "Show file names" toggle (feat/next-11), and a
+                                   "Sidebar" section with "Show Collections in the
+                                   Sidebar" (feat/next-32). Other settings still
+                                   live in the sidebar / toolbar / menus
   Muse.entitlements                app-sandbox + user-selected.read-write +
                                    bookmarks.app-scope + iCloud Documents +
                                    network.client (Sparkle update fetch ONLY —
