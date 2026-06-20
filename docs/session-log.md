@@ -2968,3 +2968,88 @@ Spec + plan in `docs/superpowers/`. **PENDING:** human GUI verification of the
 interactive flows — live click automation was unavailable (the harness lacks macOS
 Accessibility permission to drive the app via System Events); the headline render
 (folder cards first, native icons, captions) was confirmed visually via screenshot.
+
+### `feat/next-42` — Grid faceted filters (kind / date / size)
+
+**Goal.** Add a **filter** to the grid: narrow the visible tiles by **kind**
+(images / videos / PDFs / documents / audio / other), **modified-date** preset
+(Today / This Week / This Month / This Year), and **size** bucket
+(< 1 MB / 1–10 / 10–100 / > 100 MB). Muse could already *sort* by these but not
+*filter*. Second of the three browsing features brainstormed with next-38 (the
+hero INFO card was first; the multi-tag AND view is still spec-only).
+
+**What shipped.** A funnel toolbar button beside the sort cluster opens a
+mood-picker-styled popover (Kind checkboxes / Date radio / Size radio / Clear
+All, ~270 wide). The button inverts to the engaged accent (blue, white icon)
+whenever a filter is active — the always-visible reminder for a folder that looks
+sparse. The filter is a pure narrowing layer applied as the **final** step of the
+`visibleFiles` pipeline on **every** branch (browse / collection / tag / search),
+so it stacks with everything and narrows search results too (the funnel is its
+own ToolbarItem, deliberately NOT `.disabled(isSearchActive)` like the sort
+cluster). It **persists** across folder switches (held on `AppState`, mirrored to
+`AppSettings`), enabling a cross-folder sweep ("PDFs this week, everywhere").
+
+**Architecture.** Reuses the established "pure model + AppSettings mirror +
+AppState `@Published` + memo invalidation" pattern (`imageLayout`/`tileBackground`),
+so no new architecture. New pure `Models/GridFilter.swift`: `KindFacet`/`DateFacet`/
+`SizeFacet` enums + a `GridFilter` value type with `isActive`, a deterministic
+`matches(kind:sizeBytes:modified:now:)` (the `now` injected so date windows are
+testable; date windows via `Calendar.current` start-of-period; decimal MB =
+1,000,000 to match the app's `ByteCountFormatter(.file)` size strings), and a
+Codable `resolve(_:)` (JSON, default `.none`). `KindFacet(from: AssetKind)` is an
+exhaustive 16-case switch (anything unhandled → `.other`). `AppState.gridFilter`'s
+`didSet` persists, invalidates the `visibleFiles` memo, and prunes the selection
+(below). The matcher reads the values `FileNode` already carries (`kind`/
+`sizeBytes`/`modifiedAt`) — no extra `resourceValues` hit — and the memo means it
+runs only when an input actually changed.
+
+**Built subagent-driven** from a written plan (`docs/superpowers/plans/
+2026-06-20-grid-faceted-filters.md`): 4 TDD tasks (model+tests → persistence →
+visibleFiles wiring → popover+toolbar), each build+test gated, then a
+three-lens review round (correctness/concurrency, QA/integration, UI/a11y) and a
+focused review of the resulting fix.
+
+**Review findings folded in.**
+- *Whole-branch review (Important):* in the one-level browse view `currentFiles`
+  contains `.folder` cards (next-41); the facet filter would have hidden them
+  (Kind≠Other, or any date/size facet vs a folder's nil-ish size/mtime),
+  stranding drill-in. Fixed: `visibleFiles` keeps every `$0.kind == .folder` node
+  regardless of the facet — folders are navigation, not content. This is the
+  explicit folder decision next-41's rule requires.
+- *QA review (Important):* a facet filter could hide a *selected* file that then
+  rode along into a selection action (Move to Folder / Add to Collection / Add
+  Tag / Share / sidebar drop) via `effectiveSelectionURLs`' rebuild-from-path
+  fallback. Fixed with `AppState.pruneSelectionToVisible()` called from
+  `gridFilter.didSet`: deselect anything the new filter hides ("what you can't see
+  can't be acted on"), with a grid-ordered deterministic replacement Shift anchor.
+  This closes the one narrowing input that wasn't already clearing/pruning the
+  selection (active-tag / collection-removal paths already call `clearSelection`).
+- *UI/a11y review:* popover section headers (`KIND`/`DATE`/`SIZE`) get
+  `.isHeader` (VoiceOver heading rotor, next-34 convention); the funnel button
+  announces its real state via `.accessibilityValue("Active"/"Off")` + a dynamic
+  `.help` (the toggle's "on" doubles for popover-open, so state needed a separate
+  channel). The follow-up review of the prune fix returned clean on all six
+  scrutiny points (ordering, no re-entrancy — `selectedFiles`/`selectionAnchor`
+  have no `didSet`, anchor, folder survival, no-op guard, filter-clear keeps
+  selection).
+
+**Accepted / not changed.** (1) Inside a collection the header count
+(reachability count) can read higher than the filtered grid — but the count is
+*correct* for what it measures and the blue funnel is the documented cue (the spec
+accepts the funnel as the explanation and lists Collections-card filtering as out
+of scope). (2) Stale-`now` edge: a date filter left active while the app sits idle
+across a day/week/month/year rollover with NO input change keeps the cached window
+until the next interaction — inherent to the memo + wall-clock predicate, accepted.
+
+**Files.** New `Models/GridFilter.swift`, `Views/GridFilterPopover.swift`,
+`MuseTests/GridFilterTests.swift` (16 cases: kind buckets over all 16 kinds, each
+date window at its boundary, each size bucket incl. nil, combined facets,
+`isActive`/`resolve` default + round-trip). Modified `Settings/AppSettings.swift`,
+`Models/AppState.swift`, `Models/AppState+Filters.swift`, `Models/AppState+Selection.swift`,
+`ContentView.swift`. Build + full `MuseTests` unit suite green throughout. (The
+`MuseUITests` boilerplate `testExample`/`testLaunch` fail to *foreground* the app
+under headless automation — environmental, unrelated; they passed earlier in the
+same session.) **PENDING:** human GUI verification of the interactive flows (apply
+each facet in a folder / collection / search, confirm the blue engaged state +
+Clear All + persistence) — live click automation unavailable (the harness lacks
+macOS Accessibility permission). Spec + plan in `docs/superpowers/`.
