@@ -19,6 +19,34 @@ _Last reviewed: 2026-06-17. Both code-tidiness items below were completed on
   `FadeOutModifier.swift`); no code/pbxproj references needed updating since it's
   a filesystem-synchronized group.
 
+## Health watch list (not problems — areas to watch for complexity creep)
+
+From a 2026-06-19 codebase-health rating (overall ~8.5/10, **healthy**). None of
+these are bugs or blockers. They're the three places where future complexity will
+hurt *first*, captured so that when work starts touching one of them we make a
+conscious choice to split/refactor rather than letting it sprawl. The intent is to
+**flag the interaction at the moment a change adds complexity here**, not to
+refactor preemptively.
+
+1. **A couple of files are getting heavy.**
+   - `Muse/Views/SidebarView.swift` (~1,359 LOC) — the largest. Its live-drag
+     reorder logic is the prime candidate to extract into its own model/component
+     before the file reaches ~1,500 LOC.
+   - `Muse/Models/AppState.swift` (~1,258 LOC) — already partially split into
+     `AppState+Selection.swift` / `AppState+Filters.swift`. Keep splitting along
+     those seams as new state lands; don't pile back onto the core file.
+2. **Known O(n)/keystroke + scan scaling items** (flagged by the feat/next-35 audit
+   as "personal-scale concerns, not bugs"): semantic search runs O(n) per keystroke,
+   tag search does a `LIKE` table scan, and `CollectionStore` has an N+2 query
+   pattern. Fine at the user's personal library size; latent debt if Muse is ever
+   pointed at a ~50k-file library. When new work touches these paths, note the
+   scaling cost instead of silently extending it.
+3. **Test coverage is logic-deep but UI-shallow** (inherent + accepted). Pure logic
+   helpers are well-tested; SwiftUI view wiring is not. This is the right tradeoff,
+   but it means view-wiring regressions (the class behind the Escape two-press fix
+   and the toolbar-icon drift) can only be caught by hand. When changing view wiring,
+   remember there's no automated net under it — manual verification is the safeguard.
+
 ## Features / decisions deferred
 
 - **Separate `.dev` iCloud container for Debug builds.** Debug builds currently
