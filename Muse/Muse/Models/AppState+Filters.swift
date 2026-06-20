@@ -33,10 +33,16 @@ extension AppState {
     /// inside a collection, else the current folder's files; the tag chip
     /// filter narrows either.
     var visibleFiles: [FileNode] {
-        // Memoized: recomputed only after one of the four inputs changes (they
-        // invalidate the cache via didSet in AppState). The grid reads this many
-        // times per render; without the cache the tag filter below re-standardized
-        // every path on every read. See `_visibleFilesCache`.
+        // Memoized: recomputed only after one of the inputs changes (they
+        // invalidate the cache via didSet in AppState: currentFiles,
+        // isSearchActive, activeCollectionFiles, activeTagPaths, gridFilter).
+        // The grid reads this many times per render; without the cache the tag
+        // filter below re-standardized every path on every read. The date
+        // window's `now` is captured fresh per recompute (not at first read), so
+        // a filter change re-windows correctly; the only stale-`now` edge is the
+        // app sitting idle across a day/week/month/year rollover with NO input
+        // change, which the next interaction corrects (accepted). See
+        // `_visibleFilesCache`.
         if _visibleFilesValid { return _visibleFilesCache }
         // search results are global; collection/tag filters apply to browsing only
         var base: [FileNode]
@@ -52,10 +58,18 @@ extension AppState {
         // (search included). Reads the values FileNode already carries — no
         // extra resourceValues hit; the memo means this runs only when an input
         // actually changed, not on every grid render.
+        //
+        // Folder grid cards (the one-level browse view, feat/next-41) are
+        // NAVIGATION, not content: they are always kept regardless of the facet
+        // filter. Otherwise a Kind filter excluding "Other" — or any date/size
+        // facet (a folder's size/mtime is nil-ish) — would hide subfolders and
+        // strand drill-in. This is the explicit folder decision feat/next-41's
+        // rule requires (collection/search branches carry no folders anyway).
         let result: [FileNode]
         if gridFilter.isActive {
             let now = Date()
             result = base.filter {
+                $0.kind == .folder ||
                 gridFilter.matches(kind: $0.kind,
                                    sizeBytes: $0.sizeBytes,
                                    modified: $0.modifiedAt,
