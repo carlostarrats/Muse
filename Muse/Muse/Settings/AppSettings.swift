@@ -95,6 +95,21 @@ enum AppSettings {
         set { UserDefaults.standard.set(newValue.rawValue, forKey: tileBackgroundKey) }
     }
 
+    static let gridFilterKey = "muse.gridFilter"
+
+    /// Global grid faceted filter (kind / date / size). Default `.none` (off).
+    /// Persisted as a JSON string (GridFilter is Codable, not a single rawValue
+    /// like imageLayout/tileBackground). Unset/invalid → none.
+    static var gridFilter: GridFilter {
+        get { GridFilter.resolve(UserDefaults.standard.string(forKey: gridFilterKey)) }
+        set {
+            if let data = try? JSONEncoder().encode(newValue),
+               let json = String(data: data, encoding: .utf8) {
+                UserDefaults.standard.set(json, forKey: gridFilterKey)
+            }
+        }
+    }
+
     static let showCollectionsInSidebarKey = "showCollectionsInSidebar"
 
     /// Show the Collections section in the sidebar. Default false. Unset → off.

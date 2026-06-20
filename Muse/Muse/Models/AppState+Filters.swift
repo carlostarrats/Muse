@@ -38,16 +38,31 @@ extension AppState {
         // times per render; without the cache the tag filter below re-standardized
         // every path on every read. See `_visibleFilesCache`.
         if _visibleFilesValid { return _visibleFilesCache }
-        let result: [FileNode]
         // search results are global; collection/tag filters apply to browsing only
+        var base: [FileNode]
         if isSearchActive {
-            result = currentFiles
+            base = currentFiles
         } else {
-            var files = activeCollectionFiles ?? currentFiles
+            base = activeCollectionFiles ?? currentFiles
             if let tagPaths = activeTagPaths {
-                files = files.filter { tagPaths.contains($0.url.standardizedFileURL.path) }
+                base = base.filter { tagPaths.contains($0.url.standardizedFileURL.path) }
             }
-            result = files
+        }
+        // Facet filter: the final narrowing step, applied to ALL branches
+        // (search included). Reads the values FileNode already carries — no
+        // extra resourceValues hit; the memo means this runs only when an input
+        // actually changed, not on every grid render.
+        let result: [FileNode]
+        if gridFilter.isActive {
+            let now = Date()
+            result = base.filter {
+                gridFilter.matches(kind: $0.kind,
+                                   sizeBytes: $0.sizeBytes,
+                                   modified: $0.modifiedAt,
+                                   now: now)
+            }
+        } else {
+            result = base
         }
         _visibleFilesCache = result
         _visibleFilesValid = true
