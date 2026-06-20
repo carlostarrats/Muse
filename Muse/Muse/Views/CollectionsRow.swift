@@ -245,28 +245,30 @@ struct CollectionCard: View {
                             coverFileID: loaded.coverFileID,
                             isEmpty: loaded.aliveCount == 0,
                             size: coverSize)
-                // Hairline grey border + soft drop shadow so each card reads
-                // as a distinct object instead of blending into the row.
+                // Hairline outline that follows the mood ("Auto") — a faint
+                // iconColor line (black on light moods, white on dark) so it
+                // adapts to the background instead of a fixed grey. Animated in
+                // lockstep with the background fade, like the toolbar icons.
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(appState.moodPalette.iconColor.opacity(0.05), lineWidth: 1)
                 )
+                .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
                 // Calm dark veil on hover, same as the grid tiles — no resize.
                 // Suppressed on the active card (its accent border is the cue).
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(Color.black)
                         .opacity((hovering && !isActive) ? 0.2 : 0)
                         .allowsHitTesting(false)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .strokeBorder(
                             isActive ? Color.accentColor : Color.clear,
                             lineWidth: 2
                         )
                 )
-                .shadow(color: Color.black.opacity(0.09), radius: 4, x: 0, y: 1.5)
                 .animation(.easeOut(duration: 0.18), value: hovering)
                 .onHover { hovering = $0 }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -364,7 +366,7 @@ private struct CollectionCover: View {
         // Cover fades in once loaded rather than snapping in.
         .animation(.easeOut(duration: 0.3), value: cover != nil)
         .frame(width: size.width, height: size.height)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         // Reload when the membership OR the chosen cover changes.
         .task(id: "\(memberIDs.joined(separator: ","))|\(coverFileID ?? "")") {
             await loadCover()
