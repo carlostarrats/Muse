@@ -19,6 +19,8 @@ struct HeroImageViewer: View {
 
     @State private var currentURL: URL
     @State private var details: ViewerFileDetails?
+    /// Extra metadata (EXIF / PDF / A/V) for the current file's INFO card.
+    @State private var metadata: FileMetadata?
     @State private var naturalSize: CGSize?
     @State private var zoom: CGFloat = 1
     @State private var pan: CGSize = .zero
@@ -175,6 +177,7 @@ struct HeroImageViewer: View {
                          details: details,
                          fallbackPalette: computedPalette,
                          paletteLoading: !paletteResolved,
+                         metadata: metadata,
                          backing: infoBackingColor,
                          backingVisible: zoom > 1.001,
                          refresh: { await loadDetails() },
@@ -428,6 +431,14 @@ struct HeroImageViewer: View {
         }
         guard url == currentURL else { return }
         details = loaded
+        // Extra metadata for the INFO card (off-main, no DB). Derive the kind
+        // from the live URL (navigation changes currentURL, not `file`). Like
+        // `details`/palette above, we deliberately DON'T clear `metadata` first:
+        // letting the prior card linger until the new load resolves avoids a
+        // disappear/reappear flash on fast navigation.
+        let kind = AssetKind.detect(at: url)
+        let meta = await FileMetadata.load(url: url, kind: kind)
+        if url == currentURL { metadata = meta }
         if let px = loaded?.pixelSize {
             naturalSize = px
         } else {

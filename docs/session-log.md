@@ -2720,3 +2720,98 @@ not force-downloaded on reconnect enumeration (the `Indexer`/`AssetKind` guards
 cover it). New code under `Muse/Muse/Backup/` + `Views/Backup/ReconnectWizard.swift`;
 menu in `MuseApp.swift`; export/restore entry points + the `BookmarkStore` fix.
 Spec + plan in `docs/superpowers/`.
+
+---
+
+## 2026-06-20 — `feat/next-38` — Hero INFO card (EXIF / file metadata)
+
+**Context.** A "what features are missing" conversation surfaced three browsing
+improvements, brainstormed together and each given its own spec in
+`docs/superpowers/specs/` (2026-06-20): a hero **INFO card** (EXIF/file metadata),
+**grid faceted filters** (kind/date/size), and **multi-tag AND view**. They ship
+as three independent branches in merge-order INFO → filters → multi-tag. This
+branch is the first; the other two are specced but not built.
+
+**What shipped.** A new **INFO** card in the hero viewer's right-hand column
+(`ViewerInfoColumn`, directly below COLORS) surfacing a file's metadata *beyond*
+the subtitle line:
+
+- **Photos** (ImageIO `CGImageSourceCopyPropertiesAtIndex` → EXIF/TIFF/GPS):
+  Taken · Camera · Lens · Exposure (ƒ · shutter · ISO) · Location.
+- **PDFs** (PDFKit `documentAttributes`): Pages · Title · Author · Creator.
+- **Video/Audio** (AVFoundation `load(.duration)`): Duration.
+- **Every non-dataless file**: a **Modified** filesystem-date row.
+
+**Design decisions (the load-bearing ones):**
+
+- **Read on viewer-open, never persisted.** No DB column, no migration — the
+  data is only ever shown for the current hero file, so it's read off-main in
+  `HeroImageViewer.loadDetails()` (mirroring the existing `computedPalette`
+  fallback) and held in `@State`. Pure formatting lives in
+  `Viewers/FileMetadata.swift` (unit-tested); a thin `load(url:kind:) async`
+  wraps the CG/PDFKit/AV reads and delegates to the pure functions.
+- **No network for location.** Location renders as text coordinates plus an
+  **"Open in Maps"** link-button (`maps://?ll=…` via `NSWorkspace`, formatted
+  `%.6f`). An inline `MKMapSnapshotter` was explicitly rejected — it fetches map
+  tiles from Apple's servers, which would break the update-only network policy.
+- **Dataless iCloud guard.** `load` returns `.empty` for a not-downloaded
+  placeholder (`.ubiquitousItemDownloadingStatusKey == .notDownloaded`) *before*
+  any byte read — same rule as `AssetKind.isDataless` / the Indexer.
+- **Kind from the live URL.** `loadDetails` derives the kind via
+  `AssetKind.detect(at: url)` on the *current* URL (hero navigation changes
+  `currentURL`, not the immutable `file`), guarded by `url == currentURL` after
+  the await so a fast arrow-key flip can't apply stale metadata.
+
+**Round-2 polish (from driving the real app):**
+
+- The hero **subtitle dropped its bare, unlabeled date** — it's now
+  `size · dimensions` only. That date moved *into* the INFO card as a labeled
+  **Modified** row (a filesystem attribute appended for every non-dataless file),
+  placed **directly under Taken** (or at the top when there's no capture date,
+  e.g. PDFs/videos). This is why the INFO card now appears for essentially any
+  file, not only those carrying photo/PDF/AV metadata; the "hidden when empty"
+  gate still holds for the dataless → `.empty` case.
+- **"Open in Maps"** restyled from plain text to a link-button (underlined +
+  small `arrow.up.forward`).
+- The INFO card gained a **+/× collapse header** reusing the TAGS card's
+  `PlusCircleButton` + `.spring(0.45, 0.75)` + move/opacity transition, open by
+  default (× when open, + when collapsed), card clipped so the fold reads cleanly.
+
+**Concurrency gotcha — `nonisolated` value types.** The project sets
+`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, so an unannotated `struct` is
+main-actor-isolated and its *synthesized* `Equatable`/`Identifiable` conformance
+can't be used from a `nonisolated` context — here the detached `load` and the
+nonisolated XCTest methods (`XCTAssertEqual(m, FileMetadata.empty)`). Marking
+`FileMetadata`/`InfoRow`/`Coordinate` **`nonisolated`** fixes it and is the
+correct boundary (pure data, never actor-bound). This removed the only warnings
+the branch's own files emitted. A full build also surfaced that the **codebase
+already carries many pre-existing Swift-6 concurrency warnings** (AppState,
+Indexer, AnalyzePipeline, Backup, CollectionStore, TagStore, …) — that's the
+baseline on `main`, independent of this branch and left untouched; a future
+project-wide concurrency cleanup is a candidate but out of scope here.
+
+**Process.** Built subagent-driven: 5 TDD tasks (pure image formatting → pure
+PDF/duration → IO loader → INFO card view → hero wiring), a per-task spec+quality
+review after each, and a whole-branch review at the end. One review fix during
+execution: the IO loader's first cut used the deprecated synchronous
+`AVURLAsset.duration` (warning under macOS 14.6) → switched to the async
+`asset.load(.duration)` pattern already used in `ThumbnailCache`. After the two
+live-polish rounds, a fresh whole-branch review returned **ready to merge** (no
+Critical/Important; three cosmetic/by-design Minors, two of which were addressed:
+`%.6f` map coords and a comment documenting the deliberate "don't clear
+`metadata` before reload" choice). Full `xcodebuild test` green throughout;
+`FileMetadataTests` = 20 cases. Spec + plan in `docs/superpowers/`.
+
+**Files.** New `Muse/Muse/Viewers/FileMetadata.swift` +
+`Muse/MuseTests/FileMetadataTests.swift`; modified
+`Muse/Muse/Views/Viewer/ViewerInfoColumn.swift` (INFO card, collapse, Maps
+button, subtitle) and `Muse/Muse/Views/Viewer/HeroImageViewer.swift` (load +
+wire).
+
+**Deferred (next, per the same session).** A **sidebar-count-not-updating**
+bug — after adding files (a RAW+JPG pair and a ~30s iPhone video), the grid
+updated but the sidebar folder count never refreshed and the "Organizing" pill
+lingered for many minutes, persisting across folder switches within the session.
+Unrelated to this branch (INFO is read-only, hero-only; never touches
+`FolderStatCache`/`AnalyzePipeline`) — to be investigated with
+systematic-debugging after this merges.
