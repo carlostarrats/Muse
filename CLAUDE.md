@@ -260,6 +260,21 @@ The four most critical are also saved as Claude memories (linked).
   masked this with an explicit post-add rebuild; the reconnect wizard (sink-only)
   didn't. Activating first makes the synchronous rebuild resolve every new root.
   Don't reorder back. Fixed 2026-06-20 (`feat/next-37`).
+- **A trailing debounce with NO maxWait cap starves forever under a sustained
+  event stream.** `FolderStatCache` (sidebar file counts) rescheduled its 0.4s
+  recompute debounce on EVERY qualifying FSEvents under a root. A continuous
+  stream arriving faster than 0.4s apart reset the timer indefinitely, so the
+  recompute never ran and the **sidebar count froze** until the stream stopped
+  or the app restarted — which is exactly what an iCloud-synced folder produces
+  while syncing newly-imported files (a 48 MP RAW + a 30 s video) during a long
+  analysis pass (minutes of upload/metadata FSEvents). The fix is a **maxWait cap
+  (2.0 s)** via the pure `StatRecomputeScheduler`: once the current burst has run
+  past the cap, flush (recompute) immediately instead of rescheduling, so the
+  count refreshes at least every ~2 s even under continuous churn (normal
+  single-add behavior keeps the trailing 0.4 s debounce). Any debounce over a
+  potentially-unbounded event source needs this cap. Reproduced with a 6 s
+  touch-storm (recompute fired 0× during, once after); verified the fix flushes
+  every ~2.4 s during an 8 s storm. Fixed 2026-06-20 (`feat/next-39`).
 
 ### Session index (detail in `docs/session-log.md`)
 
@@ -716,6 +731,23 @@ The four most critical are also saved as Claude memories (linked).
   subagent-driven (5 TDD tasks, per-task review + a whole-branch review), then two
   rounds of live polish from driving the app. Build + full suite green (FileMetadata
   20 tests). Spec + plan in `docs/superpowers/`; narrative in `docs/session-log.md`.
+- **2026-06-20** `feat/next-39` — fix: **sidebar file count froze under sustained
+  FSEvents** (systematic-debugging). After importing iPhone files (a 48 MP RAW + a
+  30 s video) into an iCloud-synced folder, the grid updated but the sidebar count
+  never refreshed in-session (only on restart). Root cause: `FolderStatCache.handle`
+  rescheduled its 0.4 s recompute debounce on EVERY qualifying FSEvents under a root
+  with no maxWait cap, so the minutes-long stream of iCloud upload/metadata events
+  during the analysis reset it indefinitely and `recompute` never ran. Confirmed by
+  instrumenting the count path + a 6 s touch-storm (recompute fired 0× during, once
+  ~0.4 s after). Fix: a 2.0 s maxWait cap via the pure, unit-tested
+  `StatRecomputeScheduler` — past the cap, flush immediately instead of
+  rescheduling, so the count refreshes ~every 2 s even under continuous churn
+  (single-add still uses the trailing 0.4 s debounce). Verified the fix flushes
+  every ~2.4 s during an 8 s storm. The separate "Organizing" pill running ~7 min
+  is just the genuinely heavy 48 MP RAW + video analysis, not part of this bug.
+  `FolderStatCache.swift` + new `FolderStatSchedulerTests` (5). MuseTests green.
+  Also on this branch: the parked `grid-voiceover-open` spec (built later). See the
+  durable gotcha above + `docs/session-log.md`.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
@@ -864,7 +896,12 @@ Muse/Muse/
                                    all roots (debounced), set-diff so a reorder
                                    doesn't re-walk, ignores dotfile/.muse changes
                                    (rootForMediaChange); AppState owns + forwards
-                                   changes (2026-06-18)
+                                   changes (2026-06-18). The recompute debounce has
+                                   a maxWait CAP (pure StatRecomputeScheduler, 0.4s
+                                   trailing / 2.0s cap) so a sustained FSEvents
+                                   stream — iCloud sync churn during a long analysis
+                                   — can't starve it and freeze the count
+                                   (feat/next-39)
     StarStore.swift                SQLite-backed starred folders
     ThumbnailCache.swift           QLThumbnail + AVAssetImageGenerator (videos);
                                    off-main, ordered (top→bottom) load; 2-tier

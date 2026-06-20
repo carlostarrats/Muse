@@ -10,6 +10,24 @@
 
 import Foundation
 
+/// Pure debounce policy for the folder-stat recompute. A plain trailing debounce
+/// (reschedule on every event) starves forever under a *sustained* event stream:
+/// FSEvents arriving faster than `quiet` reset it indefinitely, so the recompute
+/// never runs and the sidebar count freezes — e.g. while iCloud syncs newly
+/// imported files during a long analysis. The cap (`maxWait`) forces a flush once
+/// the current burst has run that long, guaranteeing the count refreshes even
+/// under continuous churn. Mirrors lodash's debounce `{ maxWait }`.
+nonisolated enum StatRecomputeScheduler {
+    enum Decision: Equatable {
+        case flushNow
+        case debounce(TimeInterval)
+    }
+    static func decide(burstStart: TimeInterval, now: TimeInterval,
+                       quiet: TimeInterval = 0.4, maxWait: TimeInterval = 2.0) -> Decision {
+        (now - burstStart >= maxWait) ? .flushNow : .debounce(quiet)
+    }
+}
+
 @MainActor
 final class FolderStatCache: ObservableObject {
     /// Stats keyed by standardized root path.
@@ -20,6 +38,9 @@ final class FolderStatCache: ObservableObject {
     private var watchedPaths: Set<String> = []
     private var pending: Set<String> = []
     private var debounce: DispatchWorkItem?
+    /// systemUptime of the first event in the current un-flushed burst; drives
+    /// the maxWait cap so a continuous event stream can't starve the recompute.
+    private var burstStart: TimeInterval?
 
     func stat(for url: URL) -> FolderStat? {
         stats[url.standardizedFileURL.path]
@@ -51,15 +72,34 @@ final class FolderStatCache: ObservableObject {
         let affected = Set(paths.compactMap { rootForMediaChange($0) })
         guard !affected.isEmpty else { return }
         pending.formUnion(affected)
+
+        let now = ProcessInfo.processInfo.systemUptime
+        let start = burstStart ?? now
+        burstStart = start
         debounce?.cancel()
-        let work = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            let todo = self.pending
-            self.pending.removeAll()
-            for p in todo { self.recompute(URL(fileURLWithPath: p)) }
+        debounce = nil
+
+        switch StatRecomputeScheduler.decide(burstStart: start, now: now) {
+        case .flushNow:
+            // Burst has run past the cap — recompute now instead of resetting the
+            // timer again, so a continuous FSEvents stream (iCloud sync churn
+            // during a long analysis) can't freeze the count indefinitely.
+            flush()
+        case .debounce(let quiet):
+            let work = DispatchWorkItem { [weak self] in self?.flush() }
+            debounce = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + quiet, execute: work)
         }
-        debounce = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
+    }
+
+    /// Recompute every pending root, then reset the burst + debounce state so the
+    /// next event starts a fresh window.
+    private func flush() {
+        debounce = nil
+        burstStart = nil
+        let todo = pending
+        pending.removeAll()
+        for p in todo { recompute(URL(fileURLWithPath: p)) }
     }
 
     /// The watched root containing `path`, but only for a change Muse's count
