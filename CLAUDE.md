@@ -687,6 +687,35 @@ The four most critical are also saved as Claude memories (linked).
   one systematic-debugging session (the iCloud-folder-vanishing bug → the
   `BookmarkStore` activate-before-append fix, see the durable gotcha). Build + full
   suite green. Spec + plan in `docs/superpowers/`; narrative in `docs/session-log.md`.
+- **2026-06-20** `feat/next-38` — Hero **INFO card** (first of three browsing
+  features brainstormed together; the other two — grid faceted filters + multi-tag
+  AND view — have specs in `docs/superpowers/specs/` but are NOT built yet). A new
+  card in the hero viewer's right column (below COLORS) showing a file's *extra*
+  metadata beyond the subtitle: **photos** Taken/Camera/Lens/Exposure/Location
+  (ImageIO EXIF/TIFF/GPS), **PDFs** Pages/Title/Author/Creator (PDFKit), **A/V**
+  Duration (AVFoundation), and a **Modified** filesystem date on every file. The
+  subtitle line dropped its bare (unlabeled) date — it's now `size · dimensions`
+  only — and that date moved into INFO as the labeled **Modified** row, placed
+  directly under **Taken** (or at the top when there's no capture date). New pure,
+  unit-tested `Viewers/FileMetadata.swift` (formatting) + a thin off-main IO loader
+  `load(url:kind:)`; metadata is read **on viewer-open only — no DB column, no
+  migration** (mirrors the palette-fallback pattern), with the standard dataless
+  iCloud guard so classification/reads never force a download. **Location is text
+  coordinates + an "Open in Maps" link-button** (`maps://` via `NSWorkspace`,
+  `%.6f`) — deliberately NO inline `MKMapSnapshotter` map (that fetches remote
+  tiles, violating the update-only network policy). The card is **hidden entirely
+  when it would have zero rows** (rare now that Modified is near-universal; a
+  dataless file → `.empty` → no card), and has a **+/× collapse header** reusing
+  the TAGS card's `PlusCircleButton` + spring (open by default). The value types
+  (`FileMetadata`/`InfoRow`/`Coordinate`) are marked **`nonisolated`** because the
+  project's default actor isolation is MainActor — without it their synthesized
+  `Equatable`/`Identifiable` conformances are main-actor-isolated and unusable from
+  the detached load + nonisolated XCTest methods (this fix removed the only
+  warnings the branch's files emitted; the codebase's many other pre-existing
+  Swift-6 concurrency warnings are a separate, untouched baseline). Built
+  subagent-driven (5 TDD tasks, per-task review + a whole-branch review), then two
+  rounds of live polish from driving the app. Build + full suite green (FileMetadata
+  20 tests). Spec + plan in `docs/superpowers/`; narrative in `docs/session-log.md`.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
@@ -931,6 +960,15 @@ Muse/Muse/
     ModelViewerView.swift          SCNScene from URL
     FontViewerView.swift           process-scope font registration
     ViewerChrome.swift             dimmed bg + close button + Esc dismiss
+    FileMetadata.swift             hero INFO-card metadata: pure formatting
+                                   (EXIF/TIFF/GPS image · PDF doc attrs · A/V
+                                   duration · filesystem Modified date) + a thin
+                                   off-main IO loader load(url:kind:). Read on
+                                   viewer-open only (NO DB/migration); dataless
+                                   iCloud guard. Value types are `nonisolated`
+                                   (module default isolation is MainActor) so they
+                                   build in the detached load + nonisolated tests.
+                                   Unit-tested (feat/next-38)
   Views/
     SidebarView.swift              multi-root OutlineGroup tree + starred section;
                                    file-URL drop on folder rows MOVES the grid
@@ -1092,7 +1130,16 @@ Muse/Muse/
                                    (feat/next-23)
     Viewer/                        hero image viewer (HeroImageViewer, HeroStage,
                                    ViewerInfoColumn, backdrop, geometry, toast,
-                                   PillFlow/PillRowModel)
+                                   PillFlow/PillRowModel). ViewerInfoColumn renders
+                                   an INFO card (below COLORS) from FileMetadata —
+                                   labeled rows (Taken/Modified/Camera/…, Pages,
+                                   Duration), a collapsible +/× header like the
+                                   TAGS card (open by default), and a text-only
+                                   "Open in Maps" link-button (maps://, no inline
+                                   map). The subtitle line is now size · dimensions
+                                   only (the date moved into INFO as "Modified").
+                                   HeroImageViewer loads FileMetadata on open
+                                   (feat/next-38)
       ShareButton.swift            macOS share sheet (NSSharingServicePicker)
                                    for the hero image
     Spatial/
