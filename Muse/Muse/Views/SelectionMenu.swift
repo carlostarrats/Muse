@@ -18,28 +18,37 @@ struct SelectionActionsMenu: View {
     let path: String
 
     private var urls: [URL] { appState.effectiveSelectionURLs(fallback: path) }
+    /// File-only subset (folders can't be tagged / collected / shared as files).
+    private var fileURLs: [URL] {
+        urls.filter {
+            (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory != true
+        }
+    }
 
     var body: some View {
-        Menu("Add to Collection") {
-            if engine.collections.isEmpty {
-                Button("No collections") {}.disabled(true)
-            } else {
-                ForEach(engine.collections.sorted {
-                    $0.collection.name.localizedCaseInsensitiveCompare($1.collection.name) == .orderedAscending
-                }, id: \.collection.id) { loaded in
-                    Button(loaded.collection.name) { addToCollection(loaded.collection.id) }
+        if !fileURLs.isEmpty {
+            Menu("Add to Collection") {
+                if engine.collections.isEmpty {
+                    Button("No collections") {}.disabled(true)
+                } else {
+                    ForEach(engine.collections.sorted {
+                        $0.collection.name.localizedCaseInsensitiveCompare($1.collection.name) == .orderedAscending
+                    }, id: \.collection.id) { loaded in
+                        Button(loaded.collection.name) { addToCollection(loaded.collection.id) }
+                    }
                 }
             }
-        }
-        Button("New Collection from Selection") { appState.requestNewCollection(fallback: path) }
-        Menu("Add Tag") {
-            if appState.allTagLabels.isEmpty {
-                Button("No tags") {}.disabled(true)
-            } else {
-                ForEach(appState.allTagLabels, id: \.self) { label in
-                    Button(label) { addTag(label) }
+            Button("New Collection from Selection") { appState.requestNewCollection(fallback: path) }
+            Menu("Add Tag") {
+                if appState.allTagLabels.isEmpty {
+                    Button("No tags") {}.disabled(true)
+                } else {
+                    ForEach(appState.allTagLabels, id: \.self) { label in
+                        Button(label) { addTag(label) }
+                    }
                 }
             }
+            Button("Share") { share() }
         }
         // Remove from the tag/collection you're currently viewing. Shown only
         // in that context (a tag filter or an open collection); acts on the
@@ -47,18 +56,17 @@ struct SelectionActionsMenu: View {
         if appState.activeTagLabel != nil || appState.activeCollectionID != nil {
             Divider()
             if let label = appState.activeTagLabel {
-                Button("Remove Tag “\(label)”") {
+                Button("Remove Tag \u{201c}\(label)\u{201d}") {
                     appState.removeTag(label, fromURLs: urls)
                 }
             }
             if let cid = appState.activeCollectionID {
-                Button("Remove from Collection “\(collectionName(cid))”") {
+                Button("Remove from Collection \u{201c}\(collectionName(cid))\u{201d}") {
                     appState.removeFromCollection(cid, urls: urls)
                 }
             }
             Divider()
         }
-        Button("Share") { share() }
         Menu("Move to Folder") {
             let folders = moveDestinations
             if folders.isEmpty {
@@ -71,7 +79,7 @@ struct SelectionActionsMenu: View {
         }
     }
 
-    /// Top-level folders the selection can be moved into — the keyboard/
+    /// Top-level folders the selection can be moved into \u{2014} the keyboard/
     /// VoiceOver alternative to dragging onto the sidebar.
     private var moveDestinations: [(name: String, url: URL)] {
         appState.bookmarks.roots.compactMap { root in
@@ -91,7 +99,7 @@ struct SelectionActionsMenu: View {
     }
 
     private func addToCollection(_ collectionID: String) {
-        let paths = urls.map { $0.standardizedFileURL.path }
+        let paths = fileURLs.map { $0.standardizedFileURL.path }
         Task { @MainActor in
             guard let q = Database.shared.dbQueue else { return }
             let ids = (try? await CollectionStore.fileIDs(queue: q, paths: paths)) ?? []
@@ -103,7 +111,7 @@ struct SelectionActionsMenu: View {
     }
 
     private func addTag(_ label: String) {
-        let targets = urls
+        let targets = fileURLs
         Task { @MainActor in
             for url in targets { _ = await TagStore.shared.addManualTag(label: label, for: url) }
             appState.tagsVersion &+= 1
@@ -111,8 +119,8 @@ struct SelectionActionsMenu: View {
     }
 
     private func share() {
-        guard let contentView = NSApp.keyWindow?.contentView, !urls.isEmpty else { return }
-        let picker = NSSharingServicePicker(items: urls)
+        guard let contentView = NSApp.keyWindow?.contentView, !fileURLs.isEmpty else { return }
+        let picker = NSSharingServicePicker(items: fileURLs)
         picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
     }
 }
