@@ -177,7 +177,7 @@ struct FileMetadata: Equatable {
             case .pdf:
                 return loadPDF(url: url)
             case .video, .audio:
-                return loadMedia(url: url)
+                return await loadMedia(url: url)
             default:
                 return .empty
             }
@@ -212,9 +212,10 @@ struct FileMetadata: Equatable {
         return pdfMetadata(pageCount: doc.pageCount, attributes: attrs)
     }
 
-    private static func loadMedia(url: URL) -> FileMetadata {
+    private static func loadMedia(url: URL) async -> FileMetadata {
         let asset = AVURLAsset(url: url)
-        let seconds = CMTimeGetSeconds(asset.duration)
+        guard let duration = try? await asset.load(.duration) else { return .empty }
+        let seconds = CMTimeGetSeconds(duration)
         return mediaMetadata(durationSeconds: seconds.isFinite ? seconds : nil)
     }
 }
