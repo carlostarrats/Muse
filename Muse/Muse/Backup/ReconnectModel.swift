@@ -2,10 +2,13 @@
 //  ReconnectModel.swift
 //  Muse
 //
-//  Drives the Reconnect wizard. Maps each backed-up folder to a new location,
-//  then (on Reconnect All) indexes + hashes each, matches occurrences by
-//  content hash, applies metadata, and finally materializes collections + stars.
-//  All heavy lifting delegates to the pure matcher/materializer/applier.
+//  Drives the Reconnect wizard. The user locates each backed-up folder ONE AT A
+//  TIME (folders can live anywhere on the new Mac); locating a folder reconnects
+//  it immediately — index + hash through the real Indexer, match the archive's
+//  occurrences by content hash, apply metadata, then refresh collections + stars.
+//  There is deliberately no "do it all" master action (it would assume every
+//  folder shares one parent). Heavy lifting delegates to the pure
+//  matcher/materializer/applier.
 //
 
 import Foundation
@@ -32,13 +35,12 @@ final class ReconnectModel: ObservableObject {
 
     @Published var folders: [FolderRow]
     @Published var collectionStatuses: [CollectionStatusRow]
-    @Published var isRunning = false
-    @Published var finished = false
 
     private let archive: BackupArchive
     private let hashToFile: [String: BackupFile]
     private let hashForOriginalPath: [String: String]
-    private var cancelled = false
+
+    var collectionsDone: Int { collectionStatuses.filter { $0.reconnected > 0 }.count }
 
     var overallPercent: Int {
         let total = collectionStatuses.reduce(0) { $0 + $1.total }
@@ -66,25 +68,80 @@ final class ReconnectModel: ObservableObject {
                                        reconnected: 0, total: $0.members.count) }
     }
 
-    func autoMap(parent: URL) {
-        let fm = FileManager.default
-        for i in folders.indices {
-            let candidate = parent.appendingPathComponent(folders[i].displayName, isDirectory: true)
-            var isDir: ObjCBool = false
-            if fm.fileExists(atPath: candidate.path, isDirectory: &isDir), isDir.boolValue {
-                folders[i].newLocation = candidate
+    /// Locate one backed-up folder at `location` and reconnect it immediately.
+    /// Independent per folder — others can be reconnected before or after, in
+    /// any order, from anywhere on disk.
+    func reconnectFolder(id: String, location: URL, bookmarks: BookmarkStore) async {
+        guard let queue = Database.shared.dbQueue,
+              let idx = folders.firstIndex(where: { $0.id == id }) else { return }
+        folders[idx].newLocation = location
+        folders[idx].status = .working
+
+        _ = bookmarks.addRoot(at: location)
+
+        // Enumerate the folder's indexable files off the main actor.
+        let (pairs, imageURLs) = await Task.detached(priority: .utility) {
+            () -> (pairs: [(URL, AssetKind)], images: [URL]) in
+            var pairs: [(URL, AssetKind)] = []
+            var images: [URL] = []
+            let fm = FileManager.default
+            guard let en = fm.enumerator(at: location, includingPropertiesForKeys: [.isRegularFileKey])
+            else { return ([], []) }
+            for case let url as URL in en {
+                guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true
+                else { continue }
+                let kind = AssetKind.detect(at: url)
+                guard kind != .folder, kind.hasNativeViewer || kind == .archive else { continue }
+                pairs.append((url, kind))
+                if kind == .image || kind == .raw || kind == .psd { images.append(url) }
+            }
+            return (pairs, images)
+        }.value
+
+        // Index through the real pipeline — creates the FileRow (by content hash)
+        // + PathRow that applyMeta/collections join against.
+        _ = await Indexer.shared.indexBatch(pairs, priority: .high)
+
+        // Match the archive's occurrences for this folder against the now-indexed
+        // disk files (their real content hashes).
+        let disk = await diskFiles(under: location, queue: queue)
+        let occurrences = archive.files.flatMap { $0.occurrences }.filter { $0.root_path == id }
+        let expected = Dictionary(uniqueKeysWithValues:
+            occurrences.compactMap { o -> (String, String)? in
+                guard let h = hashForOriginalPath[o.original_path] else { return nil }
+                return (o.original_path, h)
+            })
+        let match = ReconnectMatcher.match(occurrences: occurrences, disk: disk, expectedHash: expected)
+
+        var byFile: [String: [OccurrenceMatch]] = [:]
+        for m in match.matches {
+            guard let h = hashForOriginalPath[m.occurrence.original_path] else { continue }
+            byFile[h, default: []].append(m)
+        }
+        for (hash, matches) in byFile {
+            guard let file = hashToFile[hash] else { continue }
+            try? await ReconnectApplier.applyMeta(matches: matches, file: file, queue: queue)
+        }
+        folders[idx].status = match.unmatched.isEmpty ? .clean
+            : .flagged(unmatched: match.unmatched.count)
+
+        // Rebuild collections + stars from the current DB and refresh the readout
+        // (collections light up incrementally as each folder comes back).
+        if let map = try? await ReconnectApplier.currentFileIDForHash(queue: queue) {
+            try? await ReconnectApplier.applyCollections(archive, fileIDForHash: map, queue: queue)
+            try? await ReconnectApplier.applyStars(archive, queue: queue)
+            for j in collectionStatuses.indices {
+                let coll = archive.collections.first { $0.id == collectionStatuses[j].id }
+                collectionStatuses[j].reconnected = coll?.members
+                    .filter { map[$0.content_hash] != nil }.count ?? 0
             }
         }
-    }
 
-    func setLocation(_ url: URL, forFolder id: String) {
-        guard let i = folders.firstIndex(where: { $0.id == id }) else { return }
-        folders[i].newLocation = url
-    }
-
-    func cancel() {
-        cancelled = true
-        isRunning = false
+        // Reconcile: analyze anything new/changed the backup didn't cover. Matched
+        // files were marked analyzed by applyMeta, so they're skipped here.
+        if !imageURLs.isEmpty {
+            await AnalyzePipeline.shared.analyzePending(in: imageURLs)
+        }
     }
 
     /// Alive indexed files under `location` (its own row or anything beneath it),
@@ -105,94 +162,5 @@ final class ReconnectModel: ObservableObject {
             .map { DiskFile(path: $0.0,
                             basename: URL(fileURLWithPath: $0.0).lastPathComponent,
                             contentHash: $0.1) }
-    }
-
-    func reconnectAll(bookmarks: BookmarkStore) async {
-        guard let queue = Database.shared.dbQueue else { return }
-        cancelled = false
-        isRunning = true
-        finished = false
-
-        var addedImageURLs: [URL] = []
-
-        for i in folders.indices {
-            if cancelled { break }
-            guard let location = folders[i].newLocation else { continue }
-            folders[i].status = .working
-
-            _ = bookmarks.addRoot(at: location)
-
-            // Enumerate the folder's indexable files off the main actor.
-            let (pairs, imageURLs) = await Task.detached(priority: .utility) {
-                () -> (pairs: [(URL, AssetKind)], images: [URL]) in
-                var pairs: [(URL, AssetKind)] = []
-                var images: [URL] = []
-                let fm = FileManager.default
-                guard let en = fm.enumerator(at: location, includingPropertiesForKeys: [.isRegularFileKey])
-                else { return ([], []) }
-                for case let url as URL in en {
-                    guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true
-                    else { continue }
-                    let kind = AssetKind.detect(at: url)
-                    guard kind != .folder, kind.hasNativeViewer || kind == .archive else { continue }
-                    pairs.append((url, kind))
-                    if kind == .image || kind == .raw || kind == .psd { images.append(url) }
-                }
-                return (pairs, images)
-            }.value
-
-            // Index the folder through the real pipeline — this is what creates
-            // the FileRow (by content hash) + PathRow that applyMeta/collections
-            // join against. Reuses the exact identity machinery the app uses.
-            _ = await Indexer.shared.indexBatch(pairs, priority: .high)
-            addedImageURLs.append(contentsOf: imageURLs)
-
-            // Read the now-indexed disk files back (their real content hashes) and
-            // match the archive's occurrences for this folder against them.
-            let disk = await diskFiles(under: location, queue: queue)
-            let rootID = folders[i].id
-            let occurrences = archive.files.flatMap { $0.occurrences }
-                .filter { $0.root_path == rootID }
-            let expected = Dictionary(uniqueKeysWithValues:
-                occurrences.compactMap { o -> (String, String)? in
-                    guard let h = hashForOriginalPath[o.original_path] else { return nil }
-                    return (o.original_path, h)
-                })
-            let match = ReconnectMatcher.match(occurrences: occurrences, disk: disk,
-                                               expectedHash: expected)
-
-            // Apply metadata per backup file.
-            var byFile: [String: [OccurrenceMatch]] = [:]
-            for m in match.matches {
-                guard let h = hashForOriginalPath[m.occurrence.original_path] else { continue }
-                byFile[h, default: []].append(m)
-            }
-            for (hash, matches) in byFile {
-                guard let file = hashToFile[hash] else { continue }
-                try? await ReconnectApplier.applyMeta(matches: matches, file: file, queue: queue)
-            }
-
-            folders[i].status = match.unmatched.isEmpty ? .clean
-                : .flagged(unmatched: match.unmatched.count)
-        }
-
-        // Collections + stars from the now-populated DB.
-        if let map = try? await ReconnectApplier.currentFileIDForHash(queue: queue) {
-            try? await ReconnectApplier.applyCollections(archive, fileIDForHash: map, queue: queue)
-            try? await ReconnectApplier.applyStars(archive, queue: queue)
-            for j in collectionStatuses.indices {
-                let coll = archive.collections.first { $0.id == collectionStatuses[j].id }
-                collectionStatuses[j].reconnected = coll?.members
-                    .filter { map[$0.content_hash] != nil }.count ?? 0
-            }
-        }
-
-        // Reconcile: analyze anything new/changed the backup didn't cover.
-        if !addedImageURLs.isEmpty {
-            await AnalyzePipeline.shared.analyzePending(in: addedImageURLs)
-        }
-
-        isRunning = false
-        finished = true
     }
 }

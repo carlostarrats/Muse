@@ -2,8 +2,10 @@
 //  ReconnectWizard.swift
 //  Muse
 //
-//  Locked restore sheet: map each backed-up folder to its new location, then
-//  Reconnect All. Matches InfoSheet chrome (600x720). No X — Cancel/Done only.
+//  Locked restore sheet. The backup is already loaded (picked from the menu);
+//  here the user locates each backed-up folder ONE AT A TIME — folders can live
+//  anywhere — and locating reconnects that folder immediately. No master
+//  "do it all" action. Matches InfoSheet chrome (600x720). No X — Done only.
 //
 
 import SwiftUI
@@ -14,22 +16,21 @@ struct ReconnectWizard: View {
     @Binding var isPresented: Bool
     let bookmarks: BookmarkStore
 
-    @State private var confirmCancel = false
-
-    private var anyLocated: Bool { model.folders.contains { $0.newLocation != nil } }
-    private var collectionsDone: Int { model.collectionStatuses.filter { $0.reconnected > 0 }.count }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Restore from Backup")
                 .font(.system(size: 24, weight: .semibold))
+            Text("Reconnect your folders and collections. Locate each folder where it lives now — they can be anywhere.")
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 6)
                 .padding(.bottom, 20)
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 20) {
-                    pointAtParent
+                VStack(alignment: .leading, spacing: 24) {
                     folderSection
-                    collectionSection
+                    collectionCard
                 }
             }
 
@@ -38,25 +39,6 @@ struct ReconnectWizard: View {
         }
         .padding(28)
         .frame(width: 600, height: 720)
-        .alert("Stop reconnecting?", isPresented: $confirmCancel) {
-            Button("Keep Going", role: .cancel) {}
-            Button("Stop", role: .destructive) { model.cancel(); isPresented = false }
-        } message: {
-            Text("Reconnection is in progress. Stopping leaves it partially done; you can restore again later.")
-        }
-    }
-
-    private var pointAtParent: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Where are your files?").font(.system(size: 15, weight: .semibold))
-            Text("Point at the folder that holds your copied library and Muse will line up your folders automatically. You can also locate any folder by hand below.")
-                .font(.system(size: 13)).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Button("Point at folder…") {
-                if let url = pickDirectory() { model.autoMap(parent: url) }
-            }
-            .disabled(model.isRunning)
-        }
     }
 
     private var folderSection: some View {
@@ -65,7 +47,7 @@ struct ReconnectWizard: View {
             ForEach(model.folders) { folder in
                 HStack(spacing: 10) {
                     statusGlyph(folder.status)
-                        .frame(width: 90, alignment: .leading)
+                        .frame(width: 92, alignment: .leading)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(folder.displayName).font(.system(size: 13, weight: .medium))
                         Text(folder.newLocation?.path ?? "Not located")
@@ -74,10 +56,13 @@ struct ReconnectWizard: View {
                             .lineLimit(1).truncationMode(.middle)
                     }
                     Spacer()
-                    Button("Locate…") {
-                        if let url = pickDirectory() { model.setLocation(url, forFolder: folder.id) }
+                    Button(folder.newLocation == nil ? "Locate…" : "Relocate…") {
+                        if let url = pickDirectory() {
+                            Task { await model.reconnectFolder(id: folder.id, location: url,
+                                                               bookmarks: bookmarks) }
+                        }
                     }
-                    .disabled(model.isRunning)
+                    .disabled(folder.status == .working)
                 }
                 .padding(.vertical, 4)
                 Divider()
@@ -85,11 +70,15 @@ struct ReconnectWizard: View {
         }
     }
 
-    private var collectionSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Collections").font(.system(size: 15, weight: .semibold))
-            Text("\(collectionsDone) / \(model.collectionStatuses.count) re-established · \(model.overallPercent)% of images reconnected")
-                .font(.system(size: 13)).foregroundStyle(.secondary)
+    private var collectionCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Collections").font(.system(size: 15, weight: .semibold))
+                Spacer()
+                Text("\(model.collectionsDone) / \(model.collectionStatuses.count) re-established · \(model.overallPercent)%")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
             ForEach(model.collectionStatuses) { c in
                 HStack {
                     Text(c.name).font(.system(size: 12))
@@ -101,24 +90,16 @@ struct ReconnectWizard: View {
                 }
             }
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.08)))
     }
 
     private var footer: some View {
         HStack {
-            Button("Cancel") {
-                if model.isRunning { confirmCancel = true } else { isPresented = false }
-            }
             Spacer()
-            if model.finished {
-                Button("Done") { isPresented = false }
-                    .keyboardShortcut(.defaultAction)
-            } else {
-                Button("Reconnect All") {
-                    Task { await model.reconnectAll(bookmarks: bookmarks) }
-                }
+            Button("Done") { isPresented = false }
                 .keyboardShortcut(.defaultAction)
-                .disabled(!anyLocated || model.isRunning)
-            }
         }
     }
 
