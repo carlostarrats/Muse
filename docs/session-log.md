@@ -2167,3 +2167,52 @@ failures, `** TEST SUCCEEDED **`) after the review-round fixes. Files touched:
 `CollectionStore.swift`, `CollectionsEngine.swift`, `AppState.swift` (setRoots
 push), `AppState+Filters.swift` (grid reachability filter), `PathReconciler.swift`
 (diagnostic), + the new test file.
+
+### Collections page scroll-clip — no-tags cutoff made universal — 2026-06-19 (on `feat/next-29`)
+
+**Symptom.** On the dedicated Collections **card page**, scrolling up let the
+cards slide *under* the floating window toolbar / search bar, instead of being
+cut off at the toolbar edge the way the main grid is. The grid had this exact
+problem fixed earlier (the "no-tags top inset" fix, `ff30f47`); the card page
+never got the same treatment.
+
+**Root cause — a missing top reserve, not a missing clip.** A SwiftUI
+`ScrollView` clips its content to its own frame. The main grid lives in
+`ContentView`'s `VStack(spacing: 0) { TagChipsRow(); GridView() }`, and
+`TagChipsRow`'s no-tags branch reserves a `Color.clear.frame(height: 10)` ABOVE
+the grid's scroll view — so the grid's clip boundary sits 10pt below the toolbar
+and content is cut off there. `CollectionsPage` is the *other* `ContentView`
+branch (`isCollectionsPage`), a standalone view whose `ScrollView` filled the
+whole detail pane right up to the toolbar edge — no reserve, so its clip boundary
+was at y=0 and cards bled up under the transparent toolbar (`.toolbarBackground(.hidden)`).
+The in-collection view was never affected: it uses `GridView` + `TagChipsRow`, so
+it already inherits the reserve.
+
+**Fix.** Wrap `CollectionsPage`'s body in `VStack(spacing: 0)` with the same
+`Color.clear` reserve above the `GeometryReader`/`ScrollView`, and move
+`.background(moodPalette.background)` onto the `VStack` so the reserve strip is
+painted too. The `GeometryReader`'s card-width math is unaffected (the spacer
+only steals vertical space); `PageScrollCatcher` still resolves
+`enclosingScrollView` through the AppKit chain (SwiftUI wrappers don't insert
+scroll views). Bonus: the "Collections" title now lands at the same 10 + 14 = 24pt
+offset as the in-collection header (`CollectionsRow`'s `.padding(.top, 14)` under
+the same reserve) — previously misaligned by 10pt.
+
+**Drift guard (review nit, addressed).** The two reserves MUST stay equal for the
+cutoff to match, so the magic `10` was extracted to one constant —
+`TagChipsRow.noTagsTopClearance` — referenced by both the no-tags branch and
+`CollectionsPage`. An independent review of round 1 returned **ship**; this was
+its only (non-blocking) finding.
+
+**Durable gotcha.** A `ScrollView` clips to its own frame — to make scrolled
+content cut off below the floating toolbar (rather than slide under it), reserve
+the toolbar clearance ABOVE the scroll view, not as inner content padding (which
+scrolls away with the content). Every top-level scroll surface needs its own
+reserve; they're independent views. Keep the two reserves on the shared
+`TagChipsRow.noTagsTopClearance` constant.
+
+**Verification.** Build green; full `MuseTests`/UI suite green (`** TEST SUCCEEDED **`,
+0 failures) before and after the constant extraction. Launched the Debug build,
+navigated to the Collections page, confirmed the title clearance + card grid.
+Files touched: `CollectionsPage.swift`, `TagChipsRow.swift` (the shared constant).
+No test — a pure SwiftUI layout change (UI views aren't unit-tested).

@@ -194,6 +194,17 @@ The four most critical are also saved as Claude memories (linked).
   sawtooth on slow/Intel hardware. Use the value-scoped `.animation(_:value:)`
   modifier (keyed on the animated `@State`) so the repeat is confined to its own
   subtree. Fixed 2026-06-19; see that session log.
+- **A `ScrollView` clips to its OWN frame — reserve the floating-toolbar clearance
+  ABOVE the scroll view, not as inner content padding.** The window toolbar's
+  background is hidden (`.toolbarBackground(.hidden)`), so any scroll surface whose
+  frame reaches the toolbar edge lets content slide up UNDER the toolbar/search bar
+  on scroll. The grid avoids this because `TagChipsRow` (even its no-tags branch)
+  sits above `GridView` and reserves a 10pt strip, dropping the grid's clip
+  boundary below the toolbar so content is cut off there. Inner `.padding(.top:)`
+  does NOT help — it scrolls away with the content. Every top-level scroll surface
+  (the grid AND `CollectionsPage`) needs its own reserve; they're independent
+  views. Keep the two reserves on the shared `TagChipsRow.noTagsTopClearance`
+  constant so they can't drift. Fixed 2026-06-19 (`feat/next-29`); see that log.
 
 ### Session index (detail in `docs/session-log.md`)
 
@@ -412,6 +423,23 @@ The four most critical are also saved as Claude memories (linked).
   path"), only a diagnostic `print("[PathReconciler] …")` on mark-dead was added —
   the partial-materialization guard awaits a confirmed repro. Full suite green
   (259). Spec: `docs/superpowers/specs/2026-06-19-collection-count-vs-contents-mismatch-design.md`.
+- **2026-06-19** `feat/next-29` — Collections-page scroll-clip: on the dedicated
+  Collections **card page**, scrolling up let cards slide UNDER the floating
+  toolbar instead of being cut off at the toolbar edge like the main grid. Cause:
+  a `ScrollView` clips to its own frame; the grid sits below `TagChipsRow`, whose
+  no-tags branch reserves a 10pt clearance ABOVE the grid's scroll view (its clip
+  boundary lands below the toolbar), but `CollectionsPage` (the standalone
+  `isCollectionsPage` branch) filled the whole detail pane with no reserve, so its
+  clip boundary was at the toolbar edge. Fix: wrap `CollectionsPage`'s body in a
+  `VStack(spacing: 0)` with the same `Color.clear` reserve above its
+  `GeometryReader`/`ScrollView` (and move `.background` onto the VStack so the
+  strip is painted) — clip boundary now matches the grid; the "Collections" title
+  also aligns with the in-collection header (both at 10 + 14 = 24pt; were 10pt
+  off). The in-collection view already inherited the reserve via `TagChipsRow`, so
+  the cutoff is now universal. The shared `10` is one constant
+  (`TagChipsRow.noTagsTopClearance`) read by both so they can't drift (review nit).
+  Build + full suite green; one review round (ship). `CollectionsPage.swift` +
+  `TagChipsRow.swift`; no test (pure SwiftUI layout). See the durable gotcha above.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
