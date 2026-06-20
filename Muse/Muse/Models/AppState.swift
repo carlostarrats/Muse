@@ -766,6 +766,39 @@ final class AppState: ObservableObject {
         reloadCurrentFiles(showLoading: true, thenIndex: true, verifyICloud: true)
     }
 
+    /// Navigate into a subfolder chosen from a grid folder card: expand the
+    /// sidebar tree down to it (so its row is visible), then select it exactly
+    /// like a sidebar click. Highlight is URL-based (see SidebarView.isSelected),
+    /// so even the FolderNode-build fallback lights up the right row.
+    func openSubfolder(_ url: URL) {
+        let target = url.standardizedFileURL.path
+        guard let root = rootNodes.first(where: { r in
+            let rp = r.url.standardizedFileURL.path
+            return target == rp || target.hasPrefix(rp + "/")
+        }) else { return }
+
+        var node = root
+        node.loadChildrenIfNeeded(showHidden: showHidden)
+        node.isExpanded = true
+        while node.url.standardizedFileURL.path != target {
+            guard let next = node.children.first(where: { c in
+                let cp = c.url.standardizedFileURL.path
+                return target == cp || target.hasPrefix(cp + "/")
+            }) else { break }
+            next.loadChildrenIfNeeded(showHidden: showHidden)
+            next.isExpanded = true
+            node = next
+        }
+
+        if node.url.standardizedFileURL.path == target {
+            select(folder: node)
+        } else {
+            // Path not fully resolvable in the tree (rare) — still navigate; the
+            // URL-based highlight will match if the row later loads.
+            select(folder: FolderNode(url: url))
+        }
+    }
+
     /// Scan the current folder's images for duplicates, then present the
     /// review sheet. Lives here so the menu bar can trigger it.
     func findDuplicatesInCurrentFolder() {

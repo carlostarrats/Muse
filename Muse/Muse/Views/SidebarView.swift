@@ -788,7 +788,8 @@ private struct FolderTreeNode: View {
             return false
         }
         if appState.isSearchActive && appState.searchAllFolders { return false }
-        return appState.selectedFolder?.id == node.id
+        return appState.selectedFolder?.url.standardizedFileURL
+            == node.url.standardizedFileURL
     }
 
     var body: some View {

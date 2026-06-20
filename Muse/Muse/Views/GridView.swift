@@ -57,7 +57,11 @@ struct GridView: View {
         let window = max(NSEvent.doubleClickInterval, 0.35)
         if lastTapPath == p, now - lastTapAt < window {
             lastTapPath = nil
-            appState.selectedFile = file          // double-click → open
+            if file.kind == .folder {
+                appState.openSubfolder(file.url)  // double-click → navigate in
+            } else {
+                appState.selectedFile = file      // double-click → open viewer
+            }
             return
         }
         lastTapPath = p
@@ -258,6 +262,7 @@ struct GridView: View {
                     // Drag onto a sidebar folder to move. Dragging an unselected
                     // tile first selects just it, so the drop moves the right set.
                     .onDrag {
+                        guard file.kind != .folder else { return NSItemProvider() }
                         let p = file.url.standardizedFileURL.path
                         if !appState.selectedFiles.contains(p) {
                             appState.applyClick(.single(p))
