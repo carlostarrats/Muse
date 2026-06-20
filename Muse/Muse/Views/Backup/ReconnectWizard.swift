@@ -47,7 +47,7 @@ struct ReconnectWizard: View {
             ForEach(model.folders) { folder in
                 HStack(spacing: 10) {
                     statusGlyph(folder.status)
-                        .frame(width: 92, alignment: .leading)
+                        .frame(width: 128, alignment: .leading)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(folder.displayName).font(.system(size: 13, weight: .medium))
                         Text(folder.newLocation?.path ?? "Not located")
@@ -100,6 +100,7 @@ struct ReconnectWizard: View {
             Spacer()
             Button("Done") { isPresented = false }
                 .keyboardShortcut(.defaultAction)
+                .disabled(model.folders.contains { $0.status == .working })
         }
     }
 
@@ -112,11 +113,26 @@ struct ReconnectWizard: View {
             ProgressView().controlSize(.small)
         case .clean:
             Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-        case .flagged(let n):
+        case .flagged(let unmatched, let nameOnly):
             HStack(spacing: 3) {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                Text("\(n) not found").font(.system(size: 10)).foregroundStyle(.orange)
+                Text(flaggedText(unmatched: unmatched, nameOnly: nameOnly))
+                    .font(.system(size: 10)).foregroundStyle(.orange)
+                    .lineLimit(1)
             }
+        case .failed:
+            HStack(spacing: 3) {
+                Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
+                Text("couldn't save").font(.system(size: 10)).foregroundStyle(.red)
+            }
+        }
+    }
+
+    private func flaggedText(unmatched: Int, nameOnly: Int) -> String {
+        switch (unmatched, nameOnly) {
+        case let (u, 0):        return "\(u) not found"
+        case let (0, n):        return "\(n) by name — check"
+        case let (u, n):        return "\(u) not found · \(n) by name"
         }
     }
 

@@ -18,7 +18,15 @@ import GRDB
 @MainActor
 final class ReconnectModel: ObservableObject {
     enum FolderStatus: Equatable {
-        case pending, working, clean, flagged(unmatched: Int)
+        case pending, working, clean
+        /// Reconnected, but not entirely confidently: some occurrences had no
+        /// match at all (`unmatched`), and/or were matched only by filename
+        /// (`nameOnly`, a different-content file with the same name — surfaced
+        /// for the user to eyeball rather than trusted like an exact hash).
+        case flagged(unmatched: Int, nameOnly: Int)
+        /// A database write threw while applying — the folder is NOT safely
+        /// reconnected even though files may have matched.
+        case failed
     }
     struct FolderRow: Identifiable {
         let id: String              // original root_path
@@ -77,7 +85,13 @@ final class ReconnectModel: ObservableObject {
         folders[idx].newLocation = location
         folders[idx].status = .working
 
-        _ = bookmarks.addRoot(at: location)
+        // Add the located folder as a sidebar root — but not twice. Relocating the
+        // same folder, or a backup whose folders overlap an existing root, would
+        // otherwise append a duplicate Root (and a second security scope).
+        let alreadyRoot = bookmarks.roots.contains {
+            bookmarks.url(for: $0)?.standardizedFileURL.path == location.standardizedFileURL.path
+        }
+        if !alreadyRoot { _ = bookmarks.addRoot(at: location) }
 
         // Enumerate the folder's indexable files off the main actor.
         let (pairs, imageURLs) = await Task.detached(priority: .utility) {
@@ -112,29 +126,48 @@ final class ReconnectModel: ObservableObject {
                 return (o.original_path, h)
             })
         let match = ReconnectMatcher.match(occurrences: occurrences, disk: disk, expectedHash: expected)
+        let nameOnlyCount = match.matches.filter { $0.kind == .nameOnly }.count
 
         var byFile: [String: [OccurrenceMatch]] = [:]
         for m in match.matches {
             guard let h = hashForOriginalPath[m.occurrence.original_path] else { continue }
             byFile[h, default: []].append(m)
         }
+        var applyFailed = false
         for (hash, matches) in byFile {
             guard let file = hashToFile[hash] else { continue }
-            try? await ReconnectApplier.applyMeta(matches: matches, file: file, queue: queue)
+            do { try await ReconnectApplier.applyMeta(matches: matches, file: file, queue: queue) }
+            catch { applyFailed = true }
         }
-        folders[idx].status = match.unmatched.isEmpty ? .clean
-            : .flagged(unmatched: match.unmatched.count)
 
         // Rebuild collections + stars from the current DB and refresh the readout
-        // (collections light up incrementally as each folder comes back).
+        // (collections light up incrementally as each folder comes back), then
+        // reload the live engine so the sidebar/Collections page actually show
+        // them — the early addRoot→reload fired before these writes landed.
         if let map = try? await ReconnectApplier.currentFileIDForHash(queue: queue) {
-            try? await ReconnectApplier.applyCollections(archive, fileIDForHash: map, queue: queue)
+            do {
+                try await ReconnectApplier.applyCollections(archive, fileIDForHash: map, queue: queue)
+            } catch { applyFailed = true }
             try? await ReconnectApplier.applyStars(archive, queue: queue)
+            await CollectionsEngine.shared.reload()
             for j in collectionStatuses.indices {
                 let coll = archive.collections.first { $0.id == collectionStatuses[j].id }
                 collectionStatuses[j].reconnected = coll?.members
                     .filter { map[$0.content_hash] != nil }.count ?? 0
             }
+        } else {
+            applyFailed = true
+        }
+
+        // Status: a DB write failure means the folder is NOT safely reconnected,
+        // even if files matched. Otherwise clean only when every occurrence was an
+        // exact-hash match; name-only or unmatched occurrences flag it for a look.
+        if applyFailed {
+            folders[idx].status = .failed
+        } else if match.unmatched.isEmpty && nameOnlyCount == 0 {
+            folders[idx].status = .clean
+        } else {
+            folders[idx].status = .flagged(unmatched: match.unmatched.count, nameOnly: nameOnlyCount)
         }
 
         // Reconcile: analyze anything new/changed the backup didn't cover. Matched

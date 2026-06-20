@@ -34,8 +34,13 @@ nonisolated enum CollectionMaterializer {
                 guard let fid = fileIDForHash[m.content_hash] else { return nil }
                 return MaterializedMember(fileID: fid, addedBy: m.added_by)
             }
+            // Drop a dead AUTO collection (zero reconnected members) — UNLESS it's
+            // a hand-made one (preserved even empty) or a hidden one (a durable
+            // "deleted" tombstone; recreating it keeps a user-deleted auto
+            // collection from being resurrected when re-analysis reclusters the
+            // same files into the same deterministic id on the new Mac).
             let isManual = c.model_version == "manual"
-            if members.isEmpty && !isManual { continue }    // drop dead auto collection
+            if members.isEmpty && !isManual && c.is_hidden == 0 { continue }
             out.append(MaterializedCollection(
                 id: c.id, name: c.name, sortOrder: c.sort_order,
                 modelVersion: c.model_version, isHidden: c.is_hidden,
