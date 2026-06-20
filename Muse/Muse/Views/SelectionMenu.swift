@@ -67,19 +67,21 @@ struct SelectionActionsMenu: View {
             }
             Divider()
         }
-        Menu("Move to Folder") {
-            let folders = moveDestinations
-            if folders.isEmpty {
-                Button("No folders") {}.disabled(true)
-            } else {
-                ForEach(folders, id: \.url) { dest in
-                    Button(dest.name) { move(to: dest.url) }
+        if !fileURLs.isEmpty {
+            Menu("Move to Folder") {
+                let folders = moveDestinations
+                if folders.isEmpty {
+                    Button("No folders") {}.disabled(true)
+                } else {
+                    ForEach(folders, id: \.url) { dest in
+                        Button(dest.name) { move(to: dest.url) }
+                    }
                 }
             }
         }
     }
 
-    /// Top-level folders the selection can be moved into \u{2014} the keyboard/
+    /// Top-level folders the selection can be moved into — the keyboard/
     /// VoiceOver alternative to dragging onto the sidebar.
     private var moveDestinations: [(name: String, url: URL)] {
         appState.bookmarks.roots.compactMap { root in
@@ -94,7 +96,7 @@ struct SelectionActionsMenu: View {
     }
 
     private func move(to dest: URL) {
-        let moving = urls
+        let moving = fileURLs
         appState.reloadAfterMove(failed: FileMover.move(moving, into: dest))
     }
 
