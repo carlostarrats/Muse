@@ -567,6 +567,38 @@ The four most critical are also saved as Claude memories (linked).
   (next-31). The mood `.animation(value:)` sits ABOVE the hover-veil + active-accent
   overlays so only the outline follows the mood. No test (pure SwiftUI cosmetic;
   Color equality unreliable). Build + full suite green.
+- **2026-06-19** `feat/next-34` — accessibility pass on everything added since the
+  last one (`feat/next-25`), i.e. next-26→33. Most of that range is non-UI
+  (next-27 classification, next-28 count logic) or visual/layout-only (next-29
+  scroll-clip, next-31 mood tiles, next-33 card restyle) with no new controls, and
+  next-30's Escape back-out is a keyboard accelerator that's inherently accessible;
+  the Settings modal (next-32 QA) is text-labeled `Toggle`s + the already-labeled
+  `SheetCloseButton`. The real surface was **Collections in the Sidebar**
+  (next-32), which was largely built with a11y in mind but had three gaps, all in
+  `Views/SidebarView.swift`: (1) **dead VoiceOver actions** — `CollectionSidebarRow`
+  exposed "Move Up"/"Move Down" custom actions unconditionally (no-ops in Name/Date
+  sort, and offered at list boundaries), whereas the context menu correctly gates
+  them. Replaced the `.accessibilityAction(named:)` chain with a single
+  `.accessibilityActions { }` builder that gates the Move actions on `manual` sort
+  AND index bounds (`index > 0` / `index < count - 1`) — the exact negation of the
+  context menu's `.disabled` conditions over the same `index`/`count` source, so
+  VoiceOver omits a Move action exactly when the menu would disable it (omitting a
+  dead rotor action is the better a11y behavior). The default activate action (open
+  collection) is preserved as a separate `.accessibilityAction { }`. (2) **ambiguous
+  sort menus** — next-32 put a second "Sort: …" pop-up in the sidebar; the
+  collections one already had `.accessibilityLabel("Sort collections")` but the
+  folder one had none, so VoiceOver read two near-identical pop-ups. Added
+  `.accessibilityLabel("Sort folders")`. (3) **section headings** — the new
+  FOLDERS / COLLECTIONS `SectionHeader` titles weren't exposed as headings; added
+  `.accessibilityAddTraits(.isHeader)` to the title `Text` (scoped to the Text, not
+  the HStack, so the collapse `Button`'s own label/action is untouched) so the new
+  sidebar structure is navigable via VoiceOver's heading rotor. Additive a11y
+  annotations only — no layout/behavior change; one file. Build + full suite green
+  (`** TEST SUCCEEDED **`); independent review clean (no Critical/Important). The
+  rest of next-32's sidebar (rows as single activatable elements with name+count
+  labels + `.isButton`/`.isSelected`, mouse-only grips `.accessibilityHidden`,
+  labeled collapse buttons / bottom-bar pills / menu-bar Move Collection commands)
+  was already correct.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
