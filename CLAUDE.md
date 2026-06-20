@@ -440,6 +440,27 @@ The four most critical are also saved as Claude memories (linked).
   (`TagChipsRow.noTagsTopClearance`) read by both so they can't drift (review nit).
   Build + full suite green; one review round (ship). `CollectionsPage.swift` +
   `TagChipsRow.swift`; no test (pure SwiftUI layout). See the durable gotcha above.
+- **2026-06-19** `feat/next-30` — Escape backs out of a collection / the
+  Collections page (keyboard accelerator alongside the visible back buttons).
+  A pure `EscapeResolver`/`EscapeAction` (`Components/EscapeAction.swift`, mirrors
+  `GridSelection`/`PageScroll`) resolves a peel-one-layer priority chain: hero
+  viewer → other viewer → active/typed search → inside a collection (pop to the
+  Collections page, = `setActiveCollection(nil)`) → Collections page (back to the
+  grid, = `toggleCollectionsPage()`) → plain grid (no-op). `ContentView`'s hidden
+  `keyboardShortcut(.escape)` Button is now a thin mapper onto those existing
+  calls. The hero-close path is structurally untouched — any selected file
+  short-circuits to `.closeHero`/`.closeViewer` BEFORE any back-out case, and
+  `.closeHero` still fires ONLY `viewerClosing` (preserves the 2026-06-18 two-press
+  fix). QA finding folded in: a search runs WITHOUT clearing the collection/page
+  underneath, so search is peeled ABOVE the collection (`.clearSearch` →
+  `AppState.clearSearch()` leaves collection state intact, returning to the
+  collection's members) — never a dead key. "Search present" =
+  `isSearchActive || !searchQuery.isEmpty`, extracted to a tested
+  `EscapeResolver.searchPresent(...)`. Modals are a non-issue (SwiftUI
+  `.sheet`/`.alert`/`.popover` are separate key windows; the parent's Escape
+  Button doesn't fire under them). New `MuseTests/EscapeActionTests.swift` (12
+  cases); independent review returned ship (no Critical/Important). Build + full
+  suite green. `Components/EscapeAction.swift` + `ContentView.swift`.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
@@ -849,6 +870,13 @@ Muse/Muse/
                                    (feat/multi-select)
     PageScroll.swift               pure Page Up/Down math (newOriginY: overlap +
                                    clamp), unit-tested (feat/page-scroll)
+    EscapeAction.swift             pure Escape priority resolver: peel one focused
+                                   layer per press — viewer → search → collection →
+                                   Collections page → grid (EscapeResolver.action +
+                                   searchPresent glue). ContentView's hidden Escape
+                                   button maps the result onto existing AppState
+                                   calls; viewer always wins so the hero close is
+                                   never disturbed. Unit-tested (feat/next-30)
     MasonryGeometry.swift          pure masonry packing (frames + height) from
                                    aspect ratios — feeds GridView's virtualization
                                    (replaced the old MasonryLayout: Layout, deleted
