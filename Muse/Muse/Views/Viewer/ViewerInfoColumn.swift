@@ -46,6 +46,9 @@ struct ViewerInfoColumn<Chrome: View>: View {
     @State private var hoveredTagPill: Int?
     @State private var collectionsExpanded = false
     @State private var tagsExpanded = false
+    /// INFO card defaults to OPEN (rows visible, button shows ×); tapping
+    /// collapses it (button shows +), mirroring the tags card's motion.
+    @State private var infoExpanded = true
     @State private var newCollectionName = ""
     @State private var newTagLabel = ""
     @State private var tagSuggestions: [PillItem] = []
@@ -253,27 +256,42 @@ struct ViewerInfoColumn<Chrome: View>: View {
     private func infoCard(_ metadata: FileMetadata) -> some View {
         InfoCard {
             VStack(alignment: .leading, spacing: 8) {
-                CardLabel(text: "INFO")
-                ForEach(metadata.rows) { row in
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(row.label)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.white.opacity(0.42))
-                            .frame(width: 64, alignment: .leading)
-                        Text(row.value)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.white.opacity(0.9))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    CardLabel(text: "INFO")
+                    Spacer()
+                    PlusCircleButton(size: 18, rotated: infoExpanded,
+                                     accessibilityLabel: infoExpanded ? "Hide info" : "Show info") {
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
+                            infoExpanded.toggle()
+                        }
                     }
-                    .accessibilityElement(children: .combine)
                 }
-                if let coord = metadata.coordinate {
-                    OpenInMapsButton(coordinate: coord)
-                        .padding(.top, 2)
+                if infoExpanded {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(metadata.rows) { row in
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(row.label)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.white.opacity(0.42))
+                                    .frame(width: 64, alignment: .leading)
+                                Text(row.value)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.white.opacity(0.9))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .accessibilityElement(children: .combine)
+                        }
+                        if let coord = metadata.coordinate {
+                            OpenInMapsButton(coordinate: coord)
+                                .padding(.top, 2)
+                        }
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
         }
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     /// Same shell and geometry as colorsCard so nothing below moves when

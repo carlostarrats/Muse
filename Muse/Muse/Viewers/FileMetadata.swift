@@ -195,13 +195,19 @@ nonisolated struct FileMetadata: Equatable {
                 result = .empty
             }
             // The Modified date applies to EVERY file — it's a filesystem
-            // attribute, not a byte read — so it's appended last for all kinds.
-            // This is why the INFO card now shows for any non-dataless file, not
-            // only those carrying photo/PDF/AV metadata.
+            // attribute, not a byte read. It sits directly under "Taken" when a
+            // capture date exists, else at the top. This is why the INFO card
+            // now shows for any non-dataless file, not only those carrying
+            // photo/PDF/AV metadata.
             if let mod = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
                 .contentModificationDate,
                let s = formatModifiedDate(mod) {
-                result.rows.append(InfoRow("Modified", s))
+                let row = InfoRow("Modified", s)
+                if let takenIdx = result.rows.firstIndex(where: { $0.label == "Taken" }) {
+                    result.rows.insert(row, at: takenIdx + 1)
+                } else {
+                    result.rows.insert(row, at: 0)
+                }
             }
             return result
         }.value
