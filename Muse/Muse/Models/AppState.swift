@@ -409,6 +409,16 @@ final class AppState: ObservableObject {
         didSet { AppSettings.tileBackground = tileBackground }
     }
 
+    // MARK: - Sidebar collections
+
+    /// How the sidebar's COLLECTIONS section is ordered. Persisted; INDEPENDENT
+    /// of the Collections-page sort (`collectionSortMode`). Manual = the user's
+    /// drag arrangement (collections.sort_order). See SidebarCollectionSort.
+    @Published var sidebarCollectionSortMode: SidebarCollectionSortMode =
+        AppSettings.sidebarCollectionSortMode {
+        didSet { AppSettings.sidebarCollectionSortMode = sidebarCollectionSortMode }
+    }
+
     /// Masonry has no letterbox, so it always uses Auto; only fixed ratios honor
     /// the user's pick. The stored `tileBackground` is preserved while in masonry
     /// so switching back to a ratio restores the choice.

@@ -333,4 +333,44 @@ extension AppState {
             }
         }
     }
+
+    // MARK: - Sidebar collections (independent of the Collections page)
+
+    /// The engine's visible collections, ordered by the sidebar's own sort mode
+    /// (`sidebarCollectionSortMode`) — never the Collections-page sort. The
+    /// sidebar UI reads this; it re-runs when CollectionsEngine publishes.
+    var sidebarCollections: [CollectionStore.Loaded] {
+        let loaded = CollectionsEngine.shared.collections
+        let items = loaded.map {
+            SidebarCollectionSort.Item(id: $0.collection.id,
+                                       name: $0.collection.name,
+                                       createdAt: $0.collection.created_at,
+                                       updatedAt: $0.collection.updated_at,
+                                       sortOrder: $0.collection.sort_order)
+        }
+        let orderedIDs = SidebarCollectionSort.order(items, by: sidebarCollectionSortMode)
+        let byID = Dictionary(uniqueKeysWithValues: loaded.map { ($0.collection.id, $0) })
+        return orderedIDs.compactMap { byID[$0] }
+    }
+
+    /// Move a collection one slot in Manual mode (Move Up/Down). No-op otherwise
+    /// or at the ends.
+    func moveSidebarCollection(id: String, by delta: Int) {
+        guard sidebarCollectionSortMode == .manual else { return }
+        var ids = sidebarCollections.map { $0.collection.id }
+        guard let from = ids.firstIndex(of: id) else { return }
+        let to = from + delta
+        guard ids.indices.contains(to) else { return }
+        ids.swapAt(from, to)
+        reorderSidebarCollections(ids)
+    }
+
+    /// Commit a new full order (drag result or Move Up/Down) to the DB + reload.
+    func reorderSidebarCollections(_ orderedIDs: [String]) {
+        Task { @MainActor in
+            guard let q = Database.shared.dbQueue else { return }
+            try? await CollectionStore.persistOrder(queue: q, orderedIDs: orderedIDs)
+            await CollectionsEngine.shared.reload()
+        }
+    }
 }
