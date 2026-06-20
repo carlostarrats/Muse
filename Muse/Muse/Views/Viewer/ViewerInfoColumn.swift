@@ -539,7 +539,7 @@ private struct OpenInMapsButton: View {
 
     var body: some View {
         Button {
-            let u = "maps://?ll=\(coordinate.lat),\(coordinate.long)"
+            let u = String(format: "maps://?ll=%.6f,%.6f", coordinate.lat, coordinate.long)
             if let url = URL(string: u) { NSWorkspace.shared.open(url) }
         } label: {
             HStack(spacing: 4) {

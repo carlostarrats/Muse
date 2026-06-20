@@ -432,7 +432,10 @@ struct HeroImageViewer: View {
         guard url == currentURL else { return }
         details = loaded
         // Extra metadata for the INFO card (off-main, no DB). Derive the kind
-        // from the live URL (navigation changes currentURL, not `file`).
+        // from the live URL (navigation changes currentURL, not `file`). Like
+        // `details`/palette above, we deliberately DON'T clear `metadata` first:
+        // letting the prior card linger until the new load resolves avoids a
+        // disappear/reappear flash on fast navigation.
         let kind = AssetKind.detect(at: url)
         let meta = await FileMetadata.load(url: url, kind: kind)
         if url == currentURL { metadata = meta }
