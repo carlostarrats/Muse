@@ -73,4 +73,45 @@ final class FileMetadataTests: XCTestCase {
         XCTAssertNil(m.coordinate)
         XCTAssertEqual(m, FileMetadata.empty)
     }
+
+    // MARK: pdfMetadata
+    func testPDFMetadataRowsInOrder() {
+        let attrs: [String: Any] = [
+            "Title": "Quarterly Report",
+            "Author": "Jane Doe",
+            "Creator": "Pages",
+        ]
+        let m = FileMetadata.pdfMetadata(pageCount: 12, attributes: attrs)
+        XCTAssertEqual(m.rows.map(\.label), ["Pages", "Title", "Author", "Creator"])
+        XCTAssertEqual(m.rows.first?.value, "12")
+        XCTAssertNil(m.coordinate)
+    }
+    func testPDFMetadataPagesOnlyWhenNoAttrs() {
+        let m = FileMetadata.pdfMetadata(pageCount: 3, attributes: [:])
+        XCTAssertEqual(m.rows.map(\.label), ["Pages"])
+    }
+    func testPDFMetadataSkipsBlankAttrs() {
+        let m = FileMetadata.pdfMetadata(pageCount: 1, attributes: ["Title": "", "Author": "  "])
+        XCTAssertEqual(m.rows.map(\.label), ["Pages"])
+    }
+
+    // MARK: formatDuration / mediaMetadata
+    func testDurationFormatsMinutesSeconds() {
+        XCTAssertEqual(FileMetadata.formatDuration(222), "3:42")
+        XCTAssertEqual(FileMetadata.formatDuration(5), "0:05")
+    }
+    func testDurationFormatsHours() {
+        XCTAssertEqual(FileMetadata.formatDuration(3661), "1:01:01")
+    }
+    func testDurationNilOrZero() {
+        XCTAssertNil(FileMetadata.formatDuration(nil))
+        XCTAssertNil(FileMetadata.formatDuration(0))
+    }
+    func testMediaMetadataRow() {
+        let m = FileMetadata.mediaMetadata(durationSeconds: 222)
+        XCTAssertEqual(m.rows, [InfoRow("Duration", "3:42")])
+    }
+    func testMediaMetadataEmptyWhenNoDuration() {
+        XCTAssertEqual(FileMetadata.mediaMetadata(durationSeconds: nil), FileMetadata.empty)
+    }
 }

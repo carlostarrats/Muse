@@ -123,4 +123,35 @@ struct FileMetadata: Equatable {
         let signedLong = (longRef?.uppercased() == "W") ? -abs(long) : long
         return Coordinate(lat: signedLat, long: signedLong)
     }
+
+    // MARK: - Pure PDF formatting
+
+    /// `attributes` keys are the bare PDFDocumentAttribute suffixes
+    /// ("Title", "Author", "Creator") — the loader maps PDFKit's keys to these.
+    static func pdfMetadata(pageCount: Int, attributes: [String: Any]) -> FileMetadata {
+        var rows: [InfoRow] = [InfoRow("Pages", "\(pageCount)")]
+        for key in ["Title", "Author", "Creator"] {
+            if let v = (attributes[key] as? String)?.trimmingCharacters(in: .whitespaces),
+               !v.isEmpty {
+                rows.append(InfoRow(key, v))
+            }
+        }
+        return FileMetadata(rows: rows, coordinate: nil)
+    }
+
+    // MARK: - Pure media formatting
+
+    static func formatDuration(_ seconds: Double?) -> String? {
+        guard let seconds, seconds > 0 else { return nil }
+        let total = Int(seconds.rounded())
+        let h = total / 3600, m = (total % 3600) / 60, s = total % 60
+        return h > 0
+            ? String(format: "%d:%02d:%02d", h, m, s)
+            : String(format: "%d:%02d", m, s)
+    }
+
+    static func mediaMetadata(durationSeconds: Double?) -> FileMetadata {
+        guard let d = formatDuration(durationSeconds) else { return .empty }
+        return FileMetadata(rows: [InfoRow("Duration", d)], coordinate: nil)
+    }
 }
