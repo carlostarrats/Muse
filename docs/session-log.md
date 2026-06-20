@@ -2468,3 +2468,80 @@ pinned below the scroll in both states.
 a pure SwiftUI cosmetic change (UI views aren't unit-tested; Color equality is
 unreliable, same call as feat/next-24/next-31). One file:
 `Views/CollectionsRow.swift`.
+
+### Accessibility pass on next-26→33 — 2026-06-19 (on `feat/next-34`)
+
+**Ask.** "We've added a lot since the last accessibility check — do a new review
+and fix any issues." The last pass was `feat/next-25` (Polish 16), which covered
+next-18→24. So this one covers everything merged since: next-26 through next-33.
+
+**Scope triage.** Most of that range has little or no new accessibility surface:
+
+- **next-27** (extensionless-image classification) and **next-28** (collection
+  count-vs-contents reachability) are non-UI logic.
+- **next-29** (Collections-page scroll-clip), **next-31** (Image Layout modal mood
+  tiles), and **next-33** (Collections-page card restyle) are layout/visual-only —
+  no new controls.
+- **next-30** (Escape backs out of a collection / the Collections page) is a
+  keyboard accelerator routed through a hidden `keyboardShortcut(.escape)` Button;
+  inherently accessible, no label needed.
+- The **Settings modal sheet** (the next-32 QA round that moved Settings off the
+  native Preferences window into an in-app `.sheet`) is text-labeled `Toggle`s plus
+  the already-labeled shared `SheetCloseButton`.
+
+That leaves **Collections in the Sidebar** (next-32) as the one substantial new
+interactive surface. It had largely been built with accessibility in mind (rows are
+single activatable elements with name+count labels and `.isButton`/`.isSelected`
+traits; the mouse-only reorder grips are `.accessibilityHidden`; the collapse
+buttons, the two-up bottom-bar pills, and the menu-bar Move Collection commands are
+all labeled), but three real gaps remained — all in `Views/SidebarView.swift`.
+
+**Fixes (all additive a11y annotations — no layout or behavior change).**
+
+1. **Dead VoiceOver actions removed (`CollectionSidebarRow`).** The row exposed
+   custom "Move Up"/"Move Down" actions to VoiceOver *unconditionally* — they
+   silently no-op'd in Name/Date sort (the closures guarded on `if manual` inside),
+   and even in Manual sort were offered at the list boundaries (the top row got a
+   dead "Move Up"). The context menu just above already gates these correctly
+   (`if manual`, with `.disabled(index <= 0)` / `.disabled(index >= count - 1)`).
+   Replaced the chain of `.accessibilityAction(named:)` modifiers with a single
+   `.accessibilityActions { }` builder so the Move actions can be *conditionally
+   included*: gated on `manual` AND `index > 0` / `index < count - 1` — the exact
+   negation of the context menu's `.disabled` conditions over the same
+   `index`/`count` source (both come from `collectionRow`). So VoiceOver omits a
+   Move action precisely when the menu would show it disabled; omitting a dead rotor
+   action is the better behavior (same principle next-25 applied to the undraggable
+   grip). The default activate action (open collection) stays a separate
+   `.accessibilityAction { }` above the builder, so activation is preserved.
+   Rename/Delete moved into the builder unchanged.
+
+2. **Sort-menu disambiguation (folder `sortHeader`).** next-32 put a *second*
+   "Sort: …" pop-up in the sidebar. The new `collectionsSortHeader` already carried
+   `.accessibilityLabel("Sort collections")`, but the folder `sortHeader` had no
+   label, so VoiceOver read two near-identical "Sort: …" pop-up buttons with no way
+   to tell them apart. Added `.accessibilityLabel("Sort folders")` to the folder
+   menu to complete the pair.
+
+3. **Section headings (`SectionHeader`).** The new FOLDERS / COLLECTIONS section
+   titles weren't exposed as headings, so VoiceOver's heading rotor skipped the new
+   sidebar structure. Added `.accessibilityAddTraits(.isHeader)` to the title
+   `Text` — scoped to the `Text`, NOT the surrounding HStack, so the trait attaches
+   to the heading label without absorbing or altering the sibling collapse
+   `Button`'s own label/action.
+
+**Why the `.accessibilityActions { }` builder.** It's the first use of the builder
+form in the codebase (the rest use `.accessibilityAction(named:)`), chosen because
+it's the only way to *conditionally* register named custom actions — a plain modifier
+chain can't be gated with `if`. Verified it's available on the 14.6 min target
+(macOS 13+), coexists with the separate default `.accessibilityAction { }`, the
+`.accessibilityElement(children: .ignore)`, `.accessibilityLabel`, and
+`.accessibilityAddTraits` on the same element, and registers the `Button` closures
+as named actions equivalent to the old modifiers.
+
+**Verification.** Build green; full unit suite green (`** TEST SUCCEEDED **`). No
+new test — additive accessibility annotations on SwiftUI views, which aren't
+unit-tested (same call as the prior a11y passes). Independent code review of the
+diff returned ship — no Critical/Important findings; it confirmed the
+builder/API coexistence (via the clean build), the exact bounds-parity with the
+context menu, and that `.isHeader` on the Text doesn't interfere with the collapse
+Button. One file: `Views/SidebarView.swift`.

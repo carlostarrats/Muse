@@ -485,6 +485,9 @@ struct SidebarView: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
+            // Disambiguate from the COLLECTIONS sort pop-up (same visible "Sort:…"
+            // shape) now that both can sit in the sidebar at once.
+            .accessibilityLabel("Sort folders")
             Spacer()
         }
         .padding(.horizontal, 14)
@@ -1123,6 +1126,9 @@ private struct SectionHeader: View {
                 .font(.system(size: 11, weight: .semibold))
                 .tracking(0.6)
                 .foregroundStyle(.secondary)
+                // Expose the new sidebar sections to VoiceOver's heading rotor so
+                // the FOLDERS / COLLECTIONS structure is navigable.
+                .accessibilityAddTraits(.isHeader)
             Spacer()
             Button {
                 // `collapsed` is a plain @State binding, so withAnimation spins
@@ -1266,16 +1272,24 @@ private struct CollectionSidebarRow: View {
                             + (loaded.aliveCount == 1 ? "item" : "items"))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction { appState.setActiveCollection(id) }
-        .accessibilityAction(named: "Rename Collection") {
-            appState.setActiveCollection(id)
-            appState.collectionRenameRequest = true
-        }
-        .accessibilityAction(named: "Delete Collection") { confirmDelete = true }
-        .accessibilityAction(named: "Move Up") {
-            if manual { appState.moveSidebarCollection(id: id, by: -1) }
-        }
-        .accessibilityAction(named: "Move Down") {
-            if manual { appState.moveSidebarCollection(id: id, by: 1) }
+        .accessibilityActions {
+            Button("Rename Collection") {
+                appState.setActiveCollection(id)
+                appState.collectionRenameRequest = true
+            }
+            Button("Delete Collection") { confirmDelete = true }
+            // Move actions only when Manual sort permits reordering, and only in
+            // the non-boundary direction(s) — mirrors the context menu's disabled
+            // gating so VoiceOver never offers a dead "Move Up/Down" (e.g. on the
+            // top row, or in a sorted mode where reordering does nothing).
+            if manual {
+                if index > 0 {
+                    Button("Move Up") { appState.moveSidebarCollection(id: id, by: -1) }
+                }
+                if index < count - 1 {
+                    Button("Move Down") { appState.moveSidebarCollection(id: id, by: 1) }
+                }
+            }
         }
         .alert("Delete Collection", isPresented: $confirmDelete) {
             Button("Delete", role: .destructive) {
