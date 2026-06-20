@@ -23,6 +23,9 @@ struct ViewerInfoColumn<Chrome: View>: View {
     /// file. Renders the colors card with placeholder swatches so the
     /// actions row doesn't jump down when the real swatches arrive.
     var paletteLoading: Bool = false
+    /// Extra file metadata (EXIF / PDF / A/V) shown in the INFO card. Loaded by
+    /// the hero viewer on open; nil/empty → the card is omitted.
+    var metadata: FileMetadata? = nil
     /// Near-opaque card drawn behind the whole column while zoomed. It's the
     /// direct background of the content stack, so it resizes in the same
     /// layout pass (and spring) as the Collection/Tags expanders.
@@ -59,6 +62,9 @@ struct ViewerInfoColumn<Chrome: View>: View {
                     colorsCard(palette: displayPalette)
                 } else if paletteLoading {
                     colorsPlaceholderCard
+                }
+                if let metadata, !metadata.rows.isEmpty {
+                    infoCard(metadata)
                 }
                 actionsRow
             }
@@ -240,6 +246,38 @@ struct ViewerInfoColumn<Chrome: View>: View {
                             show("Copied \(hex)")
                         }
                     }
+                }
+            }
+        }
+    }
+
+    // MARK: - Info card
+
+    private func infoCard(_ metadata: FileMetadata) -> some View {
+        InfoCard {
+            VStack(alignment: .leading, spacing: 8) {
+                CardLabel(text: "INFO")
+                ForEach(metadata.rows) { row in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(row.label)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.42))
+                            .frame(width: 64, alignment: .leading)
+                        Text(row.value)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+                if let coord = metadata.coordinate {
+                    HoverTextButton(label: "Open in Maps") {
+                        let u = "maps://?ll=\(coord.lat),\(coord.long)"
+                        if let url = URL(string: u) { NSWorkspace.shared.open(url) }
+                    }
+                    .padding(.top, 2)
+                    .accessibilityLabel("Open location in Maps")
                 }
             }
         }
