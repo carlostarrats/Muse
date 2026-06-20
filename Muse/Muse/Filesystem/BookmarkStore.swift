@@ -77,9 +77,15 @@ final class BookmarkStore: ObservableObject {
             bookmarkData: data,
             addedAt: Date()
         )
+        // Activate BEFORE appending: appending publishes `$roots`, whose sink
+        // rebuilds the sidebar SYNCHRONOUSLY — if accessedURLs isn't populated
+        // yet, url(for:) is nil and the new root's node is silently dropped from
+        // that rebuild (only picked up by some later rebuild, so the LAST root
+        // added never appears). Activating first means the synchronous rebuild
+        // already resolves this root's URL.
+        activate(root)
         roots.append(root)
         save()
-        activate(root)
         return root
     }
 
