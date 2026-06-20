@@ -122,6 +122,18 @@ struct InfoSheet: View {
                         network calls.
                         """)
                     rowDivider
+                    section("Back Up & Restore", """
+                        Muse keeps your collections, tags, and folder list on \
+                        this Mac — not inside your files. Before moving to a new \
+                        Mac, choose Muse ▸ Back Up Muse… to save one backup file; \
+                        keep it somewhere safe and carry it over with your files. \
+                        On the new Mac, choose Muse ▸ Restore from Backup…, point \
+                        Muse at your folders, and it reconnects everything by \
+                        matching each file's contents — even if you renamed or \
+                        rearranged them. Collections with no files on the new Mac \
+                        simply don't appear; nothing is ever left broken.
+                        """)
+                    rowDivider
                     section("Grid & appearance", """
                         Set the grid density with the slider at the bottom \
                         right, and turn on file names under tiles in Settings. \

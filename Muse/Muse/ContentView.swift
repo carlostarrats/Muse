@@ -293,6 +293,12 @@ struct ContentView: View {
         .sheet(isPresented: $appState.settingsShown) {
             SettingsView(isPresented: $appState.settingsShown)
         }
+        .sheet(isPresented: $appState.reconnectShown) {
+            if let model = appState.reconnectModel {
+                ReconnectWizard(model: model, isPresented: $appState.reconnectShown,
+                                bookmarks: appState.bookmarks)
+            }
+        }
         .alert("Couldn’t move some files",
                isPresented: Binding(get: { !appState.moveFailureNames.isEmpty },
                                     set: { if !$0 { appState.moveFailureNames = [] } })) {
