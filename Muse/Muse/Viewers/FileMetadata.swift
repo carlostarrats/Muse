@@ -11,6 +11,9 @@
 //
 
 import Foundation
+import ImageIO
+import PDFKit
+import AVFoundation
 
 struct InfoRow: Identifiable, Equatable {
     let id: UUID
@@ -153,5 +156,65 @@ struct FileMetadata: Equatable {
     static func mediaMetadata(durationSeconds: Double?) -> FileMetadata {
         guard let d = formatDuration(durationSeconds) else { return .empty }
         return FileMetadata(rows: [InfoRow("Duration", d)], coordinate: nil)
+    }
+
+    // MARK: - IO loader (not unit-tested: CG/PDFKit/AVFoundation layer)
+
+    /// Read header metadata off-main for `url`, dispatched by `kind`. Returns
+    /// `.empty` for kinds without extra metadata, for dataless iCloud
+    /// placeholders (never forces a download), and on any read failure.
+    static func load(url: URL, kind: AssetKind) async -> FileMetadata {
+        // Never read bytes of a not-yet-downloaded iCloud file (mirrors
+        // AssetKind.isDataless / the Indexer dataless rule).
+        if (try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]))?
+            .ubiquitousItemDownloadingStatus == .notDownloaded {
+            return .empty
+        }
+        return await Task.detached(priority: .userInitiated) { () -> FileMetadata in
+            switch kind {
+            case .image, .raw, .psd:
+                return loadImage(url: url)
+            case .pdf:
+                return loadPDF(url: url)
+            case .video, .audio:
+                return loadMedia(url: url)
+            default:
+                return .empty
+            }
+        }.value
+    }
+
+    private static func loadImage(url: URL) -> FileMetadata {
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any]
+        else { return .empty }
+        // Strip the kCGImageProperty*<Group>* prefixes so the pure functions see
+        // bare keys ("FNumber", "Make", "Latitude").
+        func sub(_ key: CFString) -> [String: Any] {
+            guard let dict = props[key] as? [CFString: Any] else { return [:] }
+            var out: [String: Any] = [:]
+            for (k, v) in dict { out[k as String] = v }
+            return out
+        }
+        return imageMetadata(exif: sub(kCGImagePropertyExifDictionary),
+                             tiff: sub(kCGImagePropertyTIFFDictionary),
+                             gps: sub(kCGImagePropertyGPSDictionary))
+    }
+
+    private static func loadPDF(url: URL) -> FileMetadata {
+        guard let doc = PDFDocument(url: url) else { return .empty }
+        let raw = doc.documentAttributes ?? [:]
+        var attrs: [String: Any] = [:]
+        // PDFKit keys are PDFDocumentAttribute (e.g. .titleAttribute) → bare names.
+        if let t = raw[PDFDocumentAttribute.titleAttribute] { attrs["Title"] = t }
+        if let a = raw[PDFDocumentAttribute.authorAttribute] { attrs["Author"] = a }
+        if let c = raw[PDFDocumentAttribute.creatorAttribute] { attrs["Creator"] = c }
+        return pdfMetadata(pageCount: doc.pageCount, attributes: attrs)
+    }
+
+    private static func loadMedia(url: URL) -> FileMetadata {
+        let asset = AVURLAsset(url: url)
+        let seconds = CMTimeGetSeconds(asset.duration)
+        return mediaMetadata(durationSeconds: seconds.isFinite ? seconds : nil)
     }
 }
