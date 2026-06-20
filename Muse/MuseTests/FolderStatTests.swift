@@ -24,7 +24,7 @@ final class FolderStatTests: XCTestCase {
         try fm.setAttributes([.modificationDate: newest], ofItemAtPath: deep.path)
 
         let stat = FolderStats.compute(folder: root)
-        XCTAssertEqual(stat.immediateFileCount, 2)   // a.txt, b.txt (not sub)
+        XCTAssertEqual(stat.immediateFileCount, 3)   // a.txt, b.txt + sub (folders now counted)
         XCTAssertEqual(stat.recursiveFileCount, 3)   // + c.txt
         XCTAssertEqual(stat.totalSize, 9)
         XCTAssertNotNil(stat.latestModified)

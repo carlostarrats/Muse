@@ -4,9 +4,11 @@
 //
 //  Aggregate stats for a top-level sidebar folder — file counts (immediate +
 //  recursive), recursive total size, recursive newest mtime. Pure + nonisolated
-//  so it runs off the main thread. Counts mirror the grid's file notion (every
-//  non-folder entry; packages count as files, not descended-as-folders), so the
-//  sidebar number always matches what the grid would show.
+//  so it runs off the main thread. The IMMEDIATE count mirrors the one-level grid:
+//  every non-hidden immediate entry (files, packages, AND plain subfolders), so the
+//  sidebar number matches the grid (which shows folder cards) and Finder. The
+//  RECURSIVE count stays files-only (packages count as files, plain folders are
+//  not descended-as-folders), so it matches what the recursive grid would show.
 //
 
 import Foundation
@@ -25,13 +27,17 @@ nonisolated enum FolderStats {
         let fm = FileManager.default
         let opts: FileManager.DirectoryEnumerationOptions = showHidden ? [] : [.skipsHiddenFiles]
 
+        // Every non-hidden immediate entry counts: files, packages, AND plain
+        // subfolders (the grid shows folder cards in the one-level view, so the
+        // count must include them to match — and Finder). The recursive tally
+        // below stays files-only, matching the recursive grid (no folder tiles).
         var immediate = 0
         if let entries = try? fm.contentsOfDirectory(
             at: folder,
-            includingPropertiesForKeys: [.isDirectoryKey, .isPackageKey],
+            includingPropertiesForKeys: nil,
             options: opts
         ) {
-            for url in entries where !isPlainDirectory(url) { immediate += 1 }
+            immediate = entries.count
         }
 
         var recursive = 0
@@ -81,8 +87,4 @@ nonisolated enum FolderStats {
         return best
     }
 
-    private static func isPlainDirectory(_ url: URL) -> Bool {
-        let v = try? url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
-        return v?.isDirectory == true && v?.isPackage != true
-    }
 }
