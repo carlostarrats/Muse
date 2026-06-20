@@ -67,7 +67,8 @@ final class FolderNode: ObservableObject, Identifiable {
 
 /// Reads files (non-folder entries) inside a single folder. Used by the grid.
 nonisolated enum FolderReader {
-    static func files(in url: URL, showHidden: Bool = false) -> [FileNode] {
+    static func files(in url: URL, showHidden: Bool = false,
+                      includeFolders: Bool = false) -> [FileNode] {
         let fm = FileManager.default
         guard let entries = try? fm.contentsOfDirectory(
             at: url,
@@ -83,8 +84,11 @@ nonisolated enum FolderReader {
             let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
             let isDir = values?.isDirectory == true
             let isPackage = values?.isPackage == true
-            // Skip plain directories; treat packages (like .app) as files.
-            if isDir && !isPackage { return nil }
+            // Plain directories: emit as a folder tile when asked (the one-level
+            // grid), else skip. Packages (like .app) always count as files.
+            if isDir && !isPackage {
+                return includeFolders ? FileNode(url: url, kind: .folder) : nil
+            }
             // We already know this is a file/package, so classify directly and
             // skip AssetKind.detect's redundant fileExists stat.
             return FileNode(url: url, kind: AssetKind.classify(url: url, fallback: .unknown))

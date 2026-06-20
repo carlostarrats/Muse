@@ -2889,3 +2889,82 @@ actionable Minor applied: the 0.4s/2.0s tuning is now named constants
 (`StatRecomputeScheduler.quiet` / `.maxWait`) with a pointer comment at the
 `handle` call site, instead of implicit default-arg literals. No behavior change;
 MuseTests green.
+
+### `feat/next-41` — Folders as grid cards
+
+**Goal.** Match Finder: a folder's immediate subfolders show as grid cards (and
+count) in the one-level browse view, double-click navigates in, the sidebar
+follows.
+
+**What shipped.** In the non-recursive (subfolders-toggle OFF) folder-browse grid,
+immediate subfolders now render as cards, **folders-first**, reusing the existing
+non-image file-card rendering (native macOS folder icon via QuickLook `.all` +
+filename caption + mood-contrast) — deliberately **no new tile view**. The sidebar's
+immediate file count now includes immediate subfolders (so it matches the grid and
+Finder); the recursive count stays files-only. Double-clicking a folder card calls
+`AppState.openSubfolder(_:)` → navigates into it exactly like a sidebar click, and
+the sidebar **expands + highlights** that row (highlight matched by standardized
+**URL**, not node id, so even a not-yet-loaded row lights up). A folder card's
+right-click menu equals the sidebar subfolder menu — **New Subfolder… / Rename
+Folder… / Reveal in Finder**, nothing else. Folders are excluded from every
+file-only flow.
+
+**Architecture.** Pure `Models/FolderOrdering.swift` (`foldersFirst` stable
+partition, no-op without folders); `FolderStat` immediate count = every non-hidden
+entry; `FolderReader.files(in:showHidden:includeFolders:)` (new default-false param)
+emits plain subfolders as `.folder` nodes while packages (`.app`) stay files;
+`AppState` one-level read passes `includeFolders:true` + `FolderOrdering.foldersFirst`
+after the sort (load path AND in-place re-sort); `AppState.resolveFolderNode(_:)`
+walks the sidebar tree to the target URL, loading children + expanding along the way
+so the resolved node carries a **parent chain** (rename does
+`node.parent?.reloadChildren()`, new-subfolder does `node.reloadChildren()` — a
+detached `FolderNode(url:)` would not refresh the sidebar); `openSubfolder` is now
+`select(folder: resolveFolderNode(url) ?? FolderNode(url: url))`. `GridView`
+double-click branches `.folder → openSubfolder`, the folder tile's `.onDrag` is a
+no-op, and its `contextMenu` is the folder menu. `SidebarView.isSelected` compares
+standardized URLs (cross-folder suppression guards intact).
+
+**Process.** Built subagent-driven (executing the committed spec + plan): 6
+TDD/wiring tasks, each with a fresh implementer + a per-task spec+quality review
+(all shipped clean), then a whole-branch **opus** review. That review caught the
+one substantive gap a per-task pass couldn't — folder cards are *selectable like
+files*, so a folder co-selected with files leaked into destructive file-only flows.
+Task 7 then reworked the folder-card menu to match the sidebar (per the user's
+directive) and excluded folders from Move-to-Folder. A final **deep bug-hunt QA
+pass** (opus, sharpened risk checklist) traced ten cross-cutting risks and found
+**two Important** leaks that the menu rework hadn't covered:
+
+1. **Mixed-selection Move to Trash** — the grid file-tile's "Move to Trash" used the
+   full selection (`effectiveSelectionURLs`) resolved against `visibleFiles` (which
+   now contains folder nodes), so a folder co-selected with files would `recycle` a
+   **whole subfolder tree**. Fixed: the trash loop skips `node.kind == .folder`.
+2. **Sidebar drop-to-move** — `.onDrop` moved the full selection via `FileMover`,
+   carrying a co-selected folder despite the v1 "no folder drag-to-move" intent.
+   Fixed: filter directories out of the move set (the `isDirectory != true`
+   predicate, mirroring `SelectionMenu.fileURLs`).
+
+Both fixes were independently re-reviewed (sound). The QA pass also produced an
+empirical `FolderCountGridConsistencyTests` (sidebar count == grid tile count on a
+temp dir with a `.app` package, a symlink-to-dir, and a hidden file — all agree on
+7), and confirmed-safe the other risks (reversed sort keeps folders on top; fixed
+image layouts still draw the folder icon via `cardIcon`; caption contrast reuses
+the shared mood-adaptive color; no `.folder` reaches a viewer/hero — hero arrow-nav
+filters to image kinds; `resolveFolderNode` terminates with valid parent chains and
+runs synchronous IO only on user actions, never a render hot path; search/collections
+stay files-only). Known-minor, accepted for v1: folders' **intra-group** order is
+arbitrary under Size/Kind sorts (all-tie keys) — deterministic under
+Name/Date/Color/Shape.
+
+**Durable gotcha recorded** (CLAUDE.md): folder grid cards are selectable like
+files, so every file-only destructive/move flow must filter out `.folder` nodes;
+folder ops live only on the folder card's own menu.
+
+**Files.** New `Models/FolderOrdering.swift`; modified `Filesystem/FolderStat.swift`,
+`Filesystem/FolderTree.swift`, `Models/AppState.swift`, `Views/GridView.swift`,
+`Views/SidebarView.swift`, `Views/SelectionMenu.swift`, `Models/AppState+Filters.swift`.
+New tests: `FolderOrderingTests`, `FolderStatCountTests`, `FolderReaderFoldersTests`,
+`FolderCountGridConsistencyTests`. Build + full `MuseTests` suite green throughout.
+Spec + plan in `docs/superpowers/`. **PENDING:** human GUI verification of the
+interactive flows — live click automation was unavailable (the harness lacks macOS
+Accessibility permission to drive the app via System Events); the headline render
+(folder cards first, native icons, captions) was confirmed visually via screenshot.

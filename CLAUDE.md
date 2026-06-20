@@ -275,6 +275,22 @@ The four most critical are also saved as Claude memories (linked).
   potentially-unbounded event source needs this cap. Reproduced with a 6 s
   touch-storm (recompute fired 0× during, once after); verified the fix flushes
   every ~2.4 s during an 8 s storm. Fixed 2026-06-20 (`feat/next-39`).
+- **Folder grid cards are SELECTABLE like files — every file-only destructive/
+  move flow must filter out `.folder` nodes.** In the one-level (subfolders-OFF)
+  browse view, `currentFiles`/`visibleFiles` now contain `.folder` `FileNode`s
+  (feat/next-41 shows subfolders as grid cards). A folder tile single-click
+  selects exactly like a file (`applyClick`), so a folder co-selected with files
+  silently rides along in any flow built on `effectiveSelectionURLs` /
+  `visibleFiles`. Two such flows leaked and were fixed in QA: the grid tile's
+  **Move to Trash** (would `recycle` a whole subfolder tree) and the **sidebar
+  drop-to-move** — both now skip folders (`node.kind != .folder` /
+  `isDirectory != true`). The `SelectionActionsMenu` file-only actions
+  (collection/tag/share/new-collection/move-to-folder) already filter via
+  `fileURLs`. Folder operations live ONLY on the folder card's own context menu
+  (New Subfolder / Rename / Reveal in Finder, mirroring the sidebar subfolder
+  menu). Rule: any NEW selection-based action that can touch files must decide
+  explicitly whether it applies to folders; the default for file-only/destructive
+  ones is to exclude `.folder`. Fixed 2026-06-20 (`feat/next-41`).
 
 ### Session index (detail in `docs/session-log.md`)
 
@@ -748,6 +764,33 @@ The four most critical are also saved as Claude memories (linked).
   `FolderStatCache.swift` + new `FolderStatSchedulerTests` (5). MuseTests green.
   Also on this branch: the parked `grid-voiceover-open` spec (built later). See the
   durable gotcha above + `docs/session-log.md`.
+- **2026-06-20** `feat/next-41` — **Folders as grid cards.** In the one-level
+  (subfolders-toggle OFF) browse view, a folder's immediate subfolders now render
+  as grid cards (folders-first, Finder pattern), reusing the existing non-image
+  file-card rendering for the native folder icon + caption + mood-contrast — no new
+  tile view. Double-clicking a folder card navigates INTO it and the sidebar
+  expands + highlights that row (highlight matched by standardized URL, not node
+  id). The sidebar's IMMEDIATE file count now includes immediate subfolders (matches
+  the grid + Finder); the recursive count stays files-only. A folder card's
+  right-click menu equals the sidebar subfolder menu — New Subfolder / Rename /
+  Reveal in Finder, nothing else. Folders are excluded from all file-only flows
+  (collection/tag/share/new-collection/move-to-folder) and, post-QA, from the
+  mixed-selection Move-to-Trash + sidebar drop-to-move (see the durable gotcha
+  above). The recursive read, search, and collections stay files-only by
+  construction. Built subagent-driven (6 TDD/wiring tasks, per-task review + a
+  whole-branch opus review that caught the two mixed-selection destructive leaks,
+  then a deep bug-hunt QA pass). New pure `Models/FolderOrdering.swift` (folders-
+  first stable partition, unit-tested); `FolderStat` immediate count +
+  `FolderReader.files(includeFolders:)` + `AppState.openSubfolder`/`resolveFolderNode`
+  (tree-walk that loads children along the path so the resolved node has a parent
+  chain — rename/new-subfolder reload via it). New tests: `FolderOrderingTests`,
+  `FolderStatCountTests`, `FolderReaderFoldersTests`, `FolderCountGridConsistencyTests`
+  (empirical sidebar-count == grid-tile-count across package/symlink/hidden entries).
+  Build + full suite green. Spec + plan in `docs/superpowers/`; narrative in
+  `docs/session-log.md`. Known-minor (v1, documented): folders' intra-group order is
+  arbitrary under Size/Kind sorts (all-tie keys); deterministic under Name/Date/
+  Color/Shape. PENDING human GUI verification of the interactive flows (live click
+  automation was unavailable — macOS Accessibility not granted to the harness).
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
@@ -773,6 +816,13 @@ Muse/Muse/
                                    selection methods split into the extensions
                                    below (2026-06-17 tidy-up). reloadAfterMove;
                                    allTagLabels preload (feat/multi-select).
+                                   One-level read passes FolderReader includeFolders
+                                   :true + FolderOrdering.foldersFirst (folder cards
+                                   first); openSubfolder(_:) navigates into a folder
+                                   card (= sidebar click) and resolveFolderNode(_:)
+                                   walks/loads the sidebar tree to the URL so the
+                                   resolved node has a parent chain (rename/new-
+                                   subfolder reload via it) — feat/next-41.
                                    Memoized visibleFiles; navTransition (0.2s
                                    shared nav-crossfade duration); owns the tag-
                                    chip data — tagChipRows + reloadTagChips()
@@ -815,7 +865,16 @@ Muse/Muse/
                                    next-27
     FileNode.swift                 in-memory enumerated-file value type;
                                    init(url:kind:) takes a precomputed kind so
-                                   enumeration skips the per-file fileExists stat
+                                   enumeration skips the per-file fileExists stat.
+                                   In the one-level browse view a subfolder is a
+                                   `.folder` node (feat/next-41) — selectable like
+                                   a file; see the durable gotcha on filtering it
+                                   from file-only flows
+    FolderOrdering.swift           pure folders-first stable partition for the grid
+                                   (Finder pattern): foldersFirst([FileNode]) keeps
+                                   each group in the caller's sort order; a no-op
+                                   when there are no folders (recursive view).
+                                   Unit-tested (feat/next-41)
     Root.swift                     security-scoped bookmark wrapper
     DeleteCoordinator.swift        delete state machine (trash + undo toast);
                                    drives a fade-out (internals still named
@@ -869,7 +928,12 @@ Muse/Muse/
                                    new root's URL (feat/next-37 — see durable gotcha)
     FolderTree.swift               lazy hierarchical tree + FolderReader; FolderNode
                                    has a weak parent + reloadChildren() (refresh after
-                                   create/rename — feat/folder-ops-and-share)
+                                   create/rename — feat/folder-ops-and-share).
+                                   FolderReader.files(in:showHidden:includeFolders:)
+                                   — includeFolders:true (default false) emits plain
+                                   subfolders as `.folder` nodes for the one-level
+                                   grid; packages (.app) always stay files (feat/
+                                   next-41)
     FolderWatcher.swift            FSEvents-backed live watcher; delivers the
                                    changed paths. FolderEventFilter (pure) keeps
                                    only viewable in-folder files (drops hidden/
@@ -880,7 +944,11 @@ Muse/Muse/
                                    recursive size, recursive latest mtime) +
                                    FolderStats.compute/root(containing:); mirrors the
                                    grid's file notion so sidebar counts match
-                                   (2026-06-18)
+                                   (2026-06-18). The IMMEDIATE count now counts every
+                                   non-hidden entry — files, packages, AND subfolders
+                                   — to match the one-level grid (which shows folder
+                                   cards) + Finder; the recursive count stays
+                                   files-only (feat/next-41)
     PathReconciler.swift           pure scope/diff + DB ops that mark a folder's
                                    externally-deleted files is_alive=0 on a fresh
                                    folder load (stops ghost rows leaking into
@@ -1009,9 +1077,13 @@ Muse/Muse/
   Views/
     SidebarView.swift              multi-root OutlineGroup tree + starred section;
                                    file-URL drop on folder rows MOVES the grid
-                                   selection there (FileMover) with a drop-target
-                                   highlight; Reveal in Finder menu item
-                                   (feat/multi-select). No folder shows as selected
+                                   selection there (FileMover, folders filtered out
+                                   so a co-selected folder card can't ride along —
+                                   feat/next-41) with a drop-target highlight;
+                                   Reveal in Finder menu item (feat/multi-select).
+                                   Row isSelected matches by standardized URL (so a
+                                   folder opened from a grid card lights up — feat/
+                                   next-41). No folder shows as selected
                                    in cross-folder views — Collections page, a
                                    single collection, or an "All"-scope search
                                    (2026-06-17); the drop highlight is independent.
@@ -1044,7 +1116,13 @@ Muse/Muse/
                                    can't drop it — 2026-06-17); accent wash+border
                                    inside the tile (scales w/ hover); .onDrag carries
                                    the file URL; selection-aware contextMenu
-                                   (feat/multi-select). A content-level Color.clear
+                                   (feat/multi-select). A `.folder` tile (one-level
+                                   browse) selects like a file but double-click
+                                   NAVIGATES (openSubfolder, not the viewer), .onDrag
+                                   is a no-op, and its contextMenu is the sidebar
+                                   subfolder menu (New Subfolder/Rename/Reveal); the
+                                   file Move-to-Trash skips folder nodes (feat/
+                                   next-41 + QA — see the durable gotcha). A content-level Color.clear
                                    deselect surface behind the tiles makes the empty
                                    top inset deselect with OR without the tag chips
                                    (2026-06-17). Non-image tiles render the native
@@ -1089,7 +1167,11 @@ Muse/Muse/
                                    AppState.confirmNewCollection, Cancel/blank
                                    creates nothing — feat/next-19) / Add Tag /
                                    Share / Move to Folder over the effective
-                                   selection (feat/multi-select)
+                                   selection (feat/multi-select). All file-only
+                                   actions consume a folder-filtered `fileURLs`
+                                   subset and hide when it's empty — collection/tag/
+                                   share/new-collection/move-to-folder never touch a
+                                   co-selected folder card (feat/next-41)
     OutsideClickDeselect.swift     0×0 NSView + window leftMouseDown monitor that
                                    clears the selection on any click outside the
                                    grid's enclosingScrollView (feat/multi-select)

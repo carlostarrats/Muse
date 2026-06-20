@@ -788,7 +788,8 @@ private struct FolderTreeNode: View {
             return false
         }
         if appState.isSearchActive && appState.searchAllFolders { return false }
-        return appState.selectedFolder?.id == node.id
+        return appState.selectedFolder?.url.standardizedFileURL
+            == node.url.standardizedFileURL
     }
 
     var body: some View {
@@ -976,7 +977,13 @@ private struct FolderTreeNode: View {
         // the set to move. (Reorder is a separate live gesture, no .onDrop, so
         // there's no drop-type shadowing here anymore.)
         .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { _ in
-            let selected = appState.effectiveSelectionURLs(fallback: "")
+            // Move only files — a folder in the selection stays put (no
+            // folder drag-to-move in v1; a folder tile's own .onDrag is a
+            // no-op, but a folder co-selected with files would otherwise ride
+            // along when a file tile is dragged onto a sidebar folder).
+            let selected = appState.effectiveSelectionURLs(fallback: "").filter {
+                (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory != true
+            }
             guard !selected.isEmpty else { return false }
             appState.reloadAfterMove(failed: FileMover.move(selected, into: node.url))
             return true

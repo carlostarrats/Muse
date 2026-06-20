@@ -766,6 +766,44 @@ final class AppState: ObservableObject {
         reloadCurrentFiles(showLoading: true, thenIndex: true, verifyICloud: true)
     }
 
+    /// Resolve the sidebar `FolderNode` for a URL, expanding + loading children
+    /// along the path so the returned node has a valid parent chain (folder ops
+    /// like rename/new-subfolder reload via `node.parent` / `node`). Returns nil
+    /// if the path isn't reachable under any root. Side effect: reveals the path
+    /// in the sidebar tree (same as navigating to it).
+    func resolveFolderNode(_ url: URL) -> FolderNode? {
+        let target = url.standardizedFileURL.path
+        guard let root = rootNodes.first(where: { r in
+            let rp = r.url.standardizedFileURL.path
+            return target == rp || target.hasPrefix(rp + "/")
+        }) else { return nil }
+
+        var node = root
+        node.loadChildrenIfNeeded(showHidden: showHidden)
+        node.isExpanded = true
+        while node.url.standardizedFileURL.path != target {
+            guard let next = node.children.first(where: { c in
+                let cp = c.url.standardizedFileURL.path
+                return target == cp || target.hasPrefix(cp + "/")
+            }) else { break }
+            next.loadChildrenIfNeeded(showHidden: showHidden)
+            next.isExpanded = true
+            node = next
+        }
+        return node.url.standardizedFileURL.path == target ? node : nil
+    }
+
+    /// Navigate into a subfolder chosen from a grid folder card: expand the
+    /// sidebar tree down to it (so its row is visible), then select it exactly
+    /// like a sidebar click. Highlight is URL-based (see SidebarView.isSelected),
+    /// so even the FolderNode-build fallback lights up the right row.
+    func openSubfolder(_ url: URL) {
+        // Resolve (and reveal) the tree node; fall back to a detached node so
+        // navigation still works — the URL-based highlight matches if the row
+        // later loads.
+        select(folder: resolveFolderNode(url) ?? FolderNode(url: url))
+    }
+
     /// Scan the current folder's images for duplicates, then present the
     /// review sheet. Lives here so the menu bar can trigger it.
     func findDuplicatesInCurrentFolder() {
@@ -1068,7 +1106,7 @@ final class AppState: ObservableObject {
         Task.detached(priority: .userInitiated) {
             let raw = showSub
                 ? Self.enumerateRecursive(at: folderURL, showHidden: showHid)
-                : FolderReader.files(in: folderURL, showHidden: showHid)
+                : FolderReader.files(in: folderURL, showHidden: showHid, includeFolders: true)
             let merged = raw.map { fresh -> FileNode in
                 if let old = existing[fresh.url],
                    old.modifiedAt == fresh.modifiedAt,
@@ -1077,7 +1115,10 @@ final class AppState: ObservableObject {
                 }
                 return fresh
             }
-            let sorted = SmartSorter.apply(mode, to: merged, reversed: reversed)
+            // Folders first (Finder pattern), each group in the active sort order.
+            // No-op in the recursive view (no folder nodes there).
+            let sorted = FolderOrdering.foldersFirst(
+                SmartSorter.apply(mode, to: merged, reversed: reversed))
             // Reconcile externally-deleted files on a fresh folder open: flip
             // DB rows for files that vanished from disk to is_alive=0, so they
             // stop leaking into search (blank tiles) + collection counts. Runs
@@ -1185,7 +1226,8 @@ final class AppState: ObservableObject {
     func resort() {
         // Don't re-sort search results; they maintain relevance ranking
         guard !isSearchActive else { return }
-        currentFiles = SmartSorter.apply(sortMode, to: currentFiles, reversed: sortReversed)
+        currentFiles = FolderOrdering.foldersFirst(
+            SmartSorter.apply(sortMode, to: currentFiles, reversed: sortReversed))
         if let collectionFiles = activeCollectionFiles {
             activeCollectionFiles = SmartSorter.apply(sortMode, to: collectionFiles, reversed: sortReversed)
         }

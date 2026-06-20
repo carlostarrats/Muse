@@ -245,7 +245,9 @@ extension AppState {
         // drives body re-eval / presentation — so the paths must already hold their
         // final value when the message renders.
         pendingNewCollectionPaths = path.map { p in
-            effectiveSelectionURLs(fallback: p).map { $0.standardizedFileURL.path }
+            effectiveSelectionURLs(fallback: p)
+                .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory != true }
+                .map { $0.standardizedFileURL.path }
         } ?? []
         newCollectionNameDraft = ""
         newCollectionRequest = true
