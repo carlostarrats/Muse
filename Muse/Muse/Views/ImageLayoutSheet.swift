@@ -38,7 +38,7 @@ struct ImageLayoutSheet: View {
                             LayoutTile(
                                 layout: layout,
                                 isSelected: appState.imageLayout == layout,
-                                tileFill: Mood.paperPalette.tileFill
+                                palette: appState.moodPalette
                             ) { appState.imageLayout = layout }
                         }
                     }
@@ -85,24 +85,38 @@ struct ImageLayoutSheet: View {
 }
 
 /// One selectable layout tile. Mirrors a grid tile's selection exactly, but
-/// blue-only: hovering darkens (veil); selecting shrinks the inner fill inward
-/// (the gap reveals the sheet behind it), turns it blue, and draws the blue
-/// ring at the outer edge. There is no intermediate pressed/darkened state.
+/// blue-only: hovering washes the tile (a veil — dark on light tiles, light on
+/// dark tiles); selecting shrinks the inner fill inward (the gap reveals the
+/// sheet behind it), turns it blue, and draws the blue ring at the outer edge.
+/// There is no intermediate pressed/darkened state. Surface, label, icon, and
+/// veil all follow the active mood (`palette`).
 private struct LayoutTile: View {
     let layout: ImageLayout
     let isSelected: Bool
-    let tileFill: Color
+    /// The active mood palette — the tile surface, label, icon, and hover veil
+    /// all derive from it so the modal flips with Light/Dark/Auto/Custom mood
+    /// (like the toolbar icons), instead of staying a fixed white card on a dark
+    /// sheet. Animated on `palette` changes, in lockstep with the mood fade.
+    let palette: MoodPalette
     let onTap: () -> Void
 
     @State private var hovering = false
 
     // Match TileView's locked selection feel: 8pt continuous ring, square image.
-    private static let hoverVeilOpacity = 0.2
     private static let selectionInset: CGFloat = 10
     private static let ringWidth: CGFloat = 2.5
     private static let ringCorner: CGFloat = 8
 
     private var blue: Color { Color.accentColor }
+    private var isDark: Bool { palette.scheme == .dark }
+    /// Elevated card surface: a touch lighter than the surrounding sheet so the
+    /// tile reads as a card in either scheme. Light mode lands at the lighter
+    /// grey the user asked for (≈0.95); dark mode lifts above the dark sheet.
+    private var tileFill: Color { Color(white: isDark ? 0.24 : 0.95) }
+    /// Black-on-light / white-on-dark, matching MoodPalette.iconColor.
+    private var contentColor: Color { palette.iconColor }
+    private var hoverVeil: Color { isDark ? .white : .black }
+    private var hoverVeilOpacity: Double { isDark ? 0.10 : 0.2 }
 
     var body: some View {
         Button(action: onTap) {
@@ -119,17 +133,18 @@ private struct LayoutTile: View {
                 VStack(spacing: 10) {
                     Text(layout.displayName)
                         .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(isSelected ? blue : Color.black.opacity(0.85))
+                        .foregroundStyle(isSelected ? blue : contentColor.opacity(0.85))
                     LayoutIconView(kind: layout.iconKind,
-                                   color: isSelected ? blue : Color.black.opacity(0.45))
+                                   color: isSelected ? blue : contentColor.opacity(0.45))
                         .frame(width: 44, height: 44)
                 }
                 .padding(isSelected ? Self.selectionInset : 0)
 
-                // Hover veil — unselected only; a calm dark wash, no resize.
+                // Hover veil — unselected only; a calm wash (dark on light tiles,
+                // light on dark tiles), no resize.
                 Rectangle()
-                    .fill(Color.black)
-                    .opacity((hovering && !isSelected) ? Self.hoverVeilOpacity : 0)
+                    .fill(hoverVeil)
+                    .opacity((hovering && !isSelected) ? hoverVeilOpacity : 0)
                     .allowsHitTesting(false)
 
                 // Ring at the outer edge when selected — matches the grid's 8pt.
@@ -143,6 +158,7 @@ private struct LayoutTile: View {
             .contentShape(Rectangle())
             .animation(.easeOut(duration: 0.18), value: hovering)
             .animation(.easeOut(duration: 0.15), value: isSelected)
+            .animation(.easeInOut(duration: 0.35), value: palette)
         }
         // No pressed-state dimming — straight from hover to the blue selection.
         .buttonStyle(FlatButtonStyle())

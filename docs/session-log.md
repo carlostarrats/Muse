@@ -2270,3 +2270,44 @@ collection ordering, the back-out chain, the `searchPresent` glue). Build +
 full suite green (`** TEST SUCCEEDED **`, 0 failures). Files touched:
 `Components/EscapeAction.swift` (new), `ContentView.swift`,
 `MuseTests/EscapeActionTests.swift` (new).
+
+### Image Layout modal tiles are mood-adaptive — 2026-06-19 (on `feat/next-31`)
+
+**Ask.** The 9 grey layout-selection tiles in the Image Layout modal looked a
+little dark. First pass just lightened the fixed grey — but on a Dark (or Custom)
+mood the modal chrome already flips to dark (the sheet inherits
+`preferredColorScheme(moodPalette.scheme)` from `ContentView`), while the tiles
+stayed a fixed light-grey card with black text. They read as glaring white cards
+on a dark sheet, and the labels would have needed re-contrasting too. The ask
+became: make the tiles auto-adapt to the mood like the Info modal does, via an
+inline override (no new type, no change to the global palette).
+
+**Why they weren't adaptive.** The tiles were wired to `Mood.paperPalette.tileFill`
+— a *fixed* light-mode grey. That was deliberate in feat/next-22 ("mood-independent
+layout modal"). The Info modal (`InfoSheet`) adapts for free because it hard-codes
+no colors at all — just `.primary`/`.secondary` over the forced color scheme.
+
+**Fix.** `LayoutTile` now takes the active `MoodPalette` (`appState.moodPalette`)
+instead of a `Color`, and derives everything from it:
+- **Surface** — `Color(white: isDark ? 0.24 : 0.95)`. An elevated card in either
+  scheme: light mode lands at the lighter grey requested; dark mode lifts *above*
+  the dark sheet so the tile still reads as a card (the mood's own `tileFill` of
+  0.118 would have sat darker than the sheet). Kept neutral rather than the colored
+  custom-mood tile so the cards stay legible on a colored background.
+- **Label + icon** — `MoodPalette.iconColor` (black-on-light / white-on-dark), the
+  same value the toolbar icons use, so text auto-contrasts.
+- **Hover veil** — flips: a dark wash on light tiles, a light wash on dark tiles
+  (with a lower opacity in dark, 0.10 vs 0.20).
+- **Animation** — `.animation(.easeInOut(duration: 0.35), value: palette)`, the
+  same curve/duration the background fade uses, so the tiles crossfade in lockstep
+  with the mood change exactly like the toolbar icons (feat/next-24).
+
+Selection blue fill + ring are unchanged (system accent, not mood). This reverses
+the "mood-independent" decision from feat/next-22 by explicit request; the
+CLAUDE.md architecture-map note for `ImageLayoutSheet.swift` was updated to match.
+
+**Verification.** Build + full suite green (260 tests, `** TEST SUCCEEDED **`). No
+new test — a pure SwiftUI cosmetic change (UI views aren't unit-tested, and Color
+equality is unreliable, same call made for feat/next-24). Diff review (all angles,
+manual given the 38-line single-file scope) returned clean. One file:
+`Views/ImageLayoutSheet.swift`.

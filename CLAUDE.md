@@ -461,6 +461,21 @@ The four most critical are also saved as Claude memories (linked).
   Button doesn't fire under them). New `MuseTests/EscapeActionTests.swift` (12
   cases); independent review returned ship (no Critical/Important). Build + full
   suite green. `Components/EscapeAction.swift` + `ContentView.swift`.
+- **2026-06-19** `feat/next-31` — Image Layout modal tiles are mood-adaptive. The
+  9 layout-selection tiles were a fixed light-grey card (`Mood.paperPalette.tileFill`,
+  the deliberately mood-independent choice from feat/next-22), so on a Dark/Custom
+  mood — where the sheet chrome already flips via `preferredColorScheme` — they
+  read as glaring white cards with black text on a dark sheet. `LayoutTile` now
+  takes the active `MoodPalette` (`appState.moodPalette`) and derives everything
+  from it: surface `Color(white: 0.95 light / 0.24 dark)` (an elevated card in
+  either scheme — light lands at the lighter grey requested, dark lifts above the
+  dark sheet), label + icon from `MoodPalette.iconColor` (black-on-light /
+  white-on-dark), and the hover veil flips (dark wash on light tiles, light on
+  dark). All keyed to `.animation(.easeInOut(duration: 0.35), value: palette)` so
+  the tiles crossfade in lockstep with the background mood fade, exactly like the
+  toolbar icons (feat/next-24). Selection blue + ring unchanged (system accent).
+  Pure SwiftUI cosmetic; one file (`Views/ImageLayoutSheet.swift`); no test (Color
+  equality is unreliable). Build + full suite green (260); diff review clean.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
@@ -766,8 +781,14 @@ Muse/Muse/
                                    reference list. LayoutIconView draws the 4 generic
                                    44×44 previews (mason/square/portrait/landscape).
                                    Live-applies behind the open sheet (feat/next-21).
-                                   Tiles use a fixed default grey + fixed text
-                                   colors (mood-independent — feat/next-22)
+                                   LayoutTile now takes the active MoodPalette and
+                                   derives its surface (Color(white:) 0.95 light /
+                                   0.24 dark), label/icon (MoodPalette.iconColor),
+                                   and hover veil from it, animated in lockstep
+                                   with the mood fade — so the modal flips with
+                                   Light/Dark/Auto/Custom instead of a fixed white
+                                   card on a dark sheet (feat/next-31; reverses the
+                                   mood-independent tiles from feat/next-22)
     SheetCloseButton.swift         shared circular hover-✕ for modal sheets (Esc via
                                    cancelAction); used by InfoSheet + ImageLayoutSheet
                                    (extracted from InfoSheet — feat/next-21)
