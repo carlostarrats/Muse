@@ -10,6 +10,7 @@
 
 import Foundation
 import SwiftUI
+import GRDB
 
 @MainActor
 final class ReconnectModel: ObservableObject {
@@ -86,6 +87,26 @@ final class ReconnectModel: ObservableObject {
         isRunning = false
     }
 
+    /// Alive indexed files under `location` (its own row or anything beneath it),
+    /// with the real content hashes the indexer just computed. The prefix guard
+    /// uses the codebase's `== prefix || hasPrefix(prefix + "/")` rule so a
+    /// sibling folder ("/a/Inspo Extra") can't leak into "/a/Inspo".
+    private func diskFiles(under location: URL, queue: DatabaseQueue) async -> [DiskFile] {
+        let prefix = location.standardizedFileURL.path
+        let rows: [(String, String?)] = (try? await queue.read { db in
+            try Row.fetchAll(db, sql: """
+                SELECT p.absolute_path AS path, f.content_hash AS hash
+                FROM paths p JOIN files f ON f.id = p.file_id
+                WHERE p.is_alive = 1
+                """).map { (row: Row) in (row["path"] as String, row["hash"] as String?) }
+        }) ?? []
+        return rows
+            .filter { $0.0 == prefix || $0.0.hasPrefix(prefix + "/") }
+            .map { DiskFile(path: $0.0,
+                            basename: URL(fileURLWithPath: $0.0).lastPathComponent,
+                            contentHash: $0.1) }
+    }
+
     func reconnectAll(bookmarks: BookmarkStore) async {
         guard let queue = Database.shared.dbQueue else { return }
         cancelled = false
@@ -101,35 +122,43 @@ final class ReconnectModel: ObservableObject {
 
             _ = bookmarks.addRoot(at: location)
 
-            // Enumerate + hash the folder's files off the main actor.
-            let rootID = folders[i].id
-            let occurrences = archive.files.flatMap { $0.occurrences }
-                .filter { $0.root_path == rootID }
-            let result = await Task.detached(priority: .utility) { () -> (disk: [DiskFile], urls: [URL]) in
-                var disk: [DiskFile] = []
-                var urls: [URL] = []
+            // Enumerate the folder's indexable files off the main actor.
+            let (pairs, imageURLs) = await Task.detached(priority: .utility) {
+                () -> (pairs: [(URL, AssetKind)], images: [URL]) in
+                var pairs: [(URL, AssetKind)] = []
+                var images: [URL] = []
                 let fm = FileManager.default
                 guard let en = fm.enumerator(at: location, includingPropertiesForKeys: [.isRegularFileKey])
                 else { return ([], []) }
                 for case let url as URL in en {
                     guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true
                     else { continue }
-                    let hash = HashService.sha256(of: url)
-                    disk.append(DiskFile(path: url.standardizedFileURL.path,
-                                         basename: url.lastPathComponent, contentHash: hash))
-                    urls.append(url)
+                    let kind = AssetKind.detect(at: url)
+                    guard kind != .folder, kind.hasNativeViewer || kind == .archive else { continue }
+                    pairs.append((url, kind))
+                    if kind == .image || kind == .raw || kind == .psd { images.append(url) }
                 }
-                return (disk, urls)
+                return (pairs, images)
             }.value
 
-            addedImageURLs.append(contentsOf: result.urls)
+            // Index the folder through the real pipeline — this is what creates
+            // the FileRow (by content hash) + PathRow that applyMeta/collections
+            // join against. Reuses the exact identity machinery the app uses.
+            _ = await Indexer.shared.indexBatch(pairs, priority: .high)
+            addedImageURLs.append(contentsOf: imageURLs)
 
+            // Read the now-indexed disk files back (their real content hashes) and
+            // match the archive's occurrences for this folder against them.
+            let disk = await diskFiles(under: location, queue: queue)
+            let rootID = folders[i].id
+            let occurrences = archive.files.flatMap { $0.occurrences }
+                .filter { $0.root_path == rootID }
             let expected = Dictionary(uniqueKeysWithValues:
                 occurrences.compactMap { o -> (String, String)? in
                     guard let h = hashForOriginalPath[o.original_path] else { return nil }
                     return (o.original_path, h)
                 })
-            let match = ReconnectMatcher.match(occurrences: occurrences, disk: result.disk,
+            let match = ReconnectMatcher.match(occurrences: occurrences, disk: disk,
                                                expectedHash: expected)
 
             // Apply metadata per backup file.
