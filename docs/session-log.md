@@ -2815,3 +2815,64 @@ lingered for many minutes, persisting across folder switches within the session.
 Unrelated to this branch (INFO is read-only, hero-only; never touches
 `FolderStatCache`/`AnalyzePipeline`) — to be investigated with
 systematic-debugging after this merges.
+
+---
+
+## 2026-06-20 — `feat/next-39` — fix: sidebar count froze under sustained FSEvents
+
+**Symptom (user report).** After importing iPhone files into a sidebar folder — an
+image, a ~30 s video, and a RAW+JPG pair — the grid updated promptly but the
+**sidebar folder count never updated** for 7+ minutes, didn't recover when
+switching folders, and only corrected on app restart. Alongside it, the
+"Organizing" pill lingered for minutes.
+
+**Investigation (systematic-debugging).** The two watch paths (active-folder grid
+reload vs `FolderStatCache` counts) share `FolderWatcher.watch(urls:)`, and the
+grid updated — so FSEvents worked. `FolderStats.compute` counts every non-folder
+file (no kind filter) and the `objectWillChange` forwarding is correct, so a
+*recompute that runs* would publish the right number. I instrumented the count
+path (`handle` / debounce / `recompute`) with temporary `NSLog`s, captured stderr
+by launching the binary directly, and reproduced:
+
+- Single `cp` into the local root `INSPO` (`~/Desktop/INSPO`): count updated
+  34→35 within 0.5 s. ✓
+- A unique-hash 126 MB video (ffmpeg re-encode) into `INSPO`: 35→36, even with
+  analysis running at 101 % CPU. ✓
+- Add into the iCloud root `Saved Inspo`
+  (`~/Library/Mobile Documents/com~apple~CloudDocs/Archive/Saved Inspo`, 1981
+  files): 1981→1982. ✓
+
+So a single add always worked. The decisive test was a **6 s event storm**
+(`touch` every 0.2 s, faster than the 0.4 s debounce): `handle` fired 21×, the
+debounce was **reset 21×, and `recompute` FIRED 0× during the storm** — only once
+~0.4 s after it stopped.
+
+**Root cause.** `FolderStatCache.handle` rescheduled its 0.4 s recompute debounce
+on EVERY qualifying FSEvents under a root, with **no maximum-wait cap**. A
+sustained stream arriving faster than 0.4 s apart resets the timer indefinitely →
+`recompute` never runs → the count freezes until the stream stops. In the user's
+case the folder is under `~/Desktop`, which is **iCloud-synced (Desktop &
+Documents)**; importing a 48 MP RAW + a 30 s video triggers minutes of continuous
+iCloud upload/metadata FSEvents, which starved the debounce for the whole analysis
+window. (Plain `cat` reads of materialized files produced no events — it's the
+*sync of newly-written* files that sustains the stream, which a single local `cp`
+can't replicate, hence why it only bit in the real import.)
+
+**Fix.** A `maxWait` cap (2.0 s) via a pure, unit-tested `StatRecomputeScheduler`:
+each event records the burst's start; once the burst has run past the cap, `handle`
+**flushes (recomputes) immediately** instead of rescheduling, then resets the burst
+window. Normal single-add keeps the trailing 0.4 s debounce. So the count refreshes
+at least every ~2 s even under continuous churn. Mirrors lodash debounce
+`{ maxWait }`. Verified behaviorally: during an 8 s storm the recompute now flushes
+every ~2.4 s (was 0× during). The `decide(burstStart:now:quiet:maxWait:)` policy is
+covered by `FolderStatSchedulerTests` (5 cases, TDD red→green); the `handle`/`flush`
+wiring is the integration.
+
+**Not in scope.** The ~7-minute "Organizing" pill is just the genuinely heavy
+analysis of a 48 MP RAW + a 30 s video (ImageIO/Vision on a huge image), not part
+of this bug — left as a separate performance consideration.
+
+**Files.** `Muse/Muse/Filesystem/FolderStatCache.swift` (pure scheduler + maxWait
+cap, `flush` helper) + new `Muse/MuseTests/FolderStatSchedulerTests.swift`. Full
+`MuseTests` suite green. (The `MuseUITests` boilerplate `testExample`/`testLaunch`
+fail to *foreground* the app under headless automation — environmental, unrelated.)
