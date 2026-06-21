@@ -383,7 +383,10 @@ private struct TagChip: View {
     var body: some View {
         if let toggleAction {
             chip.accessibilityAction(
-                named: Text(isSelected ? "Remove from filter" : "Add to filter")
+                // A ternary of literals binds the non-localizing String overload, so
+                // wrap each branch explicitly so VoiceOver reads the translated action.
+                named: Text(isSelected ? String(localized: "Remove from filter")
+                                       : String(localized: "Add to filter"))
             ) { toggleAction() }
         } else {
             chip

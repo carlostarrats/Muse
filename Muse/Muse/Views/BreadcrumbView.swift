@@ -37,7 +37,9 @@ struct BreadcrumbView: View {
         let rootPath = rootURL.standardizedFileURL.path
         let rootName = appState.activeRoot?.displayName ?? rootURL.lastPathComponent
         if folderPath == rootPath { return [rootName] }
-        guard folderPath.hasPrefix(rootPath) else { return [folder.displayName] }
+        // Trailing-slash guard: a sibling ("/a/Inspo Extra") must not read as under
+        // the root ("/a/Inspo") and produce a corrupted breadcrumb slice.
+        guard folderPath.hasPrefix(rootPath + "/") else { return [folder.displayName] }
         let rel = String(folderPath.dropFirst(rootPath.count))
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         let pieces = rel.split(separator: "/").map(String.init)

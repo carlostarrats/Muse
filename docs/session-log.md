@@ -3740,3 +3740,55 @@ after the round: build + full suite green, placeholder integrity 0, the stale-bu
 still resolve to French at runtime. Accepted/documented (cosmetic, Low): the 3+-tag banner
 keeps the Oxford comma in French ("Affichage a, b, et c") — a VoiceOver-only corner case;
 a correct fix needs locale-aware grammar in the pure helper + its tests, not worth the churn.
+
+### Pre-release health review — 2026-06-21 (on `feat/next-53`)
+
+A broad health / bug / leakage / security audit of the **159 commits since v1.1.3**
+(localization, code-health AppState split, video hero viewer, grid faceted filters,
+multi-tag view, collection PDF, library backup/reconnect, folders-as-grid-cards,
+collections-in-sidebar). Dispatched six parallel review subagents across the changed
+subsystems, then **verified every flagged finding against the actual code** before acting —
+most were false positives:
+
+- **Rejected (verified non-bugs):** the four `CGImageSourceCreateWithURL` "leaks" (the API
+  returns a Swift-ARC-managed `CGImageSource?`, not `Unmanaged` — a manual `CFRelease` would
+  over-release and crash); the NotificationCenter "retain cycles" (outer closures already
+  `[weak self]`; the transient `Task` strongifying `self` for the async body is correct);
+  the viewer-string "unlocalized" reports (`Close`/`None yet`/`Open in Maps`/etc. are all in
+  literal `Text`/`.help`/`.accessibilityLabel` positions → auto-extracted, and the French
+  catalog is 100% complete — 371 keys, 0 missing, 0 untranslated); `applyStars`' `fileExists`
+  filter on restore (intentional per the backup plan — "for paths that exist on disk"); the
+  reconnect FTS-per-occurrence concern (mirrors existing `analyzeOne`: FTS is keyed by
+  `file_id`, one basename — not a regression); the "collection names stored localized"
+  concern (the deliberate **AI-names-in-language** feature, commit `b762bb7`). The migration
+  `v8_collection_sort_order` + explicit `foreignKeysEnabled` were reviewed and are clean.
+
+- **Fixed (5 genuine issues):**
+  1. `AppState.openFromIntent` used a bare `url.path.hasPrefix(node.url.path)` — added the
+     standing trailing-slash containment guard (`== || hasPrefix(+ "/")`) so a sibling root
+     can't claim a file. (Low impact — both branches did the same `select` — but it violated
+     the documented rule.)
+  2. `BreadcrumbView.segments` had the same bare `hasPrefix(rootPath)` → `hasPrefix(rootPath + "/")`,
+     so a sibling folder can't produce a corrupted breadcrumb slice.
+  3. `ReconnectWizard`'s Locate/Relocate button was `Button(cond ? "Locate…" : "Relocate…")` —
+     a ternary of literals binds the non-localizing `String` overload, so it shipped English
+     despite the catalog carrying both keys. Wrapped each branch in `String(localized:)`.
+  4. `TagChipsRow`'s accessibility action had the same ternary escape
+     (`Text(isSelected ? "Remove from filter" : "Add to filter")`) — wrapped each branch.
+  5. **`AnalyzePipeline` pass-claim gap:** the manual entry points bypassed the `acquirePass`
+     gate — `analyzeCurrentFolder` called `analyze(folder:)` directly and `analyzeSelected`
+     called `analyze(file:)` directly, so a user-triggered analyze could run concurrently with
+     the automatic `analyzePending` pass (the exact "two passes at once" failure the gate
+     exists to prevent — clobbered progress/`isRunning`, ambiguous `cancelActivePass`). Added
+     `analyzeFolderManual`/`analyzeFileManual` claiming wrappers (acquire → `defer` release →
+     call the claim-free inner method, which must stay claim-free so the existing claiming
+     wrappers don't deadlock) and routed both callers through them. Recorded the refined
+     invariant in the `acquirePass` gotcha.
+
+A focused second-pass review of the remaining areas (Intelligence sort/dedup/collections,
+ContentView/MuseApp, Export PDF, Settings/models) found no further concrete bugs — converged.
+Build green; `MuseTests` unit suite **TEST SUCCEEDED**. (`MuseUITests-Runner` times out
+enabling automation mode in this headless context — an environment limitation, not a code
+failure.) Security surface re-confirmed clean: no network path outside Sparkle, viewers block
+remote loads + JS, backup uses `JSONDecoder` (not `NSKeyedUnarchiver`), Foundation Models
+capability-gated, no `Process`/`exec`, sandbox entitlements unchanged.

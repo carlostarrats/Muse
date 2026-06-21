@@ -74,6 +74,28 @@ final class AnalyzePipeline: ObservableObject {
 
     private init() {}
 
+    // MARK: - Manual entry points (claim the pass gate)
+
+    /// User-initiated "Analyze this folder" (menu / App Intent). Claims the pass
+    /// gate so it can't run concurrently with the automatic `analyzePending`
+    /// pass — without this it would clobber the shared progress/`isRunning` state
+    /// and let `cancelActivePass()` halt the wrong pass. The inner
+    /// `analyze(folder:)` stays claim-free so the already-claiming wrappers
+    /// (analyzePending / regenerateTagless) don't deadlock.
+    func analyzeFolderManual(_ urls: [URL]) async {
+        guard await acquirePass() else { return }
+        defer { passClaimed = false }
+        await analyze(folder: urls)
+    }
+
+    /// User-initiated "Analyze this file". Claims the pass gate for the same
+    /// reason as `analyzeFolderManual`.
+    func analyzeFileManual(_ url: URL) async {
+        guard await acquirePass() else { return }
+        defer { passClaimed = false }
+        await analyze(file: url)
+    }
+
     // MARK: - File-level
 
     func analyze(file url: URL) async {

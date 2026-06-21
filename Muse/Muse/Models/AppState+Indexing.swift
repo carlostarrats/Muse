@@ -83,13 +83,13 @@ extension AppState {
         let urls = currentFiles
             .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
             .map { $0.url }
-        await AnalyzePipeline.shared.analyze(folder: urls)
+        await AnalyzePipeline.shared.analyzeFolderManual(urls)
         // Re-sort in case visual signals just landed
         resort()
     }
 
     func analyzeSelected() async {
         guard let url = selectedFile?.url else { return }
-        await AnalyzePipeline.shared.analyze(file: url)
+        await AnalyzePipeline.shared.analyzeFileManual(url)
     }
 }

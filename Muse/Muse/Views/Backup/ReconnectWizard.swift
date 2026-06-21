@@ -62,7 +62,10 @@ struct ReconnectWizard: View {
                             .lineLimit(1).truncationMode(.middle)
                     }
                     Spacer()
-                    Button(folder.newLocation == nil ? "Locate…" : "Relocate…") {
+                    // A ternary of literals binds the non-localizing String overload,
+                    // so each branch is wrapped explicitly (catalog carries both keys).
+                    Button(folder.newLocation == nil
+                           ? String(localized: "Locate…") : String(localized: "Relocate…")) {
                         if let url = pickDirectory() {
                             Task { await model.reconnectFolder(id: folder.id, location: url,
                                                                bookmarks: bookmarks) }
