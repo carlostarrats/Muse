@@ -1180,11 +1180,15 @@ The four most critical are also saved as Claude memories (linked).
   set into the source `.xcstrings`); enum display props (sort/mood/layout/tile/filter)
   wrapped in `String(localized:)` so menus localize too (display-only; rawValue
   persistence untouched; `displayName` tests pass in the en test host). Two live-feedback
-  passes grew the catalog 240→**315 keys** catching the strings extraction MISSES (anything
-  passed as a plain `String`: AppKit setters, custom-view title:/label: params, data
-  arrays, toasts, the ⓘ About modal via `section()`→`LocalizedStringKey`, INFO-card
-  metadata labels via `NSLocalizedString(row.label)` at the render site). 315 strings +
-  1303/1303 vocab compile to `fr.lproj`; live French confirmed with the user. Gotchas: a
+  passes + a code-review round grew the catalog 240→**371 keys** catching the strings
+  extraction MISSES (anything passed as a plain `String`: AppKit setters, custom-view
+  title:/label: params, data arrays, toasts, ternary/concatenation in `.help`/
+  `.accessibility*` where one branch forces the String overload, enum `displayName`/`label`
+  + other method returns, the ⓘ About modal via `section()`→`LocalizedStringKey`, INFO-card
+  metadata labels via `NSLocalizedString(row.label)` at the render site). 371 strings +
+  1303/1303 vocab compile to `fr.lproj`; live French confirmed with the user. A review round
+  also verified placeholder integrity (0 `%@`/`%lld` mismatches) + canonical-key invariants
+  (comparisons/persistence stay English). Gotchas: a
   plain `xcodebuild` build does NOT write extracted keys back (use `-exportLocalizations`);
   **compiler extraction only sees SwiftUI text-literal positions — String-typed UI text
   (AppKit/custom-view params/data arrays/`displayName`s) must be hand-wrapped in
@@ -1492,7 +1496,7 @@ Muse/Muse/
                                    (all 1303 VNClassifyImageRequest taxonomy terms;
                                    untranslated terms fall back per-term by design)
   Localizable.xcstrings            (at Muse/Muse/ root) UI-chrome String Catalog;
-                                   FULL fr (315 strings — extraction + the
+                                   FULL fr (371 strings — extraction + the
                                    String-typed UI text it misses, hand-wrapped).
                                    Xcode 26 synced groups auto-include it; only
                                    knownRegions needed `fr`. NOTE: a plain xcodebuild
@@ -2060,6 +2064,17 @@ MuseShareExtension/                (separate app-extension target) "Send to Muse
   - **Longer localized text overflows fixed-width controls** — budget ~1.3× the
     English width; use `lineLimit(1)` + `.truncationMode(.tail)` +
     `.minimumScaleFactor(…)` (or a wider frame).
+  - **Don't prune `NSLocalizedString(variable)`-reached keys as orphans.** The
+    extractor can't see runtime-variable keys, so `-exportLocalizations` marks them
+    `extractionState: stale` even though they're used and DO compile to `fr.lproj`
+    (the 14 INFO-card metadata labels — `Taken`/`Camera`/… — are the standing case).
+    A genuinely orphaned key is one no longer referenced in code at all; verify before
+    deleting.
+  - **A concatenation only localizes the wrapped part** — `String(localized: "A ") + "B"`
+    ships "B" in English (and a remaining-English grep for `String(localized:` won't
+    flag it). Wrap the WHOLE phrase as one key. Same trap: a ternary/`??` whose other
+    branch has interpolation forces the `String` overload, so literal branches need
+    explicit `String(localized:)`.
   - **Run the unit suite in an English host.** Enum-`displayName`/toast tests assert
     the English source; a per-app French override (`defaults write com.tarrats.Muse
     AppleLanguages '("fr")'`) makes them read French and fail — that's expected, not

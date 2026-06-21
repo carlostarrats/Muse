@@ -3711,3 +3711,32 @@ The infrastructure is language-agnostic — a SECOND language is now purely "fil
 no code changes. **Live French GUI confirmed with the user** ("everything I can see looks
 French"); a native-speaker wording review is still the right final polish. All unit tests
 green throughout (in the en host).
+
+**Code-review + QA round (catalog 346 → 371 keys).** A structured review — placeholder-
+integrity check (0 mismatches, no `%@`/`%lld` crash risk), canonical-key invariant audit
+(every `== label`/`byLabel[…]`/`displayName` comparison + AppSettings persistence stays
+canonical-English; the wraps are display-only), a seven-pass remaining-English sweep, and a
+fresh-eyes subagent review of the diff — caught **~34 more strings** the compiler extraction
+AND the earlier reactive passes missed, all the same root cause (built dynamically, not a
+SwiftUI text literal):
+- ternary/concatenation accessibility (sort-direction VoiceOver "Sens du tri : %@",
+  Filter active/Active/Off, the Duplicates tile value `Marked for delete`/`Kept…`,
+  Collapse/Expand, Close, the tag-chip help) — these have one branch that forces the
+  `String` overload, so the literals shipped English;
+- **method-returned UI labels**: folder-op error messages (with the verb itself localized —
+  `créer`/`renommer` interpolated into a localized template), the 10 screenshot-intent
+  collection names (`Recipes`→`Recettes`…), the 3 duplicate-type labels (`Byte-exact`→
+  `Identique octet pour octet`…), the namer `Collection` fallback, the Markdown load error,
+  and the font-specimen pangram (→ the French pangram);
+- the subagent review found two real bugs: the **backup save-panel message was half-French**
+  (my earlier `panel.message =` regex wrapped only the first of two concatenated literals) —
+  combined into one key; and **tag-suggestion pills rendered canonical English** while the
+  existing-tag pills rendered `display()` — now consistent.
+Also removed the orphaned old backup half-key and cleared a FALSE `extractionState: stale`
+flag on the 14 metadata labels: they're reached via `NSLocalizedString(row.label)` (a runtime
+variable the extractor can't see, so it marks them stale), but they ARE used and DO compile
+into `fr.lproj` — **don't prune `NSLocalizedString`-reached keys as orphans.** Re-verified
+after the round: build + full suite green, placeholder integrity 0, the stale-but-used labels
+still resolve to French at runtime. Accepted/documented (cosmetic, Low): the 3+-tag banner
+keeps the Oxford comma in French ("Affichage a, b, et c") — a VoiceOver-only corner case;
+a correct fix needs locale-aware grammar in the pure helper + its tests, not worth the churn.
