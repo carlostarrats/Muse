@@ -853,6 +853,23 @@ The four most critical are also saved as Claude memories (linked).
   rollover edge (memo + wall-clock, self-corrects on next interaction). Spec + plan
   in `docs/superpowers/`; narrative in `docs/session-log.md`. PENDING human GUI
   verification of the interactive flows (live click automation unavailable).
+- **2026-06-20** `feat/next-43` — **disable show-subfolders in the Collections
+  world.** The `rectangle.stack` show-subfolders toggle was live everywhere, but a
+  collection is a flat membership with no folder tree — toggling it on the
+  Collections card page or inside a single collection does nothing. New
+  `ContentView.inCollectionsContext` (`showingCollections || activeCollectionID != nil`)
+  covers the card page AND a drilled-into collection regardless of entry path
+  (page-opened keeps `showingCollections` true; sidebar-opened sets only
+  `activeCollectionID`); the toggle's `.disabled` became `isSearchActive ||
+  inCollectionsContext`. Deliberately a BROADER predicate than the sort cluster's
+  `isCollectionsPage` (card-page only) — `tagSortMenu`/`filterMenu` stay live
+  *inside* a collection (tag chips + in-collection filtering are valid) but
+  subfolders is dead in the whole Collections world. The icon greys out for free
+  via `moodToolbarIcon`'s `@Environment(\.isEnabled)` dim (next-42). One file
+  (`ContentView.swift`); build + full `MuseTests` green; no new test (pure
+  SwiftUI `.disabled` on a computed bool, like prior toolbar-enablement changes).
+  PENDING human GUI confirmation of the grey-out on the card page + inside a
+  collection (live click automation unavailable).
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
