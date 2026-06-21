@@ -1139,6 +1139,27 @@ The four most critical are also saved as Claude memories (linked).
   `Views/Viewer/ViewerBackdrop.swift`, `Views/Backup/ReconnectWizard.swift`,
   `Views/InfoSheet.swift`. PENDING human VoiceOver verification of the live flows
   (automated macOS VoiceOver driving unavailable — no Accessibility grant).
+- **2026-06-20** `feat/next-50` — **code-health refactor: shrink AppState +
+  SidebarView** (no behavior change). The two files the 2026-06-19 health rating
+  flagged (memory `muse-health-watch-list`) had grown past their thresholds, so a
+  deliberate split. Approach: **pure-math helper + file moves** — explicitly NOT a
+  generic ReorderController (relocating the drag `@State` would disturb the SwiftUI
+  timing seam where the sidebar's historical bugs lived). **AppState 1,404 → 972
+  LOC:** eight new `@MainActor extension AppState` files (`+Backup`, `+FolderOps`,
+  `+Indexing`, `+Search`, `+Mood`, `+Watcher`, `+TagChips`/`+Starring`) along the
+  existing `+Selection`/`+Filters` seam — methods only, since **stored properties
+  can't move to a Swift extension** (every `@Published`/stored prop stays in core,
+  dropping `private`→internal where a moved method needs it). **SidebarView 1,373 →
+  712 LOC:** the row/support structs moved verbatim into `Views/Sidebar/`
+  (`private`→internal), and the folder + collection reorder math — verified
+  line-for-line mirrors — de-duplicated into the pure, unit-tested
+  `Components/ReorderMath.swift` (13 tests); the `@State`, gestures, and synchronous
+  `disablesAnimations` commits stay inline. Diff audit vs baseline confirmed the
+  timing-critical code (`commitReorder`/`commitCollectionReorder`/`resetDrag`/
+  `rootRow`/`collectionRow` + the two large moved structs) is **byte-identical**; one
+  paraphrased doc comment caught + restored. Build + full `MuseTests` green at every
+  checkpoint. PENDING human GUI verification of the two live drag-reorders (folder +
+  sidebar-collection, Manual sort) — automated macOS drag driving unavailable.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
@@ -1208,6 +1229,32 @@ Muse/Muse/
                                    via matches(kind:ext:) — the ext is the node's
                                    url.pathExtension, picking the image-format leaf —
                                    feat/next-42, feat/next-48
+    AppState+Backup.swift          extension: library backup/restore actions
+                                   (exportBackup / beginRestorePicker) — feat/next-50
+    AppState+FolderOps.swift       extension: create/rename subfolder + DB path
+                                   migration + the new-subfolder/rename dialog
+                                   requests — feat/next-50
+    AppState+Indexing.swift        extension: scheduleIndexing / analyzeCurrentFolder
+                                   / analyzeSelected / findDuplicatesInCurrentFolder
+                                   (the indexingTask handle + markContentChanged +
+                                   enumerateRecursive stay in core) — feat/next-50
+    AppState+Search.swift          extension: runSearch / clearSearch
+                                   (searchRequestToken stays in core) — feat/next-50
+    AppState+Mood.swift            extension: moodPalette / setMood /
+                                   updateAutoMoodTimer (mood @Published state +
+                                   autoMoodTimer stay in core) — feat/next-50
+    AppState+Watcher.swift         extension: startWatching / handleFolderEvent
+                                   (the watcher handle stays in core) — feat/next-50
+    AppState+TagChips.swift        extension: reloadTagChips / bumpTagChipToken
+                                   (tagChipToken stays in core) — feat/next-50
+    AppState+Starring.swift        extension: toggleStar / openStarred
+                                   (startedStarredScopes stays in core) — feat/next-50
+                                   [The above 8 extensions were split off AppState.swift
+                                   in the 2026-06-20 code-health pass — methods only;
+                                   stored properties CANNOT move to a Swift extension,
+                                   so every @Published / stored prop stays in core,
+                                   dropping `private` where a moved method needs it.
+                                   Core: 1404 → 972 LOC. No behavior change.]
     AssetKind.swift                kind enum + extension/UTType detection;
                                    classify(url:) skips detect's fileExists stat
                                    (used by FolderReader for fast enumeration).
@@ -1473,6 +1520,19 @@ Muse/Muse/
                                    build in the detached load + nonisolated tests.
                                    Unit-tested (feat/next-38, next-47)
   Views/
+    Sidebar/                       (feat/next-50 code-health split) the sidebar row +
+                                   support views moved out of SidebarView.swift into
+                                   their own files (SidebarView 1373 → 712 LOC):
+                                   FolderTreeNode.swift (one folder row),
+                                   CollectionSidebarRow.swift (one collection row),
+                                   SidebarRows.swift (StarRow / AddFolderPillButton /
+                                   SectionHeader / AddPillButton),
+                                   SidebarReorderSupport.swift (RootFramePreference /
+                                   CollectionFramePreference / the sidebarReordering
+                                   environment flag / ReorderContext). Verbatim moves
+                                   (private → internal); SidebarView still owns the
+                                   reorder @State + gestures + synchronous commit and
+                                   delegates the math to Components/ReorderMath.swift
     SidebarView.swift              multi-root OutlineGroup tree + starred section;
                                    file-URL drop on folder rows MOVES the grid
                                    selection there (FileMover, folders filtered out
@@ -1719,6 +1779,13 @@ Muse/Muse/
                                    (feat/multi-select)
     PageScroll.swift               pure Page Up/Down math (newOriginY: overlap +
                                    clamp), unit-tested (feat/page-scroll)
+    ReorderMath.swift              pure sidebar live-drag reorder arithmetic
+                                   (rowShift / slot / insertionLineY) shared by the
+                                   folder AND collection reorders — the two were
+                                   verified line-for-line mirrors. SidebarView keeps
+                                   the @State + gestures + the SYNCHRONOUS commit; it
+                                   only delegates the math here. Unit-tested
+                                   (feat/next-50)
     EscapeAction.swift             pure Escape priority resolver: peel one focused
                                    layer per press — viewer → search → collection →
                                    Collections page → grid (EscapeResolver.action +

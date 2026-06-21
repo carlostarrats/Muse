@@ -64,7 +64,9 @@ final class AppState: ObservableObject {
     /// (memory + disk, synchronously) and bump their version so any visible
     /// tile re-decodes. Re-analysis is handled separately (the indexer cleared
     /// `analyzed_hash`, so the analyze pass regenerates tags/colors/dimensions).
-    private func markContentChanged(_ paths: [String]) {
+    /// Not `private`: called by `scheduleIndexing` (AppState+Indexing.swift)
+    /// and `handleFolderEvent` (AppState+Watcher.swift).
+    func markContentChanged(_ paths: [String]) {
         guard !paths.isEmpty else { return }
         for raw in paths {
             let url = URL(fileURLWithPath: raw)
@@ -93,7 +95,8 @@ final class AppState: ObservableObject {
     /// and the `tagsVersion` sink (tag edits). See `reloadTagChips`.
     @Published var tagChipRows: [(label: String, count: Int)] = []
     /// Monotonic token so a slow chip load can't clobber a newer scope.
-    private var tagChipToken = 0
+    /// Not `private`: the tag-chip methods live in AppState+TagChips.swift.
+    var tagChipToken = 0
     /// Reloads the chips whenever a tag is added / removed / renamed.
     private var tagsVersionCancellable: AnyCancellable?
     /// Tag-chip sort order (Most Used / A→Z). Persisted in AppSettings; a change
@@ -323,17 +326,6 @@ final class AppState: ObservableObject {
     /// confirm. Stored (not @Published) — extensions can't add stored props.
     var pendingNewCollectionPaths: [String] = []
 
-    /// Present the New Subfolder dialog for `node` (empty draft).
-    func requestNewSubfolder(_ node: FolderNode) {
-        folderNameDraft = ""
-        newSubfolderRequest = node
-    }
-
-    /// Present the Rename dialog for `node` (draft pre-filled with its name).
-    func requestRenameFolder(_ node: FolderNode) {
-        folderNameDraft = node.displayName
-        folderRenameRequest = node
-    }
     /// Monotonic token so a slow tag-filter load can't clobber a newer pick.
     /// Not `private`: read/written by `setActiveTag` in AppState+Filters.swift.
     var tagRequestToken = 0
@@ -385,43 +377,11 @@ final class AppState: ObservableObject {
     }
 
     /// Day/night flag for the Auto mood; a minute timer keeps it honest.
-    @Published private(set) var autoMoodIsDay = Mood.isDaytime()
-    private var autoMoodTimer: Timer?
-
-    var moodPalette: MoodPalette {
-        switch mood {
-        case .ink:    return Mood.fallbackPalette
-        case .paper:  return Mood.paperPalette
-        case .auto:   return autoMoodIsDay ? Mood.paperPalette : Mood.fallbackPalette
-        case .custom: return Mood.customPalette(hue: customHue,
-                                                saturation: customSaturation,
-                                                brightness: customBrightness)
-        }
-    }
-
-    func setMood(_ m: Mood) {
-        withAnimation(.easeInOut(duration: 0.35)) { mood = m }
-        m.save()
-        updateAutoMoodTimer()
-    }
-
-    /// Runs only while the mood is Auto; flips the palette at the
-    /// day/night boundary with a slow fade.
-    func updateAutoMoodTimer() {
-        autoMoodTimer?.invalidate()
-        autoMoodTimer = nil
-        guard mood == .auto else { return }
-        autoMoodIsDay = Mood.isDaytime()
-        autoMoodTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self, self.mood == .auto else { return }
-                let day = Mood.isDaytime()
-                if day != self.autoMoodIsDay {
-                    withAnimation(.easeInOut(duration: 0.6)) { self.autoMoodIsDay = day }
-                }
-            }
-        }
-    }
+    /// Mutated only by the mood code in AppState+Mood.swift (hence internal-set,
+    /// not private(set) — the setter must be reachable from that extension).
+    @Published var autoMoodIsDay = Mood.isDaytime()
+    /// Not `private`: `updateAutoMoodTimer` lives in AppState+Mood.swift.
+    var autoMoodTimer: Timer?
 
     // MARK: - Image layout
 
@@ -476,7 +436,8 @@ final class AppState: ObservableObject {
 
     // MARK: - Watcher
 
-    private var watcher: FolderWatcher?
+    /// Not `private`: `startWatching` lives in AppState+Watcher.swift.
+    var watcher: FolderWatcher?
     private var bookmarksCancellable: AnyCancellable?
     private var starsCancellable: AnyCancellable?
     private var folderStatsCancellable: AnyCancellable?
@@ -706,63 +667,6 @@ final class AppState: ObservableObject {
         rebuildRootNodes()
     }
 
-    // MARK: - Backup & restore (2026-06-20 library-backup spec)
-
-    /// Export a one-file backup of the whole library (folders, collections,
-    /// tags, stars, AI metadata) re-keyed to content hash. Purely additive;
-    /// reads the DB, writes a `.muselibrary` file the user keeps and carries.
-    func exportBackup() {
-        guard let queue = Database.shared.dbQueue else { return }
-        let roots: [BackupRoot] = bookmarks.roots.compactMap { root in
-            guard let url = bookmarks.url(for: root) else { return nil }
-            return BackupRoot(path: url.standardizedFileURL.path,
-                              display_name: url.lastPathComponent)
-        }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        let suggested = "Muse Backup \(formatter.string(from: Date())).\(BackupDocument.fileExtension)"
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = suggested
-        panel.canCreateDirectories = true
-        panel.message = "Keep this file somewhere safe — ideally not only on this Mac. "
-            + "You'll use it to restore your collections, tags, and folders on another Mac."
-        guard panel.runModal() == .OK, let dest = panel.url else { return }
-
-        Task {
-            do {
-                let archive = try await BackupBuilder.build(
-                    queue: queue, roots: roots,
-                    createdAt: Int64(Date().timeIntervalSince1970), appVersion: version)
-                let data = try BackupDocument.encode(archive)
-                try data.write(to: dest, options: .atomic)
-            } catch {
-                print("[Backup] export failed: \(error)")
-            }
-        }
-    }
-
-    /// Pick a `.muselibrary` file and open the Reconnect wizard.
-    func beginRestorePicker() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        if let type = UTType(filenameExtension: BackupDocument.fileExtension) {
-            panel.allowedContentTypes = [type]
-        }
-        panel.message = "Choose the Muse backup file you exported on your other Mac."
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            let data = try Data(contentsOf: url)
-            let archive = try BackupDocument.decode(data)
-            reconnectModel = ReconnectModel(archive: archive)
-            reconnectShown = true
-        } catch {
-            print("[Backup] restore load failed: \(error)")
-        }
-    }
-
     // MARK: - Folder selection
 
     func select(folder: FolderNode) {
@@ -837,21 +741,6 @@ final class AppState: ObservableObject {
         select(folder: resolveFolderNode(url) ?? FolderNode(url: url))
     }
 
-    /// Scan the current folder's images for duplicates, then present the
-    /// review sheet. Lives here so the menu bar can trigger it.
-    func findDuplicatesInCurrentFolder() {
-        let urls = currentFiles
-            .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
-            .map { $0.url }
-        Task { @MainActor in
-            await DuplicateFinder.shared.scan(in: urls)
-            duplicatesSheetVisible = true
-        }
-    }
-
-    /// Kick off active-folder indexing, then the automatic analysis pass
-    /// over whatever images are new or changed (stale analyzed_hash) —
-    /// already-analyzed files are provably skipped.
     /// In-flight index/prewarm/analyze work for the active folder. Held so
     /// removing the folder can cancel it — otherwise the detached task keeps
     /// analyzing files that are no longer reachable (the user-reported "kept
@@ -859,92 +748,18 @@ final class AppState: ObservableObject {
     /// failure mid-pass). A new selection supersedes via `folderLoadToken`;
     /// the previous folder's pass is deliberately allowed to finish, so this
     /// is cancelled only on explicit removal, not on every switch.
-    private var indexingTask: Task<Void, Never>?
-
-    /// - verifyICloud: run the background content-verify pass over the iCloud
-    ///   files (catches edits made while the app was closed — iCloud
-    ///   size/mtime oscillates so the normal fast path can't notice). Only the
-    ///   FRESH folder selection asks for this; live FSEvents reloads handle
-    ///   their specific changed files directly and must not re-hash the whole
-    ///   iCloud folder on every event.
-    private func scheduleIndexing(for url: URL, verifyICloud: Bool = false) {
-        let files = currentFiles
-        let icloud = iCloudFolderURL
-        indexingTask = Task.detached(priority: .userInitiated) {
-            let pairs = files.compactMap { f -> (URL, AssetKind)? in
-                guard f.kind != .folder, f.kind.hasNativeViewer || f.kind == .archive else { return nil }
-                return (f.url, f.kind)
-            }
-            // Local edits made while closed surface here (size/mtime changed),
-            // as do brand-new files. Drop stale art for the ones that changed.
-            let changed = await Indexer.shared.indexBatch(pairs, priority: .high)
-            await MainActor.run { self.markContentChanged(changed.map { $0.path }) }
-            if Task.isCancelled { return }
-            let imageURLs = files
-                .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
-                .map { $0.url }
-            // Warm the whole folder's thumbnails to disk up front (background),
-            // so scrolling anywhere later is an instant cache read — no
-            // generation, no progress pill. Runs concurrently with analysis.
-            let thumbURLs = files
-                .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd || $0.kind == .svg }
-                .map { $0.url }
-            await ThumbnailCache.shared.prewarmToDisk(thumbURLs)
-            if Task.isCancelled { return }
-            await SidecarHydrator.hydrate(urls: imageURLs, folder: icloud)
-            if Task.isCancelled { return }
-            await AnalyzePipeline.shared.analyzePending(in: imageURLs)
-            if Task.isCancelled { return }
-
-            // iCloud cold-start parity: re-hash the iCloud-zone files to catch
-            // edits/syncs that landed while Muse was closed. Background +
-            // silent (no pill) and content-hash based — NOT size/mtime, which
-            // oscillates on iCloud. Only the files that truly changed get their
-            // art dropped + a re-analyze; an unchanged folder is just reads.
-            guard verifyICloud, let icloud else { return }
-            let icloudPairs = pairs.filter {
-                $0.0.standardizedFileURL.path.hasPrefix(icloud.standardizedFileURL.path + "/")
-            }
-            guard !icloudPairs.isEmpty else { return }
-            let icloudChanged = await Indexer.shared.indexBatch(
-                icloudPairs, priority: .background, force: true, silent: true)
-            if Task.isCancelled || icloudChanged.isEmpty { return }
-            await MainActor.run { self.markContentChanged(icloudChanged.map { $0.path }) }
-            await ThumbnailCache.shared.prewarmToDisk(icloudChanged)
-            await AnalyzePipeline.shared.analyzePending(in: icloudChanged)
-        }
-    }
+    /// Not `private`: `scheduleIndexing` lives in AppState+Indexing.swift.
+    var indexingTask: Task<Void, Never>?
 
     // MARK: - Starring
-
-    func toggleStar(folder: FolderNode) {
-        if stars.isStarred(folder.url) {
-            stars.unstar(folder: folder.url)
-        } else {
-            stars.star(folder: folder.url)
-        }
-    }
 
     /// Starred-folder scopes we've already begun accessing this session. Each
     /// `startAccessingSecurityScopedResource()` increments a kernel refcount with
     /// no matching stop here (the folder is meant to stay reachable while it's
     /// pinned), so without de-duping, re-opening the same pin leaks a scope every
     /// time. Bounding to one start per distinct path caps it.
-    private var startedStarredScopes = Set<String>()
-
-    func openStarred(_ star: StarStore.StarredFolder) {
-        guard let url = stars.resolveURL(for: star) else { return }
-        let path = url.standardizedFileURL.path
-        // Start the scope once per distinct path, and only RECORD it as started
-        // when the start actually succeeds — so a transient first-open failure
-        // doesn't permanently skip the retry on a later open this session.
-        if !startedStarredScopes.contains(path),
-           url.startAccessingSecurityScopedResource() {
-            startedStarredScopes.insert(path)
-        }
-        let node = FolderNode(url: url, displayName: star.displayName)
-        select(folder: node)
-    }
+    /// Not `private`: `openStarred` lives in AppState+Starring.swift.
+    var startedStarredScopes = Set<String>()
 
     /// Monotonic token so a slow folder load can't clobber a newer selection.
     private var folderLoadToken = 0
@@ -973,121 +788,8 @@ final class AppState: ObservableObject {
         }
     }
 
-    // MARK: - Folder management
-
-    /// Create a subfolder inside `node` on disk, then refresh the tree and
-    /// drill into the new folder. Surfaces failures via `folderOpError`.
-    func createSubfolder(named name: String, in node: FolderNode) {
-        switch FolderOps.createSubfolder(named: name, in: node.url) {
-        case .failure(let e):
-            folderOpError = Self.message(for: e, verb: "create")
-        case .success:
-            // Reveal the new folder in the sidebar but DON'T navigate into it —
-            // the user stays on whatever they're currently viewing.
-            node.reloadChildren()
-            node.isExpanded = true
-        }
-    }
-
-    /// Rename `node`'s folder on disk and migrate the index + tags + pins so
-    /// nothing is orphaned. Roots repoint their bookmark; subfolders reload from
-    /// their parent. The iCloud home is never renamed (callers gate it).
-    func renameFolder(_ node: FolderNode, to name: String) {
-        let oldURL = node.url
-        switch FolderOps.rename(oldURL, to: name) {
-        case .failure(let e):
-            folderOpError = Self.message(for: e, verb: "rename")
-        case .success(let newURL):
-            // No-op rename (same name) — FolderOps returns the original URL.
-            guard newURL.standardizedFileURL != oldURL.standardizedFileURL else { return }
-            let oldPath = oldURL.standardizedFileURL.path
-            let newPath = newURL.standardizedFileURL.path
-
-            // Sidebar refresh (disk already moved; these are synchronous).
-            if node.isRoot, let root = bookmarks.roots.first(where: {
-                bookmarks.url(for: $0) == oldURL
-            }) {
-                // rootRenamed mutates bookmarks.roots → the $roots sink rebuilds
-                // rootNodes with the new URL/name.
-                if !bookmarks.rootRenamed(root, to: newURL) {
-                    folderOpError = "Couldn’t finish renaming the folder."
-                }
-            } else {
-                node.parent?.reloadChildren()
-            }
-
-            // Does the active selection sit AT or UNDER the renamed folder?
-            // (renaming an ancestor of the open folder must follow it, not
-            // strand the grid on a now-nonexistent path).
-            let selPath = selectedFolder?.url.standardizedFileURL.path
-            let selectedWasRoot = selectedFolder?.isRoot ?? false
-            let newSelPath: String? = selPath.flatMap {
-                FolderRenameMigration.rewrite(path: $0, old: oldPath, new: newPath)
-            }
-
-            // Migrate the DB FIRST, then reselect — the reselect triggers a
-            // re-index of the new location, which must not run before the
-            // path/tag rows are rewritten (a half-migrated state loses tags and
-            // could collide on the alive-path unique index).
-            Task { [weak self] in
-                let ok = await Self.migratePaths(old: oldPath, new: newPath,
-                                                 newName: newURL.lastPathComponent)
-                guard let self else { return }
-                if !ok {
-                    self.folderOpError = "The folder was renamed, but updating its tags failed."
-                }
-                self.tagsVersion &+= 1
-                self.stars.load()   // refresh pin paths/labels after migration
-                if let newSelPath {
-                    let url = URL(fileURLWithPath: newSelPath)
-                    let node = self.findNode(withURL: url)
-                        ?? FolderNode(url: url, isRoot: selectedWasRoot && newSelPath == newPath)
-                    self.select(folder: node)
-                }
-            }
-        }
-    }
-
-    /// Find a loaded node by URL across all root trees (best-effort; only walks
-    /// already-loaded children). Used to reselect after a rename.
-    private func findNode(withURL url: URL) -> FolderNode? {
-        let target = url.standardizedFileURL
-        func walk(_ n: FolderNode) -> FolderNode? {
-            if n.url.standardizedFileURL == target { return n }
-            for c in n.children { if let hit = walk(c) { return hit } }
-            return nil
-        }
-        for r in rootNodes { if let hit = walk(r) { return hit } }
-        return nil
-    }
-
-    /// Rewrite stored path prefixes after a folder rename (paths.absolute_path,
-    /// tags.parent_dir, starred_folders) in one transaction. Off the main actor;
-    /// returns false on failure so the caller can surface it. The actual SQL
-    /// lives in `FolderRenameMigration.apply` so it is unit-testable.
-    private static func migratePaths(old: String, new: String, newName: String) async -> Bool {
-        guard let queue = Database.shared.dbQueue else { return false }
-        do {
-            try await queue.write { db in
-                try FolderRenameMigration.apply(db, old: old, new: new, newName: newName)
-            }
-            return true
-        } catch {
-            return false
-        }
-    }
-
-    /// User-facing folder-op error copy.
-    private static func message(for error: FolderOps.OpError, verb: String) -> String {
-        switch error {
-        case .emptyName:   return "Please enter a folder name."
-        case .invalidName: return "A folder name can’t contain “/” or “:”."
-        case .collision:   return "A folder with that name already exists here."
-        case .ioError:     return "Couldn’t \(verb) the folder. You may not have permission."
-        }
-    }
-
-    private func reloadCurrentFiles(showLoading: Bool = false, thenIndex: Bool = false,
+    /// Not `private`: `clearSearch` (AppState+Search.swift) calls it.
+    func reloadCurrentFiles(showLoading: Bool = false, thenIndex: Bool = false,
                                     verifyICloud: Bool = false) {
         guard let folder = selectedFolder else {
             currentFiles = []
@@ -1217,48 +919,6 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// Recompute the tag-chip labels for the CURRENT scope (the active
-    /// collection's members, else the selected folder) off the main thread, then
-    /// publish them. The shared entry point for collection changes, tag edits,
-    /// and live folder reloads. A fresh folder SELECT instead computes the chips
-    /// inline in `reloadCurrentFiles`, so files + chips reveal together (and that
-    /// path, not this one, manages the `tagRowReady` gate).
-    /// `sortModeOverride` is supplied by the `$tagSortMode` sink: `@Published`
-    /// fires in `willSet`, so when the sink runs `self.tagSortMode` still holds
-    /// the OLD value — reading it here would order the chips one selection
-    /// behind (the "backwards" bug). The sink passes the delivered new value;
-    /// every other caller reads the (already-committed) property.
-    func reloadTagChips(sortModeOverride: TagSortMode? = nil) {
-        tagChipToken &+= 1
-        let token = tagChipToken
-        let scope = tagSourceFiles
-        let recursive = showSubfolders
-        let inCollection = activeCollectionID != nil
-        guard let queue = Database.shared.dbQueue, !scope.isEmpty else {
-            tagChipRows = []
-            return
-        }
-        let paths = scope.map { $0.url.standardizedFileURL.path }
-        // Search results can span folders, so the single-folder GROUP BY fast
-        // path doesn't apply — fall to the general per-file-scope query.
-        let simpleDir = (!inCollection && !recursive && !isSearchActive)
-            ? TagScope.parentDir(ofPath: paths[0]) : nil
-        let tagSort = sortModeOverride ?? tagSortMode
-        Task.detached(priority: .userInitiated) {
-            let rows = TagChipLoader.ordered(
-                TagChipLoader.counts(paths: paths, simpleFolderDir: simpleDir, queue: queue),
-                sortMode: tagSort)
-            await MainActor.run {
-                guard token == self.tagChipToken else { return }
-                withAnimation(.easeInOut(duration: AppState.navTransition)) {
-                    self.tagChipRows = rows
-                }
-            }
-        }
-    }
-
-    private func bumpTagChipToken() { tagChipToken &+= 1 }
-
     func resort() {
         // Don't re-sort search results; they maintain relevance ranking
         guard !isSearchActive else { return }
@@ -1272,57 +932,10 @@ final class AppState: ObservableObject {
     // MARK: - Search
 
     /// Monotonic token so a slow search can't clobber a newer search — or a
-    /// dismissal that landed while it was in flight.
-    private var searchRequestToken = 0
-
-    func runSearch(_ query: String) async {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            clearSearch()
-            return
-        }
-        searchRequestToken += 1
-        let token = searchRequestToken
-        // Scope follows the magnifier menu: "All" searches the whole indexed
-        // library; "This folder" (default) scopes to the selected folder, and
-        // falls back to everywhere when nothing is selected.
-        let scope: SearchScope
-        if !searchAllFolders, let folder = selectedFolder {
-            scope = .currentFolder(folder.url)
-        } else {
-            scope = .everywhere
-        }
-        let results = await SearchService.search(query: trimmed, scope: scope)
-        // A newer search — or clearSearch() — invalidates this stale result.
-        guard token == searchRequestToken else { return }
-        isSearchActive = true
-        // search results keep relevance rank; sort modes apply to folder browsing only
-        currentFiles = results
-        // Chip labels derive from the search result set (tagSourceFiles is
-        // search-aware) so the offered chips stay relevant while searching.
-        reloadTagChips()
-    }
-
-    func clearSearch() {
-        searchRequestToken += 1   // cancel any in-flight search result
-        searchQuery = ""
-        isSearchActive = false
-        reloadCurrentFiles()
-    }
-
-    func analyzeCurrentFolder() async {
-        let urls = currentFiles
-            .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
-            .map { $0.url }
-        await AnalyzePipeline.shared.analyze(folder: urls)
-        // Re-sort in case visual signals just landed
-        resort()
-    }
-
-    func analyzeSelected() async {
-        guard let url = selectedFile?.url else { return }
-        await AnalyzePipeline.shared.analyze(file: url)
-    }
+    /// dismissal that landed while it was in flight. Not `private`: the search
+    /// methods live in AppState+Search.swift and the folder-selection path here
+    /// also bumps it.
+    var searchRequestToken = 0
 
     /// Nonisolated so it can run off the main thread during a folder load.
     /// Sorting is left to SmartSorter (the caller applies the active mode).
@@ -1356,49 +969,4 @@ final class AppState: ObservableObject {
         reloadCurrentFiles()
     }
 
-    // MARK: - Watcher
-
-    private func startWatching(_ url: URL) {
-        if watcher == nil {
-            watcher = FolderWatcher { [weak self] changedPaths in
-                // Search results aren't folder contents — a disk event must
-                // not replace them with the watched folder's listing.
-                guard let self, !self.isSearchActive else { return }
-                self.handleFolderEvent(changedPaths: changedPaths)
-            }
-        }
-        watcher?.watch(url: url, recursive: showSubfolders)
-    }
-
-    /// A live disk change landed. Two jobs: (1) refresh the specific media
-    /// files that changed — re-hash them (forced, so iCloud's oscillating
-    /// metadata can't hide a real edit), drop their stale thumbnails, and
-    /// re-analyze new/edited ones; (2) reflect adds/removes/renames in the
-    /// grid listing. No folder-wide reindex — only the touched files do work.
-    private func handleFolderEvent(changedPaths: [String]) {
-        guard let folder = selectedFolder else { return }
-        let media = FolderEventFilter.mediaChanges(
-            paths: changedPaths, folder: folder.url, recursive: showSubfolders)
-        let existing = media.filter { FileManager.default.fileExists(atPath: $0) }
-        if !existing.isEmpty {
-            Task.detached(priority: .userInitiated) {
-                let pairs = existing.map { p -> (URL, AssetKind) in
-                    let u = URL(fileURLWithPath: p)
-                    return (u, AssetKind.detect(at: u))
-                }
-                // force: a same-path edit (and every iCloud edit) wouldn't be
-                // caught by the size/mtime fast path. silent: no progress pill
-                // for a handful of files.
-                let changed = await Indexer.shared.indexBatch(
-                    pairs, priority: .high, force: true, silent: true)
-                await MainActor.run { self.markContentChanged(changed.map { $0.path }) }
-                let urls = existing.map { URL(fileURLWithPath: $0) }
-                // prewarm covers brand-new files; analyzePending self-gates on
-                // a stale analyzed_hash, so it re-tags new + edited only.
-                await ThumbnailCache.shared.prewarmToDisk(urls)
-                await AnalyzePipeline.shared.analyzePending(in: urls)
-            }
-        }
-        reloadCurrentFiles()
-    }
 }
