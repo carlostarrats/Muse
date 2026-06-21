@@ -337,6 +337,29 @@ The four most critical are also saved as Claude memories (linked).
   (better drag-reorder math). Rule: don't use `LazyVStack` for a short list sharing a
   `ScrollView` with sibling content — the laziness buys nothing and risks the
   vanishing-rows glitch. Fixed 2026-06-20 (`fix/sidebar-folders-vanish`).
+- **The tag chip filter is an ORDERED SET, not a scalar — `activeTagPaths` is the
+  INTERSECTION (AND).** `AppState.activeTagLabel: String?` is gone; the filter is
+  `activeTagLabels: [String]` (insertion order drives the banner wording). Mutate it
+  ONLY via `setActiveTags(_:)` (the core — clears the grid selection, then recomputes
+  `activeTagPaths` as the set-intersection of each label's path set) / `setActiveTag(_:)`
+  (single/clear, delegates) / `toggleActiveTag(_:)` (Cmd-click). Do NOT compute
+  `activeTagPaths` as a SwiftUI computed property — it's set imperatively inside the
+  `tagRequestToken`-guarded `Task` so labels + paths land in ONE animated transaction
+  (same crossfade discipline as the collection filter). Each per-label query MUST stay
+  `parent_dir`-scoped (`pathsForTag` reuses the per-location SQL — tags are per
+  `(file_id, parent_dir)`, so a duplicate sharing the file_id in an untagged folder must
+  not be pulled in). `singleActiveTag` (count==1 ? first : nil) gates the single-tag menu
+  commands (Rename/Delete/Remove) — they're ambiguous for a 2+ selection; deletion stays
+  single (right-click, per-chip `tag.label`). An empty intersection is a LEGITIMATE empty
+  grid (the banner explains the set) — only the single-tag case falls back to "All" to
+  avoid stranding. `removeTag` keeps the intersection correct with
+  `activeTagPaths?.subtract(removed)` (a file still in the intersection carries ALL labels,
+  so any that lost the removed label is in `removed`). The chip row + tag filter now also
+  mount/apply during SEARCH (`tagSourceFiles`/`reloadTagChips` are search-aware — chips
+  derive from the result set and the per-folder GROUP BY fast path is skipped since
+  results span folders). `EscapeResolver` has a `.clearTags` layer ordered AFTER search,
+  BEFORE the collection back-out (one press clears the whole set). Built 2026-06-20
+  (`feat/next-45`).
 
 ### Session index (detail in `docs/session-log.md`)
 
@@ -907,6 +930,30 @@ The four most critical are also saved as Claude memories (linked).
   diff review clean; no new test (SwiftUI rendering race, no testable surface — UI
   views aren't unit-tested). New durable gotcha recorded. Real confirmation is the
   bug ceasing to recur in the live build.
+- **2026-06-20** `feat/next-45` — **Multi-tag view (AND / intersection)** — the third
+  and most invasive of the three browsing features (after the hero INFO card `next-38`
+  and grid faceted filters `next-42`). The tag chip row could filter by exactly one tag;
+  it's now an ordered SET. **Plain-click** a chip = view just that tag (today's behavior,
+  preserved; re-plain-clicking the sole chip clears). **Cmd-click** toggles a chip in/out;
+  the grid shows files carrying ALL selected tags (set **intersection / AND**), which
+  monotonically narrows and can legitimately be empty (honest empty grid). A **banner**
+  ("Viewing a and b", Oxford "and" for 3+) names the active set for 2+ tags, sitting at
+  the grid top below the chips. Scope expands to **search**: the chip row now mounts over
+  search results and the tag filter narrows within them (This-Folder and All scope), chips
+  derived from the result set. **Escape** clears the whole set in one press (a new
+  `.clearTags` layer ordered after viewer/search, before the collection back-out). The
+  scalar→set migration was the real cost: `AppState.activeTagLabel: String?` →
+  `activeTagLabels: [String]`, `activeTagPaths` retained as the intersection, all readers
+  (Tags menu, SelectionMenu, GridView `.id`/`gridSignature`, TagChipsRow, `select(folder:)`)
+  migrated together (no half-state). New pure `Models/TagSelection.swift` (`toggling` +
+  Oxford `bannerText`, unit-tested); `setActiveTags` core (token-guarded, per-`parent_dir`
+  queries intersected in one transaction); `singleActiveTag` gates the single-tag menu
+  commands. **NOT** in scope (per spec): bulk tag delete (deletion stays single,
+  right-click), OR/union mode, Collections-card-page filtering. New `TagSelectionTests`
+  (9) + extended `EscapeActionTests` (`tagsActive` param + 4 ordering cases). Build + full
+  `MuseTests` green; independent diff review clean (Ready to merge: Yes, no Critical/
+  Important). New durable gotcha recorded. Spec + plan in `docs/superpowers/`. PENDING
+  human GUI verification of the interactive flows (live click automation unavailable).
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
