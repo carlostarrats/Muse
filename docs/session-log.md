@@ -3792,3 +3792,48 @@ enabling automation mode in this headless context — an environment limitation,
 failure.) Security surface re-confirmed clean: no network path outside Sparkle, viewers block
 remote loads + JS, backup uses `JSONDecoder` (not `NSKeyedUnarchiver`), Foundation Models
 capability-gated, no `Process`/`exec`, sandbox entitlements unchanged.
+
+## 2026-06-21 — `fix/tag-switch-flicker` — grid flickers the prior tag when switching chips
+
+**Symptom (from the owner, live).** Switching tag-filter chips briefly flashed the
+grid of the tag you just *left* before the newly-selected tag's content appeared.
+After the first fix, a fainter residual remained: the new content seemed to "fade
+in on its own" — a small dim-and-recover blip.
+
+**Root cause (two layered issues).** The grid keys a `.id` on the active tag filter
+so a switch replaces the canvas wholesale (no per-tile reflow), softened by a
+`.transition`. Both stem from the deliberate sync-label / async-paths split in
+`setActiveTags` (see the tag-filter durable constraint): `activeTagLabels` commits
+synchronously (chip highlight is instant); only `activeTagPaths` — the DB-derived
+intersection that actually drives `visibleFiles` — lands a frame later inside the
+`withAnimation` block.
+
+1. **Prior-tag flash.** The grid `.id` was keyed on `activeTagLabels`, so it rebuilt
+   the canvas *immediately* on the click — a frame before `activeTagPaths` updated.
+   The fresh canvas therefore rendered the OLD tag's filtered files, then snapped to
+   the new set when the query returned. That snap was the flash.
+2. **Dim blip.** `.transition(.opacity)` on the identity swap is a *symmetric* fade:
+   the outgoing and incoming canvas both read the same global `visibleFiles`, so SwiftUI
+   fades two identical layers out/in at once. Mid-transition both sit at ~0.5 opacity →
+   the composite dips to ~75% and recovers. A true A→B cross-fade isn't achievable from
+   shared state without snapshotting the old grid (not worth it).
+
+**Fix.**
+- `AppState.activeTagPaths.didSet` now bumps a new `@Published var tagFilterGeneration`
+  (`&+= 1`). It advances in lockstep with the RESOLVED filter, covering all three write
+  sites (async commit + both sync-clear paths) for free.
+- `GridView` keys the canvas `.id` on `tagFilterGeneration` instead of `activeTagLabels`,
+  so the swap fires exactly when the new paths land — never a frame early. Chip highlight /
+  banner still key on `activeTagLabels`, so the documented fast-Cmd-click behavior is
+  untouched.
+- The transition is now `.transition(.identity)` (NOT removed — an `.id` change inside
+  `withAnimation` defaults to `.opacity`, so the dip would return). Instant swap: no flash,
+  no dim, and the `.id` still does its real job (wholesale replace, no per-tile reflow).
+  Trade-off: tag/collection switches no longer fade — they're an instant replace. That's
+  the cleanest flicker-free option given shared state; the old "fade" was only ever the dim
+  artifact.
+
+Verified live by the owner ("perfect"). Build green; `MuseTests` **TEST SUCCEEDED**
+(exit 0, 0 failures). No new tests — this is SwiftUI view-timing glue (`.id` + transition),
+which the suite doesn't cover (UI views aren't unit-tested), and the logic change is a
+trivial counter bump in a `didSet`.

@@ -277,8 +277,19 @@ final class AppState: ObservableObject {
     /// Alive paths in the INTERSECTION of `activeTagLabels` (files carrying ALL
     /// selected tags); nil = no filter.
     @Published var activeTagPaths: Set<String>? {
-        didSet { _visibleFilesValid = false }
+        didSet {
+            _visibleFilesValid = false
+            // Bumps in lockstep with the RESOLVED filter (not the synchronously
+            // committed `activeTagLabels`). The grid keys its cross-fade `.id` on
+            // this so the swap fires when the new path set actually lands — keying
+            // on `activeTagLabels` rebuilt the grid a frame early, rendering the
+            // OLD tag's files until the async query returned (the switch flicker).
+            tagFilterGeneration &+= 1
+        }
     }
+    /// Monotonic counter advanced whenever `activeTagPaths` is committed. See its
+    /// didSet — drives the grid's tag-switch cross-fade identity.
+    @Published var tagFilterGeneration = 0
     /// Bumped after any tag mutation (add/rename/delete) so the chip row
     /// and other tag-derived UI reload.
     @Published var tagsVersion = 0

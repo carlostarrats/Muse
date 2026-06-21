@@ -156,9 +156,22 @@ struct GridView: View {
                             )
                             .padding(contentInset)
                             // Collection/tag switches replace the grid wholesale —
-                            // one clean cross-fade, not a per-tile reflow.
-                            .id("\(appState.activeCollectionID ?? "")|\(appState.activeTagLabels.joined(separator: "\u{1f}"))")
-                            .transition(.opacity)
+                            // one clean cross-fade, not a per-tile reflow. Keyed on
+                            // `tagFilterGeneration` (commits with the RESOLVED
+                            // `activeTagPaths`), not `activeTagLabels` (commits a
+                            // frame early), so the swap doesn't flash the prior
+                            // tag's files mid-fade.
+                            .id("\(appState.activeCollectionID ?? "")|\(appState.tagFilterGeneration)")
+                            // Instant swap, NOT `.opacity`. Both the outgoing and
+                            // incoming canvas read the same global `visibleFiles`,
+                            // so a symmetric opacity transition fades two identical
+                            // layers in/out at once — the composite dips to ~75%
+                            // and recovers (a visible dim of the NEW content, not a
+                            // real A→B cross-fade, which shared state can't give us
+                            // without snapshotting). `.identity` keeps the `.id`'s
+                            // job — wholesale replace, no per-tile reflow — without
+                            // the dim blip.
+                            .transition(.identity)
                     }
                 }
                 }
