@@ -24,5 +24,8 @@ struct ViewerBackdrop: View {
         }
         .ignoresSafeArea()
         .animation(.easeInOut(duration: 0.6), value: hexColor)
+        // Purely a decorative wash — VoiceOver shouldn't stop on it (the viewer's
+        // close affordance is the ✕ chrome button; the tap-to-close is mouse-only).
+        .accessibilityHidden(true)
     }
 }

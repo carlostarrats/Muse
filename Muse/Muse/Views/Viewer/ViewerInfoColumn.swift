@@ -237,6 +237,7 @@ struct ViewerInfoColumn<Chrome: View>: View {
                         copyToPasteboard(palette.joined(separator: ", "))
                         show("Copied \(palette.count) colors")
                     }
+                    .accessibilityLabel("Copy all colors")
                 }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 26, maximum: 26), spacing: 6)],
                           alignment: .leading, spacing: 6) {
@@ -305,6 +306,8 @@ struct ViewerInfoColumn<Chrome: View>: View {
                         RoundedRectangle(cornerRadius: 7, style: .continuous)
                             .fill(.white.opacity(0.08))
                             .frame(width: 26, height: 26)
+                            // Transient loading placeholders — nothing to announce.
+                            .accessibilityHidden(true)
                     }
                 }
             }
@@ -370,6 +373,9 @@ private struct CardLabel: View {
             .kerning(0.8)
             .textCase(.uppercase)
             .foregroundStyle(.white.opacity(0.42))
+            // Every card title (COLLECTION / TAGS / COLORS / INFO) is a heading,
+            // so VoiceOver's heading rotor can jump between the column's cards.
+            .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -593,6 +599,8 @@ private struct ActionButton: View {
             HStack(spacing: 6) {
                 Image(systemName: systemImage)
                     .font(.system(size: 11, weight: .medium))
+                    // The text label names the button; the glyph is decorative.
+                    .accessibilityHidden(true)
                 Text(label)
                     .font(.system(size: 12, weight: .medium))
                     .lineLimit(1)
