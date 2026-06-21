@@ -9,6 +9,7 @@ final class EscapeActionTests: XCTestCase {
         let action = EscapeResolver.action(hasSelectedFile: true,
                                            selectedFileIsHero: true,
                                            searchActive: false,
+                                           tagsActive: false,
                                            insideCollection: false,
                                            showingCollectionsPage: false)
         XCTAssertEqual(action, .closeHero)
@@ -18,6 +19,7 @@ final class EscapeActionTests: XCTestCase {
         let action = EscapeResolver.action(hasSelectedFile: true,
                                            selectedFileIsHero: false,
                                            searchActive: false,
+                                           tagsActive: false,
                                            insideCollection: false,
                                            showingCollectionsPage: false)
         XCTAssertEqual(action, .closeViewer)
@@ -29,6 +31,7 @@ final class EscapeActionTests: XCTestCase {
         let action = EscapeResolver.action(hasSelectedFile: true,
                                            selectedFileIsHero: true,
                                            searchActive: true,
+                                           tagsActive: true,
                                            insideCollection: true,
                                            showingCollectionsPage: true)
         XCTAssertEqual(action, .closeHero)
@@ -38,17 +41,19 @@ final class EscapeActionTests: XCTestCase {
         let action = EscapeResolver.action(hasSelectedFile: true,
                                            selectedFileIsHero: false,
                                            searchActive: false,
+                                           tagsActive: false,
                                            insideCollection: true,
                                            showingCollectionsPage: true)
         XCTAssertEqual(action, .closeViewer)
     }
 
-    // MARK: - Search is the next layer peeled (above collection/page)
+    // MARK: - Search is the next layer peeled (above tags/collection/page)
 
     func testSearchActiveClearsSearch() {
         let action = EscapeResolver.action(hasSelectedFile: false,
                                            selectedFileIsHero: false,
                                            searchActive: true,
+                                           tagsActive: false,
                                            insideCollection: false,
                                            showingCollectionsPage: false)
         XCTAssertEqual(action, .clearSearch)
@@ -61,17 +66,64 @@ final class EscapeActionTests: XCTestCase {
         let action = EscapeResolver.action(hasSelectedFile: false,
                                            selectedFileIsHero: false,
                                            searchActive: true,
+                                           tagsActive: false,
                                            insideCollection: true,
                                            showingCollectionsPage: true)
         XCTAssertEqual(action, .clearSearch)
     }
 
-    // MARK: - Back-out chain (no viewer, no active search)
+    // MARK: - Tag set is peeled after search, before collection
+
+    func testTagsActiveClearsTags() {
+        let action = EscapeResolver.action(hasSelectedFile: false,
+                                           selectedFileIsHero: false,
+                                           searchActive: false,
+                                           tagsActive: true,
+                                           insideCollection: false,
+                                           showingCollectionsPage: false)
+        XCTAssertEqual(action, .clearTags)
+    }
+
+    func testSearchBeatsTags() {
+        // Search is peeled first (per the existing priority chain); tags next.
+        let action = EscapeResolver.action(hasSelectedFile: false,
+                                           selectedFileIsHero: false,
+                                           searchActive: true,
+                                           tagsActive: true,
+                                           insideCollection: false,
+                                           showingCollectionsPage: false)
+        XCTAssertEqual(action, .clearSearch)
+    }
+
+    func testTagsBeatCollectionExit() {
+        // Inside a collection with a tag set: Escape clears the tags first,
+        // leaving the collection's full members; the next press exits it.
+        let action = EscapeResolver.action(hasSelectedFile: false,
+                                           selectedFileIsHero: false,
+                                           searchActive: false,
+                                           tagsActive: true,
+                                           insideCollection: true,
+                                           showingCollectionsPage: true)
+        XCTAssertEqual(action, .clearTags)
+    }
+
+    func testViewerBeatsTags() {
+        let action = EscapeResolver.action(hasSelectedFile: true,
+                                           selectedFileIsHero: true,
+                                           searchActive: false,
+                                           tagsActive: true,
+                                           insideCollection: false,
+                                           showingCollectionsPage: false)
+        XCTAssertEqual(action, .closeHero)
+    }
+
+    // MARK: - Back-out chain (no viewer, no active search, no tags)
 
     func testInsideCollectionExitsToCollectionsPage() {
         let action = EscapeResolver.action(hasSelectedFile: false,
                                            selectedFileIsHero: false,
                                            searchActive: false,
+                                           tagsActive: false,
                                            insideCollection: true,
                                            showingCollectionsPage: true)
         XCTAssertEqual(action, .exitCollection)
@@ -81,6 +133,7 @@ final class EscapeActionTests: XCTestCase {
         let action = EscapeResolver.action(hasSelectedFile: false,
                                            selectedFileIsHero: false,
                                            searchActive: false,
+                                           tagsActive: false,
                                            insideCollection: false,
                                            showingCollectionsPage: true)
         XCTAssertEqual(action, .exitCollectionsPage)
@@ -90,6 +143,7 @@ final class EscapeActionTests: XCTestCase {
         let action = EscapeResolver.action(hasSelectedFile: false,
                                            selectedFileIsHero: false,
                                            searchActive: false,
+                                           tagsActive: false,
                                            insideCollection: false,
                                            showingCollectionsPage: false)
         XCTAssertEqual(action, .none)

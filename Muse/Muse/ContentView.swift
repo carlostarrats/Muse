@@ -265,6 +265,7 @@ struct ContentView: View {
                     hasSelectedFile: selected != nil,
                     selectedFileIsHero: isHero,
                     searchActive: searchPresent,
+                    tagsActive: !appState.activeTagLabels.isEmpty,
                     insideCollection: appState.activeCollectionID != nil,
                     showingCollectionsPage: appState.showingCollections
                 ) {
@@ -287,6 +288,9 @@ struct ContentView: View {
                     // Peel the search first (it left any collection intact), so
                     // this returns to the collection's members or the folder grid.
                     appState.clearSearch()
+                case .clearTags:
+                    // Clear the whole tag set in one press (not one tag at a time).
+                    appState.setActiveTag(nil)
                 case .exitCollection:
                     // Same as the in-collection header BackArrowButton.
                     appState.setActiveCollection(nil)
