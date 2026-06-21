@@ -215,17 +215,25 @@ extension AppState {
             await TagStore.shared.removeLabel(label, fromURLs: urls)
             tagsVersion &+= 1
             if activeTagLabels.contains(label) {
-                // The affected files no longer carry `label`, so they leave the
-                // intersection — subtract them from activeTagPaths (correct for
-                // both single- and multi-tag: a file still in the intersection
-                // must carry ALL labels, so any that lost `label` is in `removed`).
+                // A multi-tag delete only comes from the chip's full-view "Delete
+                // Tag…" (the partial "Remove Tag from Selection" is gated to a
+                // single active tag), so the deleted label is now gone from this
+                // view. Drop it from the set and recompute the remaining
+                // intersection — otherwise the banner keeps naming a tag whose
+                // chip has vanished, with no way to deselect it.
+                if activeTagLabels.count > 1 {
+                    setActiveTags(activeTagLabels.filter { $0 != label })
+                    return
+                }
+                // Single tag: the affected files leave the intersection — subtract
+                // them from activeTagPaths (a file still in the intersection must
+                // carry the tag, so any that lost it is in `removed`). If nothing
+                // here would still carry the tag the grid is stranded empty, so
+                // fall back to "All".
                 let anyLeft = visibleFiles.contains {
                     !removed.contains($0.url.standardizedFileURL.path)
                 }
-                // Preserve today's single-tag "fall back to All" so the grid is
-                // never stranded empty. A multi-tag intersection that empties is
-                // legitimate (honest empty grid; the banner explains the set).
-                if !anyLeft && activeTagLabels.count == 1 {
+                if !anyLeft {
                     setActiveTag(nil)
                     return
                 }
@@ -350,25 +358,29 @@ extension AppState {
 
     /// Core tag-filter mutation: set the selection to exactly `labels` (ordered)
     /// and recompute `activeTagPaths` as the INTERSECTION of each label's path
-    /// set (files carrying ALL of them). Empty `labels` clears the filter. Same
-    /// single-transaction animated swap as the collection filter — labels +
-    /// paths land together so the grid cross-fades once. One query per label
-    /// (selection sizes are tiny).
+    /// set (files carrying ALL of them). Empty `labels` clears the filter. One
+    /// query per label (selection sizes are tiny).
+    ///
+    /// `activeTagLabels` is committed SYNCHRONOUSLY (before the async path query)
+    /// so the chip highlight + banner reflect the click immediately AND the next
+    /// toggle/replace decision reads a fresh value. It used to be written only
+    /// inside the async Task, which lagged a click — two fast Cmd-clicks both read
+    /// the pre-Task set, so the first selection was lost (and a double plain-click
+    /// failed to clear). Only `activeTagPaths` (the DB-derived intersection) lands
+    /// async now; the grid crossfades when it arrives (a frame later for tiny
+    /// selections — imperceptible).
     func setActiveTags(_ labels: [String], animated: Bool = true) {
         clearSelection()
         let curve = Animation.easeInOut(duration: AppState.navTransition)
         tagRequestToken += 1
+        activeTagLabels = labels
         guard !labels.isEmpty else {
             // Clearing as part of a folder switch is INSTANT (animated: false), so
             // the selected-tag view vanishes in one frame rather than animating
             // away before the new folder appears.
             if animated {
-                withAnimation(curve) {
-                    activeTagLabels = []
-                    activeTagPaths = nil
-                }
+                withAnimation(curve) { activeTagPaths = nil }
             } else {
-                activeTagLabels = []
                 activeTagPaths = nil
             }
             return
@@ -384,7 +396,6 @@ extension AppState {
             }
             if token == tagRequestToken {
                 withAnimation(curve) {
-                    activeTagLabels = labels
                     activeTagPaths = inter
                 }
             }

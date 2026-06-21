@@ -93,17 +93,39 @@ struct TagChipsRow: View {
         }
 
         // Banner naming the active set (2+ tags). Sits at the top of the grid
-        // area, below the chips — quiet secondary text, absent for 0/1 tag.
+        // area, below the chips — quiet secondary text with the tag labels drawn
+        // as pills so they stand out from the connective words. Absent for 0/1
+        // tag. The plain string is the VoiceOver label so it reads naturally.
         if let banner = appState.tagBannerText {
-            Text(banner)
+            // Horizontal scroll mirrors the chip row above so a long set (many
+            // pills / long labels) scrolls instead of squeezing each pill and
+            // connective word into ugly per-element truncation.
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    Text("Viewing")
+                        .foregroundStyle(.secondary)
+                    ForEach(Array(
+                        TagSelection.bannerSegments(for: appState.activeTagLabels).enumerated()),
+                            id: \.offset) { _, seg in
+                        if seg.precededByAnd {
+                            Text("and").foregroundStyle(.secondary)
+                        }
+                        HStack(spacing: 0) {
+                            BannerPill(label: seg.label)
+                            if seg.trailingComma {
+                                Text(",").foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 14)
-                .padding(.bottom, 10)
-                .transition(.opacity)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, 10)
+            .transition(.opacity)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(banner)
         }
         }
         .animation(.easeInOut(duration: AppState.navTransition), value: appState.activeTagLabels)
@@ -152,7 +174,7 @@ struct TagChipsRow: View {
             await TagStore.shared.renameLabel(from: old, to: new)
             if appState.activeTagLabels.contains(old) {
                 appState.setActiveTags(
-                    appState.activeTagLabels.map { $0 == old ? new : $0 })
+                    TagSelection.renaming(appState.activeTagLabels, from: old, to: new))
             }
             appState.tagsVersion += 1
         }
@@ -287,6 +309,27 @@ private struct ChipFlow: Layout {
         }
         out[h] = naturals[h] + grow
         return out
+    }
+}
+
+// MARK: - Banner pill
+
+/// Small quiet capsule used in the multi-tag banner ("Viewing [white] and
+/// [black]") so each tag label stands out from the connective words. A read-only
+/// label — not interactive, unlike the TagChip filter chips above.
+private struct BannerPill: View {
+    let label: String
+
+    var body: some View {
+        Text(label)
+            .font(.system(size: 12, weight: .medium))
+            .lineLimit(1)
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            // Match the resting (unselected) TagChip wash so the banner pills read
+            // as the same family.
+            .background(Capsule(style: .continuous).fill(.primary.opacity(0.08)))
     }
 }
 

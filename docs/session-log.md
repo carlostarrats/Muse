@@ -3230,3 +3230,47 @@ the per-`parent_dir` scoping, token/race handling, intersection reduce, and
 scroll-clip clearance all confirmed intact. Pending human GUI verification of the
 interactive flows (live click automation unavailable — macOS Accessibility not
 granted to the harness). New durable gotcha recorded in `CLAUDE.md`.
+
+### Same session — pill banner + three-lens QA pass
+
+After the initial build, two refinements driven from the running app + review:
+
+**Pill banner.** The banner's tag labels now render as small quiet capsules
+(`BannerPill`, matching the resting `TagChip` wash at `.primary.opacity(0.08)`) so
+they stand out from the connective words — "Viewing [white] and [black]". New pure
+`TagSelection.bannerSegments(for:)` carries the per-label connective flags
+(`precededByAnd` / `trailingComma` for the Oxford comma), unit-tested; the banner is
+wrapped in a horizontal `ScrollView` mirroring the chip row so a long set scrolls
+instead of truncating each pill. The plain `bannerText` string stays the VoiceOver
+label (`.accessibilityElement(children: .ignore)`).
+
+**QA pass (three parallel review lenses + a verification round).** Correctness/
+concurrency, UI/a11y, and an adversarial 12-scenario trace. Findings fixed:
+
+1. **Sync-label race (Important).** `setActiveTags` wrote `activeTagLabels` only
+   inside its async `Task`, so `toggleActiveTag` and the plain-click replace-vs-clear
+   check read a STALE set — two fast Cmd-clicks dropped the first selection and a
+   double plain-click failed to clear. Fix: commit `activeTagLabels` SYNCHRONOUSLY;
+   only `activeTagPaths` (the DB-derived intersection) lands async under the token
+   guard. (New durable gotcha.)
+2. **Phantom-label-on-delete (Minor→fixed).** Deleting a member of a multi-tag set
+   left it in the banner with no chip to deselect. A multi-tag `removeTag` is always a
+   full-view "Delete Tag…" (the partial "Remove Tag from Selection" is gated to
+   `singleActiveTag`), so it now drops the label via `setActiveTags(filter)`; the
+   single-tag path keeps its anyLeft / subtract / fall-back-to-All.
+3. **Rename-merge duplicate (Important).** Renaming a selected tag onto another
+   selected tag yielded `["b","b"]` ("Viewing b and b") because `TagStore.renameLabel`
+   merges on collision. Fix: `TagSelection.renaming(_:from:to:)` (pure, tested) remaps
+   then dedups, order-preserving.
+4. **Banner overflow (Important).** Many/long pills squeezed into ugly per-element
+   truncation — wrapped in a horizontal `ScrollView` like the chip row.
+5. **Airtight grid `.id` (Minor).** The label join separator `","` → `"\u{1f}"`
+   (unit separator, un-typeable) so a comma-containing label can't collide two
+   distinct selections onto the same grid identity.
+
+Accepted nuance (documented): with the sync-label commit, on a tag *switch* the grid
+`.id` flips a frame before `activeTagPaths` updates, so up to ~1 frame of the previous
+tag's tiles can show at the start of the 0.2s crossfade — imperceptible for normal
+indexed single-label queries, only surfacing under a slow/contended DB. Second
+verification round: all six fixes correct, no regression, ready to commit. Build +
+full `MuseTests` green.

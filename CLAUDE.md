@@ -344,8 +344,20 @@ The four most critical are also saved as Claude memories (linked).
   `activeTagPaths` as the set-intersection of each label's path set) / `setActiveTag(_:)`
   (single/clear, delegates) / `toggleActiveTag(_:)` (Cmd-click). Do NOT compute
   `activeTagPaths` as a SwiftUI computed property — it's set imperatively inside the
-  `tagRequestToken`-guarded `Task` so labels + paths land in ONE animated transaction
-  (same crossfade discipline as the collection filter). Each per-label query MUST stay
+  `tagRequestToken`-guarded `Task`. **`setActiveTags` MUST commit `activeTagLabels`
+  SYNCHRONOUSLY (before the async path query); only `activeTagPaths` lands in the Task.**
+  An earlier version wrote BOTH inside the async block, so `toggleActiveTag` (and the
+  plain-click replace-vs-clear check) read a STALE `activeTagLabels` — two fast
+  Cmd-clicks both saw the pre-Task set and the first selection was silently dropped, and
+  a double plain-click failed to clear. The labels are the source of truth for the next
+  toggle decision + the chip highlight + the banner, so they can't lag a click; the paths
+  (DB-derived) may trail by a frame (the grid crossfades when they land — imperceptible
+  for tiny selections). `removeTag` of a MULTI-tag-set member is always a full-view delete
+  (the partial "Remove Tag from Selection" is gated to `singleActiveTag`), so it drops the
+  label from the set via `setActiveTags(filter)` rather than leaving a phantom banner entry
+  with no chip to clear; the single-tag path keeps its anyLeft/subtract/fall-back-to-All.
+  `commitRename` of a selected label routes through `TagSelection.renaming` (dedups, since
+  `TagStore.renameLabel` merges on collision — else `["b","b"]` → "Viewing b and b"). Each per-label query MUST stay
   `parent_dir`-scoped (`pathsForTag` reuses the per-location SQL — tags are per
   `(file_id, parent_dir)`, so a duplicate sharing the file_id in an untagged folder must
   not be pulled in). `singleActiveTag` (count==1 ? first : nil) gates the single-tag menu
@@ -937,8 +949,11 @@ The four most critical are also saved as Claude memories (linked).
   preserved; re-plain-clicking the sole chip clears). **Cmd-click** toggles a chip in/out;
   the grid shows files carrying ALL selected tags (set **intersection / AND**), which
   monotonically narrows and can legitimately be empty (honest empty grid). A **banner**
-  ("Viewing a and b", Oxford "and" for 3+) names the active set for 2+ tags, sitting at
-  the grid top below the chips. Scope expands to **search**: the chip row now mounts over
+  ("Viewing [a] and [b]", Oxford "and" for 3+) names the active set for 2+ tags, sitting
+  at the grid top below the chips — the tag labels render as small quiet **pills**
+  (`BannerPill`, matching the resting chip wash) so they pop from the connective words,
+  in a horizontal scroll that mirrors the chip row (no ugly per-pill truncation on
+  overflow); the plain string is the VoiceOver label. Scope expands to **search**: the chip row now mounts over
   search results and the tag filter narrows within them (This-Folder and All scope), chips
   derived from the result set. **Escape** clears the whole set in one press (a new
   `.clearTags` layer ordered after viewer/search, before the collection back-out). The
@@ -950,10 +965,15 @@ The four most critical are also saved as Claude memories (linked).
   queries intersected in one transaction); `singleActiveTag` gates the single-tag menu
   commands. **NOT** in scope (per spec): bulk tag delete (deletion stays single,
   right-click), OR/union mode, Collections-card-page filtering. New `TagSelectionTests`
-  (9) + extended `EscapeActionTests` (`tagsActive` param + 4 ordering cases). Build + full
-  `MuseTests` green; independent diff review clean (Ready to merge: Yes, no Critical/
-  Important). New durable gotcha recorded. Spec + plan in `docs/superpowers/`. PENDING
-  human GUI verification of the interactive flows (live click automation unavailable).
+  (15: toggle/banner/segments/rename) + extended `EscapeActionTests` (`tagsActive` param +
+  4 ordering cases). A **three-lens QA pass** (correctness/concurrency · UI/a11y ·
+  adversarial 12-scenario trace) then fixed: the sync-label-commit race (lost tags on
+  rapid Cmd-click / failed double-click clear), the phantom-banner-on-delete, the
+  rename-merge duplicate, the banner overflow (horizontal scroll), and an airtight grid
+  `.id` separator (`\u{1f}`); a second verification round confirmed all six correct with
+  no regression. Build + full `MuseTests` green throughout. New durable gotcha recorded.
+  Spec + plan in `docs/superpowers/`. PENDING human GUI verification of the interactive
+  flows (live click automation unavailable).
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
