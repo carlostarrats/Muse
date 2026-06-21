@@ -39,18 +39,28 @@ struct TagChipsRow: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     ChipFlow(gap: 8, hovered: hovered, grow: growForHovered, noGrow: [0]) {
                         TagChip(index: 0, label: "All", count: nil,
-                                isSelected: appState.activeTagLabel == nil,
+                                isSelected: appState.activeTagLabels.isEmpty,
                                 isHovered: hovered == 0,
                                 onHover: hover) {
                             appState.setActiveTag(nil)
                         }
                         ForEach(Array(tags.enumerated()), id: \.element.label) { i, tag in
                             TagChip(index: i + 1, label: tag.label, count: tag.count,
-                                    isSelected: appState.activeTagLabel == tag.label,
+                                    isSelected: appState.activeTagLabels.contains(tag.label),
                                     isHovered: hovered == i + 1,
                                     onHover: hover) {
-                                appState.setActiveTag(
-                                    appState.activeTagLabel == tag.label ? nil : tag.label)
+                                // Cmd-click toggles the chip in/out of the
+                                // selection (AND filter); plain click replaces the
+                                // selection with just this tag (re-plain-clicking
+                                // the sole selected chip clears). Mirrors the
+                                // grid's own Cmd-click model (GridView reads
+                                // NSEvent.modifierFlags the same way).
+                                if NSEvent.modifierFlags.contains(.command) {
+                                    appState.toggleActiveTag(tag.label)
+                                } else {
+                                    appState.setActiveTag(
+                                        appState.activeTagLabels == [tag.label] ? nil : tag.label)
+                                }
                             }
                             .contextMenu {
                                 Button("Rename Tag…") {
@@ -123,7 +133,10 @@ struct TagChipsRow: View {
         guard !new.isEmpty, new != old else { return }
         Task { @MainActor in
             await TagStore.shared.renameLabel(from: old, to: new)
-            if appState.activeTagLabel == old { appState.setActiveTag(new) }
+            if appState.activeTagLabels.contains(old) {
+                appState.setActiveTags(
+                    appState.activeTagLabels.map { $0 == old ? new : $0 })
+            }
             appState.tagsVersion += 1
         }
     }

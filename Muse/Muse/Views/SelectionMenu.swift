@@ -53,9 +53,9 @@ struct SelectionActionsMenu: View {
         // Remove from the tag/collection you're currently viewing. Shown only
         // in that context (a tag filter or an open collection); acts on the
         // effective selection.
-        if appState.activeTagLabel != nil || appState.activeCollectionID != nil {
+        if appState.singleActiveTag != nil || appState.activeCollectionID != nil {
             Divider()
-            if let label = appState.activeTagLabel {
+            if let label = appState.singleActiveTag {
                 Button("Remove Tag \u{201c}\(label)\u{201d}") {
                     appState.removeTag(label, fromURLs: urls)
                 }

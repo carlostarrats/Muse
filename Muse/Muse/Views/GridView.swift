@@ -157,7 +157,7 @@ struct GridView: View {
                             .padding(contentInset)
                             // Collection/tag switches replace the grid wholesale —
                             // one clean cross-fade, not a per-tile reflow.
-                            .id("\(appState.activeCollectionID ?? "")|\(appState.activeTagLabel ?? "")")
+                            .id("\(appState.activeCollectionID ?? "")|\(appState.activeTagLabels.joined(separator: ","))")
                             .transition(.opacity)
                     }
                 }
@@ -394,7 +394,7 @@ struct GridView: View {
             String(files.count),
             appState.selectedFolder?.id.uuidString ?? "",
             appState.activeCollectionID ?? "",
-            appState.activeTagLabel ?? "",
+            appState.activeTagLabels.joined(separator: ","),
             appState.isSearchActive ? "s" : "",
             appState.searchQuery,
             String(describing: appState.sortMode),
