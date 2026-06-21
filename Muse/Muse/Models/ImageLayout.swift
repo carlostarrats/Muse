@@ -21,18 +21,18 @@ enum ImageLayout: String, CaseIterable, Identifiable {
     /// Label on the modal tile; for ratios it's also the size key.
     var displayName: String {
         switch self {
-        case .masonry: return "Masonry"
-        case .r1x1:  return "1:1"
-        case .r9x16: return "9:16"
-        case .r16x9: return "16:9"
-        case .r4x5:  return "4:5"
-        case .r5x4:  return "5:4"
-        case .r6x7:  return "6:7"
-        case .r7x6:  return "7:6"
-        case .r2x3:  return "2:3"
-        case .r3x2:  return "3:2"
-        case .r3x4:  return "3:4"
-        case .r4x3:  return "4:3"
+        case .masonry: return String(localized: "Masonry")
+        case .r1x1:  return String(localized: "1:1")
+        case .r9x16: return String(localized: "9:16")
+        case .r16x9: return String(localized: "16:9")
+        case .r4x5:  return String(localized: "4:5")
+        case .r5x4:  return String(localized: "5:4")
+        case .r6x7:  return String(localized: "6:7")
+        case .r7x6:  return String(localized: "7:6")
+        case .r2x3:  return String(localized: "2:3")
+        case .r3x2:  return String(localized: "3:2")
+        case .r3x4:  return String(localized: "3:4")
+        case .r4x3:  return String(localized: "4:3")
         }
     }
 

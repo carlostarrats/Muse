@@ -16,8 +16,8 @@ enum TagSortMode: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .count: return "Most Used"
-        case .alphabetical: return "A → Z"
+        case .count: return String(localized: "Most Used")
+        case .alphabetical: return String(localized: "A → Z")
         }
     }
 }

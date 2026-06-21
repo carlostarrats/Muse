@@ -18,10 +18,10 @@ enum SidebarCollectionSortMode: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .manual: return "Manual"
-        case .name: return "Name"
-        case .dateCreated: return "Date Created"
-        case .dateModified: return "Date Modified"
+        case .manual: return String(localized: "Manual")
+        case .name: return String(localized: "Name")
+        case .dateCreated: return String(localized: "Date Created")
+        case .dateModified: return String(localized: "Date Modified")
         }
     }
 }

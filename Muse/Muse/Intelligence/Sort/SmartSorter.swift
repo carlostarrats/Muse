@@ -18,13 +18,13 @@ enum SortMode: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .dateModified: return "Date Modified"
-        case .dateCreated: return "Date Created"
-        case .name: return "Name"
-        case .size: return "Size"
-        case .kind: return "Kind"
-        case .dominantColor: return "Color"
-        case .shape: return "Shape"
+        case .dateModified: return String(localized: "Date Modified")
+        case .dateCreated: return String(localized: "Date Created")
+        case .name: return String(localized: "Name")
+        case .size: return String(localized: "Size")
+        case .kind: return String(localized: "Kind")
+        case .dominantColor: return String(localized: "Color")
+        case .shape: return String(localized: "Shape")
         }
     }
 

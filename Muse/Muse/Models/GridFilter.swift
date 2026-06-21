@@ -32,22 +32,22 @@ enum KindFacet: String, CaseIterable, Identifiable, Codable {
 
     var displayName: String {
         switch self {
-        case .jpeg:       return "JPEG"
-        case .png:        return "PNG"
-        case .heic:       return "HEIC"
-        case .tiff:       return "TIFF"
-        case .gif:        return "GIF"
-        case .webp:       return "WebP"
-        case .raw:        return "RAW"
-        case .psd:        return "PSD"
-        case .svg:        return "SVG"
-        case .imageOther: return "Other"
-        case .video:      return "Videos"
-        case .pdf:        return "PDFs"
-        case .document:   return "Documents"
-        case .audio:      return "Audio"
-        case .folder:     return "Folders"
-        case .other:      return "Other"
+        case .jpeg:       return String(localized: "JPEG")
+        case .png:        return String(localized: "PNG")
+        case .heic:       return String(localized: "HEIC")
+        case .tiff:       return String(localized: "TIFF")
+        case .gif:        return String(localized: "GIF")
+        case .webp:       return String(localized: "WebP")
+        case .raw:        return String(localized: "RAW")
+        case .psd:        return String(localized: "PSD")
+        case .svg:        return String(localized: "SVG")
+        case .imageOther: return String(localized: "Other")
+        case .video:      return String(localized: "Videos")
+        case .pdf:        return String(localized: "PDFs")
+        case .document:   return String(localized: "Documents")
+        case .audio:      return String(localized: "Audio")
+        case .folder:     return String(localized: "Folders")
+        case .other:      return String(localized: "Other")
         }
     }
 

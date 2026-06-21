@@ -19,11 +19,11 @@ enum TileBackground: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .none:     return "None"
-        case .auto:     return "Auto"
-        case .light:    return "Light"
-        case .darkGrey: return "Dark Grey"
-        case .black:    return "Black"
+        case .none:     return String(localized: "None")
+        case .auto:     return String(localized: "Auto")
+        case .light:    return String(localized: "Light")
+        case .darkGrey: return String(localized: "Dark Grey")
+        case .black:    return String(localized: "Black")
         }
     }
 

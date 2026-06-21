@@ -46,10 +46,10 @@ enum Mood: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .paper:  return "Light"
-        case .ink:    return "Dark"
-        case .auto:   return "Auto"
-        case .custom: return "Custom"
+        case .paper:  return String(localized: "Light")
+        case .ink:    return String(localized: "Dark")
+        case .auto:   return String(localized: "Auto")
+        case .custom: return String(localized: "Custom")
         }
     }
 
