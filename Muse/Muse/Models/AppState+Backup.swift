@@ -33,8 +33,7 @@ extension AppState {
         let panel = NSSavePanel()
         panel.nameFieldStringValue = suggested
         panel.canCreateDirectories = true
-        panel.message = String(localized: "Keep this file somewhere safe — ideally not only on this Mac. ")
-            + "You'll use it to restore your collections, tags, and folders on another Mac."
+        panel.message = String(localized: "Keep this file somewhere safe — ideally not only on this Mac. You'll use it to restore your collections, tags, and folders on another Mac.")
         guard panel.runModal() == .OK, let dest = panel.url else { return }
 
         Task {

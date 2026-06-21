@@ -10,16 +10,16 @@ enum IntentBucket: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .recipe:       return "Recipes"
-        case .shopping:     return "Shopping"
-        case .places:       return "Places"
-        case .receipt:      return "Receipts"
-        case .quote:        return "Quotes"
-        case .article:      return "Articles"
-        case .conversation: return "Conversations"
-        case .event:        return "Events"
-        case .design:       return "Design"
-        case .code:         return "Code"
+        case .recipe:       return String(localized: "Recipes")
+        case .shopping:     return String(localized: "Shopping")
+        case .places:       return String(localized: "Places")
+        case .receipt:      return String(localized: "Receipts")
+        case .quote:        return String(localized: "Quotes")
+        case .article:      return String(localized: "Articles")
+        case .conversation: return String(localized: "Conversations")
+        case .event:        return String(localized: "Events")
+        case .design:       return String(localized: "Design")
+        case .code:         return String(localized: "Code")
         }
     }
 

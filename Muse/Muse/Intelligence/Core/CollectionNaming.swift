@@ -15,7 +15,7 @@ final class TagFallbackNamer: CollectionNamer {
     func name(tagsByFrequency: [String]) async -> String {
         // Localize the top (canonical) tag for display, then capitalize. The
         // result becomes the stored collection name (user data thereafter).
-        guard let top = tagsByFrequency.first else { return "Collection" }
+        guard let top = tagsByFrequency.first else { return String(localized: "Collection") }
         return localizer.display(top).capitalized
     }
 

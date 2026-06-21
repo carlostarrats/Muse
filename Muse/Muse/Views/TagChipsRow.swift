@@ -427,7 +427,7 @@ private struct TagChip: View {
         .buttonStyle(.plain)
         .contentShape(Capsule(style: .continuous))
         .onHover { onHover(index, $0) }
-        .help(isSelected ? "Clear tag filter" : "Show files tagged \(label)")
+        .help(isSelected ? String(localized: "Clear tag filter") : String(localized: "Show files tagged \(label)"))
         // Surface the file count to VoiceOver — it's otherwise only revealed
         // on mouse hover, so screen-reader users couldn't reach it.
         .accessibilityValue(count.map { "\($0) files" } ?? "")

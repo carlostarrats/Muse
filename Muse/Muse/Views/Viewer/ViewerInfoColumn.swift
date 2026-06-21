@@ -454,7 +454,10 @@ private struct CardExpander: View {
             if !candidates.isEmpty {
                 PillFlow(gap: 6, hovered: nil) {
                     ForEach(candidates) { candidate in
-                        DashedPill(label: candidate.label) { onCandidateTap(candidate) }
+                        // Display the localized vision-tag term; the tap keeps
+                        // the canonical `candidate.label` for the DB write. `display`
+                        // is identity for non-vocabulary strings (collection names).
+                        DashedPill(label: VocabularyLocalizer.shared.display(candidate.label)) { onCandidateTap(candidate) }
                     }
                 }
             }

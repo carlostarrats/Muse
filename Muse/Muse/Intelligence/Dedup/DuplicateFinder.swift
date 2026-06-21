@@ -37,9 +37,9 @@ struct DuplicateGroup: Identifiable, Hashable {
         case byteExact, visual, filename
         var displayName: String {
             switch self {
-            case .byteExact: return "Byte-exact"
-            case .visual:    return "Visually similar"
-            case .filename:  return "Same filename"
+            case .byteExact: return String(localized: "Byte-exact")
+            case .visual:    return String(localized: "Visually similar")
+            case .filename:  return String(localized: "Same filename")
             }
         }
     }

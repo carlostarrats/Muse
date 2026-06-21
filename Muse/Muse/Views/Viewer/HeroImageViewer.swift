@@ -519,7 +519,7 @@ private struct ChromeCircleButton: View {
                 .background(Circle().fill(.white.opacity(hovering ? 0.24 : 0.10)))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(systemName == "xmark" ? "Close" : systemName)
+        .accessibilityLabel(systemName == "xmark" ? String(localized: "Close") : systemName)
         .onHover { hovering = $0 }
     }
 }

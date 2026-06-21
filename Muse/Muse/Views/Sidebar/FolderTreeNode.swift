@@ -75,7 +75,7 @@ struct FolderTreeNode: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(node.isExpanded ? "Collapse" : "Expand")
+                .accessibilityLabel(node.isExpanded ? String(localized: "Collapse") : String(localized: "Expand"))
             } else {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 10, weight: .semibold))

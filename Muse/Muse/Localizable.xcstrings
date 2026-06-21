@@ -305,6 +305,26 @@
         }
       }
     },
+    "A folder name can’t contain “/” or “:”.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un nom de dossier ne peut pas contenir « / » ni « : »."
+          }
+        }
+      }
+    },
+    "A folder with that name already exists here.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un dossier portant ce nom existe déjà ici."
+          }
+        }
+      }
+    },
     "A local-first viewer and organizer for the folders you already have. Point it at a folder — Downloads, Documents, a pile of screenshots — and browse everything in one place. Nothing is imported or copied: Muse reads your files where they live and never moves or changes them.": {
       "localizations": {
         "fr": {
@@ -505,6 +525,16 @@
         }
       }
     },
+    "Articles": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Articles"
+          }
+        }
+      }
+    },
     "Ascending": {
       "localizations": {
         "fr": {
@@ -536,7 +566,6 @@
       }
     },
     "Author": {
-      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -666,8 +695,17 @@
         }
       }
     },
+    "Byte-exact": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Identique octet pour octet"
+          }
+        }
+      }
+    },
     "Camera": {
-      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -767,6 +805,16 @@
         }
       }
     },
+    "Code": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Code"
+          }
+        }
+      }
+    },
     "Collapse": {
       "localizations": {
         "fr": {
@@ -783,6 +831,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Réduire %@"
+          }
+        }
+      }
+    },
+    "Collection": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collection"
           }
         }
       }
@@ -867,6 +925,16 @@
         }
       }
     },
+    "Conversations": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversations"
+          }
+        }
+      }
+    },
     "Copied %@": {
       "localizations": {
         "fr": {
@@ -913,6 +981,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Copier la couleur %@"
+          }
+        }
+      }
+    },
+    "Could not load: %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de charger : %@"
+          }
+        }
+      }
+    },
+    "Couldn’t %@ the folder. You may not have permission.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de %@ le dossier. Vous n'avez peut-être pas la permission."
+          }
+        }
+      }
+    },
+    "Couldn’t finish renaming the folder.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de terminer le changement de nom du dossier."
           }
         }
       }
@@ -967,6 +1065,16 @@
         }
       }
     },
+    "create": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "créer"
+          }
+        }
+      }
+    },
     "Create": {
       "localizations": {
         "fr": {
@@ -1008,7 +1116,6 @@
       }
     },
     "Creator": {
-      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -1198,8 +1305,17 @@
         }
       }
     },
+    "Design": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Design"
+          }
+        }
+      }
+    },
     "Dimensions": {
-      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -1250,7 +1366,6 @@
       }
     },
     "Duration": {
-      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -1266,6 +1381,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Modifier"
+          }
+        }
+      }
+    },
+    "Events": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Événements"
           }
         }
       }
@@ -1301,7 +1426,6 @@
       }
     },
     "Exposure": {
-      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -1422,7 +1546,6 @@
       }
     },
     "Frame Rate": {
-      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -1632,12 +1755,12 @@
         }
       }
     },
-    "Keep this file somewhere safe — ideally not only on this Mac. ": {
+    "Keep this file somewhere safe — ideally not only on this Mac. You'll use it to restore your collections, tags, and folders on another Mac.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conservez ce fichier en lieu sûr — idéalement pas uniquement sur ce Mac. "
+            "value": "Conservez ce fichier en lieu sûr — idéalement pas uniquement sur ce Mac. Vous l'utiliserez pour restaurer vos collections, étiquettes et dossiers sur un autre Mac."
           }
         }
       }
@@ -1683,7 +1806,6 @@
       }
     },
     "Lens": {
-      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -1754,7 +1876,6 @@
       }
     },
     "Location": {
-      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -1825,7 +1946,6 @@
       }
     },
     "Modified": {
-      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -2372,7 +2492,6 @@
       }
     },
     "Pages": {
-      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -2422,6 +2541,26 @@
         }
       }
     },
+    "Places": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lieux"
+          }
+        }
+      }
+    },
+    "Please enter a folder name.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Veuillez saisir un nom de dossier."
+          }
+        }
+      }
+    },
     "PNG": {
       "localizations": {
         "fr": {
@@ -2462,12 +2601,42 @@
         }
       }
     },
+    "Quotes": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Citations"
+          }
+        }
+      }
+    },
     "RAW": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "RAW"
+          }
+        }
+      }
+    },
+    "Receipts": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reçus"
+          }
+        }
+      }
+    },
+    "Recipes": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recettes"
           }
         }
       }
@@ -2503,7 +2672,6 @@
       }
     },
     "Recorded": {
-      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -2659,6 +2827,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Retire « %@ » des images de cette vue. Les autres dossiers conservent leurs étiquettes. Vos images restent sur le disque."
+          }
+        }
+      }
+    },
+    "rename": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "renommer"
           }
         }
       }
@@ -2819,6 +2997,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Exécute l'étiquetage par Vision, la reconnaissance de texte et l'extraction des couleurs sur toutes les images d'un dossier."
+          }
+        }
+      }
+    },
+    "Same filename": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Même nom de fichier"
           }
         }
       }
@@ -3023,6 +3211,16 @@
         }
       }
     },
+    "Shopping": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Achats"
+          }
+        }
+      }
+    },
     "Show Collections in the Sidebar": {
       "localizations": {
         "fr": {
@@ -3153,6 +3351,16 @@
         }
       }
     },
+    "Sort direction: %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sens du tri : %@"
+          }
+        }
+      }
+    },
     "Sort folders": {
       "localizations": {
         "fr": {
@@ -3264,7 +3472,6 @@
       }
     },
     "Taken": {
-      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -3310,6 +3517,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "La collection est supprimée. Vos images restent sur le disque."
+          }
+        }
+      }
+    },
+    "The folder was renamed, but updating its tags failed.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le dossier a été renommé, mais la mise à jour de ses étiquettes a échoué."
+          }
+        }
+      }
+    },
+    "The quick brown fox jumps over the lazy dog.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Portez ce vieux whisky au juge blond qui fume."
           }
         }
       }
@@ -3365,7 +3592,6 @@
       }
     },
     "Title": {
-      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -3441,6 +3667,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Affichage et sélection"
+          }
+        }
+      }
+    },
+    "Visually similar": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Visuellement similaire"
           }
         }
       }
