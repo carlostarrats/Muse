@@ -1,8 +1,12 @@
 # Grid VoiceOver "Open" Action — design
 
 **Date:** 2026-06-20
-**Status:** Approved (brainstorm complete) — scope: Option A
-**Ships as:** its own branch
+**Status:** ✅ Shipped in `feat/next-49` (the accessibility pass; not its own branch).
+Implemented with one addition the spec didn't anticipate: the primary action is
+**branched on kind** — a file opens the viewer (`selectedFile`), a `.folder` grid card
+(feat/next-41, after this spec was written) navigates IN (`openSubfolder`). Folder cards
+also expose New Subfolder / Rename / Reveal as named actions.
+**Original scope:** Option A — approved (brainstorm complete).
 
 ## Summary
 

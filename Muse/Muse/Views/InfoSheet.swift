@@ -18,6 +18,7 @@ struct InfoSheet: View {
             HStack {
                 Text("About Muse")
                     .font(.system(size: 24, weight: .semibold))
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
                 SheetCloseButton { isPresented = false }
             }
@@ -189,6 +190,9 @@ struct InfoSheet: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.system(size: 15, weight: .semibold))
+                // Each section title is a heading so VoiceOver's heading rotor can
+                // jump between the ~17 About sections instead of linear reading.
+                .accessibilityAddTraits(.isHeader)
             Text(body)
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)

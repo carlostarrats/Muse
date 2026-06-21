@@ -20,6 +20,7 @@ struct ReconnectWizard: View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Restore from Backup")
                 .font(.system(size: 24, weight: .semibold))
+                .accessibilityAddTraits(.isHeader)
             Text("Reconnect your folders and collections. Locate each folder where it lives now — they can be anywhere.")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
@@ -44,10 +45,15 @@ struct ReconnectWizard: View {
     private var folderSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Folders").font(.system(size: 15, weight: .semibold))
+                .accessibilityAddTraits(.isHeader)
             ForEach(model.folders) { folder in
                 HStack(spacing: 10) {
                     statusGlyph(folder.status)
                         .frame(width: 128, alignment: .leading)
+                        // The status is otherwise only a colored glyph (a green
+                        // check / orange warning / red X) — give VoiceOver the words.
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(statusLabel(folder.status))
                     VStack(alignment: .leading, spacing: 1) {
                         Text(folder.displayName).font(.system(size: 13, weight: .medium))
                         Text(folder.newLocation?.path ?? "Not located")
@@ -63,6 +69,11 @@ struct ReconnectWizard: View {
                         }
                     }
                     .disabled(folder.status == .working)
+                    // Name the target so the button isn't a bare "Locate…" when
+                    // VoiceOver moves control-to-control across several rows.
+                    .accessibilityLabel(folder.newLocation == nil
+                                        ? "Locate \(folder.displayName)"
+                                        : "Relocate \(folder.displayName)")
                 }
                 .padding(.vertical, 4)
                 Divider()
@@ -70,10 +81,24 @@ struct ReconnectWizard: View {
         }
     }
 
+    /// Spoken status for a folder row — the glyph alone (color + symbol) carries
+    /// it visually, so VoiceOver needs the words. Mirrors `statusGlyph`.
+    private func statusLabel(_ status: ReconnectModel.FolderStatus) -> String {
+        switch status {
+        case .pending:                          return "Not located yet"
+        case .working:                          return "Locating"
+        case .clean:                            return "Reconnected"
+        case .flagged(let unmatched, let nameOnly):
+            return "Reconnected — " + flaggedText(unmatched: unmatched, nameOnly: nameOnly)
+        case .failed:                           return "Couldn’t save"
+        }
+    }
+
     private var collectionCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("Collections").font(.system(size: 15, weight: .semibold))
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
                 Text("\(model.collectionsDone) / \(model.collectionStatuses.count) re-established · \(model.overallPercent)%")
                     .font(.system(size: 12, weight: .medium))
@@ -88,6 +113,10 @@ struct ReconnectWizard: View {
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(c.reconnected == 0 ? .orange : .secondary)
                 }
+                // The "0/3"-in-orange reconnection state reads as one phrase, not
+                // "name … zero slash three" split across the row.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(c.name), \(c.reconnected) of \(c.total) files reconnected")
             }
         }
         .padding(16)

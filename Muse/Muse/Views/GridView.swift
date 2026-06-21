@@ -271,12 +271,31 @@ struct GridView: View {
                     }
                     .offset(x: rect.minX, y: rect.minY)
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(file.basename)
+                    // Folder cards have only an icon on screen — name the kind so
+                    // VoiceOver disambiguates a folder from a file.
+                    .accessibilityLabel(file.kind == .folder
+                                        ? "\(file.basename), folder" : file.basename)
                     // Expose selection to VoiceOver, not just via the color/border.
                     .accessibilityAddTraits(
                         appState.selectedFiles.contains(file.url.standardizedFileURL.path)
                             ? [.isButton, .isSelected] : .isButton)
-                    .accessibilityHint("Double-tap to open. Right-click for actions.")
+                    // Primary VoiceOver action = OPEN. The mouse opens via the
+                    // double-click timing window, which VoiceOver can't reproduce,
+                    // so activating a tile only SELECTED it before — there was no
+                    // keyboard/VoiceOver path to open. A file opens the viewer
+                    // (`selectedFile`, the exact trigger double-click uses); a
+                    // folder navigates IN (`openSubfolder`, what its double-click
+                    // does) — applying the file path to a folder would wrongly
+                    // route it to a viewer.
+                    .accessibilityAction {
+                        if file.kind == .folder {
+                            appState.openSubfolder(file.url)
+                        } else {
+                            appState.selectedFile = file
+                        }
+                    }
+                    .accessibilityHint(file.kind == .folder
+                                       ? "Opens the folder." : "Opens in the viewer.")
                     .contextMenu {
                         if file.kind == .folder {
                             // A folder card behaves like a sidebar subfolder:
@@ -337,6 +356,29 @@ struct GridView: View {
                             }
                         }
                     }
+                    // Folder cards expose their right-click items (New Subfolder /
+                    // Rename / Reveal) as named VoiceOver actions too, so folders
+                    // stay manageable without a mouse now that the hint no longer
+                    // mentions "right-click". No-op for file tiles. Rename is
+                    // omitted for the iCloud folder, matching its context menu.
+                    .folderCardActions(
+                        file.kind == .folder,
+                        newSubfolder: {
+                            if let n = appState.resolveFolderNode(file.url) {
+                                appState.requestNewSubfolder(n)
+                            }
+                        },
+                        rename: file.url.standardizedFileURL
+                            == appState.iCloudFolderURL?.standardizedFileURL
+                            ? nil
+                            : {
+                                if let n = appState.resolveFolderNode(file.url) {
+                                    appState.requestRenameFolder(n)
+                                }
+                            },
+                        reveal: {
+                            NSWorkspace.shared.activateFileViewerSelecting([file.url])
+                        })
             }
         }
         .frame(width: layoutWidth, height: totalHeight, alignment: .topLeading)
@@ -825,6 +867,34 @@ fileprivate struct ShimmerBand: View {
         }
         .onAppear {
             phase = reduceMotion ? 0 : 1
+        }
+    }
+}
+
+private extension View {
+    /// Adds the folder-card management commands as named VoiceOver actions when
+    /// `isFolder` is true (a no-op for file tiles, whose actions stay on the
+    /// right-click `SelectionActionsMenu`). `rename` is nil when the folder can't
+    /// be renamed (the iCloud root), so VoiceOver omits the action entirely
+    /// rather than offering a dead one — mirroring the context menu.
+    @ViewBuilder
+    func folderCardActions(_ isFolder: Bool,
+                           newSubfolder: @escaping () -> Void,
+                           rename: (() -> Void)?,
+                           reveal: @escaping () -> Void) -> some View {
+        if isFolder {
+            if let rename {
+                self
+                    .accessibilityAction(named: Text("New Subfolder")) { newSubfolder() }
+                    .accessibilityAction(named: Text("Rename Folder")) { rename() }
+                    .accessibilityAction(named: Text("Reveal in Finder")) { reveal() }
+            } else {
+                self
+                    .accessibilityAction(named: Text("New Subfolder")) { newSubfolder() }
+                    .accessibilityAction(named: Text("Reveal in Finder")) { reveal() }
+            }
+        } else {
+            self
         }
     }
 }

@@ -390,6 +390,22 @@ The four most critical are also saved as Claude memories (linked).
   `collapse()` (a full OR empty set → `.none`), so blue == a real active filter; a
   leftover test filter (all kinds except top-level Other) was the culprit, cleared
   by resetting `AppSettings.gridFilter`.
+- **A mouse-only modifier interaction has NO VoiceOver equivalent — give it a parallel
+  named `.accessibilityAction`.** VoiceOver activation is a single discrete event
+  (Control-Option-Space); it cannot reproduce a mouse double-click timing window or a
+  Cmd-/Shift-modified click. Two shipped features silently locked VoiceOver users out of
+  a core capability this way: the grid tile's **double-click-to-open** (activation only
+  *selected* — no path to open) and the tag chip's **Cmd-click-to-add-to-the-multi-tag
+  AND-set** (the intersection was unbuildable without a mouse). Both fixed in
+  `feat/next-49` by adding an `.accessibilityAction` that routes through the SAME call
+  the mouse path makes (`selectedFile`/`openSubfolder` for the tile, `toggleActiveTag`
+  for the chip). Rule: any NEW affordance that depends on a click MODIFIER or a
+  click-TIMING gesture (double-click, long-press, Cmd/Shift-click, drag) must expose an
+  equivalent named accessibility action — the right-click `contextMenu` is VoiceOver-
+  reachable, but a bare gesture is not. **And branch the action by node kind where the
+  mouse path does:** the grid open action is `selectedFile` for a file but
+  `openSubfolder` for a `.folder` card — applying one uniformly (as the open spec, written
+  before folder cards, implied) would misroute folders into a viewer.
 
 ### Session index (detail in `docs/session-log.md`)
 
@@ -1085,6 +1101,44 @@ The four most critical are also saved as Claude memories (linked).
   `GridFilterTests` (25 cases). Build + full `MuseTests` green. Spec:
   `docs/superpowers/specs/2026-06-20-image-format-filter-design.md`. GUI flows
   confirmed live with the user during the session.
+- **2026-06-20** `feat/next-49` — **accessibility pass (next-35→48) + grid VoiceOver
+  "Open".** The recurring a11y sweep over everything added since the last one
+  (`feat/next-34`, next-26→33), made comprehensive because a prior pass had missed a real
+  usability gap: six new surfaces audited in parallel, then triaged with judgment (the
+  audit over-reported — many controls were already labeled, and the
+  `NSAccessibility.post`-announcement / restructure-rows-into-`Button`s / `children:
+  .combine`-over-sections suggestions were rejected as behavior-changing or convention-
+  breaking). Also folded in the approved
+  `docs/superpowers/specs/2026-06-20-grid-voiceover-open-design.md`. **Two MAJOR gaps,
+  same shape — a mouse-only interaction with no VoiceOver equivalent** (see the new
+  durable gotcha): (1) **grid tiles couldn't be OPENED via VoiceOver** — activation only
+  *selected* (open was the mouse double-click timing window). Added a primary
+  `.accessibilityAction`, **branched on kind** (a file → `selectedFile` opens the viewer,
+  a `.folder` card → `openSubfolder` navigates IN; the spec, written before folder cards,
+  assumed file-only and would have misrouted folders), reworded the misleading hint,
+  named the folder kind in the label, and exposed the folder card's New Subfolder/Rename/
+  Reveal as named actions (the new hint drops "right-click"); a file-private
+  `View.folderCardActions` applies them only to `.folder` tiles. (2) **the multi-tag
+  AND-set couldn't be BUILT via VoiceOver** (next-45) — Cmd-click is mouse-only; added a
+  named "Add to filter"/"Remove from filter" action on each tag chip routing through the
+  same `toggleActiveTag`. **Smaller additive fixes:** `ViewerInfoColumn` (baked `.isHeader`
+  into the shared `CardLabel` → all four card titles are headings; hid loading swatches +
+  `ActionButton` glyphs; labeled "copy all"); `ReconnectWizard` (color-only folder status
+  → spoken `.accessibilityLabel` via a new `statusLabel`; named Locate buttons; collection
+  rows as one element "Vacation, 0 of 3 files reconnected"; header traits); `InfoSheet`
+  (`.isHeader` on the ~17 section titles + About title); `ViewerBackdrop`
+  (`.accessibilityHidden` — decorative wash, shared by both hero viewers). **Already
+  correct, verified untouched:** `GridFilterPopover` (section header already `.isHeader`;
+  the native `NSButton` tri-state "Images" checkbox carries its title + announces mixed/
+  on/off natively; funnel already has label + value), `ShareButton`/video-close ✕/
+  `SheetCloseButton` (already `.help` + `.accessibilityLabel`), and the multi-tag banner
+  (already one coherent string via `children: .ignore` + `.accessibilityLabel`). No new
+  tests — additive SwiftUI a11y modifiers only (convention: only pure logic is unit-tested;
+  UI views aren't), matching next-25/next-34. Build + full `MuseTests` green. Files:
+  `Views/GridView.swift`, `Views/TagChipsRow.swift`, `Views/Viewer/ViewerInfoColumn.swift`,
+  `Views/Viewer/ViewerBackdrop.swift`, `Views/Backup/ReconnectWizard.swift`,
+  `Views/InfoSheet.swift`. PENDING human VoiceOver verification of the live flows
+  (automated macOS VoiceOver driving unavailable — no Accessibility grant).
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 

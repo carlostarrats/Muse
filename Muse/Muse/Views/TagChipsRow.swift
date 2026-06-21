@@ -49,7 +49,14 @@ struct TagChipsRow: View {
                             TagChip(index: i + 1, label: tag.label, count: tag.count,
                                     isSelected: appState.activeTagLabels.contains(tag.label),
                                     isHovered: hovered == i + 1,
-                                    onHover: hover) {
+                                    onHover: hover,
+                                    // Cmd-click is mouse-only with no VoiceOver
+                                    // equivalent, so the AND-set was unbuildable
+                                    // without a mouse. This is the VoiceOver path:
+                                    // a named action that toggles the chip in/out
+                                    // of the intersection (the same call Cmd-click
+                                    // makes). Nil on the "All" chip (it only clears).
+                                    toggleAction: { appState.toggleActiveTag(tag.label) }) {
                                 // Cmd-click toggles the chip in/out of the
                                 // selection (AND filter); plain click replaces the
                                 // selection with just this tag (re-plain-clicking
@@ -345,9 +352,23 @@ private struct TagChip: View {
     let isSelected: Bool
     let isHovered: Bool
     var onHover: (Int, Bool) -> Void
+    /// VoiceOver-reachable toggle into/out of the multi-tag AND-set — the
+    /// keyboard equivalent of the mouse-only Cmd-click. Nil = no such action
+    /// (the "All" chip). Exposed as a named accessibility action below.
+    var toggleAction: (() -> Void)? = nil
     var action: () -> Void
 
     var body: some View {
+        if let toggleAction {
+            chip.accessibilityAction(
+                named: Text(isSelected ? "Remove from filter" : "Add to filter")
+            ) { toggleAction() }
+        } else {
+            chip
+        }
+    }
+
+    private var chip: some View {
         Button(action: action) {
             HStack(spacing: 0) {
                 Text(label)
