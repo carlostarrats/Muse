@@ -107,7 +107,14 @@ struct SidebarView: View {
     /// The folder tree content (iCloud home, stars, reorderable roots). Extracted
     /// so both the folders-only ScrollView and the two-section ScrollView reuse it.
     @ViewBuilder private var folderList: some View {
-        LazyVStack(alignment: .leading, spacing: 1) {
+        // A non-lazy VStack iterated DIRECTLY by node id (mirrors collectionsList).
+        // A LazyVStack here could de-materialize the top-level folder rows when
+        // scrolled out of the shared two-section ScrollView and fail to bring them
+        // back, leaving an empty FOLDERS section while COLLECTIONS (already a plain
+        // VStack) stayed intact. The top-level root list is short (children live in
+        // FolderTreeNode), so there's no virtualization cost, and always-realized
+        // rows make the drag-reorder frame preferences reliable.
+        VStack(alignment: .leading, spacing: 1) {
             // The iCloud "Muse" folder is the fixed home — always on top, not
             // reorderable — with a gap below it separating it from local folders.
             if let icloud = iCloudNode {
@@ -122,9 +129,8 @@ struct SidebarView: View {
                 }
             }
 
-            ForEach(Array(displayedReorderableNodes.enumerated()),
-                    id: \.element.id) { pair in
-                rootRow(pair.element, index: pair.offset)
+            ForEach(displayedReorderableNodes, id: \.id) { node in
+                rootRow(node, index: displayedReorderableNodes.firstIndex { $0.id == node.id } ?? 0)
             }
             // Catch-area below the last folder so a drag released in the empty
             // space underneath still lands at the bottom.
@@ -558,8 +564,9 @@ struct SidebarView: View {
     }
 
     /// An opaque copy of the dragged folder row, drawn as a ScrollView overlay so
-    /// it stays above every row it passes (LazyVStack ignores zIndex). Mirrors the
-    /// real row's metrics so it lands seamlessly.
+    /// it stays above every row it passes (a single floating copy is simpler and
+    /// more reliable than per-row zIndex juggling; mirrors collectionDraggedOverlay).
+    /// Mirrors the real row's metrics so it lands seamlessly.
     private func draggedRowOverlay(_ root: Root) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "chevron.right").opacity(0).frame(width: 10)
@@ -605,7 +612,7 @@ struct SidebarView: View {
     private func rowShift(forIndex i: Int) -> CGFloat {
         guard let d = draggedIndex, let target = dropTarget, i != d else { return 0 }
         let pitch = (draggingRoot.flatMap { dragStartFrames[$0.id]?.height }
-                     ?? Self.rowHeight) + 1   // + LazyVStack spacing
+                     ?? Self.rowHeight) + 1   // + VStack spacing
         let removedIndex = i < d ? i : i - 1
         var shift: CGFloat = 0
         if i > d { shift -= pitch }                 // close the dragged row's hole
@@ -616,9 +623,9 @@ struct SidebarView: View {
     /// One draggable top-level folder. Reorder is a LIVE gesture, not pasteboard
     /// drag-and-drop: the trailing grip drives a DragGesture; the dragged row is
     /// hidden in place (so its slot stays and the others can part around it) while
-    /// an opaque copy (`draggedRowOverlay`) follows the cursor on top — LazyVStack
-    /// ignores zIndex, so a top overlay is the reliable way to keep it above the
-    /// rows it passes. A faint insertion line marks the gap as an overshoot cue.
+    /// an opaque copy (`draggedRowOverlay`) follows the cursor on top — a single
+    /// floating overlay keeps it above the rows it passes without per-row zIndex
+    /// juggling. A faint insertion line marks the gap as an overshoot cue.
     /// The grip gesture is isolated to its small zone, so click-to-select is safe.
     ///
     /// Known limitation: tuned for COLLAPSED top-level folders (the common case).
@@ -662,8 +669,8 @@ struct SidebarView: View {
                 )
                 // The dragged row is hidden in place (its slot stays so the others
                 // can part around it); an opaque copy is drawn on TOP via a
-                // ScrollView overlay — LazyVStack ignores zIndex, so a top overlay
-                // is the reliable way to keep it above the rows it passes.
+                // ScrollView overlay — a single floating copy keeps it above the
+                // rows it passes without per-row zIndex juggling.
                 .offset(y: isDraggingRoot(model) ? 0 : rowShift(forIndex: index))
                 .opacity(isDraggingRoot(model) ? 0 : 1)
         } else {
