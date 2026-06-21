@@ -336,33 +336,20 @@ struct SidebarView: View {
     }
 
     private func collectionRowShift(forIndex i: Int) -> CGFloat {
-        guard let d = draggedCollectionIndex, let target = collectionDropTarget, i != d else { return 0 }
         let pitch = (draggingCollectionID.flatMap { collectionDragStartFrames[$0]?.height }
                      ?? Self.rowHeight) + 1
-        let removedIndex = i < d ? i : i - 1
-        var shift: CGFloat = 0
-        if i > d { shift -= pitch }
-        if removedIndex >= target { shift += pitch }
-        return shift
+        return ReorderMath.rowShift(forIndex: i, draggedIndex: draggedCollectionIndex,
+                                    dropTarget: collectionDropTarget, pitch: pitch)
     }
 
     private func collectionReorderSlot(forY y: CGFloat) -> Int {
-        let others = otherCollectionIDs
-        for (i, cid) in others.enumerated() {
-            guard let f = collectionDragStartFrames[cid] else { continue }
-            if y < f.midY { return i }
-        }
-        return others.count
+        ReorderMath.slot(forY: y,
+                         orderedStartFrames: otherCollectionIDs.map { collectionDragStartFrames[$0] })
     }
 
     private func collectionInsertionLineY() -> CGFloat? {
-        guard let target = collectionDropTarget else { return nil }
-        let others = otherCollectionIDs
-        guard !others.isEmpty else { return nil }
-        if target >= others.count {
-            return others.last.flatMap { collectionFrames[$0]?.maxY }
-        }
-        return collectionFrames[others[target]]?.minY
+        ReorderMath.insertionLineY(dropTarget: collectionDropTarget,
+                                   orderedLiveFrames: otherCollectionIDs.map { collectionFrames[$0] })
     }
 
     private func commitCollectionReorder(movingID: String) {
@@ -555,13 +542,8 @@ struct SidebarView: View {
     /// Y (from the ScrollView top) of the gap at `dropTarget`. Uses LIVE frames
     /// (which reflect the parting offsets) so the line sits at the open gap.
     private func insertionLineY() -> CGFloat? {
-        guard let target = dropTarget else { return nil }
-        let others = otherReorderRoots
-        guard !others.isEmpty else { return nil }
-        if target >= others.count {
-            return others.last.flatMap { rootFrames[$0.id]?.maxY }
-        }
-        return rootFrames[others[target].id]?.minY
+        ReorderMath.insertionLineY(dropTarget: dropTarget,
+                                   orderedLiveFrames: otherReorderRoots.map { rootFrames[$0.id] })
     }
 
     /// An opaque copy of the dragged folder row, drawn as a ScrollView overlay so
@@ -611,14 +593,10 @@ struct SidebarView: View {
     /// below the dragged one rise to close its hole; rows at/after the target sink
     /// to open the gap. Uses the drag-start snapshot's height so it's stable.
     private func rowShift(forIndex i: Int) -> CGFloat {
-        guard let d = draggedIndex, let target = dropTarget, i != d else { return 0 }
         let pitch = (draggingRoot.flatMap { dragStartFrames[$0.id]?.height }
                      ?? Self.rowHeight) + 1   // + VStack spacing
-        let removedIndex = i < d ? i : i - 1
-        var shift: CGFloat = 0
-        if i > d { shift -= pitch }                 // close the dragged row's hole
-        if removedIndex >= target { shift += pitch } // open the gap at the target
-        return shift
+        return ReorderMath.rowShift(forIndex: i, draggedIndex: draggedIndex,
+                                    dropTarget: dropTarget, pitch: pitch)
     }
 
     /// One draggable top-level folder. Reorder is a LIVE gesture, not pasteboard
@@ -685,12 +663,8 @@ struct SidebarView: View {
     /// measured against the static `otherReorderRoots` midpoints (the dragged
     /// row is excluded — its frame moves with the drag and would corrupt this).
     private func reorderSlot(forY y: CGFloat) -> Int {
-        let others = otherReorderRoots
-        for (i, r) in others.enumerated() {
-            guard let f = dragStartFrames[r.id] else { continue }
-            if y < f.midY { return i }
-        }
-        return others.count
+        ReorderMath.slot(forY: y,
+                         orderedStartFrames: otherReorderRoots.map { dragStartFrames[$0.id] })
     }
 
     /// Commit the dragged folder to the computed slot (an index into
