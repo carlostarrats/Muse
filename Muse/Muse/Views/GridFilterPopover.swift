@@ -2,49 +2,47 @@
 //  GridFilterPopover.swift
 //  Muse
 //
-//  The funnel-button popover: three stacked sections (Kind checkboxes, Date
-//  radio, Size radio) + Clear All, writing AppState.gridFilter. Styled like the
-//  mood picker (270 wide, 16pt padding/spacing, dividers between sections).
+//  The funnel-button popover. A single KIND section: an over-arching "Images"
+//  checkbox (native tri-state — check / dash / empty) over its format checkboxes
+//  (JPEG/PNG/…/Other), then the top-level non-image kinds, then Clear All. The
+//  formats are always visible (no expand/collapse — the dropdown was what broke
+//  the popover's resize, and with a fixed size the native AppKit checkbox works).
+//  Every row is a native checkbox, so they all match. Writes AppState.gridFilter.
+//  (feat/next-48)
 //
 
 import SwiftUI
+import AppKit
 
 struct GridFilterPopover: View {
     @EnvironmentObject var appState: AppState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // KIND (multi-select checkboxes)
+        VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 8) {
                 sectionHeader("KIND")
-                ForEach(KindFacet.allCases) { facet in
-                    Toggle(facet.displayName, isOn: kindBinding(facet))
+
+                // Over-arching Images checkbox (tri-state) + its format rows.
+                TriStateCheckbox(title: "Images",
+                                 state: appState.gridFilter.imageParentState) {
+                    appState.gridFilter = appState.gridFilter.togglingImageGroup()
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(KindFacet.imageLeaves) { facet in
+                        Toggle(facet.displayName, isOn: leafBinding(facet))
+                            .toggleStyle(.checkbox)
+                            .accessibilityLabel(facet == .imageOther
+                                                ? "Other image formats"
+                                                : facet.displayName)
+                    }
+                }
+                .padding(.leading, 16)
+
+                ForEach(KindFacet.topLevelKinds) { facet in
+                    Toggle(facet.displayName, isOn: leafBinding(facet))
                         .toggleStyle(.checkbox)
                 }
-            }
-
-            Divider()
-
-            // DATE (single-select radio, modified date)
-            VStack(alignment: .leading, spacing: 8) {
-                sectionHeader("DATE")
-                Picker("", selection: dateBinding) {
-                    ForEach(DateFacet.allCases) { Text($0.displayName).tag($0) }
-                }
-                .pickerStyle(.radioGroup)
-                .labelsHidden()
-            }
-
-            Divider()
-
-            // SIZE (single-select radio)
-            VStack(alignment: .leading, spacing: 8) {
-                sectionHeader("SIZE")
-                Picker("", selection: sizeBinding) {
-                    ForEach(SizeFacet.allCases) { Text($0.displayName).tag($0) }
-                }
-                .pickerStyle(.radioGroup)
-                .labelsHidden()
             }
 
             Divider()
@@ -53,7 +51,7 @@ struct GridFilterPopover: View {
                 .disabled(!appState.gridFilter.isActive)
         }
         .padding(16)
-        .frame(width: 270)
+        .frame(width: 180)
     }
 
     @ViewBuilder
@@ -68,33 +66,51 @@ struct GridFilterPopover: View {
 
     // MARK: - Bindings
 
-    /// A kind reads as checked when the set is empty (the "all = off" sentinel)
-    /// or explicitly contains it.
-    private func kindBinding(_ facet: KindFacet) -> Binding<Bool> {
+    /// A leaf reads as checked when the set is empty (the "all = off" sentinel)
+    /// or explicitly contains it; toggling routes through the pure model helper.
+    private func leafBinding(_ facet: KindFacet) -> Binding<Bool> {
         Binding(
             get: { appState.gridFilter.kinds.isEmpty
                    || appState.gridFilter.kinds.contains(facet) },
-            set: { _ in toggleKind(facet) })
+            set: { _ in appState.gridFilter = appState.gridFilter.toggling(facet) })
+    }
+}
+
+/// A native (AppKit) checkbox that can show the mixed/dash state — SwiftUI's
+/// `Toggle(.checkbox)` is on/off only. Visual state is driven entirely by the
+/// model (`ParentCheckState`); a click just fires `onToggle`, and the next
+/// render re-syncs `state`, so the button never drives its own state. Safe here
+/// because the popover is a fixed size (no dynamic resize to disrupt).
+private struct TriStateCheckbox: NSViewRepresentable {
+    let title: String
+    let state: ParentCheckState
+    let onToggle: () -> Void
+
+    func makeNSView(context: Context) -> NSButton {
+        let button = NSButton(checkboxWithTitle: title,
+                              target: context.coordinator,
+                              action: #selector(Coordinator.fire))
+        button.allowsMixedState = true
+        button.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+        button.setContentCompressionResistancePriority(.required, for: .horizontal)
+        return button
     }
 
-    private func toggleKind(_ facet: KindFacet) {
-        var filter = appState.gridFilter
-        // Expand the "empty == all" sentinel to a concrete full set before edit.
-        var set = filter.kinds.isEmpty ? Set(KindFacet.allCases) : filter.kinds
-        if set.contains(facet) { set.remove(facet) } else { set.insert(facet) }
-        // Collapse "all selected" (or "none selected") back to the empty/off
-        // sentinel: per the model, empty == no kind constraint == all shown.
-        filter.kinds = (set == Set(KindFacet.allCases) || set.isEmpty) ? [] : set
-        appState.gridFilter = filter
+    func updateNSView(_ button: NSButton, context: Context) {
+        button.title = title
+        context.coordinator.onToggle = onToggle
+        switch state {
+        case .on:    button.state = .on
+        case .off:   button.state = .off
+        case .mixed: button.state = .mixed
+        }
     }
 
-    private var dateBinding: Binding<DateFacet> {
-        Binding(get: { appState.gridFilter.date },
-                set: { appState.gridFilter.date = $0 })
-    }
+    func makeCoordinator() -> Coordinator { Coordinator(onToggle: onToggle) }
 
-    private var sizeBinding: Binding<SizeFacet> {
-        Binding(get: { appState.gridFilter.size },
-                set: { appState.gridFilter.size = $0 })
+    final class Coordinator: NSObject {
+        var onToggle: () -> Void
+        init(onToggle: @escaping () -> Void) { self.onToggle = onToggle }
+        @objc func fire() { onToggle() }
     }
 }

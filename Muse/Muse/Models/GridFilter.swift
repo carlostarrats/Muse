@@ -3,143 +3,164 @@
 //  Muse
 //
 //  Pure, unit-testable faceted filter for the grid: narrow the visible tiles by
-//  kind (image/video/pdf/document/audio/other), modified-date preset, and size
-//  bucket. Mirrors the shape of ImageLayout / TileBackground — a value type +
-//  matcher persisted via AppSettings and mirrored on AppState. `matches` takes
-//  raw inputs (kind/size/modified) and an injected `now` so date windows are
-//  deterministic in tests; the source of those values (FileNode) is an
-//  implementation detail of the caller. NOT a sort — it removes non-matching
-//  files from whichever set is active (folder / collection / tag / search).
+//  kind. Images break down into format leaves (JPEG/PNG/HEIC/…); every other
+//  kind stays a single leaf. The stored model is one flat `Set<KindFacet>` of
+//  LEAF facets with an "empty == all" sentinel — the "Images" parent is purely a
+//  UI grouping (see GridFilterPopover), not a stored facet. Mirrors the shape of
+//  ImageLayout / TileBackground — a value type + matcher persisted via
+//  AppSettings and mirrored on AppState. `matches` takes raw inputs (kind + file
+//  extension); the source of those values (FileNode) is an implementation detail
+//  of the caller. NOT a sort — it removes non-matching files from whichever set
+//  is active (folder / collection / tag / search). (Date and size filtering were
+//  removed — sort-by-date and sort-by-size cover those needs; feat/next-48.)
 //
 
 import Foundation
 
-/// Grouped kind buckets the filter exposes. Several `AssetKind`s collapse into
-/// each bucket (e.g. raw/psd/svg → image); anything unhandled → `.other`.
-/// `folder` is its own facet so the one-level browse view's subfolder cards can
-/// be toggled on/off independently (feat/next-42 follow-up).
+/// Leaf facets the filter narrows by. Image kinds expand into format leaves
+/// (JPEG/PNG/HEIC/TIFF/GIF/WebP/RAW/PSD/SVG + an `imageOther` catch-all so no
+/// image format is ever unreachable); every non-image kind is a single leaf.
+/// `folder` is its own leaf so the one-level browse view's subfolder cards can
+/// be toggled on/off. (feat/next-48 replaced the old coarse `.image` facet.)
 enum KindFacet: String, CaseIterable, Identifiable, Codable {
-    case image, video, pdf, document, audio, folder, other
+    // Image-format leaves (grouped under the "Images" UI parent).
+    case jpeg, png, heic, tiff, gif, webp, raw, psd, svg, imageOther
+    // Non-image kinds (each a single leaf).
+    case video, pdf, document, audio, folder, other
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .image:    return "Images"
-        case .video:    return "Videos"
-        case .pdf:      return "PDFs"
-        case .document: return "Documents"
-        case .audio:    return "Audio"
-        case .folder:   return "Folders"
-        case .other:    return "Other"
+        case .jpeg:       return "JPEG"
+        case .png:        return "PNG"
+        case .heic:       return "HEIC"
+        case .tiff:       return "TIFF"
+        case .gif:        return "GIF"
+        case .webp:       return "WebP"
+        case .raw:        return "RAW"
+        case .psd:        return "PSD"
+        case .svg:        return "SVG"
+        case .imageOther: return "Other"
+        case .video:      return "Videos"
+        case .pdf:        return "PDFs"
+        case .document:   return "Documents"
+        case .audio:      return "Audio"
+        case .folder:     return "Folders"
+        case .other:      return "Other"
         }
     }
 
-    init(from kind: AssetKind) {
+    /// The image-format leaves, in display order, grouped under the UI "Images"
+    /// parent. Order also drives the indented checkbox list.
+    static let imageLeaves: [KindFacet] = [
+        .jpeg, .png, .heic, .tiff, .gif, .webp, .raw, .psd, .svg, .imageOther
+    ]
+
+    /// The non-image kind leaves, in display order (the top-level rows below the
+    /// "Images" group heading).
+    static let topLevelKinds: [KindFacet] = [.video, .pdf, .document, .audio, .folder, .other]
+
+    /// Resolve a file to the single leaf that controls it. Pure — the extension
+    /// comes from the caller's `FileNode.url`; no IO. An image-kind file whose
+    /// format isn't named maps to `imageOther` so it's always reachable.
+    static func leaf(kind: AssetKind, ext: String) -> KindFacet {
         switch kind {
-        case .image, .raw, .psd, .svg:         self = .image
-        case .video:                           self = .video
-        case .pdf:                             self = .pdf
-        case .text, .markdown, .code, .office: self = .document
-        case .audio:                           self = .audio
-        case .folder:                          self = .folder
+        case .raw: return .raw
+        case .psd: return .psd
+        case .svg: return .svg
+        case .image:
+            switch ext.lowercased() {
+            case "jpg", "jpeg":  return .jpeg
+            case "png":          return .png
+            case "heic", "heif": return .heic
+            case "tif", "tiff":  return .tiff
+            case "gif":          return .gif
+            case "webp":         return .webp
+            default:             return .imageOther
+            }
+        case .video:                           return .video
+        case .pdf:                             return .pdf
+        case .text, .markdown, .code, .office: return .document
+        case .audio:                           return .audio
+        case .folder:                          return .folder
         case .model3d, .font, .archive, .unknown:
-            self = .other
+            return .other
         }
     }
 }
 
-/// Modified-date preset. `.any` = no date constraint.
-enum DateFacet: String, CaseIterable, Identifiable, Codable {
-    case any, today, week, month, year
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .any:   return "Any"
-        case .today: return "Today"
-        case .week:  return "This Week"
-        case .month: return "This Month"
-        case .year:  return "This Year"
-        }
-    }
-
-    /// Inclusive lower bound of the window relative to `now`, or nil for `.any`.
-    func windowStart(now: Date, calendar: Calendar = .current) -> Date? {
-        switch self {
-        case .any:   return nil
-        case .today: return calendar.startOfDay(for: now)
-        case .week:  return calendar.dateInterval(of: .weekOfYear, for: now)?.start
-        case .month: return calendar.dateInterval(of: .month, for: now)?.start
-        case .year:  return calendar.dateInterval(of: .year, for: now)?.start
-        }
-    }
-}
-
-/// Size bucket using decimal MB (1 MB = 1,000,000 bytes, matching Finder).
-/// `.any` = no size constraint.
-enum SizeFacet: String, CaseIterable, Identifiable, Codable {
-    case any, under1MB, mb1to10, mb10to100, over100MB
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .any:       return "Any"
-        case .under1MB:  return "< 1 MB"
-        case .mb1to10:   return "1–10 MB"
-        case .mb10to100: return "10–100 MB"
-        case .over100MB: return "> 100 MB"
-        }
-    }
-
-    private static let MB: Int64 = 1_000_000
-
-    func contains(_ bytes: Int64) -> Bool {
-        switch self {
-        case .any:       return true
-        case .under1MB:  return bytes < 1 * Self.MB
-        case .mb1to10:   return bytes >= 1 * Self.MB && bytes < 10 * Self.MB
-        case .mb10to100: return bytes >= 10 * Self.MB && bytes < 100 * Self.MB
-        case .over100MB: return bytes >= 100 * Self.MB
-        }
-    }
+/// Tri-state of the over-arching "Images" checkbox, derived from how many image
+/// leaves the filter currently includes.
+enum ParentCheckState: Equatable {
+    case on    // all image leaves included
+    case mixed // some included
+    case off   // none included
 }
 
 struct GridFilter: Equatable, Codable {
-    /// Empty = no kind constraint (all kinds shown).
+    /// Empty = no kind constraint (all leaves shown). Otherwise the exact set of
+    /// leaves to show.
     var kinds: Set<KindFacet>
-    var date: DateFacet
-    var size: SizeFacet
 
-    static let none = GridFilter(kinds: [], date: .any, size: .any)
+    static let none = GridFilter(kinds: [])
+
+    private static let allLeaves = Set(KindFacet.allCases)
 
     /// True when any facet constrains the result.
-    var isActive: Bool {
-        !kinds.isEmpty || date != .any || size != .any
+    var isActive: Bool { !kinds.isEmpty }
+
+    /// Pure predicate. The extension comes from the caller's `FileNode.url`.
+    func matches(kind: AssetKind, ext: String) -> Bool {
+        guard !kinds.isEmpty else { return true }   // empty = all
+        return kinds.contains(KindFacet.leaf(kind: kind, ext: ext))
     }
 
-    /// Pure predicate. `now` injected so date windows are deterministic in tests.
-    func matches(kind: AssetKind, sizeBytes: Int64?, modified: Date?, now: Date) -> Bool {
-        let facet = KindFacet(from: kind)
-        if !kinds.isEmpty {
-            guard kinds.contains(facet) else { return false }
+    /// The effective leaf set, expanding the "empty == all" sentinel.
+    private var effective: Set<KindFacet> {
+        kinds.isEmpty ? Self.allLeaves : kinds
+    }
+
+    /// Collapse a working set back to the sentinel: a full OR empty set both mean
+    /// "all shown" (`.none`), never "show nothing".
+    private static func collapse(_ set: Set<KindFacet>) -> GridFilter {
+        (set == allLeaves || set.isEmpty) ? .none : GridFilter(kinds: set)
+    }
+
+    /// Flip a single leaf on/off (every checkbox in the popover), honoring the
+    /// empty-as-all sentinel.
+    func toggling(_ facet: KindFacet) -> GridFilter {
+        var set = effective
+        if set.contains(facet) { set.remove(facet) } else { set.insert(facet) }
+        return Self.collapse(set)
+    }
+
+    /// State of the over-arching "Images" checkbox.
+    var imageParentState: ParentCheckState {
+        let set = effective
+        let present = KindFacet.imageLeaves.filter { set.contains($0) }.count
+        if present == 0 { return .off }
+        if present == KindFacet.imageLeaves.count { return .on }
+        return .mixed
+    }
+
+    /// Toggle the whole image group: if every image leaf is currently included,
+    /// remove them all; otherwise add them all.
+    func togglingImageGroup() -> GridFilter {
+        var set = effective
+        let allImagesOn = KindFacet.imageLeaves.allSatisfy { set.contains($0) }
+        if allImagesOn {
+            KindFacet.imageLeaves.forEach { set.remove($0) }
+        } else {
+            KindFacet.imageLeaves.forEach { set.insert($0) }
         }
-        // Folders are matched ONLY by the kind facet — date/size are file
-        // concepts that never apply to a directory, so a date/size filter must
-        // not hide a folder the kind facet kept (folders are navigation).
-        if facet == .folder { return true }
-        if let start = date.windowStart(now: now) {
-            guard let modified, modified >= start else { return false }
-        }
-        if size != .any {
-            guard let sizeBytes, size.contains(sizeBytes) else { return false }
-        }
-        return true
+        return Self.collapse(set)
     }
 
     /// Decode a persisted JSON string, defaulting to `.none` when missing/invalid.
+    /// A filter saved before feat/next-48 holds the old coarse `"image"` leaf
+    /// (and possibly date/size keys); the unknown enum case fails to decode, so
+    /// it falls back to `.none` (all shown) — acceptable for transient view state.
     static func resolve(_ raw: String?) -> GridFilter {
         guard let raw, let data = raw.data(using: .utf8),
               let decoded = try? JSONDecoder().decode(GridFilter.self, from: data)

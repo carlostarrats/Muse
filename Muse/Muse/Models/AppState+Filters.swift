@@ -65,19 +65,14 @@ extension AppState {
         // extra resourceValues hit; the memo means this runs only when an input
         // actually changed, not on every grid render.
         //
-        // Folder grid cards (the one-level browse view, feat/next-41) are now a
-        // first-class Kind facet ("Folders"): the matcher keeps them when the
-        // kind set is empty or contains `.folder`, and never lets a date/size
-        // facet hide them (those are file concepts). So unchecking "Folders"
-        // hides subfolder cards, and any other facet leaves them alone.
+        // Facet filter narrows by leaf: each file maps to exactly one KindFacet
+        // (image formats break out into JPEG/PNG/…/imageOther; folders are the
+        // `.folder` leaf). The file extension picks the image-format leaf and
+        // comes from the URL the node already holds — no extra IO.
         let result: [FileNode]
         if gridFilter.isActive {
-            let now = Date()
             result = base.filter {
-                gridFilter.matches(kind: $0.kind,
-                                   sizeBytes: $0.sizeBytes,
-                                   modified: $0.modifiedAt,
-                                   now: now)
+                gridFilter.matches(kind: $0.kind, ext: $0.url.pathExtension)
             }
         } else {
             result = base

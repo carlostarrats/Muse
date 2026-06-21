@@ -3410,3 +3410,66 @@ confirmed rendering correctly (color wash, aspect-fit playback, full info column
 frame-sampled colors), but the interactive paths (Esc/✕/backdrop close, delete+undo,
 Open in Maps) couldn't be driven from the harness — macOS blocked synthetic events
 ("Not authorized to send Apple events"; no Accessibility grant).
+
+## 2026-06-20 — `feat/next-48` — grid filter: drop date/size, add granular image formats
+
+Reworked the grid's faceted filter (the toolbar funnel) in two moves, driven live with
+the user.
+
+**1. Removed the Date and Size facets.** Sort-by-date and sort-by-size already cover
+those needs, so date/size filtering was redundant. Deleted `DateFacet`/`SizeFacet` and
+dropped `matches`'s `sizeBytes`/`modified`/`now` parameters. The funnel is kind-only.
+
+**2. The coarse "Images" facet became granular image FORMATS.** A photo-heavy library
+needs to narrow by format. `KindFacet` is now a flat set of LEAF facets: image formats
+(`jpeg/png/heic/tiff/gif/webp/raw/psd/svg`) + an **`imageOther` catch-all**, plus the
+unchanged non-image kinds (`video/pdf/document/audio/folder/other`). The catch-all is
+load-bearing: an image whose format isn't named (BMP/AVIF/ICO, or an extensionless
+header-sniffed image) maps to `imageOther`, so **every image is controlled by exactly
+one checkbox** and nothing becomes unreachable when you narrow the list. New pure
+`KindFacet.leaf(kind:ext:)` resolves a file to its leaf (image kind → format by
+extension; raw/psd/svg by kind; exhaustive 16-case `AssetKind` switch); `matches(kind:
+ext:)` takes the node's `url.pathExtension`. The "empty == all" sentinel + `collapse()`
+(a full OR empty working set → `.none`) is preserved, so `isActive` (`!kinds.isEmpty`)
+can never be wrongly true — the funnel's engaged-blue means a genuinely active filter.
+
+**Popover.** One KIND section: an over-arching **"Images" tri-state checkbox** over the
+always-visible indented format checkboxes, then the kind rows, then Clear All; width
+trimmed 270→180.
+
+**The UI was a multi-round bug-hunt** (the interesting part). SwiftUI has no tri-state
+`Toggle(.checkbox)`, so the "Images" parent needs a native AppKit `NSButton`
+(`allowsMixedState`). The first cut paired that with an expand/collapse **dropdown** for
+the formats — which broke badly: on collapse the `NSPopover` wouldn't re-measure to the
+smaller size and left a **stale blurred layer snapshot** (ghosting) bleeding over the
+toolbar. Removing the animation didn't fix it; swapping to a pure-SwiftUI parent
+(SF-symbol, then a custom-drawn `RoundedRectangle`) fixed the ghost but never matched
+the native checkboxes' shape/size. The resolution: **drop the dropdown** — show all the
+format checkboxes always, making the popover a **fixed size** — at which point the
+native `NSButton` tri-state checkbox works perfectly and matches the rows exactly. New
+durable gotcha recorded: *don't put an `NSViewRepresentable` in a SwiftUI popover whose
+content height changes at runtime.* Separately, a "stuck blue funnel" turned out to be a
+**leftover test filter** (everything except the top-level "Other" unchecked) persisted in
+`AppSettings.gridFilter`, not a bug — confirmed by resetting it and watching the funnel
+return to grey. The funnel-blue behavior the user wanted ("blue while open; persists if a
+filter is set; grey otherwise") is exactly the existing logic. Legacy persisted filters
+(old `"image"`/date/size keys) fail to decode → `resolve` falls back to `.none`; no
+migration (transient view state).
+
+**QA — review loop until green.** Two independent code reviews (correctness/logic +
+UI/integration) both returned **ship** — no Critical/Important. They verified: the `leaf`
+mapping against every `AssetKind`; the legacy-decode fallback (a `Set<KindFacet>` with an
+unknown raw value genuinely throws → `.none`); the sentinel/collapse invariant proving
+the funnel can't strand blue; and the `TriStateCheckbox` representable being race-/
+double-fire-/retain-cycle-/stale-closure-free. Their Minor test-gap notes were closed
+(explicit full-image-set `imageParentState`, `togglingImageGroup` from off). The
+duplicate visible "Other" label is disambiguated by indentation + a VoiceOver
+`"Other image formats"` label, matching the brainstormed layout.
+
+New/updated tests: `GridFilterTests` (25 cases — leaf mapping incl. case-insensitivity +
+`imageOther` catch-all, narrowing, the parent tri-state + toggle-all, sentinel collapse,
+legacy-decode→none). Build + full `MuseTests` green throughout. Files:
+`Models/GridFilter.swift`, `Models/AppState+Filters.swift`, `Views/GridFilterPopover.swift`,
+`MuseTests/GridFilterTests.swift`. Spec:
+`docs/superpowers/specs/2026-06-20-image-format-filter-design.md`. GUI flows were
+confirmed live with the user this session.

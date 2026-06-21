@@ -3,187 +3,182 @@ import XCTest
 
 final class GridFilterTests: XCTestCase {
 
-    // Fixed "now": Wed 2026-06-17 12:00:00 local. Mid-week, mid-month, mid-year.
-    private func fixedNow() -> Date {
-        var c = DateComponents()
-        c.year = 2026; c.month = 6; c.day = 17; c.hour = 12; c.minute = 0; c.second = 0
-        return Calendar.current.date(from: c)!
+    // MARK: - leaf(kind:ext:) mapping
+
+    func testImageExtensionsMapToNamedLeaves() {
+        XCTAssertEqual(KindFacet.leaf(kind: .image, ext: "jpg"), .jpeg)
+        XCTAssertEqual(KindFacet.leaf(kind: .image, ext: "jpeg"), .jpeg)
+        XCTAssertEqual(KindFacet.leaf(kind: .image, ext: "png"), .png)
+        XCTAssertEqual(KindFacet.leaf(kind: .image, ext: "heic"), .heic)
+        XCTAssertEqual(KindFacet.leaf(kind: .image, ext: "heif"), .heic)
+        XCTAssertEqual(KindFacet.leaf(kind: .image, ext: "tif"), .tiff)
+        XCTAssertEqual(KindFacet.leaf(kind: .image, ext: "tiff"), .tiff)
+        XCTAssertEqual(KindFacet.leaf(kind: .image, ext: "gif"), .gif)
+        XCTAssertEqual(KindFacet.leaf(kind: .image, ext: "webp"), .webp)
     }
 
-    private func date(_ y: Int, _ m: Int, _ d: Int, _ h: Int = 12) -> Date {
-        var c = DateComponents()
-        c.year = y; c.month = m; c.day = d; c.hour = h
-        return Calendar.current.date(from: c)!
+    func testImageExtensionMatchingIsCaseInsensitive() {
+        XCTAssertEqual(KindFacet.leaf(kind: .image, ext: "JPG"), .jpeg)
+        XCTAssertEqual(KindFacet.leaf(kind: .image, ext: "PNG"), .png)
+        XCTAssertEqual(KindFacet.leaf(kind: .image, ext: "HEIC"), .heic)
     }
 
-    // MARK: - KindFacet mapping
-
-    func testKindFacetBucketing() {
-        XCTAssertEqual(KindFacet(from: .image), .image)
-        XCTAssertEqual(KindFacet(from: .raw), .image)
-        XCTAssertEqual(KindFacet(from: .psd), .image)
-        XCTAssertEqual(KindFacet(from: .svg), .image)
-        XCTAssertEqual(KindFacet(from: .video), .video)
-        XCTAssertEqual(KindFacet(from: .pdf), .pdf)
-        XCTAssertEqual(KindFacet(from: .text), .document)
-        XCTAssertEqual(KindFacet(from: .markdown), .document)
-        XCTAssertEqual(KindFacet(from: .code), .document)
-        XCTAssertEqual(KindFacet(from: .office), .document)
-        XCTAssertEqual(KindFacet(from: .audio), .audio)
-        XCTAssertEqual(KindFacet(from: .folder), .folder)
-        XCTAssertEqual(KindFacet(from: .model3d), .other)
-        XCTAssertEqual(KindFacet(from: .font), .other)
-        XCTAssertEqual(KindFacet(from: .archive), .other)
-        XCTAssertEqual(KindFacet(from: .unknown), .other)
+    func testUnnamedImageFormatsMapToImageOther() {
+        // Image-kind files whose format isn't named fall into the catch-all.
+        XCTAssertEqual(KindFacet.leaf(kind: .image, ext: "bmp"), .imageOther)
+        XCTAssertEqual(KindFacet.leaf(kind: .image, ext: "ico"), .imageOther)
+        XCTAssertEqual(KindFacet.leaf(kind: .image, ext: "avif"), .imageOther)
+        // Extensionless image (classified via header sniff) → catch-all.
+        XCTAssertEqual(KindFacet.leaf(kind: .image, ext: ""), .imageOther)
     }
 
-    func testFolderMatchedOnlyByKindFacet() {
-        let now = fixedNow()
-        // No kind constraint: a folder shows even with date+size set, and even
-        // with a nil size/modified (date/size never apply to a folder).
-        XCTAssertTrue(GridFilter(kinds: [], date: .today, size: .over100MB)
-            .matches(kind: .folder, sizeBytes: nil, modified: nil, now: now))
-        // Folders explicitly included: shown regardless of date/size.
-        XCTAssertTrue(GridFilter(kinds: [.folder], date: .year, size: .under1MB)
-            .matches(kind: .folder, sizeBytes: nil, modified: nil, now: now))
-        // Folders excluded (a kind set without .folder): hidden.
-        XCTAssertFalse(GridFilter(kinds: [.image], date: .any, size: .any)
-            .matches(kind: .folder, sizeBytes: 5, modified: now, now: now))
-        // Unchecking just Folders (every other facet present) hides folders but
-        // keeps files of the checked kinds.
-        let allButFolder = GridFilter(kinds: [.image, .video, .pdf, .document, .audio, .other],
-                                      date: .any, size: .any)
-        XCTAssertFalse(allButFolder.matches(kind: .folder, sizeBytes: nil, modified: nil, now: now))
-        XCTAssertTrue(allButFolder.matches(kind: .image, sizeBytes: 5, modified: now, now: now))
+    func testRawPsdSvgMapToOwnLeavesRegardlessOfExt() {
+        XCTAssertEqual(KindFacet.leaf(kind: .raw, ext: "dng"), .raw)
+        XCTAssertEqual(KindFacet.leaf(kind: .raw, ext: "cr3"), .raw)
+        XCTAssertEqual(KindFacet.leaf(kind: .raw, ext: "nef"), .raw)
+        XCTAssertEqual(KindFacet.leaf(kind: .psd, ext: "psd"), .psd)
+        XCTAssertEqual(KindFacet.leaf(kind: .svg, ext: "svg"), .svg)
+    }
+
+    func testNonImageKindsMapToTheirLeaves() {
+        XCTAssertEqual(KindFacet.leaf(kind: .video, ext: "mp4"), .video)
+        XCTAssertEqual(KindFacet.leaf(kind: .pdf, ext: "pdf"), .pdf)
+        XCTAssertEqual(KindFacet.leaf(kind: .audio, ext: "mp3"), .audio)
+        XCTAssertEqual(KindFacet.leaf(kind: .folder, ext: ""), .folder)
+        // document collapses text/markdown/code/office
+        XCTAssertEqual(KindFacet.leaf(kind: .text, ext: "txt"), .document)
+        XCTAssertEqual(KindFacet.leaf(kind: .markdown, ext: "md"), .document)
+        XCTAssertEqual(KindFacet.leaf(kind: .code, ext: "swift"), .document)
+        XCTAssertEqual(KindFacet.leaf(kind: .office, ext: "docx"), .document)
+        // other collapses model3d/font/archive/unknown
+        XCTAssertEqual(KindFacet.leaf(kind: .model3d, ext: "usdz"), .other)
+        XCTAssertEqual(KindFacet.leaf(kind: .font, ext: "ttf"), .other)
+        XCTAssertEqual(KindFacet.leaf(kind: .archive, ext: "zip"), .other)
+        XCTAssertEqual(KindFacet.leaf(kind: .unknown, ext: "dat"), .other)
+    }
+
+    func testFacetGroupings() {
+        XCTAssertEqual(KindFacet.imageLeaves,
+                       [.jpeg, .png, .heic, .tiff, .gif, .webp, .raw, .psd, .svg, .imageOther])
+        XCTAssertEqual(KindFacet.topLevelKinds,
+                       [.video, .pdf, .document, .audio, .folder, .other])
+    }
+
+    // MARK: - matches
+
+    func testEmptyKindsMatchesEverything() {
+        let f = GridFilter.none
+        XCTAssertTrue(f.matches(kind: .image, ext: "jpg"))
+        XCTAssertTrue(f.matches(kind: .image, ext: "bmp"))
+        XCTAssertTrue(f.matches(kind: .folder, ext: ""))
+        XCTAssertTrue(f.matches(kind: .video, ext: "mp4"))
+    }
+
+    func testNarrowToOneImageFormat() {
+        let f = GridFilter(kinds: [.png])
+        XCTAssertTrue(f.matches(kind: .image, ext: "png"))
+        XCTAssertFalse(f.matches(kind: .image, ext: "jpg"))
+        // A BMP (imageOther) is hidden when only PNG is selected...
+        XCTAssertFalse(f.matches(kind: .image, ext: "bmp"))
+        // ...and a non-image kind is hidden too.
+        XCTAssertFalse(f.matches(kind: .video, ext: "mp4"))
+    }
+
+    func testImageOtherReachesUnnamedFormats() {
+        let f = GridFilter(kinds: [.imageOther])
+        XCTAssertTrue(f.matches(kind: .image, ext: "bmp"))
+        XCTAssertTrue(f.matches(kind: .image, ext: "avif"))
+        XCTAssertFalse(f.matches(kind: .image, ext: "png"))
+    }
+
+    func testFolderFacetGatesFolders() {
+        XCTAssertTrue(GridFilter(kinds: [.folder]).matches(kind: .folder, ext: ""))
+        XCTAssertFalse(GridFilter(kinds: [.jpeg]).matches(kind: .folder, ext: ""))
     }
 
     // MARK: - isActive
 
-    func testNoneIsInactive() {
+    func testIsActive() {
         XCTAssertFalse(GridFilter.none.isActive)
         XCTAssertEqual(GridFilter.none.kinds, [])
-        XCTAssertEqual(GridFilter.none.date, .any)
-        XCTAssertEqual(GridFilter.none.size, .any)
+        XCTAssertTrue(GridFilter(kinds: [.jpeg]).isActive)
     }
 
-    func testIsActiveWhenAnyFacetSet() {
-        XCTAssertTrue(GridFilter(kinds: [.image], date: .any, size: .any).isActive)
-        XCTAssertTrue(GridFilter(kinds: [], date: .today, size: .any).isActive)
-        XCTAssertTrue(GridFilter(kinds: [], date: .any, size: .over100MB).isActive)
+    // MARK: - toggling a single leaf (empty == all sentinel)
+
+    func testTogglingFromEmptyDeselectsOneLeaf() {
+        // Empty (all) → toggling png expands to the full set minus png.
+        let f = GridFilter.none.toggling(.png)
+        XCTAssertFalse(f.kinds.contains(.png))
+        XCTAssertTrue(f.kinds.contains(.jpeg))
+        XCTAssertTrue(f.kinds.contains(.video))
+        XCTAssertTrue(f.isActive)
     }
 
-    // MARK: - Kind matching
-
-    func testEmptyKindsMatchesEverything() {
-        let f = GridFilter.none
-        let now = fixedNow()
-        XCTAssertTrue(f.matches(kind: .image, sizeBytes: 5, modified: now, now: now))
-        XCTAssertTrue(f.matches(kind: .folder, sizeBytes: 5, modified: now, now: now))
+    func testTogglingBackToFullSetCollapsesToEmpty() {
+        // Full-minus-png, then toggle png back on → collapses to the empty (all) sentinel.
+        let f = GridFilter.none.toggling(.png).toggling(.png)
+        XCTAssertEqual(f, .none)
     }
 
-    func testKindConstraintNarrows() {
-        let f = GridFilter(kinds: [.pdf], date: .any, size: .any)
-        let now = fixedNow()
-        XCTAssertTrue(f.matches(kind: .pdf, sizeBytes: 5, modified: now, now: now))
-        XCTAssertFalse(f.matches(kind: .image, sizeBytes: 5, modified: now, now: now))
-        XCTAssertTrue(GridFilter(kinds: [.image, .video], date: .any, size: .any)
-            .matches(kind: .video, sizeBytes: 5, modified: now, now: now))
+    func testTogglingLastRemainingLeafOffCollapsesToEmpty() {
+        // From a single-leaf selection, toggling that leaf off would empty the
+        // set, which collapses back to the "all" sentinel rather than "show nothing".
+        let f = GridFilter(kinds: [.jpeg]).toggling(.jpeg)
+        XCTAssertEqual(f, .none)
     }
 
-    // MARK: - Date windows (modified date, against fixedNow)
+    // MARK: - Images parent (tri-state) + toggle-all
 
-    func testDateAnyMatchesAnyDateAndNilModified() {
-        let f = GridFilter(kinds: [], date: .any, size: .any)
-        let now = fixedNow()
-        XCTAssertTrue(f.matches(kind: .image, sizeBytes: 5, modified: date(1999, 1, 1), now: now))
-        XCTAssertTrue(f.matches(kind: .image, sizeBytes: 5, modified: nil, now: now))
+    func testImageParentStateAll() {
+        XCTAssertEqual(GridFilter.none.imageParentState, .on)
     }
 
-    func testDateToday() {
-        let f = GridFilter(kinds: [], date: .today, size: .any)
-        let now = fixedNow()
-        XCTAssertTrue(f.matches(kind: .image, sizeBytes: 5, modified: date(2026, 6, 17, 0), now: now))
-        XCTAssertTrue(f.matches(kind: .image, sizeBytes: 5, modified: date(2026, 6, 17, 23), now: now))
-        XCTAssertFalse(f.matches(kind: .image, sizeBytes: 5, modified: date(2026, 6, 16, 23), now: now))
+    func testImageParentStateMixed() {
+        let f = GridFilter.none.toggling(.png)   // all images except png
+        XCTAssertEqual(f.imageParentState, .mixed)
     }
 
-    func testDateThisWeek() {
-        let f = GridFilter(kinds: [], date: .week, size: .any)
-        let now = fixedNow()
-        // Something earlier this same week matches; last week does not.
-        XCTAssertTrue(f.matches(kind: .image, sizeBytes: 5, modified: now, now: now))
-        XCTAssertFalse(f.matches(kind: .image, sizeBytes: 5, modified: date(2026, 6, 1), now: now))
+    func testImageParentStateOff() {
+        // Only a non-image leaf selected → no image leaves present.
+        XCTAssertEqual(GridFilter(kinds: [.video]).imageParentState, .off)
     }
 
-    func testDateThisMonth() {
-        let f = GridFilter(kinds: [], date: .month, size: .any)
-        let now = fixedNow()
-        XCTAssertTrue(f.matches(kind: .image, sizeBytes: 5, modified: date(2026, 6, 1, 0), now: now))
-        XCTAssertFalse(f.matches(kind: .image, sizeBytes: 5, modified: date(2026, 5, 31, 23), now: now))
+    func testImageParentStateOnForExplicitFullImageSet() {
+        // An explicit (non-sentinel) set holding every image leaf plus a
+        // non-image leaf still reports .on (exercises the non-effective branch).
+        let kinds = Set(KindFacet.imageLeaves).union([.video])
+        XCTAssertEqual(GridFilter(kinds: kinds).imageParentState, .on)
     }
 
-    func testDateThisYear() {
-        let f = GridFilter(kinds: [], date: .year, size: .any)
-        let now = fixedNow()
-        XCTAssertTrue(f.matches(kind: .image, sizeBytes: 5, modified: date(2026, 1, 1, 0), now: now))
-        XCTAssertFalse(f.matches(kind: .image, sizeBytes: 5, modified: date(2025, 12, 31, 23), now: now))
+    func testTogglingImageGroupFromOffSelectsAllImageLeaves() {
+        // From an images-off state (only a non-image leaf), toggling the parent
+        // turns every image leaf on.
+        let f = GridFilter(kinds: [.video]).togglingImageGroup()
+        for leaf in KindFacet.imageLeaves { XCTAssertTrue(f.kinds.contains(leaf)) }
+        XCTAssertEqual(f.imageParentState, .on)
     }
 
-    func testDateConstraintRejectsNilModified() {
-        let now = fixedNow()
-        for facet in [DateFacet.today, .week, .month, .year] {
-            let f = GridFilter(kinds: [], date: facet, size: .any)
-            XCTAssertFalse(f.matches(kind: .image, sizeBytes: 5, modified: nil, now: now),
-                           "\(facet) must reject a nil modified date")
-        }
+    func testTogglingImageGroupOffRemovesAllImageLeaves() {
+        // From all-on, toggling the Images parent removes every image leaf,
+        // leaving the non-image kinds.
+        let f = GridFilter.none.togglingImageGroup()
+        for leaf in KindFacet.imageLeaves { XCTAssertFalse(f.kinds.contains(leaf)) }
+        XCTAssertTrue(f.kinds.contains(.video))
+        XCTAssertTrue(f.kinds.contains(.folder))
+        XCTAssertEqual(f.imageParentState, .off)
     }
 
-    // MARK: - Size buckets (decimal MB = 1_000_000 bytes)
-
-    func testSizeBuckets() {
-        let now = fixedNow()
-        func f(_ s: SizeFacet) -> GridFilter { GridFilter(kinds: [], date: .any, size: s) }
-
-        // < 1 MB
-        XCTAssertTrue(f(.under1MB).matches(kind: .image, sizeBytes: 999_999, modified: now, now: now))
-        XCTAssertFalse(f(.under1MB).matches(kind: .image, sizeBytes: 1_000_000, modified: now, now: now))
-        // 1–10 MB
-        XCTAssertTrue(f(.mb1to10).matches(kind: .image, sizeBytes: 1_000_000, modified: now, now: now))
-        XCTAssertTrue(f(.mb1to10).matches(kind: .image, sizeBytes: 9_999_999, modified: now, now: now))
-        XCTAssertFalse(f(.mb1to10).matches(kind: .image, sizeBytes: 10_000_000, modified: now, now: now))
-        // 10–100 MB
-        XCTAssertTrue(f(.mb10to100).matches(kind: .image, sizeBytes: 10_000_000, modified: now, now: now))
-        XCTAssertFalse(f(.mb10to100).matches(kind: .image, sizeBytes: 100_000_000, modified: now, now: now))
-        // > 100 MB
-        XCTAssertTrue(f(.over100MB).matches(kind: .image, sizeBytes: 100_000_000, modified: now, now: now))
-        XCTAssertFalse(f(.over100MB).matches(kind: .image, sizeBytes: 99_999_999, modified: now, now: now))
+    func testTogglingImageGroupOnFromMixedSelectsAllImageLeaves() {
+        // A mixed state (some images) → toggling the parent turns all images on.
+        let f = GridFilter.none.toggling(.png).togglingImageGroup()
+        XCTAssertEqual(f.imageParentState, .on)
     }
 
-    func testSizeConstraintRejectsNilSize() {
-        let now = fixedNow()
-        for facet in [SizeFacet.under1MB, .mb1to10, .mb10to100, .over100MB] {
-            let f = GridFilter(kinds: [], date: .any, size: facet)
-            XCTAssertFalse(f.matches(kind: .image, sizeBytes: nil, modified: now, now: now),
-                           "\(facet) must reject a nil size")
-        }
-        // .any tolerates nil size.
-        XCTAssertTrue(GridFilter(kinds: [], date: .any, size: .any)
-            .matches(kind: .image, sizeBytes: nil, modified: now, now: now))
-    }
-
-    // MARK: - Combined facets
-
-    func testAllThreeFacetsTogether() {
-        let f = GridFilter(kinds: [.image], date: .month, size: .mb1to10)
-        let now = fixedNow()
-        // matches all three
-        XCTAssertTrue(f.matches(kind: .image, sizeBytes: 5_000_000, modified: date(2026, 6, 10), now: now))
-        // wrong kind
-        XCTAssertFalse(f.matches(kind: .pdf, sizeBytes: 5_000_000, modified: date(2026, 6, 10), now: now))
-        // wrong size
-        XCTAssertFalse(f.matches(kind: .image, sizeBytes: 50_000_000, modified: date(2026, 6, 10), now: now))
-        // wrong date
-        XCTAssertFalse(f.matches(kind: .image, sizeBytes: 5_000_000, modified: date(2026, 4, 1), now: now))
+    func testTogglingImageGroupRoundTripCollapsesToEmpty() {
+        // Off then on again from the all-on default returns to the empty sentinel.
+        let f = GridFilter.none.togglingImageGroup().togglingImageGroup()
+        XCTAssertEqual(f, .none)
     }
 
     // MARK: - resolve / Codable round-trip
@@ -194,9 +189,16 @@ final class GridFilterTests: XCTestCase {
     }
 
     func testCodableRoundTripViaResolve() throws {
-        let original = GridFilter(kinds: [.image, .pdf], date: .week, size: .mb10to100)
+        let original = GridFilter(kinds: [.jpeg, .png, .pdf])
         let data = try JSONEncoder().encode(original)
         let json = String(data: data, encoding: .utf8)
         XCTAssertEqual(GridFilter.resolve(json), original)
+    }
+
+    func testResolveIgnoresLegacyImageDateSizeKeys() {
+        // A filter saved before this change holds the old coarse "image" leaf
+        // (and possibly date/size keys); it no longer decodes → falls back to none.
+        let legacy = #"{"kinds":["image"],"date":"week","size":"mb1to10"}"#
+        XCTAssertEqual(GridFilter.resolve(legacy), .none)
     }
 }
