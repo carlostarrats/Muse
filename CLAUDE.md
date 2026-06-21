@@ -372,6 +372,24 @@ The four most critical are also saved as Claude memories (linked).
   results span folders). `EscapeResolver` has a `.clearTags` layer ordered AFTER search,
   BEFORE the collection back-out (one press clears the whole set). Built 2026-06-20
   (`feat/next-45`).
+- **Don't put an AppKit `NSViewRepresentable` inside a SwiftUI `.popover` whose
+  CONTENT SIZE changes at runtime.** The grid filter's "Images" tri-state checkbox
+  needs a native `NSButton` (SwiftUI's `Toggle(.checkbox)` has no mixed/dash state).
+  The first cut paired that representable with an expand/collapse disclosure that
+  grew/shrank the popover: on collapse the `NSPopover` failed to re-measure to the
+  smaller content and left a **stale blurred layer snapshot** (ghosting) over the
+  toolbar, and the funnel looked stuck. Root cause is the AppKit-hosted subview
+  blocking the hosting view's size invalidation; an `easeInOut` on the disclosure
+  made it worse. The fix that stuck: make the popover a **fixed size** (drop the
+  dropdown — show all the format checkboxes always) so the representable never has
+  to trigger a resize; then the native `NSButton` checkbox works perfectly. Rule:
+  a SwiftUI popover containing an `NSViewRepresentable` must NOT change its content
+  height dynamically — keep it fixed-size, or use pure SwiftUI for the dynamic part.
+  Fixed 2026-06-20 (`feat/next-48`). Also that session: the funnel persisting blue
+  was NOT a bug — `isActive` is `!kinds.isEmpty` and every mutation routes through
+  `collapse()` (a full OR empty set → `.none`), so blue == a real active filter; a
+  leftover test filter (all kinds except top-level Other) was the culprit, cleared
+  by resetting `AppSettings.gridFilter`.
 
 ### Session index (detail in `docs/session-log.md`)
 
@@ -1037,6 +1055,36 @@ The four most critical are also saved as Claude memories (linked).
   far less exposed (its delete closes via the burn flight, not a sleep racing Esc). PENDING
   human GUI confirmation of the live flow (automated macOS UI click unavailable — no
   Accessibility grant; the viewer itself was screenshot-confirmed rendering correctly).
+- **2026-06-20** `feat/next-48` — **grid filter: drop date/size, add granular image
+  formats.** Two parts. (1) **Removed the Date and Size facets** — sort-by-date and
+  sort-by-size already cover those needs, so the funnel filter is kind-only.
+  `DateFacet`/`SizeFacet` deleted; `matches` lost its `sizeBytes`/`modified`/`now`
+  params. (2) **The coarse "Images" facet became granular image FORMATS.** `KindFacet`
+  is now a flat set of LEAF facets: image formats (jpeg/png/heic/tiff/gif/webp/raw/psd/
+  svg + an **`imageOther` catch-all** so a BMP/AVIF/ICO/extensionless-image is never
+  unreachable — every image maps to exactly one leaf) plus the unchanged non-image
+  kinds (video/pdf/document/audio/folder/other). New pure `KindFacet.leaf(kind:ext:)`
+  (image kind → format by extension, raw/psd/svg by kind, exhaustive 16-case
+  AssetKind switch); `matches(kind:ext:)` reads the node's `url.pathExtension`. The
+  "empty == all" sentinel + `collapse()` invariant is preserved, so the funnel's
+  engaged-blue can never get stuck (blue == a genuinely active filter). The popover
+  shows an **over-arching "Images" tri-state checkbox** (native `NSButton`
+  allowsMixedState, since SwiftUI `Toggle(.checkbox)` has no dash) over the
+  always-visible indented format checkboxes, then the kind rows, then Clear All;
+  width trimmed 270→180. **UI bug-hunt across several rounds** (live-driven with the
+  user): the first cut used an expand/collapse dropdown + the AppKit checkbox, which
+  broke the popover resize and left a blurred ghost — fixed by dropping the dropdown
+  (fixed-size popover) so the native checkbox works (new durable gotcha recorded);
+  an SF-symbol / custom-drawn box never matched the native checkboxes, so the native
+  `NSButton` tri-state is the keeper; a "stuck blue funnel" was just a leftover test
+  filter, not a bug. Legacy persisted filters (old `"image"`/date/size keys) fail to
+  decode → `resolve` falls back to `.none` (transient view state; no migration). Two
+  independent code reviews (correctness + UI/integration) returned **ship** (no
+  Critical/Important; tri-state representable verified race/cycle-free, sentinel
+  proven un-strandable); their Minor test-gap notes were closed. New/updated
+  `GridFilterTests` (25 cases). Build + full `MuseTests` green. Spec:
+  `docs/superpowers/specs/2026-06-20-image-format-filter-design.md`. GUI flows
+  confirmed live with the user during the session.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
@@ -1102,9 +1150,10 @@ Muse/Muse/
                                    removeFromCollection / setCollectionCover /
                                    toggleCollectionsPage / bulkTagCommandsAvailable.
                                    visibleFiles applies gridFilter as the FINAL
-                                   narrowing step on every branch (search included),
-                                   keeping `.folder` cards regardless of facet —
-                                   feat/next-42
+                                   narrowing step on every branch (search included)
+                                   via matches(kind:ext:) — the ext is the node's
+                                   url.pathExtension, picking the image-format leaf —
+                                   feat/next-42, feat/next-48
     AssetKind.swift                kind enum + extension/UTType detection;
                                    classify(url:) skips detect's fileExists stat
                                    (used by FolderReader for fast enumeration).
@@ -1160,20 +1209,27 @@ Muse/Muse/
                                    AppState.effectiveTileBackground. Unit-tested
                                    (feat/next-22)
     GridFilter.swift               global grid faceted filter (pure, unit-tested):
-                                   KindFacet (image/video/pdf/document/audio/
-                                   folder/other, from an exhaustive 16-case
-                                   AssetKind switch) + DateFacet (any/today/week/
-                                   month/year, MODIFIED date, Calendar.current
-                                   windows) + SizeFacet (any/<1MB/1–10/10–100/
-                                   >100MB, decimal MB) + a GridFilter value type:
-                                   isActive, deterministic matches(kind:sizeBytes:
-                                   modified:now:) (now injected for tests; a folder
-                                   matches by the kind facet ONLY — date/size never
-                                   hide one), Codable resolve(_:) default .none.
-                                   Persisted via AppSettings.gridFilter
+                                   KindFacet is now a flat set of LEAF facets —
+                                   image FORMATS (jpeg/png/heic/tiff/gif/webp/raw/
+                                   psd/svg + imageOther catch-all) + non-image kinds
+                                   (video/pdf/document/audio/folder/other). leaf(
+                                   kind:ext:) maps a file to its single leaf (image
+                                   kind → format by extension, unnamed → imageOther
+                                   so nothing's unreachable; raw/psd/svg by kind;
+                                   exhaustive 16-case AssetKind switch). GridFilter
+                                   value type: isActive, matches(kind:ext:), Codable
+                                   resolve(_:) default .none (a legacy "image"/date/
+                                   size value fails to decode → .none). "empty ==
+                                   all" sentinel; toggling(_:) flips one leaf, then
+                                   collapse()s a full/empty result to .none.
+                                   imageLeaves/topLevelKinds drive the popover;
+                                   imageParentState (on/mixed/off ParentCheckState) +
+                                   togglingImageGroup() back the "Images" tri-state.
+                                   DATE + SIZE facets REMOVED (sort-by-date/size
+                                   cover them). Persisted via AppSettings.gridFilter
                                    (JSON), mirrored on AppState.gridFilter whose
                                    didSet invalidates the visibleFiles memo + prunes
-                                   the selection (feat/next-42)
+                                   the selection (feat/next-42, reworked feat/next-48)
   Filesystem/
     FileMover.swift                move(_:into:) via FileManager.moveItem; skips
                                    name collisions, returns failures; roots already
@@ -1512,19 +1568,26 @@ Muse/Muse/
                                    disabled→Auto in masonry with a note) — feat/
                                    next-22
     GridFilterPopover.swift        the funnel-button popover (mood-picker chrome,
-                                   ~270): KIND checkboxes incl. Folders (Toggle
-                                   .checkbox, "empty == all" sentinel normalized in
-                                   toggleKind) / DATE + SIZE radio (Picker
-                                   .radioGroup) / Clear All, writing
-                                   AppState.gridFilter. Section headers carry
-                                   .isHeader. The funnel (ContentView.filterMenu)
-                                   lives INSIDE the sort cluster between the sort-by
-                                   menu and the direction arrow; per-control
-                                   .disabled — live during search (narrows results)
-                                   but disabled on the Collections card page (cards
-                                   aren't filtered); engaged-blue +
-                                   .accessibilityValue when gridFilter.isActive
-                                   (feat/next-42)
+                                   180 wide): one KIND section — an over-arching
+                                   "Images" tri-state checkbox (TriStateCheckbox, a
+                                   native NSButton allowsMixedState=true driven
+                                   ENTIRELY from imageParentState; a click just fires
+                                   togglingImageGroup, the next render re-syncs) over
+                                   the always-visible indented image-FORMAT checkboxes
+                                   (JPEG/PNG/…/Other) + the top-level kind checkboxes
+                                   (Videos/PDFs/Documents/Audio/Folders/Other) +
+                                   Clear All. All leaf rows are native Toggle(.checkbox)
+                                   bound through gridFilter.toggling(_:). NO
+                                   expand/collapse dropdown (it broke the popover
+                                   resize + ghosted the AppKit checkbox — see the
+                                   durable gotcha) and NO date/size sections. The
+                                   funnel (ContentView.filterMenu) lives INSIDE the
+                                   sort cluster between the sort-by menu and the
+                                   direction arrow; per-control .disabled — live
+                                   during search but disabled on the Collections card
+                                   page; engaged-blue + .accessibilityValue when
+                                   gridFilter.isActive (feat/next-42, reworked feat/
+                                   next-48)
     InfoSheet.swift                ⓘ About-Muse modal (behavior + privacy); uses
                                    the shared SheetCloseButton (feat/next-21). Has a
                                    "Back Up & Restore" section (feat/next-37)
