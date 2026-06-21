@@ -259,6 +259,16 @@
         }
       }
     },
+    "A local-first viewer and organizer for the folders you already have. Point it at a folder — Downloads, Documents, a pile of screenshots — and browse everything in one place. Nothing is imported or copied: Muse reads your files where they live and never moves or changes them.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un visualiseur et organiseur local d'abord pour les dossiers que vous possédez déjà. Indiquez-lui un dossier — Téléchargements, Documents, un tas de captures d'écran — et parcourez tout au même endroit. Rien n'est importé ni copié : Muse lit vos fichiers là où ils se trouvent et ne les déplace ni ne les modifie jamais."
+          }
+        }
+      }
+    },
     "About Muse": {
       "localizations": {
         "fr": {
@@ -305,6 +315,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ajouter un dossier"
+          }
+        }
+      }
+    },
+    "Add folders from the sidebar with the Add Folder button — Muse indexes them automatically (the status pills at the bottom show progress). Drag folders up or down to reorder them. Right-click a folder to make a New Subfolder, Rename it, Reveal it in Finder, or — for a buried subfolder — Pin it to the top. Right-click a top-level folder to Remove it from Muse. Your files are never modified; deleting means moving to the Trash, and it's undoable.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajoutez des dossiers depuis la barre latérale avec le bouton Ajouter un dossier — Muse les indexe automatiquement (les pastilles d'état en bas indiquent la progression). Faites glisser les dossiers vers le haut ou le bas pour les réordonner. Cliquez avec le bouton droit sur un dossier pour créer un Nouveau sous-dossier, le Renommer, l'Afficher dans le Finder ou — pour un sous-dossier enfoui — l'Épingler en haut. Cliquez avec le bouton droit sur un dossier de premier niveau pour le Retirer de Muse. Vos fichiers ne sont jamais modifiés ; supprimer revient à déplacer vers la corbeille, et l'opération est réversible."
           }
         }
       }
@@ -359,12 +379,32 @@
         }
       }
     },
+    "After indexing, Muse automatically analyzes new or changed images with Apple's on-device Vision: tags, dominant colors, dimensions, and readable text. This powers the tag chips, the Color and Shape sorts, the viewer's color swatches, and collections. There's no button to press — images already analyzed are never redone, and your own tag edits always win over the machine's.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Après l'indexation, Muse analyse automatiquement les images nouvelles ou modifiées avec Vision, en local sur l'appareil Apple : tags, couleurs dominantes, dimensions et texte lisible. C'est ce qui alimente les pastilles de tags, les tris par Couleur et par Forme, les échantillons de couleur du visualiseur et les collections. Il n'y a aucun bouton à presser — les images déjà analysées ne le sont jamais à nouveau, et vos propres modifications de tags l'emportent toujours sur celles de la machine."
+          }
+        }
+      }
+    },
     "All": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Tout"
+          }
+        }
+      }
+    },
+    "Analysis": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analyse"
           }
         }
       }
@@ -475,6 +515,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Retour à la bibliothèque"
+          }
+        }
+      }
+    },
+    "Back Up & Restore": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sauvegarde et restauration"
           }
         }
       }
@@ -1059,6 +1109,16 @@
         }
       }
     },
+    "Everything happens on this Mac. Muse collects nothing — no analytics, no telemetry; nothing about you or your files is ever uploaded or shared. Its only network use is checking for and downloading app updates (iCloud sync, if you use it, is handled by the system). If you remove a folder from the sidebar, its index data is kept for 180 days — so re-adding it restores everything instantly — then deleted automatically.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tout se passe sur ce Mac. Muse ne collecte rien — aucune statistique, aucune télémétrie ; rien vous concernant ni concernant vos fichiers n'est jamais envoyé ou partagé. Sa seule utilisation du réseau est la recherche et le téléchargement des mises à jour de l'app (la synchronisation iCloud, si vous l'utilisez, est gérée par le système). Si vous retirez un dossier de la barre latérale, ses données d'index sont conservées pendant 180 jours — ainsi, le rajouter restaure tout instantanément — puis supprimées automatiquement."
+          }
+        }
+      }
+    },
     "Expand": {
       "localizations": {
         "fr": {
@@ -1125,6 +1185,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rechercher les doublons dans le dossier"
+          }
+        }
+      }
+    },
+    "Find Duplicates in the File menu surfaces copies — byte-for-byte identical files, visually similar images, and matching filenames — so you can review and clear them out to the Trash.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechercher les doublons, dans le menu Fichier, fait remonter les copies — fichiers identiques octet par octet, images visuellement similaires et noms de fichiers correspondants — afin que vous puissiez les examiner et les envoyer dans la corbeille."
           }
         }
       }
@@ -1209,6 +1279,26 @@
         }
       }
     },
+    "Grid & appearance": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grille et apparence"
+          }
+        }
+      }
+    },
+    "Groupings that span your whole library, suggested automatically from what Vision finds, plus any you build by hand in the viewer. Screenshots get their own smart collections by what they're of — recipes, receipts, places, articles, and more. Open the Collections page from the toolbar to browse them. They track your files: delete images or remove a folder and collections shrink to match — empty ones disappear. Open one to rename or delete it from its header.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Des regroupements qui couvrent toute votre bibliothèque, suggérés automatiquement à partir de ce que Vision détecte, ainsi que ceux que vous créez à la main dans le visualiseur. Les captures d'écran obtiennent leurs propres collections intelligentes selon leur contenu — recettes, reçus, lieux, articles, et plus encore. Ouvrez la page Collections depuis la barre d'outils pour les parcourir. Elles suivent vos fichiers : supprimez des images ou retirez un dossier et les collections rétrécissent en conséquence — les collections vides disparaissent. Ouvrez-en une pour la renommer ou la supprimer depuis son en-tête."
+          }
+        }
+      }
+    },
     "HEIC": {
       "localizations": {
         "fr": {
@@ -1225,6 +1315,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Masquer les fichiers des sous-dossiers"
+          }
+        }
+      }
+    },
+    "iCloud sync": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Synchronisation iCloud"
           }
         }
       }
@@ -1345,6 +1445,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Type"
+          }
+        }
+      }
+    },
+    "Library & folders": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bibliothèque et dossiers"
           }
         }
       }
@@ -1565,12 +1675,72 @@
         }
       }
     },
+    "Muse can keep one folder in your iCloud Drive, synced across your Macs. Each image carries a small sidecar of its tags, colors, and analysis, so a second Mac restores everything without re-analyzing. This rides Apple's iCloud sync — Muse itself still makes no network calls.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muse peut conserver un dossier dans votre iCloud Drive, synchronisé entre vos Mac. Chaque image embarque un petit fichier annexe contenant ses tags, ses couleurs et son analyse, de sorte qu'un second Mac restaure tout sans nouvelle analyse. Cela s'appuie sur la synchronisation iCloud d'Apple — Muse lui-même n'effectue toujours aucun appel réseau."
+          }
+        }
+      }
+    },
     "Muse File": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Fichier Muse"
+          }
+        }
+      }
+    },
+    "Muse is distributed directly (not via the App Store) and keeps itself up to date with Sparkle. It checks quietly in the background, or choose Muse ▸ Check for Updates… any time. New versions are downloaded over HTTPS and cryptographically verified before installing.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muse est distribué directement (pas via l'App Store) et se maintient à jour grâce à Sparkle. Il vérifie discrètement en arrière-plan, ou choisissez Muse ▸ Rechercher des mises à jour… à tout moment. Les nouvelles versions sont téléchargées via HTTPS et vérifiées cryptographiquement avant l'installation."
+          }
+        }
+      }
+    },
+    "Muse is open source under the MIT license. The code lives at github.com/carlostarrats/Muse.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muse est open source sous licence MIT. Le code se trouve sur github.com/carlostarrats/Muse."
+          }
+        }
+      }
+    },
+    "Muse keeps your collections, tags, and folder list on this Mac — not inside your files. Before moving to a new Mac, choose Muse ▸ Back Up Muse… to save one backup file; keep it somewhere safe and carry it over with your files. On the new Mac, choose Muse ▸ Restore from Backup…, point Muse at your folders, and it reconnects everything by matching each file's contents — even if you renamed or rearranged them. Collections with no files on the new Mac simply don't appear; nothing is ever left broken.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muse conserve vos collections, vos tags et votre liste de dossiers sur ce Mac — pas à l'intérieur de vos fichiers. Avant de passer à un nouveau Mac, choisissez Muse ▸ Sauvegarder Muse… pour enregistrer un fichier de sauvegarde ; conservez-le en lieu sûr et emportez-le avec vos fichiers. Sur le nouveau Mac, choisissez Muse ▸ Restaurer depuis une sauvegarde…, indiquez à Muse vos dossiers, et il reconnecte tout en faisant correspondre le contenu de chaque fichier — même si vous les avez renommés ou réorganisés. Les collections sans fichiers sur le nouveau Mac n'apparaissent tout simplement pas ; rien n'est jamais laissé dans un état défectueux."
+          }
+        }
+      }
+    },
+    "Muse opens almost anything in place: images, PDFs, video, audio, fonts, Markdown, and code or text. Click an image for a full-screen view with zoom, pan, and a details panel; its Share button also offers Open With. Select images in the grid with a click, ⌘-click, or Shift-click, then right-click for actions — move to a folder, add to a collection, add a tag, share, or Open With. Anything without a dedicated viewer falls back to Quick Look.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muse ouvre presque tout sur place : images, PDF, vidéo, audio, polices, Markdown, ainsi que code ou texte. Cliquez sur une image pour une vue plein écran avec zoom, déplacement et un panneau de détails ; son bouton Partager propose aussi Ouvrir avec. Sélectionnez des images dans la grille par un clic, un ⌘-clic ou un Maj-clic, puis cliquez avec le bouton droit pour accéder aux actions — déplacer vers un dossier, ajouter à une collection, ajouter un tag, partager ou Ouvrir avec. Tout ce qui n'a pas de visualiseur dédié bascule sur Coup d'œil."
+          }
+        }
+      }
+    },
+    "Muse organizes automatically, but you're in control: in Settings (⌘,) you can turn off automatic tagging or automatic collections. Existing tags and collections stay; only future automatic work is paused, and the manual commands still work.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muse organise automatiquement, mais vous gardez le contrôle : dans les Réglages (⌘,) vous pouvez désactiver l'ajout automatique de tags ou les collections automatiques. Les tags et collections existants demeurent ; seul le travail automatique futur est suspendu, et les commandes manuelles fonctionnent toujours."
           }
         }
       }
@@ -1815,6 +1985,16 @@
         }
       }
     },
+    "Open source": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open source"
+          }
+        }
+      }
+    },
     "Open With": {
       "localizations": {
         "fr": {
@@ -1911,6 +2091,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "PNG"
+          }
+        }
+      }
+    },
+    "Privacy & retention": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confidentialité et conservation"
           }
         }
       }
@@ -2285,6 +2475,26 @@
         }
       }
     },
+    "Search & sort": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recherche et tri"
+          }
+        }
+      }
+    },
+    "Search by name, tags, captions, and text found inside images. The magnifier menu scopes the search to the current folder or your whole library. Sort by date, name, size, color, or shape, and use the arrow beside the sort menu to flip the direction.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recherchez par nom, tags, légendes et texte trouvé à l'intérieur des images. Le menu de la loupe limite la recherche au dossier courant ou à toute votre bibliothèque. Triez par date, nom, taille, couleur ou forme, et utilisez la flèche à côté du menu de tri pour inverser le sens."
+          }
+        }
+      }
+    },
     "Search files, captions, and tags in Muse's indexed library.": {
       "localizations": {
         "fr": {
@@ -2355,6 +2565,16 @@
         }
       }
     },
+    "Set the grid density with the slider at the bottom right, and turn on file names under tiles in Settings. The palette button sets the background: Light, Dark, Auto (light by day, dark at night), or a custom color.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réglez la densité de la grille avec le curseur en bas à droite, et activez les noms de fichiers sous les vignettes dans les Réglages. Le bouton palette définit l'arrière-plan : Clair, Sombre, Auto (clair le jour, sombre la nuit), ou une couleur personnalisée."
+          }
+        }
+      }
+    },
     "Settings": {
       "localizations": {
         "fr": {
@@ -2395,12 +2615,32 @@
         }
       }
     },
+    "Share an image from the viewer — AirDrop, Mail, Messages, or Save to Files — or share a whole collection as a PDF from its header. From Finder, right-click any file and choose Share → Muse to send it into your iCloud folder.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partagez une image depuis le visualiseur — AirDrop, Mail, Messages ou Enregistrer dans Fichiers — ou partagez une collection entière sous forme de PDF depuis son en-tête. Depuis le Finder, cliquez avec le bouton droit sur un fichier et choisissez Partager → Muse pour l'envoyer dans votre dossier iCloud."
+          }
+        }
+      }
+    },
     "Share collection": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Partager la collection"
+          }
+        }
+      }
+    },
+    "Sharing": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partage"
           }
         }
       }
@@ -2625,6 +2865,16 @@
         }
       }
     },
+    "The chip row shows the tags of the folder you're viewing. Click a chip to filter; hover for its count. Right-click a chip to rename or delete the tag everywhere; add tags from an image's right-click menu or inside the viewer.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La rangée de pastilles affiche les tags du dossier que vous consultez. Cliquez sur une pastille pour filtrer ; survolez-la pour voir son décompte. Cliquez avec le bouton droit sur une pastille pour renommer ou supprimer le tag partout ; ajoutez des tags depuis le menu contextuel d'une image ou à l'intérieur du visualiseur."
+          }
+        }
+      }
+    },
     "The collection is removed everywhere. Your images stay on disk.": {
       "localizations": {
         "fr": {
@@ -2715,6 +2965,16 @@
         }
       }
     },
+    "Updates": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mises à jour"
+          }
+        }
+      }
+    },
     "Vertical video on most phones": {
       "localizations": {
         "fr": {
@@ -2745,12 +3005,172 @@
         }
       }
     },
+    "Viewing & selecting": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Affichage et sélection"
+          }
+        }
+      }
+    },
     "WebP": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "WebP"
+          }
+        }
+      }
+    },
+    "What Muse is": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce qu'est Muse"
+          }
+        }
+      }
+    },
+    "Taken": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pris"
+          }
+        }
+      }
+    },
+    "Modified": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifié"
+          }
+        }
+      }
+    },
+    "Camera": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appareil"
+          }
+        }
+      }
+    },
+    "Lens": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Objectif"
+          }
+        }
+      }
+    },
+    "Exposure": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exposition"
+          }
+        }
+      }
+    },
+    "Location": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lieu"
+          }
+        }
+      }
+    },
+    "Pages": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pages"
+          }
+        }
+      }
+    },
+    "Title": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Titre"
+          }
+        }
+      }
+    },
+    "Author": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auteur"
+          }
+        }
+      }
+    },
+    "Creator": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Créateur"
+          }
+        }
+      }
+    },
+    "Recorded": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistré"
+          }
+        }
+      }
+    },
+    "Dimensions": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dimensions"
+          }
+        }
+      }
+    },
+    "Duration": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Durée"
+          }
+        }
+      }
+    },
+    "Frame Rate": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cadence"
           }
         }
       }

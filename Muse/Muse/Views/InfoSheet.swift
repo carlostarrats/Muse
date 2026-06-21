@@ -186,7 +186,7 @@ struct InfoSheet: View {
             .padding(.vertical, 16)
     }
 
-    private func section(_ title: String, _ body: String) -> some View {
+    private func section(_ title: LocalizedStringKey, _ body: LocalizedStringKey) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.system(size: 15, weight: .semibold))

@@ -271,10 +271,14 @@ struct ViewerInfoColumn<Chrome: View>: View {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(metadata.rows) { row in
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                Text(row.label)
+                                // row.label is canonical English (also used as a
+                                // comparison key in FileMetadata); localize for
+                                // display via a runtime catalog lookup. Wider
+                                // column so longer French labels don't truncate.
+                                Text(NSLocalizedString(row.label, comment: "INFO card metadata label"))
                                     .font(.system(size: 11))
                                     .foregroundStyle(.white.opacity(0.42))
-                                    .frame(width: 64, alignment: .leading)
+                                    .frame(width: 80, alignment: .leading)
                                 Text(row.value)
                                     .font(.system(size: 11))
                                     .foregroundStyle(.white.opacity(0.9))
@@ -609,8 +613,14 @@ private struct ActionButton: View {
                 Text(label)
                     .font(.system(size: 12, weight: .medium))
                     .lineLimit(1)
+                    .truncationMode(.tail)
+                    // Longer localized labels (e.g. "Ouvrir dans le Finder")
+                    // shrink to fit before truncating, so the text never spills
+                    // past the capsule's rounded edge.
+                    .minimumScaleFactor(0.7)
             }
             .foregroundStyle(.white.opacity(0.92))
+            .padding(.horizontal, 10)
             .frame(maxWidth: .infinity)
             .frame(height: 36)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous)

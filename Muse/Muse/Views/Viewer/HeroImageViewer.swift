@@ -265,7 +265,7 @@ struct HeroImageViewer: View {
     }
 
     private var zoomReadout: String {
-        guard abs(zoom - 1) > 0.001 else { return "Fit" }
+        guard abs(zoom - 1) > 0.001 else { return String(localized: "Fit") }
         if let n = naturalSize, n.width > 0 {
             let fitScale = currentFitRect.width / n.width
             return "\(Int(zoom * fitScale * 100))%"
