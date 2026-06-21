@@ -424,7 +424,7 @@ struct HeroImageViewer: View {
         // Kick off the quick palette now (48px decode) rather than after the
         // DB read: swatches should land before the chrome fade-in finishes,
         // so the actions row never visibly shifts.
-        async let quick = Self.quickPalette(at: url)
+        async let quick = HeroPalette.quickPalette(at: url)
         var loaded: ViewerFileDetails? = nil
         if let queue = Database.shared.dbQueue {
             loaded = try? await ViewerFileDetails.load(queue: queue, path: url.path)
@@ -459,53 +459,6 @@ struct HeroImageViewer: View {
                 }
             }
         }
-    }
-
-    /// Fast 3-swatch palette from a tiny downsample: coarse RGB-bucket
-    /// histogram, top distinct buckets ordered dark → light (the prototype's
-    /// swatch order). Display-only; Analyze still writes the real palette.
-    nonisolated private static func quickPalette(at url: URL) async -> [String] {
-        await Task.detached(priority: .userInitiated) { () -> [String] in
-            guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
-                  let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, [
-                      kCGImageSourceCreateThumbnailFromImageAlways: true,
-                      kCGImageSourceThumbnailMaxPixelSize: 48,
-                  ] as CFDictionary) else { return [] }
-            let w = cg.width, h = cg.height
-            var data = [UInt8](repeating: 0, count: w * h * 4)
-            let drew = data.withUnsafeMutableBytes { buf -> Bool in
-                guard let ctx = CGContext(data: buf.baseAddress, width: w, height: h,
-                                          bitsPerComponent: 8, bytesPerRow: w * 4,
-                                          space: CGColorSpaceCreateDeviceRGB(),
-                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-                else { return false }
-                ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
-                return true
-            }
-            guard drew else { return [] }
-            var counts: [Int: Int] = [:]
-            var sums: [Int: (r: Int, g: Int, b: Int)] = [:]
-            for i in stride(from: 0, to: data.count, by: 4) {
-                let r = Int(data[i]), g = Int(data[i + 1]), b = Int(data[i + 2])
-                let key = (r >> 4) << 8 | (g >> 4) << 4 | (b >> 4)
-                counts[key, default: 0] += 1
-                let s = sums[key] ?? (0, 0, 0)
-                sums[key] = (s.r + r, s.g + g, s.b + b)
-            }
-            let top = counts.sorted { $0.value > $1.value }.prefix(12)
-                .compactMap { key, c -> (Int, Int, Int)? in
-                    guard let s = sums[key] else { return nil }
-                    return (s.r / c, s.g / c, s.b / c)
-                }
-            var picked: [(Int, Int, Int)] = []
-            for c in top where picked.count < 3 {
-                if picked.allSatisfy({ abs($0.0 - c.0) + abs($0.1 - c.1) + abs($0.2 - c.2) > 60 }) {
-                    picked.append(c)
-                }
-            }
-            picked.sort { ($0.0 + $0.1 + $0.2) < ($1.0 + $1.1 + $1.2) }
-            return picked.map { String(format: "#%02x%02x%02x", $0.0, $0.1, $0.2) }
-        }.value
     }
 
     nonisolated private static func imagePixelSize(at url: URL) -> CGSize? {
