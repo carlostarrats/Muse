@@ -34,6 +34,7 @@ struct TagChipsRow: View {
     private var tags: [(label: String, count: Int)] { appState.tagChipRows }
 
     var body: some View {
+        VStack(spacing: 0) {
         ZStack {
             if !tags.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -90,6 +91,22 @@ struct TagChipsRow: View {
                 Color.clear.frame(height: Self.noTagsTopClearance)
             }
         }
+
+        // Banner naming the active set (2+ tags). Sits at the top of the grid
+        // area, below the chips — quiet secondary text, absent for 0/1 tag.
+        if let banner = appState.tagBannerText {
+            Text(banner)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14)
+                .padding(.bottom, 10)
+                .transition(.opacity)
+        }
+        }
+        .animation(.easeInOut(duration: AppState.navTransition), value: appState.activeTagLabels)
         .onChange(of: appState.tagRenameRequest) { _, label in
             if let label { renameText = label }
         }
