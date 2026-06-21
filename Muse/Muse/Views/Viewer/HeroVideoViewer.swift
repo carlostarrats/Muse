@@ -23,6 +23,10 @@ struct HeroVideoViewer: View {
     @State private var computedPalette: [String] = []
     @State private var paletteResolved = false
     @State private var backdropVisible = false
+    /// The video stage fades in a beat AFTER the backdrop, so the backdrop
+    /// reads as "settling first" and the large video doesn't flash up in
+    /// lockstep with it (there's no flight to bridge the tile→hero size jump).
+    @State private var stageVisible = false
     @State private var chromeVisible = false
     @State private var toast: ToastData?
     @State private var deleting = false
@@ -47,7 +51,9 @@ struct HeroVideoViewer: View {
         }
         .ignoresSafeArea()
         .onAppear {
-            backdropVisible = true
+            backdropVisible = true   // leads — fades in over its own 0.4s
+            // Video lags the backdrop, then eases in gently (no flash-up).
+            withAnimation(.easeOut(duration: 0.35).delay(0.22)) { stageVisible = true }
             withAnimation(.easeOut(duration: 0.4).delay(0.15)) { chromeVisible = true }
         }
         .task(id: file.url) { await loadDetails() }
@@ -67,6 +73,7 @@ struct HeroVideoViewer: View {
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .shadow(color: .black.opacity(0.5), radius: 40, y: 24)
             .position(x: rect.midX, y: rect.midY)
+            .opacity(stageVisible ? 1 : 0)
     }
 
     // MARK: - Right rail

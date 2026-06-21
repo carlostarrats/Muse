@@ -128,4 +128,48 @@ final class FileMetadataTests: XCTestCase {
     func testFormatModifiedDateNil() {
         XCTAssertNil(FileMetadata.formatModifiedDate(nil))
     }
+
+    // MARK: video metadata (feat/next-47)
+    func testFrameRateRoundsNearInteger() {
+        XCTAssertEqual(FileMetadata.formatFrameRate(30), "30 fps")
+        XCTAssertEqual(FileMetadata.formatFrameRate(29.97), "30 fps")
+    }
+    func testFrameRateNilOrZero() {
+        XCTAssertNil(FileMetadata.formatFrameRate(nil))
+        XCTAssertNil(FileMetadata.formatFrameRate(0))
+    }
+    func testRecordedDateHasYear() {
+        var c = DateComponents(); c.year = 2026; c.month = 6; c.day = 1; c.hour = 14; c.minute = 30
+        let date = Calendar(identifier: .gregorian).date(from: c)!
+        let s = FileMetadata.formatRecordedDate(date)
+        XCTAssertNotNil(s)
+        XCTAssertTrue(s!.contains("2026"), "expected year in \(s!)")
+    }
+    func testRecordedDateNil() {
+        XCTAssertNil(FileMetadata.formatRecordedDate(nil))
+    }
+    func testParseISO6709() {
+        let c = FileMetadata.parseISO6709("+34.0522-118.2437+096.000/")
+        XCTAssertEqual(c, Coordinate(lat: 34.0522, long: -118.2437))
+    }
+    func testParseISO6709Invalid() {
+        XCTAssertNil(FileMetadata.parseISO6709("not a coordinate"))
+        XCTAssertNil(FileMetadata.parseISO6709(nil))
+    }
+    func testVideoMetadataRowsOrder() {
+        let m = FileMetadata.videoMetadata(durationSeconds: 222,
+                                           dimensions: (width: 1080, height: 1920),
+                                           frameRate: 30, recorded: nil, coordinate: nil)
+        XCTAssertEqual(m.rows, [InfoRow("Dimensions", "1080 × 1920"),
+                                InfoRow("Duration", "3:42"),
+                                InfoRow("Frame Rate", "30 fps")])
+        XCTAssertNil(m.coordinate)
+    }
+    func testVideoMetadataIncludesLocation() {
+        let coord = Coordinate(lat: 34.0522, long: -118.2437)
+        let m = FileMetadata.videoMetadata(durationSeconds: nil, dimensions: nil,
+                                           frameRate: nil, recorded: nil, coordinate: coord)
+        XCTAssertEqual(m.rows, [InfoRow("Location", "34.0522, -118.2437")])
+        XCTAssertEqual(m.coordinate, coord)
+    }
 }

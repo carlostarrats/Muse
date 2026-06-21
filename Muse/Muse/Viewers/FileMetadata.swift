@@ -158,6 +158,59 @@ nonisolated struct FileMetadata: Equatable {
         return FileMetadata(rows: [InfoRow("Duration", d)], coordinate: nil)
     }
 
+    /// Frame rate as a tidy integer when close to one (29.97 → "30 fps"),
+    /// else two decimals. nil for missing/zero.
+    static func formatFrameRate(_ fps: Float?) -> String? {
+        guard let fps, fps > 0 else { return nil }
+        let rounded = fps.rounded()
+        if abs(fps - rounded) < 0.1 { return "\(Int(rounded)) fps" }
+        return String(format: "%.2f fps", fps)
+    }
+
+    /// A video's capture date (medium date + short time), paralleling photos'
+    /// "Taken". nil when no date.
+    static func formatRecordedDate(_ date: Date?) -> String? {
+        guard let date else { return nil }
+        let out = DateFormatter()
+        out.dateStyle = .medium
+        out.timeStyle = .short
+        return out.string(from: date)
+    }
+
+    /// Parse an ISO 6709 location string (e.g. "+34.0522-118.2437+096.000/",
+    /// as embedded in iPhone video metadata) → signed lat/long. nil if it
+    /// doesn't start with a signed lat+long pair.
+    static func parseISO6709(_ s: String?) -> Coordinate? {
+        guard let s else { return nil }
+        let pattern = #"([+-]\d+(?:\.\d+)?)([+-]\d+(?:\.\d+)?)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let m = regex.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)),
+              let latR = Range(m.range(at: 1), in: s),
+              let longR = Range(m.range(at: 2), in: s),
+              let lat = Double(s[latR]), let long = Double(s[longR]) else { return nil }
+        return Coordinate(lat: lat, long: long)
+    }
+
+    /// Assemble a video's INFO rows: Recorded · Dimensions · Duration ·
+    /// Frame Rate · Location (the "Modified" row is added by `load`). The
+    /// coordinate is surfaced so the card can show "Open in Maps".
+    static func videoMetadata(durationSeconds: Double?,
+                              dimensions: (width: Int, height: Int)?,
+                              frameRate: Float?, recorded: Date?,
+                              coordinate: Coordinate?) -> FileMetadata {
+        var rows: [InfoRow] = []
+        if let s = formatRecordedDate(recorded) { rows.append(InfoRow("Recorded", s)) }
+        if let dim = dimensions, dim.width > 0, dim.height > 0 {
+            rows.append(InfoRow("Dimensions", "\(dim.width) × \(dim.height)"))
+        }
+        if let d = formatDuration(durationSeconds) { rows.append(InfoRow("Duration", d)) }
+        if let fps = formatFrameRate(frameRate) { rows.append(InfoRow("Frame Rate", fps)) }
+        if let c = coordinate {
+            rows.append(InfoRow("Location", String(format: "%.4f, %.4f", c.lat, c.long)))
+        }
+        return FileMetadata(rows: rows, coordinate: coordinate)
+    }
+
     // MARK: - Pure file-attribute formatting
 
     /// Filesystem modification date as a medium date with NO time, to match the
@@ -189,7 +242,9 @@ nonisolated struct FileMetadata: Equatable {
                 result = loadImage(url: url)
             case .pdf:
                 result = loadPDF(url: url)
-            case .video, .audio:
+            case .video:
+                result = await loadVideo(url: url)
+            case .audio:
                 result = await loadMedia(url: url)
             default:
                 result = .empty
@@ -203,8 +258,12 @@ nonisolated struct FileMetadata: Equatable {
                 .contentModificationDate,
                let s = formatModifiedDate(mod) {
                 let row = InfoRow("Modified", s)
-                if let takenIdx = result.rows.firstIndex(where: { $0.label == "Taken" }) {
-                    result.rows.insert(row, at: takenIdx + 1)
+                // Sit directly under the capture-date row when present ("Taken"
+                // for photos, "Recorded" for videos), else at the top.
+                if let anchorIdx = result.rows.firstIndex(where: {
+                    $0.label == "Taken" || $0.label == "Recorded"
+                }) {
+                    result.rows.insert(row, at: anchorIdx + 1)
                 } else {
                     result.rows.insert(row, at: 0)
                 }
@@ -246,5 +305,62 @@ nonisolated struct FileMetadata: Equatable {
         guard let duration = try? await asset.load(.duration) else { return .empty }
         let seconds = CMTimeGetSeconds(duration)
         return mediaMetadata(durationSeconds: seconds.isFinite ? seconds : nil)
+    }
+
+    private static func loadVideo(url: URL) async -> FileMetadata {
+        let asset = AVURLAsset(url: url)
+        let seconds: Double? = (try? await asset.load(.duration))
+            .map { CMTimeGetSeconds($0) }
+            .flatMap { ($0.isFinite && $0 > 0) ? $0 : nil }
+
+        var dimensions: (width: Int, height: Int)? = nil
+        var frameRate: Float? = nil
+        if let track = try? await asset.loadTracks(withMediaType: .video).first {
+            if let size = try? await track.load(.naturalSize),
+               let transform = try? await track.load(.preferredTransform) {
+                let applied = size.applying(transform)
+                let w = Int(abs(applied.width).rounded()), h = Int(abs(applied.height).rounded())
+                if w > 0, h > 0 { dimensions = (w, h) }
+            }
+            if let fps = try? await track.load(.nominalFrameRate) { frameRate = fps }
+        }
+
+        // Capture date + GPS from the asset's common metadata (iPhone videos
+        // carry both). dateValue is the primary path; fall back to parsing a
+        // string. Location is an ISO 6709 string → coordinate (drives the same
+        // "Open in Maps" link as photos).
+        var recorded: Date? = nil
+        var coordinate: Coordinate? = nil
+        if let metadata = try? await asset.load(.metadata) {
+            for item in metadata {
+                guard let key = item.commonKey else { continue }
+                switch key {
+                case .commonKeyCreationDate where recorded == nil:
+                    if let d = try? await item.load(.dateValue) {
+                        recorded = d
+                    } else if let s = try? await item.load(.stringValue) {
+                        recorded = parseMetadataDate(s)
+                    }
+                case .commonKeyLocation where coordinate == nil:
+                    if let s = try? await item.load(.stringValue) {
+                        coordinate = parseISO6709(s)
+                    }
+                default:
+                    break
+                }
+            }
+        }
+
+        return videoMetadata(durationSeconds: seconds, dimensions: dimensions,
+                             frameRate: frameRate, recorded: recorded, coordinate: coordinate)
+    }
+
+    /// ISO 8601 fallback for a creation-date string when `.dateValue` is absent.
+    private static func parseMetadataDate(_ s: String) -> Date? {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime]
+        if let d = iso.date(from: s) { return d }
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return iso.date(from: s)
     }
 }
