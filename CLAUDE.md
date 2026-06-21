@@ -1160,6 +1160,28 @@ The four most critical are also saved as Claude memories (linked).
   paraphrased doc comment caught + restored. Build + full `MuseTests` green at every
   checkpoint. PENDING human GUI verification of the two live drag-reorders (folder +
   sidebar-collection, Manual sort) — automated macOS drag driving unavailable.
+- **2026-06-20** `feat/localization-french` — **Localization (French v1), infra +
+  seed.** First localization pass; spec + plan in `docs/superpowers/`. Built
+  infra-first with a small French seed (the user's chosen sequencing). **Core rule:
+  localize at DISPLAY time — stored data (DB tags, FTS, collection rows) stays
+  canonical-English; no schema change/migration; three independent removal kill-
+  switches.** Shipped: `fr` in `knownRegions` + `Localizable.xcstrings`;
+  `Localization/VocabularyLocalizer` (pure seam — `display(canonical)->localized`
+  identity-for-unknown, `canonicalize(token)->canonical?`, `shared` via
+  `preferredLocalizations` honoring the per-app override); `VisionVocabulary.json`
+  (fr seed of ~50 real `VNClassifyImageRequest` taxonomy terms, 1302 total);
+  tag-label display localized everywhere (chips, banner pills + VoiceOver, hero
+  pills + toasts) while every action/identity stays canonical; `Database/SearchBridge`
+  (localized query → canonical tag match, `plage`→`beach`); AI collection names
+  in-language (FM prompt + localized fallback namer); UI-chrome seed (~55 strings,
+  verified resolving). T7 formatting audit = no-op (display formatters already
+  `Locale.current`). Gotchas: `xcodebuild` doesn't write extracted catalog keys back
+  (IDE-only) — author keys verbatim; sandbox test can't write `/tmp` (use
+  `NSTemporaryDirectory()`); a function call inside a big SwiftUI view-builder
+  expression trips "unable to type-check in reasonable time" — bind to a `let`.
+  **Deferred (labor, not machine):** full vocabulary (~1300) + full UI chrome (~230);
+  adding coverage or a new language is "fill a column," no code. PENDING human GUI
+  verification in French (`-AppleLanguages '(fr)'`). All unit tests green.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
@@ -1418,7 +1440,16 @@ Muse/Muse/
   Database/
     Database.swift                 GRDB queue + migrations (v1…v5_intent)
     Records.swift                  FileRow (+analyzed_hash, +intent), PathRow, TagRow, etc.
-    SearchService.swift            FTS5 + tag-label search (sidebar-folder scope)
+    SearchService.swift            FTS5 + tag-label search (sidebar-folder scope).
+                                   The tag LIKE is ORed over SearchBridge terms so
+                                   a localized query finds canonical tags (feat/
+                                   localization-french)
+    SearchBridge.swift             pure: expand a query into [raw + canonical] tag-
+                                   search terms via VocabularyLocalizer.canonicalize
+                                   (whole query + per token), de-duped. So "plage"
+                                   finds files tagged canonical "beach"; the raw
+                                   query is always kept (filenames/OCR/manual tags).
+                                   Unit-tested (feat/localization-french)
     TagScope.swift                 parent-folder key derivation — tags are
                                    per (file_id, parent_dir), not per content
                                    hash (2026-06-17). Single source of truth used
@@ -1433,6 +1464,27 @@ Muse/Muse/
                                    the result (feat/next-10)
     Housekeeping.swift             launch prune: index data for files unreachable
                                    from any sidebar folder, unseen >180 days
+  Localization/                    (feat/localization-french) display-time
+                                   localization. Storage stays canonical-English;
+                                   this layer maps canonical<->localized for
+                                   rendering + search. Three removal kill-switches.
+    VocabularyLocalizer.swift      pure nonisolated seam: display(canonical)->
+                                   localized (identity for English/unknown, so
+                                   manual + untranslated vision tags pass through),
+                                   canonicalize(token)->canonical?. init(table:
+                                   language:) + static shared resolving
+                                   Bundle.main.preferredLocalizations (honors the
+                                   macOS per-app language override). Unit-tested
+    VisionVocabulary.json          bundled {canonical:{lang:term}} table; fr seed
+                                   (~50 common terms; full VNClassifyImageRequest
+                                   taxonomy = 1302, rest fall back per-term)
+  Localizable.xcstrings            (at Muse/Muse/ root) UI-chrome String Catalog;
+                                   fr seed (~55 high-visibility strings). Xcode 26
+                                   synced groups auto-include it; only knownRegions
+                                   needed `fr`. NOTE: xcodebuild does NOT write
+                                   extracted keys back to the source .xcstrings
+                                   (IDE-only) — author entries with exact source-
+                                   literal keys
   Indexing/
     HashService.swift              streaming SHA-256; nil on dataless iCloud reads
     Indexer.swift                  identity reconciliation matrix (§4); size+mtime

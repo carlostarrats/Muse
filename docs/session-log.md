@@ -3601,3 +3601,67 @@ against `git show` and restored verbatim. PENDING human GUI verification of the 
 live drag-reorders (folder list + sidebar collection list, Manual sort: up / down /
 to-top / to-bottom / overshoot) — automated macOS drag driving unavailable (no
 Accessibility grant).
+
+---
+
+## 2026-06-20 — `feat/localization-french` — Localization (French v1), infra + seed
+
+First localization pass. Spec + plan in `docs/superpowers/` (8 TDD tasks). Built
+**infrastructure-first with a small validation seed** (user's chosen sequencing):
+prove the reusable machine + a French taste of it before investing in full
+translation, since the spec designed graceful English fallback so any fill level
+works.
+
+**Core principle (spec §3):** localize at DISPLAY time; stored data (DB tags, FTS,
+collection rows) stays canonical-English. No schema change, no migration. Three
+independent removal kill-switches (drop `fr` from `knownRegions`; make
+`VocabularyLocalizer` identity; or both). No user data is ever written translated.
+
+**What shipped:**
+- **Config:** `fr` added to `knownRegions`; `Localizable.xcstrings` at the synced-
+  group root. Xcode 26 file-system-synchronized groups auto-include new files/
+  resources in the target — no per-file pbxproj surgery (only `knownRegions`).
+- **`VocabularyLocalizer`** (`Localization/`, pure, `nonisolated`, 9 tests): the one
+  isolated AI-tag seam. `display(canonical)->localized` (identity for English/
+  unknown, so manual tags + untranslated vision terms pass through),
+  `canonicalize(token)->canonical?` (reverse). `init(table:language:)` +
+  `static let shared` resolving `Bundle.main.preferredLocalizations` (honors the
+  macOS per-app language override).
+- **`VisionVocabulary.json`** seed: ~50 common terms in French, using REAL canonical
+  identifiers (dumped the full `VNClassifyImageRequest.knownClassifications`
+  taxonomy = 1302 terms; full translation deferred, untranslated fall back per-term).
+- **Tag display localized** (chips, multi-tag banner pills + VoiceOver string, hero
+  viewer pills + toasts) via `display()`; every action/identity (set/toggle/rename/
+  delete/tap, ForEach ids, intersection, grid `.id`) stays canonical.
+  `TagSelection.bannerText` gained localized `viewing`/`and` params (English
+  defaults keep existing tests valid).
+- **Search bridge** (`Database/SearchBridge.swift`, pure, 5 tests): expands a query
+  to `[raw + canonical]` tag-LIKE terms via `canonicalize`, ORed in `SearchService`
+  — so `plage` finds canonical `beach`; raw query always kept (filenames/OCR/manual).
+- **AI collection names in-language:** `FoundationModelNamer` prompts in the effective
+  language; `TagFallbackNamer` localizes its top-tag name via an injectable
+  `VocabularyLocalizer` (3 tests). A generated name is stored as user data thereafter.
+- **Formatting audit (T7): no changes needed** — all display formatters already use
+  `Locale.current`; the one pinned `en_US_POSIX` is a fixed-format EXIF *parser*
+  (correct) and the backup `yyyy-MM-dd` is a filename (intentionally stable).
+- **UI chrome seed:** ~55 high-visibility strings (toolbar, menus, tag chips, common
+  buttons) translated in the catalog; compiles to `fr.lproj/Localizable.strings`,
+  verified resolving (`All`→`Tout`, `Find Duplicates in Folder`→`Rechercher les
+  doublons dans le dossier`). Untranslated chrome falls back to English.
+
+**Gotchas recorded this session:**
+- `xcodebuild` does NOT write extracted String Catalog keys back into the source
+  `.xcstrings` (IDE-only) — catalog entries were authored manually with exact
+  source-literal keys (they match at runtime regardless of extraction).
+- Sandboxed test target can't write `/tmp` — the taxonomy dump wrote to
+  `NSTemporaryDirectory()` (the sandbox container tmp).
+- Adding a function call (e.g. `display(tag.label)`, `String(localized:)`) inside a
+  large SwiftUI view-builder expression (the `TagChip(...)` call) tripped "unable to
+  type-check in reasonable time" — bind the value to a `let` first. (SourceKit also
+  flagged it as an editor artifact; the batch compiler confirmed via build.)
+
+**Deferred (the labor, not the machine):** full Vision-vocabulary French (~1300 terms)
+and full UI-chrome French (~230 strings). The infrastructure is language-agnostic —
+adding coverage (or a new language) is "fill a column," no code changes. PENDING human
+GUI verification of the live French experience (launch with `-AppleLanguages '(fr)'`).
+All unit tests green throughout.
