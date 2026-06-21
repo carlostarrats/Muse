@@ -3553,3 +3553,51 @@ GridView.swift`, `Views/TagChipsRow.swift`, `Views/Viewer/ViewerInfoColumn.swift
 `Views/Viewer/ViewerBackdrop.swift`, `Views/Backup/ReconnectWizard.swift`,
 `Views/InfoSheet.swift`. PENDING human VoiceOver verification of the live flows
 (automated macOS VoiceOver driving unavailable — no Accessibility grant).
+
+---
+
+## 2026-06-20 — `feat/next-50` — code-health refactor: shrink AppState + SidebarView
+
+Deliberate code-health pass on the two files the 2026-06-19 health rating flagged
+as the spots where complexity would hurt first (memory `muse-health-watch-list`),
+both of which had grown since: `AppState.swift` (1,404 LOC) and `SidebarView.swift`
+(1,373 LOC). Spec + plan in `docs/superpowers/`. Chosen approach: **"pure-math
+helper + file moves"** — reject the textbook "generic ReorderController" because
+relocating the drag `@State` off the view changes WHEN SwiftUI sees mutations,
+the exact seam where the sidebar's historical timing bugs lived. Remove
+duplication only at the safe (pure-math) layer; leave the view/`@State`/gesture/
+synchronous-commit layer byte-identical.
+
+**Part A — AppState (1,404 → 972 LOC).** Seven new `@MainActor extension AppState`
+files split off self-contained method groups along the existing `AppState+Selection`
+/ `AppState+Filters` seam: `+Backup`, `+FolderOps`, `+Indexing`, `+Search`, `+Mood`,
+`+Watcher`, `+TagChips` / `+Starring`. Mechanical, zero behavior change (extensions
+compile to identical code). The load-bearing rule: **stored properties can't move to
+a Swift extension**, so every `@Published`/stored prop (the `FolderWatcher?`, the
+auto-mood `Timer?`, `indexingTask`, `searchRequestToken`, `tagChipToken`,
+`startedStarredScopes`, `autoMoodIsDay`/`autoMoodTimer`) stays declared in core,
+dropping `private` (→ internal) where a moved method needs it. `enumerateRecursive`
++ `markContentChanged` deliberately stayed in core (the core folder-load path uses
+them). Per-task: build green; full `MuseTests` green at the gate.
+
+**Part B — SidebarView (1,373 → 712 LOC).** (B1) The already-independent row/support
+structs moved verbatim into a new `Views/Sidebar/` folder (`FolderTreeNode`,
+`CollectionSidebarRow`, `SidebarRows`, `SidebarReorderSupport`), `private` → internal;
+`SidebarView.reorderSpace` promoted fileprivate → internal so they can read it.
+(B2) New pure, unit-tested `Components/ReorderMath.swift` (`rowShift` / `slot` /
+`insertionLineY`, 13 tests) — the de-duplicated form of the folder and collection
+reorder math, which were verified line-for-line mirrors. (B3) Both math triples on
+`SidebarView` now delegate to `ReorderMath`; the `@State`, gestures,
+`commitReorder`/`commitCollectionReorder` (synchronous, `disablesAnimations`), resets,
+and overlays stay inline — timing/animation unchanged.
+
+**Verification.** Build + full `MuseTests` green at every checkpoint. Diff audit vs
+the pre-flight baseline confirmed the timing-critical code is **byte-identical**:
+`commitReorder`, `commitCollectionReorder`, `resetDrag`, `resetCollectionDrag`,
+`rootRow`, `collectionRow`, and the two large moved structs (`FolderTreeNode`,
+`CollectionSidebarRow`) all diff clean (modulo the `private`→`struct` flip). One
+process catch folded in: an A7 doc comment had been paraphrased on the move — caught
+against `git show` and restored verbatim. PENDING human GUI verification of the two
+live drag-reorders (folder list + sidebar collection list, Manual sort: up / down /
+to-top / to-bottom / overshoot) — automated macOS drag driving unavailable (no
+Accessibility grant).
