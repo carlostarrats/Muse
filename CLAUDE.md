@@ -305,6 +305,19 @@ The four most critical are also saved as Claude memories (linked).
   if the "Folders" kind facet hid it). Rule: a new filter/scope that can hide
   selected tiles must prune (or clear) the selection in lockstep, not rely on the
   consumer to re-check visibility. Fixed 2026-06-20 (`feat/next-42`).
+- **An explicit `.foregroundStyle` overrides SwiftUI's automatic disabled
+  dimming.** `View.moodToolbarIcon` colors every toolbar glyph EXPLICITLY from the
+  mood (`MoodPalette.iconColor`), which means a `.disabled` toolbar control's icon
+  stays full mood color — it looks active even though it's unclickable (reported
+  for the grid filter on the Collections card page). The fix: `moodToolbarIcon` is
+  a `MoodToolbarIcon: ViewModifier` reading `@Environment(\.isEnabled)` and applying
+  `.opacity(isEnabled ? 1 : 0.4)` (0.4 = the house disabled value, cf.
+  `MoodPickerView`). `.disabled` propagates into the environment of a control's
+  descendants, so each icon dims off its OWN control's `.disabled` (sort cluster /
+  subfolders / Collections / Image Layout during search; the filter on the card
+  page). Don't pair a fresh explicit `foregroundStyle` with `.disabled` and expect
+  auto-dimming — route it through `moodToolbarIcon` (or dim manually). Fixed
+  2026-06-20 (`feat/next-42`).
 
 ### Session index (detail in `docs/session-log.md`)
 

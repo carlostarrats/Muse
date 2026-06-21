@@ -3069,3 +3069,16 @@ collection cards aren't filtered; it stays live inside a collection and during
 search. New `GridFilterTests.testFolderMatchedOnlyByKindFacet`; `testKindFacetBucketing`
 updated (`.folder` → `.folder`). Build + full `MuseTests` suite green; toolbar
 reorder confirmed visually (funnel between sort-by and the arrow).
+
+**Dim fix (same branch).** A live drive caught that the funnel, when disabled on
+the Collections card page, stayed full black (looked active though unclickable).
+Root cause: `moodToolbarIcon` sets an explicit mood `foregroundStyle`, which
+overrides SwiftUI's automatic disabled dimming. Rather than a targeted opacity on
+the filter alone (which would leave the sort cluster / subfolders / Collections /
+Image Layout still un-dimmed when THEY disable during search — a latent gap), made
+`moodToolbarIcon` a `MoodToolbarIcon: ViewModifier` reading
+`@Environment(\.isEnabled)` and dimming to 0.4 when disabled, so every toolbar icon
+dims uniformly off its own control's `.disabled`. Two review rounds
+(Folders-facet logic + toolbar/dim) converged clean; the env-aware modifier was the
+toolbar reviewer's recommended fix for the consistency gap. Build + full `MuseTests`
+green. New durable gotcha recorded. See the CLAUDE.md gotcha above.
