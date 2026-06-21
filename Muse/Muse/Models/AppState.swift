@@ -376,43 +376,11 @@ final class AppState: ObservableObject {
     }
 
     /// Day/night flag for the Auto mood; a minute timer keeps it honest.
-    @Published private(set) var autoMoodIsDay = Mood.isDaytime()
-    private var autoMoodTimer: Timer?
-
-    var moodPalette: MoodPalette {
-        switch mood {
-        case .ink:    return Mood.fallbackPalette
-        case .paper:  return Mood.paperPalette
-        case .auto:   return autoMoodIsDay ? Mood.paperPalette : Mood.fallbackPalette
-        case .custom: return Mood.customPalette(hue: customHue,
-                                                saturation: customSaturation,
-                                                brightness: customBrightness)
-        }
-    }
-
-    func setMood(_ m: Mood) {
-        withAnimation(.easeInOut(duration: 0.35)) { mood = m }
-        m.save()
-        updateAutoMoodTimer()
-    }
-
-    /// Runs only while the mood is Auto; flips the palette at the
-    /// day/night boundary with a slow fade.
-    func updateAutoMoodTimer() {
-        autoMoodTimer?.invalidate()
-        autoMoodTimer = nil
-        guard mood == .auto else { return }
-        autoMoodIsDay = Mood.isDaytime()
-        autoMoodTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self, self.mood == .auto else { return }
-                let day = Mood.isDaytime()
-                if day != self.autoMoodIsDay {
-                    withAnimation(.easeInOut(duration: 0.6)) { self.autoMoodIsDay = day }
-                }
-            }
-        }
-    }
+    /// Mutated only by the mood code in AppState+Mood.swift (hence internal-set,
+    /// not private(set) — the setter must be reachable from that extension).
+    @Published var autoMoodIsDay = Mood.isDaytime()
+    /// Not `private`: `updateAutoMoodTimer` lives in AppState+Mood.swift.
+    var autoMoodTimer: Timer?
 
     // MARK: - Image layout
 
