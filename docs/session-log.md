@@ -3568,10 +3568,10 @@ the exact seam where the sidebar's historical timing bugs lived. Remove
 duplication only at the safe (pure-math) layer; leave the view/`@State`/gesture/
 synchronous-commit layer byte-identical.
 
-**Part A — AppState (1,404 → 972 LOC).** Seven new `@MainActor extension AppState`
+**Part A — AppState (1,404 → 972 LOC).** Eight new `@MainActor extension AppState`
 files split off self-contained method groups along the existing `AppState+Selection`
 / `AppState+Filters` seam: `+Backup`, `+FolderOps`, `+Indexing`, `+Search`, `+Mood`,
-`+Watcher`, `+TagChips` / `+Starring`. Mechanical, zero behavior change (extensions
+`+Watcher`, `+TagChips`, `+Starring`. Mechanical, zero behavior change (extensions
 compile to identical code). The load-bearing rule: **stored properties can't move to
 a Swift extension**, so every `@Published`/stored prop (the `FolderWatcher?`, the
 auto-mood `Timer?`, `indexingTask`, `searchRequestToken`, `tagChipToken`,

@@ -119,15 +119,23 @@ git -C "Muse App" commit -m "refactor(appstate): extract folder ops into AppStat
 
 ### Task A3: Extract Indexing & Analyze
 
+> **As-built deviation:** `enumerateRecursive` was NOT moved — during execution it
+> turned out to be called by the core folder-load (`reloadCurrentFiles`), not only by
+> `analyzeSelected`, so it stayed in core `AppState.swift` (moving it would have forced
+> its `private` open for no benefit). The Indexing extension holds `scheduleIndexing`,
+> `findDuplicatesInCurrentFolder`, `analyzeCurrentFolder`, `analyzeSelected`.
+> `markContentChanged` also stayed in core (shared by Indexing + Watcher; dropped
+> `private` → internal).
+
 **Files:**
 - Create: `Muse/Muse/Models/AppState+Indexing.swift`
 - Modify: `Muse/Muse/Models/AppState.swift` (remove `scheduleIndexing` ~870–916, `findDuplicatesInCurrentFolder` ~842, `analyzeCurrentFolder`/`analyzeSelected`/`enumerateRecursive` ~1313–1352)
 
 **Interfaces:**
-- Produces: `scheduleIndexing(for:verifyICloud:)`, `findDuplicatesInCurrentFolder()`, `analyzeCurrentFolder()`, `analyzeSelected()`, `enumerateRecursive(at:showHidden:)` (nonisolated static).
+- Produces: `scheduleIndexing(for:verifyICloud:)`, `findDuplicatesInCurrentFolder()`, `analyzeCurrentFolder()`, `analyzeSelected()`. (As-built: `enumerateRecursive` stayed in core — see the deviation note above.)
 - Consumes (core): `currentFiles`, `iCloudFolderURL`, `indexingTask` (stored — stays in core), `duplicatesSheetVisible`, `Indexer.shared`, `ThumbnailCache`, `AnalyzePipeline`.
 
-- [ ] **Step 1: Move the methods.** Keep `private var indexingTask` declared in core (stored property). Move only the listed methods. `enumerateRecursive` is `private nonisolated static` — keep `nonisolated static`, drop `private` only if referenced cross-file (it's called by `analyzeSelected`, which moves with it, so it can stay `private`). Imports: `Foundation`.
+- [ ] **Step 1: Move the methods.** Keep `private var indexingTask` declared in core (stored property). Move the four Produces methods. (As-built: `enumerateRecursive` was found to be called by the core folder-load, so it stayed in core — see the deviation note above. `markContentChanged` likewise stayed in core, dropping `private` → internal since `+Indexing` and `+Watcher` both call it.) Imports: `Foundation`.
 - [ ] **Step 2: Build → `** BUILD SUCCEEDED **`**
 - [ ] **Step 3: Test → `** TEST SUCCEEDED **`**
 - [ ] **Step 4: Commit** `refactor(appstate): extract indexing/analyze into AppState+Indexing`

@@ -1145,7 +1145,7 @@ The four most critical are also saved as Claude memories (linked).
   deliberate split. Approach: **pure-math helper + file moves** — explicitly NOT a
   generic ReorderController (relocating the drag `@State` would disturb the SwiftUI
   timing seam where the sidebar's historical bugs lived). **AppState 1,404 → 972
-  LOC:** seven new `@MainActor extension AppState` files (`+Backup`, `+FolderOps`,
+  LOC:** eight new `@MainActor extension AppState` files (`+Backup`, `+FolderOps`,
   `+Indexing`, `+Search`, `+Mood`, `+Watcher`, `+TagChips`/`+Starring`) along the
   existing `+Selection`/`+Filters` seam — methods only, since **stored properties
   can't move to a Swift extension** (every `@Published`/stored prop stays in core,
@@ -1249,7 +1249,7 @@ Muse/Muse/
                                    (tagChipToken stays in core) — feat/next-50
     AppState+Starring.swift        extension: toggleStar / openStarred
                                    (startedStarredScopes stays in core) — feat/next-50
-                                   [The above 7 extensions were split off AppState.swift
+                                   [The above 8 extensions were split off AppState.swift
                                    in the 2026-06-20 code-health pass — methods only;
                                    stored properties CANNOT move to a Swift extension,
                                    so every @Published / stored prop stays in core,

@@ -80,12 +80,19 @@ isolation. Zero behavior change by construction.
 |---|---|
 | `Models/AppState+Backup.swift` | `exportBackup`, `beginRestorePicker` |
 | `Models/AppState+FolderOps.swift` | `createSubfolder`, `renameFolder`, `migratePaths` (static), `findNode`, `requestNewSubfolder`, `requestRenameFolder` |
-| `Models/AppState+Indexing.swift` | `scheduleIndexing`, `analyzeCurrentFolder`, `analyzeSelected`, `enumerateRecursive` (static), `findDuplicatesInCurrentFolder` |
+| `Models/AppState+Indexing.swift` | `scheduleIndexing`, `analyzeCurrentFolder`, `analyzeSelected`, `findDuplicatesInCurrentFolder` |
 | `Models/AppState+Search.swift` | `runSearch`, `clearSearch` |
 | `Models/AppState+Mood.swift` | `moodPalette` (computed), `setMood`, `updateAutoMoodTimer` |
 | `Models/AppState+Watcher.swift` | `startWatching`, `handleFolderEvent` |
 | `Models/AppState+TagChips.swift` | `reloadTagChips`, `bumpTagChipToken` |
 | `Models/AppState+Starring.swift` | `toggleStar`, `openStarred` |
+
+> **As-built note (deviation from the original spec table).** `enumerateRecursive`
+> was originally listed under `+Indexing` but **stayed in core** `AppState.swift`:
+> the core folder-load (`reloadCurrentFiles`) calls it, so leaving it in core avoids
+> widening its visibility and keeps it next to its primary caller. `markContentChanged`
+> likewise stays in core (shared by `+Indexing` and `+Watcher`). The final
+> architecture map in `CLAUDE.md` reflects the as-built state.
 
 Each extension file is `@MainActor extension AppState { … }` (the class is
 already `@MainActor`; the explicit annotation keeps each file self-documenting
