@@ -592,7 +592,25 @@ private extension View {
     /// lockstep with the background fade. `selected` keeps a toggle's native
     /// white-on-accent look (popover/subfolders "on").
     func moodToolbarIcon(_ palette: MoodPalette, selected: Bool = false) -> some View {
-        foregroundStyle(selected ? Color.white : palette.iconColor)
+        modifier(MoodToolbarIcon(palette: palette, selected: selected))
+    }
+}
+
+/// The explicit mood `foregroundStyle` overrides SwiftUI's automatic
+/// disabled dimming, so a `.disabled` toolbar icon would stay full-color
+/// (looking active though unclickable). Reading `\.isEnabled` here dims every
+/// `moodToolbarIcon` control uniformly when disabled (0.4 = the house disabled
+/// value, cf. MoodPickerView) — the sort cluster during search, the filter on
+/// the Collections card page, etc.
+private struct MoodToolbarIcon: ViewModifier {
+    let palette: MoodPalette
+    let selected: Bool
+    @Environment(\.isEnabled) private var isEnabled
+
+    func body(content: Content) -> some View {
+        content
+            .foregroundStyle(selected ? Color.white : palette.iconColor)
+            .opacity(isEnabled ? 1 : 0.4)
             .animation(.easeInOut(duration: 0.35), value: palette)
     }
 }
