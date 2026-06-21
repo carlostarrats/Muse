@@ -17,10 +17,10 @@ enum FolderSortMode: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .manual: return "Manual"
-        case .name: return "Name"
-        case .dateModified: return "Date Modified"
-        case .size: return "Size"
+        case .manual: return String(localized: "Manual")
+        case .name: return String(localized: "Name")
+        case .dateModified: return String(localized: "Date Modified")
+        case .size: return String(localized: "Size")
         }
     }
 }

@@ -95,7 +95,7 @@ struct OpenWithItems: View {
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.application]
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
-        panel.prompt = "Open"
+        panel.prompt = String(localized: "Open")
         guard panel.runModal() == .OK, let app = panel.url else { return }
         open(with: app)
     }

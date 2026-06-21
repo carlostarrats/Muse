@@ -1,0 +1,3911 @@
+{
+  "abacus": {
+    "fr": "boulier"
+  },
+  "accordion": {
+    "fr": "accordéon"
+  },
+  "acorn": {
+    "fr": "gland"
+  },
+  "acrobat": {
+    "fr": "acrobate"
+  },
+  "adult": {
+    "fr": "adulte"
+  },
+  "adult_cat": {
+    "fr": "chat adulte"
+  },
+  "agriculture": {
+    "fr": "agriculture"
+  },
+  "aircraft": {
+    "fr": "aéronef"
+  },
+  "airplane": {
+    "fr": "avion"
+  },
+  "airport": {
+    "fr": "aéroport"
+  },
+  "airshow": {
+    "fr": "meeting aérien"
+  },
+  "alley": {
+    "fr": "ruelle"
+  },
+  "alligator_crocodile": {
+    "fr": "crocodilien"
+  },
+  "almond": {
+    "fr": "amande"
+  },
+  "ambulance": {
+    "fr": "ambulance"
+  },
+  "amusement_park": {
+    "fr": "parc d'attractions"
+  },
+  "anchovy": {
+    "fr": "anchois"
+  },
+  "angelfish": {
+    "fr": "poisson-ange"
+  },
+  "animal": {
+    "fr": "animal"
+  },
+  "ant": {
+    "fr": "fourmi"
+  },
+  "antipasti": {
+    "fr": "antipasti"
+  },
+  "anvil": {
+    "fr": "enclume"
+  },
+  "apartment": {
+    "fr": "appartement"
+  },
+  "apple": {
+    "fr": "pomme"
+  },
+  "appliance": {
+    "fr": "appareil électroménager"
+  },
+  "apricot": {
+    "fr": "abricot"
+  },
+  "apron": {
+    "fr": "tablier"
+  },
+  "aquarium": {
+    "fr": "aquarium"
+  },
+  "arachnid": {
+    "fr": "arachnide"
+  },
+  "arch": {
+    "fr": "arche"
+  },
+  "archery": {
+    "fr": "tir à l'arc"
+  },
+  "arena": {
+    "fr": "arène"
+  },
+  "armchair": {
+    "fr": "fauteuil"
+  },
+  "art": {
+    "fr": "art"
+  },
+  "arthropods": {
+    "fr": "arthropode"
+  },
+  "artichoke": {
+    "fr": "artichaut"
+  },
+  "arugula": {
+    "fr": "roquette"
+  },
+  "asparagus": {
+    "fr": "asperge"
+  },
+  "athletics": {
+    "fr": "athlétisme"
+  },
+  "atm": {
+    "fr": "distributeur automatique de billets"
+  },
+  "atv": {
+    "fr": "VTT motorisé"
+  },
+  "auditorium": {
+    "fr": "auditorium"
+  },
+  "aurora": {
+    "fr": "aurore polaire"
+  },
+  "australian_shepherd": {
+    "fr": "berger australien"
+  },
+  "automobile": {
+    "fr": "automobile"
+  },
+  "avocado": {
+    "fr": "avocat"
+  },
+  "axe": {
+    "fr": "hache"
+  },
+  "baby": {
+    "fr": "bébé"
+  },
+  "backgammon": {
+    "fr": "backgammon"
+  },
+  "backhoe": {
+    "fr": "rétrocaveuse"
+  },
+  "backpack": {
+    "fr": "sac à dos"
+  },
+  "bacon": {
+    "fr": "bacon"
+  },
+  "badminton": {
+    "fr": "badminton"
+  },
+  "bag": {
+    "fr": "sac"
+  },
+  "bagel": {
+    "fr": "bagel"
+  },
+  "baked_goods": {
+    "fr": "produit de boulangerie"
+  },
+  "baklava": {
+    "fr": "baklava"
+  },
+  "balcony": {
+    "fr": "balcon"
+  },
+  "ball": {
+    "fr": "balle"
+  },
+  "ballet": {
+    "fr": "ballet"
+  },
+  "ballet_dancer": {
+    "fr": "danseur de ballet"
+  },
+  "ballgames": {
+    "fr": "jeu de ballon"
+  },
+  "balloon": {
+    "fr": "ballon"
+  },
+  "balloon_hotair": {
+    "fr": "montgolfière"
+  },
+  "banana": {
+    "fr": "banane"
+  },
+  "banner": {
+    "fr": "bannière"
+  },
+  "bar": {
+    "fr": "bar"
+  },
+  "barbell": {
+    "fr": "haltère long"
+  },
+  "barge": {
+    "fr": "péniche"
+  },
+  "barn": {
+    "fr": "grange"
+  },
+  "barnacle": {
+    "fr": "balane"
+  },
+  "barracuda": {
+    "fr": "barracuda"
+  },
+  "barrel": {
+    "fr": "tonneau"
+  },
+  "baseball": {
+    "fr": "baseball"
+  },
+  "baseball_bat": {
+    "fr": "batte de baseball"
+  },
+  "baseball_hat": {
+    "fr": "casquette de baseball"
+  },
+  "basenji": {
+    "fr": "basenji"
+  },
+  "basket_container": {
+    "fr": "panier"
+  },
+  "basketball": {
+    "fr": "basket-ball"
+  },
+  "basset": {
+    "fr": "basset"
+  },
+  "bath": {
+    "fr": "bain"
+  },
+  "bathrobe": {
+    "fr": "peignoir de bain"
+  },
+  "bathroom": {
+    "fr": "salle de bain"
+  },
+  "bathroom_faucet": {
+    "fr": "robinet de salle de bain"
+  },
+  "bathroom_room": {
+    "fr": "salle de bain"
+  },
+  "beach": {
+    "fr": "plage"
+  },
+  "beagle": {
+    "fr": "beagle"
+  },
+  "bean": {
+    "fr": "haricot"
+  },
+  "beanie": {
+    "fr": "bonnet"
+  },
+  "bear": {
+    "fr": "ours"
+  },
+  "bed": {
+    "fr": "lit"
+  },
+  "bedding": {
+    "fr": "literie"
+  },
+  "bedroom": {
+    "fr": "chambre à coucher"
+  },
+  "bee": {
+    "fr": "abeille"
+  },
+  "beef": {
+    "fr": "bœuf"
+  },
+  "beehive": {
+    "fr": "ruche"
+  },
+  "beekeeping": {
+    "fr": "apiculture"
+  },
+  "beer": {
+    "fr": "bière"
+  },
+  "beet": {
+    "fr": "betterave"
+  },
+  "begonia": {
+    "fr": "bégonia"
+  },
+  "bell": {
+    "fr": "cloche"
+  },
+  "bell_pepper": {
+    "fr": "poivron"
+  },
+  "belltower": {
+    "fr": "clocher"
+  },
+  "bellydance": {
+    "fr": "danse orientale"
+  },
+  "bench": {
+    "fr": "banc"
+  },
+  "bernese_mountain": {
+    "fr": "bouvier bernois"
+  },
+  "berry": {
+    "fr": "baie"
+  },
+  "bib": {
+    "fr": "bavoir"
+  },
+  "bichon": {
+    "fr": "bichon"
+  },
+  "bicycle": {
+    "fr": "vélo"
+  },
+  "billboards": {
+    "fr": "panneau d'affichage"
+  },
+  "billiards": {
+    "fr": "billard"
+  },
+  "binoculars": {
+    "fr": "jumelles"
+  },
+  "bird": {
+    "fr": "oiseau"
+  },
+  "birdhouse": {
+    "fr": "nichoir"
+  },
+  "birthday_cake": {
+    "fr": "gâteau d'anniversaire"
+  },
+  "biryani": {
+    "fr": "biryani"
+  },
+  "biscotti": {
+    "fr": "biscotti"
+  },
+  "biscuit": {
+    "fr": "biscuit"
+  },
+  "bison": {
+    "fr": "bison"
+  },
+  "blackberry": {
+    "fr": "mûre"
+  },
+  "bleachers": {
+    "fr": "gradins"
+  },
+  "blender": {
+    "fr": "mixeur"
+  },
+  "blizzard": {
+    "fr": "blizzard"
+  },
+  "blocks": {
+    "fr": "blocs de construction"
+  },
+  "blossom": {
+    "fr": "fleur"
+  },
+  "blue_sky": {
+    "fr": "ciel bleu"
+  },
+  "blueberry": {
+    "fr": "myrtille"
+  },
+  "boar": {
+    "fr": "sanglier"
+  },
+  "board_game": {
+    "fr": "jeu de société"
+  },
+  "boat": {
+    "fr": "bateau"
+  },
+  "boathouse": {
+    "fr": "hangar à bateaux"
+  },
+  "bobcat": {
+    "fr": "lynx roux"
+  },
+  "bodyboard": {
+    "fr": "bodyboard"
+  },
+  "bongo_drum": {
+    "fr": "bongo"
+  },
+  "bonsai": {
+    "fr": "bonsaï"
+  },
+  "book": {
+    "fr": "livre"
+  },
+  "bookshelf": {
+    "fr": "bibliothèque"
+  },
+  "boot": {
+    "fr": "botte"
+  },
+  "bottle": {
+    "fr": "bouteille"
+  },
+  "bouquet": {
+    "fr": "bouquet"
+  },
+  "bowl": {
+    "fr": "bol"
+  },
+  "bowling": {
+    "fr": "bowling"
+  },
+  "bowtie": {
+    "fr": "nœud papillon"
+  },
+  "boxing": {
+    "fr": "boxe"
+  },
+  "branch": {
+    "fr": "branche"
+  },
+  "brass_music": {
+    "fr": "musique de cuivres"
+  },
+  "bread": {
+    "fr": "pain"
+  },
+  "breakdancing": {
+    "fr": "breakdance"
+  },
+  "brick": {
+    "fr": "brique"
+  },
+  "brick_oven": {
+    "fr": "four à briques"
+  },
+  "bride": {
+    "fr": "mariée"
+  },
+  "bridesmaid": {
+    "fr": "demoiselle d'honneur"
+  },
+  "bridge": {
+    "fr": "pont"
+  },
+  "briefcase": {
+    "fr": "mallette"
+  },
+  "broccoli": {
+    "fr": "brocoli"
+  },
+  "broom": {
+    "fr": "balai"
+  },
+  "brownie": {
+    "fr": "brownie"
+  },
+  "bruschetta": {
+    "fr": "bruschetta"
+  },
+  "bubble_tea": {
+    "fr": "thé aux perles"
+  },
+  "bucket": {
+    "fr": "seau"
+  },
+  "building": {
+    "fr": "bâtiment"
+  },
+  "bulldog": {
+    "fr": "bouledogue"
+  },
+  "bulldozer": {
+    "fr": "bulldozer"
+  },
+  "bullfighting": {
+    "fr": "corrida"
+  },
+  "bungee": {
+    "fr": "saut à l'élastique"
+  },
+  "burrito": {
+    "fr": "burrito"
+  },
+  "bus": {
+    "fr": "bus"
+  },
+  "butter": {
+    "fr": "beurre"
+  },
+  "butterfly": {
+    "fr": "papillon"
+  },
+  "cabinet": {
+    "fr": "armoire"
+  },
+  "cableway": {
+    "fr": "téléphérique"
+  },
+  "cactus": {
+    "fr": "cactus"
+  },
+  "cage": {
+    "fr": "cage"
+  },
+  "cake": {
+    "fr": "gâteau"
+  },
+  "cake_regular": {
+    "fr": "gâteau"
+  },
+  "cakestand": {
+    "fr": "présentoir à gâteau"
+  },
+  "calculator": {
+    "fr": "calculatrice"
+  },
+  "calendar": {
+    "fr": "calendrier"
+  },
+  "caliper": {
+    "fr": "pied à coulisse"
+  },
+  "camel": {
+    "fr": "chameau"
+  },
+  "camera": {
+    "fr": "appareil photo"
+  },
+  "camping": {
+    "fr": "camping"
+  },
+  "candle": {
+    "fr": "bougie"
+  },
+  "candlestick": {
+    "fr": "chandelier"
+  },
+  "candy": {
+    "fr": "bonbon"
+  },
+  "candy_cane": {
+    "fr": "sucre d'orge"
+  },
+  "candy_other": {
+    "fr": "bonbon"
+  },
+  "canine": {
+    "fr": "canidé"
+  },
+  "canoe": {
+    "fr": "canoë"
+  },
+  "cantaloupe": {
+    "fr": "cantaloup"
+  },
+  "canyon": {
+    "fr": "canyon"
+  },
+  "caprese": {
+    "fr": "salade caprese"
+  },
+  "car": {
+    "fr": "voiture"
+  },
+  "car_seat": {
+    "fr": "siège auto"
+  },
+  "caramel": {
+    "fr": "caramel"
+  },
+  "cardboard_box": {
+    "fr": "boîte en carton"
+  },
+  "carnation": {
+    "fr": "œillet"
+  },
+  "carnival": {
+    "fr": "fête foraine"
+  },
+  "carousel": {
+    "fr": "carrousel"
+  },
+  "carrot": {
+    "fr": "carotte"
+  },
+  "cart": {
+    "fr": "chariot"
+  },
+  "carton": {
+    "fr": "carton"
+  },
+  "cashew": {
+    "fr": "noix de cajou"
+  },
+  "casino": {
+    "fr": "casino"
+  },
+  "casserole": {
+    "fr": "cocotte"
+  },
+  "cassette": {
+    "fr": "cassette"
+  },
+  "castle": {
+    "fr": "château"
+  },
+  "cat": {
+    "fr": "chat"
+  },
+  "caterpillar": {
+    "fr": "chenille"
+  },
+  "cauliflower": {
+    "fr": "chou-fleur"
+  },
+  "cave": {
+    "fr": "grotte"
+  },
+  "cd": {
+    "fr": "CD"
+  },
+  "celebration": {
+    "fr": "fête"
+  },
+  "celery": {
+    "fr": "céleri"
+  },
+  "celestial_body": {
+    "fr": "corps céleste"
+  },
+  "celestial_body_other": {
+    "fr": "corps céleste"
+  },
+  "cellar": {
+    "fr": "cave"
+  },
+  "cello": {
+    "fr": "violoncelle"
+  },
+  "centipede": {
+    "fr": "mille-pattes"
+  },
+  "cephalopod": {
+    "fr": "céphalopode"
+  },
+  "cereal": {
+    "fr": "céréales"
+  },
+  "ceremony": {
+    "fr": "cérémonie"
+  },
+  "cetacean": {
+    "fr": "cétacé"
+  },
+  "chainsaw": {
+    "fr": "tronçonneuse"
+  },
+  "chair": {
+    "fr": "chaise"
+  },
+  "chair_other": {
+    "fr": "chaise"
+  },
+  "chairlift": {
+    "fr": "télésiège"
+  },
+  "chaise": {
+    "fr": "chaise longue"
+  },
+  "chalkboard": {
+    "fr": "tableau noir"
+  },
+  "chameleon": {
+    "fr": "caméléon"
+  },
+  "chandelier": {
+    "fr": "lustre"
+  },
+  "chart": {
+    "fr": "graphique"
+  },
+  "checkbook": {
+    "fr": "chéquier"
+  },
+  "cheerleading": {
+    "fr": "pom-pom girl"
+  },
+  "cheese": {
+    "fr": "fromage"
+  },
+  "cheesecake": {
+    "fr": "cheesecake"
+  },
+  "cheetah": {
+    "fr": "guépard"
+  },
+  "cherry": {
+    "fr": "cerise"
+  },
+  "chess": {
+    "fr": "échecs"
+  },
+  "chestnut": {
+    "fr": "châtaigne"
+  },
+  "chewing_gum": {
+    "fr": "chewing-gum"
+  },
+  "chihuahua": {
+    "fr": "chihuahua"
+  },
+  "child": {
+    "fr": "enfant"
+  },
+  "chimney": {
+    "fr": "cheminée"
+  },
+  "chinchilla": {
+    "fr": "chinchilla"
+  },
+  "chives": {
+    "fr": "ciboulette"
+  },
+  "chocolate": {
+    "fr": "chocolat"
+  },
+  "chocolate_chip": {
+    "fr": "pépite de chocolat"
+  },
+  "chopsticks": {
+    "fr": "baguettes"
+  },
+  "christmas_decoration": {
+    "fr": "décoration de Noël"
+  },
+  "christmas_tree": {
+    "fr": "sapin de Noël"
+  },
+  "chrysanthemum": {
+    "fr": "chrysanthème"
+  },
+  "cigar": {
+    "fr": "cigare"
+  },
+  "cigarette": {
+    "fr": "cigarette"
+  },
+  "cilantro": {
+    "fr": "coriandre"
+  },
+  "circuit_board": {
+    "fr": "circuit imprimé"
+  },
+  "circus": {
+    "fr": "cirque"
+  },
+  "citrus_fruit": {
+    "fr": "agrume"
+  },
+  "cityscape": {
+    "fr": "paysage urbain"
+  },
+  "clam": {
+    "fr": "palourde"
+  },
+  "clarinet": {
+    "fr": "clarinette"
+  },
+  "classroom": {
+    "fr": "salle de classe"
+  },
+  "cliff": {
+    "fr": "falaise"
+  },
+  "cloak": {
+    "fr": "cape"
+  },
+  "clock": {
+    "fr": "horloge"
+  },
+  "clock_tower": {
+    "fr": "tour de l'horloge"
+  },
+  "closet": {
+    "fr": "placard"
+  },
+  "clothesline": {
+    "fr": "corde à linge"
+  },
+  "clothespin": {
+    "fr": "pince à linge"
+  },
+  "clothing": {
+    "fr": "vêtement"
+  },
+  "cloudy": {
+    "fr": "nuageux"
+  },
+  "clover": {
+    "fr": "trèfle"
+  },
+  "clown": {
+    "fr": "clown"
+  },
+  "clownfish": {
+    "fr": "poisson-clown"
+  },
+  "cockatoo": {
+    "fr": "cacatoès"
+  },
+  "cocktail": {
+    "fr": "cocktail"
+  },
+  "coconut": {
+    "fr": "noix de coco"
+  },
+  "coffee": {
+    "fr": "café"
+  },
+  "coffee_bean": {
+    "fr": "grain de café"
+  },
+  "coin": {
+    "fr": "pièce de monnaie"
+  },
+  "coleslaw": {
+    "fr": "salade de chou"
+  },
+  "collie": {
+    "fr": "colley"
+  },
+  "compass": {
+    "fr": "boussole"
+  },
+  "computer": {
+    "fr": "ordinateur"
+  },
+  "computer_keyboard": {
+    "fr": "clavier d'ordinateur"
+  },
+  "computer_monitor": {
+    "fr": "écran d'ordinateur"
+  },
+  "computer_mouse": {
+    "fr": "souris d'ordinateur"
+  },
+  "computer_tower": {
+    "fr": "tour d'ordinateur"
+  },
+  "concert": {
+    "fr": "concert"
+  },
+  "conch": {
+    "fr": "conque"
+  },
+  "condiment": {
+    "fr": "condiment"
+  },
+  "conference": {
+    "fr": "conférence"
+  },
+  "consumer_electronics": {
+    "fr": "appareil électronique grand public"
+  },
+  "container": {
+    "fr": "conteneur"
+  },
+  "convertible": {
+    "fr": "cabriolet"
+  },
+  "conveyance": {
+    "fr": "moyen de transport"
+  },
+  "cookie": {
+    "fr": "biscuit"
+  },
+  "cookware": {
+    "fr": "ustensile de cuisine"
+  },
+  "coral_reef": {
+    "fr": "récif corallien"
+  },
+  "cord": {
+    "fr": "cordon"
+  },
+  "corgi": {
+    "fr": "corgi"
+  },
+  "corkscrew": {
+    "fr": "tire-bouchon"
+  },
+  "corn": {
+    "fr": "maïs"
+  },
+  "cornflower": {
+    "fr": "bleuet"
+  },
+  "cosmetic_tool": {
+    "fr": "accessoire de maquillage"
+  },
+  "costume": {
+    "fr": "costume"
+  },
+  "cougar": {
+    "fr": "couguar"
+  },
+  "coupon": {
+    "fr": "bon de réduction"
+  },
+  "cow": {
+    "fr": "vache"
+  },
+  "cowboy_hat": {
+    "fr": "chapeau de cow-boy"
+  },
+  "coyote_wolf": {
+    "fr": "coyote"
+  },
+  "crab": {
+    "fr": "crabe"
+  },
+  "cranberry": {
+    "fr": "canneberge"
+  },
+  "crane_construction": {
+    "fr": "grue de chantier"
+  },
+  "crate": {
+    "fr": "caisse"
+  },
+  "credit_card": {
+    "fr": "carte de crédit"
+  },
+  "creek": {
+    "fr": "ruisseau"
+  },
+  "crepe": {
+    "fr": "crêpe"
+  },
+  "crib": {
+    "fr": "lit de bébé"
+  },
+  "cricket_sport": {
+    "fr": "cricket"
+  },
+  "croissant": {
+    "fr": "croissant"
+  },
+  "crosswalk": {
+    "fr": "passage piéton"
+  },
+  "crowd": {
+    "fr": "foule"
+  },
+  "cruise_ship": {
+    "fr": "bateau de croisière"
+  },
+  "crutch": {
+    "fr": "béquille"
+  },
+  "cubicle": {
+    "fr": "box de bureau"
+  },
+  "cucumber": {
+    "fr": "concombre"
+  },
+  "cup": {
+    "fr": "tasse"
+  },
+  "cupcake": {
+    "fr": "cupcake"
+  },
+  "currency": {
+    "fr": "monnaie"
+  },
+  "curry": {
+    "fr": "curry"
+  },
+  "curtain": {
+    "fr": "rideau"
+  },
+  "cutting_board": {
+    "fr": "planche à découper"
+  },
+  "cycling": {
+    "fr": "cyclisme"
+  },
+  "dachshund": {
+    "fr": "teckel"
+  },
+  "daffodil": {
+    "fr": "jonquille"
+  },
+  "dahlia": {
+    "fr": "dahlia"
+  },
+  "daikon": {
+    "fr": "radis blanc"
+  },
+  "daisy": {
+    "fr": "marguerite"
+  },
+  "dalmatian": {
+    "fr": "dalmatien"
+  },
+  "dam": {
+    "fr": "barrage"
+  },
+  "dancing": {
+    "fr": "danse"
+  },
+  "dandelion": {
+    "fr": "pissenlit"
+  },
+  "dartboard": {
+    "fr": "cible de fléchettes"
+  },
+  "dashboard": {
+    "fr": "tableau de bord"
+  },
+  "daytime": {
+    "fr": "journée"
+  },
+  "decanter": {
+    "fr": "carafe"
+  },
+  "deck": {
+    "fr": "terrasse"
+  },
+  "decoration": {
+    "fr": "décoration"
+  },
+  "decorative_plant": {
+    "fr": "plante décorative"
+  },
+  "deejay": {
+    "fr": "disc-jockey"
+  },
+  "deer": {
+    "fr": "cerf"
+  },
+  "desert": {
+    "fr": "désert"
+  },
+  "desk": {
+    "fr": "bureau"
+  },
+  "dessert": {
+    "fr": "dessert"
+  },
+  "diagram": {
+    "fr": "diagramme"
+  },
+  "dial": {
+    "fr": "cadran"
+  },
+  "diaper": {
+    "fr": "couche"
+  },
+  "dice": {
+    "fr": "dé"
+  },
+  "dill": {
+    "fr": "aneth"
+  },
+  "dining_room": {
+    "fr": "salle à manger"
+  },
+  "dinosaur": {
+    "fr": "dinosaure"
+  },
+  "diorama": {
+    "fr": "diorama"
+  },
+  "dirt_road": {
+    "fr": "chemin de terre"
+  },
+  "disco_ball": {
+    "fr": "boule à facettes"
+  },
+  "dishwasher": {
+    "fr": "lave-vaisselle"
+  },
+  "diskette": {
+    "fr": "disquette"
+  },
+  "diving": {
+    "fr": "plongée"
+  },
+  "doberman": {
+    "fr": "doberman"
+  },
+  "dock": {
+    "fr": "quai"
+  },
+  "document": {
+    "fr": "document"
+  },
+  "dog": {
+    "fr": "chien"
+  },
+  "doll": {
+    "fr": "poupée"
+  },
+  "dolphin": {
+    "fr": "dauphin"
+  },
+  "dome": {
+    "fr": "dôme"
+  },
+  "domicile": {
+    "fr": "domicile"
+  },
+  "domino": {
+    "fr": "domino"
+  },
+  "donkey": {
+    "fr": "âne"
+  },
+  "donut": {
+    "fr": "beignet"
+  },
+  "door": {
+    "fr": "porte"
+  },
+  "dove": {
+    "fr": "colombe"
+  },
+  "dragon_parade": {
+    "fr": "parade du dragon"
+  },
+  "dragonfly": {
+    "fr": "libellule"
+  },
+  "dressage": {
+    "fr": "dressage"
+  },
+  "drink": {
+    "fr": "boisson"
+  },
+  "drinking_glass": {
+    "fr": "verre"
+  },
+  "driveway": {
+    "fr": "allée"
+  },
+  "drone_machine": {
+    "fr": "drone"
+  },
+  "drum": {
+    "fr": "tambour"
+  },
+  "dumbbell": {
+    "fr": "haltère"
+  },
+  "dumpling": {
+    "fr": "raviole"
+  },
+  "durian": {
+    "fr": "durian"
+  },
+  "eagle": {
+    "fr": "aigle"
+  },
+  "earmuffs": {
+    "fr": "cache-oreilles"
+  },
+  "easel": {
+    "fr": "chevalet"
+  },
+  "easter_egg": {
+    "fr": "œuf de Pâques"
+  },
+  "edamame": {
+    "fr": "edamame"
+  },
+  "egg": {
+    "fr": "œuf"
+  },
+  "eggplant": {
+    "fr": "aubergine"
+  },
+  "electric_fan": {
+    "fr": "ventilateur électrique"
+  },
+  "elephant": {
+    "fr": "éléphant"
+  },
+  "elevator": {
+    "fr": "ascenseur"
+  },
+  "elk": {
+    "fr": "élan"
+  },
+  "embers": {
+    "fr": "braises"
+  },
+  "engine_vehicle": {
+    "fr": "moteur de véhicule"
+  },
+  "entertainer": {
+    "fr": "artiste"
+  },
+  "envelope": {
+    "fr": "enveloppe"
+  },
+  "equestrian": {
+    "fr": "équitation"
+  },
+  "escalator": {
+    "fr": "escalator"
+  },
+  "eucalyptus_tree": {
+    "fr": "eucalyptus"
+  },
+  "evergreen": {
+    "fr": "conifère"
+  },
+  "extinguisher": {
+    "fr": "extincteur"
+  },
+  "eyeglasses": {
+    "fr": "lunettes"
+  },
+  "fairground": {
+    "fr": "champ de foire"
+  },
+  "falafel": {
+    "fr": "falafel"
+  },
+  "farm": {
+    "fr": "ferme"
+  },
+  "fedora": {
+    "fr": "feutre"
+  },
+  "feline": {
+    "fr": "félin"
+  },
+  "fence": {
+    "fr": "clôture"
+  },
+  "fencing_sport": {
+    "fr": "escrime"
+  },
+  "ferns": {
+    "fr": "fougère"
+  },
+  "ferret": {
+    "fr": "furet"
+  },
+  "ferris_wheel": {
+    "fr": "grande roue"
+  },
+  "fig": {
+    "fr": "figue"
+  },
+  "figurine": {
+    "fr": "figurine"
+  },
+  "fire": {
+    "fr": "feu"
+  },
+  "firecracker": {
+    "fr": "pétard"
+  },
+  "fireplace": {
+    "fr": "cheminée"
+  },
+  "firetruck": {
+    "fr": "camion de pompiers"
+  },
+  "fireworks": {
+    "fr": "feu d'artifice"
+  },
+  "fish": {
+    "fr": "poisson"
+  },
+  "fishbowl": {
+    "fr": "bocal à poisson"
+  },
+  "fishing": {
+    "fr": "pêche"
+  },
+  "fishtank": {
+    "fr": "aquarium"
+  },
+  "flag": {
+    "fr": "drapeau"
+  },
+  "flagpole": {
+    "fr": "mât"
+  },
+  "flame": {
+    "fr": "flamme"
+  },
+  "flamingo": {
+    "fr": "flamant rose"
+  },
+  "flan": {
+    "fr": "flan"
+  },
+  "flashlight": {
+    "fr": "lampe de poche"
+  },
+  "flipchart": {
+    "fr": "tableau à feuilles"
+  },
+  "flipper": {
+    "fr": "palme"
+  },
+  "flower": {
+    "fr": "fleur"
+  },
+  "flower_arrangement": {
+    "fr": "composition florale"
+  },
+  "flute": {
+    "fr": "flûte"
+  },
+  "folding_chair": {
+    "fr": "chaise pliante"
+  },
+  "foliage": {
+    "fr": "feuillage"
+  },
+  "fondue": {
+    "fr": "fondue"
+  },
+  "food": {
+    "fr": "nourriture"
+  },
+  "foosball": {
+    "fr": "baby-foot"
+  },
+  "football": {
+    "fr": "football américain"
+  },
+  "footwear": {
+    "fr": "chaussure"
+  },
+  "forest": {
+    "fr": "forêt"
+  },
+  "fork": {
+    "fr": "fourchette"
+  },
+  "forklift": {
+    "fr": "chariot élévateur"
+  },
+  "formula_one_car": {
+    "fr": "voiture de formule 1"
+  },
+  "fountain": {
+    "fr": "fontaine"
+  },
+  "fox": {
+    "fr": "renard"
+  },
+  "frame": {
+    "fr": "cadre"
+  },
+  "fried_chicken": {
+    "fr": "poulet frit"
+  },
+  "fried_egg": {
+    "fr": "œuf au plat"
+  },
+  "fries": {
+    "fr": "frites"
+  },
+  "frisbee": {
+    "fr": "frisbee"
+  },
+  "frog": {
+    "fr": "grenouille"
+  },
+  "frozen": {
+    "fr": "gelé"
+  },
+  "frozen_dessert": {
+    "fr": "dessert glacé"
+  },
+  "fruit": {
+    "fr": "fruit"
+  },
+  "fruitcake": {
+    "fr": "cake aux fruits"
+  },
+  "furniture": {
+    "fr": "meuble"
+  },
+  "gamepad": {
+    "fr": "manette de jeu"
+  },
+  "games": {
+    "fr": "jeu"
+  },
+  "garage": {
+    "fr": "garage"
+  },
+  "garden": {
+    "fr": "jardin"
+  },
+  "gargoyle": {
+    "fr": "gargouille"
+  },
+  "garlic": {
+    "fr": "ail"
+  },
+  "gas_mask": {
+    "fr": "masque à gaz"
+  },
+  "gastropod": {
+    "fr": "gastéropode"
+  },
+  "gazebo": {
+    "fr": "kiosque de jardin"
+  },
+  "gears": {
+    "fr": "engrenage"
+  },
+  "gecko": {
+    "fr": "gecko"
+  },
+  "gerbil": {
+    "fr": "gerbille"
+  },
+  "german_shepherd": {
+    "fr": "berger allemand"
+  },
+  "geyser": {
+    "fr": "geyser"
+  },
+  "gift": {
+    "fr": "cadeau"
+  },
+  "gift_card": {
+    "fr": "carte cadeau"
+  },
+  "gingerbread": {
+    "fr": "pain d'épices"
+  },
+  "giraffe": {
+    "fr": "girafe"
+  },
+  "glacier": {
+    "fr": "glacier"
+  },
+  "glove": {
+    "fr": "gant"
+  },
+  "glove_other": {
+    "fr": "gant"
+  },
+  "go_kart": {
+    "fr": "karting"
+  },
+  "goat": {
+    "fr": "chèvre"
+  },
+  "goggles": {
+    "fr": "lunettes de protection"
+  },
+  "goldfish": {
+    "fr": "poisson rouge"
+  },
+  "golf": {
+    "fr": "golf"
+  },
+  "golf_ball": {
+    "fr": "balle de golf"
+  },
+  "golf_club": {
+    "fr": "club de golf"
+  },
+  "golf_course": {
+    "fr": "terrain de golf"
+  },
+  "gown": {
+    "fr": "robe"
+  },
+  "graduation": {
+    "fr": "remise des diplômes"
+  },
+  "graffiti": {
+    "fr": "graffiti"
+  },
+  "grain": {
+    "fr": "grain"
+  },
+  "grand_prix": {
+    "fr": "grand prix"
+  },
+  "grape": {
+    "fr": "raisin"
+  },
+  "grapefruit": {
+    "fr": "pamplemousse"
+  },
+  "grass": {
+    "fr": "herbe"
+  },
+  "grater": {
+    "fr": "râpe"
+  },
+  "grave": {
+    "fr": "tombe"
+  },
+  "green_beans": {
+    "fr": "haricot vert"
+  },
+  "greenhouse": {
+    "fr": "serre"
+  },
+  "greyhound": {
+    "fr": "lévrier"
+  },
+  "grill": {
+    "fr": "barbecue"
+  },
+  "grilled_chicken": {
+    "fr": "poulet grillé"
+  },
+  "groom": {
+    "fr": "marié"
+  },
+  "guacamole": {
+    "fr": "guacamole"
+  },
+  "guava": {
+    "fr": "goyave"
+  },
+  "guitar": {
+    "fr": "guitare"
+  },
+  "gull": {
+    "fr": "mouette"
+  },
+  "guppy": {
+    "fr": "guppy"
+  },
+  "gymnastics": {
+    "fr": "gymnastique"
+  },
+  "gyoza": {
+    "fr": "gyoza"
+  },
+  "habanero": {
+    "fr": "piment habanero"
+  },
+  "ham": {
+    "fr": "jambon"
+  },
+  "hamburger": {
+    "fr": "hamburger"
+  },
+  "hammer": {
+    "fr": "marteau"
+  },
+  "hammock": {
+    "fr": "hamac"
+  },
+  "hamster": {
+    "fr": "hamster"
+  },
+  "handwriting": {
+    "fr": "écriture manuscrite"
+  },
+  "hangar": {
+    "fr": "hangar"
+  },
+  "hangglider": {
+    "fr": "deltaplane"
+  },
+  "harbour": {
+    "fr": "port"
+  },
+  "hardhat": {
+    "fr": "casque de chantier"
+  },
+  "harp": {
+    "fr": "harpe"
+  },
+  "hat": {
+    "fr": "chapeau"
+  },
+  "haze": {
+    "fr": "brume"
+  },
+  "headgear": {
+    "fr": "couvre-chef"
+  },
+  "headphones": {
+    "fr": "casque audio"
+  },
+  "health_club": {
+    "fr": "club de sport"
+  },
+  "hedgehog": {
+    "fr": "hérisson"
+  },
+  "helicopter": {
+    "fr": "hélicoptère"
+  },
+  "helmet": {
+    "fr": "casque"
+  },
+  "henna": {
+    "fr": "henné"
+  },
+  "herb": {
+    "fr": "herbe aromatique"
+  },
+  "heron": {
+    "fr": "héron"
+  },
+  "high_chair": {
+    "fr": "chaise haute"
+  },
+  "high_heel": {
+    "fr": "talon haut"
+  },
+  "hiking": {
+    "fr": "randonnée"
+  },
+  "hill": {
+    "fr": "colline"
+  },
+  "hippopotamus": {
+    "fr": "hippopotame"
+  },
+  "hockey": {
+    "fr": "hockey"
+  },
+  "holly": {
+    "fr": "houx"
+  },
+  "honey": {
+    "fr": "miel"
+  },
+  "honeydew": {
+    "fr": "melon miel"
+  },
+  "hoodie": {
+    "fr": "sweat à capuche"
+  },
+  "hookah": {
+    "fr": "narguilé"
+  },
+  "horse": {
+    "fr": "cheval"
+  },
+  "horseshoe": {
+    "fr": "fer à cheval"
+  },
+  "hospital": {
+    "fr": "hôpital"
+  },
+  "hotdog": {
+    "fr": "hot-dog"
+  },
+  "hound": {
+    "fr": "chien de chasse"
+  },
+  "hourglass": {
+    "fr": "sablier"
+  },
+  "house_single": {
+    "fr": "maison"
+  },
+  "houseboat": {
+    "fr": "péniche"
+  },
+  "housewares": {
+    "fr": "articles ménagers"
+  },
+  "hula": {
+    "fr": "hula"
+  },
+  "hummingbird": {
+    "fr": "colibri"
+  },
+  "hummus": {
+    "fr": "houmous"
+  },
+  "hunting": {
+    "fr": "chasse"
+  },
+  "hurdle": {
+    "fr": "haie"
+  },
+  "husky": {
+    "fr": "husky"
+  },
+  "hydrant": {
+    "fr": "bouche d'incendie"
+  },
+  "hyena": {
+    "fr": "hyène"
+  },
+  "ice": {
+    "fr": "glace"
+  },
+  "ice_cream": {
+    "fr": "crème glacée"
+  },
+  "ice_skates": {
+    "fr": "patins à glace"
+  },
+  "ice_skating": {
+    "fr": "patinage sur glace"
+  },
+  "iceberg": {
+    "fr": "iceberg"
+  },
+  "igloo": {
+    "fr": "igloo"
+  },
+  "iguana": {
+    "fr": "iguane"
+  },
+  "illustrations": {
+    "fr": "illustration"
+  },
+  "insect": {
+    "fr": "insecte"
+  },
+  "interior_room": {
+    "fr": "intérieur de pièce"
+  },
+  "interior_shop": {
+    "fr": "intérieur de magasin"
+  },
+  "irish_wolfhound": {
+    "fr": "lévrier irlandais"
+  },
+  "iron_clothing": {
+    "fr": "fer à repasser"
+  },
+  "island": {
+    "fr": "île"
+  },
+  "ivy": {
+    "fr": "lierre"
+  },
+  "jack_o_lantern": {
+    "fr": "citrouille d'Halloween"
+  },
+  "jack_russell_terrier": {
+    "fr": "jack russell terrier"
+  },
+  "jacket": {
+    "fr": "veste"
+  },
+  "jacuzzi": {
+    "fr": "jacuzzi"
+  },
+  "jalapeno": {
+    "fr": "piment jalapeño"
+  },
+  "jar": {
+    "fr": "bocal"
+  },
+  "jeans": {
+    "fr": "jean"
+  },
+  "jeep": {
+    "fr": "jeep"
+  },
+  "jello": {
+    "fr": "gelée"
+  },
+  "jelly": {
+    "fr": "gelée"
+  },
+  "jellyfish": {
+    "fr": "méduse"
+  },
+  "jetski": {
+    "fr": "jet-ski"
+  },
+  "jewelry": {
+    "fr": "bijou"
+  },
+  "jigsaw": {
+    "fr": "puzzle"
+  },
+  "jockey_horse": {
+    "fr": "jockey à cheval"
+  },
+  "joystick": {
+    "fr": "manette de jeu"
+  },
+  "jug": {
+    "fr": "cruche"
+  },
+  "juggling": {
+    "fr": "jonglerie"
+  },
+  "juice": {
+    "fr": "jus"
+  },
+  "juicer": {
+    "fr": "presse-agrumes"
+  },
+  "jungle": {
+    "fr": "jungle"
+  },
+  "kangaroo": {
+    "fr": "kangourou"
+  },
+  "karaoke": {
+    "fr": "karaoké"
+  },
+  "kayak": {
+    "fr": "kayak"
+  },
+  "kebab": {
+    "fr": "kebab"
+  },
+  "keg": {
+    "fr": "fût"
+  },
+  "kettle": {
+    "fr": "bouilloire"
+  },
+  "keypad": {
+    "fr": "clavier"
+  },
+  "kickboxing": {
+    "fr": "kickboxing"
+  },
+  "kilt": {
+    "fr": "kilt"
+  },
+  "kimono": {
+    "fr": "kimono"
+  },
+  "kitchen": {
+    "fr": "cuisine"
+  },
+  "kitchen_countertop": {
+    "fr": "plan de travail de cuisine"
+  },
+  "kitchen_faucet": {
+    "fr": "robinet de cuisine"
+  },
+  "kitchen_oven": {
+    "fr": "four de cuisine"
+  },
+  "kitchen_room": {
+    "fr": "cuisine"
+  },
+  "kitchen_sink": {
+    "fr": "évier de cuisine"
+  },
+  "kite": {
+    "fr": "cerf-volant"
+  },
+  "kiteboarding": {
+    "fr": "kitesurf"
+  },
+  "kitten": {
+    "fr": "chaton"
+  },
+  "kiwi": {
+    "fr": "kiwi"
+  },
+  "knife": {
+    "fr": "couteau"
+  },
+  "koala": {
+    "fr": "koala"
+  },
+  "kohlrabi": {
+    "fr": "chou-rave"
+  },
+  "koi": {
+    "fr": "carpe koï"
+  },
+  "lab_coat": {
+    "fr": "blouse de laboratoire"
+  },
+  "ladle": {
+    "fr": "louche"
+  },
+  "ladybug": {
+    "fr": "coccinelle"
+  },
+  "lake": {
+    "fr": "lac"
+  },
+  "lamp": {
+    "fr": "lampe"
+  },
+  "lamppost": {
+    "fr": "lampadaire"
+  },
+  "land": {
+    "fr": "terre"
+  },
+  "lantern": {
+    "fr": "lanterne"
+  },
+  "laptop": {
+    "fr": "ordinateur portable"
+  },
+  "laundry_machine": {
+    "fr": "machine à laver"
+  },
+  "lava": {
+    "fr": "lave"
+  },
+  "leash": {
+    "fr": "laisse"
+  },
+  "leek": {
+    "fr": "poireau"
+  },
+  "lemon": {
+    "fr": "citron"
+  },
+  "lemongrass": {
+    "fr": "citronnelle"
+  },
+  "lemur": {
+    "fr": "lémurien"
+  },
+  "leopard": {
+    "fr": "léopard"
+  },
+  "leotard": {
+    "fr": "justaucorps"
+  },
+  "lettuce": {
+    "fr": "laitue"
+  },
+  "library": {
+    "fr": "bibliothèque"
+  },
+  "license_plate": {
+    "fr": "plaque d'immatriculation"
+  },
+  "lifejacket": {
+    "fr": "gilet de sauvetage"
+  },
+  "lifesaver": {
+    "fr": "bouée de sauvetage"
+  },
+  "light": {
+    "fr": "lumière"
+  },
+  "light_bulb": {
+    "fr": "ampoule"
+  },
+  "lighter": {
+    "fr": "briquet"
+  },
+  "lighthouse": {
+    "fr": "phare"
+  },
+  "lightning": {
+    "fr": "éclair"
+  },
+  "lily": {
+    "fr": "lys"
+  },
+  "lime": {
+    "fr": "citron vert"
+  },
+  "limousine": {
+    "fr": "limousine"
+  },
+  "lion": {
+    "fr": "lion"
+  },
+  "lionfish": {
+    "fr": "poisson-lion"
+  },
+  "liquid": {
+    "fr": "liquide"
+  },
+  "liquor": {
+    "fr": "alcool"
+  },
+  "living_room": {
+    "fr": "salon"
+  },
+  "lizard": {
+    "fr": "lézard"
+  },
+  "llama": {
+    "fr": "lama"
+  },
+  "loafer": {
+    "fr": "mocassin"
+  },
+  "lobster": {
+    "fr": "homard"
+  },
+  "lollipop": {
+    "fr": "sucette"
+  },
+  "luggage": {
+    "fr": "bagage"
+  },
+  "lychee": {
+    "fr": "litchi"
+  },
+  "lynx": {
+    "fr": "lynx"
+  },
+  "macadamia": {
+    "fr": "noix de macadamia"
+  },
+  "machine": {
+    "fr": "machine"
+  },
+  "mackerel": {
+    "fr": "maquereau"
+  },
+  "magazine": {
+    "fr": "magazine"
+  },
+  "mailbox": {
+    "fr": "boîte aux lettres"
+  },
+  "malamute": {
+    "fr": "malamute"
+  },
+  "malinois": {
+    "fr": "malinois"
+  },
+  "mallet": {
+    "fr": "maillet"
+  },
+  "mammal": {
+    "fr": "mammifère"
+  },
+  "mandarine": {
+    "fr": "mandarine"
+  },
+  "mango": {
+    "fr": "mangue"
+  },
+  "mangosteen": {
+    "fr": "mangoustan"
+  },
+  "mangrove": {
+    "fr": "mangrove"
+  },
+  "manhole": {
+    "fr": "regard d'égout"
+  },
+  "map": {
+    "fr": "carte"
+  },
+  "maple_tree": {
+    "fr": "érable"
+  },
+  "margarita": {
+    "fr": "margarita"
+  },
+  "marigold": {
+    "fr": "souci"
+  },
+  "marshmallow": {
+    "fr": "guimauve"
+  },
+  "marsupial": {
+    "fr": "marsupial"
+  },
+  "martial_arts": {
+    "fr": "arts martiaux"
+  },
+  "martini": {
+    "fr": "martini"
+  },
+  "mask": {
+    "fr": "masque"
+  },
+  "mast": {
+    "fr": "mât"
+  },
+  "mastiff": {
+    "fr": "mastiff"
+  },
+  "matches": {
+    "fr": "allumettes"
+  },
+  "material": {
+    "fr": "matière"
+  },
+  "matzo": {
+    "fr": "pain azyme"
+  },
+  "measuring_tape": {
+    "fr": "mètre ruban"
+  },
+  "meat": {
+    "fr": "viande"
+  },
+  "meatball": {
+    "fr": "boulette de viande"
+  },
+  "medal": {
+    "fr": "médaille"
+  },
+  "media": {
+    "fr": "média"
+  },
+  "medicine": {
+    "fr": "médicament"
+  },
+  "megalith": {
+    "fr": "mégalithe"
+  },
+  "megaphone": {
+    "fr": "mégaphone"
+  },
+  "melon": {
+    "fr": "melon"
+  },
+  "microphone": {
+    "fr": "microphone"
+  },
+  "microscope": {
+    "fr": "microscope"
+  },
+  "microwave": {
+    "fr": "four à micro-ondes"
+  },
+  "military_uniform": {
+    "fr": "uniforme militaire"
+  },
+  "milkshake": {
+    "fr": "milk-shake"
+  },
+  "millipede": {
+    "fr": "mille-pattes"
+  },
+  "mistletoe": {
+    "fr": "gui"
+  },
+  "mitten": {
+    "fr": "moufle"
+  },
+  "moccasin": {
+    "fr": "mocassin"
+  },
+  "mojito": {
+    "fr": "mojito"
+  },
+  "mollusk": {
+    "fr": "mollusque"
+  },
+  "money": {
+    "fr": "argent"
+  },
+  "monitor_lizard": {
+    "fr": "varan"
+  },
+  "monorail": {
+    "fr": "monorail"
+  },
+  "monument": {
+    "fr": "monument"
+  },
+  "moon": {
+    "fr": "lune"
+  },
+  "moose": {
+    "fr": "orignal"
+  },
+  "mop": {
+    "fr": "serpillière"
+  },
+  "moss": {
+    "fr": "mousse"
+  },
+  "moth": {
+    "fr": "papillon de nuit"
+  },
+  "motocross": {
+    "fr": "motocross"
+  },
+  "motorcycle": {
+    "fr": "moto"
+  },
+  "motorhome": {
+    "fr": "camping-car"
+  },
+  "motorsport": {
+    "fr": "sport automobile"
+  },
+  "mountain": {
+    "fr": "montagne"
+  },
+  "mousetrap": {
+    "fr": "souricière"
+  },
+  "mower": {
+    "fr": "tondeuse à gazon"
+  },
+  "muffin": {
+    "fr": "muffin"
+  },
+  "mug": {
+    "fr": "tasse"
+  },
+  "museum": {
+    "fr": "musée"
+  },
+  "mushroom": {
+    "fr": "champignon"
+  },
+  "music": {
+    "fr": "musique"
+  },
+  "musical_instrument": {
+    "fr": "instrument de musique"
+  },
+  "mussel": {
+    "fr": "moule"
+  },
+  "mustard": {
+    "fr": "moutarde"
+  },
+  "naan": {
+    "fr": "naan"
+  },
+  "nachos": {
+    "fr": "nachos"
+  },
+  "nascar": {
+    "fr": "NASCAR"
+  },
+  "necktie": {
+    "fr": "cravate"
+  },
+  "nectarine": {
+    "fr": "nectarine"
+  },
+  "nest": {
+    "fr": "nid"
+  },
+  "newfoundland": {
+    "fr": "terre-neuve"
+  },
+  "newspaper": {
+    "fr": "journal"
+  },
+  "night_sky": {
+    "fr": "ciel nocturne"
+  },
+  "nightclub": {
+    "fr": "boîte de nuit"
+  },
+  "nut": {
+    "fr": "noix"
+  },
+  "oak_tree": {
+    "fr": "chêne"
+  },
+  "oar": {
+    "fr": "rame"
+  },
+  "oatmeal": {
+    "fr": "flocons d'avoine"
+  },
+  "obelisk": {
+    "fr": "obélisque"
+  },
+  "ocean": {
+    "fr": "océan"
+  },
+  "office_supplies": {
+    "fr": "fournitures de bureau"
+  },
+  "omelet": {
+    "fr": "omelette"
+  },
+  "onion": {
+    "fr": "oignon"
+  },
+  "optical_equipment": {
+    "fr": "matériel optique"
+  },
+  "oranges": {
+    "fr": "oranges"
+  },
+  "orchard": {
+    "fr": "verger"
+  },
+  "orchestra": {
+    "fr": "orchestre"
+  },
+  "orchid": {
+    "fr": "orchidée"
+  },
+  "organ_instrument": {
+    "fr": "orgue"
+  },
+  "origami": {
+    "fr": "origami"
+  },
+  "ostrich": {
+    "fr": "autruche"
+  },
+  "otter": {
+    "fr": "loutre"
+  },
+  "outdoor": {
+    "fr": "extérieur"
+  },
+  "oven": {
+    "fr": "four"
+  },
+  "owl": {
+    "fr": "hibou"
+  },
+  "oyster": {
+    "fr": "huître"
+  },
+  "pacifier": {
+    "fr": "tétine"
+  },
+  "paella": {
+    "fr": "paella"
+  },
+  "paintball": {
+    "fr": "paintball"
+  },
+  "paintbrush": {
+    "fr": "pinceau"
+  },
+  "painting": {
+    "fr": "peinture"
+  },
+  "palm_tree": {
+    "fr": "palmier"
+  },
+  "pan": {
+    "fr": "poêle"
+  },
+  "pancake": {
+    "fr": "crêpe"
+  },
+  "panda": {
+    "fr": "panda"
+  },
+  "papaya": {
+    "fr": "papaye"
+  },
+  "paper_bag": {
+    "fr": "sac en papier"
+  },
+  "parachute": {
+    "fr": "parachute"
+  },
+  "parade": {
+    "fr": "défilé"
+  },
+  "parakeet": {
+    "fr": "perruche"
+  },
+  "parasailing": {
+    "fr": "parachute ascensionnel"
+  },
+  "park": {
+    "fr": "parc"
+  },
+  "parking_lot": {
+    "fr": "parking"
+  },
+  "parrot": {
+    "fr": "perroquet"
+  },
+  "passionfruit": {
+    "fr": "fruit de la passion"
+  },
+  "passport": {
+    "fr": "passeport"
+  },
+  "pasta": {
+    "fr": "pâtes"
+  },
+  "pastry": {
+    "fr": "pâtisserie"
+  },
+  "path": {
+    "fr": "sentier"
+  },
+  "patio": {
+    "fr": "patio"
+  },
+  "payphone": {
+    "fr": "téléphone public"
+  },
+  "pea": {
+    "fr": "pois"
+  },
+  "peach": {
+    "fr": "pêche"
+  },
+  "peacock": {
+    "fr": "paon"
+  },
+  "peanut": {
+    "fr": "cacahuète"
+  },
+  "pear": {
+    "fr": "poire"
+  },
+  "pecan": {
+    "fr": "noix de pécan"
+  },
+  "pelican": {
+    "fr": "pélican"
+  },
+  "pen": {
+    "fr": "stylo"
+  },
+  "penguin": {
+    "fr": "pingouin"
+  },
+  "people": {
+    "fr": "personnes"
+  },
+  "pepper_veggie": {
+    "fr": "poivron"
+  },
+  "pepperoni": {
+    "fr": "pepperoni"
+  },
+  "peregrine": {
+    "fr": "faucon pèlerin"
+  },
+  "performance": {
+    "fr": "spectacle"
+  },
+  "pergola": {
+    "fr": "pergola"
+  },
+  "persimmon": {
+    "fr": "kaki"
+  },
+  "petunia": {
+    "fr": "pétunia"
+  },
+  "phone": {
+    "fr": "téléphone"
+  },
+  "piano": {
+    "fr": "piano"
+  },
+  "pickle": {
+    "fr": "cornichon"
+  },
+  "pie": {
+    "fr": "tarte"
+  },
+  "pier": {
+    "fr": "jetée"
+  },
+  "pierogi": {
+    "fr": "pierogi"
+  },
+  "pig": {
+    "fr": "cochon"
+  },
+  "pigeon": {
+    "fr": "pigeon"
+  },
+  "piggybank": {
+    "fr": "tirelire"
+  },
+  "pillow": {
+    "fr": "oreiller"
+  },
+  "pineapple": {
+    "fr": "ananas"
+  },
+  "ping_pong": {
+    "fr": "ping-pong"
+  },
+  "pipe": {
+    "fr": "tuyau"
+  },
+  "pistachio": {
+    "fr": "pistache"
+  },
+  "pita": {
+    "fr": "pita"
+  },
+  "pitbull": {
+    "fr": "pitbull"
+  },
+  "pizza": {
+    "fr": "pizza"
+  },
+  "plant": {
+    "fr": "plante"
+  },
+  "plate": {
+    "fr": "assiette"
+  },
+  "play_card": {
+    "fr": "carte à jouer"
+  },
+  "playground": {
+    "fr": "terrain de jeu"
+  },
+  "pliers": {
+    "fr": "pince"
+  },
+  "plum": {
+    "fr": "prune"
+  },
+  "podium": {
+    "fr": "podium"
+  },
+  "poinsettia": {
+    "fr": "poinsettia"
+  },
+  "poker": {
+    "fr": "poker"
+  },
+  "pole": {
+    "fr": "poteau"
+  },
+  "police_car": {
+    "fr": "voiture de police"
+  },
+  "polka_dots": {
+    "fr": "pois"
+  },
+  "polo": {
+    "fr": "polo"
+  },
+  "pomegranate": {
+    "fr": "grenade"
+  },
+  "pomeranian": {
+    "fr": "spitz nain"
+  },
+  "poncho": {
+    "fr": "poncho"
+  },
+  "poodle": {
+    "fr": "caniche"
+  },
+  "pool": {
+    "fr": "piscine"
+  },
+  "popcorn": {
+    "fr": "pop-corn"
+  },
+  "popsicle": {
+    "fr": "sucette glacée"
+  },
+  "porch": {
+    "fr": "véranda"
+  },
+  "porcupine": {
+    "fr": "porc-épic"
+  },
+  "portal": {
+    "fr": "portail"
+  },
+  "porthole": {
+    "fr": "hublot"
+  },
+  "pot_cooking": {
+    "fr": "casserole"
+  },
+  "potato": {
+    "fr": "pomme de terre"
+  },
+  "poultry": {
+    "fr": "volaille"
+  },
+  "power_saw": {
+    "fr": "scie électrique"
+  },
+  "prairie_dog": {
+    "fr": "chien de prairie"
+  },
+  "pretzel": {
+    "fr": "bretzel"
+  },
+  "printed_page": {
+    "fr": "page imprimée"
+  },
+  "printer": {
+    "fr": "imprimante"
+  },
+  "propeller": {
+    "fr": "hélice"
+  },
+  "puck": {
+    "fr": "palet"
+  },
+  "pudding": {
+    "fr": "pudding"
+  },
+  "puffer_fish": {
+    "fr": "poisson-globe"
+  },
+  "puffin": {
+    "fr": "macareux"
+  },
+  "pug": {
+    "fr": "carlin"
+  },
+  "pulley": {
+    "fr": "poulie"
+  },
+  "pumpkin": {
+    "fr": "citrouille"
+  },
+  "puppet": {
+    "fr": "marionnette"
+  },
+  "purse": {
+    "fr": "sac à main"
+  },
+  "putt": {
+    "fr": "putt"
+  },
+  "puzzles": {
+    "fr": "casse-tête"
+  },
+  "pylon": {
+    "fr": "pylône"
+  },
+  "pyramid": {
+    "fr": "pyramide"
+  },
+  "pyrotechnics": {
+    "fr": "pyrotechnie"
+  },
+  "python": {
+    "fr": "python"
+  },
+  "quesadilla": {
+    "fr": "quesadilla"
+  },
+  "quinoa": {
+    "fr": "quinoa"
+  },
+  "rabbit": {
+    "fr": "lapin"
+  },
+  "raccoon": {
+    "fr": "raton laveur"
+  },
+  "racquet": {
+    "fr": "raquette"
+  },
+  "radish": {
+    "fr": "radis"
+  },
+  "rafting": {
+    "fr": "rafting"
+  },
+  "railroad": {
+    "fr": "voie ferrée"
+  },
+  "rainbow": {
+    "fr": "arc-en-ciel"
+  },
+  "rake": {
+    "fr": "râteau"
+  },
+  "rambutan": {
+    "fr": "ramboutan"
+  },
+  "ramen": {
+    "fr": "ramen"
+  },
+  "rangoli": {
+    "fr": "rangoli"
+  },
+  "raptor": {
+    "fr": "rapace"
+  },
+  "raspberry": {
+    "fr": "framboise"
+  },
+  "rat": {
+    "fr": "rat"
+  },
+  "ratchet": {
+    "fr": "cliquet"
+  },
+  "rattlesnake": {
+    "fr": "serpent à sonnette"
+  },
+  "raven": {
+    "fr": "corbeau"
+  },
+  "raw_glass": {
+    "fr": "verre brut"
+  },
+  "receipt": {
+    "fr": "reçu"
+  },
+  "record": {
+    "fr": "disque vinyle"
+  },
+  "recreation": {
+    "fr": "loisir"
+  },
+  "red_envelope": {
+    "fr": "enveloppe rouge"
+  },
+  "red_wine": {
+    "fr": "vin rouge"
+  },
+  "refrigerator": {
+    "fr": "réfrigérateur"
+  },
+  "reptile": {
+    "fr": "reptile"
+  },
+  "restaurant": {
+    "fr": "restaurant"
+  },
+  "retriever": {
+    "fr": "retriever"
+  },
+  "rhinoceros": {
+    "fr": "rhinocéros"
+  },
+  "rhubarb": {
+    "fr": "rhubarbe"
+  },
+  "rice": {
+    "fr": "riz"
+  },
+  "rice_field": {
+    "fr": "rizière"
+  },
+  "rickshaw": {
+    "fr": "pousse-pousse"
+  },
+  "ridgeback": {
+    "fr": "ridgeback"
+  },
+  "rim": {
+    "fr": "jante"
+  },
+  "rink": {
+    "fr": "patinoire"
+  },
+  "risotto": {
+    "fr": "risotto"
+  },
+  "river": {
+    "fr": "rivière"
+  },
+  "road": {
+    "fr": "route"
+  },
+  "road_other": {
+    "fr": "autre route"
+  },
+  "road_safety_equipment": {
+    "fr": "équipement de sécurité routière"
+  },
+  "rock_climbing": {
+    "fr": "escalade"
+  },
+  "rocket": {
+    "fr": "fusée"
+  },
+  "rocks": {
+    "fr": "rochers"
+  },
+  "rodent": {
+    "fr": "rongeur"
+  },
+  "rodeo": {
+    "fr": "rodéo"
+  },
+  "roe": {
+    "fr": "œufs de poisson"
+  },
+  "rollercoaster": {
+    "fr": "montagnes russes"
+  },
+  "rollerskates": {
+    "fr": "patins à roulettes"
+  },
+  "rollerskating": {
+    "fr": "patinage à roulettes"
+  },
+  "rolling_pin": {
+    "fr": "rouleau à pâtisserie"
+  },
+  "roof": {
+    "fr": "toit"
+  },
+  "rope": {
+    "fr": "corde"
+  },
+  "rose": {
+    "fr": "rose"
+  },
+  "rosemary": {
+    "fr": "romarin"
+  },
+  "rotisserie": {
+    "fr": "rôtissoire"
+  },
+  "rottweiler": {
+    "fr": "rottweiler"
+  },
+  "roulette": {
+    "fr": "roulette"
+  },
+  "rowboat": {
+    "fr": "barque"
+  },
+  "rugby": {
+    "fr": "rugby"
+  },
+  "ruins": {
+    "fr": "ruines"
+  },
+  "sack": {
+    "fr": "sac"
+  },
+  "saddle": {
+    "fr": "selle"
+  },
+  "safety_vest": {
+    "fr": "gilet de sécurité"
+  },
+  "sailboat": {
+    "fr": "voilier"
+  },
+  "saint_bernard": {
+    "fr": "saint-bernard"
+  },
+  "salad": {
+    "fr": "salade"
+  },
+  "salami": {
+    "fr": "salami"
+  },
+  "salmon": {
+    "fr": "saumon"
+  },
+  "samba": {
+    "fr": "samba"
+  },
+  "samosa": {
+    "fr": "samoussa"
+  },
+  "sand": {
+    "fr": "sable"
+  },
+  "sand_dune": {
+    "fr": "dune de sable"
+  },
+  "sandal": {
+    "fr": "sandale"
+  },
+  "sandcastle": {
+    "fr": "château de sable"
+  },
+  "sandpiper": {
+    "fr": "bécasseau"
+  },
+  "sandwich": {
+    "fr": "sandwich"
+  },
+  "sangria": {
+    "fr": "sangria"
+  },
+  "santa_claus": {
+    "fr": "père Noël"
+  },
+  "sardine": {
+    "fr": "sardine"
+  },
+  "sari": {
+    "fr": "sari"
+  },
+  "satay": {
+    "fr": "satay"
+  },
+  "sauerkraut": {
+    "fr": "choucroute"
+  },
+  "sausage": {
+    "fr": "saucisse"
+  },
+  "saxophone": {
+    "fr": "saxophone"
+  },
+  "scallop": {
+    "fr": "coquille Saint-Jacques"
+  },
+  "scarab": {
+    "fr": "scarabée"
+  },
+  "scarecrow": {
+    "fr": "épouvantail"
+  },
+  "scarf": {
+    "fr": "écharpe"
+  },
+  "schnauzer": {
+    "fr": "schnauzer"
+  },
+  "scissors": {
+    "fr": "ciseaux"
+  },
+  "scone": {
+    "fr": "scone"
+  },
+  "scooter": {
+    "fr": "scooter"
+  },
+  "scoreboard": {
+    "fr": "tableau de score"
+  },
+  "scorpion": {
+    "fr": "scorpion"
+  },
+  "scrambled_eggs": {
+    "fr": "oeufs brouillés"
+  },
+  "screenshot": {
+    "fr": "capture d'écran"
+  },
+  "screwdriver": {
+    "fr": "tournevis"
+  },
+  "scuba": {
+    "fr": "plongée sous-marine"
+  },
+  "seabass": {
+    "fr": "bar"
+  },
+  "seafood": {
+    "fr": "fruits de mer"
+  },
+  "seahorse": {
+    "fr": "hippocampe"
+  },
+  "seal": {
+    "fr": "phoque"
+  },
+  "sealion": {
+    "fr": "otarie"
+  },
+  "seashell": {
+    "fr": "coquillage"
+  },
+  "seasonings": {
+    "fr": "assaisonnement"
+  },
+  "seat": {
+    "fr": "siège"
+  },
+  "seaweed": {
+    "fr": "algue"
+  },
+  "seed": {
+    "fr": "graine"
+  },
+  "seesaw": {
+    "fr": "balançoire à bascule"
+  },
+  "semi_truck": {
+    "fr": "semi-remorque"
+  },
+  "sequoia": {
+    "fr": "séquoia"
+  },
+  "sesame": {
+    "fr": "sésame"
+  },
+  "setter": {
+    "fr": "setter"
+  },
+  "sewing": {
+    "fr": "couture"
+  },
+  "shark": {
+    "fr": "requin"
+  },
+  "shawarma": {
+    "fr": "chawarma"
+  },
+  "shed": {
+    "fr": "cabanon"
+  },
+  "sheep": {
+    "fr": "mouton"
+  },
+  "sheepdog": {
+    "fr": "chien de berger"
+  },
+  "shellfish": {
+    "fr": "crustacé"
+  },
+  "shellfish_prepared": {
+    "fr": "crustacé préparé"
+  },
+  "shipyard": {
+    "fr": "chantier naval"
+  },
+  "shoes": {
+    "fr": "chaussure"
+  },
+  "shopping_cart": {
+    "fr": "caddie"
+  },
+  "shore": {
+    "fr": "rivage"
+  },
+  "shower": {
+    "fr": "douche"
+  },
+  "shrub": {
+    "fr": "arbuste"
+  },
+  "sidewalk": {
+    "fr": "trottoir"
+  },
+  "sign": {
+    "fr": "panneau"
+  },
+  "silo": {
+    "fr": "silo"
+  },
+  "singer": {
+    "fr": "chanteur"
+  },
+  "skateboard": {
+    "fr": "planche à roulettes"
+  },
+  "skateboarding": {
+    "fr": "skateboard"
+  },
+  "skatepark": {
+    "fr": "skatepark"
+  },
+  "skating": {
+    "fr": "patinage"
+  },
+  "skeleton": {
+    "fr": "squelette"
+  },
+  "ski_boot": {
+    "fr": "chaussure de ski"
+  },
+  "ski_equipment": {
+    "fr": "équipement de ski"
+  },
+  "skiing": {
+    "fr": "ski"
+  },
+  "skull": {
+    "fr": "crâne"
+  },
+  "skunk": {
+    "fr": "mouffette"
+  },
+  "sky": {
+    "fr": "ciel"
+  },
+  "skydiving": {
+    "fr": "parachutisme"
+  },
+  "skyscraper": {
+    "fr": "gratte-ciel"
+  },
+  "sled": {
+    "fr": "luge"
+  },
+  "sledding": {
+    "fr": "luge"
+  },
+  "slide_toy": {
+    "fr": "toboggan"
+  },
+  "smokestack": {
+    "fr": "cheminée d'usine"
+  },
+  "smoking_item": {
+    "fr": "article de fumeur"
+  },
+  "smoothie": {
+    "fr": "smoothie"
+  },
+  "snail": {
+    "fr": "escargot"
+  },
+  "snake": {
+    "fr": "serpent"
+  },
+  "snake_other": {
+    "fr": "autre serpent"
+  },
+  "snapdragon": {
+    "fr": "gueule-de-loup"
+  },
+  "snapper": {
+    "fr": "vivaneau"
+  },
+  "sneaker": {
+    "fr": "basket"
+  },
+  "snorkeling": {
+    "fr": "plongée avec tuba"
+  },
+  "snow": {
+    "fr": "neige"
+  },
+  "snowball": {
+    "fr": "boule de neige"
+  },
+  "snowboard": {
+    "fr": "snowboard"
+  },
+  "snowboarding": {
+    "fr": "snowboard"
+  },
+  "snowman": {
+    "fr": "bonhomme de neige"
+  },
+  "snowmobile": {
+    "fr": "motoneige"
+  },
+  "snowshoe": {
+    "fr": "raquette à neige"
+  },
+  "soccer": {
+    "fr": "football"
+  },
+  "sock": {
+    "fr": "chaussette"
+  },
+  "soda": {
+    "fr": "soda"
+  },
+  "sofa": {
+    "fr": "canapé"
+  },
+  "softball": {
+    "fr": "softball"
+  },
+  "solar_panel": {
+    "fr": "panneau solaire"
+  },
+  "sombrero": {
+    "fr": "sombrero"
+  },
+  "souffle": {
+    "fr": "soufflé"
+  },
+  "soup": {
+    "fr": "soupe"
+  },
+  "souvlaki": {
+    "fr": "souvlaki"
+  },
+  "spaghetti": {
+    "fr": "spaghetti"
+  },
+  "spaniel": {
+    "fr": "épagneul"
+  },
+  "spareribs": {
+    "fr": "travers de porc"
+  },
+  "sparkler": {
+    "fr": "cierge magique"
+  },
+  "sparkling_wine": {
+    "fr": "vin mousseux"
+  },
+  "sparrow": {
+    "fr": "moineau"
+  },
+  "spatula": {
+    "fr": "spatule"
+  },
+  "speakers_music": {
+    "fr": "enceintes"
+  },
+  "speedboat": {
+    "fr": "hors-bord"
+  },
+  "spice": {
+    "fr": "épice"
+  },
+  "spider": {
+    "fr": "araignée"
+  },
+  "spiderweb": {
+    "fr": "toile d'araignée"
+  },
+  "spinach": {
+    "fr": "épinard"
+  },
+  "spoon": {
+    "fr": "cuillère"
+  },
+  "sport": {
+    "fr": "sport"
+  },
+  "sports_equipment": {
+    "fr": "équipement de sport"
+  },
+  "sportscar": {
+    "fr": "voiture de sport"
+  },
+  "spotlight": {
+    "fr": "projecteur"
+  },
+  "springroll": {
+    "fr": "rouleau de printemps"
+  },
+  "sprinkler": {
+    "fr": "arroseur"
+  },
+  "squash_sport": {
+    "fr": "squash"
+  },
+  "squirrel": {
+    "fr": "écureuil"
+  },
+  "stadium": {
+    "fr": "stade"
+  },
+  "stained_glass": {
+    "fr": "vitrail"
+  },
+  "stairs": {
+    "fr": "escalier"
+  },
+  "starfish": {
+    "fr": "étoile de mer"
+  },
+  "starfruit": {
+    "fr": "carambole"
+  },
+  "statue": {
+    "fr": "statue"
+  },
+  "steak": {
+    "fr": "steak"
+  },
+  "steamer_cookware": {
+    "fr": "cuiseur vapeur"
+  },
+  "stereo": {
+    "fr": "chaîne stéréo"
+  },
+  "stethoscope": {
+    "fr": "stéthoscope"
+  },
+  "sticky_note": {
+    "fr": "note autocollante"
+  },
+  "stingray": {
+    "fr": "raie"
+  },
+  "stir_fry": {
+    "fr": "sauté"
+  },
+  "stool": {
+    "fr": "tabouret"
+  },
+  "stopwatch": {
+    "fr": "chronomètre"
+  },
+  "storefront": {
+    "fr": "devanture de magasin"
+  },
+  "stork": {
+    "fr": "cigogne"
+  },
+  "storm": {
+    "fr": "tempête"
+  },
+  "stove": {
+    "fr": "cuisinière"
+  },
+  "straw_drinking": {
+    "fr": "paille"
+  },
+  "straw_hay": {
+    "fr": "paille"
+  },
+  "strawberry": {
+    "fr": "fraise"
+  },
+  "street": {
+    "fr": "rue"
+  },
+  "street_sign": {
+    "fr": "panneau de rue"
+  },
+  "streetcar": {
+    "fr": "tramway"
+  },
+  "stretcher": {
+    "fr": "brancard"
+  },
+  "string_instrument": {
+    "fr": "instrument à cordes"
+  },
+  "stroller": {
+    "fr": "poussette"
+  },
+  "structure": {
+    "fr": "structure"
+  },
+  "strudel": {
+    "fr": "strudel"
+  },
+  "stuffed_animals": {
+    "fr": "peluche"
+  },
+  "submarine_water": {
+    "fr": "sous-marin"
+  },
+  "sugar_cube": {
+    "fr": "morceau de sucre"
+  },
+  "suit": {
+    "fr": "costume"
+  },
+  "suitcase": {
+    "fr": "valise"
+  },
+  "sumo": {
+    "fr": "sumo"
+  },
+  "sun": {
+    "fr": "soleil"
+  },
+  "sunbathing": {
+    "fr": "bain de soleil"
+  },
+  "sundial": {
+    "fr": "cadran solaire"
+  },
+  "sunfish": {
+    "fr": "poisson-lune"
+  },
+  "sunflower": {
+    "fr": "tournesol"
+  },
+  "sunflower_seeds": {
+    "fr": "graines de tournesol"
+  },
+  "sunglasses": {
+    "fr": "lunettes de soleil"
+  },
+  "sunhat": {
+    "fr": "chapeau de soleil"
+  },
+  "sunset_sunrise": {
+    "fr": "coucher de soleil"
+  },
+  "surfboard": {
+    "fr": "planche de surf"
+  },
+  "surfing": {
+    "fr": "surf"
+  },
+  "sushi": {
+    "fr": "sushi"
+  },
+  "suv": {
+    "fr": "SUV"
+  },
+  "swan": {
+    "fr": "cygne"
+  },
+  "swimming": {
+    "fr": "natation"
+  },
+  "swimsuit": {
+    "fr": "maillot de bain"
+  },
+  "swing_playground": {
+    "fr": "balançoire"
+  },
+  "swivel_chair": {
+    "fr": "chaise pivotante"
+  },
+  "sword": {
+    "fr": "épée"
+  },
+  "swordfish": {
+    "fr": "espadon"
+  },
+  "syringe": {
+    "fr": "seringue"
+  },
+  "tabbouleh": {
+    "fr": "taboulé"
+  },
+  "table": {
+    "fr": "table"
+  },
+  "tableware": {
+    "fr": "vaisselle"
+  },
+  "tachometer": {
+    "fr": "compte-tours"
+  },
+  "taco": {
+    "fr": "taco"
+  },
+  "taffy": {
+    "fr": "caramel mou"
+  },
+  "tambourine": {
+    "fr": "tambourin"
+  },
+  "tapas": {
+    "fr": "tapas"
+  },
+  "tapioca_pearls": {
+    "fr": "perles de tapioca"
+  },
+  "taro": {
+    "fr": "taro"
+  },
+  "tattoo": {
+    "fr": "tatouage"
+  },
+  "tea_drink": {
+    "fr": "thé"
+  },
+  "teapot": {
+    "fr": "théière"
+  },
+  "teen": {
+    "fr": "adolescent"
+  },
+  "telescope": {
+    "fr": "télescope"
+  },
+  "television": {
+    "fr": "télévision"
+  },
+  "tempura": {
+    "fr": "tempura"
+  },
+  "tennis": {
+    "fr": "tennis"
+  },
+  "tent": {
+    "fr": "tente"
+  },
+  "tequila": {
+    "fr": "tequila"
+  },
+  "teriyaki": {
+    "fr": "teriyaki"
+  },
+  "terrarium": {
+    "fr": "terrarium"
+  },
+  "terrier": {
+    "fr": "terrier"
+  },
+  "textile": {
+    "fr": "textile"
+  },
+  "theater": {
+    "fr": "théâtre"
+  },
+  "thermometer": {
+    "fr": "thermomètre"
+  },
+  "thermos": {
+    "fr": "thermos"
+  },
+  "thermostat": {
+    "fr": "thermostat"
+  },
+  "thunderstorm": {
+    "fr": "orage"
+  },
+  "tiara": {
+    "fr": "diadème"
+  },
+  "ticket": {
+    "fr": "billet"
+  },
+  "tiger": {
+    "fr": "tigre"
+  },
+  "timepiece": {
+    "fr": "horloge"
+  },
+  "tiramisu": {
+    "fr": "tiramisu"
+  },
+  "tire": {
+    "fr": "pneu"
+  },
+  "toad": {
+    "fr": "crapaud"
+  },
+  "toaster": {
+    "fr": "grille-pain"
+  },
+  "toaster_oven": {
+    "fr": "four grille-pain"
+  },
+  "toilet_seat": {
+    "fr": "lunette de toilettes"
+  },
+  "tomato": {
+    "fr": "tomate"
+  },
+  "tool": {
+    "fr": "outil"
+  },
+  "toolbox": {
+    "fr": "boîte à outils"
+  },
+  "tornado": {
+    "fr": "tornade"
+  },
+  "tortilla": {
+    "fr": "tortilla"
+  },
+  "tortoise": {
+    "fr": "tortue terrestre"
+  },
+  "toucan": {
+    "fr": "toucan"
+  },
+  "tower": {
+    "fr": "tour"
+  },
+  "toy": {
+    "fr": "jouet"
+  },
+  "track_rail": {
+    "fr": "rail"
+  },
+  "tractor": {
+    "fr": "tracteur"
+  },
+  "traffic_light": {
+    "fr": "feu de circulation"
+  },
+  "trail": {
+    "fr": "sentier"
+  },
+  "train": {
+    "fr": "train"
+  },
+  "train_real": {
+    "fr": "train"
+  },
+  "train_station": {
+    "fr": "gare"
+  },
+  "train_toy": {
+    "fr": "train miniature"
+  },
+  "trampoline": {
+    "fr": "trampoline"
+  },
+  "tramway": {
+    "fr": "tramway"
+  },
+  "trash_can": {
+    "fr": "poubelle"
+  },
+  "treadmill": {
+    "fr": "tapis de course"
+  },
+  "tree": {
+    "fr": "arbre"
+  },
+  "tricycle": {
+    "fr": "tricycle"
+  },
+  "tripod": {
+    "fr": "trépied"
+  },
+  "trombone": {
+    "fr": "trombone"
+  },
+  "trophy": {
+    "fr": "trophée"
+  },
+  "trout": {
+    "fr": "truite"
+  },
+  "truck": {
+    "fr": "camion"
+  },
+  "trumpet": {
+    "fr": "trompette"
+  },
+  "tuba": {
+    "fr": "tuba"
+  },
+  "tulip": {
+    "fr": "tulipe"
+  },
+  "tuna": {
+    "fr": "thon"
+  },
+  "tunnel": {
+    "fr": "tunnel"
+  },
+  "turmeric": {
+    "fr": "curcuma"
+  },
+  "turntable": {
+    "fr": "platine vinyle"
+  },
+  "turtle": {
+    "fr": "tortue"
+  },
+  "tuxedo": {
+    "fr": "smoking"
+  },
+  "typewriter": {
+    "fr": "machine à écrire"
+  },
+  "ukulele": {
+    "fr": "ukulélé"
+  },
+  "umbrella": {
+    "fr": "parapluie"
+  },
+  "underwater": {
+    "fr": "sous-marin"
+  },
+  "ungulates": {
+    "fr": "ongulé"
+  },
+  "urchin": {
+    "fr": "oursin"
+  },
+  "utensil": {
+    "fr": "ustensile"
+  },
+  "vacuum": {
+    "fr": "aspirateur"
+  },
+  "van": {
+    "fr": "fourgonnette"
+  },
+  "vase": {
+    "fr": "vase"
+  },
+  "vegetable": {
+    "fr": "légume"
+  },
+  "vegetation": {
+    "fr": "végétation"
+  },
+  "vehicle": {
+    "fr": "véhicule"
+  },
+  "vehicle_toy": {
+    "fr": "véhicule miniature"
+  },
+  "videogame": {
+    "fr": "jeu vidéo"
+  },
+  "vineyard": {
+    "fr": "vignoble"
+  },
+  "violin": {
+    "fr": "violon"
+  },
+  "vizsla": {
+    "fr": "braque hongrois"
+  },
+  "volcano": {
+    "fr": "volcan"
+  },
+  "volleyball": {
+    "fr": "volley-ball"
+  },
+  "vulture": {
+    "fr": "vautour"
+  },
+  "waffle": {
+    "fr": "gaufre"
+  },
+  "wagon": {
+    "fr": "chariot"
+  },
+  "wakeboarding": {
+    "fr": "wakeboard"
+  },
+  "wallet": {
+    "fr": "portefeuille"
+  },
+  "walrus": {
+    "fr": "morse"
+  },
+  "warship": {
+    "fr": "navire de guerre"
+  },
+  "wasabi": {
+    "fr": "wasabi"
+  },
+  "washbasin": {
+    "fr": "lavabo"
+  },
+  "watch": {
+    "fr": "montre"
+  },
+  "water": {
+    "fr": "eau"
+  },
+  "water_body": {
+    "fr": "étendue d'eau"
+  },
+  "watercraft": {
+    "fr": "embarcation"
+  },
+  "waterfall": {
+    "fr": "cascade"
+  },
+  "watering_can": {
+    "fr": "arrosoir"
+  },
+  "watermelon": {
+    "fr": "pastèque"
+  },
+  "watermill": {
+    "fr": "moulin à eau"
+  },
+  "waterpolo": {
+    "fr": "water-polo"
+  },
+  "watersport": {
+    "fr": "sport nautique"
+  },
+  "waterways": {
+    "fr": "voie navigable"
+  },
+  "wedding": {
+    "fr": "mariage"
+  },
+  "wedding_cake": {
+    "fr": "gâteau de mariage"
+  },
+  "wedding_dress": {
+    "fr": "robe de mariée"
+  },
+  "weight_scale": {
+    "fr": "balance"
+  },
+  "weimaraner": {
+    "fr": "braque de Weimar"
+  },
+  "wetland": {
+    "fr": "zone humide"
+  },
+  "wetsuit": {
+    "fr": "combinaison de plongée"
+  },
+  "whale": {
+    "fr": "baleine"
+  },
+  "wheat": {
+    "fr": "blé"
+  },
+  "wheel": {
+    "fr": "roue"
+  },
+  "wheelbarrow": {
+    "fr": "brouette"
+  },
+  "wheelchair": {
+    "fr": "fauteuil roulant"
+  },
+  "whisk": {
+    "fr": "fouet"
+  },
+  "white_bread": {
+    "fr": "pain blanc"
+  },
+  "white_wine": {
+    "fr": "vin blanc"
+  },
+  "whiteboard": {
+    "fr": "tableau blanc"
+  },
+  "willow": {
+    "fr": "saule"
+  },
+  "winch": {
+    "fr": "treuil"
+  },
+  "wind_turbine": {
+    "fr": "éolienne"
+  },
+  "windmill": {
+    "fr": "moulin à vent"
+  },
+  "window": {
+    "fr": "fenêtre"
+  },
+  "windsurfing": {
+    "fr": "planche à voile"
+  },
+  "wine": {
+    "fr": "vin"
+  },
+  "wine_bottle": {
+    "fr": "bouteille de vin"
+  },
+  "winter_sport": {
+    "fr": "sport d'hiver"
+  },
+  "wonton": {
+    "fr": "wonton"
+  },
+  "wood_natural": {
+    "fr": "bois"
+  },
+  "wood_processed": {
+    "fr": "bois transformé"
+  },
+  "woodpecker": {
+    "fr": "pic"
+  },
+  "woodwind": {
+    "fr": "bois"
+  },
+  "workout": {
+    "fr": "entraînement"
+  },
+  "worm": {
+    "fr": "ver"
+  },
+  "wreath": {
+    "fr": "couronne"
+  },
+  "wrench": {
+    "fr": "clé à molette"
+  },
+  "wrestling": {
+    "fr": "lutte"
+  },
+  "xylophone": {
+    "fr": "xylophone"
+  },
+  "yacht": {
+    "fr": "yacht"
+  },
+  "yarn": {
+    "fr": "fil"
+  },
+  "yoga": {
+    "fr": "yoga"
+  },
+  "yogurt": {
+    "fr": "yaourt"
+  },
+  "yolk": {
+    "fr": "jaune d'oeuf"
+  },
+  "zebra": {
+    "fr": "zèbre"
+  },
+  "zoo": {
+    "fr": "zoo"
+  },
+  "zucchini": {
+    "fr": "courgette"
+  }
+}

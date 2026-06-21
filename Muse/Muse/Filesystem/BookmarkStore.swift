@@ -54,8 +54,8 @@ final class BookmarkStore: ObservableObject {
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
-        panel.prompt = "Choose"
-        panel.message = "Pick a folder for Muse to view."
+        panel.prompt = String(localized: "Choose")
+        panel.message = String(localized: "Pick a folder for Muse to view.")
         guard panel.runModal() == .OK, let url = panel.url else { return nil }
         return addRoot(at: url)
     }

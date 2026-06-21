@@ -1160,6 +1160,45 @@ The four most critical are also saved as Claude memories (linked).
   paraphrased doc comment caught + restored. Build + full `MuseTests` green at every
   checkpoint. PENDING human GUI verification of the two live drag-reorders (folder +
   sidebar-collection, Manual sort) — automated macOS drag driving unavailable.
+- **2026-06-20** `feat/localization-french` — **Localization (French v1), infra +
+  seed.** First localization pass; spec + plan in `docs/superpowers/`. Built
+  infra-first with a small French seed (the user's chosen sequencing). **Core rule:
+  localize at DISPLAY time — stored data (DB tags, FTS, collection rows) stays
+  canonical-English; no schema change/migration; three independent removal kill-
+  switches.** Shipped: `fr` in `knownRegions` + `Localizable.xcstrings`;
+  `Localization/VocabularyLocalizer` (pure seam — `display(canonical)->localized`
+  identity-for-unknown, `canonicalize(token)->canonical?`, `shared` via
+  `preferredLocalizations` honoring the per-app override); `VisionVocabulary.json`
+  (fr seed of ~50 real `VNClassifyImageRequest` taxonomy terms, 1302 total);
+  tag-label display localized everywhere (chips, banner pills + VoiceOver, hero
+  pills + toasts) while every action/identity stays canonical; `Database/SearchBridge`
+  (localized query → canonical tag match, `plage`→`beach`); AI collection names
+  in-language (FM prompt + localized fallback namer). T7 formatting audit = no-op
+  (display formatters already `Locale.current`). **Then FULL translation:** all 1303
+  Vision taxonomy terms (8 parallel subagents, coverage-checked 0 missing/extra/dup) +
+  all UI strings (via `xcodebuild -exportLocalizations`, which write-backs the key
+  set into the source `.xcstrings`); enum display props (sort/mood/layout/tile/filter)
+  wrapped in `String(localized:)` so menus localize too (display-only; rawValue
+  persistence untouched; `displayName` tests pass in the en test host). Two live-feedback
+  passes + a code-review round grew the catalog 240→**371 keys** catching the strings
+  extraction MISSES (anything passed as a plain `String`: AppKit setters, custom-view
+  title:/label: params, data arrays, toasts, ternary/concatenation in `.help`/
+  `.accessibility*` where one branch forces the String overload, enum `displayName`/`label`
+  + other method returns, the ⓘ About modal via `section()`→`LocalizedStringKey`, INFO-card
+  metadata labels via `NSLocalizedString(row.label)` at the render site). 371 strings +
+  1303/1303 vocab compile to `fr.lproj`; live French confirmed with the user. A review round
+  also verified placeholder integrity (0 `%@`/`%lld` mismatches) + canonical-key invariants
+  (comparisons/persistence stay English). Gotchas: a
+  plain `xcodebuild` build does NOT write extracted keys back (use `-exportLocalizations`);
+  **compiler extraction only sees SwiftUI text-literal positions — String-typed UI text
+  (AppKit/custom-view params/data arrays/`displayName`s) must be hand-wrapped in
+  `String(localized:)`, or `NSLocalizedString(var)`+manual keys for a runtime label**;
+  enum-`displayName` tests assert English so run the suite in an en host; longer French
+  overflows fixed-width controls (truncationMode+minimumScaleFactor); sandbox test can't
+  write `/tmp` (use `NSTemporaryDirectory()`); a call inside a big SwiftUI view-builder
+  expression trips "unable to type-check in reasonable time" — bind to a `let`. A SECOND
+  language is now "fill a column," no code. PENDING human GUI verification in French
+  (`-AppleLanguages '(fr)'`) + real-user wording review. All unit tests green.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
@@ -1418,7 +1457,16 @@ Muse/Muse/
   Database/
     Database.swift                 GRDB queue + migrations (v1…v5_intent)
     Records.swift                  FileRow (+analyzed_hash, +intent), PathRow, TagRow, etc.
-    SearchService.swift            FTS5 + tag-label search (sidebar-folder scope)
+    SearchService.swift            FTS5 + tag-label search (sidebar-folder scope).
+                                   The tag LIKE is ORed over SearchBridge terms so
+                                   a localized query finds canonical tags (feat/
+                                   localization-french)
+    SearchBridge.swift             pure: expand a query into [raw + canonical] tag-
+                                   search terms via VocabularyLocalizer.canonicalize
+                                   (whole query + per token), de-duped. So "plage"
+                                   finds files tagged canonical "beach"; the raw
+                                   query is always kept (filenames/OCR/manual tags).
+                                   Unit-tested (feat/localization-french)
     TagScope.swift                 parent-folder key derivation — tags are
                                    per (file_id, parent_dir), not per content
                                    hash (2026-06-17). Single source of truth used
@@ -1433,6 +1481,29 @@ Muse/Muse/
                                    the result (feat/next-10)
     Housekeeping.swift             launch prune: index data for files unreachable
                                    from any sidebar folder, unseen >180 days
+  Localization/                    (feat/localization-french) display-time
+                                   localization. Storage stays canonical-English;
+                                   this layer maps canonical<->localized for
+                                   rendering + search. Three removal kill-switches.
+    VocabularyLocalizer.swift      pure nonisolated seam: display(canonical)->
+                                   localized (identity for English/unknown, so
+                                   manual + untranslated vision tags pass through),
+                                   canonicalize(token)->canonical?. init(table:
+                                   language:) + static shared resolving
+                                   Bundle.main.preferredLocalizations (honors the
+                                   macOS per-app language override). Unit-tested
+    VisionVocabulary.json          bundled {canonical:{lang:term}} table; FULL fr
+                                   (all 1303 VNClassifyImageRequest taxonomy terms;
+                                   untranslated terms fall back per-term by design)
+  Localizable.xcstrings            (at Muse/Muse/ root) UI-chrome String Catalog;
+                                   FULL fr (371 strings — extraction + the
+                                   String-typed UI text it misses, hand-wrapped).
+                                   Xcode 26 synced groups auto-include it; only
+                                   knownRegions needed `fr`. NOTE: a plain xcodebuild
+                                   build does NOT write extracted keys back to the
+                                   source .xcstrings — use `xcodebuild
+                                   -exportLocalizations` (it write-backs the full key
+                                   set) then translate
   Indexing/
     HashService.swift              streaming SHA-256; nil on dataless iCloud reads
     Indexer.swift                  identity reconciliation matrix (§4); size+mtime
@@ -1960,6 +2031,58 @@ MuseShareExtension/                (separate app-extension target) "Send to Muse
   "Cannot find type 'FileNode' in scope" and similar — they're cross-
   file resolution issues that disappear at build time. Always verify
   with `xcodebuild ... build` before assuming something's broken.
+- **The app is LOCALIZED — every new user-facing string MUST be localized.**
+  Muse ships French (`feat/localization-french`, 346 UI strings in
+  `Localizable.xcstrings` + 1303 Vision tag terms in
+  `Localization/VisionVocabulary.json`); the infra is language-agnostic. As long
+  as more than one language exists, **any new feature/UI text is incomplete until
+  it's localized** — treat it like a test you must keep green. Rules:
+  - **Storage stays canonical-English; localize at DISPLAY time.** Never persist a
+    translated string (DB/FTS/collection rows/tags). AI tag labels render via
+    `VocabularyLocalizer.shared.display(label)`; the stored label is the canonical
+    English key (also the search/dedup identity). A new Vision-derived label that
+    should localize needs a row in `VisionVocabulary.json`.
+  - **Compiler extraction ONLY sees SwiftUI text-literal positions** —
+    `Text("…")`, `Button("…")`, `Label`, `.help("…")`, `.accessibilityLabel("…")`,
+    `Section`, `.navigationTitle`, `.alert` titles, `Toggle`/`Picker` titles. Those
+    auto-localize and `xcodebuild -exportLocalizations` extracts them.
+  - **Anything passed as a `String` is NOT extracted and will ship in English** —
+    AppKit setters (`NSSearchField.placeholderString`, `NS*Panel.prompt/.message`,
+    `NSMenuItem(title:)`), custom-view `title:`/`label:`/`text:`/`caption:`/
+    `placeholder:` params, `ternary ? "a" : "b"`, string concatenation,
+    `enum.displayName`/`label` properties, and method return values. **Hand-wrap
+    each in `String(localized:)`** (it auto-extracts once wrapped). For a label
+    built from a RUNTIME variable (e.g. `Text(row.label)` where `label` is dynamic),
+    use `NSLocalizedString(var, comment:)` and add the keys to the catalog manually.
+    This applies to VoiceOver too: `.accessibilityLabel/Hint/Value` built dynamically
+    are read aloud and must be wrapped.
+  - **Workflow for new strings / a new language:** wrap literals → run
+    `xcodebuild -exportLocalizations -project Muse/Muse.xcodeproj -localizationPath
+    <dir> -exportLanguage <lang>` (it write-backs every key into the source
+    `.xcstrings` — a plain build does NOT) → fill the empty `<lang>` values → it
+    reports 0 untranslated when done. Add the language to `knownRegions`.
+  - **Longer localized text overflows fixed-width controls** — budget ~1.3× the
+    English width; use `lineLimit(1)` + `.truncationMode(.tail)` +
+    `.minimumScaleFactor(…)` (or a wider frame).
+  - **Don't prune `NSLocalizedString(variable)`-reached keys as orphans.** The
+    extractor can't see runtime-variable keys, so `-exportLocalizations` marks them
+    `extractionState: stale` even though they're used and DO compile to `fr.lproj`
+    (the 14 INFO-card metadata labels — `Taken`/`Camera`/… — are the standing case).
+    A genuinely orphaned key is one no longer referenced in code at all; verify before
+    deleting.
+  - **A concatenation only localizes the wrapped part** — `String(localized: "A ") + "B"`
+    ships "B" in English (and a remaining-English grep for `String(localized:` won't
+    flag it). Wrap the WHOLE phrase as one key. Same trap: a ternary/`??` whose other
+    branch has interpolation forces the `String` overload, so literal branches need
+    explicit `String(localized:)`.
+  - **Run the unit suite in an English host.** Enum-`displayName`/toast tests assert
+    the English source; a per-app French override (`defaults write com.tarrats.Muse
+    AppleLanguages '("fr")'`) makes them read French and fail — that's expected, not
+    a regression. To preview the app in French, launch with
+    `open -n <Muse.app> --args -AppleLanguages "(fr)"` (a one-shot arg, no defaults
+    write, so it doesn't pollute later test runs).
+  - See the `feat/localization-french` session log for the full design (display-time
+    layer, `VocabularyLocalizer` seam, search bridge, three removal kill-switches).
 
 ## Open product questions (none currently)
 

@@ -128,7 +128,7 @@ struct ViewerInfoColumn<Chrome: View>: View {
     // MARK: - Collection card
 
     private var collectionCard: some View {
-        PillCard(title: "COLLECTION",
+        PillCard(title: String(localized: "COLLECTION"),
                  pills: (details?.collections ?? []).map { PillItem(id: $0.id, label: $0.name) },
                  hovered: $hoveredCollectionPill,
                  isExpanded: $collectionsExpanded,
@@ -138,18 +138,18 @@ struct ViewerInfoColumn<Chrome: View>: View {
                          try await CollectionStore.removeFile(queue: queue, fileID: fileID,
                                                               collectionID: pill.id)
                          await engine.reload()
-                         show("Removed from \(pill.label)")
+                         show(String(localized: "Removed from \(pill.label)"))
                      }
                  }) {
             CardExpander(candidates: collectionCandidates,
-                         placeholder: "…or create a new one",
+                         placeholder: String(localized: "…or create a new one"),
                          text: $newCollectionName,
                          onCandidateTap: { candidate in
                              mutate { queue, fileID in
                                  try await CollectionStore.addFile(queue: queue, fileID: fileID,
                                                                    collectionID: candidate.id)
                                  await engine.reload()
-                                 show("Added to \(candidate.label)")
+                                 show(String(localized: "Added to \(candidate.label)"))
                              }
                          },
                          onCreate: { name in
@@ -157,7 +157,7 @@ struct ViewerInfoColumn<Chrome: View>: View {
                                  _ = try await CollectionStore.createManual(queue: queue, name: name,
                                                                             fileID: fileID)
                                  await engine.reload()
-                                 show("Added to \(name)")
+                                 show(String(localized: "Added to \(name)"))
                              }
                          })
         }
@@ -175,7 +175,7 @@ struct ViewerInfoColumn<Chrome: View>: View {
     // MARK: - Tags card
 
     private var tagsCard: some View {
-        PillCard(title: "TAGS",
+        PillCard(title: String(localized: "TAGS"),
                  pills: (details?.tags ?? []).map { PillItem(id: $0.id, label: $0.label) },
                  hovered: $hoveredTagPill,
                  isExpanded: $tagsExpanded,
@@ -185,25 +185,25 @@ struct ViewerInfoColumn<Chrome: View>: View {
                      Task {
                          _ = await TagStore.shared.removeTag(tag, for: url)
                          await refresh()
-                         show("Removed \(pill.label)")
+                         show(String(localized: "Removed \(VocabularyLocalizer.shared.display(pill.label))"))
                      }
                  }) {
             CardExpander(candidates: tagSuggestions,
-                         placeholder: "…or create a new one",
+                         placeholder: String(localized: "…or create a new one"),
                          text: $newTagLabel,
                          onCandidateTap: { candidate in
                              Task {
                                  _ = await TagStore.shared.addManualTag(label: candidate.label, for: url)
                                  await refresh()
                                  await loadTagSuggestions()
-                                 show("Added \(candidate.label)")
+                                 show(String(localized: "Added \(VocabularyLocalizer.shared.display(candidate.label))"))
                              }
                          },
                          onCreate: { label in
                              Task {
                                  _ = await TagStore.shared.addManualTag(label: label, for: url)
                                  await refresh()
-                                 show("Added \(label)")
+                                 show(String(localized: "Added \(label)"))
                              }
                          })
             .task { await loadTagSuggestions() }
@@ -231,11 +231,11 @@ struct ViewerInfoColumn<Chrome: View>: View {
         InfoCard {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    CardLabel(text: "COLORS")
+                    CardLabel(text: String(localized: "COLORS"))
                     Spacer()
-                    HoverTextButton(label: "copy all") {
+                    HoverTextButton(label: String(localized: "copy all")) {
                         copyToPasteboard(palette.joined(separator: ", "))
-                        show("Copied \(palette.count) colors")
+                        show(String(localized: "Copied \(palette.count) colors"))
                     }
                     .accessibilityLabel("Copy all colors")
                 }
@@ -244,7 +244,7 @@ struct ViewerInfoColumn<Chrome: View>: View {
                     ForEach(palette, id: \.self) { hex in
                         ColorSwatch(hex: hex) {
                             copyToPasteboard(hex)
-                            show("Copied \(hex)")
+                            show(String(localized: "Copied \(hex)"))
                         }
                     }
                 }
@@ -258,10 +258,10 @@ struct ViewerInfoColumn<Chrome: View>: View {
         InfoCard {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    CardLabel(text: "INFO")
+                    CardLabel(text: String(localized: "INFO"))
                     Spacer()
                     PlusCircleButton(size: 18, rotated: infoExpanded,
-                                     accessibilityLabel: infoExpanded ? "Hide info" : "Show info") {
+                                     accessibilityLabel: infoExpanded ? String(localized: "Hide info") : String(localized: "Show info")) {
                         withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
                             infoExpanded.toggle()
                         }
@@ -271,10 +271,14 @@ struct ViewerInfoColumn<Chrome: View>: View {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(metadata.rows) { row in
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                Text(row.label)
+                                // row.label is canonical English (also used as a
+                                // comparison key in FileMetadata); localize for
+                                // display via a runtime catalog lookup. Wider
+                                // column so longer French labels don't truncate.
+                                Text(NSLocalizedString(row.label, comment: "INFO card metadata label"))
                                     .font(.system(size: 11))
                                     .foregroundStyle(.white.opacity(0.42))
-                                    .frame(width: 64, alignment: .leading)
+                                    .frame(width: 80, alignment: .leading)
                                 Text(row.value)
                                     .font(.system(size: 11))
                                     .foregroundStyle(.white.opacity(0.9))
@@ -300,7 +304,7 @@ struct ViewerInfoColumn<Chrome: View>: View {
     private var colorsPlaceholderCard: some View {
         InfoCard {
             VStack(alignment: .leading, spacing: 10) {
-                CardLabel(text: "COLORS")
+                CardLabel(text: String(localized: "COLORS"))
                 HStack(spacing: 6) {
                     ForEach(0..<3, id: \.self) { _ in
                         RoundedRectangle(cornerRadius: 7, style: .continuous)
@@ -318,8 +322,8 @@ struct ViewerInfoColumn<Chrome: View>: View {
 
     private var actionsRow: some View {
         HStack(spacing: 8) {
-            ActionButton(label: "Open in Finder", systemImage: "folder", action: onOpenInFinder)
-            ActionButton(label: "Delete", systemImage: "trash", action: onDelete)
+            ActionButton(label: String(localized: "Open in Finder"), systemImage: "folder", action: onOpenInFinder)
+            ActionButton(label: String(localized: "Delete"), systemImage: "trash", action: onDelete)
         }
     }
 
@@ -397,8 +401,8 @@ private struct PillCard<Expander: View>: View {
                     CardLabel(text: title)
                     Spacer()
                     PlusCircleButton(size: 18, rotated: isExpanded,
-                                     accessibilityLabel: isExpanded ? "Hide \(title.lowercased()) field"
-                                                                    : "Add \(title.lowercased())") {
+                                     accessibilityLabel: isExpanded ? String(localized: "Hide \(title.lowercased()) field")
+                                                                    : String(localized: "Add \(title.lowercased())")) {
                         withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
                             isExpanded.toggle()
                         }
@@ -411,7 +415,12 @@ private struct PillCard<Expander: View>: View {
                 } else {
                     PillFlow(gap: 6, hovered: hovered) {
                         ForEach(Array(pills.enumerated()), id: \.element.id) { i, pill in
-                            HoverPill(index: i, label: pill.label, isHovered: hovered == i,
+                            // Display the localized label; taps/removal use the
+                            // canonical `pill.label`/`pill.id` (unchanged). `display`
+                            // is identity for non-vocabulary strings (collection
+                            // names), so this shared render site is safe for both.
+                            let pillLabel = VocabularyLocalizer.shared.display(pill.label)
+                            HoverPill(index: i, label: pillLabel, isHovered: hovered == i,
                                       onHover: { idx, inside in
                                           if inside { hovered = idx }
                                           else if hovered == idx { hovered = nil }
@@ -445,7 +454,10 @@ private struct CardExpander: View {
             if !candidates.isEmpty {
                 PillFlow(gap: 6, hovered: nil) {
                     ForEach(candidates) { candidate in
-                        DashedPill(label: candidate.label) { onCandidateTap(candidate) }
+                        // Display the localized vision-tag term; the tap keeps
+                        // the canonical `candidate.label` for the DB write. `display`
+                        // is identity for non-vocabulary strings (collection names).
+                        DashedPill(label: VocabularyLocalizer.shared.display(candidate.label)) { onCandidateTap(candidate) }
                     }
                 }
             }
@@ -460,7 +472,7 @@ private struct CardExpander: View {
                         .fill(.white.opacity(0.08)))
                     .onSubmit(submit)
                 PlusCircleButton(size: 18, rotated: false,
-                                 accessibilityLabel: "Create", action: submit)
+                                 accessibilityLabel: String(localized: "Create"), action: submit)
             }
         }
     }
@@ -501,7 +513,7 @@ private struct DashedPill: View {
 private struct PlusCircleButton: View {
     let size: CGFloat
     let rotated: Bool
-    var accessibilityLabel: String = "Add"
+    var accessibilityLabel: String = String(localized: "Add")
     var action: () -> Void
     @State private var hovering = false
 
@@ -604,8 +616,14 @@ private struct ActionButton: View {
                 Text(label)
                     .font(.system(size: 12, weight: .medium))
                     .lineLimit(1)
+                    .truncationMode(.tail)
+                    // Longer localized labels (e.g. "Ouvrir dans le Finder")
+                    // shrink to fit before truncating, so the text never spills
+                    // past the capsule's rounded edge.
+                    .minimumScaleFactor(0.7)
             }
             .foregroundStyle(.white.opacity(0.92))
+            .padding(.horizontal, 10)
             .frame(maxWidth: .infinity)
             .frame(height: 36)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous)

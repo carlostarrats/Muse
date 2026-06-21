@@ -55,9 +55,9 @@ private struct ActiveCollectionHeader: View {
                     .onAppear { nameFocused = true }
                 HStack(spacing: 8) {
                     HeaderIconButton(systemName: "checkmark",
-                                     help: "Save name") { commitRename() }
+                                     help: String(localized: "Save name")) { commitRename() }
                     HeaderIconButton(systemName: "xmark",
-                                     help: "Cancel") { cancelEdit() }
+                                     help: String(localized: "Cancel")) { cancelEdit() }
                 }
             } else {
                 Text(loaded.collection.name)
@@ -198,7 +198,7 @@ private struct TrashButton: View {
 /// Circular hover-brightening back arrow, shared by the active-collection
 /// header and the Collections page.
 struct BackArrowButton: View {
-    var help: String = "Back to all collections"
+    var help: String = String(localized: "Back to all collections")
     var action: () -> Void
     @State private var hovering = false
 
@@ -305,7 +305,7 @@ struct CollectionCard: View {
         // action (otherwise unreachable without a right-click).
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(loaded.collection.name), \(loaded.aliveCount) "
-                            + (loaded.aliveCount == 1 ? "item" : "items"))
+                            + (loaded.aliveCount == 1 ? String(localized: "item") : String(localized: "items")))
         .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction { appState.setActiveCollection(loaded.collection.id) }
         .accessibilityAction(named: "Delete Collection") { confirmDelete = true }

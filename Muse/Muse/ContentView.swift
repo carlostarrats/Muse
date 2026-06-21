@@ -493,7 +493,7 @@ struct ContentView: View {
                 .moodToolbarIcon(appState.moodPalette)
         }
         .help(mode.directionLabel(ascending: ascending))
-        .accessibilityLabel("Sort direction: " + mode.directionLabel(ascending: ascending))
+        .accessibilityLabel(String(localized: "Sort direction: \(mode.directionLabel(ascending: ascending))"))
     }
 
     @ViewBuilder
@@ -514,11 +514,11 @@ struct ContentView: View {
                                  selected: filterPopoverShown || appState.gridFilter.isActive)
         }
         .toggleStyle(.button)
-        .help(appState.gridFilter.isActive ? "Filter (active)" : "Filter")
+        .help(appState.gridFilter.isActive ? String(localized: "Filter (active)") : String(localized: "Filter"))
         .accessibilityLabel("Filter")
         // The toggle's "on" state doubles for popover-open, so announce the
         // actual filter state separately (keeps the stable name "Filter").
-        .accessibilityValue(appState.gridFilter.isActive ? "Active" : "Off")
+        .accessibilityValue(appState.gridFilter.isActive ? String(localized: "Active") : String(localized: "Off"))
         .popover(isPresented: $filterPopoverShown, arrowEdge: .bottom) {
             GridFilterPopover()
                 .environmentObject(appState)

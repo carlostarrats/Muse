@@ -117,7 +117,7 @@ private struct NativeSearchField: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSSearchField {
         let field = InsetSearchField()
-        field.placeholderString = "Search files, tags, captions…"
+        field.placeholderString = String(localized: "Search files, tags, captions…")
         field.delegate = context.coordinator
         field.sendsSearchStringImmediately = false
         field.sendsWholeSearchString = false
@@ -156,10 +156,10 @@ private struct NativeSearchField: NSViewRepresentable {
         /// A fresh two-item scope menu with the checkmark on the active scope.
         func makeScopeMenu(allFolders: Bool) -> NSMenu {
             let menu = NSMenu()
-            let all = NSMenuItem(title: "All", action: #selector(pickAll), keyEquivalent: "")
+            let all = NSMenuItem(title: String(localized: "All"), action: #selector(pickAll), keyEquivalent: "")
             all.target = self
             all.state = allFolders ? .on : .off
-            let folder = NSMenuItem(title: "This Folder", action: #selector(pickFolder), keyEquivalent: "")
+            let folder = NSMenuItem(title: String(localized: "This Folder"), action: #selector(pickFolder), keyEquivalent: "")
             folder.target = self
             folder.state = allFolders ? .off : .on
             menu.addItem(all)

@@ -6,8 +6,17 @@ import FoundationModels
 
 final class TagFallbackNamer: CollectionNamer {
     let modelVersion = "topTag-v1"
+    private let localizer: VocabularyLocalizer
+
+    init(localizer: VocabularyLocalizer = .shared) {
+        self.localizer = localizer
+    }
+
     func name(tagsByFrequency: [String]) async -> String {
-        tagsByFrequency.first?.capitalized ?? "Collection"
+        // Localize the top (canonical) tag for display, then capitalize. The
+        // result becomes the stored collection name (user data thereafter).
+        guard let top = tagsByFrequency.first else { return String(localized: "Collection") }
+        return localizer.display(top).capitalized
     }
 
     /// Returns the FM-backed namer on Apple Intelligence-capable Macs
@@ -28,19 +37,26 @@ final class TagFallbackNamer: CollectionNamer {
 final class FoundationModelNamer: CollectionNamer {
     let modelVersion = "fm-namer-v1"
 
-    private static let instructions = """
-    You name small collections of images from their descriptive tags.
-    Reply with ONLY a short collection title, 1-3 words, no punctuation.
-    """
+    /// The app's effective UI language as a human name (e.g. "French"), so the
+    /// model is asked to title the collection in the user's language.
+    private static var languageName: String {
+        let code = Bundle.main.preferredLocalizations.first ?? "en"
+        return Locale.current.localizedString(forLanguageCode: code) ?? "English"
+    }
 
     func name(tagsByFrequency: [String]) async -> String {
         let fallback = tagsByFrequency.first?.capitalized ?? "Collection"
         guard !tagsByFrequency.isEmpty else { return fallback }
+        let language = Self.languageName
         do {
-            let session = LanguageModelSession(instructions: Self.instructions)
+            let session = LanguageModelSession(instructions: """
+            You name small collections of images from their descriptive tags.
+            Reply with ONLY a short collection title, 1-3 words, no punctuation,
+            written in \(language).
+            """)
             let prompt = """
             These tags describe a group of images: \(tagsByFrequency.prefix(8).joined(separator: ", ")).
-            Reply with ONLY a short collection title, 1-3 words, no punctuation.
+            Reply with ONLY a short collection title, 1-3 words, no punctuation, in \(language).
             """
             let response = try await session.respond(to: prompt)
             let title = response.content

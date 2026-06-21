@@ -56,7 +56,7 @@ struct ReconnectWizard: View {
                         .accessibilityLabel(statusLabel(folder.status))
                     VStack(alignment: .leading, spacing: 1) {
                         Text(folder.displayName).font(.system(size: 13, weight: .medium))
-                        Text(folder.newLocation?.path ?? "Not located")
+                        Text(folder.newLocation?.path ?? String(localized: "Not located"))
                             .font(.system(size: 11))
                             .foregroundStyle(folder.newLocation == nil ? .secondary : .primary)
                             .lineLimit(1).truncationMode(.middle)
@@ -72,8 +72,8 @@ struct ReconnectWizard: View {
                     // Name the target so the button isn't a bare "Locate…" when
                     // VoiceOver moves control-to-control across several rows.
                     .accessibilityLabel(folder.newLocation == nil
-                                        ? "Locate \(folder.displayName)"
-                                        : "Relocate \(folder.displayName)")
+                                        ? String(localized: "Locate \(folder.displayName)")
+                                        : String(localized: "Relocate \(folder.displayName)"))
                 }
                 .padding(.vertical, 4)
                 Divider()
@@ -85,12 +85,12 @@ struct ReconnectWizard: View {
     /// it visually, so VoiceOver needs the words. Mirrors `statusGlyph`.
     private func statusLabel(_ status: ReconnectModel.FolderStatus) -> String {
         switch status {
-        case .pending:                          return "Not located yet"
-        case .working:                          return "Locating"
-        case .clean:                            return "Reconnected"
+        case .pending:                          return String(localized: "Not located yet")
+        case .working:                          return String(localized: "Locating")
+        case .clean:                            return String(localized: "Reconnected")
         case .flagged(let unmatched, let nameOnly):
-            return "Reconnected — " + flaggedText(unmatched: unmatched, nameOnly: nameOnly)
-        case .failed:                           return "Couldn’t save"
+            return String(localized: "Reconnected — ") + flaggedText(unmatched: unmatched, nameOnly: nameOnly)
+        case .failed:                           return String(localized: "Couldn’t save")
         }
     }
 
@@ -159,9 +159,9 @@ struct ReconnectWizard: View {
 
     private func flaggedText(unmatched: Int, nameOnly: Int) -> String {
         switch (unmatched, nameOnly) {
-        case let (u, 0):        return "\(u) not found"
-        case let (0, n):        return "\(n) by name — check"
-        case let (u, n):        return "\(u) not found · \(n) by name"
+        case let (u, 0):        return String(localized: "\(u) not found")
+        case let (0, n):        return String(localized: "\(n) by name — check")
+        case let (u, n):        return String(localized: "\(u) not found · \(n) by name")
         }
     }
 

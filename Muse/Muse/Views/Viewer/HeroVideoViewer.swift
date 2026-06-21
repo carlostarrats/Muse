@@ -153,8 +153,8 @@ struct HeroVideoViewer: View {
             }
             // Hand the Undo toast to the always-present GridToastHost so it
             // survives the viewer unmount.
-            appState.deletion.toast = ToastData(message: "Moved to Trash",
-                                                actionLabel: "Undo") {
+            appState.deletion.toast = ToastData(message: String(localized: "Moved to Trash"),
+                                                actionLabel: String(localized: "Undo")) {
                 appState.deletion.restore(ticket: ticket,
                                           node: node ?? FileNode(url: url))
             }
@@ -171,7 +171,7 @@ struct HeroVideoViewer: View {
             }
         } catch {
             withAnimation(.easeOut(duration: 0.18)) {
-                toast = ToastData(message: "Couldn't move to Trash")
+                toast = ToastData(message: String(localized: "Couldn't move to Trash"))
                 fade = 0
                 deleting = false
             }

@@ -129,13 +129,13 @@ struct HeroImageViewer: View {
                         // Clear the stale selection on the trashed file so an
                         // Undo doesn't restore a tile already wearing the ring.
                         appState.clearSelection()
-                        appState.deletion.toast = ToastData(message: "Moved to Trash",
-                                                            actionLabel: "Undo") {
+                        appState.deletion.toast = ToastData(message: String(localized: "Moved to Trash"),
+                                                            actionLabel: String(localized: "Undo")) {
                             appState.deletion.restore(ticket: ticket,
                                                       node: node ?? FileNode(url: url))
                         }
                     } catch {
-                        appState.deletion.toast = ToastData(message: "Couldn't move to Trash")
+                        appState.deletion.toast = ToastData(message: String(localized: "Couldn't move to Trash"))
                     }
                 }
             }
@@ -255,7 +255,7 @@ struct HeroImageViewer: View {
     }
 
     private var fitButton: some View {
-        ChromeTextButton(label: "Fit") {
+        ChromeTextButton(label: String(localized: "Fit")) {
             withAnimation(.easeOut(duration: 0.2)) { zoom = 1; pan = .zero }
         }
     }
@@ -265,7 +265,7 @@ struct HeroImageViewer: View {
     }
 
     private var zoomReadout: String {
-        guard abs(zoom - 1) > 0.001 else { return "Fit" }
+        guard abs(zoom - 1) > 0.001 else { return String(localized: "Fit") }
         if let n = naturalSize, n.width > 0 {
             let fitScale = currentFitRect.width / n.width
             return "\(Int(zoom * fitScale * 100))%"
@@ -392,8 +392,8 @@ struct HeroImageViewer: View {
             withAnimation(.easeIn(duration: 0.2)) {
                 appState.currentFiles.removeAll { $0.url == url }
             }
-            appState.deletion.toast = ToastData(message: "Moved to Trash",
-                                                actionLabel: "Undo") {
+            appState.deletion.toast = ToastData(message: String(localized: "Moved to Trash"),
+                                                actionLabel: String(localized: "Undo")) {
                 appState.deletion.restore(ticket: ticket,
                                           node: node ?? FileNode(url: url))
             }
@@ -408,7 +408,7 @@ struct HeroImageViewer: View {
             appState.clearSelection()
         } catch {
             withAnimation(.easeOut(duration: 0.18)) {
-                toast = ToastData(message: "Couldn't move to Trash")
+                toast = ToastData(message: String(localized: "Couldn't move to Trash"))
                 burnProgress = 0
                 burning = false
                 chromeVisible = true
@@ -519,7 +519,7 @@ private struct ChromeCircleButton: View {
                 .background(Circle().fill(.white.opacity(hovering ? 0.24 : 0.10)))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(systemName == "xmark" ? "Close" : systemName)
+        .accessibilityLabel(systemName == "xmark" ? String(localized: "Close") : systemName)
         .onHover { hovering = $0 }
     }
 }
@@ -547,8 +547,8 @@ private struct ChromePillButton: View {
         }
         .buttonStyle(.plain)
         .disabled(disabled)
-        .accessibilityLabel(systemName == "minus" ? "Zoom out"
-                            : systemName == "plus" ? "Zoom in" : systemName)
+        .accessibilityLabel(systemName == "minus" ? String(localized: "Zoom out")
+                            : systemName == "plus" ? String(localized: "Zoom in") : systemName)
         .onHover { hovering = $0 }
     }
 }

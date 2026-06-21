@@ -18,7 +18,7 @@ struct FontViewerView: View {
 
     private static let sampleSizes: [CGFloat] = [10, 14, 18, 24, 32, 48]
     private static let alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ\nabcdefghijklmnopqrstuvwxyz\n0123456789 .,!?;:'\"-—()[]/\\"
-    private static let sampleText = "The quick brown fox jumps over the lazy dog."
+    private static var sampleText: String { String(localized: "The quick brown fox jumps over the lazy dog.") }
 
     var body: some View {
         ScrollView {

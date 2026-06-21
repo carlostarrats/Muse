@@ -181,13 +181,13 @@ struct SidebarView: View {
     private var twoSectionScroll: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                SectionHeader(title: "FOLDERS", collapsed: $foldersCollapsed)
+                SectionHeader(title: String(localized: "FOLDERS"), collapsed: $foldersCollapsed)
                 if !foldersCollapsed {
                     sortHeader
                     folderList
                 }
                 Color.clear.frame(height: 14)
-                SectionHeader(title: "COLLECTIONS", collapsed: $collectionsCollapsed)
+                SectionHeader(title: String(localized: "COLLECTIONS"), collapsed: $collectionsCollapsed)
                 if !collectionsCollapsed {
                     collectionsSortHeader
                     collectionsList
@@ -422,10 +422,10 @@ struct SidebarView: View {
     @ViewBuilder private var bottomBar: some View {
         if showCollectionsInSidebar {
             HStack(spacing: 10) {
-                AddPillButton(systemImage: "folder", label: "Add Folder") {
+                AddPillButton(systemImage: "folder", label: String(localized: "Add Folder")) {
                     appState.pickAndAddRoot()
                 }
-                AddPillButton(systemImage: "square.stack.3d.up", label: "Add Collection") {
+                AddPillButton(systemImage: "square.stack.3d.up", label: String(localized: "Add Collection")) {
                     appState.requestNewCollection()
                 }
             }

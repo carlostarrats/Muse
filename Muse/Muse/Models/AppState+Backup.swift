@@ -33,8 +33,7 @@ extension AppState {
         let panel = NSSavePanel()
         panel.nameFieldStringValue = suggested
         panel.canCreateDirectories = true
-        panel.message = "Keep this file somewhere safe — ideally not only on this Mac. "
-            + "You'll use it to restore your collections, tags, and folders on another Mac."
+        panel.message = String(localized: "Keep this file somewhere safe — ideally not only on this Mac. You'll use it to restore your collections, tags, and folders on another Mac.")
         guard panel.runModal() == .OK, let dest = panel.url else { return }
 
         Task {
@@ -58,7 +57,7 @@ extension AppState {
         if let type = UTType(filenameExtension: BackupDocument.fileExtension) {
             panel.allowedContentTypes = [type]
         }
-        panel.message = "Choose the Muse backup file you exported on your other Mac."
+        panel.message = String(localized: "Choose the Muse backup file you exported on your other Mac.")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             let data = try Data(contentsOf: url)

@@ -38,9 +38,18 @@ enum SearchService {
             )
             let ftsIDs = ftsRows.compactMap { $0["file_id"] as String? }
 
-            // 2) Tag label matches (for indexed content)
+            // 2) Tag label matches (for indexed content). Bridge a localized
+            //    query to its canonical vision term so e.g. "plage" finds files
+            //    tagged canonical "beach"; the raw query is always included so
+            //    French filenames/OCR/manual tags still match.
+            let tagTerms = SearchBridge.tagSearchTerms(for: trimmed) {
+                VocabularyLocalizer.shared.canonicalize($0)
+            }
+            let tagFilter = tagTerms
+                .map { TagRow.Columns.label.like("%" + $0 + "%") }
+                .joined(operator: .or)
             let tagIDs = try TagRow
-                .filter(TagRow.Columns.label.like("%" + trimmed + "%"))
+                .filter(tagFilter)
                 .fetchAll(db)
                 .map { $0.file_id }
 

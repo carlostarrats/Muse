@@ -104,4 +104,26 @@ final class TagSelectionTests: XCTestCase {
                 .init(label: "c", precededByAnd: true, trailingComma: false),
             ])
     }
+
+    // MARK: - bannerText connective localization
+
+    func testBannerTextUsesProvidedConnectives() {
+        // The view passes localized connective words so the VoiceOver banner
+        // reads in the user's language.
+        XCTAssertEqual(
+            TagSelection.bannerText(for: ["plage", "chien"], viewing: "Affichage", and: "et"),
+            "Affichage plage et chien")
+    }
+
+    func testBannerTextDefaultsRemainEnglish() {
+        XCTAssertEqual(
+            TagSelection.bannerText(for: ["blue", "screenshot"]),
+            "Viewing blue and screenshot")
+    }
+
+    func testBannerTextThreeLabelsWithLocalizedConnectives() {
+        XCTAssertEqual(
+            TagSelection.bannerText(for: ["a", "b", "c"], viewing: "Affichage", and: "et"),
+            "Affichage a, b, et c")
+    }
 }

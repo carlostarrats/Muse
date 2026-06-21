@@ -18,13 +18,13 @@ enum SortMode: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .dateModified: return "Date Modified"
-        case .dateCreated: return "Date Created"
-        case .name: return "Name"
-        case .size: return "Size"
-        case .kind: return "Kind"
-        case .dominantColor: return "Color"
-        case .shape: return "Shape"
+        case .dateModified: return String(localized: "Date Modified")
+        case .dateCreated: return String(localized: "Date Created")
+        case .name: return String(localized: "Name")
+        case .size: return String(localized: "Size")
+        case .kind: return String(localized: "Kind")
+        case .dominantColor: return String(localized: "Color")
+        case .shape: return String(localized: "Shape")
         }
     }
 
@@ -51,11 +51,11 @@ enum SortMode: String, CaseIterable, Identifiable {
     /// tooltip. `ascending` is the effective direction (default XOR reversed).
     func directionLabel(ascending: Bool) -> String {
         switch self {
-        case .dateModified, .dateCreated: return ascending ? "Oldest first" : "Newest first"
-        case .name, .kind:                return ascending ? "A → Z" : "Z → A"
-        case .size:                       return ascending ? "Smallest first" : "Largest first"
-        case .shape:                      return ascending ? "Tall → wide" : "Wide → tall"
-        case .dominantColor:              return ascending ? "Ascending" : "Descending"
+        case .dateModified, .dateCreated: return ascending ? String(localized: "Oldest first") : String(localized: "Newest first")
+        case .name, .kind:                return ascending ? String(localized: "A → Z") : String(localized: "Z → A")
+        case .size:                       return ascending ? String(localized: "Smallest first") : String(localized: "Largest first")
+        case .shape:                      return ascending ? String(localized: "Tall → wide") : String(localized: "Wide → tall")
+        case .dominantColor:              return ascending ? String(localized: "Ascending") : String(localized: "Descending")
         }
     }
 

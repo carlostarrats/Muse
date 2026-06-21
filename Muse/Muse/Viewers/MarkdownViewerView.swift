@@ -51,7 +51,7 @@ struct MarkdownViewerView: View {
             }
         } catch {
             await MainActor.run {
-                self.loadError = "Could not load: \(error.localizedDescription)"
+                self.loadError = String(localized: "Could not load: \(error.localizedDescription)")
             }
         }
     }

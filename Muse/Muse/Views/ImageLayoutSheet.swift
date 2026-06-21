@@ -54,12 +54,12 @@ struct ImageLayoutSheet: View {
     // MARK: - Common Sizes
 
     private let sizes: [(String, String)] = [
-        ("1:1", "Square medium format"),
-        ("2:3", "Sony, Canon, Nikon, 35mm film"),
-        ("3:4", "iPhone, Google Pixel, Samsung Galaxy, OnePlus"),
-        ("4:5", "Instagram, large format film"),
-        ("6:7", "Medium format"),
-        ("9:16", "Vertical video on most phones"),
+        ("1:1", String(localized: "Square medium format")),
+        ("2:3", String(localized: "Sony, Canon, Nikon, 35mm film")),
+        ("3:4", String(localized: "iPhone, Google Pixel, Samsung Galaxy, OnePlus")),
+        ("4:5", String(localized: "Instagram, large format film")),
+        ("6:7", String(localized: "Medium format")),
+        ("9:16", String(localized: "Vertical video on most phones")),
     ]
 
     private var commonSizes: some View {

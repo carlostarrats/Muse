@@ -60,7 +60,7 @@ final class DeleteCoordinator: ObservableObject {
             }
             // Last-wins toast replacement is intentional for v1 single-file
             // deletes (a second delete's toast replaces the first's Undo).
-            toast = ToastData(message: "Moved to Trash", actionLabel: "Undo") { [weak self] in
+            toast = ToastData(message: String(localized: "Moved to Trash"), actionLabel: String(localized: "Undo")) { [weak self] in
                 self?.restore(ticket: ticket, node: file)
             }
         } catch {
@@ -68,7 +68,7 @@ final class DeleteCoordinator: ObservableObject {
             withAnimation(.easeOut(duration: 0.3)) {
                 _ = burningPaths.remove(path)
             }
-            toast = ToastData(message: "Couldn't move to Trash")
+            toast = ToastData(message: String(localized: "Couldn't move to Trash"))
         }
     }
 
@@ -80,7 +80,7 @@ final class DeleteCoordinator: ObservableObject {
             // Already back at the original path (FSEvents/external move) —
             // the folder reload reconciles; stay quiet.
             guard !FileManager.default.fileExists(atPath: ticket.originalURL.path) else { return }
-            toast = ToastData(message: "Couldn't restore — file is in the Trash")
+            toast = ToastData(message: String(localized: "Couldn't restore — file is in the Trash"))
         }
     }
 }

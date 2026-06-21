@@ -3601,3 +3601,142 @@ against `git show` and restored verbatim. PENDING human GUI verification of the 
 live drag-reorders (folder list + sidebar collection list, Manual sort: up / down /
 to-top / to-bottom / overshoot) — automated macOS drag driving unavailable (no
 Accessibility grant).
+
+---
+
+## 2026-06-20 — `feat/localization-french` — Localization (French v1), infra + seed
+
+First localization pass. Spec + plan in `docs/superpowers/` (8 TDD tasks). Built
+**infrastructure-first with a small validation seed** (user's chosen sequencing):
+prove the reusable machine + a French taste of it before investing in full
+translation, since the spec designed graceful English fallback so any fill level
+works.
+
+**Core principle (spec §3):** localize at DISPLAY time; stored data (DB tags, FTS,
+collection rows) stays canonical-English. No schema change, no migration. Three
+independent removal kill-switches (drop `fr` from `knownRegions`; make
+`VocabularyLocalizer` identity; or both). No user data is ever written translated.
+
+**What shipped:**
+- **Config:** `fr` added to `knownRegions`; `Localizable.xcstrings` at the synced-
+  group root. Xcode 26 file-system-synchronized groups auto-include new files/
+  resources in the target — no per-file pbxproj surgery (only `knownRegions`).
+- **`VocabularyLocalizer`** (`Localization/`, pure, `nonisolated`, 9 tests): the one
+  isolated AI-tag seam. `display(canonical)->localized` (identity for English/
+  unknown, so manual tags + untranslated vision terms pass through),
+  `canonicalize(token)->canonical?` (reverse). `init(table:language:)` +
+  `static let shared` resolving `Bundle.main.preferredLocalizations` (honors the
+  macOS per-app language override).
+- **`VisionVocabulary.json`** seed: ~50 common terms in French, using REAL canonical
+  identifiers (dumped the full `VNClassifyImageRequest.knownClassifications`
+  taxonomy = 1302 terms; full translation deferred, untranslated fall back per-term).
+- **Tag display localized** (chips, multi-tag banner pills + VoiceOver string, hero
+  viewer pills + toasts) via `display()`; every action/identity (set/toggle/rename/
+  delete/tap, ForEach ids, intersection, grid `.id`) stays canonical.
+  `TagSelection.bannerText` gained localized `viewing`/`and` params (English
+  defaults keep existing tests valid).
+- **Search bridge** (`Database/SearchBridge.swift`, pure, 5 tests): expands a query
+  to `[raw + canonical]` tag-LIKE terms via `canonicalize`, ORed in `SearchService`
+  — so `plage` finds canonical `beach`; raw query always kept (filenames/OCR/manual).
+- **AI collection names in-language:** `FoundationModelNamer` prompts in the effective
+  language; `TagFallbackNamer` localizes its top-tag name via an injectable
+  `VocabularyLocalizer` (3 tests). A generated name is stored as user data thereafter.
+- **Formatting audit (T7): no changes needed** — all display formatters already use
+  `Locale.current`; the one pinned `en_US_POSIX` is a fixed-format EXIF *parser*
+  (correct) and the backup `yyyy-MM-dd` is a filename (intentionally stable).
+- **UI chrome seed:** ~55 high-visibility strings (toolbar, menus, tag chips, common
+  buttons) translated in the catalog; compiles to `fr.lproj/Localizable.strings`,
+  verified resolving (`All`→`Tout`, `Find Duplicates in Folder`→`Rechercher les
+  doublons dans le dossier`). Untranslated chrome falls back to English.
+
+**Gotchas recorded this session:**
+- `xcodebuild` does NOT write extracted String Catalog keys back into the source
+  `.xcstrings` (IDE-only) — catalog entries were authored manually with exact
+  source-literal keys (they match at runtime regardless of extraction).
+- Sandboxed test target can't write `/tmp` — the taxonomy dump wrote to
+  `NSTemporaryDirectory()` (the sandbox container tmp).
+- Adding a function call (e.g. `display(tag.label)`, `String(localized:)`) inside a
+  large SwiftUI view-builder expression (the `TagChip(...)` call) tripped "unable to
+  type-check in reasonable time" — bind the value to a `let` first. (SourceKit also
+  flagged it as an editor artifact; the batch compiler confirmed via build.)
+
+**Then completed the FULL French translation** (the user needs a genuinely complete build
+for a real-user test — can't ship a half-French app):
+- **Vocabulary:** all 1303 `VNClassifyImageRequest` taxonomy terms translated to French
+  (8 parallel translation subagents over the dumped taxonomy → merged + coverage-checked:
+  0 missing / 0 extra / 0 duplicate keys).
+- **UI chrome:** used `xcodebuild -exportLocalizations` (the authoritative compiler
+  extraction — and unlike a plain build it write-backs the full key set into the source
+  `.xcstrings`) to get all 240 keys, and translated every one (placeholders preserved with
+  positional specifiers `%1$@` etc.; format/ratio codes like `JPEG`/`16:9`/`A → Z` left
+  identical). Enum display properties (sort modes, moods, image layouts, tile backgrounds,
+  tag/folder/collection sort, grid-filter facets) wrapped in `String(localized:)` so
+  menus/pickers localize too — display-only props (persistence uses rawValue, untouched);
+  `displayName` unit tests still pass because `String(localized:)` resolves to the English
+  source under the en test host. **All strings + 1303/1303 vocabulary compile to `fr.lproj`.**
+
+**Two live-feedback passes** (drove the app in French, fixed what the user spotted) grew the
+catalog 240 → **315 keys** by catching the whole class of strings the compiler extraction
+MISSES — anything passed as a plain `String` rather than a SwiftUI text literal:
+- AppKit setters (`NSSearchField.placeholderString`, `NSOpen/SavePanel.prompt/.message`),
+  custom-view `title:`/`label:`/`text:`/`caption:`/`placeholder:` params (hero card titles
+  TAGS/COLLECTION/COLORS/INFO, sidebar FOLDERS/COLLECTIONS, filter "Images", "Fit",
+  search-scope All/This Folder), data-driven arrays (ImageLayout "Common Sizes" camera
+  descriptions), `ToastData(message:)` + interpolated `show("…")` toasts.
+- Enum `displayName`/`label` (sort/mood/layout/tile/filter facets) wrapped in
+  `String(localized:)` so menus/pickers localize (display-only; rawValue persistence
+  untouched).
+- The **About (ⓘ) modal**: `section()` switched to `LocalizedStringKey` so all 17 titles +
+  prose paragraphs extract; bodies translated by a subagent (consistent voice).
+- **INFO-card metadata labels** (Taken/Camera/Lens/Exposure/…): localized at the RENDER
+  site via `NSLocalizedString(row.label)` — the model keeps English labels (also used as
+  comparison keys + asserted by tests), only display localizes; widened the label column
+  64→80 for longer French.
+- **Layout fix:** longer French overran the "Open in Finder" action button; added
+  `truncationMode(.tail)` + `minimumScaleFactor(0.7)` + horizontal padding so labels
+  shrink-then-truncate inside the capsule (a general rule — budget for ~1.3× English width).
+
+Durable gotchas added: (1) a plain `xcodebuild` build does NOT write extracted catalog keys
+back to the source `.xcstrings` — use `xcodebuild -exportLocalizations` (it write-backs the
+full key set); (2) compiler extraction only sees SwiftUI text-literal positions — anything
+passed as a `String` (AppKit, custom-view params, data arrays, `displayName`s) must be
+hand-wrapped in `String(localized:)`, or for a runtime-variable label use
+`NSLocalizedString(var)` + manual catalog keys; (3) enum-`displayName` unit tests assert the
+English source, so the suite must run with the host in English (a French per-app override
+makes them read French — expected); (4) longer localized strings overflow fixed-width
+controls — plan truncation/scaling.
+
+The infrastructure is language-agnostic — a SECOND language is now purely "fill a column"
+(run `-exportLocalizations`, translate the new keys, add a `VisionVocabulary.json` lang key),
+no code changes. **Live French GUI confirmed with the user** ("everything I can see looks
+French"); a native-speaker wording review is still the right final polish. All unit tests
+green throughout (in the en host).
+
+**Code-review + QA round (catalog 346 → 371 keys).** A structured review — placeholder-
+integrity check (0 mismatches, no `%@`/`%lld` crash risk), canonical-key invariant audit
+(every `== label`/`byLabel[…]`/`displayName` comparison + AppSettings persistence stays
+canonical-English; the wraps are display-only), a seven-pass remaining-English sweep, and a
+fresh-eyes subagent review of the diff — caught **~34 more strings** the compiler extraction
+AND the earlier reactive passes missed, all the same root cause (built dynamically, not a
+SwiftUI text literal):
+- ternary/concatenation accessibility (sort-direction VoiceOver "Sens du tri : %@",
+  Filter active/Active/Off, the Duplicates tile value `Marked for delete`/`Kept…`,
+  Collapse/Expand, Close, the tag-chip help) — these have one branch that forces the
+  `String` overload, so the literals shipped English;
+- **method-returned UI labels**: folder-op error messages (with the verb itself localized —
+  `créer`/`renommer` interpolated into a localized template), the 10 screenshot-intent
+  collection names (`Recipes`→`Recettes`…), the 3 duplicate-type labels (`Byte-exact`→
+  `Identique octet pour octet`…), the namer `Collection` fallback, the Markdown load error,
+  and the font-specimen pangram (→ the French pangram);
+- the subagent review found two real bugs: the **backup save-panel message was half-French**
+  (my earlier `panel.message =` regex wrapped only the first of two concatenated literals) —
+  combined into one key; and **tag-suggestion pills rendered canonical English** while the
+  existing-tag pills rendered `display()` — now consistent.
+Also removed the orphaned old backup half-key and cleared a FALSE `extractionState: stale`
+flag on the 14 metadata labels: they're reached via `NSLocalizedString(row.label)` (a runtime
+variable the extractor can't see, so it marks them stale), but they ARE used and DO compile
+into `fr.lproj` — **don't prune `NSLocalizedString`-reached keys as orphans.** Re-verified
+after the round: build + full suite green, placeholder integrity 0, the stale-but-used labels
+still resolve to French at runtime. Accepted/documented (cosmetic, Low): the 3+-tag banner
+keeps the Oxford comma in French ("Affichage a, b, et c") — a VoiceOver-only corner case;
+a correct fix needs locale-aware grammar in the pure helper + its tests, not worth the churn.

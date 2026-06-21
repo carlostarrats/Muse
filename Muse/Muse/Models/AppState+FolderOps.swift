@@ -32,7 +32,7 @@ extension AppState {
     func createSubfolder(named name: String, in node: FolderNode) {
         switch FolderOps.createSubfolder(named: name, in: node.url) {
         case .failure(let e):
-            folderOpError = Self.message(for: e, verb: "create")
+            folderOpError = Self.message(for: e, verb: String(localized: "create"))
         case .success:
             // Reveal the new folder in the sidebar but DON'T navigate into it —
             // the user stays on whatever they're currently viewing.
@@ -48,7 +48,7 @@ extension AppState {
         let oldURL = node.url
         switch FolderOps.rename(oldURL, to: name) {
         case .failure(let e):
-            folderOpError = Self.message(for: e, verb: "rename")
+            folderOpError = Self.message(for: e, verb: String(localized: "rename"))
         case .success(let newURL):
             // No-op rename (same name) — FolderOps returns the original URL.
             guard newURL.standardizedFileURL != oldURL.standardizedFileURL else { return }
@@ -62,7 +62,7 @@ extension AppState {
                 // rootRenamed mutates bookmarks.roots → the $roots sink rebuilds
                 // rootNodes with the new URL/name.
                 if !bookmarks.rootRenamed(root, to: newURL) {
-                    folderOpError = "Couldn’t finish renaming the folder."
+                    folderOpError = String(localized: "Couldn’t finish renaming the folder.")
                 }
             } else {
                 node.parent?.reloadChildren()
@@ -86,7 +86,7 @@ extension AppState {
                                                  newName: newURL.lastPathComponent)
                 guard let self else { return }
                 if !ok {
-                    self.folderOpError = "The folder was renamed, but updating its tags failed."
+                    self.folderOpError = String(localized: "The folder was renamed, but updating its tags failed.")
                 }
                 self.tagsVersion &+= 1
                 self.stars.load()   // refresh pin paths/labels after migration
@@ -132,10 +132,10 @@ extension AppState {
     /// User-facing folder-op error copy.
     private static func message(for error: FolderOps.OpError, verb: String) -> String {
         switch error {
-        case .emptyName:   return "Please enter a folder name."
-        case .invalidName: return "A folder name can’t contain “/” or “:”."
-        case .collision:   return "A folder with that name already exists here."
-        case .ioError:     return "Couldn’t \(verb) the folder. You may not have permission."
+        case .emptyName:   return String(localized: "Please enter a folder name.")
+        case .invalidName: return String(localized: "A folder name can’t contain “/” or “:”.")
+        case .collision:   return String(localized: "A folder with that name already exists here.")
+        case .ioError:     return String(localized: "Couldn’t \(verb) the folder. You may not have permission.")
         }
     }
 }

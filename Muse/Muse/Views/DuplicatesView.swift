@@ -324,12 +324,12 @@ private struct DuplicateImageTile: View {
         .contentShape(Rectangle())
         .onTapGesture { if !isLocked { onToggle() } }
         .onHover { hovering = $0 }
-        .help(isLocked ? "At least one copy must be kept" : "")
+        .help(isLocked ? String(localized: "At least one copy must be kept") : "")
         .animation(.easeOut(duration: 0.15), value: isSelected)
         .animation(.easeOut(duration: 0.18), value: hovering)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(member.url.lastPathComponent)
-        .accessibilityValue(isSelected ? "Marked for delete" : (isLocked ? "Kept — last copy, can't delete" : "Kept"))
+        .accessibilityValue(isSelected ? String(localized: "Marked for delete") : (isLocked ? String(localized: "Kept — last copy, can't delete") : String(localized: "Kept")))
         .accessibilityAddTraits(.isButton)
         // VoiceOver parity with the click: activating the tile toggles delete
         // (no-op when locked), the same as the Delete checkbox below it.

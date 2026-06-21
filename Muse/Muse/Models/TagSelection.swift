@@ -34,15 +34,21 @@ nonisolated enum TagSelection {
     /// filled chip is already clear). Oxford-style "and" before the last label.
     /// Plain text — used as the banner's accessibility label (and tested);
     /// the view renders the labels as pills via `bannerSegments`.
-    static func bannerText(for labels: [String]) -> String? {
+    /// `viewing`/`and` default to English; the view passes localized connective
+    /// words (via `String(localized:)`) so the VoiceOver banner reads in the
+    /// user's language. The tag labels themselves are localized by the caller
+    /// before they're passed in.
+    static func bannerText(for labels: [String],
+                           viewing: String = "Viewing",
+                           and: String = "and") -> String? {
         switch labels.count {
         case 0, 1:
             return nil
         case 2:
-            return "Viewing \(labels[0]) and \(labels[1])"
+            return "\(viewing) \(labels[0]) \(and) \(labels[1])"
         default:
             let head = labels.dropLast().joined(separator: ", ")
-            return "Viewing \(head), and \(labels.last!)"
+            return "\(viewing) \(head), \(and) \(labels.last!)"
         }
     }
 
