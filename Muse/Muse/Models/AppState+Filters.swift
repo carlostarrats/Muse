@@ -33,21 +33,48 @@ extension AppState {
     /// inside a collection, else the current folder's files; the tag chip
     /// filter narrows either.
     var visibleFiles: [FileNode] {
-        // Memoized: recomputed only after one of the four inputs changes (they
-        // invalidate the cache via didSet in AppState). The grid reads this many
-        // times per render; without the cache the tag filter below re-standardized
-        // every path on every read. See `_visibleFilesCache`.
+        // Memoized: recomputed only after one of the inputs changes (they
+        // invalidate the cache via didSet in AppState: currentFiles,
+        // isSearchActive, activeCollectionFiles, activeTagPaths, gridFilter).
+        // The grid reads this many times per render; without the cache the tag
+        // filter below re-standardized every path on every read. The date
+        // window's `now` is captured fresh per recompute (not at first read), so
+        // a filter change re-windows correctly; the only stale-`now` edge is the
+        // app sitting idle across a day/week/month/year rollover with NO input
+        // change, which the next interaction corrects (accepted). See
+        // `_visibleFilesCache`.
         if _visibleFilesValid { return _visibleFilesCache }
-        let result: [FileNode]
         // search results are global; collection/tag filters apply to browsing only
+        var base: [FileNode]
         if isSearchActive {
-            result = currentFiles
+            base = currentFiles
         } else {
-            var files = activeCollectionFiles ?? currentFiles
+            base = activeCollectionFiles ?? currentFiles
             if let tagPaths = activeTagPaths {
-                files = files.filter { tagPaths.contains($0.url.standardizedFileURL.path) }
+                base = base.filter { tagPaths.contains($0.url.standardizedFileURL.path) }
             }
-            result = files
+        }
+        // Facet filter: the final narrowing step, applied to ALL branches
+        // (search included). Reads the values FileNode already carries — no
+        // extra resourceValues hit; the memo means this runs only when an input
+        // actually changed, not on every grid render.
+        //
+        // Folder grid cards (the one-level browse view, feat/next-41) are now a
+        // first-class Kind facet ("Folders"): the matcher keeps them when the
+        // kind set is empty or contains `.folder`, and never lets a date/size
+        // facet hide them (those are file concepts). So unchecking "Folders"
+        // hides subfolder cards, and any other facet leaves them alone.
+        let result: [FileNode]
+        if gridFilter.isActive {
+            let now = Date()
+            result = base.filter {
+                gridFilter.matches(kind: $0.kind,
+                                   sizeBytes: $0.sizeBytes,
+                                   modified: $0.modifiedAt,
+                                   now: now)
+            }
+        } else {
+            result = base
         }
         _visibleFilesCache = result
         _visibleFilesValid = true

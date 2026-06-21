@@ -421,6 +421,21 @@ final class AppState: ObservableObject {
         didSet { AppSettings.tileBackground = tileBackground }
     }
 
+    // MARK: - Grid filter
+
+    /// The grid faceted filter (kind / date / size). Persisted to AppSettings;
+    /// its didSet invalidates the visibleFiles memo exactly like the other
+    /// filter inputs (currentFiles / activeCollectionFiles / activeTagPaths).
+    @Published var gridFilter: GridFilter = AppSettings.gridFilter {
+        didSet {
+            AppSettings.gridFilter = gridFilter
+            _visibleFilesValid = false
+            // Deselect anything the new filter hides so a filter-hidden file
+            // can't ride along into a selection action (see pruneSelectionToVisible).
+            pruneSelectionToVisible()
+        }
+    }
+
     // MARK: - Sidebar collections
 
     /// How the sidebar's COLLECTIONS section is ordered. Persisted; INDEPENDENT

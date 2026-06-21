@@ -37,6 +37,27 @@ extension AppState {
         selectionAnchor = paths.first
     }
 
+    /// Drop any selected paths the current filter/view now hides, so a
+    /// filter-hidden file can never ride along into a selection action
+    /// (Move to Folder / Add to Collection / Add Tag / Share / sidebar drop).
+    /// "What you can't see can't be acted on" — mirrors the feat/next-41 rule
+    /// that file-only flows must not silently act on out-of-view nodes. Called
+    /// from `gridFilter`'s didSet; reads `selectionOrder` (= the freshly
+    /// recomputed `visibleFiles`). A selected folder is pruned too if the
+    /// "Folders" kind facet hid it.
+    func pruneSelectionToVisible() {
+        guard !selectedFiles.isEmpty else { return }
+        let visible = Set(selectionOrder)
+        let pruned = selectedFiles.intersection(visible)
+        guard pruned.count != selectedFiles.count else { return }
+        selectedFiles = pruned
+        if let anchor = selectionAnchor, !visible.contains(anchor) {
+            // Keep the replacement anchor deterministic + in grid order (like
+            // selectAllVisible), not Set.first which is nondeterministic.
+            selectionAnchor = selectionOrder.first { pruned.contains($0) }
+        }
+    }
+
     /// URLs for the effective selection (the selection, or `[fallback]` if the
     /// fallback path isn't part of the selection). An empty `fallback` yields
     /// only the current selection.

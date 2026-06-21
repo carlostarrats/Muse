@@ -19,6 +19,7 @@ struct ContentView: View {
     @State private var moodPickerShown = false
     @State private var infoShown = false
     @State private var imageLayoutShown = false
+    @State private var filterPopoverShown = false
 
     /// The Collections page is the card grid — showing collections with no
     /// single collection drilled into (and not while searching).
@@ -91,14 +92,22 @@ struct ContentView: View {
                 // (show-subfolders) cluster on its right.
                 ToolbarItem(placement: .navigation) {
                     HStack(spacing: 2) {
+                        // The sort menu + direction arrow are live on the
+                        // Collections page (they sort the cards) and on the grid;
+                        // only search disables them (results are ranked by
+                        // relevance). The funnel sits BETWEEN sort-by and the
+                        // direction arrow and has the OPPOSITE enablement: live
+                        // during search (it narrows results) but dead on the
+                        // Collections CARD page (cards aren't filtered) — so each
+                        // control carries its own `.disabled`, not the HStack.
                         sortMenu
+                            .disabled(appState.isSearchActive)
+                        filterMenu
+                            .disabled(isCollectionsPage)
                         // Flip the active sort mode's direction (newest↔oldest, A↔Z, …).
                         sortDirectionButton
+                            .disabled(appState.isSearchActive)
                     }
-                    // The sort cluster is live on the Collections page (it sorts
-                    // the cards) and on the grid; only search disables it
-                    // (results are ranked by relevance).
-                    .disabled(appState.isSearchActive)
                 }
 
                 // Tag-chip sort order (Most Used / A→Z) — its own item, sitting
@@ -470,6 +479,35 @@ struct ContentView: View {
     }
 
     @ViewBuilder
+    private var filterMenu: some View {
+        // Native toolbar Toggle in `.button` style: when "on" it gets the
+        // standard selected fill (solid accent, white icon). We drive "on" from
+        // (popover open) OR (a filter is active) so the engaged blue persists
+        // while a filter is set even with the popover closed — the always-visible
+        // reminder. The setter ignores the incoming value and only toggles the
+        // popover, so a click always opens/closes it (never silently clears the
+        // filter). NOT disabled during search: the funnel narrows results too.
+        Toggle(isOn: Binding(
+            get: { filterPopoverShown || appState.gridFilter.isActive },
+            set: { _ in filterPopoverShown.toggle() }
+        )) {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .moodToolbarIcon(appState.moodPalette,
+                                 selected: filterPopoverShown || appState.gridFilter.isActive)
+        }
+        .toggleStyle(.button)
+        .help(appState.gridFilter.isActive ? "Filter (active)" : "Filter")
+        .accessibilityLabel("Filter")
+        // The toggle's "on" state doubles for popover-open, so announce the
+        // actual filter state separately (keeps the stable name "Filter").
+        .accessibilityValue(appState.gridFilter.isActive ? "Active" : "Off")
+        .popover(isPresented: $filterPopoverShown, arrowEdge: .bottom) {
+            GridFilterPopover()
+                .environmentObject(appState)
+        }
+    }
+
+    @ViewBuilder
     private var moodMenu: some View {
         // Native toolbar Toggle: macOS gives it the standard icon size, the
         // round hover state, and — while "on" (popover open) — the native
@@ -554,7 +592,25 @@ private extension View {
     /// lockstep with the background fade. `selected` keeps a toggle's native
     /// white-on-accent look (popover/subfolders "on").
     func moodToolbarIcon(_ palette: MoodPalette, selected: Bool = false) -> some View {
-        foregroundStyle(selected ? Color.white : palette.iconColor)
+        modifier(MoodToolbarIcon(palette: palette, selected: selected))
+    }
+}
+
+/// The explicit mood `foregroundStyle` overrides SwiftUI's automatic
+/// disabled dimming, so a `.disabled` toolbar icon would stay full-color
+/// (looking active though unclickable). Reading `\.isEnabled` here dims every
+/// `moodToolbarIcon` control uniformly when disabled (0.4 = the house disabled
+/// value, cf. MoodPickerView) — the sort cluster during search, the filter on
+/// the Collections card page, etc.
+private struct MoodToolbarIcon: ViewModifier {
+    let palette: MoodPalette
+    let selected: Bool
+    @Environment(\.isEnabled) private var isEnabled
+
+    func body(content: Content) -> some View {
+        content
+            .foregroundStyle(selected ? Color.white : palette.iconColor)
+            .opacity(isEnabled ? 1 : 0.4)
             .animation(.easeInOut(duration: 0.35), value: palette)
     }
 }
