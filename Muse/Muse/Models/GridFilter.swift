@@ -16,8 +16,10 @@ import Foundation
 
 /// Grouped kind buckets the filter exposes. Several `AssetKind`s collapse into
 /// each bucket (e.g. raw/psd/svg → image); anything unhandled → `.other`.
+/// `folder` is its own facet so the one-level browse view's subfolder cards can
+/// be toggled on/off independently (feat/next-42 follow-up).
 enum KindFacet: String, CaseIterable, Identifiable, Codable {
-    case image, video, pdf, document, audio, other
+    case image, video, pdf, document, audio, folder, other
 
     var id: String { rawValue }
 
@@ -28,6 +30,7 @@ enum KindFacet: String, CaseIterable, Identifiable, Codable {
         case .pdf:      return "PDFs"
         case .document: return "Documents"
         case .audio:    return "Audio"
+        case .folder:   return "Folders"
         case .other:    return "Other"
         }
     }
@@ -39,7 +42,8 @@ enum KindFacet: String, CaseIterable, Identifiable, Codable {
         case .pdf:                             self = .pdf
         case .text, .markdown, .code, .office: self = .document
         case .audio:                           self = .audio
-        case .model3d, .font, .archive, .folder, .unknown:
+        case .folder:                          self = .folder
+        case .model3d, .font, .archive, .unknown:
             self = .other
         }
     }
@@ -118,9 +122,14 @@ struct GridFilter: Equatable, Codable {
 
     /// Pure predicate. `now` injected so date windows are deterministic in tests.
     func matches(kind: AssetKind, sizeBytes: Int64?, modified: Date?, now: Date) -> Bool {
+        let facet = KindFacet(from: kind)
         if !kinds.isEmpty {
-            guard kinds.contains(KindFacet(from: kind)) else { return false }
+            guard kinds.contains(facet) else { return false }
         }
+        // Folders are matched ONLY by the kind facet — date/size are file
+        // concepts that never apply to a directory, so a date/size filter must
+        // not hide a folder the kind facet kept (folders are navigation).
+        if facet == .folder { return true }
         if let start = date.windowStart(now: now) {
             guard let modified, modified >= start else { return false }
         }

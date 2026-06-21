@@ -92,21 +92,22 @@ struct ContentView: View {
                 // (show-subfolders) cluster on its right.
                 ToolbarItem(placement: .navigation) {
                     HStack(spacing: 2) {
+                        // The sort menu + direction arrow are live on the
+                        // Collections page (they sort the cards) and on the grid;
+                        // only search disables them (results are ranked by
+                        // relevance). The funnel sits BETWEEN sort-by and the
+                        // direction arrow and has the OPPOSITE enablement: live
+                        // during search (it narrows results) but dead on the
+                        // Collections CARD page (cards aren't filtered) — so each
+                        // control carries its own `.disabled`, not the HStack.
                         sortMenu
+                            .disabled(appState.isSearchActive)
+                        filterMenu
+                            .disabled(isCollectionsPage)
                         // Flip the active sort mode's direction (newest↔oldest, A↔Z, …).
                         sortDirectionButton
+                            .disabled(appState.isSearchActive)
                     }
-                    // The sort cluster is live on the Collections page (it sorts
-                    // the cards) and on the grid; only search disables it
-                    // (results are ranked by relevance).
-                    .disabled(appState.isSearchActive)
-                }
-
-                // Faceted filter (kind / date / size). Sits beside the sort
-                // cluster but is its OWN item — deliberately NOT disabled during
-                // search, because the funnel narrows search results too.
-                ToolbarItem(placement: .navigation) {
-                    filterMenu
                 }
 
                 // Tag-chip sort order (Most Used / A→Z) — its own item, sitting

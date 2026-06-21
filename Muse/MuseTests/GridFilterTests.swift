@@ -30,11 +30,31 @@ final class GridFilterTests: XCTestCase {
         XCTAssertEqual(KindFacet(from: .code), .document)
         XCTAssertEqual(KindFacet(from: .office), .document)
         XCTAssertEqual(KindFacet(from: .audio), .audio)
+        XCTAssertEqual(KindFacet(from: .folder), .folder)
         XCTAssertEqual(KindFacet(from: .model3d), .other)
         XCTAssertEqual(KindFacet(from: .font), .other)
         XCTAssertEqual(KindFacet(from: .archive), .other)
-        XCTAssertEqual(KindFacet(from: .folder), .other)
         XCTAssertEqual(KindFacet(from: .unknown), .other)
+    }
+
+    func testFolderMatchedOnlyByKindFacet() {
+        let now = fixedNow()
+        // No kind constraint: a folder shows even with date+size set, and even
+        // with a nil size/modified (date/size never apply to a folder).
+        XCTAssertTrue(GridFilter(kinds: [], date: .today, size: .over100MB)
+            .matches(kind: .folder, sizeBytes: nil, modified: nil, now: now))
+        // Folders explicitly included: shown regardless of date/size.
+        XCTAssertTrue(GridFilter(kinds: [.folder], date: .year, size: .under1MB)
+            .matches(kind: .folder, sizeBytes: nil, modified: nil, now: now))
+        // Folders excluded (a kind set without .folder): hidden.
+        XCTAssertFalse(GridFilter(kinds: [.image], date: .any, size: .any)
+            .matches(kind: .folder, sizeBytes: 5, modified: now, now: now))
+        // Unchecking just Folders (every other facet present) hides folders but
+        // keeps files of the checked kinds.
+        let allButFolder = GridFilter(kinds: [.image, .video, .pdf, .document, .audio, .other],
+                                      date: .any, size: .any)
+        XCTAssertFalse(allButFolder.matches(kind: .folder, sizeBytes: nil, modified: nil, now: now))
+        XCTAssertTrue(allButFolder.matches(kind: .image, sizeBytes: 5, modified: now, now: now))
     }
 
     // MARK: - isActive

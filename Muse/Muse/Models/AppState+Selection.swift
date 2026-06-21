@@ -43,8 +43,8 @@ extension AppState {
     /// "What you can't see can't be acted on" — mirrors the feat/next-41 rule
     /// that file-only flows must not silently act on out-of-view nodes. Called
     /// from `gridFilter`'s didSet; reads `selectionOrder` (= the freshly
-    /// recomputed `visibleFiles`). Folder cards stay visible under any facet, so
-    /// a selected folder is never pruned here.
+    /// recomputed `visibleFiles`). A selected folder is pruned too if the
+    /// "Folders" kind facet hid it.
     func pruneSelectionToVisible() {
         guard !selectedFiles.isEmpty else { return }
         let visible = Set(selectionOrder)

@@ -59,17 +59,15 @@ extension AppState {
         // extra resourceValues hit; the memo means this runs only when an input
         // actually changed, not on every grid render.
         //
-        // Folder grid cards (the one-level browse view, feat/next-41) are
-        // NAVIGATION, not content: they are always kept regardless of the facet
-        // filter. Otherwise a Kind filter excluding "Other" — or any date/size
-        // facet (a folder's size/mtime is nil-ish) — would hide subfolders and
-        // strand drill-in. This is the explicit folder decision feat/next-41's
-        // rule requires (collection/search branches carry no folders anyway).
+        // Folder grid cards (the one-level browse view, feat/next-41) are now a
+        // first-class Kind facet ("Folders"): the matcher keeps them when the
+        // kind set is empty or contains `.folder`, and never lets a date/size
+        // facet hide them (those are file concepts). So unchecking "Folders"
+        // hides subfolder cards, and any other facet leaves them alone.
         let result: [FileNode]
         if gridFilter.isActive {
             let now = Date()
             result = base.filter {
-                $0.kind == .folder ||
                 gridFilter.matches(kind: $0.kind,
                                    sizeBytes: $0.sizeBytes,
                                    modified: $0.modifiedAt,
