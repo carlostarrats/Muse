@@ -3274,3 +3274,54 @@ tag's tiles can show at the start of the 0.2s crossfade — imperceptible for no
 indexed single-label queries, only surfacing under a slow/contended DB. Second
 verification round: all six fixes correct, no regression, ready to commit. Build +
 full `MuseTests` green.
+
+### `feat/next-46` — collection PDF export carries the active tag filter
+
+The collection PDF export (`ShareCollectionButton` → Save to… / Share) now reflects
+the on-screen tag refinement, in two parts (spec + plan in `docs/superpowers/`).
+
+1. **Export the filtered grid, not all members.** `exportURLs` switched from
+   `activeCollectionFiles` (the full membership) to `AppState.visibleFiles` (minus
+   folders) — exactly what's on screen, so the active tag set AND any engaged
+   kind/date/size facet filter narrow the export. The header count already came from
+   `urls.count`, so it auto-follows the filtered set. Safe by construction: the Share
+   button lives in `CollectionsRow`, which `GridView` renders ONLY when
+   `!isSearchActive` (line 124), so the export path can never hit `visibleFiles`'
+   search branch (global results) — when the button exists, `visibleFiles` resolves
+   through `activeCollectionFiles ?? currentFiles`, the in-collection filtered set.
+
+2. **Draw the active tag labels as pills above the title.** `makePDF` gained a
+   `tagLabels: [String] = []` parameter (defaulted, so the call site stayed a
+   one-line change). On page 1 the labels render as bare CoreText capsules above the
+   collection name — matching the on-screen `BannerPill` (12pt medium, `black @ 8%`
+   wash), 8/2pt padding, left→right, NO "Viewing"/"and" connective words. Pills show
+   for **1+ tags** (a deliberate divergence from the on-screen banner's 2+ threshold:
+   the PDF has no chip row, so a single pill is the only refinement cue). The page-1
+   header reserve (`firstPageHeaderHeight`) grew to fit the pill row(s) + gap + title;
+   `CollectionPDFLayout.paginate` already takes a variable first-page header, so image
+   packing is untouched. The no-tags path is byte-for-byte the old 46pt title-only
+   header (title baseline preserved at `pageSize.height - margin - 24`), so an
+   unfiltered export is identical to before. Pills wrap to a second row on overflow.
+
+Decisions (locked in the spec): export set = exactly what's on screen (vs tags-only);
+pills for 1+ tags (vs match-the-screen 2+). Out of scope: OR/union mode, the export
+filename, facet labels in the header text, Collections-card-page filtering.
+
+**QA (two review rounds + visual render check).** An adversarial correctness/QA
+review found one **High**: an over-long tag label (tags are user-renameable to
+arbitrary length) drew a capsule past the page margin with no truncation — the
+on-screen `BannerPill` relies on a horizontal scroll the PDF lacks. Fix: `layoutPills`
+clamps each pill width to the content width (`min(pillWidth, maxWidth)` — the
+first-of-row pill never wraps, so the clamp is what bounds it), and `drawPill`
+truncates the label to the capsule's inner width (`p.width - 2*padH`) with an ellipsis
+token via `CTLineCreateTruncatedLine`, mirroring `drawCaption`. A second review
+confirmed the fix (bounds proof: every capsule x-extent stays within
+`[margin, pageSize.width - margin]`; `blockHeight`/`rows` math intact; no-op for short
+tags) with no residual Critical/High. **Visual verification:** rendered real PDFs via a
+throwaway test harness (sandbox writes to the container tmp; read back externally) and
+eyeballed page-1 headers for none/one/two/long-tag variants — all correct (no pills
+unfiltered; single pill; two side-by-side pills; long tag clamped + `…`-truncated
+inside the margins). Harness deleted after. Build + full `MuseTests` green throughout.
+Two files: `Views/ShareCollectionButton.swift`, `Export/CollectionPDFExporter.swift`
+(`CollectionPDFLayout` unchanged). PENDING human GUI confirmation of the live export
+flow (automated GUI click unavailable).
