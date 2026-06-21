@@ -2027,6 +2027,47 @@ MuseShareExtension/                (separate app-extension target) "Send to Muse
   "Cannot find type 'FileNode' in scope" and similar — they're cross-
   file resolution issues that disappear at build time. Always verify
   with `xcodebuild ... build` before assuming something's broken.
+- **The app is LOCALIZED — every new user-facing string MUST be localized.**
+  Muse ships French (`feat/localization-french`, 346 UI strings in
+  `Localizable.xcstrings` + 1303 Vision tag terms in
+  `Localization/VisionVocabulary.json`); the infra is language-agnostic. As long
+  as more than one language exists, **any new feature/UI text is incomplete until
+  it's localized** — treat it like a test you must keep green. Rules:
+  - **Storage stays canonical-English; localize at DISPLAY time.** Never persist a
+    translated string (DB/FTS/collection rows/tags). AI tag labels render via
+    `VocabularyLocalizer.shared.display(label)`; the stored label is the canonical
+    English key (also the search/dedup identity). A new Vision-derived label that
+    should localize needs a row in `VisionVocabulary.json`.
+  - **Compiler extraction ONLY sees SwiftUI text-literal positions** —
+    `Text("…")`, `Button("…")`, `Label`, `.help("…")`, `.accessibilityLabel("…")`,
+    `Section`, `.navigationTitle`, `.alert` titles, `Toggle`/`Picker` titles. Those
+    auto-localize and `xcodebuild -exportLocalizations` extracts them.
+  - **Anything passed as a `String` is NOT extracted and will ship in English** —
+    AppKit setters (`NSSearchField.placeholderString`, `NS*Panel.prompt/.message`,
+    `NSMenuItem(title:)`), custom-view `title:`/`label:`/`text:`/`caption:`/
+    `placeholder:` params, `ternary ? "a" : "b"`, string concatenation,
+    `enum.displayName`/`label` properties, and method return values. **Hand-wrap
+    each in `String(localized:)`** (it auto-extracts once wrapped). For a label
+    built from a RUNTIME variable (e.g. `Text(row.label)` where `label` is dynamic),
+    use `NSLocalizedString(var, comment:)` and add the keys to the catalog manually.
+    This applies to VoiceOver too: `.accessibilityLabel/Hint/Value` built dynamically
+    are read aloud and must be wrapped.
+  - **Workflow for new strings / a new language:** wrap literals → run
+    `xcodebuild -exportLocalizations -project Muse/Muse.xcodeproj -localizationPath
+    <dir> -exportLanguage <lang>` (it write-backs every key into the source
+    `.xcstrings` — a plain build does NOT) → fill the empty `<lang>` values → it
+    reports 0 untranslated when done. Add the language to `knownRegions`.
+  - **Longer localized text overflows fixed-width controls** — budget ~1.3× the
+    English width; use `lineLimit(1)` + `.truncationMode(.tail)` +
+    `.minimumScaleFactor(…)` (or a wider frame).
+  - **Run the unit suite in an English host.** Enum-`displayName`/toast tests assert
+    the English source; a per-app French override (`defaults write com.tarrats.Muse
+    AppleLanguages '("fr")'`) makes them read French and fail — that's expected, not
+    a regression. To preview the app in French, launch with
+    `open -n <Muse.app> --args -AppleLanguages "(fr)"` (a one-shot arg, no defaults
+    write, so it doesn't pollute later test runs).
+  - See the `feat/localization-french` session log for the full design (display-time
+    layer, `VocabularyLocalizer` seam, search bridge, three removal kill-switches).
 
 ## Open product questions (none currently)
 
