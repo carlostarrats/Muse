@@ -1,6 +1,171 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "About Muse" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "À propos de Muse" } } }
+    },
+    "All" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Tout" } } }
+    },
+    "and" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "et" } } }
+    },
+    "Automatic organization" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Organisation automatique" } } }
+    },
+    "Back to Library" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Retour à la bibliothèque" } } }
+    },
+    "Back Up Muse…" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Sauvegarder Muse…" } } }
+    },
+    "Background" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Arrière-plan" } } }
+    },
+    "Cancel" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Annuler" } } }
+    },
+    "Clear Tag Filter" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Effacer le filtre d'étiquettes" } } }
+    },
+    "Collections" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Collections" } } }
+    },
+    "Create" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Créer" } } }
+    },
+    "Delete" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer" } } }
+    },
+    "Delete All" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Tout supprimer" } } }
+    },
+    "Delete All Tags…" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer toutes les étiquettes…" } } }
+    },
+    "Delete Collection…" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer la collection…" } } }
+    },
+    "Delete Tag…" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer l'étiquette…" } } }
+    },
+    "Deselect All" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Tout désélectionner" } } }
+    },
+    "Filter" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Filtrer" } } }
+    },
+    "Find Duplicates in Folder" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rechercher les doublons dans le dossier" } } }
+    },
+    "Grid" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Grille" } } }
+    },
+    "Image Layout" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Disposition des images" } } }
+    },
+    "Move Collection Down" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Déplacer la collection vers le bas" } } }
+    },
+    "Move Collection Up" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Déplacer la collection vers le haut" } } }
+    },
+    "Move Folder Down" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Déplacer le dossier vers le bas" } } }
+    },
+    "Move Folder Up" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Déplacer le dossier vers le haut" } } }
+    },
+    "New Collection" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Nouvelle collection" } } }
+    },
+    "New Collection from Selection…" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Nouvelle collection à partir de la sélection…" } } }
+    },
+    "New Subfolder…" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Nouveau sous-dossier…" } } }
+    },
+    "No collections yet" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Aucune collection pour l'instant" } } }
+    },
+    "None yet" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Aucune pour l'instant" } } }
+    },
+    "OK" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "OK" } } }
+    },
+    "Open" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ouvrir" } } }
+    },
+    "Open in Finder" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ouvrir dans le Finder" } } }
+    },
+    "Regenerate" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Régénérer" } } }
+    },
+    "Regenerate Tags…" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Régénérer les étiquettes…" } } }
+    },
+    "Remove Folder" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Retirer le dossier" } } }
+    },
+    "Remove Selection from Collection" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Retirer la sélection de la collection" } } }
+    },
+    "Remove Tag from Selection" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Retirer l'étiquette de la sélection" } } }
+    },
+    "Rename" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Renommer" } } }
+    },
+    "Rename Collection…" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Renommer la collection…" } } }
+    },
+    "Rename Folder…" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Renommer le dossier…" } } }
+    },
+    "Rename Tag…" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Renommer l'étiquette…" } } }
+    },
+    "Restore from Backup…" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Restaurer depuis une sauvegarde…" } } }
+    },
+    "Select All" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Tout sélectionner" } } }
+    },
+    "Set as Collection Cover" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Définir comme couverture de la collection" } } }
+    },
+    "Settings" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Réglages" } } }
+    },
+    "Settings…" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Réglages…" } } }
+    },
+    "Show files in subfolders" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Afficher les fichiers des sous-dossiers" } } }
+    },
+    "Sidebar" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Barre latérale" } } }
+    },
+    "Sort" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Trier" } } }
+    },
+    "Sort collections" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Trier les collections" } } }
+    },
+    "Sort folders" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Trier les dossiers" } } }
+    },
+    "Tag order" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ordre des étiquettes" } } }
+    },
+    "Viewing" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "Affichage" } } }
+    },
+    "copy all" : {
+      "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "tout copier" } } }
+    }
   },
   "version" : "1.0"
 }
