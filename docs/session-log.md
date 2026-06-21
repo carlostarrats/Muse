@@ -3053,3 +3053,19 @@ same session.) **PENDING:** human GUI verification of the interactive flows (app
 each facet in a folder / collection / search, confirm the blue engaged state +
 Clear All + persistence) — live click automation unavailable (the harness lacks
 macOS Accessibility permission). Spec + plan in `docs/superpowers/`.
+
+**Follow-up (same branch, user-requested polish).** Three refinements after the
+first live drive: (1) the funnel moved INTO the sort cluster, between the sort-by
+menu and the direction arrow (per-control `.disabled` so it can keep the opposite
+enablement from the sort controls). (2) **"Folders" is now a first-class Kind
+facet** (`KindFacet.folder`) — the matcher matches a folder by the kind facet ONLY
+(date/size never hide one), so unchecking Folders hides subfolder cards while any
+other facet leaves them alone; this replaces the earlier unconditional
+"always keep `.folder`" bypass in `visibleFiles` (the review's conservative default,
+now superseded by the user's explicit ask for folder control). The selection prune
+follows suit — a selected folder is pruned if Folders is unchecked. (3) the funnel
+is **disabled on the Collections card page** (`.disabled(isCollectionsPage)`) since
+collection cards aren't filtered; it stays live inside a collection and during
+search. New `GridFilterTests.testFolderMatchedOnlyByKindFacet`; `testKindFacetBucketing`
+updated (`.folder` → `.folder`). Build + full `MuseTests` suite green; toolbar
+reorder confirmed visually (funnel between sort-by and the arrow).

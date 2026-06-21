@@ -301,10 +301,10 @@ The four most critical are also saved as Claude memories (linked).
   filter** (`gridFilter`, feat/next-42) was the one narrowing input that didn't,
   so its `didSet` calls `AppState.pruneSelectionToVisible()` — deselect anything
   the new filter hides ("what you can't see can't be acted on"), with a
-  grid-ordered deterministic replacement Shift anchor. Folder cards stay visible
-  under any facet, so a selected folder is never pruned. Rule: a new filter/scope
-  that can hide selected tiles must prune (or clear) the selection in lockstep,
-  not rely on the consumer to re-check visibility. Fixed 2026-06-20 (`feat/next-42`).
+  grid-ordered deterministic replacement Shift anchor (a selected folder IS pruned
+  if the "Folders" kind facet hid it). Rule: a new filter/scope that can hide
+  selected tiles must prune (or clear) the selection in lockstep, not rely on the
+  consumer to re-check visibility. Fixed 2026-06-20 (`feat/next-42`).
 
 ### Session index (detail in `docs/session-log.md`)
 
@@ -807,13 +807,15 @@ The four most critical are also saved as Claude memories (linked).
   automation was unavailable — macOS Accessibility not granted to the harness).
 - **2026-06-20** `feat/next-42` — **Grid faceted filters (kind / date / size).**
   A funnel toolbar button beside the sort cluster opens a mood-picker-styled
-  popover (Kind checkboxes: Images/Videos/PDFs/Documents/Audio/Other · Date radio:
-  Any/Today/This Week/This Month/This Year, **modified** date · Size radio:
-  Any/<1MB/1–10/10–100/>100MB · Clear All). The button inverts to the engaged
-  accent (blue) whenever a filter is active. The filter is a pure narrowing layer
-  applied as the FINAL step of the `visibleFiles` pipeline on EVERY branch
-  (browse / collection / tag / search — the funnel is its own ToolbarItem, NOT
-  disabled during search), and PERSISTS across folder switches (held on AppState,
+  popover (Kind checkboxes: Images/Videos/PDFs/Documents/Audio/Folders/Other ·
+  Date radio: Any/Today/This Week/This Month/This Year, **modified** date · Size
+  radio: Any/<1MB/1–10/10–100/>100MB · Clear All). The button inverts to the
+  engaged accent (blue) whenever a filter is active. It sits in the sort cluster
+  BETWEEN the sort-by menu and the direction arrow (per-control `.disabled`: live
+  during search since it narrows results, but disabled on the Collections CARD
+  page where cards aren't filtered). The filter is a pure narrowing layer applied
+  as the FINAL step of the `visibleFiles` pipeline on EVERY branch (browse /
+  collection / tag / search), and PERSISTS across folder switches (held on AppState,
   mirrored to AppSettings — enables a cross-folder "PDFs this week everywhere"
   sweep). Reuses the established pure-model + AppSettings-mirror + AppState
   @Published + memo-invalidation pattern (`imageLayout`/`tileBackground`). New pure
@@ -821,10 +823,12 @@ The four most critical are also saved as Claude memories (linked).
   value type (`isActive`, deterministic `matches(kind:sizeBytes:modified:now:)`
   with injected `now`, decimal-MB buckets matching `ByteCountFormatter(.file)`,
   Codable `resolve`); `KindFacet(from:)` is an exhaustive 16-case AssetKind switch
-  (→`.other` default). The matcher reads what `FileNode` already carries (kind/
-  sizeBytes/modifiedAt) — no extra `resourceValues`. Two QA fixes: **(a)** folder
-  cards stay visible under any facet (`$0.kind == .folder ||` in `visibleFiles` —
-  folders are navigation, not content); **(b)** `gridFilter.didSet` calls
+  (→`.other` default; `.folder` is its own facet). The matcher reads what
+  `FileNode` already carries (kind/sizeBytes/modifiedAt) — no extra
+  `resourceValues` — and matches a folder ONLY by the kind facet (date/size never
+  hide one). Two QA fixes: **(a)** "Folders" is a first-class Kind facet so
+  subfolder cards can be toggled on/off (unchecking hides them; other facets leave
+  them alone); **(b)** `gridFilter.didSet` calls
   `pruneSelectionToVisible()` so a filter-hidden selected file can't ride into a
   selection action (see the durable gotcha above). A11y: popover section headers
   get `.isHeader`; the funnel announces state via `.accessibilityValue`. New
@@ -959,15 +963,17 @@ Muse/Muse/
                                    AppState.effectiveTileBackground. Unit-tested
                                    (feat/next-22)
     GridFilter.swift               global grid faceted filter (pure, unit-tested):
-                                   KindFacet (image/video/pdf/document/audio/other,
-                                   from an exhaustive 16-case AssetKind switch) +
-                                   DateFacet (any/today/week/month/year, MODIFIED
-                                   date, Calendar.current windows) + SizeFacet
-                                   (any/<1MB/1–10/10–100/>100MB, decimal MB) + a
-                                   GridFilter value type: isActive, deterministic
-                                   matches(kind:sizeBytes:modified:now:) (now
-                                   injected for tests), Codable resolve(_:) default
-                                   .none. Persisted via AppSettings.gridFilter
+                                   KindFacet (image/video/pdf/document/audio/
+                                   folder/other, from an exhaustive 16-case
+                                   AssetKind switch) + DateFacet (any/today/week/
+                                   month/year, MODIFIED date, Calendar.current
+                                   windows) + SizeFacet (any/<1MB/1–10/10–100/
+                                   >100MB, decimal MB) + a GridFilter value type:
+                                   isActive, deterministic matches(kind:sizeBytes:
+                                   modified:now:) (now injected for tests; a folder
+                                   matches by the kind facet ONLY — date/size never
+                                   hide one), Codable resolve(_:) default .none.
+                                   Persisted via AppSettings.gridFilter
                                    (JSON), mirrored on AppState.gridFilter whose
                                    didSet invalidates the visibleFiles memo + prunes
                                    the selection (feat/next-42)
@@ -1284,13 +1290,17 @@ Muse/Muse/
                                    disabled→Auto in masonry with a note) — feat/
                                    next-22
     GridFilterPopover.swift        the funnel-button popover (mood-picker chrome,
-                                   ~270): KIND checkboxes (Toggle .checkbox, "empty
-                                   == all" sentinel normalized in toggleKind) / DATE
-                                   + SIZE radio (Picker .radioGroup) / Clear All,
-                                   writing AppState.gridFilter. Section headers carry
-                                   .isHeader. The funnel ToolbarItem lives in
-                                   ContentView (filterMenu) beside the sort cluster
-                                   but is NOT disabled during search; engaged-blue +
+                                   ~270): KIND checkboxes incl. Folders (Toggle
+                                   .checkbox, "empty == all" sentinel normalized in
+                                   toggleKind) / DATE + SIZE radio (Picker
+                                   .radioGroup) / Clear All, writing
+                                   AppState.gridFilter. Section headers carry
+                                   .isHeader. The funnel (ContentView.filterMenu)
+                                   lives INSIDE the sort cluster between the sort-by
+                                   menu and the direction arrow; per-control
+                                   .disabled — live during search (narrows results)
+                                   but disabled on the Collections card page (cards
+                                   aren't filtered); engaged-blue +
                                    .accessibilityValue when gridFilter.isActive
                                    (feat/next-42)
     InfoSheet.swift                ⓘ About-Muse modal (behavior + privacy); uses
