@@ -65,10 +65,8 @@ struct ViewerRouter: View {
             }
 
         case .video:
-            ViewerChrome(title: file.basename) {
-                VideoPlayerView(url: file.url)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            HeroVideoViewer(file: file)
+                .id(file.url)
 
         case .audio:
             ViewerChrome(title: file.basename) {
