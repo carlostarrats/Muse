@@ -22,10 +22,11 @@ struct ShareCollectionButton: View {
     @State private var hovering = false
     @State private var preparing = false
 
-    /// The collection's displayed members, in grid order — images and file
-    /// cards alike (folders are excluded; they aren't grid content to export).
+    /// The collection's CURRENTLY VISIBLE members, in grid order — the on-screen
+    /// set, so an active tag/facet filter narrows the export (images and file
+    /// cards alike; folders are excluded — they aren't grid content to export).
     private var exportURLs: [URL] {
-        (appState.activeCollectionFiles ?? []).compactMap { node in
+        appState.visibleFiles.compactMap { node in
             node.kind == .folder ? nil : node.url
         }
     }
@@ -64,7 +65,8 @@ struct ShareCollectionButton: View {
             .backdropRGB(for: appState.moodPalette)?.cgColor
         return await CollectionPDFExporter.makePDF(
             urls: urls, title: title, count: urls.count, columns: gridColumns,
-            layoutAspect: layoutAspect, tileBackdrop: backdrop)
+            layoutAspect: layoutAspect, tileBackdrop: backdrop,
+            tagLabels: appState.activeTagLabels)
     }
 
     private func save() async {

@@ -974,6 +974,33 @@ The four most critical are also saved as Claude memories (linked).
   no regression. Build + full `MuseTests` green throughout. New durable gotcha recorded.
   Spec + plan in `docs/superpowers/`. PENDING human GUI verification of the interactive
   flows (live click automation unavailable).
+- **2026-06-20** `feat/next-46` — **collection PDF export carries the active tag
+  filter.** Exporting a collection (`ShareCollectionButton` → Save to… / Share) now
+  reflects the on-screen tag refinement. (1) `exportURLs` switched from
+  `activeCollectionFiles` (all members) to `AppState.visibleFiles` minus folders — the
+  filtered grid, so an active tag set AND any kind/date/size facet narrow the export;
+  the header count follows `urls.count`. Safe because `GridView` mounts the collection
+  header (which holds the Share button) only when `!isSearchActive`, so `visibleFiles`
+  here never resolves to its global-search branch. (2) `CollectionPDFExporter.makePDF`
+  gained `tagLabels: [String] = []`, drawn on page 1 as bare CoreText pills above the
+  title — matching the on-screen `BannerPill` (12pt medium, `black @ 8%` wash, 8/2pt
+  pad), left→right, NO "Viewing"/"and" words, shown for **1+ tags** (the PDF has no chip
+  row, so a single pill is the only refinement cue — a deliberate divergence from the
+  banner's 2+ threshold). The page-1 `firstPageHeaderHeight` grows to fit the pill
+  block + gap + title (`CollectionPDFLayout.paginate` already takes a variable header);
+  no-tags is byte-for-byte the old 46pt title-only header, so an unfiltered export is
+  identical. Pills wrap to a second row on overflow. **QA:** two adversarial review
+  rounds — round 1 found a **High** (an over-long user-renameable tag overran the page
+  margin; the on-screen pill relies on a scroll the PDF lacks) → fixed by clamping each
+  pill width to the content width in `layoutPills` and ellipsis-truncating the label in
+  `drawPill` (`CTLineCreateTruncatedLine`, mirroring `drawCaption`); round 2 confirmed
+  the fix (bounds proof, no residual Critical/High). Plus a **visual render check** —
+  rendered real PDFs (none/one/two/long-tag) via a throwaway test harness and eyeballed
+  the page-1 headers (all correct), harness deleted after. No new unit tests (CoreText
+  drawing has no pure surface; `CollectionPDFLayout` is unchanged). Build + full
+  `MuseTests` green. Spec + plan in `docs/superpowers/`. Two files:
+  `Views/ShareCollectionButton.swift`, `Export/CollectionPDFExporter.swift`. PENDING
+  human GUI confirmation of the live export flow.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
@@ -1388,11 +1415,17 @@ Muse/Muse/
     ShareCollectionButton.swift    in-collection header menu — Save to… (NSSavePanel,
                                    Desktop) / Share (NSSharingServicePicker); builds
                                    an 11×14 paginated PDF (feat/collection-pdf-share).
-                                   exportURLs = all non-folder members (file cards
-                                   included, not just images); passes the active
-                                   imageLayout.aspect + effectiveTileBackground
-                                   backdrop (sRGB cgColor) into the exporter so the
-                                   PDF mirrors the grid (feat/next-22)
+                                   exportURLs = AppState.visibleFiles minus folders —
+                                   the on-screen filtered grid, so an active tag/facet
+                                   filter narrows the export; the header count follows
+                                   urls.count (feat/next-46, was all members). Passes
+                                   the active imageLayout.aspect + effectiveTileBackground
+                                   backdrop (sRGB cgColor) AND appState.activeTagLabels
+                                   into the exporter so the PDF mirrors the grid (the
+                                   tags render as header pills — feat/next-22, next-46).
+                                   Safe: GridView mounts this header only when
+                                   !isSearchActive, so visibleFiles never resolves to
+                                   the search branch here
     AspectRatioCache.swift         per-file aspect (h÷w) for layout: bulk DB
                                    width/height + ImageIO header fallback, off-main
     CollectionsPage.swift          dedicated Collections page (toolbar
@@ -1566,7 +1599,17 @@ Muse/Muse/
                                    white); non-image files fall back to QuickLook
                                    (QLThumbnailGenerator .all) so file cards render;
                                    decode runs 8-wide via withTaskGroup, order
-                                   preserved (feat/next-22)
+                                   preserved (feat/next-22). makePDF also takes
+                                   tagLabels: [String] = [] — the active tag-filter
+                                   labels drawn as bare CoreText pills above the title
+                                   on page 1 (capsule matching the on-screen BannerPill,
+                                   no "Viewing"/"and" words, 1+ tags); layoutPills packs
+                                   them left→right wrapping on overflow + clamps each to
+                                   the content width, drawPill ellipsis-truncates an
+                                   over-long label (CTLineCreateTruncatedLine). The page-1
+                                   firstPageHeaderHeight grows to fit the pill block;
+                                   no tags → unchanged 46pt title-only header
+                                   (feat/next-46)
   Effects/                         (was Fluid/, renamed 2026-06-17; water ripple
                                    removed 2026-06-13 and the burn-up delete
                                    SHADER removed too — NO Metal shaders remain)

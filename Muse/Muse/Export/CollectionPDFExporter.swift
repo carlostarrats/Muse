@@ -17,16 +17,40 @@ import QuickLookThumbnailing
 
 enum CollectionPDFExporter {
 
+    // MARK: - Tag pills (page-1 header)
+
+    /// Geometry for the tag-filter pills drawn above the collection title.
+    /// Mirrors the on-screen `BannerPill` (12pt medium, 8pt h-pad, quiet wash).
+    private static let pillFontSize: CGFloat = 12
+    private static let pillHeight: CGFloat = 16      // 12pt text + 2*2pt v-pad
+    private static let pillPadH: CGFloat = 8
+    private static let pillRowGap: CGFloat = 4       // between wrapped pill rows
+    private static let pillGap: CGFloat = 6          // between pills in a row
+    private static let pillToTitleGap: CGFloat = 10  // pill block → title baseline
+    private static let titleFontSize: CGFloat = 24
+    /// The original title-only header reserve (kept so the gap below the title
+    /// to the first image is unchanged whether or not pills are present).
+    private static let titleBlockHeight: CGFloat = 46
+
+    /// One positioned pill plus the laid-out block, in TOP-LEFT-origin coords
+    /// (y from the page top); the drawing code flips to PDF bottom-left.
+    private struct PillLayout {
+        struct Pill { let label: String; let x: CGFloat; let topFromTop: CGFloat; let width: CGFloat }
+        let pills: [Pill]
+        let blockHeight: CGFloat
+    }
+
     /// Build the PDF for `urls` (image files, in display order). `count` is the
     /// number shown beside the title. `columns` mirrors the grid density.
-    /// Returns a temp-file URL, or nil if nothing could be rendered.
+    /// `tagLabels` (empty by default) draws the active tag-filter pills above the
+    /// title on page 1. Returns a temp-file URL, or nil if nothing rendered.
     static func makePDF(urls: [URL], title: String, count: Int, columns: Int,
-                        layoutAspect: CGFloat?, tileBackdrop: CGColor?) async -> URL? {
+                        layoutAspect: CGFloat?, tileBackdrop: CGColor?,
+                        tagLabels: [String] = []) async -> URL? {
         await Task.detached(priority: .userInitiated) { () -> URL? in
             let pageSize = CGSize(width: 792, height: 1008)   // 11x14in @ 72dpi
             let margin: CGFloat = 36
             let gutter: CGFloat = 12
-            let headerHeight: CGFloat = 46
             // Filename strip below every image: a gap, one ~9pt line, and a
             // little descender slack beneath the baseline.
             let captionFontSize: CGFloat = 9
@@ -37,6 +61,17 @@ enum CollectionPDFExporter {
             let contentWidth = pageSize.width - margin * 2
             let columnWidth = (contentWidth - gutter * CGFloat(cols - 1)) / CGFloat(cols)
             let maxPixel = Int((columnWidth * 2).rounded(.up))   // crisp without bloat
+
+            // Tag-filter pills (page-1 header). Lay them out now so the first-
+            // page header reserve can grow to fit; empty labels → no pills → the
+            // original 46pt title-only header (unchanged unfiltered export).
+            let pillFont = CTFontCreateUIFontForLanguage(.system, pillFontSize, nil)
+                ?? CTFontCreateWithName("Helvetica" as CFString, pillFontSize, nil)
+            let pillLayout: PillLayout? = tagLabels.isEmpty ? nil
+                : layoutPills(tagLabels, font: pillFont, originX: margin,
+                              originTop: margin, maxWidth: contentWidth)
+            let headerHeight: CGFloat = pillLayout
+                .map { $0.blockHeight + pillToTitleGap + titleBlockHeight } ?? titleBlockHeight
 
             // Load downsampled, orientation-corrected images + their aspect +
             // filename (drawn as a caption under each image). Images decode fast
@@ -97,8 +132,9 @@ enum CollectionPDFExporter {
                 ctx.fill(CGRect(origin: .zero, size: pageSize))
 
                 if pageIndex == 0 {
-                    drawHeader(title: title, count: count, in: ctx,
-                               pageSize: pageSize, margin: margin)
+                    drawHeader(title: title, count: count,
+                               pillLayout: pillLayout, pillFont: pillFont,
+                               in: ctx, pageSize: pageSize, margin: margin)
                 }
 
                 for pl in page.placements {
@@ -172,15 +208,24 @@ enum CollectionPDFExporter {
         return rep?.cgImage
     }
 
-    /// "Title  count" at 24pt, top-left of the content box. PDF (bottom-left)
-    /// coordinates: text baseline sits 24pt below the top margin. Built with
-    /// CoreText (CTFont/CGColor) only — no AppKit — since this runs off the
-    /// main thread inside the detached export task.
-    private static func drawHeader(title: String, count: Int, in ctx: CGContext,
-                                   pageSize: CGSize, margin: CGFloat) {
-        let base = CTFontCreateUIFontForLanguage(.system, 24, nil)
-            ?? CTFontCreateWithName("Helvetica" as CFString, 24, nil)
-        let font = CTFontCreateCopyWithSymbolicTraits(base, 24, nil, .traitBold, .traitBold) ?? base
+    /// Page-1 header: optional tag-filter pills at the top, then "Title  count"
+    /// below them. With no pills the title sits exactly where it did before
+    /// (baseline 24pt below the top margin). CoreText only (off the main thread).
+    private static func drawHeader(title: String, count: Int,
+                                   pillLayout: PillLayout?, pillFont: CTFont,
+                                   in ctx: CGContext, pageSize: CGSize, margin: CGFloat) {
+        var titleBaselineFromTop = margin + titleFontSize
+        if let pillLayout {
+            for p in pillLayout.pills {
+                drawPill(p, font: pillFont, in: ctx, pageSize: pageSize)
+            }
+            titleBaselineFromTop = margin + pillLayout.blockHeight
+                + pillToTitleGap + titleFontSize
+        }
+
+        let base = CTFontCreateUIFontForLanguage(.system, titleFontSize, nil)
+            ?? CTFontCreateWithName("Helvetica" as CFString, titleFontSize, nil)
+        let font = CTFontCreateCopyWithSymbolicTraits(base, titleFontSize, nil, .traitBold, .traitBold) ?? base
         let fontKey = NSAttributedString.Key(kCTFontAttributeName as String)
         let colorKey = NSAttributedString.Key(kCTForegroundColorAttributeName as String)
         let attr = NSMutableAttributedString(
@@ -190,7 +235,7 @@ enum CollectionPDFExporter {
             string: "  \(count)",
             attributes: [fontKey: font, colorKey: CGColor(gray: 0.5, alpha: 1)]))
         let line = CTLineCreateWithAttributedString(attr)
-        ctx.textPosition = CGPoint(x: margin, y: pageSize.height - margin - 24)
+        ctx.textPosition = CGPoint(x: margin, y: pageSize.height - titleBaselineFromTop)
         CTLineDraw(line, ctx)
     }
 
@@ -223,5 +268,74 @@ enum CollectionPDFExporter {
         let scale = min(box.width / imageW, box.height / imageH)
         let w = imageW * scale, h = imageH * scale
         return CGRect(x: box.midX - w / 2, y: box.midY - h / 2, width: w, height: h)
+    }
+
+    /// Width of one pill: measured label width + horizontal padding both sides.
+    private static func pillWidth(_ label: String, font: CTFont) -> CGFloat {
+        let attrs: [NSAttributedString.Key: Any] = [
+            NSAttributedString.Key(kCTFontAttributeName as String): font]
+        let line = CTLineCreateWithAttributedString(
+            NSAttributedString(string: label, attributes: attrs))
+        let textW = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
+        return textW + pillPadH * 2
+    }
+
+    /// Lay `labels` left → right starting at (`originX`, `originTop`) (top-left
+    /// origin), wrapping to a new row when the next pill would exceed `maxWidth`
+    /// (always at least one pill per row). Returns positioned pills + the total
+    /// block height. Caller guards `labels` non-empty.
+    private static func layoutPills(_ labels: [String], font: CTFont,
+                                    originX: CGFloat, originTop: CGFloat,
+                                    maxWidth: CGFloat) -> PillLayout {
+        var pills: [PillLayout.Pill] = []
+        var x = originX
+        var top = originTop
+        var rows = 1
+        for label in labels {
+            // Clamp to the content width so an over-long single tag (the first
+            // pill of a row never wraps) can't run off the page edge; drawPill
+            // truncates the label to fit the clamped capsule.
+            let w = min(pillWidth(label, font: font), maxWidth)
+            if x > originX, x + w > originX + maxWidth {
+                x = originX
+                top += pillHeight + pillRowGap
+                rows += 1
+            }
+            pills.append(.init(label: label, x: x, topFromTop: top, width: w))
+            x += w + pillGap
+        }
+        let blockHeight = CGFloat(rows) * pillHeight + CGFloat(rows - 1) * pillRowGap
+        return PillLayout(pills: pills, blockHeight: blockHeight)
+    }
+
+    /// Draw one pill: a quiet capsule (black @ 8% on the white page) with the
+    /// vertically-centered, left-padded label (black). PDF bottom-left coords.
+    private static func drawPill(_ p: PillLayout.Pill, font: CTFont, in ctx: CGContext,
+                                 pageSize: CGSize) {
+        let rect = CGRect(x: p.x, y: pageSize.height - p.topFromTop - pillHeight,
+                          width: p.width, height: pillHeight)
+        let path = CGPath(roundedRect: rect, cornerWidth: pillHeight / 2,
+                          cornerHeight: pillHeight / 2, transform: nil)
+        ctx.addPath(path)
+        ctx.setFillColor(CGColor(gray: 0, alpha: 0.08))
+        ctx.fillPath()
+
+        let fontKey = NSAttributedString.Key(kCTFontAttributeName as String)
+        let colorKey = NSAttributedString.Key(kCTForegroundColorAttributeName as String)
+        let attrs: [NSAttributedString.Key: Any] = [
+            fontKey: font, colorKey: CGColor(gray: 0, alpha: 1)]
+        // Truncate to the clamped capsule's inner width (mirrors drawCaption) so
+        // an over-long tag ends with an ellipsis instead of overrunning the pill.
+        let full = CTLineCreateWithAttributedString(
+            NSAttributedString(string: p.label, attributes: attrs))
+        let token = CTLineCreateWithAttributedString(
+            NSAttributedString(string: "\u{2026}", attributes: attrs))
+        let innerWidth = max(0, p.width - pillPadH * 2)
+        let line = CTLineCreateTruncatedLine(full, Double(innerWidth), .end, token) ?? full
+        var ascent: CGFloat = 0, descent: CGFloat = 0
+        _ = CTLineGetTypographicBounds(line, &ascent, &descent, nil)
+        let baselineFromTop = p.topFromTop + (pillHeight - (ascent + descent)) / 2 + ascent
+        ctx.textPosition = CGPoint(x: p.x + pillPadH, y: pageSize.height - baselineFromTop)
+        CTLineDraw(line, ctx)
     }
 }
