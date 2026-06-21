@@ -57,7 +57,8 @@ enum HeroPalette {
         }.value
     }
 
-    /// Video: one small frame ~1s in (clamped to duration) → RGBA → `paletteHexes`.
+    /// Video: one small frame ~1s in — or the clip's midpoint if it's shorter
+    /// than 2s — decoded to RGBA → `paletteHexes`.
     /// Skips dataless iCloud placeholders (never forces a download just to tint
     /// the backdrop); returns [] on any failure → neutral backdrop.
     nonisolated static func videoPalette(at url: URL) async -> [String] {

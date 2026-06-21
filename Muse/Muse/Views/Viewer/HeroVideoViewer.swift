@@ -158,8 +158,17 @@ struct HeroVideoViewer: View {
                 appState.deletion.restore(ticket: ticket,
                                           node: node ?? FileNode(url: url))
             }
-            appState.selectedFile = nil
-            appState.clearSelection()
+            // Only steer navigation if THIS file is still the one on screen.
+            // The 380ms fade gives a window where the user could Escape (which
+            // sets selectedFile = nil directly, bypassing close()) and open a
+            // different file; without this guard the late completion would close
+            // that newly-opened file and wipe its selection. The trash + toast
+            // above are unconditional — the user's delete still lands and stays
+            // undoable. (The viewer is per-file via .id, so file.url == url.)
+            if appState.selectedFile?.url == url {
+                appState.selectedFile = nil
+                appState.clearSelection()
+            }
         } catch {
             withAnimation(.easeOut(duration: 0.18)) {
                 toast = ToastData(message: "Couldn't move to Trash")
@@ -172,6 +181,10 @@ struct HeroVideoViewer: View {
     // MARK: - Load
 
     private func loadDetails() async {
+        // No stale-result URL guard needed (unlike HeroImageViewer, which
+        // reuses one instance across arrow-key flips): `file.url` is a `let` and
+        // the router mounts us with `.id(file.url)`, so switching files fully
+        // remounts with fresh @State — every write here targets this file.
         let url = file.url
         // Kick off the frame palette now so swatches/backdrop land while the
         // chrome fades in.
@@ -199,6 +212,13 @@ struct HeroVideoViewer: View {
     /// The video's display size (natural size with the preferred transform
     /// applied), used for the aspect-fit stage rect. nil → caller's 16:9 default.
     nonisolated private static func videoNaturalSize(at url: URL) async -> CGSize? {
+        // Don't read a not-yet-downloaded iCloud placeholder's container header
+        // just to size the stage (matches HeroPalette.videoPalette / FileMetadata).
+        // nil → the stage falls back to a 16:9 default until the file is local.
+        if (try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]))?
+            .ubiquitousItemDownloadingStatus == .notDownloaded {
+            return nil
+        }
         let asset = AVURLAsset(url: url)
         guard let track = try? await asset.loadTracks(withMediaType: .video).first,
               let size = try? await track.load(.naturalSize),
@@ -225,6 +245,7 @@ private struct VideoCloseButton: View {
                 .background(Circle().fill(.white.opacity(hovering ? 0.24 : 0.10)))
         }
         .buttonStyle(.plain)
+        .help("Close")
         .accessibilityLabel("Close")
         .onHover { hovering = $0 }
     }
