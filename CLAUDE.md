@@ -1176,13 +1176,22 @@ The four most critical are also saved as Claude memories (linked).
   in-language (FM prompt + localized fallback namer). T7 formatting audit = no-op
   (display formatters already `Locale.current`). **Then FULL translation:** all 1303
   Vision taxonomy terms (8 parallel subagents, coverage-checked 0 missing/extra/dup) +
-  all 240 UI strings (via `xcodebuild -exportLocalizations`, which write-backs the key
+  all UI strings (via `xcodebuild -exportLocalizations`, which write-backs the key
   set into the source `.xcstrings`); enum display props (sort/mood/layout/tile/filter)
   wrapped in `String(localized:)` so menus localize too (display-only; rawValue
-  persistence untouched; `displayName` tests pass in the en test host). 240/240 + 1303/
-  1303 compile to `fr.lproj`. Gotchas: a plain `xcodebuild` build does NOT write
-  extracted catalog keys back (use `-exportLocalizations`); sandbox test can't write
-  `/tmp` (use `NSTemporaryDirectory()`); a function call inside a big SwiftUI view-builder
+  persistence untouched; `displayName` tests pass in the en test host). Two live-feedback
+  passes grew the catalog 240→**315 keys** catching the strings extraction MISSES (anything
+  passed as a plain `String`: AppKit setters, custom-view title:/label: params, data
+  arrays, toasts, the ⓘ About modal via `section()`→`LocalizedStringKey`, INFO-card
+  metadata labels via `NSLocalizedString(row.label)` at the render site). 315 strings +
+  1303/1303 vocab compile to `fr.lproj`; live French confirmed with the user. Gotchas: a
+  plain `xcodebuild` build does NOT write extracted keys back (use `-exportLocalizations`);
+  **compiler extraction only sees SwiftUI text-literal positions — String-typed UI text
+  (AppKit/custom-view params/data arrays/`displayName`s) must be hand-wrapped in
+  `String(localized:)`, or `NSLocalizedString(var)`+manual keys for a runtime label**;
+  enum-`displayName` tests assert English so run the suite in an en host; longer French
+  overflows fixed-width controls (truncationMode+minimumScaleFactor); sandbox test can't
+  write `/tmp` (use `NSTemporaryDirectory()`); a call inside a big SwiftUI view-builder
   expression trips "unable to type-check in reasonable time" — bind to a `let`. A SECOND
   language is now "fill a column," no code. PENDING human GUI verification in French
   (`-AppleLanguages '(fr)'`) + real-user wording review. All unit tests green.
@@ -1483,7 +1492,8 @@ Muse/Muse/
                                    (all 1303 VNClassifyImageRequest taxonomy terms;
                                    untranslated terms fall back per-term by design)
   Localizable.xcstrings            (at Muse/Muse/ root) UI-chrome String Catalog;
-                                   FULL fr (all 240 compiler-extracted strings).
+                                   FULL fr (315 strings — extraction + the
+                                   String-typed UI text it misses, hand-wrapped).
                                    Xcode 26 synced groups auto-include it; only
                                    knownRegions needed `fr`. NOTE: a plain xcodebuild
                                    build does NOT write extracted keys back to the

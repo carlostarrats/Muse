@@ -3673,10 +3673,41 @@ for a real-user test — can't ship a half-French app):
   tag/folder/collection sort, grid-filter facets) wrapped in `String(localized:)` so
   menus/pickers localize too — display-only props (persistence uses rawValue, untouched);
   `displayName` unit tests still pass because `String(localized:)` resolves to the English
-  source under the en test host. **240/240 strings + 1303/1303 vocabulary compile to
-  `fr.lproj`.**
+  source under the en test host. **All strings + 1303/1303 vocabulary compile to `fr.lproj`.**
+
+**Two live-feedback passes** (drove the app in French, fixed what the user spotted) grew the
+catalog 240 → **315 keys** by catching the whole class of strings the compiler extraction
+MISSES — anything passed as a plain `String` rather than a SwiftUI text literal:
+- AppKit setters (`NSSearchField.placeholderString`, `NSOpen/SavePanel.prompt/.message`),
+  custom-view `title:`/`label:`/`text:`/`caption:`/`placeholder:` params (hero card titles
+  TAGS/COLLECTION/COLORS/INFO, sidebar FOLDERS/COLLECTIONS, filter "Images", "Fit",
+  search-scope All/This Folder), data-driven arrays (ImageLayout "Common Sizes" camera
+  descriptions), `ToastData(message:)` + interpolated `show("…")` toasts.
+- Enum `displayName`/`label` (sort/mood/layout/tile/filter facets) wrapped in
+  `String(localized:)` so menus/pickers localize (display-only; rawValue persistence
+  untouched).
+- The **About (ⓘ) modal**: `section()` switched to `LocalizedStringKey` so all 17 titles +
+  prose paragraphs extract; bodies translated by a subagent (consistent voice).
+- **INFO-card metadata labels** (Taken/Camera/Lens/Exposure/…): localized at the RENDER
+  site via `NSLocalizedString(row.label)` — the model keeps English labels (also used as
+  comparison keys + asserted by tests), only display localizes; widened the label column
+  64→80 for longer French.
+- **Layout fix:** longer French overran the "Open in Finder" action button; added
+  `truncationMode(.tail)` + `minimumScaleFactor(0.7)` + horizontal padding so labels
+  shrink-then-truncate inside the capsule (a general rule — budget for ~1.3× English width).
+
+Durable gotchas added: (1) a plain `xcodebuild` build does NOT write extracted catalog keys
+back to the source `.xcstrings` — use `xcodebuild -exportLocalizations` (it write-backs the
+full key set); (2) compiler extraction only sees SwiftUI text-literal positions — anything
+passed as a `String` (AppKit, custom-view params, data arrays, `displayName`s) must be
+hand-wrapped in `String(localized:)`, or for a runtime-variable label use
+`NSLocalizedString(var)` + manual catalog keys; (3) enum-`displayName` unit tests assert the
+English source, so the suite must run with the host in English (a French per-app override
+makes them read French — expected); (4) longer localized strings overflow fixed-width
+controls — plan truncation/scaling.
 
 The infrastructure is language-agnostic — a SECOND language is now purely "fill a column"
-(run `-exportLocalizations`, translate, add a `VisionVocabulary.json` lang key), no code
-changes. PENDING human GUI verification of the live French experience (launch with
-`-AppleLanguages '(fr)'`) and a real-user wording review. All unit tests green throughout.
+(run `-exportLocalizations`, translate the new keys, add a `VisionVocabulary.json` lang key),
+no code changes. **Live French GUI confirmed with the user** ("everything I can see looks
+French"); a native-speaker wording review is still the right final polish. All unit tests
+green throughout (in the en host).
