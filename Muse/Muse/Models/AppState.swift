@@ -566,7 +566,9 @@ final class AppState: ObservableObject {
     func openFromIntent(url: URL) {
         // If the URL is inside an existing root, navigate there directly.
         for node in rootNodes {
-            if url.path.hasPrefix(node.url.path) {
+            // Trailing-slash guard so a sibling root ("/a/Inspo") doesn't claim a
+            // file under "/a/Inspo Extra" — the standing path-prefix containment rule.
+            if url.path == node.url.path || url.path.hasPrefix(node.url.path + "/") {
                 let folder = FolderNode(url: url)
                 select(folder: folder)
                 return
