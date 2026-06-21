@@ -1239,7 +1239,10 @@ final class AppState: ObservableObject {
             return
         }
         let paths = scope.map { $0.url.standardizedFileURL.path }
-        let simpleDir = (!inCollection && !recursive) ? TagScope.parentDir(ofPath: paths[0]) : nil
+        // Search results can span folders, so the single-folder GROUP BY fast
+        // path doesn't apply — fall to the general per-file-scope query.
+        let simpleDir = (!inCollection && !recursive && !isSearchActive)
+            ? TagScope.parentDir(ofPath: paths[0]) : nil
         let tagSort = sortModeOverride ?? tagSortMode
         Task.detached(priority: .userInitiated) {
             let rows = TagChipLoader.ordered(
@@ -1295,6 +1298,9 @@ final class AppState: ObservableObject {
         isSearchActive = true
         // search results keep relevance rank; sort modes apply to folder browsing only
         currentFiles = results
+        // Chip labels derive from the search result set (tagSourceFiles is
+        // search-aware) so the offered chips stay relevant while searching.
+        reloadTagChips()
     }
 
     func clearSearch() {

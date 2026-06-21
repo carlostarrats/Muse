@@ -47,7 +47,13 @@ extension AppState {
         // search results are global; collection/tag filters apply to browsing only
         var base: [FileNode]
         if isSearchActive {
+            // Search results are global, but the tag chips now narrow WITHIN the
+            // result set (AND). activeTagPaths is library-wide for the selected
+            // labels, so it filters correctly across This-Folder and All scope.
             base = currentFiles
+            if let tagPaths = activeTagPaths {
+                base = base.filter { tagPaths.contains($0.url.standardizedFileURL.path) }
+            }
         } else {
             base = activeCollectionFiles ?? currentFiles
             if let tagPaths = activeTagPaths {
@@ -86,7 +92,11 @@ extension AppState {
     /// folder's files. Deliberately the UNFILTERED set, so selecting a tag
     /// doesn't collapse the chip list down to just that tag.
     var tagSourceFiles: [FileNode] {
-        activeCollectionFiles ?? currentFiles
+        // During search the chips derive from the search RESULT set so the
+        // offered tags are relevant (and the per-folder fast path is skipped
+        // since results can span folders — see reloadTagChips).
+        if isSearchActive { return currentFiles }
+        return activeCollectionFiles ?? currentFiles
     }
 
     /// Set (or clear, with nil) the active collection filter. Loads the

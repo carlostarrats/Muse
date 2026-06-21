@@ -68,10 +68,9 @@ struct ContentView: View {
                             // scroll view and scrolls with it. Hidden only
                             // during search and on the Collections page.
                             VStack(spacing: 0) {
-                                if !appState.isSearchActive {
-                                    TagChipsRow()
-                                        .transition(.opacity)
-                                }
+                                // Chips stay mounted during search too — tags now
+                                // narrow within the search result set (AND).
+                                TagChipsRow()
                                 GridView()
                             }
                             .transition(Self.pageReveal)
@@ -122,9 +121,10 @@ struct ContentView: View {
                 // between the grid sort cluster and the show-subfolders toggle.
                 ToolbarItem(placement: .navigation) {
                     tagSortMenu
-                        // The tag chips don't show on the Collections card page
-                        // or during a search.
-                        .disabled(isCollectionsPage || appState.isSearchActive)
+                        // The tag chips show on the grid, inside a collection, and
+                        // now over search results too — only the Collections card
+                        // page has no chip row.
+                        .disabled(isCollectionsPage)
                 }
 
                 // Its own item (own surface), sitting next to sort.
