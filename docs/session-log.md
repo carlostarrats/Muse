@@ -3082,3 +3082,34 @@ dims uniformly off its own control's `.disabled`. Two review rounds
 (Folders-facet logic + toolbar/dim) converged clean; the env-aware modifier was the
 toolbar reviewer's recommended fix for the consistency gap. Build + full `MuseTests`
 green. New durable gotcha recorded. See the CLAUDE.md gotcha above.
+
+### `feat/next-43` — disable show-subfolders in the Collections world
+
+**Goal.** The **show-subfolders** toolbar toggle (`rectangle.stack`) was live
+everywhere, but a collection is a flat membership with no folder tree — toggling
+it on the Collections card page or inside a single collection does nothing
+useful. Deactivate it in both places.
+
+**What shipped.** A new `inCollectionsContext` computed property in
+`ContentView` (`appState.showingCollections || appState.activeCollectionID != nil`)
+covers the card page AND a drilled-into collection regardless of entry path
+(opened from the page keeps `showingCollections` true; opened from the sidebar
+sets only `activeCollectionID`). The subfolders `Toggle`'s `.disabled` went from
+`appState.isSearchActive` to `appState.isSearchActive || inCollectionsContext`.
+The icon dims automatically because `moodToolbarIcon` reads `@Environment(\.isEnabled)`
+(the next-42 dim fix), so no extra styling was needed.
+
+**Why a separate predicate from `isCollectionsPage`.** The sort cluster's
+`tagSortMenu` / `filterMenu` disable on `isCollectionsPage` (card page only) —
+they stay live *inside* a collection (tag chips show; in-collection filtering is
+valid). Subfolders is different: it's dead in the **whole** Collections world, so
+it needs the broader `inCollectionsContext`, not `isCollectionsPage`.
+
+**QA.** Mirrors the established per-control `.disabled` convention in the toolbar;
+no state hazard (a disabled toggle can't flip its binding, and `showSubfolders`
+simply retains its prior value, restored on return to a normal folder grid).
+Build + full `MuseTests` suite green (`** TEST SUCCEEDED **`). No new test — pure
+SwiftUI `.disabled` on a computed bool, same as prior toolbar-enablement changes.
+One file (`ContentView.swift`). PENDING human GUI confirmation that the toggle
+greys out on the card page and inside a collection (live click automation
+unavailable — harness lacks macOS Accessibility permission).

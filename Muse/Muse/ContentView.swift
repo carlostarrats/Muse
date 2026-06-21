@@ -29,6 +29,14 @@ struct ContentView: View {
             && !appState.isSearchActive
     }
 
+    /// True anywhere in the Collections world — the card page OR drilled into a
+    /// single collection (whether opened from the page or the sidebar). Used to
+    /// disable controls that make no sense there, like show-subfolders:
+    /// collections are a flat membership, not a folder tree.
+    private var inCollectionsContext: Bool {
+        appState.showingCollections || appState.activeCollectionID != nil
+    }
+
     /// Collections-page⇄grid swap: the outgoing screen is removed INSTANTLY and
     /// only the incoming fades in (over the background). With no overlap, the two
     /// dissimilar layouts never blend into a "ghost" — leaving Collections, the
@@ -136,8 +144,11 @@ struct ContentView: View {
                         appState.toggleSubfolders()
                     }
                     // Toggling subfolders mid-search re-loads the whole folder
-                    // listing, dropping you out of the results — confusing.
-                    .disabled(appState.isSearchActive)
+                    // listing, dropping you out of the results — confusing. Also
+                    // dead in the Collections world (card page + inside a
+                    // collection): a collection is a flat membership with no
+                    // subfolders to reveal.
+                    .disabled(appState.isSearchActive || inCollectionsContext)
                 }
 
                 ToolbarItem(placement: .principal) {
