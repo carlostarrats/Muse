@@ -181,13 +181,13 @@ struct SidebarView: View {
     private var twoSectionScroll: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                SectionHeader(title: "FOLDERS", collapsed: $foldersCollapsed)
+                SectionHeader(title: String(localized: "FOLDERS"), collapsed: $foldersCollapsed)
                 if !foldersCollapsed {
                     sortHeader
                     folderList
                 }
                 Color.clear.frame(height: 14)
-                SectionHeader(title: "COLLECTIONS", collapsed: $collectionsCollapsed)
+                SectionHeader(title: String(localized: "COLLECTIONS"), collapsed: $collectionsCollapsed)
                 if !collectionsCollapsed {
                     collectionsSortHeader
                     collectionsList

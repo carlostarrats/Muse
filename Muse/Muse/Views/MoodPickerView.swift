@@ -18,17 +18,17 @@ struct MoodPickerView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 14) {
-                MoodSwatch(title: "Light",
+                MoodSwatch(title: String(localized: "Light"),
                            isSelected: appState.mood == .paper,
                            action: { appState.setMood(.paper) }) {
                     Circle().fill(Mood.paperPalette.background)
                 }
-                MoodSwatch(title: "Dark",
+                MoodSwatch(title: String(localized: "Dark"),
                            isSelected: appState.mood == .ink,
                            action: { appState.setMood(.ink) }) {
                     Circle().fill(Mood.fallbackPalette.background)
                 }
-                MoodSwatch(title: "Auto",
+                MoodSwatch(title: String(localized: "Auto"),
                            isSelected: appState.mood == .auto,
                            action: { appState.setMood(.auto) }) {
                     // Diagonal day/night split.
@@ -39,7 +39,7 @@ struct MoodPickerView: View {
                         ],
                         startPoint: .topLeading, endPoint: .bottomTrailing))
                 }
-                MoodSwatch(title: "Custom",
+                MoodSwatch(title: String(localized: "Custom"),
                            isSelected: appState.mood == .custom,
                            action: { appState.setMood(.custom) }) {
                     ZStack {
@@ -79,9 +79,9 @@ struct MoodPickerView: View {
                     .foregroundStyle(.secondary)
 
                 HStack(alignment: .top, spacing: 14) {
-                    tileGroup("Automatic", options: [.none, .auto])
+                    tileGroup(String(localized: "Automatic"), options: [.none, .auto])
                     Divider().frame(height: 52)
-                    tileGroup("Static", options: [.light, .darkGrey, .black])
+                    tileGroup(String(localized: "Static"), options: [.light, .darkGrey, .black])
                 }
                 .opacity(appState.imageLayout == .masonry ? 0.4 : 1)
                 .disabled(appState.imageLayout == .masonry)

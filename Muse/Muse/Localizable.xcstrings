@@ -21,6 +21,16 @@
         }
       }
     },
+    "…or create a new one": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "…ou en créer une nouvelle"
+          }
+        }
+      }
+    },
     "(%lld groups)": {
       "localizations": {
         "fr": {
@@ -329,6 +339,26 @@
         }
       }
     },
+    "Added %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouté %@"
+          }
+        }
+      }
+    },
+    "Added to %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouté à %@"
+          }
+        }
+      }
+    },
     "All": {
       "localizations": {
         "fr": {
@@ -395,6 +425,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Auto"
+          }
+        }
+      }
+    },
+    "Automatic": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatique"
           }
         }
       }
@@ -499,12 +539,32 @@
         }
       }
     },
+    "Choose": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choisir"
+          }
+        }
+      }
+    },
     "Choose how images are arranged. Applies to every grid.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Choisissez la disposition des images. S'applique à toutes les grilles."
+          }
+        }
+      }
+    },
+    "Choose the Muse backup file you exported on your other Mac.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choisissez le fichier de sauvegarde Muse que vous avez exporté sur votre autre Mac."
           }
         }
       }
@@ -569,6 +629,16 @@
         }
       }
     },
+    "COLLECTION": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "COLLECTION"
+          }
+        }
+      }
+    },
     "Collection name": {
       "localizations": {
         "fr": {
@@ -585,6 +655,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Collections"
+          }
+        }
+      }
+    },
+    "COLLECTIONS": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "COLLECTIONS"
           }
         }
       }
@@ -609,6 +689,16 @@
         }
       }
     },
+    "COLORS": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "COULEURS"
+          }
+        }
+      }
+    },
     "Common Sizes": {
       "localizations": {
         "fr": {
@@ -619,8 +709,27 @@
         }
       }
     },
+    "Copied %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copié %@"
+          }
+        }
+      }
+    },
+    "Copied %lld colors": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld couleurs copiées"
+          }
+        }
+      }
+    },
     "copy all": {
-      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -656,6 +765,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Impossible de déplacer certains fichiers"
+          }
+        }
+      }
+    },
+    "Couldn't move to Trash": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de mettre à la corbeille"
+          }
+        }
+      }
+    },
+    "Couldn't restore — file is in the Trash": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restauration impossible — le fichier est dans la corbeille"
           }
         }
       }
@@ -1000,6 +1129,16 @@
         }
       }
     },
+    "Fit": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajuster"
+          }
+        }
+      }
+    },
     "Folder": {
       "localizations": {
         "fr": {
@@ -1026,6 +1165,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dossiers"
+          }
+        }
+      }
+    },
+    "FOLDERS": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DOSSIERS"
           }
         }
       }
@@ -1090,12 +1239,52 @@
         }
       }
     },
+    "Images": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Images"
+          }
+        }
+      }
+    },
     "Images per row": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Images par ligne"
+          }
+        }
+      }
+    },
+    "INFO": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "INFOS"
+          }
+        }
+      }
+    },
+    "Instagram, large format film": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Instagram, film grand format"
+          }
+        }
+      }
+    },
+    "iPhone, Google Pixel, Samsung Galaxy, OnePlus": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iPhone, Google Pixel, Samsung Galaxy, OnePlus"
           }
         }
       }
@@ -1116,6 +1305,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "CONSERVER"
+          }
+        }
+      }
+    },
+    "Keep this file somewhere safe — ideally not only on this Mac. ": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conservez ce fichier en lieu sûr — idéalement pas uniquement sur ce Mac. "
           }
         }
       }
@@ -1240,6 +1439,16 @@
         }
       }
     },
+    "Medium format": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moyen format"
+          }
+        }
+      }
+    },
     "Most Used": {
       "localizations": {
         "fr": {
@@ -1342,6 +1551,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Déplacer vers le haut"
+          }
+        }
+      }
+    },
+    "Moved to Trash": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mis à la corbeille"
           }
         }
       }
@@ -1567,7 +1786,6 @@
       }
     },
     "Open in Finder": {
-      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -1663,6 +1881,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "PDF"
+          }
+        }
+      }
+    },
+    "Pick a folder for Muse to view.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choisissez un dossier à afficher dans Muse."
           }
         }
       }
@@ -1843,6 +2071,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Retirer l'étiquette de la sélection"
+          }
+        }
+      }
+    },
+    "Removed %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retiré %@"
+          }
+        }
+      }
+    },
+    "Removed from %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retiré de %@"
           }
         }
       }
@@ -2047,6 +2295,16 @@
         }
       }
     },
+    "Search files, tags, captions…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechercher fichiers, étiquettes, légendes…"
+          }
+        }
+      }
+    },
     "Search Library": {
       "localizations": {
         "fr": {
@@ -2227,6 +2485,16 @@
         }
       }
     },
+    "Sony, Canon, Nikon, 35mm film": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sony, Canon, Nikon, film 35 mm"
+          }
+        }
+      }
+    },
     "Sort": {
       "localizations": {
         "fr": {
@@ -2263,6 +2531,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Trier : %@"
+          }
+        }
+      }
+    },
+    "Square medium format": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carré, moyen format"
+          }
+        }
+      }
+    },
+    "Static": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Statique"
           }
         }
       }
@@ -2317,6 +2605,16 @@
         }
       }
     },
+    "TAGS": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ÉTIQUETTES"
+          }
+        }
+      }
+    },
     "Tags “%@”.": {
       "localizations": {
         "fr": {
@@ -2343,6 +2641,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "La collection est supprimée. Vos images restent sur le disque."
+          }
+        }
+      }
+    },
+    "This Folder": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce dossier"
           }
         }
       }
@@ -2387,12 +2695,32 @@
         }
       }
     },
+    "Undo": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Annuler"
+          }
+        }
+      }
+    },
     "Unpin": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Désépingler"
+          }
+        }
+      }
+    },
+    "Vertical video on most phones": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vidéo verticale sur la plupart des téléphones"
           }
         }
       }

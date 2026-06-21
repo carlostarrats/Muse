@@ -23,7 +23,7 @@ struct GridFilterPopover: View {
                 sectionHeader("KIND")
 
                 // Over-arching Images checkbox (tri-state) + its format rows.
-                TriStateCheckbox(title: "Images",
+                TriStateCheckbox(title: String(localized: "Images"),
                                  state: appState.gridFilter.imageParentState) {
                     appState.gridFilter = appState.gridFilter.togglingImageGroup()
                 }

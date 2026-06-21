@@ -128,7 +128,7 @@ struct ViewerInfoColumn<Chrome: View>: View {
     // MARK: - Collection card
 
     private var collectionCard: some View {
-        PillCard(title: "COLLECTION",
+        PillCard(title: String(localized: "COLLECTION"),
                  pills: (details?.collections ?? []).map { PillItem(id: $0.id, label: $0.name) },
                  hovered: $hoveredCollectionPill,
                  isExpanded: $collectionsExpanded,
@@ -138,18 +138,18 @@ struct ViewerInfoColumn<Chrome: View>: View {
                          try await CollectionStore.removeFile(queue: queue, fileID: fileID,
                                                               collectionID: pill.id)
                          await engine.reload()
-                         show("Removed from \(pill.label)")
+                         show(String(localized: "Removed from \(pill.label)"))
                      }
                  }) {
             CardExpander(candidates: collectionCandidates,
-                         placeholder: "…or create a new one",
+                         placeholder: String(localized: "…or create a new one"),
                          text: $newCollectionName,
                          onCandidateTap: { candidate in
                              mutate { queue, fileID in
                                  try await CollectionStore.addFile(queue: queue, fileID: fileID,
                                                                    collectionID: candidate.id)
                                  await engine.reload()
-                                 show("Added to \(candidate.label)")
+                                 show(String(localized: "Added to \(candidate.label)"))
                              }
                          },
                          onCreate: { name in
@@ -157,7 +157,7 @@ struct ViewerInfoColumn<Chrome: View>: View {
                                  _ = try await CollectionStore.createManual(queue: queue, name: name,
                                                                             fileID: fileID)
                                  await engine.reload()
-                                 show("Added to \(name)")
+                                 show(String(localized: "Added to \(name)"))
                              }
                          })
         }
@@ -175,7 +175,7 @@ struct ViewerInfoColumn<Chrome: View>: View {
     // MARK: - Tags card
 
     private var tagsCard: some View {
-        PillCard(title: "TAGS",
+        PillCard(title: String(localized: "TAGS"),
                  pills: (details?.tags ?? []).map { PillItem(id: $0.id, label: $0.label) },
                  hovered: $hoveredTagPill,
                  isExpanded: $tagsExpanded,
@@ -185,25 +185,25 @@ struct ViewerInfoColumn<Chrome: View>: View {
                      Task {
                          _ = await TagStore.shared.removeTag(tag, for: url)
                          await refresh()
-                         show("Removed \(VocabularyLocalizer.shared.display(pill.label))")
+                         show(String(localized: "Removed \(VocabularyLocalizer.shared.display(pill.label))"))
                      }
                  }) {
             CardExpander(candidates: tagSuggestions,
-                         placeholder: "…or create a new one",
+                         placeholder: String(localized: "…or create a new one"),
                          text: $newTagLabel,
                          onCandidateTap: { candidate in
                              Task {
                                  _ = await TagStore.shared.addManualTag(label: candidate.label, for: url)
                                  await refresh()
                                  await loadTagSuggestions()
-                                 show("Added \(VocabularyLocalizer.shared.display(candidate.label))")
+                                 show(String(localized: "Added \(VocabularyLocalizer.shared.display(candidate.label))"))
                              }
                          },
                          onCreate: { label in
                              Task {
                                  _ = await TagStore.shared.addManualTag(label: label, for: url)
                                  await refresh()
-                                 show("Added \(label)")
+                                 show(String(localized: "Added \(label)"))
                              }
                          })
             .task { await loadTagSuggestions() }
@@ -231,11 +231,11 @@ struct ViewerInfoColumn<Chrome: View>: View {
         InfoCard {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    CardLabel(text: "COLORS")
+                    CardLabel(text: String(localized: "COLORS"))
                     Spacer()
-                    HoverTextButton(label: "copy all") {
+                    HoverTextButton(label: String(localized: "copy all")) {
                         copyToPasteboard(palette.joined(separator: ", "))
-                        show("Copied \(palette.count) colors")
+                        show(String(localized: "Copied \(palette.count) colors"))
                     }
                     .accessibilityLabel("Copy all colors")
                 }
@@ -244,7 +244,7 @@ struct ViewerInfoColumn<Chrome: View>: View {
                     ForEach(palette, id: \.self) { hex in
                         ColorSwatch(hex: hex) {
                             copyToPasteboard(hex)
-                            show("Copied \(hex)")
+                            show(String(localized: "Copied \(hex)"))
                         }
                     }
                 }
@@ -258,7 +258,7 @@ struct ViewerInfoColumn<Chrome: View>: View {
         InfoCard {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    CardLabel(text: "INFO")
+                    CardLabel(text: String(localized: "INFO"))
                     Spacer()
                     PlusCircleButton(size: 18, rotated: infoExpanded,
                                      accessibilityLabel: infoExpanded ? "Hide info" : "Show info") {
@@ -300,7 +300,7 @@ struct ViewerInfoColumn<Chrome: View>: View {
     private var colorsPlaceholderCard: some View {
         InfoCard {
             VStack(alignment: .leading, spacing: 10) {
-                CardLabel(text: "COLORS")
+                CardLabel(text: String(localized: "COLORS"))
                 HStack(spacing: 6) {
                     ForEach(0..<3, id: \.self) { _ in
                         RoundedRectangle(cornerRadius: 7, style: .continuous)
@@ -318,8 +318,8 @@ struct ViewerInfoColumn<Chrome: View>: View {
 
     private var actionsRow: some View {
         HStack(spacing: 8) {
-            ActionButton(label: "Open in Finder", systemImage: "folder", action: onOpenInFinder)
-            ActionButton(label: "Delete", systemImage: "trash", action: onDelete)
+            ActionButton(label: String(localized: "Open in Finder"), systemImage: "folder", action: onOpenInFinder)
+            ActionButton(label: String(localized: "Delete"), systemImage: "trash", action: onDelete)
         }
     }
 
