@@ -33,20 +33,42 @@ struct TagChipsRow: View {
     /// folder load so files + chips reveal together); this view only renders them.
     private var tags: [(label: String, count: Int)] { appState.tagChipRows }
 
+    /// The active tag set, localized for DISPLAY only (chips/banner). The
+    /// canonical labels in `appState.activeTagLabels` stay the source of truth
+    /// for every action; this is purely what the user reads.
+    private var localizedActiveLabels: [String] {
+        appState.activeTagLabels.map { VocabularyLocalizer.shared.display($0) }
+    }
+
+    /// The multi-tag banner string (VoiceOver label) built from localized labels
+    /// + localized connective words, so it reads naturally in the user's language.
+    private var localizedBannerText: String? {
+        TagSelection.bannerText(for: localizedActiveLabels,
+                                viewing: String(localized: "Viewing"),
+                                and: String(localized: "and"))
+    }
+
     var body: some View {
         VStack(spacing: 0) {
         ZStack {
             if !tags.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     ChipFlow(gap: 8, hovered: hovered, grow: growForHovered, noGrow: [0]) {
-                        TagChip(index: 0, label: "All", count: nil,
+                        let allLabel = String(localized: "All")
+                        TagChip(index: 0, label: allLabel, count: nil,
                                 isSelected: appState.activeTagLabels.isEmpty,
                                 isHovered: hovered == 0,
                                 onHover: hover) {
                             appState.setActiveTag(nil)
                         }
                         ForEach(Array(tags.enumerated()), id: \.element.label) { i, tag in
-                            TagChip(index: i + 1, label: tag.label, count: tag.count,
+                            // Display the localized label; actions/identity below
+                            // stay on the canonical `tag.label`. Bound to a `let`
+                            // so the big TagChip expression stays type-checkable.
+                            let displayLabel = VocabularyLocalizer.shared.display(tag.label)
+                            TagChip(index: i + 1,
+                                    label: displayLabel,
+                                    count: tag.count,
                                     isSelected: appState.activeTagLabels.contains(tag.label),
                                     isHovered: hovered == i + 1,
                                     onHover: hover,
@@ -103,7 +125,7 @@ struct TagChipsRow: View {
         // area, below the chips — quiet secondary text with the tag labels drawn
         // as pills so they stand out from the connective words. Absent for 0/1
         // tag. The plain string is the VoiceOver label so it reads naturally.
-        if let banner = appState.tagBannerText {
+        if let banner = localizedBannerText {
             // Horizontal scroll mirrors the chip row above so a long set (many
             // pills / long labels) scrolls instead of squeezing each pill and
             // connective word into ugly per-element truncation.
@@ -112,7 +134,7 @@ struct TagChipsRow: View {
                     Text("Viewing")
                         .foregroundStyle(.secondary)
                     ForEach(Array(
-                        TagSelection.bannerSegments(for: appState.activeTagLabels).enumerated()),
+                        TagSelection.bannerSegments(for: localizedActiveLabels).enumerated()),
                             id: \.offset) { _, seg in
                         if seg.precededByAnd {
                             Text("and").foregroundStyle(.secondary)

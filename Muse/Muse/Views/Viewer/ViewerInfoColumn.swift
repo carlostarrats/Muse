@@ -185,7 +185,7 @@ struct ViewerInfoColumn<Chrome: View>: View {
                      Task {
                          _ = await TagStore.shared.removeTag(tag, for: url)
                          await refresh()
-                         show("Removed \(pill.label)")
+                         show("Removed \(VocabularyLocalizer.shared.display(pill.label))")
                      }
                  }) {
             CardExpander(candidates: tagSuggestions,
@@ -196,7 +196,7 @@ struct ViewerInfoColumn<Chrome: View>: View {
                                  _ = await TagStore.shared.addManualTag(label: candidate.label, for: url)
                                  await refresh()
                                  await loadTagSuggestions()
-                                 show("Added \(candidate.label)")
+                                 show("Added \(VocabularyLocalizer.shared.display(candidate.label))")
                              }
                          },
                          onCreate: { label in
@@ -411,7 +411,12 @@ private struct PillCard<Expander: View>: View {
                 } else {
                     PillFlow(gap: 6, hovered: hovered) {
                         ForEach(Array(pills.enumerated()), id: \.element.id) { i, pill in
-                            HoverPill(index: i, label: pill.label, isHovered: hovered == i,
+                            // Display the localized label; taps/removal use the
+                            // canonical `pill.label`/`pill.id` (unchanged). `display`
+                            // is identity for non-vocabulary strings (collection
+                            // names), so this shared render site is safe for both.
+                            let pillLabel = VocabularyLocalizer.shared.display(pill.label)
+                            HoverPill(index: i, label: pillLabel, isHovered: hovered == i,
                                       onHover: { idx, inside in
                                           if inside { hovered = idx }
                                           else if hovered == idx { hovered = nil }
