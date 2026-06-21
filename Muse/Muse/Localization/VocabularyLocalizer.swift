@@ -58,4 +58,19 @@ nonisolated struct VocabularyLocalizer {
         }
         self.init(forward: forward)
     }
+
+    /// Loaded once for the app's effective language. `preferredLocalizations`
+    /// honors the macOS per-app language override (System Settings → Apps). When
+    /// the language is English, or the bundled table is missing/undecodable, this
+    /// is the identity localizer — so AI tags stay canonical-English unless a
+    /// translation actually exists. Untranslated terms fall back per-term too.
+    static let shared: VocabularyLocalizer = {
+        let lang = Bundle.main.preferredLocalizations.first ?? "en"
+        guard lang != "en",
+              let url = Bundle.main.url(forResource: "VisionVocabulary", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let table = try? JSONDecoder().decode([String: [String: String]].self, from: data)
+        else { return .identity }
+        return VocabularyLocalizer(table: table, language: lang)
+    }()
 }
