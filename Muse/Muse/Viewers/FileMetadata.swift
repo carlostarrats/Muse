@@ -192,8 +192,9 @@ nonisolated struct FileMetadata: Equatable {
     }
 
     /// Assemble a video's INFO rows: Recorded · Dimensions · Duration ·
-    /// Frame Rate · Location (the "Modified" row is added by `load`). The
-    /// coordinate is surfaced so the card can show "Open in Maps".
+    /// Frame Rate (the "Modified" row is added by `load`). The coordinate is
+    /// surfaced (drives the "Open in Maps" link) but NOT shown as a text row —
+    /// the link is the location affordance, so the raw lat/long is redundant.
     static func videoMetadata(durationSeconds: Double?,
                               dimensions: (width: Int, height: Int)?,
                               frameRate: Float?, recorded: Date?,
@@ -205,9 +206,6 @@ nonisolated struct FileMetadata: Equatable {
         }
         if let d = formatDuration(durationSeconds) { rows.append(InfoRow("Duration", d)) }
         if let fps = formatFrameRate(frameRate) { rows.append(InfoRow("Frame Rate", fps)) }
-        if let c = coordinate {
-            rows.append(InfoRow("Location", String(format: "%.4f, %.4f", c.lat, c.long)))
-        }
         return FileMetadata(rows: rows, coordinate: coordinate)
     }
 

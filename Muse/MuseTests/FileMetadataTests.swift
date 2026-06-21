@@ -165,11 +165,12 @@ final class FileMetadataTests: XCTestCase {
                                 InfoRow("Frame Rate", "30 fps")])
         XCTAssertNil(m.coordinate)
     }
-    func testVideoMetadataIncludesLocation() {
+    func testVideoMetadataOmitsLocationRowButKeepsCoordinate() {
+        // No "Location" text row — the coordinate drives the Open in Maps link.
         let coord = Coordinate(lat: 34.0522, long: -118.2437)
         let m = FileMetadata.videoMetadata(durationSeconds: nil, dimensions: nil,
                                            frameRate: nil, recorded: nil, coordinate: coord)
-        XCTAssertEqual(m.rows, [InfoRow("Location", "34.0522, -118.2437")])
+        XCTAssertTrue(m.rows.isEmpty, "expected no rows, got \(m.rows)")
         XCTAssertEqual(m.coordinate, coord)
     }
 }
