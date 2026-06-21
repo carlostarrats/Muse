@@ -292,7 +292,10 @@ enum CollectionPDFExporter {
         var top = originTop
         var rows = 1
         for label in labels {
-            let w = pillWidth(label, font: font)
+            // Clamp to the content width so an over-long single tag (the first
+            // pill of a row never wraps) can't run off the page edge; drawPill
+            // truncates the label to fit the clamped capsule.
+            let w = min(pillWidth(label, font: font), maxWidth)
             if x > originX, x + w > originX + maxWidth {
                 x = originX
                 top += pillHeight + pillRowGap
@@ -319,8 +322,16 @@ enum CollectionPDFExporter {
 
         let fontKey = NSAttributedString.Key(kCTFontAttributeName as String)
         let colorKey = NSAttributedString.Key(kCTForegroundColorAttributeName as String)
-        let line = CTLineCreateWithAttributedString(NSAttributedString(
-            string: p.label, attributes: [fontKey: font, colorKey: CGColor(gray: 0, alpha: 1)]))
+        let attrs: [NSAttributedString.Key: Any] = [
+            fontKey: font, colorKey: CGColor(gray: 0, alpha: 1)]
+        // Truncate to the clamped capsule's inner width (mirrors drawCaption) so
+        // an over-long tag ends with an ellipsis instead of overrunning the pill.
+        let full = CTLineCreateWithAttributedString(
+            NSAttributedString(string: p.label, attributes: attrs))
+        let token = CTLineCreateWithAttributedString(
+            NSAttributedString(string: "\u{2026}", attributes: attrs))
+        let innerWidth = max(0, p.width - pillPadH * 2)
+        let line = CTLineCreateTruncatedLine(full, Double(innerWidth), .end, token) ?? full
         var ascent: CGFloat = 0, descent: CGFloat = 0
         _ = CTLineGetTypographicBounds(line, &ascent, &descent, nil)
         let baselineFromTop = p.topFromTop + (pillHeight - (ascent + descent)) / 2 + ascent
