@@ -51,11 +51,11 @@ enum SortMode: String, CaseIterable, Identifiable {
     /// tooltip. `ascending` is the effective direction (default XOR reversed).
     func directionLabel(ascending: Bool) -> String {
         switch self {
-        case .dateModified, .dateCreated: return ascending ? "Oldest first" : "Newest first"
-        case .name, .kind:                return ascending ? "A → Z" : "Z → A"
-        case .size:                       return ascending ? "Smallest first" : "Largest first"
-        case .shape:                      return ascending ? "Tall → wide" : "Wide → tall"
-        case .dominantColor:              return ascending ? "Ascending" : "Descending"
+        case .dateModified, .dateCreated: return ascending ? String(localized: "Oldest first") : String(localized: "Newest first")
+        case .name, .kind:                return ascending ? String(localized: "A → Z") : String(localized: "Z → A")
+        case .size:                       return ascending ? String(localized: "Smallest first") : String(localized: "Largest first")
+        case .shape:                      return ascending ? String(localized: "Tall → wide") : String(localized: "Wide → tall")
+        case .dominantColor:              return ascending ? String(localized: "Ascending") : String(localized: "Descending")
         }
     }
 

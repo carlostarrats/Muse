@@ -439,6 +439,16 @@
         }
       }
     },
+    "Ascending": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Croissant"
+          }
+        }
+      }
+    },
     "At least one copy must be kept": {
       "localizations": {
         "fr": {
@@ -455,6 +465,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Audio"
+          }
+        }
+      }
+    },
+    "Author": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auteur"
           }
         }
       }
@@ -565,6 +586,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Noir"
+          }
+        }
+      }
+    },
+    "Camera": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appareil"
           }
         }
       }
@@ -889,6 +921,17 @@
         }
       }
     },
+    "Creator": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Créateur"
+          }
+        }
+      }
+    },
     "Custom": {
       "localizations": {
         "fr": {
@@ -1049,12 +1092,33 @@
         }
       }
     },
+    "Descending": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Décroissant"
+          }
+        }
+      }
+    },
     "Deselect All": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Tout désélectionner"
+          }
+        }
+      }
+    },
+    "Dimensions": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dimensions"
           }
         }
       }
@@ -1099,6 +1163,17 @@
         }
       }
     },
+    "Duration": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Durée"
+          }
+        }
+      }
+    },
     "Edit": {
       "localizations": {
         "fr": {
@@ -1135,6 +1210,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Développer %@"
+          }
+        }
+      }
+    },
+    "Exposure": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exposition"
           }
         }
       }
@@ -1245,6 +1331,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "DOSSIERS"
+          }
+        }
+      }
+    },
+    "Frame Rate": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cadence"
           }
         }
       }
@@ -1449,6 +1546,27 @@
         }
       }
     },
+    "Largest first": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus grand d'abord"
+          }
+        }
+      }
+    },
+    "Lens": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Objectif"
+          }
+        }
+      }
+    },
     "Library & folders": {
       "localizations": {
         "fr": {
@@ -1495,6 +1613,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Localiser…"
+          }
+        }
+      }
+    },
+    "Location": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lieu"
           }
         }
       }
@@ -1555,6 +1684,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Moyen format"
+          }
+        }
+      }
+    },
+    "Modified": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifié"
           }
         }
       }
@@ -1815,6 +1955,16 @@
         }
       }
     },
+    "Newest first": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus récent d'abord"
+          }
+        }
+      }
+    },
     "No collections": {
       "localizations": {
         "fr": {
@@ -1911,6 +2061,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "OK"
+          }
+        }
+      }
+    },
+    "Oldest first": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus ancien d'abord"
           }
         }
       }
@@ -2045,6 +2205,17 @@
         }
       }
     },
+    "Pages": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pages"
+          }
+        }
+      }
+    },
     "Path of the folder to open": {
       "localizations": {
         "fr": {
@@ -2141,6 +2312,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reconnectez vos dossiers et collections. Localisez chaque dossier à son emplacement actuel — ils peuvent se trouver n'importe où."
+          }
+        }
+      }
+    },
+    "Recorded": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistré"
           }
         }
       }
@@ -2725,6 +2907,16 @@
         }
       }
     },
+    "Smallest first": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus petit d'abord"
+          }
+        }
+      }
+    },
     "Sony, Canon, Nikon, 35mm film": {
       "localizations": {
         "fr": {
@@ -2865,6 +3057,27 @@
         }
       }
     },
+    "Taken": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pris"
+          }
+        }
+      }
+    },
+    "Tall → wide": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haut → large"
+          }
+        }
+      }
+    },
     "The chip row shows the tags of the folder you're viewing. Click a chip to filter; hover for its count. Right-click a chip to rename or delete the tag everywhere; add tags from an image's right-click menu or inside the viewer.": {
       "localizations": {
         "fr": {
@@ -2941,6 +3154,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Arrière-plan des vignettes : %@"
+          }
+        }
+      }
+    },
+    "Title": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Titre"
           }
         }
       }
@@ -3035,142 +3259,22 @@
         }
       }
     },
-    "Taken": {
+    "Wide → tall": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pris"
+            "value": "Large → haut"
           }
         }
       }
     },
-    "Modified": {
+    "Z → A": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Modifié"
-          }
-        }
-      }
-    },
-    "Camera": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Appareil"
-          }
-        }
-      }
-    },
-    "Lens": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Objectif"
-          }
-        }
-      }
-    },
-    "Exposure": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Exposition"
-          }
-        }
-      }
-    },
-    "Location": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lieu"
-          }
-        }
-      }
-    },
-    "Pages": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pages"
-          }
-        }
-      }
-    },
-    "Title": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Titre"
-          }
-        }
-      }
-    },
-    "Author": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Auteur"
-          }
-        }
-      }
-    },
-    "Creator": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Créateur"
-          }
-        }
-      }
-    },
-    "Recorded": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enregistré"
-          }
-        }
-      }
-    },
-    "Dimensions": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dimensions"
-          }
-        }
-      }
-    },
-    "Duration": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Durée"
-          }
-        }
-      }
-    },
-    "Frame Rate": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cadence"
+            "value": "Z → A"
           }
         }
       }
