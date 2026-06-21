@@ -150,7 +150,8 @@ The four most critical are also saved as Claude memories (linked).
   a network surface; the only network path is Sparkle's appcast).
 - **Sidebar rows: never use `.onDrag`.** It installs an AppKit drag source on the
   shared hosting view and eats single-clicks. Reorder is a live `DragGesture` off
-  a trailing grip + an opaque on-top overlay (LazyVStack ignores `.zIndex`).
+  a trailing grip + an opaque on-top overlay (a single floating copy, reliable
+  without per-row `.zIndex` juggling; both the folder and collection lists use it).
 - **`bookmarks.$roots` sink delivers synchronously** — don't add `.receive(on:)`;
   the non-animated reorder commit relies on synchronous delivery.
 - **Fixed-viewport overlay effects:** per-element `.layerEffect`/`.visualEffect`
@@ -318,6 +319,24 @@ The four most critical are also saved as Claude memories (linked).
   page). Don't pair a fresh explicit `foregroundStyle` with `.disabled` and expect
   auto-dimming — route it through `moodToolbarIcon` (or dim manually). Fixed
   2026-06-20 (`feat/next-42`).
+- **A `LazyVStack` row list inside a shared `ScrollView` can de-materialize and not
+  come back — use a plain `VStack` for short sidebar lists.** The sidebar's FOLDERS
+  section (`SidebarView.folderList`) rendered its top-level rows in a `LazyVStack`;
+  inside the two-section `ScrollView` (FOLDERS + COLLECTIONS scroll together when
+  "Show Collections in the Sidebar" is ON) a scroll cycle could drop the off-screen
+  folder rows and fail to re-create them, leaving an **empty FOLDERS section while
+  COLLECTIONS stayed intact** (COLLECTIONS was already a plain `VStack`). It is NOT
+  data loss — `rootNodes` still held data (the section headers rendered, so `body`
+  didn't fall to its `rootNodes.isEmpty && stars.isEmpty` empty state), and nothing
+  rebuilds `rootNodes` on scroll. The fix: `folderList` is a plain `VStack` iterated
+  directly by node id (`ForEach(displayedReorderableNodes, id: \.id)`), exactly like
+  `collectionsList` (which was converted off `LazyVStack` for the sibling reorder
+  bug in `feat/next-32`). Top-level roots are few and their children render only when
+  expanded (`FolderTreeNode`), so there's no virtualization cost, and
+  always-realized rows report their `RootFramePreference` frames even off-screen
+  (better drag-reorder math). Rule: don't use `LazyVStack` for a short list sharing a
+  `ScrollView` with sibling content — the laziness buys nothing and risks the
+  vanishing-rows glitch. Fixed 2026-06-20 (`fix/sidebar-folders-vanish`).
 
 ### Session index (detail in `docs/session-log.md`)
 
@@ -870,6 +889,24 @@ The four most critical are also saved as Claude memories (linked).
   SwiftUI `.disabled` on a computed bool, like prior toolbar-enablement changes).
   PENDING human GUI confirmation of the grey-out on the card page + inside a
   collection (live click automation unavailable).
+- **2026-06-20** `fix/sidebar-folders-vanish` — **FOLDERS sidebar section goes
+  transiently empty on scroll.** Reported via screenshot: scrolling back up inside a
+  large collection left the FOLDERS section with no rows while COLLECTIONS rendered
+  fine; not reproducible on demand. Systematic-debugging ruled out data loss
+  (nothing rebuilds `rootNodes` on scroll; the section headers still showed, so
+  `body` didn't hit its empty state) and pinpointed the asymmetry: `folderList`
+  rendered its top-level rows in a `LazyVStack` while `collectionsList` was already a
+  plain `VStack`. Inside the shared two-section `ScrollView`, the `LazyVStack`
+  de-materialized off-screen folder rows and failed to re-create them. Fix:
+  `folderList` is now a plain `VStack` iterated directly by node id (mirrors
+  `collectionsList`; the top-level root list is short, children render only when
+  expanded, so no virtualization cost — and always-realized rows report frames even
+  off-screen, improving drag-reorder). Covers both the ON (two-section) and OFF
+  (folders-only) sidebar paths. Stale `LazyVStack`-justified drag comments updated.
+  One file (`Views/SidebarView.swift`); build + full `MuseTests` green; independent
+  diff review clean; no new test (SwiftUI rendering race, no testable surface — UI
+  views aren't unit-tested). New durable gotcha recorded. Real confirmation is the
+  bug ceasing to recur in the live build.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 

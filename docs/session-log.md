@@ -3113,3 +3113,48 @@ SwiftUI `.disabled` on a computed bool, same as prior toolbar-enablement changes
 One file (`ContentView.swift`). PENDING human GUI confirmation that the toggle
 greys out on the card page and inside a collection (live click automation
 unavailable — harness lacks macOS Accessibility permission).
+
+### `fix/sidebar-folders-vanish` — FOLDERS section goes transiently empty on scroll
+
+**Symptom (reported, screenshot).** While scrolled down inside a large collection
+("Photo 1,951"), the user scrolled back up and the **FOLDERS** sidebar section was
+empty — no folder rows — while the **COLLECTIONS** section beneath it rendered
+normally. Not reproducible on demand. Build was the `feat/next-42` (grid faceted
+filters) check.
+
+**Systematic debugging — root cause.** Evidence ruled out data loss: the only
+thing that rebuilds `rootNodes` is the `bookmarks.$roots` sink
+(`AppState.swift:504`), which fires on add/remove/reorder/rename — none happen on
+scroll; `bookmarks.url(for:)` just reads a stable `accessedURLs` dict
+(`BookmarkStore.swift:161`). Decisively, `SidebarView.body` shows the empty state
+only when `rootNodes.isEmpty && stars.isEmpty` (`SidebarView.swift:82`); the
+screenshot shows the FOLDERS/COLLECTIONS **section headers**, not the empty state,
+so `rootNodes` still held data — the rows just failed to render. The asymmetry
+pinpointed it: `folderList` rendered its top-level rows in a **`LazyVStack`**,
+while `collectionsList` was already a plain **`VStack`** (converted earlier for a
+sibling reorder bug, see `feat/next-32` QA). A `LazyVStack` inside the shared
+two-section `ScrollView` can de-materialize rows scrolled out of the viewport and
+fail to re-materialize them — exactly transient-empty-FOLDERS while the non-lazy
+COLLECTIONS survived.
+
+**Fix.** Convert `folderList`'s `LazyVStack` to a plain `VStack` iterated directly
+by node id (`ForEach(displayedReorderableNodes, id: \.id)`, index via `firstIndex`)
+— mirrors `collectionsList` exactly. The top-level root list is short (children
+live in `FolderTreeNode`, rendered only when expanded), so there's no
+virtualization cost; always-realized rows also report their `RootFramePreference`
+frames even when off-screen, which strictly *improves* the drag-reorder slot/parting
+math (relieves the documented "off-screen rows aren't measured" in-flight-visual
+limitation). Covers both the two-section (collections-in-sidebar ON) and
+folders-only (OFF) paths, since both share `folderList`. Also updated four now-stale
+`LazyVStack`-justified drag comments (the floating-overlay approach was always the
+real mechanism; it never depended on a LazyVStack zIndex quirk).
+
+**Verification.** Build + full `MuseTests` suite green (`** TEST SUCCEEDED **`).
+Independent diff review (correctness / drag-reorder / perf / regressions / comment
+accuracy) returned clean — the new `firstIndex` index is provably equal to the old
+`.enumerated()` offset (ids are unique per `rebuildRootNodes`), and in Manual sort
+— the only mode where reorder is wired — `displayedReorderableNodes ==
+reorderableNodes`, so the index space `rowShift` expects is unchanged. No new unit
+test: SwiftUI rendering race with no testable surface (UI views aren't
+unit-tested); real confirmation is the bug ceasing to recur in the live build. One
+file (`Views/SidebarView.swift`). New durable gotcha recorded.
