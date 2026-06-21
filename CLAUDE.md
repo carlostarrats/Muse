@@ -1001,6 +1001,42 @@ The four most critical are also saved as Claude memories (linked).
   `MuseTests` green. Spec + plan in `docs/superpowers/`. Two files:
   `Views/ShareCollectionButton.swift`, `Export/CollectionPDFExporter.swift`. PENDING
   human GUI confirmation of the live export flow.
+- **2026-06-20** `feat/next-47` — **videos open in the hero viewer** (color-wash
+  backdrop + info column) instead of the bare `ViewerChrome` (filename strip +
+  black-boxed player with side-bars). New `HeroVideoViewer` — a deliberately simpler
+  sibling of `HeroImageViewer` (NO zoom/pan/flight/arrow-flip) that reuses the
+  already-extracted `ViewerBackdrop` + `ViewerInfoColumn` + `ViewerToast` + `ShareButton`,
+  centering an aspect-fit `VideoPlayerView` (`.resizeAspect`, clear layer bg → no
+  black bars) over the backdrop via `ViewerGeometry.fitRect`; chrome row is Share + ✕
+  only; plays with the standard AVPlayer floating controls. The **wash color comes from a
+  sampled video frame**: the image viewer's private RGBA-histogram was extracted into a
+  pure, unit-tested `HeroPalette.paletteHexes(fromRGBA:width:height:)`, with
+  `quickPalette(at:)` (images, ImageIO) and a new `videoPalette(at:)` (one
+  `AVAssetImageGenerator` frame ≈1s in / mid-clip if shorter) both feeding it;
+  `HeroImageViewer` refactored onto it (behavior-identical). `.video` routes to
+  `HeroVideoViewer` in `ViewerRouter`; close/Esc need no flight wiring (`EscapeAction.closeViewer`
+  → `selectedFile = nil`; entrance is the existing `.opacity` transition). **Open timing:**
+  the backdrop settles first, then the video stage fades in ~0.22s later over 0.35s
+  (`stageVisible`), so the large video doesn't flash up in lockstep (there's no flight to
+  bridge the tile→hero size jump). **Richer video INFO** (`FileMetadata.loadVideo` +
+  pure `videoMetadata`/`formatFrameRate`/`formatRecordedDate`/`parseISO6709`): Recorded ·
+  Modified · Dimensions · Duration · Frame Rate, plus GPS → the same **Open in Maps** link
+  as photos (the raw lat/long text row is omitted for videos — the link is the affordance);
+  audio still uses the duration-only `loadMedia`. No DB/schema change (palette + metadata
+  read on open). **QA — three-lens review (correctness/concurrency · UI/a11y · adversarial)
+  then a verification round:** the adversarial pass found one **High** — the delete's 380ms
+  fire-and-forget fade let an Esc-then-open-another race close the newly-opened file; fixed
+  by guarding `completeDelete`'s `selectedFile`/`clearSelection` writes to fire only when
+  THIS file is still on screen (trash + undo stay unconditional). Also: `.closeViewer` now
+  `clearSelection()`s (Esc-on-video parity with the ✕ and the hero-image Esc — applies to
+  all non-hero viewers, harmless/consistent); `videoNaturalSize` gained the dataless-iCloud
+  guard its sibling samplers have; close-button `.help` tooltip. New tests: `HeroPaletteTests`
+  (4) + `FileMetadataTests` video cases (8). Build + full `MuseTests` green (0 failures).
+  Spec + plan in `docs/superpowers/`. KNOWN (pre-existing, out of scope, noted for a future
+  audit): `HeroImageViewer.completeDelete` has the same unguarded `selectedFile = nil` but is
+  far less exposed (its delete closes via the burn flight, not a sleep racing Esc). PENDING
+  human GUI confirmation of the live flow (automated macOS UI click unavailable — no
+  Accessibility grant; the viewer itself was screenshot-confirmed rendering correctly).
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
@@ -1293,20 +1329,39 @@ Muse/Muse/
     TextViewerView.swift           NSTextView wrapper, isCode/isRTF flags
     MarkdownViewerView.swift       AttributedString markdown
     SVGViewerView.swift            WKWebView, file:// only (no network)
-    VideoPlayerView.swift          AVKit AVPlayerView
+    VideoPlayerView.swift          AVKit AVPlayerView; .resizeAspect + clear layer
+                                   background so, framed to the hero stage's aspect-fit
+                                   rect, it shows no black bars and its rounded clip
+                                   reveals the backdrop. Pauses+nils the player on
+                                   unmount (no audio leak). Used only by HeroVideoViewer
+                                   (feat/next-47)
     AudioPlayerView.swift          AVKit + asset metadata
     ModelViewerView.swift          SCNScene from URL
     FontViewerView.swift           process-scope font registration
-    ViewerChrome.swift             dimmed bg + close button + Esc dismiss
+    ViewerChrome.swift             dimmed bg + close button + Esc dismiss (all
+                                   non-image/video kinds; video now uses HeroVideoViewer)
+    HeroPalette.swift              shared on-open palette for the hero viewers: pure
+                                   nonisolated paletteHexes(fromRGBA:width:height:)
+                                   (coarse RGB-bucket histogram → top 3 distinct hexes,
+                                   dark→light) + quickPalette(at:) (images, ImageIO 48px
+                                   thumbnail) + videoPalette(at:) (one AVAssetImageGenerator
+                                   frame ≈1s in, dataless-iCloud guarded). Extracted from
+                                   HeroImageViewer's old private quickPalette (both viewers
+                                   now call it; image behavior identical). Unit-tested
+                                   (feat/next-47)
     FileMetadata.swift             hero INFO-card metadata: pure formatting
-                                   (EXIF/TIFF/GPS image · PDF doc attrs · A/V
+                                   (EXIF/TIFF/GPS image · PDF doc attrs · video
+                                   Recorded/Dimensions/Duration/Frame Rate/GPS · A/V
                                    duration · filesystem Modified date) + a thin
-                                   off-main IO loader load(url:kind:). Read on
-                                   viewer-open only (NO DB/migration); dataless
-                                   iCloud guard. Value types are `nonisolated`
+                                   off-main IO loader load(url:kind:) (loadVideo reads the
+                                   AVAsset video track + common metadata; .audio still uses
+                                   loadMedia). Video omits the lat/long text row — the
+                                   coordinate drives the same Open in Maps link as photos
+                                   (feat/next-47). Read on viewer-open only (NO DB/migration);
+                                   dataless iCloud guard. Value types are `nonisolated`
                                    (module default isolation is MainActor) so they
                                    build in the detached load + nonisolated tests.
-                                   Unit-tested (feat/next-38)
+                                   Unit-tested (feat/next-38, next-47)
   Views/
     SidebarView.swift              multi-root OutlineGroup tree + starred section;
                                    file-URL drop on folder rows MOVES the grid
@@ -1486,7 +1541,9 @@ Muse/Muse/
     OpenWithMenu.swift             NSWorkspace registered apps via LaunchServices
     ImageDetailPanel.swift         fit/100% preview overlay
     QuickLookFallback.swift        QLPreviewView wrapper
-    ViewerRouter.swift             AssetKind → viewer dispatch
+    ViewerRouter.swift             AssetKind → viewer dispatch (image/raw/psd →
+                                   HeroImageViewer; .video → HeroVideoViewer; the rest
+                                   → ViewerChrome-wrapped viewers)
     DuplicatesView.swift           review pane with delete-to-Trash. Each duplicate
                                    is a grid-style tile (DuplicateImageTile: image
                                    fits/no-crop on a transparent square → reveals
@@ -1512,6 +1569,18 @@ Muse/Muse/
                                    only (the date moved into INFO as "Modified").
                                    HeroImageViewer loads FileMetadata on open
                                    (feat/next-38)
+      HeroVideoViewer.swift        the hero viewer for VIDEOS (feat/next-47): reuses
+                                   ViewerBackdrop (wash from HeroPalette.videoPalette) +
+                                   ViewerInfoColumn (tags/collections/colors/INFO) +
+                                   ViewerToast, centering an aspect-fit VideoPlayerView
+                                   over the backdrop. Deliberately simpler than
+                                   HeroImageViewer — NO zoom/pan/flight/arrow-flip; chrome
+                                   is Share + ✕ only. Backdrop leads, video stage fades in
+                                   ~0.22s later (stageVisible) so it doesn't flash up.
+                                   close()/Esc just clear selectedFile (.opacity transition
+                                   unmounts); delete fades out → Trash + undo toast, with
+                                   completeDelete's nav writes guarded to the on-screen file
+                                   so a late completion can't close a different file
       ShareButton.swift            macOS share sheet (NSSharingServicePicker)
                                    for the hero image
     Spatial/

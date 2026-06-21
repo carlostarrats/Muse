@@ -283,6 +283,9 @@ struct ContentView: View {
                     // one flag so both paths are truly identical.
                     appState.viewerClosing = true
                 case .closeViewer:
+                    // Match the in-viewer ✕/backdrop close (and the hero-image
+                    // Esc): leave nothing selected on the grid behind.
+                    appState.clearSelection()
                     appState.selectedFile = nil
                 case .clearSearch:
                     // Peel the search first (it left any collection intact), so

@@ -2,11 +2,14 @@
 //  VideoPlayerView.swift
 //  Muse
 //
-//  AVKit-backed video player. Auto-plays when shown.
+//  AVKit-backed video player. Auto-plays when shown. Sized by its container to
+//  the video's aspect-fit rect (the hero stage), so resizeAspect shows no bars;
+//  the layer background is clear so the rounded-corner clip reveals the backdrop.
 //
 
 import SwiftUI
 import AVKit
+import AppKit
 
 struct VideoPlayerView: NSViewRepresentable {
     let url: URL
@@ -14,6 +17,9 @@ struct VideoPlayerView: NSViewRepresentable {
     func makeNSView(context: Context) -> AVPlayerView {
         let view = AVPlayerView()
         view.controlsStyle = .floating
+        view.videoGravity = .resizeAspect
+        view.wantsLayer = true
+        view.layer?.backgroundColor = NSColor.clear.cgColor
         view.player = AVPlayer(url: url)
         view.player?.play()
         return view

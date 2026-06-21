@@ -3325,3 +3325,88 @@ inside the margins). Harness deleted after. Build + full `MuseTests` green throu
 Two files: `Views/ShareCollectionButton.swift`, `Export/CollectionPDFExporter.swift`
 (`CollectionPDFLayout` unchanged). PENDING human GUI confirmation of the live export
 flow (automated GUI click unavailable).
+
+### `feat/next-47` — videos open in the hero viewer
+
+Movies opened in the bare `ViewerChrome` fallback: a filename strip at the top and
+a black-boxed `AVPlayerView` with large black side-bars, no info column and no
+color backdrop — nothing like the rich image hero. This branch gives videos the
+hero treatment while keeping the approved playback controls.
+
+**Approach.** Rather than genericize the fragile `HeroImageViewer` (which carries
+zoom/pan/`HeroStage`/flight state video doesn't need), add a simpler sibling
+`HeroVideoViewer` that composes the already-extracted reusable pieces:
+`ViewerBackdrop` (color wash) + a centered aspect-fit `VideoPlayerView` + the
+generic `ViewerInfoColumn` (tags/collections/colors/INFO) + `ViewerToast`. The
+video is framed to `ViewerGeometry.fitRect(imageSize:viewport:)` and `.position`ed,
+so with `.resizeAspect` there are **no black bars** — the bars in the report were
+the player's black box filling the old chrome frame. Chrome row is **Share + ✕
+only** (no zoom pill / Fit — image-specific). `ViewerRouter`'s `.video` case routes
+to it; close/Esc need no flight wiring — for a non-hero kind `EscapeAction.closeViewer`
+already clears `selectedFile`, and the existing `.opacity` transition handles
+mount/unmount.
+
+**Wash color from a sampled frame.** The image viewer's private RGBA-histogram was
+extracted into `Viewers/HeroPalette.swift`: a pure, unit-tested
+`paletteHexes(fromRGBA:width:height:)` (coarse RGB-bucket histogram → top 3 distinct
+hexes, dark→light) shared by `quickPalette(at:)` (images, ImageIO 48px thumbnail) and
+a new `videoPalette(at:)` (one `AVAssetImageGenerator` frame ≈1s in, or the clip
+midpoint if shorter than 2s), with the standard dataless-iCloud guard (never force a
+download just to tint the backdrop). `HeroImageViewer` was refactored onto it —
+behavior byte-for-byte identical (same bucket packing, `prefix(12)`, `>60` distinctness,
+dark→light sort). No DB/schema change: palette is computed on open, exactly like the
+image no-palette fallback.
+
+**Staged open animation (live tweak).** The first cut had the video appear at full
+size in lockstep with the backdrop, which read as a "flash up" — there's no flight to
+bridge the tile→hero size jump. Now the backdrop settles first and the video stage
+fades in ~0.22s later over 0.35s (`stageVisible`), keeping the same composition but a
+gentler entrance.
+
+**Richer video INFO (live request).** `FileMetadata` gained pure
+`formatFrameRate`/`formatRecordedDate`/`parseISO6709` (ISO-6709 lat/long) +
+`videoMetadata(...)`, and an IO `loadVideo(url:)` that reads the AVAsset video track
+(natural size + preferred transform for correct portrait dims, nominal frame rate) and
+common metadata (creation date, GPS). The card now shows **Recorded · Modified ·
+Dimensions · Duration · Frame Rate**, plus GPS → the same **Open in Maps** link photos
+use. Per a follow-up request the raw lat/long text row is **omitted for videos** — the
+Maps link is the location affordance, so the coordinate text is redundant (the
+coordinate is still surfaced on the metadata to drive the link). `.audio` keeps the
+duration-only `loadMedia`; the universal "Modified" row's anchor now sits under "Taken"
+*or* "Recorded".
+
+**QA — three-lens review + a verification round (loop until green).** Three parallel
+read-only reviewers (correctness/concurrency · UI/a11y · adversarial). The adversarial
+lens found one **High**: the delete used a fire-and-forget `Task` with a 380ms fade and
+no guard, so an **Esc-then-open-another** during the fade let the late `completeDelete`
+close the newly-opened file and wipe its selection (Esc bypasses the view's `close()`,
+setting `selectedFile = nil` directly). Fix: guard `completeDelete`'s `selectedFile`/
+`clearSelection` writes to fire only when THIS file is still on screen — the trash +
+undo toast stay unconditional (the user's delete always lands and stays undoable), and
+removing the file from `currentFiles` is correct either way. Round-1 fixes also: Esc on
+a non-hero viewer now `clearSelection()`s (parity with the in-viewer ✕ and the
+hero-image Esc; applies to all non-hero kinds, harmless/consistent); `videoNaturalSize`
+gained the dataless-iCloud guard its sibling samplers have; close-button `.help`
+tooltip; doc-comment clarifications. A round-2 verification pass confirmed all three
+fixes correct with no new issues and **all clear to merge**.
+
+New tests: `HeroPaletteTests` (4 — histogram solid/two-region-ordering/empty/short-buffer)
+and `FileMetadataTests` video cases (8 — frame-rate rounding, recorded date, ISO-6709
+parse, video row assembly, location-omitted-but-coordinate-kept). Build + full
+`MuseTests` green throughout (0 failures). Files: `Views/Viewer/HeroVideoViewer.swift`
+(new), `Viewers/HeroPalette.swift` (new), `Viewers/FileMetadata.swift`,
+`Viewers/VideoPlayerView.swift`, `Views/ViewerRouter.swift`,
+`Views/Viewer/HeroImageViewer.swift`, `ContentView.swift` + the two test files. Spec +
+plan in `docs/superpowers/`.
+
+**Known (pre-existing, out of scope, flagged for a future audit):**
+`HeroImageViewer.completeDelete` has the same unguarded `selectedFile = nil` as the bug
+fixed here, but is far less exposed — its delete closes via the burn flight (arrow keys
++ Esc are gated during the burn), not a sleep racing an immediate Esc. Left untouched to
+avoid disturbing that delicate, invariant-laden path.
+
+**PENDING human GUI confirmation** of the live flow. The new viewer was screenshot-
+confirmed rendering correctly (color wash, aspect-fit playback, full info column with
+frame-sampled colors), but the interactive paths (Esc/✕/backdrop close, delete+undo,
+Open in Maps) couldn't be driven from the harness — macOS blocked synthetic events
+("Not authorized to send Apple events"; no Accessibility grant).
