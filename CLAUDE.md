@@ -1173,15 +1173,19 @@ The four most critical are also saved as Claude memories (linked).
   tag-label display localized everywhere (chips, banner pills + VoiceOver, hero
   pills + toasts) while every action/identity stays canonical; `Database/SearchBridge`
   (localized query → canonical tag match, `plage`→`beach`); AI collection names
-  in-language (FM prompt + localized fallback namer); UI-chrome seed (~55 strings,
-  verified resolving). T7 formatting audit = no-op (display formatters already
-  `Locale.current`). Gotchas: `xcodebuild` doesn't write extracted catalog keys back
-  (IDE-only) — author keys verbatim; sandbox test can't write `/tmp` (use
-  `NSTemporaryDirectory()`); a function call inside a big SwiftUI view-builder
-  expression trips "unable to type-check in reasonable time" — bind to a `let`.
-  **Deferred (labor, not machine):** full vocabulary (~1300) + full UI chrome (~230);
-  adding coverage or a new language is "fill a column," no code. PENDING human GUI
-  verification in French (`-AppleLanguages '(fr)'`). All unit tests green.
+  in-language (FM prompt + localized fallback namer). T7 formatting audit = no-op
+  (display formatters already `Locale.current`). **Then FULL translation:** all 1303
+  Vision taxonomy terms (8 parallel subagents, coverage-checked 0 missing/extra/dup) +
+  all 240 UI strings (via `xcodebuild -exportLocalizations`, which write-backs the key
+  set into the source `.xcstrings`); enum display props (sort/mood/layout/tile/filter)
+  wrapped in `String(localized:)` so menus localize too (display-only; rawValue
+  persistence untouched; `displayName` tests pass in the en test host). 240/240 + 1303/
+  1303 compile to `fr.lproj`. Gotchas: a plain `xcodebuild` build does NOT write
+  extracted catalog keys back (use `-exportLocalizations`); sandbox test can't write
+  `/tmp` (use `NSTemporaryDirectory()`); a function call inside a big SwiftUI view-builder
+  expression trips "unable to type-check in reasonable time" — bind to a `let`. A SECOND
+  language is now "fill a column," no code. PENDING human GUI verification in French
+  (`-AppleLanguages '(fr)'`) + real-user wording review. All unit tests green.
 
 ## Architecture map (current — see `docs/session-log.md` for the deltas behind each piece)
 
@@ -1475,16 +1479,17 @@ Muse/Muse/
                                    language:) + static shared resolving
                                    Bundle.main.preferredLocalizations (honors the
                                    macOS per-app language override). Unit-tested
-    VisionVocabulary.json          bundled {canonical:{lang:term}} table; fr seed
-                                   (~50 common terms; full VNClassifyImageRequest
-                                   taxonomy = 1302, rest fall back per-term)
+    VisionVocabulary.json          bundled {canonical:{lang:term}} table; FULL fr
+                                   (all 1303 VNClassifyImageRequest taxonomy terms;
+                                   untranslated terms fall back per-term by design)
   Localizable.xcstrings            (at Muse/Muse/ root) UI-chrome String Catalog;
-                                   fr seed (~55 high-visibility strings). Xcode 26
-                                   synced groups auto-include it; only knownRegions
-                                   needed `fr`. NOTE: xcodebuild does NOT write
-                                   extracted keys back to the source .xcstrings
-                                   (IDE-only) — author entries with exact source-
-                                   literal keys
+                                   FULL fr (all 240 compiler-extracted strings).
+                                   Xcode 26 synced groups auto-include it; only
+                                   knownRegions needed `fr`. NOTE: a plain xcodebuild
+                                   build does NOT write extracted keys back to the
+                                   source .xcstrings — use `xcodebuild
+                                   -exportLocalizations` (it write-backs the full key
+                                   set) then translate
   Indexing/
     HashService.swift              streaming SHA-256; nil on dataless iCloud reads
     Indexer.swift                  identity reconciliation matrix (§4); size+mtime

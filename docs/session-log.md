@@ -3660,8 +3660,23 @@ independent removal kill-switches (drop `fr` from `knownRegions`; make
   type-check in reasonable time" — bind the value to a `let` first. (SourceKit also
   flagged it as an editor artifact; the batch compiler confirmed via build.)
 
-**Deferred (the labor, not the machine):** full Vision-vocabulary French (~1300 terms)
-and full UI-chrome French (~230 strings). The infrastructure is language-agnostic —
-adding coverage (or a new language) is "fill a column," no code changes. PENDING human
-GUI verification of the live French experience (launch with `-AppleLanguages '(fr)'`).
-All unit tests green throughout.
+**Then completed the FULL French translation** (the user needs a genuinely complete build
+for a real-user test — can't ship a half-French app):
+- **Vocabulary:** all 1303 `VNClassifyImageRequest` taxonomy terms translated to French
+  (8 parallel translation subagents over the dumped taxonomy → merged + coverage-checked:
+  0 missing / 0 extra / 0 duplicate keys).
+- **UI chrome:** used `xcodebuild -exportLocalizations` (the authoritative compiler
+  extraction — and unlike a plain build it write-backs the full key set into the source
+  `.xcstrings`) to get all 240 keys, and translated every one (placeholders preserved with
+  positional specifiers `%1$@` etc.; format/ratio codes like `JPEG`/`16:9`/`A → Z` left
+  identical). Enum display properties (sort modes, moods, image layouts, tile backgrounds,
+  tag/folder/collection sort, grid-filter facets) wrapped in `String(localized:)` so
+  menus/pickers localize too — display-only props (persistence uses rawValue, untouched);
+  `displayName` unit tests still pass because `String(localized:)` resolves to the English
+  source under the en test host. **240/240 strings + 1303/1303 vocabulary compile to
+  `fr.lproj`.**
+
+The infrastructure is language-agnostic — a SECOND language is now purely "fill a column"
+(run `-exportLocalizations`, translate, add a `VisionVocabulary.json` lang key), no code
+changes. PENDING human GUI verification of the live French experience (launch with
+`-AppleLanguages '(fr)'`) and a real-user wording review. All unit tests green throughout.
