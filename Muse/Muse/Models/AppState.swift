@@ -839,7 +839,8 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func reloadCurrentFiles(showLoading: Bool = false, thenIndex: Bool = false,
+    /// Not `private`: `clearSearch` (AppState+Search.swift) calls it.
+    func reloadCurrentFiles(showLoading: Bool = false, thenIndex: Bool = false,
                                     verifyICloud: Bool = false) {
         guard let folder = selectedFolder else {
             currentFiles = []
@@ -1024,43 +1025,10 @@ final class AppState: ObservableObject {
     // MARK: - Search
 
     /// Monotonic token so a slow search can't clobber a newer search — or a
-    /// dismissal that landed while it was in flight.
-    private var searchRequestToken = 0
-
-    func runSearch(_ query: String) async {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            clearSearch()
-            return
-        }
-        searchRequestToken += 1
-        let token = searchRequestToken
-        // Scope follows the magnifier menu: "All" searches the whole indexed
-        // library; "This folder" (default) scopes to the selected folder, and
-        // falls back to everywhere when nothing is selected.
-        let scope: SearchScope
-        if !searchAllFolders, let folder = selectedFolder {
-            scope = .currentFolder(folder.url)
-        } else {
-            scope = .everywhere
-        }
-        let results = await SearchService.search(query: trimmed, scope: scope)
-        // A newer search — or clearSearch() — invalidates this stale result.
-        guard token == searchRequestToken else { return }
-        isSearchActive = true
-        // search results keep relevance rank; sort modes apply to folder browsing only
-        currentFiles = results
-        // Chip labels derive from the search result set (tagSourceFiles is
-        // search-aware) so the offered chips stay relevant while searching.
-        reloadTagChips()
-    }
-
-    func clearSearch() {
-        searchRequestToken += 1   // cancel any in-flight search result
-        searchQuery = ""
-        isSearchActive = false
-        reloadCurrentFiles()
-    }
+    /// dismissal that landed while it was in flight. Not `private`: the search
+    /// methods live in AppState+Search.swift and the folder-selection path here
+    /// also bumps it.
+    var searchRequestToken = 0
 
     /// Nonisolated so it can run off the main thread during a folder load.
     /// Sorting is left to SmartSorter (the caller applies the active mode).
