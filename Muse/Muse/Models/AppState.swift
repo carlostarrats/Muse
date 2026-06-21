@@ -64,7 +64,9 @@ final class AppState: ObservableObject {
     /// (memory + disk, synchronously) and bump their version so any visible
     /// tile re-decodes. Re-analysis is handled separately (the indexer cleared
     /// `analyzed_hash`, so the analyze pass regenerates tags/colors/dimensions).
-    private func markContentChanged(_ paths: [String]) {
+    /// Not `private`: called by `scheduleIndexing` (AppState+Indexing.swift)
+    /// and `handleFolderEvent` (AppState+Watcher.swift).
+    func markContentChanged(_ paths: [String]) {
         guard !paths.isEmpty else { return }
         for raw in paths {
             let url = URL(fileURLWithPath: raw)
@@ -769,21 +771,6 @@ final class AppState: ObservableObject {
         select(folder: resolveFolderNode(url) ?? FolderNode(url: url))
     }
 
-    /// Scan the current folder's images for duplicates, then present the
-    /// review sheet. Lives here so the menu bar can trigger it.
-    func findDuplicatesInCurrentFolder() {
-        let urls = currentFiles
-            .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
-            .map { $0.url }
-        Task { @MainActor in
-            await DuplicateFinder.shared.scan(in: urls)
-            duplicatesSheetVisible = true
-        }
-    }
-
-    /// Kick off active-folder indexing, then the automatic analysis pass
-    /// over whatever images are new or changed (stale analyzed_hash) —
-    /// already-analyzed files are provably skipped.
     /// In-flight index/prewarm/analyze work for the active folder. Held so
     /// removing the folder can cancel it — otherwise the detached task keeps
     /// analyzing files that are no longer reachable (the user-reported "kept
@@ -791,61 +778,8 @@ final class AppState: ObservableObject {
     /// failure mid-pass). A new selection supersedes via `folderLoadToken`;
     /// the previous folder's pass is deliberately allowed to finish, so this
     /// is cancelled only on explicit removal, not on every switch.
-    private var indexingTask: Task<Void, Never>?
-
-    /// - verifyICloud: run the background content-verify pass over the iCloud
-    ///   files (catches edits made while the app was closed — iCloud
-    ///   size/mtime oscillates so the normal fast path can't notice). Only the
-    ///   FRESH folder selection asks for this; live FSEvents reloads handle
-    ///   their specific changed files directly and must not re-hash the whole
-    ///   iCloud folder on every event.
-    private func scheduleIndexing(for url: URL, verifyICloud: Bool = false) {
-        let files = currentFiles
-        let icloud = iCloudFolderURL
-        indexingTask = Task.detached(priority: .userInitiated) {
-            let pairs = files.compactMap { f -> (URL, AssetKind)? in
-                guard f.kind != .folder, f.kind.hasNativeViewer || f.kind == .archive else { return nil }
-                return (f.url, f.kind)
-            }
-            // Local edits made while closed surface here (size/mtime changed),
-            // as do brand-new files. Drop stale art for the ones that changed.
-            let changed = await Indexer.shared.indexBatch(pairs, priority: .high)
-            await MainActor.run { self.markContentChanged(changed.map { $0.path }) }
-            if Task.isCancelled { return }
-            let imageURLs = files
-                .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
-                .map { $0.url }
-            // Warm the whole folder's thumbnails to disk up front (background),
-            // so scrolling anywhere later is an instant cache read — no
-            // generation, no progress pill. Runs concurrently with analysis.
-            let thumbURLs = files
-                .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd || $0.kind == .svg }
-                .map { $0.url }
-            await ThumbnailCache.shared.prewarmToDisk(thumbURLs)
-            if Task.isCancelled { return }
-            await SidecarHydrator.hydrate(urls: imageURLs, folder: icloud)
-            if Task.isCancelled { return }
-            await AnalyzePipeline.shared.analyzePending(in: imageURLs)
-            if Task.isCancelled { return }
-
-            // iCloud cold-start parity: re-hash the iCloud-zone files to catch
-            // edits/syncs that landed while Muse was closed. Background +
-            // silent (no pill) and content-hash based — NOT size/mtime, which
-            // oscillates on iCloud. Only the files that truly changed get their
-            // art dropped + a re-analyze; an unchanged folder is just reads.
-            guard verifyICloud, let icloud else { return }
-            let icloudPairs = pairs.filter {
-                $0.0.standardizedFileURL.path.hasPrefix(icloud.standardizedFileURL.path + "/")
-            }
-            guard !icloudPairs.isEmpty else { return }
-            let icloudChanged = await Indexer.shared.indexBatch(
-                icloudPairs, priority: .background, force: true, silent: true)
-            if Task.isCancelled || icloudChanged.isEmpty { return }
-            await MainActor.run { self.markContentChanged(icloudChanged.map { $0.path }) }
-            await ThumbnailCache.shared.prewarmToDisk(icloudChanged)
-            await AnalyzePipeline.shared.analyzePending(in: icloudChanged)
-        }
-    }
+    /// Not `private`: `scheduleIndexing` lives in AppState+Indexing.swift.
+    var indexingTask: Task<Void, Never>?
 
     // MARK: - Starring
 
@@ -1126,20 +1060,6 @@ final class AppState: ObservableObject {
         searchQuery = ""
         isSearchActive = false
         reloadCurrentFiles()
-    }
-
-    func analyzeCurrentFolder() async {
-        let urls = currentFiles
-            .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
-            .map { $0.url }
-        await AnalyzePipeline.shared.analyze(folder: urls)
-        // Re-sort in case visual signals just landed
-        resort()
-    }
-
-    func analyzeSelected() async {
-        guard let url = selectedFile?.url else { return }
-        await AnalyzePipeline.shared.analyze(file: url)
     }
 
     /// Nonisolated so it can run off the main thread during a folder load.
