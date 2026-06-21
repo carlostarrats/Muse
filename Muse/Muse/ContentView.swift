@@ -68,10 +68,9 @@ struct ContentView: View {
                             // scroll view and scrolls with it. Hidden only
                             // during search and on the Collections page.
                             VStack(spacing: 0) {
-                                if !appState.isSearchActive {
-                                    TagChipsRow()
-                                        .transition(.opacity)
-                                }
+                                // Chips stay mounted during search too — tags now
+                                // narrow within the search result set (AND).
+                                TagChipsRow()
                                 GridView()
                             }
                             .transition(Self.pageReveal)
@@ -122,9 +121,10 @@ struct ContentView: View {
                 // between the grid sort cluster and the show-subfolders toggle.
                 ToolbarItem(placement: .navigation) {
                     tagSortMenu
-                        // The tag chips don't show on the Collections card page
-                        // or during a search.
-                        .disabled(isCollectionsPage || appState.isSearchActive)
+                        // The tag chips show on the grid, inside a collection, and
+                        // now over search results too — only the Collections card
+                        // page has no chip row.
+                        .disabled(isCollectionsPage)
                 }
 
                 // Its own item (own surface), sitting next to sort.
@@ -265,6 +265,7 @@ struct ContentView: View {
                     hasSelectedFile: selected != nil,
                     selectedFileIsHero: isHero,
                     searchActive: searchPresent,
+                    tagsActive: !appState.activeTagLabels.isEmpty,
                     insideCollection: appState.activeCollectionID != nil,
                     showingCollectionsPage: appState.showingCollections
                 ) {
@@ -287,6 +288,9 @@ struct ContentView: View {
                     // Peel the search first (it left any collection intact), so
                     // this returns to the collection's members or the folder grid.
                     appState.clearSearch()
+                case .clearTags:
+                    // Clear the whole tag set in one press (not one tag at a time).
+                    appState.setActiveTag(nil)
                 case .exitCollection:
                     // Same as the in-collection header BackArrowButton.
                     appState.setActiveCollection(nil)

@@ -252,9 +252,27 @@ final class AppState: ObservableObject {
 
     // MARK: - Tag chip filter (main grid)
 
-    /// Active tag-chip filter; nil = "All". Set via `setActiveTag`.
-    @Published var activeTagLabel: String?
-    /// Alive paths of files carrying `activeTagLabel`; nil = no filter.
+    /// Active tag-chip filter as an ORDERED set; empty = "All". Insertion order
+    /// drives the banner wording. Mutated via `setActiveTags` / `setActiveTag` /
+    /// `toggleActiveTag` in AppState+Filters; the grid filters by the
+    /// INTERSECTION of these labels' path sets (`activeTagPaths`).
+    @Published var activeTagLabels: [String] = []
+
+    /// The lone selected tag, or nil when 0 or 2+ are selected. Drives the
+    /// single-tag menu commands (Rename/Delete/Remove) which are ambiguous for a
+    /// multi-tag selection.
+    var singleActiveTag: String? {
+        activeTagLabels.count == 1 ? activeTagLabels.first : nil
+    }
+
+    /// Banner text for 2+ selected tags ("Viewing a and b" / Oxford for 3+);
+    /// nil for 0 or 1 (no banner — a single filled chip is already clear).
+    var tagBannerText: String? {
+        TagSelection.bannerText(for: activeTagLabels)
+    }
+
+    /// Alive paths in the INTERSECTION of `activeTagLabels` (files carrying ALL
+    /// selected tags); nil = no filter.
     @Published var activeTagPaths: Set<String>? {
         didSet { _visibleFilesValid = false }
     }
@@ -766,7 +784,7 @@ final class AppState: ObservableObject {
         // images already in place below it).
         if showingCollections { showingCollections = false }
         if activeCollectionID != nil { setActiveCollection(nil, animated: false) }
-        if activeTagLabel != nil { setActiveTag(nil, animated: false) }
+        if !activeTagLabels.isEmpty { setActiveTag(nil, animated: false) }
         // Clear the search inline (not via clearSearch(), which would trigger a
         // second, skeleton-less reload on top of the one below). A stale search
         // would otherwise leave the query in the field, the grid showing search
@@ -1221,7 +1239,10 @@ final class AppState: ObservableObject {
             return
         }
         let paths = scope.map { $0.url.standardizedFileURL.path }
-        let simpleDir = (!inCollection && !recursive) ? TagScope.parentDir(ofPath: paths[0]) : nil
+        // Search results can span folders, so the single-folder GROUP BY fast
+        // path doesn't apply — fall to the general per-file-scope query.
+        let simpleDir = (!inCollection && !recursive && !isSearchActive)
+            ? TagScope.parentDir(ofPath: paths[0]) : nil
         let tagSort = sortModeOverride ?? tagSortMode
         Task.detached(priority: .userInitiated) {
             let rows = TagChipLoader.ordered(
@@ -1277,6 +1298,9 @@ final class AppState: ObservableObject {
         isSearchActive = true
         // search results keep relevance rank; sort modes apply to folder browsing only
         currentFiles = results
+        // Chip labels derive from the search result set (tagSourceFiles is
+        // search-aware) so the offered chips stay relevant while searching.
+        reloadTagChips()
     }
 
     func clearSearch() {

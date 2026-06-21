@@ -3158,3 +3158,119 @@ reorderableNodes`, so the index space `rowShift` expects is unchanged. No new un
 test: SwiftUI rendering race with no testable surface (UI views aren't
 unit-tested); real confirmation is the bug ceasing to recur in the live build. One
 file (`Views/SidebarView.swift`). New durable gotcha recorded.
+
+---
+
+## 2026-06-20 — `feat/next-45` — Multi-tag view (AND / intersection)
+
+The third and most invasive of the three browsing features brainstormed together
+(after the hero INFO card `feat/next-38` and the grid faceted filters
+`feat/next-42`). Spec: `docs/superpowers/specs/2026-06-20-multi-tag-view-design.md`;
+plan: `docs/superpowers/plans/2026-06-20-multi-tag-view.md`.
+
+**What it does.** The tag chip row above the grid could filter by exactly one tag
+(`AppState.activeTagLabel: String?`). It's now an ordered set:
+
+- **Plain-click** a chip → view just that tag (today's behavior, preserved;
+  re-plain-clicking the sole selected chip clears).
+- **Cmd-click** a chip → toggle it in/out of the selection. The grid shows files
+  carrying **all** selected tags (set **intersection / AND**) — adding tags
+  monotonically narrows; an unrelated combination legitimately produces the normal
+  empty grid (honest — the banner explains what's being viewed).
+- A **banner** ("Viewing blue and screenshot" for 2, Oxford "Viewing a, b, and c"
+  for 3+) sits at the top of the grid area below the chips, for 2+ tags only.
+- **Search** is now in scope: the chip row mounts over search results and the tag
+  filter narrows within them (This-Folder and All scope); chips derive from the
+  result set. The tag-sort menu is live during search too.
+- **Escape** clears the whole set in one press — a new `EscapeResolver.clearTags`
+  layer ordered after the viewer/search peel and before the collection back-out.
+
+**The cost was the scalar→set migration**, done as one coordinated rename so the
+codebase never sat half-migrated (the spec's explicit warning): `activeTagLabel:
+String?` → `activeTagLabels: [String]` (insertion order drives the banner);
+`activeTagPaths: Set<String>?` retained, now the intersection of each selected
+label's path set. Every reader moved together — the menu-bar Tags menu, the grid
+right-click `SelectionMenu`, `GridView`'s `.id` + `gridSignature`, `TagChipsRow`,
+and `select(folder:)`.
+
+**Architecture.**
+- New pure `Models/TagSelection.swift` — `toggling(_:_:)` (ordered add/remove) and
+  `bannerText(for:)` (nil for 0/1, Oxford "and" for 2+). Unit-tested
+  (`TagSelectionTests`, 9 cases).
+- `AppState+Filters.setActiveTags(_:)` is the core mutation: clears the grid
+  selection, then in a `tagRequestToken`-guarded `Task` queries each label's
+  per-`parent_dir`-scoped paths (`pathsForTag`, the original per-location SQL
+  verbatim) and intersects them, committing labels + paths in ONE animated
+  transaction (same crossfade discipline as the collection filter — not a SwiftUI
+  computed property). `setActiveTag(_:)` delegates (single/clear);
+  `toggleActiveTag(_:)` is the Cmd-click path.
+- `singleActiveTag: String?` (count == 1 ? first : nil) gates the single-tag menu
+  commands (Rename/Delete/Remove), which are ambiguous for a 2+ selection.
+- `removeTag` keeps the intersection correct with `activeTagPaths?.subtract(removed)`
+  (a file still in the intersection carries every selected label, so any that lost
+  the removed label is in `removed`); the single-tag "fall back to All" is preserved
+  (`count == 1`), while a multi-tag intersection that empties stays an honest empty
+  grid.
+- `visibleFiles`' search branch applies `activeTagPaths`; `tagSourceFiles` and
+  `reloadTagChips` are search-aware (chips from the result set; the per-folder
+  GROUP BY fast path skipped during search since results span folders).
+- The hero-close Escape path is structurally untouched — `hasSelectedFile`
+  short-circuits before the tag layer and `.closeHero` still fires only
+  `viewerClosing` (the 2026-06-18 two-press fix preserved).
+
+**Out of scope (per spec, confirmed):** no bulk tag delete (deletion stays single,
+right-click → "Delete Tag…"), no OR/union mode or AND/OR toggle, no Collections
+card-page filtering.
+
+**Verification.** Built TDD task-by-task (pure `TagSelection` + `EscapeResolver`
+unit-tested; SwiftUI views verified by build per convention). Build + full
+`MuseTests` green throughout. Independent diff review (general-purpose subagent over
+the whole branch diff) returned **Ready to merge: Yes** — no Critical/Important;
+the per-`parent_dir` scoping, token/race handling, intersection reduce, and
+scroll-clip clearance all confirmed intact. Pending human GUI verification of the
+interactive flows (live click automation unavailable — macOS Accessibility not
+granted to the harness). New durable gotcha recorded in `CLAUDE.md`.
+
+### Same session — pill banner + three-lens QA pass
+
+After the initial build, two refinements driven from the running app + review:
+
+**Pill banner.** The banner's tag labels now render as small quiet capsules
+(`BannerPill`, matching the resting `TagChip` wash at `.primary.opacity(0.08)`) so
+they stand out from the connective words — "Viewing [white] and [black]". New pure
+`TagSelection.bannerSegments(for:)` carries the per-label connective flags
+(`precededByAnd` / `trailingComma` for the Oxford comma), unit-tested; the banner is
+wrapped in a horizontal `ScrollView` mirroring the chip row so a long set scrolls
+instead of truncating each pill. The plain `bannerText` string stays the VoiceOver
+label (`.accessibilityElement(children: .ignore)`).
+
+**QA pass (three parallel review lenses + a verification round).** Correctness/
+concurrency, UI/a11y, and an adversarial 12-scenario trace. Findings fixed:
+
+1. **Sync-label race (Important).** `setActiveTags` wrote `activeTagLabels` only
+   inside its async `Task`, so `toggleActiveTag` and the plain-click replace-vs-clear
+   check read a STALE set — two fast Cmd-clicks dropped the first selection and a
+   double plain-click failed to clear. Fix: commit `activeTagLabels` SYNCHRONOUSLY;
+   only `activeTagPaths` (the DB-derived intersection) lands async under the token
+   guard. (New durable gotcha.)
+2. **Phantom-label-on-delete (Minor→fixed).** Deleting a member of a multi-tag set
+   left it in the banner with no chip to deselect. A multi-tag `removeTag` is always a
+   full-view "Delete Tag…" (the partial "Remove Tag from Selection" is gated to
+   `singleActiveTag`), so it now drops the label via `setActiveTags(filter)`; the
+   single-tag path keeps its anyLeft / subtract / fall-back-to-All.
+3. **Rename-merge duplicate (Important).** Renaming a selected tag onto another
+   selected tag yielded `["b","b"]` ("Viewing b and b") because `TagStore.renameLabel`
+   merges on collision. Fix: `TagSelection.renaming(_:from:to:)` (pure, tested) remaps
+   then dedups, order-preserving.
+4. **Banner overflow (Important).** Many/long pills squeezed into ugly per-element
+   truncation — wrapped in a horizontal `ScrollView` like the chip row.
+5. **Airtight grid `.id` (Minor).** The label join separator `","` → `"\u{1f}"`
+   (unit separator, un-typeable) so a comma-containing label can't collide two
+   distinct selections onto the same grid identity.
+
+Accepted nuance (documented): with the sync-label commit, on a tag *switch* the grid
+`.id` flips a frame before `activeTagPaths` updates, so up to ~1 frame of the previous
+tag's tiles can show at the start of the 0.2s crossfade — imperceptible for normal
+indexed single-label queries, only surfacing under a slow/contended DB. Second
+verification round: all six fixes correct, no regression, ready to commit. Build +
+full `MuseTests` green.

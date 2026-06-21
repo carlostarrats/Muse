@@ -34,23 +34,34 @@ struct TagChipsRow: View {
     private var tags: [(label: String, count: Int)] { appState.tagChipRows }
 
     var body: some View {
+        VStack(spacing: 0) {
         ZStack {
             if !tags.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     ChipFlow(gap: 8, hovered: hovered, grow: growForHovered, noGrow: [0]) {
                         TagChip(index: 0, label: "All", count: nil,
-                                isSelected: appState.activeTagLabel == nil,
+                                isSelected: appState.activeTagLabels.isEmpty,
                                 isHovered: hovered == 0,
                                 onHover: hover) {
                             appState.setActiveTag(nil)
                         }
                         ForEach(Array(tags.enumerated()), id: \.element.label) { i, tag in
                             TagChip(index: i + 1, label: tag.label, count: tag.count,
-                                    isSelected: appState.activeTagLabel == tag.label,
+                                    isSelected: appState.activeTagLabels.contains(tag.label),
                                     isHovered: hovered == i + 1,
                                     onHover: hover) {
-                                appState.setActiveTag(
-                                    appState.activeTagLabel == tag.label ? nil : tag.label)
+                                // Cmd-click toggles the chip in/out of the
+                                // selection (AND filter); plain click replaces the
+                                // selection with just this tag (re-plain-clicking
+                                // the sole selected chip clears). Mirrors the
+                                // grid's own Cmd-click model (GridView reads
+                                // NSEvent.modifierFlags the same way).
+                                if NSEvent.modifierFlags.contains(.command) {
+                                    appState.toggleActiveTag(tag.label)
+                                } else {
+                                    appState.setActiveTag(
+                                        appState.activeTagLabels == [tag.label] ? nil : tag.label)
+                                }
                             }
                             .contextMenu {
                                 Button("Rename Tag…") {
@@ -80,6 +91,44 @@ struct TagChipsRow: View {
                 Color.clear.frame(height: Self.noTagsTopClearance)
             }
         }
+
+        // Banner naming the active set (2+ tags). Sits at the top of the grid
+        // area, below the chips — quiet secondary text with the tag labels drawn
+        // as pills so they stand out from the connective words. Absent for 0/1
+        // tag. The plain string is the VoiceOver label so it reads naturally.
+        if let banner = appState.tagBannerText {
+            // Horizontal scroll mirrors the chip row above so a long set (many
+            // pills / long labels) scrolls instead of squeezing each pill and
+            // connective word into ugly per-element truncation.
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    Text("Viewing")
+                        .foregroundStyle(.secondary)
+                    ForEach(Array(
+                        TagSelection.bannerSegments(for: appState.activeTagLabels).enumerated()),
+                            id: \.offset) { _, seg in
+                        if seg.precededByAnd {
+                            Text("and").foregroundStyle(.secondary)
+                        }
+                        HStack(spacing: 0) {
+                            BannerPill(label: seg.label)
+                            if seg.trailingComma {
+                                Text(",").foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                .font(.system(size: 12, weight: .medium))
+                .padding(.horizontal, 14)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, 10)
+            .transition(.opacity)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(banner)
+        }
+        }
+        .animation(.easeInOut(duration: AppState.navTransition), value: appState.activeTagLabels)
         .onChange(of: appState.tagRenameRequest) { _, label in
             if let label { renameText = label }
         }
@@ -123,7 +172,10 @@ struct TagChipsRow: View {
         guard !new.isEmpty, new != old else { return }
         Task { @MainActor in
             await TagStore.shared.renameLabel(from: old, to: new)
-            if appState.activeTagLabel == old { appState.setActiveTag(new) }
+            if appState.activeTagLabels.contains(old) {
+                appState.setActiveTags(
+                    TagSelection.renaming(appState.activeTagLabels, from: old, to: new))
+            }
             appState.tagsVersion += 1
         }
     }
@@ -257,6 +309,27 @@ private struct ChipFlow: Layout {
         }
         out[h] = naturals[h] + grow
         return out
+    }
+}
+
+// MARK: - Banner pill
+
+/// Small quiet capsule used in the multi-tag banner ("Viewing [white] and
+/// [black]") so each tag label stands out from the connective words. A read-only
+/// label — not interactive, unlike the TagChip filter chips above.
+private struct BannerPill: View {
+    let label: String
+
+    var body: some View {
+        Text(label)
+            .font(.system(size: 12, weight: .medium))
+            .lineLimit(1)
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            // Match the resting (unselected) TagChip wash so the banner pills read
+            // as the same family.
+            .background(Capsule(style: .continuous).fill(.primary.opacity(0.08)))
     }
 }
 

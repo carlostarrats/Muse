@@ -47,7 +47,13 @@ extension AppState {
         // search results are global; collection/tag filters apply to browsing only
         var base: [FileNode]
         if isSearchActive {
+            // Search results are global, but the tag chips now narrow WITHIN the
+            // result set (AND). activeTagPaths is library-wide for the selected
+            // labels, so it filters correctly across This-Folder and All scope.
             base = currentFiles
+            if let tagPaths = activeTagPaths {
+                base = base.filter { tagPaths.contains($0.url.standardizedFileURL.path) }
+            }
         } else {
             base = activeCollectionFiles ?? currentFiles
             if let tagPaths = activeTagPaths {
@@ -86,7 +92,11 @@ extension AppState {
     /// folder's files. Deliberately the UNFILTERED set, so selecting a tag
     /// doesn't collapse the chip list down to just that tag.
     var tagSourceFiles: [FileNode] {
-        activeCollectionFiles ?? currentFiles
+        // During search the chips derive from the search RESULT set so the
+        // offered tags are relevant (and the per-folder fast path is skipped
+        // since results can span folders — see reloadTagChips).
+        if isSearchActive { return currentFiles }
+        return activeCollectionFiles ?? currentFiles
     }
 
     /// Set (or clear, with nil) the active collection filter. Loads the
@@ -204,11 +214,22 @@ extension AppState {
         Task { @MainActor in
             await TagStore.shared.removeLabel(label, fromURLs: urls)
             tagsVersion &+= 1
-            if activeTagLabel == label {
-                // If nothing here would still carry the tag, the chip is gone
-                // and the grid would be stranded empty — go straight back to
-                // "All" in ONE transaction (same crossfade as switching tags),
-                // rather than emptying the grid first and then repopulating.
+            if activeTagLabels.contains(label) {
+                // A multi-tag delete only comes from the chip's full-view "Delete
+                // Tag…" (the partial "Remove Tag from Selection" is gated to a
+                // single active tag), so the deleted label is now gone from this
+                // view. Drop it from the set and recompute the remaining
+                // intersection — otherwise the banner keeps naming a tag whose
+                // chip has vanished, with no way to deselect it.
+                if activeTagLabels.count > 1 {
+                    setActiveTags(activeTagLabels.filter { $0 != label })
+                    return
+                }
+                // Single tag: the affected files leave the intersection — subtract
+                // them from activeTagPaths (a file still in the intersection must
+                // carry the tag, so any that lost it is in `removed`). If nothing
+                // here would still carry the tag the grid is stranded empty, so
+                // fall back to "All".
                 let anyLeft = visibleFiles.contains {
                     !removed.contains($0.url.standardizedFileURL.path)
                 }
@@ -313,54 +334,83 @@ extension AppState {
         newCollectionNameDraft = ""
     }
 
-    /// Set (or clear, with nil) the tag chip filter — same single-transaction
-    /// animated swap as the collection filter.
-    func setActiveTag(_ label: String?, animated: Bool = true) {
+    /// Per-label alive-path query, scoped per `parent_dir` (tags are
+    /// per-location: a duplicate sharing the file_id in an untagged folder must
+    /// NOT be pulled in). Returns the absolute paths carrying `label` in their
+    /// own folder.
+    private func pathsForTag(_ label: String) async -> [String] {
+        guard let q = Database.shared.dbQueue else { return [] }
+        return (try? await q.read { db -> [String] in
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT p.absolute_path AS ap, t.parent_dir AS pd
+                FROM paths p JOIN tags t ON t.file_id = p.file_id
+                WHERE p.is_alive = 1 AND t.label = ?
+                """, arguments: [label])
+            var out: [String] = []
+            for r in rows {
+                guard let ap: String = r["ap"] else { continue }
+                let pd: String? = r["pd"]
+                if pd == TagScope.parentDir(ofPath: ap) { out.append(ap) }
+            }
+            return out
+        }) ?? []
+    }
+
+    /// Core tag-filter mutation: set the selection to exactly `labels` (ordered)
+    /// and recompute `activeTagPaths` as the INTERSECTION of each label's path
+    /// set (files carrying ALL of them). Empty `labels` clears the filter. One
+    /// query per label (selection sizes are tiny).
+    ///
+    /// `activeTagLabels` is committed SYNCHRONOUSLY (before the async path query)
+    /// so the chip highlight + banner reflect the click immediately AND the next
+    /// toggle/replace decision reads a fresh value. It used to be written only
+    /// inside the async Task, which lagged a click — two fast Cmd-clicks both read
+    /// the pre-Task set, so the first selection was lost (and a double plain-click
+    /// failed to clear). Only `activeTagPaths` (the DB-derived intersection) lands
+    /// async now; the grid crossfades when it arrives (a frame later for tiny
+    /// selections — imperceptible).
+    func setActiveTags(_ labels: [String], animated: Bool = true) {
         clearSelection()
         let curve = Animation.easeInOut(duration: AppState.navTransition)
         tagRequestToken += 1
-        guard let label else {
+        activeTagLabels = labels
+        guard !labels.isEmpty else {
             // Clearing as part of a folder switch is INSTANT (animated: false), so
             // the selected-tag view vanishes in one frame rather than animating
             // away before the new folder appears.
             if animated {
-                withAnimation(curve) {
-                    activeTagLabel = nil
-                    activeTagPaths = nil
-                }
+                withAnimation(curve) { activeTagPaths = nil }
             } else {
-                activeTagLabel = nil
                 activeTagPaths = nil
             }
             return
         }
         let token = tagRequestToken
         Task { @MainActor in
-            guard let q = Database.shared.dbQueue else { return }
-            let paths: [String] = (try? await q.read { db -> [String] in
-                // A path matches only if the tag is scoped to ITS folder —
-                // tags are per-location, so a duplicate sharing the file_id in
-                // an untagged folder must not be pulled in.
-                let rows = try Row.fetchAll(db, sql: """
-                    SELECT p.absolute_path AS ap, t.parent_dir AS pd
-                    FROM paths p JOIN tags t ON t.file_id = p.file_id
-                    WHERE p.is_alive = 1 AND t.label = ?
-                    """, arguments: [label])
-                var out: [String] = []
-                for r in rows {
-                    guard let ap: String = r["ap"] else { continue }
-                    let pd: String? = r["pd"]
-                    if pd == TagScope.parentDir(ofPath: ap) { out.append(ap) }
-                }
-                return out
-            }) ?? []
+            var sets: [Set<String>] = []
+            for label in labels {
+                sets.append(Set(await pathsForTag(label)))
+            }
+            let inter = sets.dropFirst().reduce(sets.first ?? Set<String>()) {
+                $0.intersection($1)
+            }
             if token == tagRequestToken {
                 withAnimation(curve) {
-                    activeTagLabel = label
-                    activeTagPaths = Set(paths)
+                    activeTagPaths = inter
                 }
             }
         }
+    }
+
+    /// Set (or clear, with nil) a SINGLE active tag — plain-click / clear.
+    func setActiveTag(_ label: String?, animated: Bool = true) {
+        setActiveTags(label.map { [$0] } ?? [], animated: animated)
+    }
+
+    /// Cmd-click toggle: add the label if absent, remove it if present;
+    /// recomputes the intersection. Emptying the set clears the filter.
+    func toggleActiveTag(_ label: String) {
+        setActiveTags(TagSelection.toggling(activeTagLabels, label))
     }
 
     // MARK: - Sidebar collections (independent of the Collections page)

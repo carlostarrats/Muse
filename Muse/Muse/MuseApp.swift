@@ -213,26 +213,26 @@ struct MuseApp: App {
             // VoiceOver reachable. Enabled while a tag filter is selected.
             CommandMenu("Tags") {
                 Button("Rename Tag…") {
-                    if let label = appState.activeTagLabel {
+                    if let label = appState.singleActiveTag {
                         appState.tagRenameRequest = label
                     }
                 }
-                .disabled(appState.activeTagLabel == nil)
+                .disabled(appState.singleActiveTag == nil)
 
                 Button("Delete Tag…") {
-                    if let label = appState.activeTagLabel {
+                    if let label = appState.singleActiveTag {
                         appState.tagDeleteRequest = label
                     }
                 }
-                .disabled(appState.activeTagLabel == nil)
+                .disabled(appState.singleActiveTag == nil)
 
                 Button("Remove Tag from Selection") {
-                    if let label = appState.activeTagLabel {
+                    if let label = appState.singleActiveTag {
                         appState.removeTag(label,
                                            fromURLs: appState.effectiveSelectionURLs(fallback: ""))
                     }
                 }
-                .disabled(appState.activeTagLabel == nil || appState.selectedFiles.isEmpty
+                .disabled(appState.singleActiveTag == nil || appState.selectedFiles.isEmpty
                           || appState.isSearchActive)
 
                 Divider()
@@ -240,7 +240,7 @@ struct MuseApp: App {
                 Button("Clear Tag Filter") {
                     appState.setActiveTag(nil)
                 }
-                .disabled(appState.activeTagLabel == nil)
+                .disabled(appState.activeTagLabels.isEmpty)
 
                 Divider()
 

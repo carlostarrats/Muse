@@ -22,6 +22,8 @@ enum EscapeAction: Equatable {
     case closeViewer
     /// An active/typed search — clear it (clearSearch()).
     case clearSearch
+    /// An active multi-tag chip selection — clear the WHOLE set (setActiveTag(nil)).
+    case clearTags
     /// Inside a collection — pop to the Collections page (setActiveCollection(nil)).
     case exitCollection
     /// On the Collections card page — return to the grid (toggleCollectionsPage()).
@@ -40,16 +42,23 @@ enum EscapeResolver {
     /// while results still show. `.exitCollection` lands on the Collections page
     /// (not the bare grid) because `showingCollections` stays true the whole time
     /// a collection is open — every opener originates from that page.
-    /// `selectedFileIsHero` is only consulted when `hasSelectedFile` is true.
+    /// `selectedFileIsHero` is only consulted when `hasSelectedFile` is true. The
+    /// tag-set layer sits between search and the collection back-out: a tag
+    /// filter narrows WITHIN the current view (folder or collection), so Escape
+    /// clears the whole set first (one press), then a further press exits the
+    /// collection. It's peeled after search to mirror the chain (a search runs
+    /// over whatever the tags left showing).
     static func action(hasSelectedFile: Bool,
                        selectedFileIsHero: Bool,
                        searchActive: Bool,
+                       tagsActive: Bool,
                        insideCollection: Bool,
                        showingCollectionsPage: Bool) -> EscapeAction {
         if hasSelectedFile {
             return selectedFileIsHero ? .closeHero : .closeViewer
         }
         if searchActive { return .clearSearch }
+        if tagsActive { return .clearTags }
         if insideCollection { return .exitCollection }
         if showingCollectionsPage { return .exitCollectionsPage }
         return .none
