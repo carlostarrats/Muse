@@ -124,7 +124,7 @@ struct CollectionSidebarRow: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(loaded.collection.name), \(loaded.aliveCount) "
-                            + (loaded.aliveCount == 1 ? "item" : "items"))
+                            + (loaded.aliveCount == 1 ? String(localized: "item") : String(localized: "items")))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction { appState.setActiveCollection(id) }
         .accessibilityActions {

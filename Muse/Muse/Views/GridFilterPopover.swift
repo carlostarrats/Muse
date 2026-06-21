@@ -33,7 +33,7 @@ struct GridFilterPopover: View {
                         Toggle(facet.displayName, isOn: leafBinding(facet))
                             .toggleStyle(.checkbox)
                             .accessibilityLabel(facet == .imageOther
-                                                ? "Other image formats"
+                                                ? String(localized: "Other image formats")
                                                 : facet.displayName)
                     }
                 }

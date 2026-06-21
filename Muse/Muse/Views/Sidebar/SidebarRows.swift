@@ -139,8 +139,8 @@ struct SectionHeader: View {
                     .rotationEffect(.degrees(collapsed ? 0 : 45))   // + collapsed, × expanded
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(collapsed ? "Expand \(title.capitalized)"
-                                          : "Collapse \(title.capitalized)")
+            .accessibilityLabel(collapsed ? String(localized: "Expand \(title.capitalized)")
+                                          : String(localized: "Collapse \(title.capitalized)"))
             .onHover { hovering = $0 }
         }
         .padding(.horizontal, 14)

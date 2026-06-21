@@ -77,6 +77,16 @@
         }
       }
     },
+    "%@, folder": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, dossier"
+          }
+        }
+      }
+    },
     "%lld": {
       "localizations": {
         "fr": {
@@ -103,12 +113,48 @@
         }
       }
     },
+    "%lld by name — check": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld par nom — à vérifier"
+          }
+        }
+      }
+    },
     "%lld files": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "%lld fichiers"
+          }
+        }
+      }
+    },
+    "%lld not found": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld introuvable"
+          }
+        }
+      }
+    },
+    "%lld not found · %lld by name": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$lld not found · %2$lld by name"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld introuvable · %lld par nom"
           }
         }
       }
@@ -305,6 +351,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ajouter"
+          }
+        }
+      }
+    },
+    "Add %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter %@"
+          }
+        }
+      }
+    },
+    "Add Collection": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter une collection"
           }
         }
       }
@@ -526,6 +592,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Étiqueter automatiquement les nouvelles images"
+          }
+        }
+      }
+    },
+    "Back to all collections": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retour à toutes les collections"
           }
         }
       }
@@ -877,6 +953,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "échec de l'enregistrement"
+          }
+        }
+      }
+    },
+    "Couldn’t save": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Échec de l'enregistrement"
           }
         }
       }
@@ -1406,12 +1492,32 @@
         }
       }
     },
+    "Hide %@ field": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Masquer le champ %@"
+          }
+        }
+      }
+    },
     "Hide files inside subfolders": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Masquer les fichiers des sous-dossiers"
+          }
+        }
+      }
+    },
+    "Hide info": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Masquer les infos"
           }
         }
       }
@@ -1482,6 +1588,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "iPhone, Google Pixel, Samsung Galaxy, OnePlus"
+          }
+        }
+      }
+    },
+    "item": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "élément"
+          }
+        }
+      }
+    },
+    "items": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "éléments"
           }
         }
       }
@@ -1613,6 +1739,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Localiser…"
+          }
+        }
+      }
+    },
+    "Locating": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Localisation…"
           }
         }
       }
@@ -2045,6 +2181,26 @@
         }
       }
     },
+    "Not located": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non localisé"
+          }
+        }
+      }
+    },
+    "Not located yet": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pas encore localisé"
+          }
+        }
+      }
+    },
     "Off": {
       "localizations": {
         "fr": {
@@ -2195,6 +2351,16 @@
         }
       }
     },
+    "Other image formats": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autres formats d'image"
+          }
+        }
+      }
+    },
     "Other…": {
       "localizations": {
         "fr": {
@@ -2312,6 +2478,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reconnectez vos dossiers et collections. Localisez chaque dossier à son emplacement actuel — ils peuvent se trouver n'importe où."
+          }
+        }
+      }
+    },
+    "Reconnected": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconnecté"
+          }
+        }
+      }
+    },
+    "Reconnected — ": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconnecté — "
           }
         }
       }
@@ -2637,6 +2823,16 @@
         }
       }
     },
+    "Save name": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrer le nom"
+          }
+        }
+      }
+    },
     "Save to…": {
       "localizations": {
         "fr": {
@@ -2883,6 +3079,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Afficher les fichiers étiquetés %@"
+          }
+        }
+      }
+    },
+    "Show info": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher les infos"
           }
         }
       }
@@ -3275,6 +3481,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Z → A"
+          }
+        }
+      }
+    },
+    "Zoom in": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoom avant"
+          }
+        }
+      }
+    },
+    "Zoom out": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoom arrière"
           }
         }
       }

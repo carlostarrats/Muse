@@ -274,7 +274,7 @@ struct GridView: View {
                     // Folder cards have only an icon on screen — name the kind so
                     // VoiceOver disambiguates a folder from a file.
                     .accessibilityLabel(file.kind == .folder
-                                        ? "\(file.basename), folder" : file.basename)
+                                        ? String(localized: "\(file.basename), folder") : file.basename)
                     // Expose selection to VoiceOver, not just via the color/border.
                     .accessibilityAddTraits(
                         appState.selectedFiles.contains(file.url.standardizedFileURL.path)
@@ -295,7 +295,7 @@ struct GridView: View {
                         }
                     }
                     .accessibilityHint(file.kind == .folder
-                                       ? "Opens the folder." : "Opens in the viewer.")
+                                       ? String(localized: "Opens the folder.") : String(localized: "Opens in the viewer."))
                     .contextMenu {
                         if file.kind == .folder {
                             // A folder card behaves like a sidebar subfolder:

@@ -547,8 +547,8 @@ private struct ChromePillButton: View {
         }
         .buttonStyle(.plain)
         .disabled(disabled)
-        .accessibilityLabel(systemName == "minus" ? "Zoom out"
-                            : systemName == "plus" ? "Zoom in" : systemName)
+        .accessibilityLabel(systemName == "minus" ? String(localized: "Zoom out")
+                            : systemName == "plus" ? String(localized: "Zoom in") : systemName)
         .onHover { hovering = $0 }
     }
 }

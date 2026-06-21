@@ -261,7 +261,7 @@ struct ViewerInfoColumn<Chrome: View>: View {
                     CardLabel(text: String(localized: "INFO"))
                     Spacer()
                     PlusCircleButton(size: 18, rotated: infoExpanded,
-                                     accessibilityLabel: infoExpanded ? "Hide info" : "Show info") {
+                                     accessibilityLabel: infoExpanded ? String(localized: "Hide info") : String(localized: "Show info")) {
                         withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
                             infoExpanded.toggle()
                         }
@@ -401,8 +401,8 @@ private struct PillCard<Expander: View>: View {
                     CardLabel(text: title)
                     Spacer()
                     PlusCircleButton(size: 18, rotated: isExpanded,
-                                     accessibilityLabel: isExpanded ? "Hide \(title.lowercased()) field"
-                                                                    : "Add \(title.lowercased())") {
+                                     accessibilityLabel: isExpanded ? String(localized: "Hide \(title.lowercased()) field")
+                                                                    : String(localized: "Add \(title.lowercased())")) {
                         withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
                             isExpanded.toggle()
                         }
@@ -469,7 +469,7 @@ private struct CardExpander: View {
                         .fill(.white.opacity(0.08)))
                     .onSubmit(submit)
                 PlusCircleButton(size: 18, rotated: false,
-                                 accessibilityLabel: "Create", action: submit)
+                                 accessibilityLabel: String(localized: "Create"), action: submit)
             }
         }
     }
@@ -510,7 +510,7 @@ private struct DashedPill: View {
 private struct PlusCircleButton: View {
     let size: CGFloat
     let rotated: Bool
-    var accessibilityLabel: String = "Add"
+    var accessibilityLabel: String = String(localized: "Add")
     var action: () -> Void
     @State private var hovering = false
 
