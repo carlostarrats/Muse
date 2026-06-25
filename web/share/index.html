@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Shared Collection</title>
+  <link rel="stylesheet" href="share.css">
+</head>
+<body>
+  <!-- All text nodes are filled by share.js via textContent (never innerHTML).
+       The manifest rides the URL fragment, so nothing personal reaches the
+       server. data-state drives which UI shows (live / expired / unavailable). -->
+  <div id="app" data-state="loading">
+    <header class="bar">
+      <div class="sig">
+        <span id="intro" class="intro"></span>
+        <span id="expires" class="expires"></span>
+        <a id="save" class="save" download>Save</a>
+      </div>
+      <div class="from">
+        <span id="label" class="label"></span>
+        <span id="name" class="name"></span>
+      </div>
+    </header>
+
+    <main id="grid" class="grid"></main>
+
+    <div class="notice notice-expired">This share has expired.</div>
+    <div class="notice notice-unavailable">This share is no longer available.</div>
+  </div>
+
+  <script type="module" src="share.js"></script>
+</body>
+</html>

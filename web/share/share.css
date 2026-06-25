@@ -1,0 +1,82 @@
+/* Matches the Muse share mockups: light-grey field, top-left signature bar,
+   responsive portrait grid. */
+:root {
+  --bg: #ececec;
+  --ink: #1c1c1e;
+  --muted: #8a8a8e;
+  --tile: #d6d6d6;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 16px/1.4 -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+#app { padding: 28px 32px 48px; }
+
+/* Header bar: signature left (intro + expires + Save), "Sent by name" right. */
+.bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+.sig { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.intro { font-size: 20px; color: var(--ink); }
+.expires { font-size: 12px; color: var(--muted); }
+.save {
+  font-size: 12px;
+  color: var(--ink);
+  text-decoration: none;
+  border: 1px solid var(--muted);
+  border-radius: 999px;
+  padding: 3px 12px;
+  white-space: nowrap;
+}
+.save:hover { border-color: var(--ink); }
+
+.from { display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
+.label { font-size: 20px; color: var(--muted); }
+.name { font-size: 20px; color: var(--ink); }
+
+/* Responsive portrait grid. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 16px;
+}
+.grid img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  background: var(--tile);
+  display: block;
+}
+
+/* State machine: show only what matches data-state. */
+.notice {
+  display: none;
+  margin-top: 64px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+#app[data-state="live"] .notice { display: none; }
+#app[data-state="expired"] .grid,
+#app[data-state="expired"] .expires,
+#app[data-state="expired"] .save { display: none; }
+#app[data-state="expired"] .notice-expired { display: block; }
+#app[data-state="unavailable"] .bar,
+#app[data-state="unavailable"] .grid { display: none; }
+#app[data-state="unavailable"] .notice-unavailable { display: block; }
+#app[data-state="loading"] .notice { display: none; }
+
+@media (max-width: 600px) {
+  .bar { flex-direction: column; gap: 12px; }
+  .intro, .label, .name { font-size: 17px; }
+}
