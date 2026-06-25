@@ -43,12 +43,15 @@ enum CollectionPDFExporter {
     /// Build the PDF for `urls` (image files, in display order). `count` is the
     /// number shown beside the title. `columns` mirrors the grid density.
     /// `tagLabels` (empty by default) draws the active tag-filter pills above the
-    /// title on page 1. Returns a temp-file URL, or nil if nothing rendered.
+    /// title on page 1. `pageSize` is the portrait page size in points (defaults
+    /// to 11×14, the original); every other dimension (margin/gutter/captions/
+    /// pagination) derives from it. Returns a temp-file URL, or nil if nothing
+    /// rendered.
     static func makePDF(urls: [URL], title: String, count: Int, columns: Int,
                         layoutAspect: CGFloat?, tileBackdrop: CGColor?,
-                        tagLabels: [String] = []) async -> URL? {
+                        tagLabels: [String] = [],
+                        pageSize: CGSize = PaperSize.default.size) async -> URL? {
         await Task.detached(priority: .userInitiated) { () -> URL? in
-            let pageSize = CGSize(width: 792, height: 1008)   // 11x14in @ 72dpi
             let margin: CGFloat = 36
             let gutter: CGFloat = 12
             // Filename strip below every image: a gap, one ~9pt line, and a

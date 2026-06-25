@@ -58,7 +58,7 @@ struct ShareCollectionButton: View {
         .accessibilityLabel("Share collection")
     }
 
-    private func makePDF() async -> URL? {
+    private func makePDF(pageSize: CGSize) async -> URL? {
         let urls = exportURLs
         let layoutAspect = appState.imageLayout.aspect
         let backdrop = appState.effectiveTileBackground
@@ -66,19 +66,28 @@ struct ShareCollectionButton: View {
         return await CollectionPDFExporter.makePDF(
             urls: urls, title: title, count: urls.count, columns: gridColumns,
             layoutAspect: layoutAspect, tileBackdrop: backdrop,
-            tagLabels: appState.activeTagLabels)
+            tagLabels: appState.activeTagLabels, pageSize: pageSize)
     }
 
     private func save() async {
-        preparing = true
-        defer { preparing = false }
-        guard let pdf = await makePDF() else { return }
+        // Show the panel (with a Paper Size dropdown) FIRST, then render at the
+        // chosen size — the page size has to be known before makePDF runs.
         let panel = NSSavePanel()
         panel.allowedContentTypes = [UTType.pdf]
         panel.nameFieldStringValue = "\(title).pdf"
         panel.directoryURL = FileManager.default
             .urls(for: .desktopDirectory, in: .userDomainMask).first
+        let popup = paperSizePopup()
+        panel.accessoryView = paperSizeAccessory(popup)
         guard panel.runModal() == .OK, let dest = panel.url else { return }
+
+        // Map the popup's selected row back through allCases (same order drove
+        // the population, so the index can't drift); fall back to the default.
+        let paper = PaperSize.allCases[safe: popup.indexOfSelectedItem] ?? .default
+
+        preparing = true
+        defer { preparing = false }
+        guard let pdf = await makePDF(pageSize: paper.size) else { return }
         // Atomic overwrite — no pre-delete window that could destroy an
         // existing file if the write fails.
         if let data = try? Data(contentsOf: pdf) {
@@ -89,9 +98,47 @@ struct ShareCollectionButton: View {
     private func share() async {
         preparing = true
         defer { preparing = false }
-        guard let pdf = await makePDF() else { return }
+        // Share keeps the default 11×14; only Save to… offers a size choice.
+        guard let pdf = await makePDF(pageSize: PaperSize.default.size) else { return }
         guard let contentView = NSApp.keyWindow?.contentView else { return }
         let picker = NSSharingServicePicker(items: [pdf])
         picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
+    }
+
+    // MARK: - Paper-size accessory view
+
+    /// A popup listing every `PaperSize` (in `allCases` order), preselected to
+    /// the default — the read-back in `save()` relies on this same order.
+    private func paperSizePopup() -> NSPopUpButton {
+        let popup = NSPopUpButton(frame: .zero, pullsDown: false)
+        popup.translatesAutoresizingMaskIntoConstraints = false
+        for paper in PaperSize.allCases { popup.addItem(withTitle: paper.displayName) }
+        popup.selectItem(at: PaperSize.allCases.firstIndex(of: .default) ?? 0)
+        return popup
+    }
+
+    /// "Paper Size:" label + the popup, laid out in a row for `accessoryView`.
+    private func paperSizeAccessory(_ popup: NSPopUpButton) -> NSView {
+        let label = NSTextField(labelWithString: String(localized: "Paper Size:"))
+        label.translatesAutoresizingMaskIntoConstraints = false
+        let container = NSView()
+        container.addSubview(label)
+        container.addSubview(popup)
+        NSLayoutConstraint.activate([
+            container.heightAnchor.constraint(equalToConstant: 48),
+            label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
+            label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            popup.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 8),
+            popup.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
+            popup.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+        ])
+        return container
+    }
+}
+
+private extension Array {
+    /// Bounds-checked index — nil instead of a crash for an out-of-range row.
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }
