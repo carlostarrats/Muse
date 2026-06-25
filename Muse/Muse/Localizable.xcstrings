@@ -295,6 +295,56 @@
         }
       }
     },
+    "A3 (297 × 420 mm)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A3 (297 × 420 mm)"
+          }
+        }
+      }
+    },
+    "A4 (210 × 297 mm)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A4 (210 × 297 mm)"
+          }
+        }
+      }
+    },
+    "Legal (8.5 × 14 in)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "US Légal (8,5 × 14 po)"
+          }
+        }
+      }
+    },
+    "Letter (8.5 × 11 in)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "US Lettre (8,5 × 11 po)"
+          }
+        }
+      }
+    },
+    "Tabloid (11 × 17 in)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tabloïd (11 × 17 po)"
+          }
+        }
+      }
+    },
     "16:9" : {
       "localizations" : {
         "fr" : {
@@ -341,26 +391,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Un visualiseur et organiseur local d'abord pour les dossiers que vous possédez déjà. Indiquez-lui un dossier — Téléchargements, Documents, un tas de captures d'écran — et parcourez tout au même endroit. Rien n'est importé ni copié : Muse lit vos fichiers là où ils se trouvent et ne les déplace ni ne les modifie jamais."
-          }
-        }
-      }
-    },
-    "A3" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A3"
-          }
-        }
-      }
-    },
-    "A4" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A4"
           }
         }
       }
@@ -1842,16 +1872,6 @@
         }
       }
     },
-    "Legal" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "US Légal"
-          }
-        }
-      }
-    },
     "Lens" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1859,16 +1879,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Objectif"
-          }
-        }
-      }
-    },
-    "Letter" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "US Lettre"
           }
         }
       }
@@ -3479,16 +3489,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "SVG"
-          }
-        }
-      }
-    },
-    "Tabloid" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tabloïd"
           }
         }
       }

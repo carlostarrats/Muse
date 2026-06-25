@@ -33,4 +33,23 @@ final class PaperSizeTests: XCTestCase {
         XCTAssertEqual(PaperSize.allCases,
                        [.elevenByFourteen, .letter, .legal, .tabloid, .a4, .a3])
     }
+
+    // Popup labels: the canonical English source (this suite runs in an English
+    // host), each carrying its native units — inches for US sizes, mm for the
+    // A-series.
+    func testDisplayNamesAreCanonicalEnglish() {
+        XCTAssertEqual(PaperSize.elevenByFourteen.displayName, "11 × 14 in")
+        XCTAssertEqual(PaperSize.letter.displayName,           "Letter (8.5 × 11 in)")
+        XCTAssertEqual(PaperSize.legal.displayName,            "Legal (8.5 × 14 in)")
+        XCTAssertEqual(PaperSize.tabloid.displayName,          "Tabloid (11 × 17 in)")
+        XCTAssertEqual(PaperSize.a4.displayName,               "A4 (210 × 297 mm)")
+        XCTAssertEqual(PaperSize.a3.displayName,               "A3 (297 × 420 mm)")
+    }
+
+    // No two sizes share a label — the popup must show six distinct rows.
+    func testDisplayNamesAreDistinct() {
+        let names = PaperSize.allCases.map(\.displayName)
+        XCTAssertEqual(Set(names).count, names.count)
+        XCTAssertFalse(names.contains(where: \.isEmpty))
+    }
 }

@@ -36,17 +36,17 @@ enum PaperSize: String, CaseIterable {
         }
     }
 
-    /// Localized label for the save-panel popup. AppKit popup titles are not
-    /// auto-extracted, so each is wrapped explicitly. "11 × 14 in" keeps its
-    /// unit to read as a size rather than a ratio; the rest are standard names.
+    /// Localized label for the save-panel popup, with each size's native
+    /// dimensions (inches for US sizes, millimetres for the A-series). AppKit
+    /// popup titles are not auto-extracted, so each is wrapped explicitly.
     var displayName: String {
         switch self {
         case .elevenByFourteen: return String(localized: "11 × 14 in")
-        case .letter:           return String(localized: "Letter")
-        case .legal:            return String(localized: "Legal")
-        case .tabloid:          return String(localized: "Tabloid")
-        case .a4:               return String(localized: "A4")
-        case .a3:               return String(localized: "A3")
+        case .letter:           return String(localized: "Letter (8.5 × 11 in)")
+        case .legal:            return String(localized: "Legal (8.5 × 14 in)")
+        case .tabloid:          return String(localized: "Tabloid (11 × 17 in)")
+        case .a4:               return String(localized: "A4 (210 × 297 mm)")
+        case .a3:               return String(localized: "A3 (297 × 420 mm)")
         }
     }
 }

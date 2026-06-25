@@ -59,8 +59,10 @@ enum PaperSize: String, CaseIterable {
 
 - `size` returns the portrait `CGSize` from the table.
 - `displayName` is `String(localized:)`-wrapped (AppKit popup titles are not
-  auto-extracted). "11 × 14 in" carries its unit to distinguish it from a ratio;
-  the rest are bare names (Letter, Legal, Tabloid, A4, A3).
+  auto-extracted). Each carries its native dimensions — inches for the US sizes,
+  millimetres for the A-series: `11 × 14 in`, `Letter (8.5 × 11 in)`,
+  `Legal (8.5 × 14 in)`, `Tabloid (11 × 17 in)`, `A4 (210 × 297 mm)`,
+  `A3 (297 × 420 mm)`.
 - The default is `PaperSize.elevenByFourteen` (also the popup's initial
   selection and `share()`'s fixed size).
 
@@ -76,9 +78,12 @@ enum PaperSize: String, CaseIterable {
 - `makePDF()` helper gains a `pageSize: CGSize` argument and forwards it.
 - `share()` passes `PaperSize.elevenByFourteen.size` (unchanged output).
 - `save()` is **reordered** so the size choice can take effect:
-  1. Build the accessory view: an `NSView` containing a "Paper Size:" label
-     (`NSTextField`) + `NSPopUpButton` populated from `PaperSize.allCases`
-     `displayName`s, selecting 11 × 14.
+  1. Build the accessory view: an `NSView` hosting an `NSStackView` of a
+     "Paper Size:" label (`NSTextField`) + `NSPopUpButton` populated from
+     `PaperSize.allCases` `displayName`s, selecting 11 × 14. The stack is
+     **centered** in the panel-width band (not pinned edge-to-edge, so the popup
+     doesn't stretch full width) with a 260 pt minimum popup width so it reads
+     comfortably.
   2. Assign `panel.accessoryView`; run the panel. **No PDF is rendered yet.**
   3. On `.OK`: map the popup's selected index → `PaperSize` → `.size`; set
      `preparing = true`; render the PDF at that size; write atomically to dest.

@@ -2,10 +2,12 @@
 //  ShareCollectionButton.swift
 //  Muse
 //
-//  In-collection header control: a menu with "Save to…" (NSSavePanel,
-//  defaulted to Desktop) and "Share" (standard NSSharingServicePicker). Both
-//  build a paginated PDF of the collection's displayed images first. Nothing
-//  about the system share sheet is customized; no new entitlement is needed.
+//  In-collection header control: a menu with "Save to…" (NSSavePanel with a
+//  Paper Size dropdown, defaulted to Desktop) and "Share" (standard
+//  NSSharingServicePicker). Both build a paginated PDF of the collection's
+//  displayed images — Save renders at the chosen paper size after the panel is
+//  confirmed; Share uses the default size. Nothing about the system share sheet
+//  is customized; no new entitlement is needed.
 //
 
 import SwiftUI
@@ -108,7 +110,9 @@ struct ShareCollectionButton: View {
     // MARK: - Paper-size accessory view
 
     /// A popup listing every `PaperSize` (in `allCases` order), preselected to
-    /// the default — the read-back in `save()` relies on this same order.
+    /// the default — the read-back in `save()` relies on this same order. Width
+    /// is governed by the 260 pt minimum in `paperSizeAccessory`; the centered
+    /// stack never stretches it past that.
     private func paperSizePopup() -> NSPopUpButton {
         let popup = NSPopUpButton(frame: .zero, pullsDown: false)
         popup.translatesAutoresizingMaskIntoConstraints = false
@@ -117,20 +121,27 @@ struct ShareCollectionButton: View {
         return popup
     }
 
-    /// "Paper Size:" label + the popup, laid out in a row for `accessoryView`.
+    /// "Paper Size:" label + the popup as a compact row, centered in the
+    /// panel-width accessory band (the panel stretches the container, so the
+    /// inner stack is centered rather than pinned to both edges — keeping the
+    /// popup at its intrinsic width instead of running the full panel width).
     private func paperSizeAccessory(_ popup: NSPopUpButton) -> NSView {
         let label = NSTextField(labelWithString: String(localized: "Paper Size:"))
-        label.translatesAutoresizingMaskIntoConstraints = false
+        let stack = NSStackView(views: [label, popup])
+        stack.orientation = .horizontal
+        stack.spacing = 8
+        stack.translatesAutoresizingMaskIntoConstraints = false
         let container = NSView()
-        container.addSubview(label)
-        container.addSubview(popup)
+        container.addSubview(stack)
         NSLayoutConstraint.activate([
-            container.heightAnchor.constraint(equalToConstant: 48),
-            label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
-            label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            popup.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 8),
-            popup.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
-            popup.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            container.heightAnchor.constraint(equalToConstant: 44),
+            stack.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            stack.leadingAnchor.constraint(greaterThanOrEqualTo: container.leadingAnchor, constant: 20),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -20),
+            // Comfortable minimum width — roomier than the popup's intrinsic
+            // size without stretching to the full panel width.
+            popup.widthAnchor.constraint(greaterThanOrEqualToConstant: 260),
         ])
         return container
     }
