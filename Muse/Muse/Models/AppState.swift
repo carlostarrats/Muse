@@ -319,11 +319,6 @@ final class AppState: ObservableObject {
     /// iCloud home; Rename is gated to non-iCloud folders by the callers.
     @Published var newSubfolderRequest: FolderNode?
     @Published var folderRenameRequest: FolderNode?
-    /// Shared text-field draft for the create/rename dialogs, seeded by the
-    /// request helpers below (one dialog is open at a time). Seeding here — not
-    /// via a view `.onChange` on node identity — means re-targeting the SAME
-    /// folder still resets the field correctly.
-    @Published var folderNameDraft = ""
     /// Set to a message to surface a folder-op failure alert.
     @Published var folderOpError: String?
 
@@ -331,8 +326,6 @@ final class AppState: ObservableObject {
     /// selection). The collection is created only on confirm — see
     /// confirmNewCollection() in AppState+Filters.
     @Published var newCollectionRequest = false
-    /// Bound to the modal's TextField; starts empty (placeholder shown).
-    @Published var newCollectionNameDraft = ""
     /// File paths captured at right-click time, created into a collection on
     /// confirm. Stored (not @Published) — extensions can't add stored props.
     var pendingNewCollectionPaths: [String] = []

@@ -3837,3 +3837,33 @@ Verified live by the owner ("perfect"). Build green; `MuseTests` **TEST SUCCEEDE
 (exit 0, 0 failures). No new tests — this is SwiftUI view-timing glue (`.id` + transition),
 which the suite doesn't cover (UI views aren't unit-tested), and the logic change is a
 trivial counter bump in a `didSet`.
+
+### Dialog text-field typing lag on slower Macs — 2026-06-25 (on `fix/dialog-typing-lag`)
+
+**Symptom.** Naming a collection (after multi-selecting images) — and, with the same
+root cause, the New Subfolder / Rename Folder dialogs — typed sluggishly on older Macs
+(Sequoia). Fast dev Macs masked it.
+
+**Root cause.** Each dialog's `TextField` bound directly to a `@Published` draft on the
+monolithic `AppState` `@EnvironmentObject` (`newCollectionNameDraft`, `folderNameDraft`).
+Every keystroke fired `AppState.objectWillChange`, re-evaluating the entire `ContentView`
+body — `NavigationSplitView` { sidebar } detail: { tag chips + grid }. Recomputing that
+tree per character is what made typing crawl on slower hardware.
+
+**Fix.** Moved each draft into LOCAL `@State` inside two dedicated `ViewModifier`s in
+`ContentView.swift` — `NameCollectionAlert` and `FolderNameAlerts`. Keystrokes now
+invalidate only the tiny modifier body (its `content` is a stable value, so the heavy
+upstream `ContentView.body` is NOT recomputed); the typed value reaches `AppState` only on
+the Create/Rename button. Seeding: the collection draft resets on the `false→true` edge of
+`newCollectionRequest`; the folder drafts seed on open (empty for new, current name for
+rename) keyed on the request's `id` (`FolderNode` is a class, not `Equatable`) — every
+close passes through nil, so re-targeting the same folder still re-seeds. `confirmNewCollection`
+now takes a `name:` parameter; the `@Published newCollectionNameDraft` / `folderNameDraft`
+properties and their request-helper seed writes were removed (zero remaining references).
+All localized literals moved verbatim (still at compiler-extracted text-literal positions),
+so extraction is unchanged. Distilled into a CLAUDE.md durable gotcha.
+
+**Verification.** Build green; `MuseTests` **TEST SUCCEEDED** (exit 0, 0 failures); app
+launches + quits cleanly. Focused code review found no blockers/should-fix. No new tests —
+this is SwiftUI state-ownership glue (UI views aren't unit-tested); the slow-Mac symptom
+isn't reproducible on the dev Mac, so verification is root-cause + build/test + review.
