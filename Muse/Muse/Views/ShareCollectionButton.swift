@@ -23,6 +23,8 @@ struct ShareCollectionButton: View {
     @AppStorage("gridColumnCount") private var gridColumns = 4
     @State private var hovering = false
     @State private var preparing = false
+    @StateObject private var iCloudService = ICloudShareService()
+    @State private var showingICloudShare = false
 
     /// The collection's CURRENTLY VISIBLE members, in grid order — the on-screen
     /// set, so an active tag/facet filter narrows the export (images and file
@@ -37,6 +39,8 @@ struct ShareCollectionButton: View {
         Menu {
             Button("Save to…") { Task { await save() } }
             Button("Share") { Task { await share() } }
+            Divider()
+            Button("Share to iCloud…") { startICloudShare() }
         } label: {
             Group {
                 if preparing {
@@ -58,6 +62,18 @@ struct ShareCollectionButton: View {
         .disabled(preparing || count == 0 || exportURLs.isEmpty)
         .help("Share collection")
         .accessibilityLabel("Share collection")
+        .sheet(isPresented: $showingICloudShare) {
+            ICloudShareProgressView(service: iCloudService) {
+                showingICloudShare = false
+                iCloudService.reset()
+            }
+        }
+    }
+
+    private func startICloudShare() {
+        iCloudService.reset()
+        showingICloudShare = true
+        iCloudService.start(title: title, urls: exportURLs)
     }
 
     private func makePDF(pageSize: CGSize) async -> URL? {
