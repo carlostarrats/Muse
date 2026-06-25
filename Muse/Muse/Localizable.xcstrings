@@ -1,3746 +1,3830 @@
 {
-  "sourceLanguage": "en",
-  "strings": {
-    "": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": ""
+  "sourceLanguage" : "en",
+  "strings" : {
+    "" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ""
           }
         }
       }
     },
-    ",": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": ","
+    "," : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ","
           }
         }
       }
     },
-    "…or create a new one": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "…ou en créer une nouvelle"
+    "…or create a new one" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "…ou en créer une nouvelle"
           }
         }
       }
     },
-    "(%lld groups)": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "(%lld groupes)"
+    "(%lld groups)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "(%lld groupes)"
           }
         }
       }
     },
-    "%@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@"
+    "%@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@"
           }
         }
       }
     },
-    "%@ layout": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "disposition %@"
+    "%@ layout" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "disposition %@"
           }
         }
       }
     },
-    "%@, %lld of %lld files reconnected": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "new",
-            "value": "%1$@, %2$lld of %3$lld files reconnected"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@, %2$lld fichiers sur %3$lld reconnectés"
-          }
-        }
-      }
-    },
-    "%@, folder": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@, dossier"
-          }
-        }
-      }
-    },
-    "%lld": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld"
-          }
-        }
-      }
-    },
-    "%lld / %lld re-established · %lld%%": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "new",
-            "value": "%1$lld / %2$lld re-established · %3$lld%%"
+    "%@, %lld of %lld files reconnected" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$lld of %3$lld files reconnected"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld / %2$lld rétablis · %3$lld%%"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$lld fichiers sur %3$lld reconnectés"
           }
         }
       }
     },
-    "%lld by name — check": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld par nom — à vérifier"
+    "%@, folder" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, dossier"
           }
         }
       }
     },
-    "%lld files": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld fichiers"
+    "%lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld"
           }
         }
       }
     },
-    "%lld not found": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld introuvable"
-          }
-        }
-      }
-    },
-    "%lld not found · %lld by name": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "new",
-            "value": "%1$lld not found · %2$lld by name"
+    "%lld / %lld re-established · %lld%%" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld / %2$lld re-established · %3$lld%%"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld introuvable · %lld par nom"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld / %2$lld rétablis · %3$lld%%"
           }
         }
       }
     },
-    "%lld selected for delete": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld sélectionnés pour suppression"
+    "%lld by name — check" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld par nom — à vérifier"
           }
         }
       }
     },
-    "%lld/%lld": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "new",
-            "value": "%1$lld/%2$lld"
+    "%lld files" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld fichiers"
+          }
+        }
+      }
+    },
+    "%lld not found" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld introuvable"
+          }
+        }
+      }
+    },
+    "%lld not found · %lld by name" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld not found · %2$lld by name"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld/%2$lld"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld introuvable · %lld par nom"
           }
         }
       }
     },
-    "1:1": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1:1"
+    "%lld selected for delete" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld sélectionnés pour suppression"
           }
         }
       }
     },
-    "2:3": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "2:3"
-          }
-        }
-      }
-    },
-    "3:2": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "3:2"
-          }
-        }
-      }
-    },
-    "3:4": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "3:4"
-          }
-        }
-      }
-    },
-    "4:3": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "4:3"
-          }
-        }
-      }
-    },
-    "4:5": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "4:5"
-          }
-        }
-      }
-    },
-    "5:4": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "5:4"
-          }
-        }
-      }
-    },
-    "6:7": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "6:7"
-          }
-        }
-      }
-    },
-    "7:6": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "7:6"
-          }
-        }
-      }
-    },
-    "9:16": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "9:16"
-          }
-        }
-      }
-    },
-    "16:9": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "16:9"
-          }
-        }
-      }
-    },
-    "A → Z": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A → Z"
-          }
-        }
-      }
-    },
-    "A folder name can’t contain “/” or “:”.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Un nom de dossier ne peut pas contenir « / » ni « : »."
-          }
-        }
-      }
-    },
-    "A folder with that name already exists here.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Un dossier portant ce nom existe déjà ici."
-          }
-        }
-      }
-    },
-    "A local-first viewer and organizer for the folders you already have. Point it at a folder — Downloads, Documents, a pile of screenshots — and browse everything in one place. Nothing is imported or copied: Muse reads your files where they live and never moves or changes them.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Un visualiseur et organiseur local d'abord pour les dossiers que vous possédez déjà. Indiquez-lui un dossier — Téléchargements, Documents, un tas de captures d'écran — et parcourez tout au même endroit. Rien n'est importé ni copié : Muse lit vos fichiers là où ils se trouvent et ne les déplace ni ne les modifie jamais."
-          }
-        }
-      }
-    },
-    "About Muse": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "À propos de Muse"
-          }
-        }
-      }
-    },
-    "About Muse — how indexing, analysis, collections, and tags work": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "À propos de Muse — fonctionnement de l'indexation, de l'analyse, des collections et des étiquettes"
-          }
-        }
-      }
-    },
-    "Active": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Actif"
-          }
-        }
-      }
-    },
-    "Add": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajouter"
-          }
-        }
-      }
-    },
-    "Add %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajouter %@"
-          }
-        }
-      }
-    },
-    "Add Collection": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajouter une collection"
-          }
-        }
-      }
-    },
-    "Add Folder": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajouter un dossier"
-          }
-        }
-      }
-    },
-    "Add folders from the sidebar with the Add Folder button — Muse indexes them automatically (the status pills at the bottom show progress). Drag folders up or down to reorder them. Right-click a folder to make a New Subfolder, Rename it, Reveal it in Finder, or — for a buried subfolder — Pin it to the top. Right-click a top-level folder to Remove it from Muse. Your files are never modified; deleting means moving to the Trash, and it's undoable.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajoutez des dossiers depuis la barre latérale avec le bouton Ajouter un dossier — Muse les indexe automatiquement (les pastilles d'état en bas indiquent la progression). Faites glisser les dossiers vers le haut ou le bas pour les réordonner. Cliquez avec le bouton droit sur un dossier pour créer un Nouveau sous-dossier, le Renommer, l'Afficher dans le Finder ou — pour un sous-dossier enfoui — l'Épingler en haut. Cliquez avec le bouton droit sur un dossier de premier niveau pour le Retirer de Muse. Vos fichiers ne sont jamais modifiés ; supprimer revient à déplacer vers la corbeille, et l'opération est réversible."
-          }
-        }
-      }
-    },
-    "Add Tag": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajouter une étiquette"
-          }
-        }
-      }
-    },
-    "Add to Collection": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajouter à la collection"
-          }
-        }
-      }
-    },
-    "Add to filter": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajouter au filtre"
-          }
-        }
-      }
-    },
-    "Added %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajouté %@"
-          }
-        }
-      }
-    },
-    "Added to %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajouté à %@"
-          }
-        }
-      }
-    },
-    "After indexing, Muse automatically analyzes new or changed images with Apple's on-device Vision: tags, dominant colors, dimensions, and readable text. This powers the tag chips, the Color and Shape sorts, the viewer's color swatches, and collections. There's no button to press — images already analyzed are never redone, and your own tag edits always win over the machine's.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Après l'indexation, Muse analyse automatiquement les images nouvelles ou modifiées avec Vision, en local sur l'appareil Apple : tags, couleurs dominantes, dimensions et texte lisible. C'est ce qui alimente les pastilles de tags, les tris par Couleur et par Forme, les échantillons de couleur du visualiseur et les collections. Il n'y a aucun bouton à presser — les images déjà analysées ne le sont jamais à nouveau, et vos propres modifications de tags l'emportent toujours sur celles de la machine."
-          }
-        }
-      }
-    },
-    "All": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tout"
-          }
-        }
-      }
-    },
-    "Analysis": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Analyse"
-          }
-        }
-      }
-    },
-    "Analyze Folder": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Analyser le dossier"
-          }
-        }
-      }
-    },
-    "Analyze Folder with Muse AI": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Analyser le dossier avec l'IA de Muse"
-          }
-        }
-      }
-    },
-    "and": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "et"
-          }
-        }
-      }
-    },
-    "Articles": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Articles"
-          }
-        }
-      }
-    },
-    "Ascending": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Croissant"
-          }
-        }
-      }
-    },
-    "At least one copy must be kept": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Au moins une copie doit être conservée"
-          }
-        }
-      }
-    },
-    "Audio": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Audio"
-          }
-        }
-      }
-    },
-    "Author": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Auteur"
-          }
-        }
-      }
-    },
-    "Auto": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Auto"
-          }
-        }
-      }
-    },
-    "Automatic": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Automatique"
-          }
-        }
-      }
-    },
-    "Automatic organization": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Organisation automatique"
-          }
-        }
-      }
-    },
-    "Automatically organize into collections": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Organiser automatiquement en collections"
-          }
-        }
-      }
-    },
-    "Automatically tag new images": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Étiqueter automatiquement les nouvelles images"
-          }
-        }
-      }
-    },
-    "Back to all collections": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retour à toutes les collections"
-          }
-        }
-      }
-    },
-    "Back to Library": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retour à la bibliothèque"
-          }
-        }
-      }
-    },
-    "Back Up & Restore": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sauvegarde et restauration"
-          }
-        }
-      }
-    },
-    "Back Up Muse…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sauvegarder Muse…"
-          }
-        }
-      }
-    },
-    "Background": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Arrière-plan"
-          }
-        }
-      }
-    },
-    "Background: %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Arrière-plan : %@"
-          }
-        }
-      }
-    },
-    "Black": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Noir"
-          }
-        }
-      }
-    },
-    "Byte-exact": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Identique octet pour octet"
-          }
-        }
-      }
-    },
-    "Camera": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Appareil"
-          }
-        }
-      }
-    },
-    "Cancel": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Annuler"
-          }
-        }
-      }
-    },
-    "Check for Updates…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rechercher des mises à jour…"
-          }
-        }
-      }
-    },
-    "Choose": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choisir"
-          }
-        }
-      }
-    },
-    "Choose how images are arranged. Applies to every grid.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choisissez la disposition des images. S'applique à toutes les grilles."
-          }
-        }
-      }
-    },
-    "Choose the Muse backup file you exported on your other Mac.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choisissez le fichier de sauvegarde Muse que vous avez exporté sur votre autre Mac."
-          }
-        }
-      }
-    },
-    "Clear All": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tout effacer"
-          }
-        }
-      }
-    },
-    "Clear tag filter": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Effacer le filtre d'étiquettes"
-          }
-        }
-      }
-    },
-    "Clear Tag Filter": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Effacer le filtre d'étiquettes"
-          }
-        }
-      }
-    },
-    "Close": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fermer"
-          }
-        }
-      }
-    },
-    "Code": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Code"
-          }
-        }
-      }
-    },
-    "Collapse": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Réduire"
-          }
-        }
-      }
-    },
-    "Collapse %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Réduire %@"
-          }
-        }
-      }
-    },
-    "Collection": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Collection"
-          }
-        }
-      }
-    },
-    "COLLECTION": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "COLLECTION"
-          }
-        }
-      }
-    },
-    "Collection name": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nom de la collection"
-          }
-        }
-      }
-    },
-    "Collections": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Collections"
-          }
-        }
-      }
-    },
-    "COLLECTIONS": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "COLLECTIONS"
-          }
-        }
-      }
-    },
-    "Collections form automatically as Muse analyzes your images — or tap + to make your own.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les collections se forment automatiquement à mesure que Muse analyse vos images — ou appuyez sur + pour créer la vôtre."
-          }
-        }
-      }
-    },
-    "Color": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couleur"
-          }
-        }
-      }
-    },
-    "COLORS": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "COULEURS"
-          }
-        }
-      }
-    },
-    "Common Sizes": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tailles courantes"
-          }
-        }
-      }
-    },
-    "Conversations": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conversations"
-          }
-        }
-      }
-    },
-    "Copied %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Copié %@"
-          }
-        }
-      }
-    },
-    "Copied %lld colors": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld couleurs copiées"
-          }
-        }
-      }
-    },
-    "copy all": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "tout copier"
-          }
-        }
-      }
-    },
-    "Copy all colors": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Copier toutes les couleurs"
-          }
-        }
-      }
-    },
-    "Copy color %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Copier la couleur %@"
-          }
-        }
-      }
-    },
-    "Could not load: %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible de charger : %@"
-          }
-        }
-      }
-    },
-    "Couldn’t %@ the folder. You may not have permission.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible de %@ le dossier. Vous n'avez peut-être pas la permission."
-          }
-        }
-      }
-    },
-    "Couldn’t finish renaming the folder.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible de terminer le changement de nom du dossier."
-          }
-        }
-      }
-    },
-    "Couldn’t move some files": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible de déplacer certains fichiers"
-          }
-        }
-      }
-    },
-    "Couldn't move to Trash": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible de mettre à la corbeille"
-          }
-        }
-      }
-    },
-    "Couldn't restore — file is in the Trash": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Restauration impossible — le fichier est dans la corbeille"
-          }
-        }
-      }
-    },
-    "couldn't save": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "échec de l'enregistrement"
-          }
-        }
-      }
-    },
-    "Couldn’t save": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Échec de l'enregistrement"
-          }
-        }
-      }
-    },
-    "create": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "créer"
-          }
-        }
-      }
-    },
-    "Create": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Créer"
-          }
-        }
-      }
-    },
-    "Creates a collection from the selected images.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crée une collection à partir des images sélectionnées."
-          }
-        }
-      }
-    },
-    "Creates a new collection.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crée une nouvelle collection."
-          }
-        }
-      }
-    },
-    "Creates a new folder inside “%@”.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crée un nouveau dossier dans « %@ »."
-          }
-        }
-      }
-    },
-    "Creator": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Créateur"
-          }
-        }
-      }
-    },
-    "Custom": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Personnalisé"
-          }
-        }
-      }
-    },
-    "Dark": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sombre"
-          }
-        }
-      }
-    },
-    "Dark Grey": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gris foncé"
-          }
-        }
-      }
-    },
-    "Date Created": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Date de création"
-          }
-        }
-      }
-    },
-    "Date Modified": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Date de modification"
-          }
-        }
-      }
-    },
-    "Delete": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer"
-          }
-        }
-      }
-    },
-    "Delete “%@”?": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer « %@ » ?"
-          }
-        }
-      }
-    },
-    "Delete All": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tout supprimer"
-          }
-        }
-      }
-    },
-    "Delete all tags in this folder?": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer toutes les étiquettes de ce dossier ?"
-          }
-        }
-      }
-    },
-    "Delete All Tags…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer toutes les étiquettes…"
-          }
-        }
-      }
-    },
-    "Delete collection": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer la collection"
-          }
-        }
-      }
-    },
-    "Delete Collection": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer la collection"
-          }
-        }
-      }
-    },
-    "Delete Collection…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer la collection…"
-          }
-        }
-      }
-    },
-    "Delete Selected to Trash": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mettre la sélection à la corbeille"
-          }
-        }
-      }
-    },
-    "Delete Tag…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer l'étiquette…"
-          }
-        }
-      }
-    },
-    "Delete…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer…"
-          }
-        }
-      }
-    },
-    "Descending": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Décroissant"
-          }
-        }
-      }
-    },
-    "Deselect All": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tout désélectionner"
-          }
-        }
-      }
-    },
-    "Design": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Design"
-          }
-        }
-      }
-    },
-    "Dimensions": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dimensions"
-          }
-        }
-      }
-    },
-    "Documents": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Documents"
-          }
-        }
-      }
-    },
-    "Done": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Terminé"
-          }
-        }
-      }
-    },
-    "Drag to reorder": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Glisser pour réorganiser"
-          }
-        }
-      }
-    },
-    "Duplicates": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Doublons"
-          }
-        }
-      }
-    },
-    "Duration": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Durée"
-          }
-        }
-      }
-    },
-    "Edit": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Modifier"
-          }
-        }
-      }
-    },
-    "Events": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Événements"
-          }
-        }
-      }
-    },
-    "Everything happens on this Mac. Muse collects nothing — no analytics, no telemetry; nothing about you or your files is ever uploaded or shared. Its only network use is checking for and downloading app updates (iCloud sync, if you use it, is handled by the system). If you remove a folder from the sidebar, its index data is kept for 180 days — so re-adding it restores everything instantly — then deleted automatically.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tout se passe sur ce Mac. Muse ne collecte rien — aucune statistique, aucune télémétrie ; rien vous concernant ni concernant vos fichiers n'est jamais envoyé ou partagé. Sa seule utilisation du réseau est la recherche et le téléchargement des mises à jour de l'app (la synchronisation iCloud, si vous l'utilisez, est gérée par le système). Si vous retirez un dossier de la barre latérale, ses données d'index sont conservées pendant 180 jours — ainsi, le rajouter restaure tout instantanément — puis supprimées automatiquement."
-          }
-        }
-      }
-    },
-    "Expand": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Développer"
-          }
-        }
-      }
-    },
-    "Expand %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Développer %@"
-          }
-        }
-      }
-    },
-    "Exposure": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Exposition"
-          }
-        }
-      }
-    },
-    "Files will be moved to the Trash and can be restored from there.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les fichiers seront placés dans la corbeille et pourront être restaurés depuis là."
-          }
-        }
-      }
-    },
-    "Filter": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Filtrer"
-          }
-        }
-      }
-    },
-    "Filter (active)": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Filtre (actif)"
-          }
-        }
-      }
-    },
-    "Find Duplicates": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rechercher les doublons"
-          }
-        }
-      }
-    },
-    "Find Duplicates in Folder": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rechercher les doublons dans le dossier"
-          }
-        }
-      }
-    },
-    "Find Duplicates in the File menu surfaces copies — byte-for-byte identical files, visually similar images, and matching filenames — so you can review and clear them out to the Trash.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rechercher les doublons, dans le menu Fichier, fait remonter les copies — fichiers identiques octet par octet, images visuellement similaires et noms de fichiers correspondants — afin que vous puissiez les examiner et les envoyer dans la corbeille."
-          }
-        }
-      }
-    },
-    "Fit": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajuster"
-          }
-        }
-      }
-    },
-    "Folder": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dossier"
-          }
-        }
-      }
-    },
-    "Folder name": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nom du dossier"
-          }
-        }
-      }
-    },
-    "Folders": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dossiers"
-          }
-        }
-      }
-    },
-    "FOLDERS": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "DOSSIERS"
-          }
-        }
-      }
-    },
-    "Frame Rate": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cadence"
-          }
-        }
-      }
-    },
-    "Get Started.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Commencer."
-          }
-        }
-      }
-    },
-    "GIF": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GIF"
-          }
-        }
-      }
-    },
-    "Grid": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Grille"
-          }
-        }
-      }
-    },
-    "Grid & appearance": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Grille et apparence"
-          }
-        }
-      }
-    },
-    "Groupings that span your whole library, suggested automatically from what Vision finds, plus any you build by hand in the viewer. Screenshots get their own smart collections by what they're of — recipes, receipts, places, articles, and more. Open the Collections page from the toolbar to browse them. They track your files: delete images or remove a folder and collections shrink to match — empty ones disappear. Open one to rename or delete it from its header.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Des regroupements qui couvrent toute votre bibliothèque, suggérés automatiquement à partir de ce que Vision détecte, ainsi que ceux que vous créez à la main dans le visualiseur. Les captures d'écran obtiennent leurs propres collections intelligentes selon leur contenu — recettes, reçus, lieux, articles, et plus encore. Ouvrez la page Collections depuis la barre d'outils pour les parcourir. Elles suivent vos fichiers : supprimez des images ou retirez un dossier et les collections rétrécissent en conséquence — les collections vides disparaissent. Ouvrez-en une pour la renommer ou la supprimer depuis son en-tête."
-          }
-        }
-      }
-    },
-    "HEIC": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "HEIC"
-          }
-        }
-      }
-    },
-    "Hide %@ field": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Masquer le champ %@"
-          }
-        }
-      }
-    },
-    "Hide files inside subfolders": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Masquer les fichiers des sous-dossiers"
-          }
-        }
-      }
-    },
-    "Hide info": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Masquer les infos"
-          }
-        }
-      }
-    },
-    "iCloud sync": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Synchronisation iCloud"
-          }
-        }
-      }
-    },
-    "Image Layout": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Disposition des images"
-          }
-        }
-      }
-    },
-    "Images": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Images"
-          }
-        }
-      }
-    },
-    "Images per row": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Images par ligne"
-          }
-        }
-      }
-    },
-    "INFO": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "INFOS"
-          }
-        }
-      }
-    },
-    "Instagram, large format film": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Instagram, film grand format"
-          }
-        }
-      }
-    },
-    "iPhone, Google Pixel, Samsung Galaxy, OnePlus": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "iPhone, Google Pixel, Samsung Galaxy, OnePlus"
-          }
-        }
-      }
-    },
-    "item": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "élément"
-          }
-        }
-      }
-    },
-    "items": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "éléments"
-          }
-        }
-      }
-    },
-    "JPEG": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "JPEG"
-          }
-        }
-      }
-    },
-    "KEEP": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CONSERVER"
-          }
-        }
-      }
-    },
-    "Keep this file somewhere safe — ideally not only on this Mac. You'll use it to restore your collections, tags, and folders on another Mac.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conservez ce fichier en lieu sûr — idéalement pas uniquement sur ce Mac. Vous l'utiliserez pour restaurer vos collections, étiquettes et dossiers sur un autre Mac."
-          }
-        }
-      }
-    },
-    "Kept": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conservé"
-          }
-        }
-      }
-    },
-    "Kept — last copy, can't delete": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conservé — dernière copie, suppression impossible"
-          }
-        }
-      }
-    },
-    "Kind": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Type"
-          }
-        }
-      }
-    },
-    "Largest first": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Plus grand d'abord"
-          }
-        }
-      }
-    },
-    "Lens": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Objectif"
-          }
-        }
-      }
-    },
-    "Library & folders": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bibliothèque et dossiers"
-          }
-        }
-      }
-    },
-    "Light": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Clair"
-          }
-        }
-      }
-    },
-    "Limit": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Limite"
-          }
-        }
-      }
-    },
-    "Locate %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Localiser %@"
-          }
-        }
-      }
-    },
-    "Locate…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Localiser…"
-          }
-        }
-      }
-    },
-    "Locating": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Localisation…"
-          }
-        }
-      }
-    },
-    "Location": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lieu"
-          }
-        }
-      }
-    },
-    "Looks for images in this folder that have no tags and generates tags for them in the background. Images that already have tags are left alone. Only automatic tags are created — tags you added by hand aren't restored.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recherche dans ce dossier les images sans étiquette et génère leurs étiquettes en arrière-plan. Les images déjà étiquetées ne sont pas modifiées. Seules des étiquettes automatiques sont créées — les étiquettes que vous avez ajoutées à la main ne sont pas restaurées."
-          }
-        }
-      }
-    },
-    "Manual": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Manuel"
-          }
-        }
-      }
-    },
-    "Marked for delete": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Marqué pour suppression"
-          }
-        }
-      }
-    },
-    "Masonry": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mosaïque"
-          }
-        }
-      }
-    },
-    "Masonry always uses Auto. Pick a fixed ratio to choose a backdrop.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La mosaïque utilise toujours Auto. Choisissez un ratio fixe pour sélectionner un arrière-plan."
-          }
-        }
-      }
-    },
-    "Medium format": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Moyen format"
-          }
-        }
-      }
-    },
-    "Modified": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Modifié"
-          }
-        }
-      }
-    },
-    "Most Used": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les plus utilisées"
-          }
-        }
-      }
-    },
-    "Move %lld file%@ to Trash?": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Move %1$lld file%2$@ to Trash?"
+    "%lld/%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld/%2$lld"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mettre %1$lld fichier%2$@ à la corbeille ?"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld/%2$lld"
           }
         }
       }
     },
-    "Move Collection Down": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Déplacer la collection vers le bas"
+    "1:1" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1:1"
           }
         }
       }
     },
-    "Move Collection Up": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Déplacer la collection vers le haut"
+    "2:3" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2:3"
           }
         }
       }
     },
-    "Move Down": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Déplacer vers le bas"
+    "3:2" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "3:2"
           }
         }
       }
     },
-    "Move Folder Down": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Déplacer le dossier vers le bas"
+    "3:4" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "3:4"
           }
         }
       }
     },
-    "Move Folder Up": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Déplacer le dossier vers le haut"
+    "4:3" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "4:3"
           }
         }
       }
     },
-    "Move to Folder": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Déplacer vers un dossier"
+    "4:5" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "4:5"
           }
         }
       }
     },
-    "Move to Trash": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mettre à la corbeille"
+    "5:4" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "5:4"
           }
         }
       }
     },
-    "Move Up": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Déplacer vers le haut"
+    "6:7" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "6:7"
           }
         }
       }
     },
-    "Moved to Trash": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mis à la corbeille"
+    "7:6" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "7:6"
           }
         }
       }
     },
-    "Muse can keep one folder in your iCloud Drive, synced across your Macs. Each image carries a small sidecar of its tags, colors, and analysis, so a second Mac restores everything without re-analyzing. This rides Apple's iCloud sync — Muse itself still makes no network calls.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Muse peut conserver un dossier dans votre iCloud Drive, synchronisé entre vos Mac. Chaque image embarque un petit fichier annexe contenant ses tags, ses couleurs et son analyse, de sorte qu'un second Mac restaure tout sans nouvelle analyse. Cela s'appuie sur la synchronisation iCloud d'Apple — Muse lui-même n'effectue toujours aucun appel réseau."
+    "9:16" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "9:16"
           }
         }
       }
     },
-    "Muse File": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fichier Muse"
+    "11 × 14 in" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "11 × 14 po"
           }
         }
       }
     },
-    "Muse is distributed directly (not via the App Store) and keeps itself up to date with Sparkle. It checks quietly in the background, or choose Muse ▸ Check for Updates… any time. New versions are downloaded over HTTPS and cryptographically verified before installing.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Muse est distribué directement (pas via l'App Store) et se maintient à jour grâce à Sparkle. Il vérifie discrètement en arrière-plan, ou choisissez Muse ▸ Rechercher des mises à jour… à tout moment. Les nouvelles versions sont téléchargées via HTTPS et vérifiées cryptographiquement avant l'installation."
+    "A3 (297 × 420 mm)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A3 (297 × 420 mm)"
           }
         }
       }
     },
-    "Muse is open source under the MIT license. The code lives at github.com/carlostarrats/Muse.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Muse est open source sous licence MIT. Le code se trouve sur github.com/carlostarrats/Muse."
+    "A4 (210 × 297 mm)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A4 (210 × 297 mm)"
           }
         }
       }
     },
-    "Muse keeps your collections, tags, and folder list on this Mac — not inside your files. Before moving to a new Mac, choose Muse ▸ Back Up Muse… to save one backup file; keep it somewhere safe and carry it over with your files. On the new Mac, choose Muse ▸ Restore from Backup…, point Muse at your folders, and it reconnects everything by matching each file's contents — even if you renamed or rearranged them. Collections with no files on the new Mac simply don't appear; nothing is ever left broken.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Muse conserve vos collections, vos tags et votre liste de dossiers sur ce Mac — pas à l'intérieur de vos fichiers. Avant de passer à un nouveau Mac, choisissez Muse ▸ Sauvegarder Muse… pour enregistrer un fichier de sauvegarde ; conservez-le en lieu sûr et emportez-le avec vos fichiers. Sur le nouveau Mac, choisissez Muse ▸ Restaurer depuis une sauvegarde…, indiquez à Muse vos dossiers, et il reconnecte tout en faisant correspondre le contenu de chaque fichier — même si vous les avez renommés ou réorganisés. Les collections sans fichiers sur le nouveau Mac n'apparaissent tout simplement pas ; rien n'est jamais laissé dans un état défectueux."
+    "Legal (8.5 × 14 in)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "US Légal (8,5 × 14 po)"
           }
         }
       }
     },
-    "Muse opens almost anything in place: images, PDFs, video, audio, fonts, Markdown, and code or text. Click an image for a full-screen view with zoom, pan, and a details panel; its Share button also offers Open With. Select images in the grid with a click, ⌘-click, or Shift-click, then right-click for actions — move to a folder, add to a collection, add a tag, share, or Open With. Anything without a dedicated viewer falls back to Quick Look.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Muse ouvre presque tout sur place : images, PDF, vidéo, audio, polices, Markdown, ainsi que code ou texte. Cliquez sur une image pour une vue plein écran avec zoom, déplacement et un panneau de détails ; son bouton Partager propose aussi Ouvrir avec. Sélectionnez des images dans la grille par un clic, un ⌘-clic ou un Maj-clic, puis cliquez avec le bouton droit pour accéder aux actions — déplacer vers un dossier, ajouter à une collection, ajouter un tag, partager ou Ouvrir avec. Tout ce qui n'a pas de visualiseur dédié bascule sur Coup d'œil."
+    "Letter (8.5 × 11 in)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "US Lettre (8,5 × 11 po)"
           }
         }
       }
     },
-    "Muse organizes automatically, but you're in control: in Settings (⌘,) you can turn off automatic tagging or automatic collections. Existing tags and collections stay; only future automatic work is paused, and the manual commands still work.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Muse organise automatiquement, mais vous gardez le contrôle : dans les Réglages (⌘,) vous pouvez désactiver l'ajout automatique de tags ou les collections automatiques. Les tags et collections existants demeurent ; seul le travail automatique futur est suspendu, et les commandes manuelles fonctionnent toujours."
+    "Tabloid (11 × 17 in)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tabloïd (11 × 17 po)"
           }
         }
       }
     },
-    "Name": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nom"
+    "16:9" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "16:9"
           }
         }
       }
     },
-    "Name Collection": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nommer la collection"
+    "A → Z" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A → Z"
           }
         }
       }
     },
-    "New Collection": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nouvelle collection"
+    "A folder name can’t contain “/” or “:”." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un nom de dossier ne peut pas contenir « / » ni « : »."
           }
         }
       }
     },
-    "New Collection from Selection": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nouvelle collection à partir de la sélection"
+    "A folder with that name already exists here." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un dossier portant ce nom existe déjà ici."
           }
         }
       }
     },
-    "New Collection from Selection…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nouvelle collection à partir de la sélection…"
+    "A local-first viewer and organizer for the folders you already have. Point it at a folder — Downloads, Documents, a pile of screenshots — and browse everything in one place. Nothing is imported or copied: Muse reads your files where they live and never moves or changes them." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un visualiseur et organiseur local d'abord pour les dossiers que vous possédez déjà. Indiquez-lui un dossier — Téléchargements, Documents, un tas de captures d'écran — et parcourez tout au même endroit. Rien n'est importé ni copié : Muse lit vos fichiers là où ils se trouvent et ne les déplace ni ne les modifie jamais."
           }
         }
       }
     },
-    "New Subfolder": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nouveau sous-dossier"
+    "About Muse" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "À propos de Muse"
           }
         }
       }
     },
-    "New Subfolder…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nouveau sous-dossier…"
+    "About Muse — how indexing, analysis, collections, and tags work" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "À propos de Muse — fonctionnement de l'indexation, de l'analyse, des collections et des étiquettes"
           }
         }
       }
     },
-    "Newest first": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Plus récent d'abord"
+    "Active" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actif"
           }
         }
       }
     },
-    "No collections": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucune collection"
+    "Add" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter"
           }
         }
       }
     },
-    "No collections yet": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucune collection pour l'instant"
+    "Add %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter %@"
           }
         }
       }
     },
-    "No duplicates found in this folder.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucun doublon trouvé dans ce dossier."
+    "Add Collection" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter une collection"
           }
         }
       }
     },
-    "No files imported yet.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucun fichier importé pour l'instant."
+    "Add Folder" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter un dossier"
           }
         }
       }
     },
-    "No folders": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucun dossier"
+    "Add folders from the sidebar with the Add Folder button — Muse indexes them automatically (the status pills at the bottom show progress). Drag folders up or down to reorder them. Right-click a folder to make a New Subfolder, Rename it, Reveal it in Finder, or — for a buried subfolder — Pin it to the top. Right-click a top-level folder to Remove it from Muse. Your files are never modified; deleting means moving to the Trash, and it's undoable." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajoutez des dossiers depuis la barre latérale avec le bouton Ajouter un dossier — Muse les indexe automatiquement (les pastilles d'état en bas indiquent la progression). Faites glisser les dossiers vers le haut ou le bas pour les réordonner. Cliquez avec le bouton droit sur un dossier pour créer un Nouveau sous-dossier, le Renommer, l'Afficher dans le Finder ou — pour un sous-dossier enfoui — l'Épingler en haut. Cliquez avec le bouton droit sur un dossier de premier niveau pour le Retirer de Muse. Vos fichiers ne sont jamais modifiés ; supprimer revient à déplacer vers la corbeille, et l'opération est réversible."
           }
         }
       }
     },
-    "No tags": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucune étiquette"
+    "Add Tag" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter une étiquette"
           }
         }
       }
     },
-    "None": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucun"
+    "Add to Collection" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter à la collection"
           }
         }
       }
     },
-    "None yet": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucune pour l'instant"
+    "Add to filter" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter au filtre"
           }
         }
       }
     },
-    "Not located": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Non localisé"
+    "Added %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouté %@"
           }
         }
       }
     },
-    "Not located yet": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pas encore localisé"
+    "Added to %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouté à %@"
           }
         }
       }
     },
-    "Off": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Désactivé"
+    "After indexing, Muse automatically analyzes new or changed images with Apple's on-device Vision: tags, dominant colors, dimensions, and readable text. This powers the tag chips, the Color and Shape sorts, the viewer's color swatches, and collections. There's no button to press — images already analyzed are never redone, and your own tag edits always win over the machine's." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Après l'indexation, Muse analyse automatiquement les images nouvelles ou modifiées avec Vision, en local sur l'appareil Apple : tags, couleurs dominantes, dimensions et texte lisible. C'est ce qui alimente les pastilles de tags, les tris par Couleur et par Forme, les échantillons de couleur du visualiseur et les collections. Il n'y a aucun bouton à presser — les images déjà analysées ne le sont jamais à nouveau, et vos propres modifications de tags l'emportent toujours sur celles de la machine."
           }
         }
       }
     },
-    "OK": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "OK"
+    "All" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout"
           }
         }
       }
     },
-    "Oldest first": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Plus ancien d'abord"
+    "Analysis" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Analyse"
           }
         }
       }
     },
-    "Open": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrir"
+    "Analyze Folder" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Analyser le dossier"
           }
         }
       }
     },
-    "Open a specific folder in Muse.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrir un dossier spécifique dans Muse."
+    "Analyze Folder with Muse AI" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Analyser le dossier avec l'IA de Muse"
           }
         }
       }
     },
-    "Open Folder": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrir le dossier"
+    "and" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "et"
           }
         }
       }
     },
-    "Open Folder in Muse": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrir le dossier dans Muse"
+    "Articles" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Articles"
           }
         }
       }
     },
-    "Open in Finder": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrir dans le Finder"
+    "Ascending" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Croissant"
           }
         }
       }
     },
-    "Open in Maps": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrir dans Plans"
+    "At least one copy must be kept" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Au moins une copie doit être conservée"
           }
         }
       }
     },
-    "Open location in Maps": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrir le lieu dans Plans"
+    "Audio" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio"
           }
         }
       }
     },
-    "Open source": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Open source"
+    "Author" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auteur"
           }
         }
       }
     },
-    "Open With": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrir avec"
+    "Auto" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auto"
           }
         }
       }
     },
-    "Opens in the viewer.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvre dans la visionneuse."
+    "Automatic" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatique"
           }
         }
       }
     },
-    "Opens the folder.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvre le dossier."
+    "Automatic organization" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Organisation automatique"
           }
         }
       }
     },
-    "Other": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Autre"
+    "Automatically organize into collections" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Organiser automatiquement en collections"
           }
         }
       }
     },
-    "Other image formats": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Autres formats d'image"
+    "Automatically tag new images" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Étiqueter automatiquement les nouvelles images"
           }
         }
       }
     },
-    "Other…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Autre…"
+    "Back to all collections" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retour à toutes les collections"
           }
         }
       }
     },
-    "Pages": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pages"
+    "Back to Library" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retour à la bibliothèque"
           }
         }
       }
     },
-    "Path of the folder to open": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chemin du dossier à ouvrir"
+    "Back Up & Restore" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sauvegarde et restauration"
           }
         }
       }
     },
-    "PDFs": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "PDF"
+    "Back Up Muse…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sauvegarder Muse…"
           }
         }
       }
     },
-    "Pick a folder for Muse to view.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choisissez un dossier à afficher dans Muse."
+    "Background" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrière-plan"
           }
         }
       }
     },
-    "Pin": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Épingler"
+    "Background: %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrière-plan : %@"
           }
         }
       }
     },
-    "Places": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lieux"
+    "Black" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noir"
           }
         }
       }
     },
-    "Please enter a folder name.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Veuillez saisir un nom de dossier."
+    "Byte-exact" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Identique octet pour octet"
           }
         }
       }
     },
-    "PNG": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "PNG"
+    "Camera" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Appareil"
           }
         }
       }
     },
-    "Privacy & retention": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Confidentialité et conservation"
+    "Cancel" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annuler"
           }
         }
       }
     },
-    "PSD": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "PSD"
+    "Check for Updates…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher des mises à jour…"
           }
         }
       }
     },
-    "Query": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Requête"
+    "Choose" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisir"
           }
         }
       }
     },
-    "Quotes": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Citations"
+    "Choose how images are arranged. Applies to every grid." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez la disposition des images. S'applique à toutes les grilles."
           }
         }
       }
     },
-    "RAW": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "RAW"
+    "Choose the Muse backup file you exported on your other Mac." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez le fichier de sauvegarde Muse que vous avez exporté sur votre autre Mac."
           }
         }
       }
     },
-    "Receipts": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reçus"
+    "Clear All" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout effacer"
           }
         }
       }
     },
-    "Recipes": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recettes"
+    "Clear tag filter" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Effacer le filtre d'étiquettes"
           }
         }
       }
     },
-    "Reconnect your folders and collections. Locate each folder where it lives now — they can be anywhere.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reconnectez vos dossiers et collections. Localisez chaque dossier à son emplacement actuel — ils peuvent se trouver n'importe où."
+    "Clear Tag Filter" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Effacer le filtre d'étiquettes"
           }
         }
       }
     },
-    "Reconnected": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reconnecté"
+    "Close" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fermer"
           }
         }
       }
     },
-    "Reconnected — ": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reconnecté — "
+    "Code" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code"
           }
         }
       }
     },
-    "Recorded": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enregistré"
+    "Collapse" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réduire"
           }
         }
       }
     },
-    "Regenerate": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Régénérer"
+    "Collapse %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réduire %@"
           }
         }
       }
     },
-    "Regenerate tags for this folder?": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Régénérer les étiquettes de ce dossier ?"
+    "Collection" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collection"
           }
         }
       }
     },
-    "Regenerate Tags…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Régénérer les étiquettes…"
+    "COLLECTION" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "COLLECTION"
           }
         }
       }
     },
-    "Relocate %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Relocaliser %@"
+    "Collection name" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nom de la collection"
           }
         }
       }
     },
-    "Relocate…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Relocaliser…"
+    "Collections" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collections"
           }
         }
       }
     },
-    "Remove %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retirer %@"
+    "COLLECTIONS" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "COLLECTIONS"
           }
         }
       }
     },
-    "Remove Folder": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retirer le dossier"
+    "Collections form automatically as Muse analyzes your images — or tap + to make your own." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les collections se forment automatiquement à mesure que Muse analyse vos images — ou appuyez sur + pour créer la vôtre."
           }
         }
       }
     },
-    "Remove from Collection “%@”": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retirer de la collection « %@ »"
+    "Color" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couleur"
           }
         }
       }
     },
-    "Remove from filter": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retirer du filtre"
+    "COLORS" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "COULEURS"
           }
         }
       }
     },
-    "Remove Selection from Collection": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retirer la sélection de la collection"
+    "Common Sizes" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tailles courantes"
           }
         }
       }
     },
-    "Remove Tag “%@”": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retirer l'étiquette « %@ »"
+    "Conversations" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversations"
           }
         }
       }
     },
-    "Remove Tag from Selection": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retirer l'étiquette de la sélection"
+    "Copied %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copié %@"
           }
         }
       }
     },
-    "Removed %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retiré %@"
+    "Copied %lld colors" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld couleurs copiées"
           }
         }
       }
     },
-    "Removed from %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retiré de %@"
+    "copy all" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tout copier"
           }
         }
       }
     },
-    "Removes “%@” from the images in this view. Other folders keep their tags. Your images stay on disk.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retire « %@ » des images de cette vue. Les autres dossiers conservent leurs étiquettes. Vos images restent sur le disque."
+    "Copy all colors" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copier toutes les couleurs"
           }
         }
       }
     },
-    "rename": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "renommer"
+    "Copy color %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copier la couleur %@"
           }
         }
       }
     },
-    "Rename": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Renommer"
+    "Could not load: %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de charger : %@"
           }
         }
       }
     },
-    "Rename collection": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Renommer la collection"
+    "Couldn’t %@ the folder. You may not have permission." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de %@ le dossier. Vous n'avez peut-être pas la permission."
           }
         }
       }
     },
-    "Rename Collection": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Renommer la collection"
+    "Couldn’t finish renaming the folder." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de terminer le changement de nom du dossier."
           }
         }
       }
     },
-    "Rename Collection…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Renommer la collection…"
+    "Couldn’t move some files" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de déplacer certains fichiers"
           }
         }
       }
     },
-    "Rename Folder": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Renommer le dossier"
+    "Couldn't move to Trash" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de mettre à la corbeille"
           }
         }
       }
     },
-    "Rename Folder…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Renommer le dossier…"
+    "Couldn't restore — file is in the Trash" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restauration impossible — le fichier est dans la corbeille"
           }
         }
       }
     },
-    "Rename Tag": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Renommer l'étiquette"
+    "couldn't save" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "échec de l'enregistrement"
           }
         }
       }
     },
-    "Rename Tag…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Renommer l'étiquette…"
+    "Couldn’t save" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Échec de l'enregistrement"
           }
         }
       }
     },
-    "Rename…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Renommer…"
+    "create" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "créer"
           }
         }
       }
     },
-    "Renames “%@” on every image in the library.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Renomme « %@ » sur toutes les images de la bibliothèque."
+    "Create" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Créer"
           }
         }
       }
     },
-    "Renames the folder on disk. Tags and collections are kept.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Renomme le dossier sur le disque. Les étiquettes et collections sont conservées."
+    "Creates a collection from the selected images." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crée une collection à partir des images sélectionnées."
           }
         }
       }
     },
-    "Restore from Backup": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Restaurer depuis une sauvegarde"
+    "Creates a new collection." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crée une nouvelle collection."
           }
         }
       }
     },
-    "Restore from Backup…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Restaurer depuis une sauvegarde…"
+    "Creates a new folder inside “%@”." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crée un nouveau dossier dans « %@ »."
           }
         }
       }
     },
-    "Reveal in Finder": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Afficher dans le Finder"
+    "Creator" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Créateur"
           }
         }
       }
     },
-    "Run Muse's duplicate scan on a folder.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lance l'analyse des doublons de Muse sur un dossier."
+    "Custom" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Personnalisé"
           }
         }
       }
     },
-    "Run Vision-based tagging, OCR, and color extraction on every image in a folder.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Exécute l'étiquetage par Vision, la reconnaissance de texte et l'extraction des couleurs sur toutes les images d'un dossier."
+    "Dark" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sombre"
           }
         }
       }
     },
-    "Same filename": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Même nom de fichier"
+    "Dark Grey" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gris foncé"
           }
         }
       }
     },
-    "Save name": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enregistrer le nom"
+    "Date Created" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Date de création"
           }
         }
       }
     },
-    "Save to…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enregistrer sous…"
+    "Date Modified" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Date de modification"
           }
         }
       }
     },
-    "Scanning…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Analyse…"
+    "Delete" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer"
           }
         }
       }
     },
-    "Search & sort": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recherche et tri"
+    "Delete “%@”?" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer « %@ » ?"
           }
         }
       }
     },
-    "Search by name, tags, captions, and text found inside images. The magnifier menu scopes the search to the current folder or your whole library. Sort by date, name, size, color, or shape, and use the arrow beside the sort menu to flip the direction.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recherchez par nom, tags, légendes et texte trouvé à l'intérieur des images. Le menu de la loupe limite la recherche au dossier courant ou à toute votre bibliothèque. Triez par date, nom, taille, couleur ou forme, et utilisez la flèche à côté du menu de tri pour inverser le sens."
+    "Delete All" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout supprimer"
           }
         }
       }
     },
-    "Search files, captions, and tags in Muse's indexed library.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recherche dans les fichiers, légendes et étiquettes de la bibliothèque indexée de Muse."
+    "Delete all tags in this folder?" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer toutes les étiquettes de ce dossier ?"
           }
         }
       }
     },
-    "Search files, tags, captions…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rechercher fichiers, étiquettes, légendes…"
+    "Delete All Tags…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer toutes les étiquettes…"
           }
         }
       }
     },
-    "Search Library": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rechercher dans la bibliothèque"
+    "Delete collection" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer la collection"
           }
         }
       }
     },
-    "Search Muse Library": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rechercher dans la bibliothèque Muse"
+    "Delete Collection" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer la collection"
           }
         }
       }
     },
-    "Search text": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Texte de recherche"
+    "Delete Collection…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer la collection…"
           }
         }
       }
     },
-    "Select All": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tout sélectionner"
+    "Delete Selected to Trash" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mettre la sélection à la corbeille"
           }
         }
       }
     },
-    "Set as Collection Cover": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Définir comme couverture de la collection"
+    "Delete Tag…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer l'étiquette…"
           }
         }
       }
     },
-    "Set the grid density with the slider at the bottom right, and turn on file names under tiles in Settings. The palette button sets the background: Light, Dark, Auto (light by day, dark at night), or a custom color.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Réglez la densité de la grille avec le curseur en bas à droite, et activez les noms de fichiers sous les vignettes dans les Réglages. Le bouton palette définit l'arrière-plan : Clair, Sombre, Auto (clair le jour, sombre la nuit), ou une couleur personnalisée."
+    "Delete…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer…"
           }
         }
       }
     },
-    "Settings": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Réglages"
+    "Descending" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Décroissant"
           }
         }
       }
     },
-    "Settings…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Réglages…"
+    "Deselect All" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout désélectionner"
           }
         }
       }
     },
-    "Shape": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Forme"
+    "Design" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Design"
           }
         }
       }
     },
-    "Share": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Partager"
+    "Dimensions" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dimensions"
           }
         }
       }
     },
-    "Share an image from the viewer — AirDrop, Mail, Messages, or Save to Files — or share a whole collection as a PDF from its header. From Finder, right-click any file and choose Share → Muse to send it into your iCloud folder.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Partagez une image depuis le visualiseur — AirDrop, Mail, Messages ou Enregistrer dans Fichiers — ou partagez une collection entière sous forme de PDF depuis son en-tête. Depuis le Finder, cliquez avec le bouton droit sur un fichier et choisissez Partager → Muse pour l'envoyer dans votre dossier iCloud."
+    "Documents" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Documents"
           }
         }
       }
     },
-    "Share collection": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Partager la collection"
+    "Done" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminé"
           }
         }
       }
     },
-    "Sharing": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Partage"
+    "Drag to reorder" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Glisser pour réorganiser"
           }
         }
       }
     },
-    "Shopping": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Achats"
+    "Duplicates" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doublons"
           }
         }
       }
     },
-    "Show Collections in the Sidebar": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Afficher les collections dans la barre latérale"
+    "Duration" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durée"
           }
         }
       }
     },
-    "Show each file's name beneath its thumbnail in the grid.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Afficher le nom de chaque fichier sous sa vignette dans la grille."
+    "Edit" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifier"
           }
         }
       }
     },
-    "Show file names": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Afficher les noms de fichiers"
+    "Events" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Événements"
           }
         }
       }
     },
-    "Show files in subfolders": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Afficher les fichiers des sous-dossiers"
+    "Everything happens on this Mac. Muse collects nothing — no analytics, no telemetry; nothing about you or your files is ever uploaded or shared. Its only network use is checking for and downloading app updates (iCloud sync, if you use it, is handled by the system). If you remove a folder from the sidebar, its index data is kept for 180 days — so re-adding it restores everything instantly — then deleted automatically." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout se passe sur ce Mac. Muse ne collecte rien — aucune statistique, aucune télémétrie ; rien vous concernant ni concernant vos fichiers n'est jamais envoyé ou partagé. Sa seule utilisation du réseau est la recherche et le téléchargement des mises à jour de l'app (la synchronisation iCloud, si vous l'utilisez, est gérée par le système). Si vous retirez un dossier de la barre latérale, ses données d'index sont conservées pendant 180 jours — ainsi, le rajouter restaure tout instantanément — puis supprimées automatiquement."
           }
         }
       }
     },
-    "Show files inside subfolders": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Afficher les fichiers des sous-dossiers"
+    "Expand" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Développer"
           }
         }
       }
     },
-    "Show files tagged %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Afficher les fichiers étiquetés %@"
+    "Expand %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Développer %@"
           }
         }
       }
     },
-    "Show info": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Afficher les infos"
+    "Exposure" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exposition"
           }
         }
       }
     },
-    "Sidebar": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Barre latérale"
+    "Files will be moved to the Trash and can be restored from there." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les fichiers seront placés dans la corbeille et pourront être restaurés depuis là."
           }
         }
       }
     },
-    "Size": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Taille"
+    "Filter" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filtrer"
           }
         }
       }
     },
-    "Smallest first": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Plus petit d'abord"
+    "Filter (active)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filtre (actif)"
           }
         }
       }
     },
-    "Sony, Canon, Nikon, 35mm film": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sony, Canon, Nikon, film 35 mm"
+    "Find Duplicates" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher les doublons"
           }
         }
       }
     },
-    "Sort": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Trier"
+    "Find Duplicates in Folder" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher les doublons dans le dossier"
           }
         }
       }
     },
-    "Sort collections": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Trier les collections"
+    "Find Duplicates in the File menu surfaces copies — byte-for-byte identical files, visually similar images, and matching filenames — so you can review and clear them out to the Trash." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher les doublons, dans le menu Fichier, fait remonter les copies — fichiers identiques octet par octet, images visuellement similaires et noms de fichiers correspondants — afin que vous puissiez les examiner et les envoyer dans la corbeille."
           }
         }
       }
     },
-    "Sort direction: %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sens du tri : %@"
+    "Fit" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajuster"
           }
         }
       }
     },
-    "Sort folders": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Trier les dossiers"
+    "Folder" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dossier"
           }
         }
       }
     },
-    "Sort: %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Trier : %@"
+    "Folder name" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nom du dossier"
           }
         }
       }
     },
-    "Square medium format": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Carré, moyen format"
+    "Folders" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dossiers"
           }
         }
       }
     },
-    "Static": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Statique"
+    "FOLDERS" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DOSSIERS"
           }
         }
       }
     },
-    "SVG": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "SVG"
+    "Frame Rate" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cadence"
           }
         }
       }
     },
-    "Tag name": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nom de l'étiquette"
+    "Get Started." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Commencer."
           }
         }
       }
     },
-    "Tag order": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ordre des étiquettes"
+    "GIF" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GIF"
           }
         }
       }
     },
-    "Tag order: %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ordre des étiquettes : %@"
+    "Grid" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grille"
           }
         }
       }
     },
-    "Tags": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Étiquettes"
+    "Grid & appearance" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grille et apparence"
           }
         }
       }
     },
-    "TAGS": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ÉTIQUETTES"
+    "Groupings that span your whole library, suggested automatically from what Vision finds, plus any you build by hand in the viewer. Screenshots get their own smart collections by what they're of — recipes, receipts, places, articles, and more. Open the Collections page from the toolbar to browse them. They track your files: delete images or remove a folder and collections shrink to match — empty ones disappear. Open one to rename or delete it from its header." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Des regroupements qui couvrent toute votre bibliothèque, suggérés automatiquement à partir de ce que Vision détecte, ainsi que ceux que vous créez à la main dans le visualiseur. Les captures d'écran obtiennent leurs propres collections intelligentes selon leur contenu — recettes, reçus, lieux, articles, et plus encore. Ouvrez la page Collections depuis la barre d'outils pour les parcourir. Elles suivent vos fichiers : supprimez des images ou retirez un dossier et les collections rétrécissent en conséquence — les collections vides disparaissent. Ouvrez-en une pour la renommer ou la supprimer depuis son en-tête."
           }
         }
       }
     },
-    "Tags “%@”.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Étiquette « %@ »."
+    "HEIC" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HEIC"
           }
         }
       }
     },
-    "Taken": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pris"
+    "Hide %@ field" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masquer le champ %@"
           }
         }
       }
     },
-    "Tall → wide": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Haut → large"
+    "Hide files inside subfolders" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masquer les fichiers des sous-dossiers"
           }
         }
       }
     },
-    "The chip row shows the tags of the folder you're viewing. Click a chip to filter; hover for its count. Right-click a chip to rename or delete the tag everywhere; add tags from an image's right-click menu or inside the viewer.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La rangée de pastilles affiche les tags du dossier que vous consultez. Cliquez sur une pastille pour filtrer ; survolez-la pour voir son décompte. Cliquez avec le bouton droit sur une pastille pour renommer ou supprimer le tag partout ; ajoutez des tags depuis le menu contextuel d'une image ou à l'intérieur du visualiseur."
+    "Hide info" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masquer les infos"
           }
         }
       }
     },
-    "The collection is removed everywhere. Your images stay on disk.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La collection est supprimée partout. Vos images restent sur le disque."
+    "iCloud sync" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronisation iCloud"
           }
         }
       }
     },
-    "The collection is removed. Your images stay on disk.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La collection est supprimée. Vos images restent sur le disque."
+    "Image Layout" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disposition des images"
           }
         }
       }
     },
-    "The folder was renamed, but updating its tags failed.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le dossier a été renommé, mais la mise à jour de ses étiquettes a échoué."
+    "Images" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Images"
           }
         }
       }
     },
-    "The quick brown fox jumps over the lazy dog.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Portez ce vieux whisky au juge blond qui fume."
+    "Images per row" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Images par ligne"
           }
         }
       }
     },
-    "This Folder": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ce dossier"
+    "INFO" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "INFOS"
           }
         }
       }
     },
-    "This removes every tag on the images in this folder — both automatic tags and ones you've added yourself. Tags you added by hand can't be recovered. Your images stay on disk.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cela retire toutes les étiquettes des images de ce dossier — à la fois les étiquettes automatiques et celles que vous avez ajoutées vous-même. Les étiquettes ajoutées à la main ne peuvent pas être récupérées. Vos images restent sur le disque."
+    "Instagram, large format film" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instagram, film grand format"
           }
         }
       }
     },
-    "TIFF": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "TIFF"
+    "iPhone, Google Pixel, Samsung Galaxy, OnePlus" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhone, Google Pixel, Samsung Galaxy, OnePlus"
           }
         }
       }
     },
-    "TILE BACKGROUND": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ARRIÈRE-PLAN DES VIGNETTES"
+    "item" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "élément"
           }
         }
       }
     },
-    "Tile background: %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Arrière-plan des vignettes : %@"
+    "items" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "éléments"
           }
         }
       }
     },
-    "Title": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Titre"
+    "JPEG" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "JPEG"
           }
         }
       }
     },
-    "Undo": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Annuler"
+    "KEEP" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CONSERVER"
           }
         }
       }
     },
-    "Unpin": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Désépingler"
+    "Keep this file somewhere safe — ideally not only on this Mac. You'll use it to restore your collections, tags, and folders on another Mac." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conservez ce fichier en lieu sûr — idéalement pas uniquement sur ce Mac. Vous l'utiliserez pour restaurer vos collections, étiquettes et dossiers sur un autre Mac."
           }
         }
       }
     },
-    "Updates": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mises à jour"
+    "Kept" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conservé"
           }
         }
       }
     },
-    "Vertical video on most phones": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vidéo verticale sur la plupart des téléphones"
+    "Kept — last copy, can't delete" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conservé — dernière copie, suppression impossible"
           }
         }
       }
     },
-    "Videos": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vidéos"
+    "Kind" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type"
           }
         }
       }
     },
-    "Viewing": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Affichage"
+    "Largest first" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plus grand d'abord"
           }
         }
       }
     },
-    "Viewing & selecting": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Affichage et sélection"
+    "Lens" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Objectif"
           }
         }
       }
     },
-    "Visually similar": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Visuellement similaire"
+    "Library & folders" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bibliothèque et dossiers"
           }
         }
       }
     },
-    "WebP": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "WebP"
+    "Light" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clair"
           }
         }
       }
     },
-    "What Muse is": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ce qu'est Muse"
+    "Limit" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limite"
           }
         }
       }
     },
-    "Wide → tall": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Large → haut"
+    "Locate %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Localiser %@"
           }
         }
       }
     },
-    "Z → A": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Z → A"
+    "Locate…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Localiser…"
           }
         }
       }
     },
-    "Zoom in": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zoom avant"
+    "Locating" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Localisation…"
           }
         }
       }
     },
-    "Zoom out": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zoom arrière"
+    "Location" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lieu"
+          }
+        }
+      }
+    },
+    "Looks for images in this folder that have no tags and generates tags for them in the background. Images that already have tags are left alone. Only automatic tags are created — tags you added by hand aren't restored." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recherche dans ce dossier les images sans étiquette et génère leurs étiquettes en arrière-plan. Les images déjà étiquetées ne sont pas modifiées. Seules des étiquettes automatiques sont créées — les étiquettes que vous avez ajoutées à la main ne sont pas restaurées."
+          }
+        }
+      }
+    },
+    "Manual" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manuel"
+          }
+        }
+      }
+    },
+    "Marked for delete" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marqué pour suppression"
+          }
+        }
+      }
+    },
+    "Masonry" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mosaïque"
+          }
+        }
+      }
+    },
+    "Masonry always uses Auto. Pick a fixed ratio to choose a backdrop." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La mosaïque utilise toujours Auto. Choisissez un ratio fixe pour sélectionner un arrière-plan."
+          }
+        }
+      }
+    },
+    "Medium format" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Moyen format"
+          }
+        }
+      }
+    },
+    "Modified" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifié"
+          }
+        }
+      }
+    },
+    "Most Used" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les plus utilisées"
+          }
+        }
+      }
+    },
+    "Move %lld file%@ to Trash?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Move %1$lld file%2$@ to Trash?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mettre %1$lld fichier%2$@ à la corbeille ?"
+          }
+        }
+      }
+    },
+    "Move Collection Down" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déplacer la collection vers le bas"
+          }
+        }
+      }
+    },
+    "Move Collection Up" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déplacer la collection vers le haut"
+          }
+        }
+      }
+    },
+    "Move Down" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déplacer vers le bas"
+          }
+        }
+      }
+    },
+    "Move Folder Down" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déplacer le dossier vers le bas"
+          }
+        }
+      }
+    },
+    "Move Folder Up" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déplacer le dossier vers le haut"
+          }
+        }
+      }
+    },
+    "Move to Folder" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déplacer vers un dossier"
+          }
+        }
+      }
+    },
+    "Move to Trash" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mettre à la corbeille"
+          }
+        }
+      }
+    },
+    "Move Up" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déplacer vers le haut"
+          }
+        }
+      }
+    },
+    "Moved to Trash" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mis à la corbeille"
+          }
+        }
+      }
+    },
+    "Muse can keep one folder in your iCloud Drive, synced across your Macs. Each image carries a small sidecar of its tags, colors, and analysis, so a second Mac restores everything without re-analyzing. This rides Apple's iCloud sync — Muse itself still makes no network calls." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muse peut conserver un dossier dans votre iCloud Drive, synchronisé entre vos Mac. Chaque image embarque un petit fichier annexe contenant ses tags, ses couleurs et son analyse, de sorte qu'un second Mac restaure tout sans nouvelle analyse. Cela s'appuie sur la synchronisation iCloud d'Apple — Muse lui-même n'effectue toujours aucun appel réseau."
+          }
+        }
+      }
+    },
+    "Muse File" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fichier Muse"
+          }
+        }
+      }
+    },
+    "Muse is distributed directly (not via the App Store) and keeps itself up to date with Sparkle. It checks quietly in the background, or choose Muse ▸ Check for Updates… any time. New versions are downloaded over HTTPS and cryptographically verified before installing." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muse est distribué directement (pas via l'App Store) et se maintient à jour grâce à Sparkle. Il vérifie discrètement en arrière-plan, ou choisissez Muse ▸ Rechercher des mises à jour… à tout moment. Les nouvelles versions sont téléchargées via HTTPS et vérifiées cryptographiquement avant l'installation."
+          }
+        }
+      }
+    },
+    "Muse is open source under the MIT license. The code lives at github.com/carlostarrats/Muse." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muse est open source sous licence MIT. Le code se trouve sur github.com/carlostarrats/Muse."
+          }
+        }
+      }
+    },
+    "Muse keeps your collections, tags, and folder list on this Mac — not inside your files. Before moving to a new Mac, choose Muse ▸ Back Up Muse… to save one backup file; keep it somewhere safe and carry it over with your files. On the new Mac, choose Muse ▸ Restore from Backup…, point Muse at your folders, and it reconnects everything by matching each file's contents — even if you renamed or rearranged them. Collections with no files on the new Mac simply don't appear; nothing is ever left broken." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muse conserve vos collections, vos tags et votre liste de dossiers sur ce Mac — pas à l'intérieur de vos fichiers. Avant de passer à un nouveau Mac, choisissez Muse ▸ Sauvegarder Muse… pour enregistrer un fichier de sauvegarde ; conservez-le en lieu sûr et emportez-le avec vos fichiers. Sur le nouveau Mac, choisissez Muse ▸ Restaurer depuis une sauvegarde…, indiquez à Muse vos dossiers, et il reconnecte tout en faisant correspondre le contenu de chaque fichier — même si vous les avez renommés ou réorganisés. Les collections sans fichiers sur le nouveau Mac n'apparaissent tout simplement pas ; rien n'est jamais laissé dans un état défectueux."
+          }
+        }
+      }
+    },
+    "Muse opens almost anything in place: images, PDFs, video, audio, fonts, Markdown, and code or text. Click an image for a full-screen view with zoom, pan, and a details panel; its Share button also offers Open With. Select images in the grid with a click, ⌘-click, or Shift-click, then right-click for actions — move to a folder, add to a collection, add a tag, share, or Open With. Anything without a dedicated viewer falls back to Quick Look." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muse ouvre presque tout sur place : images, PDF, vidéo, audio, polices, Markdown, ainsi que code ou texte. Cliquez sur une image pour une vue plein écran avec zoom, déplacement et un panneau de détails ; son bouton Partager propose aussi Ouvrir avec. Sélectionnez des images dans la grille par un clic, un ⌘-clic ou un Maj-clic, puis cliquez avec le bouton droit pour accéder aux actions — déplacer vers un dossier, ajouter à une collection, ajouter un tag, partager ou Ouvrir avec. Tout ce qui n'a pas de visualiseur dédié bascule sur Coup d'œil."
+          }
+        }
+      }
+    },
+    "Muse organizes automatically, but you're in control: in Settings (⌘,) you can turn off automatic tagging or automatic collections. Existing tags and collections stay; only future automatic work is paused, and the manual commands still work." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muse organise automatiquement, mais vous gardez le contrôle : dans les Réglages (⌘,) vous pouvez désactiver l'ajout automatique de tags ou les collections automatiques. Les tags et collections existants demeurent ; seul le travail automatique futur est suspendu, et les commandes manuelles fonctionnent toujours."
+          }
+        }
+      }
+    },
+    "Name" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nom"
+          }
+        }
+      }
+    },
+    "Name Collection" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nommer la collection"
+          }
+        }
+      }
+    },
+    "New Collection" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nouvelle collection"
+          }
+        }
+      }
+    },
+    "New Collection from Selection" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nouvelle collection à partir de la sélection"
+          }
+        }
+      }
+    },
+    "New Collection from Selection…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nouvelle collection à partir de la sélection…"
+          }
+        }
+      }
+    },
+    "New Subfolder" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nouveau sous-dossier"
+          }
+        }
+      }
+    },
+    "New Subfolder…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nouveau sous-dossier…"
+          }
+        }
+      }
+    },
+    "Newest first" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plus récent d'abord"
+          }
+        }
+      }
+    },
+    "No collections" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune collection"
+          }
+        }
+      }
+    },
+    "No collections yet" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune collection pour l'instant"
+          }
+        }
+      }
+    },
+    "No duplicates found in this folder." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun doublon trouvé dans ce dossier."
+          }
+        }
+      }
+    },
+    "No files imported yet." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun fichier importé pour l'instant."
+          }
+        }
+      }
+    },
+    "No folders" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun dossier"
+          }
+        }
+      }
+    },
+    "No tags" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune étiquette"
+          }
+        }
+      }
+    },
+    "None" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun"
+          }
+        }
+      }
+    },
+    "None yet" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune pour l'instant"
+          }
+        }
+      }
+    },
+    "Not located" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non localisé"
+          }
+        }
+      }
+    },
+    "Not located yet" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pas encore localisé"
+          }
+        }
+      }
+    },
+    "Off" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Désactivé"
+          }
+        }
+      }
+    },
+    "OK" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        }
+      }
+    },
+    "Oldest first" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plus ancien d'abord"
+          }
+        }
+      }
+    },
+    "Open" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrir"
+          }
+        }
+      }
+    },
+    "Open a specific folder in Muse." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrir un dossier spécifique dans Muse."
+          }
+        }
+      }
+    },
+    "Open Folder" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrir le dossier"
+          }
+        }
+      }
+    },
+    "Open Folder in Muse" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrir le dossier dans Muse"
+          }
+        }
+      }
+    },
+    "Open in Finder" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrir dans le Finder"
+          }
+        }
+      }
+    },
+    "Open in Maps" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrir dans Plans"
+          }
+        }
+      }
+    },
+    "Open location in Maps" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrir le lieu dans Plans"
+          }
+        }
+      }
+    },
+    "Open source" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open source"
+          }
+        }
+      }
+    },
+    "Open With" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrir avec"
+          }
+        }
+      }
+    },
+    "Opens in the viewer." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvre dans la visionneuse."
+          }
+        }
+      }
+    },
+    "Opens the folder." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvre le dossier."
+          }
+        }
+      }
+    },
+    "Other" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Autre"
+          }
+        }
+      }
+    },
+    "Other image formats" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Autres formats d'image"
+          }
+        }
+      }
+    },
+    "Other…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Autre…"
+          }
+        }
+      }
+    },
+    "Pages" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pages"
+          }
+        }
+      }
+    },
+    "Paper Size:" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Format du papier :"
+          }
+        }
+      }
+    },
+    "Path of the folder to open" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chemin du dossier à ouvrir"
+          }
+        }
+      }
+    },
+    "PDFs" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF"
+          }
+        }
+      }
+    },
+    "Pick a folder for Muse to view." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez un dossier à afficher dans Muse."
+          }
+        }
+      }
+    },
+    "Pin" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Épingler"
+          }
+        }
+      }
+    },
+    "Places" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lieux"
+          }
+        }
+      }
+    },
+    "Please enter a folder name." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Veuillez saisir un nom de dossier."
+          }
+        }
+      }
+    },
+    "PNG" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PNG"
+          }
+        }
+      }
+    },
+    "Privacy & retention" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confidentialité et conservation"
+          }
+        }
+      }
+    },
+    "PSD" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PSD"
+          }
+        }
+      }
+    },
+    "Query" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Requête"
+          }
+        }
+      }
+    },
+    "Quotes" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Citations"
+          }
+        }
+      }
+    },
+    "RAW" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RAW"
+          }
+        }
+      }
+    },
+    "Receipts" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reçus"
+          }
+        }
+      }
+    },
+    "Recipes" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recettes"
+          }
+        }
+      }
+    },
+    "Reconnect your folders and collections. Locate each folder where it lives now — they can be anywhere." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconnectez vos dossiers et collections. Localisez chaque dossier à son emplacement actuel — ils peuvent se trouver n'importe où."
+          }
+        }
+      }
+    },
+    "Reconnected" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconnecté"
+          }
+        }
+      }
+    },
+    "Reconnected — " : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconnecté — "
+          }
+        }
+      }
+    },
+    "Recorded" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistré"
+          }
+        }
+      }
+    },
+    "Regenerate" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Régénérer"
+          }
+        }
+      }
+    },
+    "Regenerate tags for this folder?" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Régénérer les étiquettes de ce dossier ?"
+          }
+        }
+      }
+    },
+    "Regenerate Tags…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Régénérer les étiquettes…"
+          }
+        }
+      }
+    },
+    "Relocate %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relocaliser %@"
+          }
+        }
+      }
+    },
+    "Relocate…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relocaliser…"
+          }
+        }
+      }
+    },
+    "Remove %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer %@"
+          }
+        }
+      }
+    },
+    "Remove Folder" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer le dossier"
+          }
+        }
+      }
+    },
+    "Remove from Collection “%@”" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer de la collection « %@ »"
+          }
+        }
+      }
+    },
+    "Remove from filter" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer du filtre"
+          }
+        }
+      }
+    },
+    "Remove Selection from Collection" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer la sélection de la collection"
+          }
+        }
+      }
+    },
+    "Remove Tag “%@”" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer l'étiquette « %@ »"
+          }
+        }
+      }
+    },
+    "Remove Tag from Selection" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer l'étiquette de la sélection"
+          }
+        }
+      }
+    },
+    "Removed %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retiré %@"
+          }
+        }
+      }
+    },
+    "Removed from %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retiré de %@"
+          }
+        }
+      }
+    },
+    "Removes “%@” from the images in this view. Other folders keep their tags. Your images stay on disk." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retire « %@ » des images de cette vue. Les autres dossiers conservent leurs étiquettes. Vos images restent sur le disque."
+          }
+        }
+      }
+    },
+    "rename" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "renommer"
+          }
+        }
+      }
+    },
+    "Rename" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renommer"
+          }
+        }
+      }
+    },
+    "Rename collection" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renommer la collection"
+          }
+        }
+      }
+    },
+    "Rename Collection" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renommer la collection"
+          }
+        }
+      }
+    },
+    "Rename Collection…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renommer la collection…"
+          }
+        }
+      }
+    },
+    "Rename Folder" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renommer le dossier"
+          }
+        }
+      }
+    },
+    "Rename Folder…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renommer le dossier…"
+          }
+        }
+      }
+    },
+    "Rename Tag" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renommer l'étiquette"
+          }
+        }
+      }
+    },
+    "Rename Tag…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renommer l'étiquette…"
+          }
+        }
+      }
+    },
+    "Rename…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renommer…"
+          }
+        }
+      }
+    },
+    "Renames “%@” on every image in the library." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renomme « %@ » sur toutes les images de la bibliothèque."
+          }
+        }
+      }
+    },
+    "Renames the folder on disk. Tags and collections are kept." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renomme le dossier sur le disque. Les étiquettes et collections sont conservées."
+          }
+        }
+      }
+    },
+    "Restore from Backup" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurer depuis une sauvegarde"
+          }
+        }
+      }
+    },
+    "Restore from Backup…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurer depuis une sauvegarde…"
+          }
+        }
+      }
+    },
+    "Reveal in Finder" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher dans le Finder"
+          }
+        }
+      }
+    },
+    "Run Muse's duplicate scan on a folder." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lance l'analyse des doublons de Muse sur un dossier."
+          }
+        }
+      }
+    },
+    "Run Vision-based tagging, OCR, and color extraction on every image in a folder." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exécute l'étiquetage par Vision, la reconnaissance de texte et l'extraction des couleurs sur toutes les images d'un dossier."
+          }
+        }
+      }
+    },
+    "Same filename" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Même nom de fichier"
+          }
+        }
+      }
+    },
+    "Save name" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrer le nom"
+          }
+        }
+      }
+    },
+    "Save to…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrer sous…"
+          }
+        }
+      }
+    },
+    "Scanning…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Analyse…"
+          }
+        }
+      }
+    },
+    "Search & sort" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recherche et tri"
+          }
+        }
+      }
+    },
+    "Search by name, tags, captions, and text found inside images. The magnifier menu scopes the search to the current folder or your whole library. Sort by date, name, size, color, or shape, and use the arrow beside the sort menu to flip the direction." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recherchez par nom, tags, légendes et texte trouvé à l'intérieur des images. Le menu de la loupe limite la recherche au dossier courant ou à toute votre bibliothèque. Triez par date, nom, taille, couleur ou forme, et utilisez la flèche à côté du menu de tri pour inverser le sens."
+          }
+        }
+      }
+    },
+    "Search files, captions, and tags in Muse's indexed library." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recherche dans les fichiers, légendes et étiquettes de la bibliothèque indexée de Muse."
+          }
+        }
+      }
+    },
+    "Search files, tags, captions…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher fichiers, étiquettes, légendes…"
+          }
+        }
+      }
+    },
+    "Search Library" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher dans la bibliothèque"
+          }
+        }
+      }
+    },
+    "Search Muse Library" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher dans la bibliothèque Muse"
+          }
+        }
+      }
+    },
+    "Search text" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texte de recherche"
+          }
+        }
+      }
+    },
+    "Select All" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout sélectionner"
+          }
+        }
+      }
+    },
+    "Set as Collection Cover" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Définir comme couverture de la collection"
+          }
+        }
+      }
+    },
+    "Set the grid density with the slider at the bottom right, and turn on file names under tiles in Settings. The palette button sets the background: Light, Dark, Auto (light by day, dark at night), or a custom color." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réglez la densité de la grille avec le curseur en bas à droite, et activez les noms de fichiers sous les vignettes dans les Réglages. Le bouton palette définit l'arrière-plan : Clair, Sombre, Auto (clair le jour, sombre la nuit), ou une couleur personnalisée."
+          }
+        }
+      }
+    },
+    "Settings" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réglages"
+          }
+        }
+      }
+    },
+    "Settings…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réglages…"
+          }
+        }
+      }
+    },
+    "Shape" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forme"
+          }
+        }
+      }
+    },
+    "Share" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partager"
+          }
+        }
+      }
+    },
+    "Share an image from the viewer — AirDrop, Mail, Messages, or Save to Files — or share a whole collection as a PDF from its header. From Finder, right-click any file and choose Share → Muse to send it into your iCloud folder." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partagez une image depuis le visualiseur — AirDrop, Mail, Messages ou Enregistrer dans Fichiers — ou partagez une collection entière sous forme de PDF depuis son en-tête. Depuis le Finder, cliquez avec le bouton droit sur un fichier et choisissez Partager → Muse pour l'envoyer dans votre dossier iCloud."
+          }
+        }
+      }
+    },
+    "Share collection" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partager la collection"
+          }
+        }
+      }
+    },
+    "Sharing" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partage"
+          }
+        }
+      }
+    },
+    "Shopping" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Achats"
+          }
+        }
+      }
+    },
+    "Show Collections in the Sidebar" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher les collections dans la barre latérale"
+          }
+        }
+      }
+    },
+    "Show each file's name beneath its thumbnail in the grid." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher le nom de chaque fichier sous sa vignette dans la grille."
+          }
+        }
+      }
+    },
+    "Show file names" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher les noms de fichiers"
+          }
+        }
+      }
+    },
+    "Show files in subfolders" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher les fichiers des sous-dossiers"
+          }
+        }
+      }
+    },
+    "Show files inside subfolders" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher les fichiers des sous-dossiers"
+          }
+        }
+      }
+    },
+    "Show files tagged %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher les fichiers étiquetés %@"
+          }
+        }
+      }
+    },
+    "Show info" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher les infos"
+          }
+        }
+      }
+    },
+    "Sidebar" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Barre latérale"
+          }
+        }
+      }
+    },
+    "Size" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Taille"
+          }
+        }
+      }
+    },
+    "Smallest first" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plus petit d'abord"
+          }
+        }
+      }
+    },
+    "Sony, Canon, Nikon, 35mm film" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sony, Canon, Nikon, film 35 mm"
+          }
+        }
+      }
+    },
+    "Sort" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trier"
+          }
+        }
+      }
+    },
+    "Sort collections" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trier les collections"
+          }
+        }
+      }
+    },
+    "Sort direction: %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sens du tri : %@"
+          }
+        }
+      }
+    },
+    "Sort folders" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trier les dossiers"
+          }
+        }
+      }
+    },
+    "Sort: %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trier : %@"
+          }
+        }
+      }
+    },
+    "Square medium format" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carré, moyen format"
+          }
+        }
+      }
+    },
+    "Static" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Statique"
+          }
+        }
+      }
+    },
+    "SVG" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SVG"
+          }
+        }
+      }
+    },
+    "Tag name" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nom de l'étiquette"
+          }
+        }
+      }
+    },
+    "Tag order" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ordre des étiquettes"
+          }
+        }
+      }
+    },
+    "Tag order: %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ordre des étiquettes : %@"
+          }
+        }
+      }
+    },
+    "Tags" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Étiquettes"
+          }
+        }
+      }
+    },
+    "TAGS" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ÉTIQUETTES"
+          }
+        }
+      }
+    },
+    "Tags “%@”." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Étiquette « %@ »."
+          }
+        }
+      }
+    },
+    "Taken" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pris"
+          }
+        }
+      }
+    },
+    "Tall → wide" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Haut → large"
+          }
+        }
+      }
+    },
+    "The chip row shows the tags of the folder you're viewing. Click a chip to filter; hover for its count. Right-click a chip to rename or delete the tag everywhere; add tags from an image's right-click menu or inside the viewer." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La rangée de pastilles affiche les tags du dossier que vous consultez. Cliquez sur une pastille pour filtrer ; survolez-la pour voir son décompte. Cliquez avec le bouton droit sur une pastille pour renommer ou supprimer le tag partout ; ajoutez des tags depuis le menu contextuel d'une image ou à l'intérieur du visualiseur."
+          }
+        }
+      }
+    },
+    "The collection is removed everywhere. Your images stay on disk." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La collection est supprimée partout. Vos images restent sur le disque."
+          }
+        }
+      }
+    },
+    "The collection is removed. Your images stay on disk." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La collection est supprimée. Vos images restent sur le disque."
+          }
+        }
+      }
+    },
+    "The folder was renamed, but updating its tags failed." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le dossier a été renommé, mais la mise à jour de ses étiquettes a échoué."
+          }
+        }
+      }
+    },
+    "The quick brown fox jumps over the lazy dog." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Portez ce vieux whisky au juge blond qui fume."
+          }
+        }
+      }
+    },
+    "This Folder" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce dossier"
+          }
+        }
+      }
+    },
+    "This removes every tag on the images in this folder — both automatic tags and ones you've added yourself. Tags you added by hand can't be recovered. Your images stay on disk." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cela retire toutes les étiquettes des images de ce dossier — à la fois les étiquettes automatiques et celles que vous avez ajoutées vous-même. Les étiquettes ajoutées à la main ne peuvent pas être récupérées. Vos images restent sur le disque."
+          }
+        }
+      }
+    },
+    "TIFF" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TIFF"
+          }
+        }
+      }
+    },
+    "TILE BACKGROUND" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ARRIÈRE-PLAN DES VIGNETTES"
+          }
+        }
+      }
+    },
+    "Tile background: %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrière-plan des vignettes : %@"
+          }
+        }
+      }
+    },
+    "Title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Titre"
+          }
+        }
+      }
+    },
+    "Undo" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annuler"
+          }
+        }
+      }
+    },
+    "Unpin" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Désépingler"
+          }
+        }
+      }
+    },
+    "Updates" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mises à jour"
+          }
+        }
+      }
+    },
+    "Vertical video on most phones" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vidéo verticale sur la plupart des téléphones"
+          }
+        }
+      }
+    },
+    "Videos" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vidéos"
+          }
+        }
+      }
+    },
+    "Viewing" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Affichage"
+          }
+        }
+      }
+    },
+    "Viewing & selecting" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Affichage et sélection"
+          }
+        }
+      }
+    },
+    "Visually similar" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Visuellement similaire"
+          }
+        }
+      }
+    },
+    "WebP" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "WebP"
+          }
+        }
+      }
+    },
+    "What Muse is" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce qu'est Muse"
+          }
+        }
+      }
+    },
+    "Wide → tall" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Large → haut"
+          }
+        }
+      }
+    },
+    "Z → A" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Z → A"
+          }
+        }
+      }
+    },
+    "Zoom in" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zoom avant"
+          }
+        }
+      }
+    },
+    "Zoom out" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zoom arrière"
           }
         }
       }
     }
   },
-  "version": "1.0"
+  "version" : "1.0"
 }
