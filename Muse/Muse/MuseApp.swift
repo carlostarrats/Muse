@@ -188,6 +188,10 @@ struct MuseApp: App {
                     appState.findDuplicatesInCurrentFolder()
                 }
 
+                Button("Manage iCloud Shares…") {
+                    appState.iCloudSharesShown = true
+                }
+
                 Divider()
 
                 Button("Open") {
