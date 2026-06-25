@@ -21,7 +21,10 @@ enum PKCE {
 
     private static func randomBytes(_ n: Int) -> Data {
         var bytes = [UInt8](repeating: 0, count: n)
-        _ = SecRandomCopyBytes(kSecRandomDefault, n, &bytes)
+        let status = SecRandomCopyBytes(kSecRandomDefault, n, &bytes)
+        // Never proceed with the all-zero buffer — that would yield a
+        // predictable verifier/state. Trap rather than weaken the crypto.
+        precondition(status == errSecSuccess, "SecRandomCopyBytes failed (\(status))")
         return Data(bytes)
     }
 

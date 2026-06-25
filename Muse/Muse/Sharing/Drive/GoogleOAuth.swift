@@ -24,12 +24,14 @@ enum DriveAuthError: Error { case cancelled, badResponse, notSignedIn, refreshFa
 
     func signOut() async {
         if let t = store.load() {
-            // Best-effort revoke; ignore network failure.
-            if let url = URL(string: "\(DriveConfig.revokeEndpoint)?token=\(t.refreshToken)") {
-                var req = URLRequest(url: url)
-                req.httpMethod = "POST"
-                _ = try? await URLSession.shared.data(for: req)
-            }
+            // Best-effort revoke. The token goes in the POST BODY (never the URL
+            // — secrets in URLs leak via logs/history/referrer).
+            var req = URLRequest(url: URL(string: DriveConfig.revokeEndpoint)!)
+            req.httpMethod = "POST"
+            req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+            let encoded = t.refreshToken.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? t.refreshToken
+            req.httpBody = "token=\(encoded)&token_type_hint=refresh_token".data(using: .utf8)
+            _ = try? await URLSession.shared.data(for: req)
         }
         store.clear()
         isSignedIn = false

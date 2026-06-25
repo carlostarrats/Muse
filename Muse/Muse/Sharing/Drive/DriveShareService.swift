@@ -61,43 +61,51 @@ struct DriveShareForm {
             let folderName = "\(title) — \(iso.string(from: form.date))"
             let folderID = try await client.createFolder(name: folderName, parent: root)
 
-            var imageIDs: [String] = []
-            for (i, url) in urls.enumerated() {
-                if Task.isCancelled { try? await client.deleteFolder(id: folderID); return }
-                phase = .uploading(i, urls.count)
-                let mime = Self.mimeType(for: url)
-                let id = try await client.uploadFile(url: url, name: url.lastPathComponent,
-                                                     mime: mime, parent: folderID)
-                imageIDs.append(id)
+            do {
+                phase = .uploading(0, urls.count)
+                var imageIDs: [String] = []
+                for (i, url) in urls.enumerated() {
+                    if Task.isCancelled { try? await client.deleteFolder(id: folderID); return }
+                    let mime = Self.mimeType(for: url)
+                    let id = try await client.uploadFile(url: url, name: url.lastPathComponent,
+                                                         mime: mime, parent: folderID)
+                    imageIDs.append(id)
+                    phase = .uploading(i + 1, urls.count)
+                }
+
+                phase = .finalizing
+                // Print-quality PDF from ORIGINALS (existing exporter), uploaded too.
+                var pdfID: String?
+                if let pdf = await CollectionPDFExporter.makePDF(
+                    urls: urls, title: title, count: urls.count, columns: 4,
+                    layoutAspect: nil, tileBackdrop: nil, tagLabels: [],
+                    pageSize: PaperSize.default.size) {
+                    pdfID = try? await client.uploadFile(url: pdf, name: "\(title).pdf",
+                                                         mime: "application/pdf", parent: folderID)
+                }
+
+                try await client.setAnyoneReader(fileID: folderID)
+
+                let manifest = DriveShareManifest(
+                    intro: form.intro, label: form.label, name: form.name,
+                    date: iso.string(from: form.date), expiry: iso.string(from: form.expiry),
+                    imageIDs: imageIDs, pdfID: pdfID)
+                let pageURL = manifest.pageURL(base: DriveConfig.shareBaseURL)
+
+                store.add(DriveShareRecord(id: UUID().uuidString, collectionName: title,
+                                           folderID: folderID, pageURL: pageURL,
+                                           itemCount: imageIDs.count, createdAt: Date(),
+                                           expiry: form.expiry))
+                // Remember the form text for next time.
+                AppSettings.driveShareName = form.name
+                AppSettings.driveShareLabel = form.label
+                phase = .done(pageURL)
+            } catch {
+                // Any failure after the folder exists → delete it so we never
+                // orphan an untracked folder in the user's Drive, then surface.
+                try? await client.deleteFolder(id: folderID)
+                throw error
             }
-
-            phase = .finalizing
-            // Print-quality PDF from ORIGINALS (existing exporter), uploaded too.
-            var pdfID: String?
-            if let pdf = await CollectionPDFExporter.makePDF(
-                urls: urls, title: title, count: urls.count, columns: 4,
-                layoutAspect: nil, tileBackdrop: nil, tagLabels: [],
-                pageSize: PaperSize.default.size) {
-                pdfID = try? await client.uploadFile(url: pdf, name: "\(title).pdf",
-                                                     mime: "application/pdf", parent: folderID)
-            }
-
-            try await client.setAnyoneReader(fileID: folderID)
-
-            let manifest = DriveShareManifest(
-                intro: form.intro, label: form.label, name: form.name,
-                date: iso.string(from: form.date), expiry: iso.string(from: form.expiry),
-                imageIDs: imageIDs, pdfID: pdfID)
-            let pageURL = manifest.pageURL(base: DriveConfig.shareBaseURL)
-
-            store.add(DriveShareRecord(id: UUID().uuidString, collectionName: title,
-                                       folderID: folderID, pageURL: pageURL,
-                                       itemCount: imageIDs.count, createdAt: Date(),
-                                       expiry: form.expiry))
-            // Remember the form text for next time.
-            AppSettings.driveShareName = form.name
-            AppSettings.driveShareLabel = form.label
-            phase = .done(pageURL)
         } catch is CancellationError {
             phase = .idle
         } catch DriveAuthError.cancelled {
