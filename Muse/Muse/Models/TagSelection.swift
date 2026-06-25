@@ -22,6 +22,13 @@ nonisolated enum TagSelection {
         return labels + [label]
     }
 
+    /// Per-pill removal from the active-filter bar: drop every occurrence of
+    /// `label`, preserving the order of the survivors. Removing the sole label
+    /// yields an empty selection (back to "All").
+    static func removing(_ labels: [String], _ label: String) -> [String] {
+        labels.filter { $0 != label }
+    }
+
     /// Apply a label rename to the selection: replace every `old` with `new`,
     /// then de-duplicate (TagStore MERGES on a rename collision, so if `new` is
     /// already selected the result must not hold it twice). Order preserved.

@@ -27,6 +27,27 @@ final class TagSelectionTests: XCTestCase {
         XCTAssertEqual(sel, ["c", "a", "b"])
     }
 
+    // MARK: - removing (per-pill ✕ in the active-filter bar)
+
+    func testRemovingDropsTheLabel() {
+        XCTAssertEqual(TagSelection.removing(["blue", "screenshot"], "blue"),
+                       ["screenshot"])
+    }
+
+    func testRemovingSoleLabelEmptiesSelection() {
+        XCTAssertEqual(TagSelection.removing(["blue"], "blue"), [])
+    }
+
+    func testRemovingAbsentLabelIsNoOp() {
+        XCTAssertEqual(TagSelection.removing(["blue", "screenshot"], "navy"),
+                       ["blue", "screenshot"])
+    }
+
+    func testRemovingPreservesOrderOfSurvivors() {
+        XCTAssertEqual(TagSelection.removing(["a", "b", "c"], "b"),
+                       ["a", "c"])
+    }
+
     // MARK: - renaming (rename a selected tag, merge on collision)
 
     func testRenameRemapsSelectedLabel() {
