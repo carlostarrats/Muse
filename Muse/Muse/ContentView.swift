@@ -334,39 +334,8 @@ struct ContentView: View {
             Text(appState.moveFailureNames.joined(separator: "\n"))
         }
         // Folder management dialogs — driven by AppState requests (shared by the
-        // sidebar context menu and the menu-bar Edit menu). The text field binds
-        // to appState.folderNameDraft, which the request helpers seed, so a
-        // re-targeted same folder still resets the field.
-        .alert("New Subfolder", isPresented: Binding(
-            get: { appState.newSubfolderRequest != nil },
-            set: { if !$0 { appState.newSubfolderRequest = nil } }
-        )) {
-            TextField("Folder name", text: $appState.folderNameDraft)
-            Button("Create") {
-                if let node = appState.newSubfolderRequest {
-                    appState.newSubfolderRequest = nil
-                    appState.createSubfolder(named: appState.folderNameDraft, in: node)
-                }
-            }
-            Button("Cancel", role: .cancel) { appState.newSubfolderRequest = nil }
-        } message: {
-            Text("Creates a new folder inside “\(appState.newSubfolderRequest?.displayName ?? "")”.")
-        }
-        .alert("Rename Folder", isPresented: Binding(
-            get: { appState.folderRenameRequest != nil },
-            set: { if !$0 { appState.folderRenameRequest = nil } }
-        )) {
-            TextField("Folder name", text: $appState.folderNameDraft)
-            Button("Rename") {
-                if let node = appState.folderRenameRequest {
-                    appState.folderRenameRequest = nil
-                    appState.renameFolder(node, to: appState.folderNameDraft)
-                }
-            }
-            Button("Cancel", role: .cancel) { appState.folderRenameRequest = nil }
-        } message: {
-            Text("Renames the folder on disk. Tags and collections are kept.")
-        }
+        // sidebar context menu and the menu-bar Edit menu).
+        .modifier(FolderNameAlerts())
         .alert("Folder", isPresented: Binding(
             get: { appState.folderOpError != nil },
             set: { if !$0 { appState.folderOpError = nil } }
@@ -375,18 +344,7 @@ struct ContentView: View {
         } message: {
             Text(appState.folderOpError ?? "")
         }
-        .alert("Name Collection", isPresented: Binding(
-            get: { appState.newCollectionRequest },
-            set: { if !$0 { appState.cancelNewCollection() } }
-        )) {
-            TextField("Collection name", text: $appState.newCollectionNameDraft)
-            Button("Create") { appState.confirmNewCollection() }
-            Button("Cancel", role: .cancel) { appState.cancelNewCollection() }
-        } message: {
-            Text(appState.pendingNewCollectionPaths.isEmpty
-                 ? "Creates a new collection."
-                 : "Creates a collection from the selected images.")
-        }
+        .modifier(NameCollectionAlert())
         // Preload the tag-label list for the selection menu, and keep it fresh
         // as tags change.
         .task { appState.refreshTagLabels() }
@@ -599,6 +557,90 @@ struct ContentView: View {
         statusPill(label: "Organizing…", progress: 1)
     }
 
+}
+
+/// The "Name Collection" prompt's text field. Bound directly to AppState's
+/// `@Published` draft, every keystroke fired `AppState.objectWillChange`, which
+/// re-evaluated the whole `ContentView` body (sidebar + tag chips + grid) — on a
+/// large library that made typing visibly crawl on slower Macs. Holding the draft
+/// in LOCAL `@State` here confines each keystroke to this modifier's tiny body;
+/// the name reaches AppState only on Create. Reset on each open since the modifier
+/// (and its `@State`) outlives individual presentations.
+private struct NameCollectionAlert: ViewModifier {
+    @EnvironmentObject private var appState: AppState
+    @State private var draft = ""
+
+    func body(content: Content) -> some View {
+        content
+            .alert("Name Collection", isPresented: Binding(
+                get: { appState.newCollectionRequest },
+                set: { if !$0 { appState.cancelNewCollection() } }
+            )) {
+                TextField("Collection name", text: $draft)
+                Button("Create") { appState.confirmNewCollection(name: draft) }
+                Button("Cancel", role: .cancel) { appState.cancelNewCollection() }
+            } message: {
+                Text(appState.pendingNewCollectionPaths.isEmpty
+                     ? "Creates a new collection."
+                     : "Creates a collection from the selected images.")
+            }
+            .onChange(of: appState.newCollectionRequest) { _, open in
+                if open { draft = "" }
+            }
+    }
+}
+
+/// The folder New-Subfolder / Rename prompts. Same trap as NameCollectionAlert:
+/// binding the field to a `@Published` draft on AppState re-evaluated the whole
+/// ContentView on every keystroke (laggy typing on slower Macs). The draft lives
+/// in LOCAL `@State` here, reaching AppState only on Create/Rename. Both prompts
+/// share one draft (only one is open at a time); it's seeded when either opens —
+/// empty for a new subfolder, the current name for a rename. Keying `.onChange` on
+/// the request's `id` (FolderNode isn't Equatable) still re-seeds when the SAME
+/// folder is re-targeted, since closing always passes through nil first.
+private struct FolderNameAlerts: ViewModifier {
+    @EnvironmentObject private var appState: AppState
+    @State private var draft = ""
+
+    func body(content: Content) -> some View {
+        content
+            .alert("New Subfolder", isPresented: Binding(
+                get: { appState.newSubfolderRequest != nil },
+                set: { if !$0 { appState.newSubfolderRequest = nil } }
+            )) {
+                TextField("Folder name", text: $draft)
+                Button("Create") {
+                    if let node = appState.newSubfolderRequest {
+                        appState.newSubfolderRequest = nil
+                        appState.createSubfolder(named: draft, in: node)
+                    }
+                }
+                Button("Cancel", role: .cancel) { appState.newSubfolderRequest = nil }
+            } message: {
+                Text("Creates a new folder inside “\(appState.newSubfolderRequest?.displayName ?? "")”.")
+            }
+            .alert("Rename Folder", isPresented: Binding(
+                get: { appState.folderRenameRequest != nil },
+                set: { if !$0 { appState.folderRenameRequest = nil } }
+            )) {
+                TextField("Folder name", text: $draft)
+                Button("Rename") {
+                    if let node = appState.folderRenameRequest {
+                        appState.folderRenameRequest = nil
+                        appState.renameFolder(node, to: draft)
+                    }
+                }
+                Button("Cancel", role: .cancel) { appState.folderRenameRequest = nil }
+            } message: {
+                Text("Renames the folder on disk. Tags and collections are kept.")
+            }
+            .onChange(of: appState.newSubfolderRequest?.id) { _, id in
+                if id != nil { draft = "" }
+            }
+            .onChange(of: appState.folderRenameRequest?.id) { _, id in
+                if id != nil { draft = appState.folderRenameRequest?.displayName ?? "" }
+            }
+    }
 }
 
 private extension View {

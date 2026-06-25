@@ -13,15 +13,15 @@ import Foundation
 extension AppState {
     // MARK: - Folder dialog requests
 
-    /// Present the New Subfolder dialog for `node` (empty draft).
+    /// Present the New Subfolder dialog for `node`. The text-field draft lives in
+    /// the alert's local @State (see FolderNameAlerts), seeded empty on open.
     func requestNewSubfolder(_ node: FolderNode) {
-        folderNameDraft = ""
         newSubfolderRequest = node
     }
 
-    /// Present the Rename dialog for `node` (draft pre-filled with its name).
+    /// Present the Rename dialog for `node`. The alert seeds its local draft with
+    /// the current name on open (see FolderNameAlerts).
     func requestRenameFolder(_ node: FolderNode) {
-        folderNameDraft = node.displayName
         folderRenameRequest = node
     }
 

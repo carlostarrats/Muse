@@ -292,19 +292,20 @@ extension AppState {
                 .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory != true }
                 .map { $0.standardizedFileURL.path }
         } ?? []
-        newCollectionNameDraft = ""
         newCollectionRequest = true
     }
 
     /// Create a collection under the typed name. A blank/whitespace name creates
     /// nothing. Seeds it with the captured selection when there is one.
-    func confirmNewCollection() {
+    func confirmNewCollection(name rawName: String) {
         // Capture paths/name into locals BEFORE clearing state: setting
         // newCollectionRequest = false drives the alert's binding setter, which
-        // calls cancelNewCollection() and wipes pendingNewCollectionPaths/draft.
+        // calls cancelNewCollection() and wipes pendingNewCollectionPaths.
         // The locals are value-type copies, so the in-flight Task is unaffected.
+        // The typed name arrives from the alert's local @State (see
+        // NameCollectionAlert) — kept off AppState so typing doesn't republish.
         let paths = pendingNewCollectionPaths
-        let name = newCollectionNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         newCollectionRequest = false
         pendingNewCollectionPaths = []
         guard !name.isEmpty else { return }
@@ -326,7 +327,6 @@ extension AppState {
     func cancelNewCollection() {
         newCollectionRequest = false
         pendingNewCollectionPaths = []
-        newCollectionNameDraft = ""
     }
 
     /// Per-label alive-path query, scoped per `parent_dir` (tags are
