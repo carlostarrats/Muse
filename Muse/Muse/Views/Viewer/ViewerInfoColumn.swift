@@ -519,12 +519,12 @@ private struct PlusCircleButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "plus")
+            Image(systemName: rotated ? "minus" : "plus")
                 .font(.system(size: size * 0.5, weight: .bold))
                 .foregroundStyle(.white.opacity(hovering ? 1.0 : 0.7))
                 .frame(width: size, height: size)
                 .background(Circle().fill(.white.opacity(hovering ? 0.28 : 0.14)))
-                .rotationEffect(.degrees(rotated ? 45 : 0))
+                .contentTransition(.identity)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)

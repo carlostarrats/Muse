@@ -131,12 +131,12 @@ struct SectionHeader: View {
                     collapsed.toggle()
                 }
             } label: {
-                Image(systemName: "plus")
+                Image(systemName: collapsed ? "plus" : "minus")   // + collapsed, − expanded
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(.secondary.opacity(hovering ? 1.0 : 0.8))
                     .frame(width: 18, height: 18)
                     .background(Circle().fill(Color.primary.opacity(hovering ? 0.16 : 0.08)))
-                    .rotationEffect(.degrees(collapsed ? 0 : 45))   // + collapsed, × expanded
+                    .contentTransition(.identity)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(collapsed ? String(localized: "Expand \(title.capitalized)")
