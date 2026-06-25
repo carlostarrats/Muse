@@ -121,8 +121,9 @@ struct TagChipsRow: View {
                     Text("Viewing")
                         .foregroundStyle(.secondary)
                     // Canonical labels drive the action; display labels are shown.
-                    // `id: \.element` is safe — `activeTagLabels` is a
-                    // de-duplicated ordered set (enforced by setActiveTags).
+                    // `id: \.element` is safe: canonical tag labels are unique
+                    // identities and the set's mutators (toggling/removing/rename)
+                    // preserve that uniqueness, so the labels never collide.
                     ForEach(Array(appState.activeTagLabels.enumerated()),
                             id: \.element) { _, canonical in
                         BannerPill(label: VocabularyLocalizer.shared.display(canonical)) {
