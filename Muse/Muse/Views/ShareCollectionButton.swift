@@ -40,7 +40,7 @@ struct ShareCollectionButton: View {
             Button("Save to…") { Task { await save() } }
             Button("Share") { Task { await share() } }
             Divider()
-            Button("Share to iCloud…") { startICloudShare() }
+            Button("Share iCloud Link") { startICloudShare() }
         } label: {
             Group {
                 if preparing {

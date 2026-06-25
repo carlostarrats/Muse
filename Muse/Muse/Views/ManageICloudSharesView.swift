@@ -2,9 +2,10 @@
 //  ManageICloudSharesView.swift
 //  Muse
 //
-//  File-menu "Manage iCloud Shares…" — lists the iCloud collection shares Muse
-//  has made and lets the user delete a folder to reclaim iCloud space. The only
-//  surface for this list (no in-app navigation entry, by design).
+//  "Manage iCloud Shares" — lists the iCloud collection shares Muse has made
+//  and lets the user delete a folder to reclaim iCloud space. Styled to match
+//  the ⓘ About modal (InfoSheet): same header/type sizes, SheetCloseButton,
+//  and hairline dividers between rows only.
 //
 
 import SwiftUI
@@ -15,43 +16,55 @@ struct ManageICloudSharesView: View {
     @State private var records: [ICloudShareRecord] = []
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("iCloud Shares").font(.headline)
+                Text("iCloud Shares")
+                    .font(.system(size: 24, weight: .semibold))
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
-                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+                SheetCloseButton { dismiss() }
             }
-            .padding()
-
-            Divider()
+            .padding(.bottom, 20)
 
             if records.isEmpty {
-                Spacer()
-                Text("No iCloud shares yet.").foregroundStyle(.secondary)
-                Spacer()
+                Text("No iCloud shares yet.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             } else {
-                List {
-                    ForEach(records) { record in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(record.collectionName)
-                                Text("\(record.itemCount) images · \(record.createdAt.formatted(date: .abbreviated, time: .omitted))")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Button(role: .destructive) { delete(record) } label: {
-                                Image(systemName: "trash")
-                            }
-                            .buttonStyle(.borderless)
-                            .help("Delete this iCloud share and free the space")
-                            .accessibilityLabel("Delete iCloud share")
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(records.enumerated()), id: \.element.id) { index, record in
+                            if index > 0 { rowDivider }
+                            row(record)
                         }
                     }
                 }
             }
         }
-        .frame(width: 460, height: 360)
+        .padding(28)
+        .frame(width: 600, height: 520)
         .onAppear { records = store.all() }
+    }
+
+    /// Hairline between rows (matches InfoSheet — between rows only, never
+    /// under the header).
+    private var rowDivider: some View {
+        Divider().padding(.vertical, 16)
+    }
+
+    private func row(_ record: ICloudShareRecord) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(record.collectionName)
+                    .font(.system(size: 15, weight: .semibold))
+                Text("\(record.itemCount) images · \(record.createdAt.formatted(date: .abbreviated, time: .omitted))")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            DeleteShareButton { delete(record) }
+        }
     }
 
     private func delete(_ record: ICloudShareRecord) {
@@ -60,5 +73,24 @@ struct ManageICloudSharesView: View {
         try? FileManager.default.removeItem(at: URL(fileURLWithPath: record.folderPath))
         store.remove(id: record.id)
         records = store.all()
+    }
+}
+
+/// Per-row delete affordance — a quiet text button that reddens on hover,
+/// keeping the modal's restrained look (no heavy destructive bar).
+private struct DeleteShareButton: View {
+    var action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Text("Delete")
+                .font(.system(size: 13))
+                .foregroundStyle(hovering ? Color.red : Color.secondary)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Delete this iCloud share and free the space")
+        .accessibilityLabel("Delete iCloud share")
     }
 }

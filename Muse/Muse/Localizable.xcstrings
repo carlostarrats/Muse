@@ -3402,16 +3402,6 @@
         }
       }
     },
-    "Share to iCloud…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Partager sur iCloud…"
-          }
-        }
-      }
-    },
     "Sharing": {
       "localizations": {
         "fr": {
@@ -3996,6 +3986,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zoom arrière"
+          }
+        }
+      }
+    },
+    "Share iCloud Link": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partager le lien iCloud"
           }
         }
       }
