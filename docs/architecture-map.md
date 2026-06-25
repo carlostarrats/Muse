@@ -246,10 +246,15 @@ Muse/Muse/
                                    outside the grid's scroll view
     PageScrollCatcher.swift        first-responder NSView giving the grid + Collections page native
                                    Page Up/Down via PageScroll math
-    ShareCollectionButton.swift    in-collection header menu — Save to… / Share; builds an 11×14
-                                   paginated PDF. exportURLs = visibleFiles minus folders (the
-                                   on-screen filtered grid). Passes imageLayout.aspect +
-                                   effectiveTileBackground + activeTagLabels so the PDF mirrors the grid
+    ShareCollectionButton.swift    in-collection header menu — Save to… / Share / Share to iCloud…;
+                                   builds an 11×14 paginated PDF. exportURLs = visibleFiles minus folders
+                                   (the on-screen filtered grid). Passes imageLayout.aspect +
+                                   effectiveTileBackground + activeTagLabels so the PDF mirrors the grid.
+                                   Share to iCloud… drives ICloudShareService + ICloudShareProgressView
+    ICloudShareProgressView.swift  modal during copy+upload; on .ready hands the folder to
+                                   NSSharingServicePicker (Copy Link / AirDrop / Mail), then closes
+    ManageICloudSharesView.swift   File-menu "Manage iCloud Shares…" sheet (only surface): list past
+                                   shares (ICloudShareStore) + Delete removes the iCloud folder to reclaim
     AspectRatioCache.swift         per-file aspect (h÷w) for layout: bulk DB width/height + ImageIO
                                    header fallback, off-main
     CollectionsPage.swift          dedicated Collections page (toolbar square.stack.3d.up):
@@ -344,6 +349,16 @@ Muse/Muse/
                                    (fixed ratio → uniform aspect array; per-image backdrop; non-image →
                                    QuickLook; decode 8-wide, order preserved) and draws active tagLabels as
                                    header pills on page 1 (width-clamped + truncated)
+  Sharing/                         iCloud collection share (backend #1 of "share a collection"; Drive future)
+    ICloudSharePaths.swift           pure: sanitize collection name → deterministic `Documents/Shared
+                                     Collections/<name>/` folder under the iCloud zone. Unit-tested
+    ICloudShareRecord.swift          ICloudShareRecord + ICloudShareStore — JSON list in App Support (NOT
+                                     iCloud/SQLite) of shares Muse made; newest-first. Unit-tested
+    UploadTally.swift                pure reducer: uploaded/total + isComplete/fraction. Unit-tested
+    ICloudShareService.swift         @MainActor orchestrator (Phase idle/copying/uploading/ready/failed):
+                                     copy members (download-then-copy dataless) → NSMetadataQuery upload
+                                     wait → record → caller presents NSSharingServicePicker. iCloud I/O,
+                                     integration-only (Debug strips the entitlement). No network code
   Effects/                         (was Fluid/; water + burn shaders removed — NO Metal shaders remain)
     FadeOutModifier.swift          animatable staggered opacity fade for the delete sequence
   Settings/
