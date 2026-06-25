@@ -3837,3 +3837,41 @@ Verified live by the owner ("perfect"). Build green; `MuseTests` **TEST SUCCEEDE
 (exit 0, 0 failures). No new tests — this is SwiftUI view-timing glue (`.id` + transition),
 which the suite doesn't cover (UI views aren't unit-tested), and the logic change is a
 trivial counter bump in a `didSet`.
+
+## 2026-06-25 — `fix/folder-switch-instant-cut` — folder switch hard-cuts in (no fade)
+
+**Symptom (from the owner, live).** Tag switching feels snappy/instant; switching
+folders felt slower — a "different animation style when loading." Goal: make folder
+switching feel like switching tabs.
+
+**Diagnosis.** Two distinct differences, not one:
+1. *Tag switch* is a pure in-memory filter of the already-loaded `currentFiles`; the
+   grid swaps via `.id` on `tagFilterGeneration` + `.transition(.identity)` — an instant
+   cut (see `fix/tag-switch-flicker` above).
+2. *Folder switch* (`select(folder:)` → `reloadCurrentFiles(showLoading: true)`) blanks
+   the grid, enumerates the new folder off-disk + reconciles the DB + recomputes chip
+   counts, then on the `freshSelect` commit revealed `tagChipRows`/`tagRowReady` inside
+   `withAnimation(.easeInOut(0.2))` — so the tiles **faded in** over 0.2s.
+
+The owner pinned it to the **fade-in** specifically (not the blank-during-load gap, which
+they were fine with).
+
+**Fix (one line).** Drop the `withAnimation` wrapper on the `freshSelect` reveal in
+`reloadCurrentFiles` — commit `tagChipRows`/`tagRowReady` un-animated so the new folder
+hard-cuts in, matching the tag-switch instant replace. Files + chips still land in the
+SAME `MainActor.run` transaction, so the deliberate "images appear already in place below
+the chips, no shove-down" ordering (the whole reason `tagRowReady` gates the grid) is
+preserved — only the opacity fade is gone. Scoped to `freshSelect` only; the live-reload
+callers (FSEvents watcher, search clear, subfolder toggle, post-move) use the `else`
+branch and are untouched. Recorded as a companion to the tag-switch durable constraint.
+
+**Discussed and rejected (owner's call).** Caching recently-visited folders to make
+*revisits* truly instant (kill the blank gap, not just the fade) — owner was happy with
+the fade fix alone and didn't want the extra staleness/invalidation surface.
+
+Verified: build green; high-effort code review (2 independent reviewers) found no bugs and
+confirmed alignment with the CLAUDE.md instant-swap rule; `MuseTests` **TEST SUCCEEDED**
+(exit 0, 0 failures). NB: a first `xcodebuild test` reported "test runner hung before
+establishing connection" — environmental (a copy of `Muse.app` was already running from a
+manual `open`, which hangs the unit-test host launch); quitting it made the suite pass
+clean. No new tests — SwiftUI view-timing glue the suite doesn't cover.

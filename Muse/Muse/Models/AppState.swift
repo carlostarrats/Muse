@@ -909,12 +909,15 @@ final class AppState: ObservableObject {
                 self.isLoadingFolder = false
                 if freshSelect {
                     // Supersede any in-flight chip load, then reveal files + chips
-                    // in one animated transaction.
+                    // in one transaction. NO withAnimation: an instant cut (like
+                    // the tag-switch `.transition(.identity)` swap) — folder
+                    // switching should feel like switching tabs, not fade in.
+                    // Files + chips still land together, so the "images appear
+                    // already in place below the chips" ordering is preserved;
+                    // only the opacity fade is dropped.
                     self.bumpTagChipToken()
-                    withAnimation(.easeInOut(duration: AppState.navTransition)) {
-                        self.tagChipRows = chipRows
-                        self.tagRowReady = true
-                    }
+                    self.tagChipRows = chipRows
+                    self.tagRowReady = true
                 } else {
                     // Live reload (FSEvents / subfolders toggle / clear search):
                     // the grid is already shown, so just refresh the chips for the
