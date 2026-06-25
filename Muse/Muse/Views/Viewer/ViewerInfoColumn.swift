@@ -322,8 +322,11 @@ struct ViewerInfoColumn<Chrome: View>: View {
 
     private var actionsRow: some View {
         HStack(spacing: 8) {
-            ActionButton(label: String(localized: "Open in Finder"), systemImage: "folder", action: onOpenInFinder)
-            ActionButton(label: String(localized: "Delete"), systemImage: "trash", action: onDelete)
+            // Finder fills the leftover width; Delete hugs its own (short) label,
+            // so the long French "Ouvrir dans le Finder" gets the room it needs
+            // instead of being squeezed into a forced 50/50 split.
+            ActionButton(label: String(localized: "Open in Finder"), systemImage: "folder", fillsWidth: true, action: onOpenInFinder)
+            ActionButton(label: String(localized: "Delete"), systemImage: "trash", isDestructive: true, action: onDelete)
         }
     }
 
@@ -603,8 +606,21 @@ private struct ColorSwatch: View {
 private struct ActionButton: View {
     let label: String
     let systemImage: String
+    /// When true the button greedily fills the leftover row width; when false it
+    /// hugs its own intrinsic label width. The primary (Finder) button fills so
+    /// long localized labels get the room; the secondary (Delete) button hugs.
+    var fillsWidth: Bool = false
+    /// Destructive actions (Delete) get a red glyph/label + red hover wash so the
+    /// irreversible action reads distinct from the neutral Finder button.
+    var isDestructive: Bool = false
     var action: () -> Void
     @State private var hovering = false
+
+    /// Coral-leaning red — brighter than systemRed so it stays legible over the
+    /// hero viewer's darkened adaptive wash.
+    private var tint: Color {
+        isDestructive ? Color(red: 1.0, green: 0.45, blue: 0.42) : .white
+    }
 
     var body: some View {
         Button(action: action) {
@@ -617,17 +633,27 @@ private struct ActionButton: View {
                     .font(.system(size: 12, weight: .medium))
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    // Longer localized labels (e.g. "Ouvrir dans le Finder")
-                    // shrink to fit before truncating, so the text never spills
-                    // past the capsule's rounded edge.
+                    // Belt-and-suspenders for an unusually long label: shrink to
+                    // fit before truncating so text never spills past the capsule.
                     .minimumScaleFactor(0.7)
             }
+            // Label/icon stay white for legibility; the red identity comes from
+            // the outline alone (red text over the dark wash read poorly).
             .foregroundStyle(.white.opacity(0.92))
             .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: fillsWidth ? .infinity : nil)
             .frame(height: 36)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.white.opacity(hovering ? 0.22 : 0.09)))
+                // Neutral keeps the faint white wash; destructive carries a light
+                // red tint so the fill nods to the outline without overpowering.
+                .fill(tint.opacity(isDestructive ? (hovering ? 0.30 : 0.16)
+                                                  : (hovering ? 0.22 : 0.09))))
+            // Destructive button reads as red via a solid (full-opacity) outline
+            // rather than a heavy fill, so it stays distinct without overpowering.
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(isDestructive ? tint : .clear, lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
