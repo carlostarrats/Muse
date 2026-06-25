@@ -24,6 +24,8 @@ import Combine
 
     private var task: Task<Void, Never>?
     private var query: NSMetadataQuery?
+    private var observerTokens: [NSObjectProtocol] = []
+    private var uploadContinuation: CheckedContinuation<Void, Never>?
     private let store: ICloudShareStore
 
     init(store: ICloudShareStore = .default) { self.store = store }
@@ -35,7 +37,7 @@ import Combine
 
     func cancel() {
         task?.cancel(); task = nil
-        stopQuery()
+        tearDownUploadWait()
     }
 
     func start(title: String, urls: [URL]) {
@@ -63,13 +65,16 @@ import Combine
                 try Self.copyMembers(urls, into: folder)
             }.value
         } catch is CancellationError {
+            Self.cleanup(folder)
             return
         } catch {
+            Self.cleanup(folder)
             phase = .failed(String(localized: "Couldn't copy the images into iCloud."))
             return
         }
-        if Task.isCancelled { return }
+        if Task.isCancelled { Self.cleanup(folder); return }
         guard copied.isEmpty == false else {
+            Self.cleanup(folder)
             phase = .failed(String(localized: "Couldn't copy the images into iCloud."))
             return
         }
@@ -106,22 +111,19 @@ import Combine
             }
             guard fm.fileExists(atPath: src.path) else { continue }
             // De-collide identical basenames within the share folder.
-            var name = src.lastPathComponent
-            if usedNames.contains(name) {
-                let base = src.deletingPathExtension().lastPathComponent
-                let ext = src.pathExtension
-                var n = 2
-                repeat {
-                    name = ext.isEmpty ? "\(base)-\(n)" : "\(base)-\(n).\(ext)"
-                    n += 1
-                } while usedNames.contains(name)
-            }
+            let name = ICloudSharePaths.uniqueName(src.lastPathComponent, taken: usedNames)
             usedNames.insert(name)
             let dest = folder.appendingPathComponent(name)
             do { try fm.copyItem(at: src, to: dest); written.append(dest) }
             catch { continue }
         }
         return written
+    }
+
+    /// Best-effort removal of a partially-built share folder (cancel / failure
+    /// paths) so we never orphan an untracked folder in the iCloud container.
+    nonisolated private static func cleanup(_ folder: URL) {
+        try? FileManager.default.removeItem(at: folder)
     }
 
     /// Block (bounded) until a dataless source finishes downloading. Best-effort:
@@ -140,51 +142,55 @@ import Combine
     // MARK: - Upload wait (NSMetadataQuery)
 
     private func waitForUpload(of copied: [URL]) async {
-        let targetPaths = Set(copied.map { $0.standardizedFileURL.path })
+        // Resolve symlinks on both sides — the ubiquity container can be reached
+        // through a symlinked root, so standardized paths alone may never match
+        // the metadata item's path (which would hang the wait forever).
+        let targetPaths = Set(copied.map { $0.resolvingSymlinksInPath().path })
         await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            self.uploadContinuation = cont
             let q = NSMetadataQuery()
             self.query = q
-            q.searchScopes = [NSMetadataQueryUbiquitousDataScope]
+            // Files live in the container's Documents dir → the Documents scope,
+            // NOT the Data scope (which is everything OUTSIDE Documents).
+            q.searchScopes = [NSMetadataQueryUbiquitousDocumentsScope]
             q.predicate = NSPredicate(format: "%K LIKE '*'", NSMetadataItemFSNameKey)
-            var resumed = false
-            let finish = { [weak self] in
-                guard resumed == false else { return }
-                resumed = true
-                self?.stopQuery()
-                cont.resume()
-            }
             let onUpdate: (Notification) -> Void = { [weak self] _ in
                 guard let self else { return }
                 q.disableUpdates()
                 var uploadedCount = 0
                 for i in 0..<q.resultCount {
                     guard let item = q.result(at: i) as? NSMetadataItem,
-                          let p = (item.value(forAttribute: NSMetadataItemPathKey) as? String),
-                          targetPaths.contains(URL(fileURLWithPath: p).standardizedFileURL.path)
+                          let p = item.value(forAttribute: NSMetadataItemPathKey) as? String,
+                          targetPaths.contains(URL(fileURLWithPath: p).resolvingSymlinksInPath().path)
                     else { continue }
                     if (item.value(forAttribute: NSMetadataUbiquitousItemIsUploadedKey) as? Bool) ?? false {
                         uploadedCount += 1
                     }
                 }
-                let tally = UploadTally(uploaded: uploadedCount, total: targetPaths.count)
-                self.phase = .uploading(tally)
+                self.phase = .uploading(UploadTally(uploaded: uploadedCount, total: targetPaths.count))
                 q.enableUpdates()
-                if tally.isComplete { finish() }
+                if uploadedCount == targetPaths.count { self.tearDownUploadWait() }
             }
-            NotificationCenter.default.addObserver(forName: .NSMetadataQueryDidFinishGathering,
-                                                   object: q, queue: .main, using: onUpdate)
-            NotificationCenter.default.addObserver(forName: .NSMetadataQueryDidUpdate,
-                                                   object: q, queue: .main, using: onUpdate)
+            // addObserver(forName:…using:) registers an opaque TOKEN, not `self`
+            // — keep the tokens so we can actually remove them later.
+            observerTokens = [
+                NotificationCenter.default.addObserver(forName: .NSMetadataQueryDidFinishGathering,
+                                                       object: q, queue: .main, using: onUpdate),
+                NotificationCenter.default.addObserver(forName: .NSMetadataQueryDidUpdate,
+                                                       object: q, queue: .main, using: onUpdate),
+            ]
             q.start()
         }
     }
 
-    private func stopQuery() {
-        if let q = query {
-            q.stop()
-            NotificationCenter.default.removeObserver(self, name: .NSMetadataQueryDidFinishGathering, object: q)
-            NotificationCenter.default.removeObserver(self, name: .NSMetadataQueryDidUpdate, object: q)
-        }
+    /// Stop the query, drop its observers, and resume the upload-wait
+    /// continuation exactly once — so cancelling mid-upload never leaks it.
+    /// Safe to call repeatedly (idempotent).
+    private func tearDownUploadWait() {
+        query?.stop()
+        observerTokens.forEach { NotificationCenter.default.removeObserver($0) }
+        observerTokens = []
         query = nil
+        if let c = uploadContinuation { uploadContinuation = nil; c.resume() }
     }
 }

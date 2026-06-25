@@ -12,6 +12,7 @@ import AppKit
 struct ICloudShareProgressView: View {
     @ObservedObject var service: ICloudShareService
     let onClose: () -> Void
+    @State private var didPresent = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -52,10 +53,17 @@ struct ICloudShareProgressView: View {
     }
 
     private func presentIfReady() {
-        guard case .ready(let folder) = service.phase else { return }
-        guard let contentView = NSApp.keyWindow?.contentView else { onClose(); return }
-        let picker = NSSharingServicePicker(items: [folder])
-        picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
+        guard case .ready(let folder) = service.phase, didPresent == false else { return }
+        didPresent = true
+        // Dismiss the sheet first, then present the picker anchored to the MAIN
+        // window (not keyWindow — that's the sheet, which is going away).
         onClose()
+        DispatchQueue.main.async {
+            let window = NSApp.mainWindow
+                ?? NSApp.windows.first { $0.isVisible && $0.canBecomeMain }
+            guard let contentView = window?.contentView else { return }
+            let picker = NSSharingServicePicker(items: [folder])
+            picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
+        }
     }
 }

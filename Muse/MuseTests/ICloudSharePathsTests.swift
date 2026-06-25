@@ -18,6 +18,18 @@ final class ICloudSharePathsTests: XCTestCase {
         XCTAssertEqual(ICloudSharePaths.sanitizedFolderName("///"), "Collection")
     }
 
+    func testUniqueNameReturnsOriginalWhenFree() {
+        XCTAssertEqual(ICloudSharePaths.uniqueName("a.jpg", taken: []), "a.jpg")
+        XCTAssertEqual(ICloudSharePaths.uniqueName("a.jpg", taken: ["b.jpg"]), "a.jpg")
+    }
+
+    func testUniqueNameAppendsSuffixBeforeExtensionOnCollision() {
+        XCTAssertEqual(ICloudSharePaths.uniqueName("a.jpg", taken: ["a.jpg"]), "a-2.jpg")
+        XCTAssertEqual(ICloudSharePaths.uniqueName("a.jpg", taken: ["a.jpg", "a-2.jpg"]), "a-3.jpg")
+        // Extensionless name collides too.
+        XCTAssertEqual(ICloudSharePaths.uniqueName("README", taken: ["README"]), "README-2")
+    }
+
     func testShareFolderIsDeterministicUnderSharedCollections() {
         let docs = URL(fileURLWithPath: "/tmp/Documents", isDirectory: true)
         let folder = ICloudSharePaths.shareFolder(zoneDocuments: docs, collectionName: "Kitchen Inspo")
