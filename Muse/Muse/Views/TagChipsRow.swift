@@ -20,6 +20,7 @@ struct TagChipsRow: View {
     @EnvironmentObject var appState: AppState
     @State private var hovered: Int? = nil
     @State private var renameText = ""
+    @State private var clearAllHovered = false
 
     /// Top clearance reserved below the floating toolbar when there are no tag
     /// chips (the no-tags branch below). Because each scroll surface clips to
@@ -32,21 +33,6 @@ struct TagChipsRow: View {
     /// The chip labels are loaded and owned by AppState (computed as part of the
     /// folder load so files + chips reveal together); this view only renders them.
     private var tags: [(label: String, count: Int)] { appState.tagChipRows }
-
-    /// The active tag set, localized for DISPLAY only (chips/banner). The
-    /// canonical labels in `appState.activeTagLabels` stay the source of truth
-    /// for every action; this is purely what the user reads.
-    private var localizedActiveLabels: [String] {
-        appState.activeTagLabels.map { VocabularyLocalizer.shared.display($0) }
-    }
-
-    /// The multi-tag banner string (VoiceOver label) built from localized labels
-    /// + localized connective words, so it reads naturally in the user's language.
-    private var localizedBannerText: String? {
-        TagSelection.bannerText(for: localizedActiveLabels,
-                                viewing: String(localized: "Viewing"),
-                                and: String(localized: "and"))
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -121,31 +107,52 @@ struct TagChipsRow: View {
             }
         }
 
-        // Banner naming the active set (2+ tags). Sits at the top of the grid
-        // area, below the chips — quiet secondary text with the tag labels drawn
-        // as pills so they stand out from the connective words. Absent for 0/1
-        // tag. The plain string is the VoiceOver label so it reads naturally.
-        if let banner = localizedBannerText {
-            // Horizontal scroll mirrors the chip row above so a long set (many
-            // pills / long labels) scrolls instead of squeezing each pill and
-            // connective word into ugly per-element truncation.
+        // Active-filter bar: shown whenever 1+ tags are active (single tags
+        // included, unlike the old 2-tag banner). Sits below the chips. Reads
+        // straight from `activeTagLabels`, so an orphaned tag carried into a
+        // collection with no matches — which has no chip in the scope row above —
+        // stays visible and removable. Each pill's ✕ removes one tag; Clear all
+        // wipes the filter back to "All" so the folder/collection shows in full.
+        if !appState.activeTagLabels.isEmpty {
+            // Horizontal scroll mirrors the chip row above so a long set scrolls
+            // instead of squeezing each pill into ugly per-element truncation.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     Text("Viewing")
                         .foregroundStyle(.secondary)
-                    ForEach(Array(
-                        TagSelection.bannerSegments(for: localizedActiveLabels).enumerated()),
-                            id: \.offset) { _, seg in
-                        if seg.precededByAnd {
-                            Text("and").foregroundStyle(.secondary)
-                        }
-                        HStack(spacing: 0) {
-                            BannerPill(label: seg.label)
-                            if seg.trailingComma {
-                                Text(",").foregroundStyle(.secondary)
-                            }
+                    // Canonical labels drive the action; display labels are shown.
+                    // `id: \.element` is safe: canonical tag labels are unique
+                    // identities and the set's mutators (toggling/removing/rename)
+                    // preserve that uniqueness, so the labels never collide.
+                    ForEach(Array(appState.activeTagLabels.enumerated()),
+                            id: \.element) { _, canonical in
+                        BannerPill(label: VocabularyLocalizer.shared.display(canonical)) {
+                            appState.setActiveTags(
+                                TagSelection.removing(appState.activeTagLabels, canonical))
                         }
                     }
+                    Button {
+                        appState.setActiveTag(nil)
+                    } label: {
+                        // Brighten + underline on hover for a clear affordance.
+                        // The underline is a bottom OVERLAY, not Text.underline —
+                        // an overlay paints over the text's frame without
+                        // re-measuring it, so toggling it can't nudge the text down.
+                        Text("Clear all")
+                            .overlay(alignment: .bottom) {
+                                Rectangle()
+                                    .frame(height: 1)
+                                    .offset(y: 2)
+                                    .opacity(clearAllHovered ? 1 : 0)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(clearAllHovered ? AnyShapeStyle(.primary)
+                                                     : AnyShapeStyle(.secondary))
+                    .padding(.leading, 4)
+                    .onHover { clearAllHovered = $0 }
+                    .animation(.easeOut(duration: 0.12), value: clearAllHovered)
+                    .accessibilityLabel(Text(String(localized: "Clear all tag filters")))
                 }
                 .font(.system(size: 12, weight: .medium))
                 .padding(.horizontal, 14)
@@ -153,8 +160,6 @@ struct TagChipsRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.bottom, 10)
             .transition(.opacity)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(banner)
         }
         }
         .animation(.easeInOut(duration: AppState.navTransition), value: appState.activeTagLabels)
@@ -343,22 +348,52 @@ private struct ChipFlow: Layout {
 
 // MARK: - Banner pill
 
-/// Small quiet capsule used in the multi-tag banner ("Viewing [white] and
-/// [black]") so each tag label stands out from the connective words. A read-only
-/// label — not interactive, unlike the TagChip filter chips above.
+/// Removable token used in the active-filter bar ("Viewing [red ✕] [blue ✕]")
+/// so each active tag stays visible and individually clearable — even when it's
+/// orphaned (carried into a collection with no matching images, so it has no
+/// chip in the scope-based row above). `label` is already localized for display;
+/// `onRemove` is wired to the canonical label by the caller.
 private struct BannerPill: View {
     let label: String
+    var onRemove: (() -> Void)? = nil
+    @State private var xHovering = false
 
     var body: some View {
-        Text(label)
-            .font(.system(size: 12, weight: .medium))
-            .lineLimit(1)
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 2)
-            // Match the resting (unselected) TagChip wash so the banner pills read
-            // as the same family.
-            .background(Capsule(style: .continuous).fill(.primary.opacity(0.08)))
+        HStack(spacing: 4) {
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .lineLimit(1)
+                .foregroundStyle(.primary)
+            if let onRemove {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                        // The ✕ is the ONLY click target, so the hover affordance
+                        // lives here, not on the whole pill: the glyph brightens
+                        // (secondary→primary) and a faint circle appears behind it
+                        // so it clearly reads as the button.
+                        .foregroundStyle(xHovering ? AnyShapeStyle(.primary)
+                                                   : AnyShapeStyle(.secondary))
+                        .padding(3)
+                        .background(Circle().fill(.primary.opacity(xHovering ? 0.18 : 0)))
+                }
+                .buttonStyle(.plain)
+                .contentShape(Circle())
+                .onHover { xHovering = $0 }
+                .animation(.easeOut(duration: 0.12), value: xHovering)
+                .accessibilityLabel(Text(String(format: NSLocalizedString(
+                    "Remove %@ from filter",
+                    comment: "VoiceOver: remove one tag from the active filter"),
+                    label)))
+            }
+        }
+        .padding(.leading, 8)
+        // Tighter trailing inset since the ✕ now carries its own padding.
+        .padding(.trailing, onRemove == nil ? 8 : 4)
+        .padding(.vertical, 2)
+        // Static resting wash matching the unselected TagChips — the pill body
+        // is not interactive, so it never lights on hover.
+        .background(Capsule(style: .continuous).fill(.primary.opacity(0.08)))
     }
 }
 

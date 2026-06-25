@@ -268,12 +268,6 @@ final class AppState: ObservableObject {
         activeTagLabels.count == 1 ? activeTagLabels.first : nil
     }
 
-    /// Banner text for 2+ selected tags ("Viewing a and b" / Oxford for 3+);
-    /// nil for 0 or 1 (no banner — a single filled chip is already clear).
-    var tagBannerText: String? {
-        TagSelection.bannerText(for: activeTagLabels)
-    }
-
     /// Alive paths in the INTERSECTION of `activeTagLabels` (files carrying ALL
     /// selected tags); nil = no filter.
     @Published var activeTagPaths: Set<String>? {

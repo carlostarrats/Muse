@@ -3905,3 +3905,47 @@ confirmed alignment with the CLAUDE.md instant-swap rule; `MuseTests` **TEST SUC
 establishing connection" — environmental (a copy of `Muse.app` was already running from a
 manual `open`, which hangs the unit-test host launch); quitting it made the suite pass
 clean. No new tests — SwiftUI view-timing glue the suite doesn't cover.
+
+## 2026-06-25 — `feat/next-57` — always-visible, clearable active-tag filter bar
+
+**Symptom (from the owner).** Select a tag in a folder, then open a collection that has
+none of those images: the grid goes empty with **no on-screen sign a filter is active** —
+the owner forgets a tag is selected and can't tell why nothing shows. With *multiple* tags
+selected there was also no way to clear them when the matching chips weren't present in the
+new scope — genuinely stuck, couldn't see the collection in full.
+
+**Diagnosis.** Three compounding gaps, all on **collection transitions** (where active tags
+are deliberately carried over; folder→folder already auto-clears — kept as-is per the
+owner's choice): (1) the scope-based chip row only shows tags that exist in the current
+scope, so an *orphaned* active tag has no chip; (2) the old "Viewing …" banner rendered only
+for **2+** tags, so a single active tag was completely invisible; (3) the only clear paths
+were the "All" chip (which disappears when the scope has zero tags) and the undiscoverable
+Escape key. Spec: `docs/superpowers/specs/2026-06-25-active-tag-filter-bar-design.md`; plan:
+`docs/superpowers/plans/2026-06-25-active-tag-filter-bar.md`.
+
+**Fix.** Upgraded the read-only banner in `TagChipsRow.swift` into an interactive
+active-filter bar shown whenever **1+** tags are active. It reads straight from
+`activeTagLabels` (not the scope's chips), so single tags, orphaned tags, and zero-chip
+collections all stay visible. Each tag is a removable `[ label ✕ ]` pill (the ✕ is the sole
+click target → `setActiveTags(TagSelection.removing(activeTagLabels, canonical))`); a
+**Clear all** wipes the filter (`setActiveTag(nil)`). Removal/clear route only through the
+sanctioned mutators — canonical labels drive actions, `VocabularyLocalizer.display` only at
+render. Added pure `TagSelection.removing(_:_:)` (unit-tested) and French strings for the 3
+new labels (`Clear all`, `Clear all tag filters`, `Remove %@ from filter`).
+
+**UI polish (owner, live).** Hover affordances added: the ✕ glyph brightens + shows a faint
+circle behind it (pill body stays static — only the button reacts); **Clear all** brightens
+and underlines. The underline is a bottom `.overlay` Rectangle, not `Text.underline` —
+toggling `Text.underline` re-measures the text and nudged it down in the center-aligned row;
+an overlay paints over the frame without re-measuring, so the text stays put.
+
+**Cleanup.** The bar replaced the prose "Viewing a and b" wording, removing the last live
+consumer of `TagSelection.bannerText` / `bannerSegments` / `BannerSegment` (their only other
+reference was the already-dead `AppState.tagBannerText`). Removed all four + their tests.
+
+**Verification.** Build green; full `MuseTests` **TEST SUCCEEDED** (0 failures), incl. 4 new
+`TagSelection.removing` cases; localization export reports the 3 new keys translated, 0
+needing review. Two code-review passes (feature + cleanup) — first returned "ready to merge"
+with only minor findings, all fixed; second confirmed the cleanup complete and correct. App
+built + launched; owner verified the repro and hover/underline behavior live. No new
+behavior policy: folder→folder still clears, collections still carry over.
