@@ -20,6 +20,7 @@ struct TagChipsRow: View {
     @EnvironmentObject var appState: AppState
     @State private var hovered: Int? = nil
     @State private var renameText = ""
+    @State private var clearAllHovered = false
 
     /// Top clearance reserved below the floating toolbar when there are no tag
     /// chips (the no-tags branch below). Because each scroll surface clips to
@@ -129,12 +130,27 @@ struct TagChipsRow: View {
                                 TagSelection.removing(appState.activeTagLabels, canonical))
                         }
                     }
-                    Button(String(localized: "Clear all")) {
+                    Button {
                         appState.setActiveTag(nil)
+                    } label: {
+                        // Brighten + underline on hover for a clear affordance.
+                        // The underline is a bottom OVERLAY, not Text.underline —
+                        // an overlay paints over the text's frame without
+                        // re-measuring it, so toggling it can't nudge the text down.
+                        Text("Clear all")
+                            .overlay(alignment: .bottom) {
+                                Rectangle()
+                                    .frame(height: 1)
+                                    .offset(y: 2)
+                                    .opacity(clearAllHovered ? 1 : 0)
+                            }
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(clearAllHovered ? AnyShapeStyle(.primary)
+                                                     : AnyShapeStyle(.secondary))
                     .padding(.leading, 4)
+                    .onHover { clearAllHovered = $0 }
+                    .animation(.easeOut(duration: 0.12), value: clearAllHovered)
                     .accessibilityLabel(Text(String(localized: "Clear all tag filters")))
                 }
                 .font(.system(size: 12, weight: .medium))
@@ -339,6 +355,7 @@ private struct ChipFlow: Layout {
 private struct BannerPill: View {
     let label: String
     var onRemove: (() -> Void)? = nil
+    @State private var xHovering = false
 
     var body: some View {
         HStack(spacing: 4) {
@@ -350,10 +367,19 @@ private struct BannerPill: View {
                 Button(action: onRemove) {
                     Image(systemName: "xmark")
                         .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(.secondary)
+                        // The ✕ is the ONLY click target, so the hover affordance
+                        // lives here, not on the whole pill: the glyph brightens
+                        // (secondary→primary) and a faint circle appears behind it
+                        // so it clearly reads as the button.
+                        .foregroundStyle(xHovering ? AnyShapeStyle(.primary)
+                                                   : AnyShapeStyle(.secondary))
+                        .padding(3)
+                        .background(Circle().fill(.primary.opacity(xHovering ? 0.18 : 0)))
                 }
                 .buttonStyle(.plain)
-                .contentShape(Rectangle())
+                .contentShape(Circle())
+                .onHover { xHovering = $0 }
+                .animation(.easeOut(duration: 0.12), value: xHovering)
                 .accessibilityLabel(Text(String(format: NSLocalizedString(
                     "Remove %@ from filter",
                     comment: "VoiceOver: remove one tag from the active filter"),
@@ -361,10 +387,11 @@ private struct BannerPill: View {
             }
         }
         .padding(.leading, 8)
-        .padding(.trailing, onRemove == nil ? 8 : 6)
+        // Tighter trailing inset since the ✕ now carries its own padding.
+        .padding(.trailing, onRemove == nil ? 8 : 4)
         .padding(.vertical, 2)
-        // Match the resting (unselected) TagChip wash so the pills read as the
-        // same family.
+        // Static resting wash matching the unselected TagChips — the pill body
+        // is not interactive, so it never lights on hover.
         .background(Capsule(style: .continuous).fill(.primary.opacity(0.08)))
     }
 }
