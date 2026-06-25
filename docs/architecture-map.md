@@ -246,15 +246,16 @@ Muse/Muse/
                                    outside the grid's scroll view
     PageScrollCatcher.swift        first-responder NSView giving the grid + Collections page native
                                    Page Up/Down via PageScroll math
-    ShareCollectionButton.swift    in-collection header menu — Save to… / Share / Share to iCloud…;
+    ShareCollectionButton.swift    in-collection header menu — Save to… / Share / Share iCloud Link;
                                    builds an 11×14 paginated PDF. exportURLs = visibleFiles minus folders
                                    (the on-screen filtered grid). Passes imageLayout.aspect +
                                    effectiveTileBackground + activeTagLabels so the PDF mirrors the grid.
-                                   Share to iCloud… drives ICloudShareService + ICloudShareProgressView
+                                   Share iCloud Link drives ICloudShareService + ICloudShareProgressView
     ICloudShareProgressView.swift  modal during copy+upload; on .ready hands the folder to
                                    NSSharingServicePicker (Copy Link / AirDrop / Mail), then closes
-    ManageICloudSharesView.swift   File-menu "Manage iCloud Shares…" sheet (only surface): list past
-                                   shares (ICloudShareStore) + Delete removes the iCloud folder to reclaim
+    ManageICloudSharesView.swift   View-menu "Manage iCloud Shares…" sheet (only surface; styled like
+                                   InfoSheet): list past shares (ICloudShareStore) + Delete removes the
+                                   iCloud folder to reclaim
     AspectRatioCache.swift         per-file aspect (h÷w) for layout: bulk DB width/height + ImageIO
                                    header fallback, off-main
     CollectionsPage.swift          dedicated Collections page (toolbar square.stack.3d.up):

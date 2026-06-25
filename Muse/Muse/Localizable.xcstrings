@@ -3991,7 +3991,6 @@
       }
     },
     "Share iCloud Link": {
-      "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {

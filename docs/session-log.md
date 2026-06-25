@@ -3967,15 +3967,17 @@ because the iCloud helper makes no automation promise; the zero-touch flow is th
 feature, which has an API. (The owner started out picturing iCloud as "fill form → Publish →
 done" — that mental model is actually the Drive flow; iCloud was the wrong backend for it.)
 
-**What shipped.** A per-collection **"Share to iCloud…"** menu item (on the existing
+**What shipped.** A per-collection **"Share iCloud Link"** menu item (on the existing
 `ShareCollectionButton`): copies the collection's currently-displayed members (same set the
 PDF share uses — an active tag filter narrows it) into the app's **already public-scoped**
 iCloud container (`ICloudZone.folderURL()` → `Documents/Shared Collections/<sanitized name>/`,
 reused for re-shares so nothing piles up), waits for the OS sync daemon to finish uploading
 via `NSMetadataQuery`, then pops the native `NSSharingServicePicker` for Copy Link. A global
-**"Manage iCloud Shares…"** command in the **File menu** (next to Find Duplicates; the **only**
-surface, no in-app nav entry — owner decision) lists past shares (JSON store in App Support,
-never iCloud/SQLite) and **Delete** removes the iCloud folder to reclaim space.
+**"Manage iCloud Shares…"** command in the **View menu** (`CommandGroup(after: .sidebar)`;
+the **only** surface, no in-app nav entry — owner decision) lists past shares (JSON store in
+App Support, never iCloud/SQLite) and **Delete** removes the iCloud folder to reclaim space.
+The Manage modal is styled to match the ⓘ About modal (`InfoSheet`): 24pt header +
+`SheetCloseButton`, 15/13pt rows, hairline dividers between rows only.
 
 **No new network code, no new entitlement.** Writes only into Muse's own ubiquity container
 (`Documents/Shared Collections/`); the OS daemon + the native share sheet do all remote work.
@@ -4012,11 +4014,11 @@ entitlement** (`Muse-Debug.entitlements`), so the copy→upload→share end-to-e
 ONLY in a **release-signed build** — unit tests cover the pure logic; iCloud I/O is
 integration-only. Signed-build manual checklist for whoever runs it:
 
-1. Collection share menu → **Share to iCloud…** → progress shows Copying → Uploading N of N →
+1. Collection share menu → **Share iCloud Link** → progress shows Copying → Uploading N of N →
    native share sheet anchored to the window.
 2. **Copy Link** → paste in a browser → Apple's iCloud Drive folder page renders the images
    (view/download only).
 3. Finder: `iCloud Drive ▸ Muse ▸ Shared Collections ▸ <collection>` holds the copies.
-4. **File ▸ Manage iCloud Shares…** lists it; **Delete** removes the folder + row.
+4. **View ▸ Manage iCloud Shares…** lists it; **Delete** removes the folder + row.
 5. Re-share same collection → reuses the folder (no duplicate), refreshed contents.
 6. iCloud Drive signed out → "Sign in to iCloud" message, clean abort.
