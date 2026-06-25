@@ -62,10 +62,11 @@ struct ShareCollectionButton: View {
         .disabled(preparing || count == 0 || exportURLs.isEmpty)
         .help("Share collection")
         .accessibilityLabel("Share collection")
-        .sheet(isPresented: $showingICloudShare) {
+        // onDismiss runs reset() on EVERY dismissal path — including Escape /
+        // OS-driven close — so the upload wait + query can never leak.
+        .sheet(isPresented: $showingICloudShare, onDismiss: { iCloudService.reset() }) {
             ICloudShareProgressView(service: iCloudService) {
                 showingICloudShare = false
-                iCloudService.reset()
             }
         }
     }

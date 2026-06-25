@@ -34,6 +34,18 @@ final class ICloudShareStoreTests: XCTestCase {
         XCTAssertEqual(store.all().map(\.id), ["2", "1"])
     }
 
+    func testReSharingSameFolderReplacesRecord() {
+        let (store, url) = tempStore()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let first = ICloudShareRecord(id: "1", collectionName: "Kitchen", folderPath: "/p/Kitchen",
+                                      itemCount: 2, createdAt: Date(timeIntervalSince1970: 10))
+        let reshare = ICloudShareRecord(id: "2", collectionName: "Kitchen", folderPath: "/p/Kitchen",
+                                        itemCount: 5, createdAt: Date(timeIntervalSince1970: 20))
+        store.add(first); store.add(reshare)
+        // Same folder path → only the latest record remains (no stale duplicate).
+        XCTAssertEqual(store.all(), [reshare])
+    }
+
     func testRemoveDropsRecord() {
         let (store, url) = tempStore()
         defer { try? FileManager.default.removeItem(at: url) }

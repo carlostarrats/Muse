@@ -26,6 +26,12 @@ import Combine
     private var query: NSMetadataQuery?
     private var observerTokens: [NSObjectProtocol] = []
     private var uploadContinuation: CheckedContinuation<Void, Never>?
+    /// Bumped only when a NEW share starts. A run captures its value and
+    /// touches shared state (phase/folder/store) only while still current —
+    /// so a superseded run can't delete the live run's folder or clobber its
+    /// phase. NOT bumped on cancel, so a plain cancel still cleans up its own
+    /// folder (the copy ran in a detached task that can't see cancellation).
+    private var generation = 0
     private let store: ICloudShareStore
 
     init(store: ICloudShareStore = .default) { self.store = store }
@@ -45,16 +51,20 @@ import Combine
             phase = .failed(String(localized: "This collection has no images to share."))
             return
         }
+        generation &+= 1
+        let gen = generation
         phase = .copying
-        task = Task { await run(title: title, urls: urls) }
+        task = Task { await run(title: title, urls: urls, gen: gen) }
     }
 
-    private func run(title: String, urls: [URL]) async {
+    private func run(title: String, urls: [URL], gen: Int) async {
         // Resolve the iCloud zone off the main thread (first access can block).
         guard let docs = await Task.detached(priority: .userInitiated, operation: {
             ICloudZone.folderURL()
         }).value else {
-            phase = .failed(String(localized: "Sign in to iCloud and turn on iCloud Drive to share to iCloud."))
+            if gen == generation {
+                phase = .failed(String(localized: "Sign in to iCloud and turn on iCloud Drive to share to iCloud."))
+            }
             return
         }
 
@@ -65,13 +75,17 @@ import Combine
                 try Self.copyMembers(urls, into: folder)
             }.value
         } catch is CancellationError {
-            Self.cleanup(folder)
+            if gen == generation { Self.cleanup(folder) }
             return
         } catch {
+            guard gen == generation else { return }
             Self.cleanup(folder)
             phase = .failed(String(localized: "Couldn't copy the images into iCloud."))
             return
         }
+        // Superseded by a newer share → leave the folder for the new run (which
+        // recreates it) and don't touch phase/store.
+        guard gen == generation else { return }
         if Task.isCancelled { Self.cleanup(folder); return }
         guard copied.isEmpty == false else {
             Self.cleanup(folder)
@@ -86,7 +100,8 @@ import Combine
 
         phase = .uploading(UploadTally(uploaded: 0, total: copied.count))
         await waitForUpload(of: copied)
-        if Task.isCancelled { return }
+        // Folder is recorded now, so a cancel here keeps it (deletable in Manage).
+        if Task.isCancelled || gen != generation { return }
         phase = .ready(folder)
     }
 

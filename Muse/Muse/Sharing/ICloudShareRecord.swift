@@ -36,9 +36,12 @@ final class ICloudShareStore {
         queue.sync { load().sorted { $0.createdAt > $1.createdAt } }
     }
 
+    /// Add (or replace). Re-sharing a collection reuses the same folder path,
+    /// so drop any prior record for that folder — otherwise the Manage list
+    /// would show stale duplicates that point at the same (deletable) folder.
     func add(_ r: ICloudShareRecord) {
         queue.sync {
-            var list = load().filter { $0.id != r.id }
+            var list = load().filter { $0.id != r.id && $0.folderPath != r.folderPath }
             list.append(r)
             save(list)
         }
