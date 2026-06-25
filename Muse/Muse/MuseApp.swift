@@ -216,6 +216,13 @@ struct MuseApp: App {
                 .disabled(appState.selectedFile == nil)
             }
 
+            // View menu — the global Drive-shares list (not tied to a folder).
+            CommandGroup(after: .sidebar) {
+                Button("Manage Drive Shares…") {
+                    appState.driveSharesShown = true
+                }
+            }
+
             // Menu-bar equivalents of the chip context menu — keyboard and
             // VoiceOver reachable. Enabled while a tag filter is selected.
             CommandMenu("Tags") {

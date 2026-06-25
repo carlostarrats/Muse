@@ -244,6 +244,9 @@ final class AppState: ObservableObject {
     /// in-collection back arrow returns here rather than to the main grid.
     @Published var showingCollections = false
 
+    /// Drives the View-menu "Manage Drive Shares…" sheet.
+    @Published var driveSharesShown = false
+
     // Collection filtering (toggleCollectionsPage / visibleFiles /
     // tagSourceFiles / setActiveCollection / setCollectionCover) and the tag
     // filter (setActiveTag / removeTag / removeFromCollection) live in
