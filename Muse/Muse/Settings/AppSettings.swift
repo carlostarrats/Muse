@@ -36,6 +36,20 @@ enum AppSettings {
         UserDefaults.standard.object(forKey: showFileNamesKey) as? Bool ?? false
     }
 
+    // Google Drive share — remembered Muse-root folder id + last form text.
+    static var driveRootFolderID: String? {
+        get { UserDefaults.standard.string(forKey: "driveRootFolderID") }
+        set { UserDefaults.standard.set(newValue, forKey: "driveRootFolderID") }
+    }
+    static var driveShareName: String {
+        get { UserDefaults.standard.string(forKey: "driveShareName") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "driveShareName") }
+    }
+    static var driveShareLabel: String {
+        get { UserDefaults.standard.string(forKey: "driveShareLabel") ?? String(localized: "Sent by") }
+        set { UserDefaults.standard.set(newValue, forKey: "driveShareLabel") }
+    }
+
     static let folderSortModeKey = "folderSortMode"
 
     /// Sidebar top-level folder sort mode. Default `.manual`. Unset → manual.
