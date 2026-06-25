@@ -16,6 +16,7 @@ import UniformTypeIdentifiers
 
 struct ShareCollectionButton: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject private var googleAuth: GoogleOAuth
     let title: String
     let count: Int
 
@@ -23,6 +24,7 @@ struct ShareCollectionButton: View {
     @AppStorage("gridColumnCount") private var gridColumns = 4
     @State private var hovering = false
     @State private var preparing = false
+    @State private var showingDriveShare = false
 
     /// The collection's CURRENTLY VISIBLE members, in grid order — the on-screen
     /// set, so an active tag/facet filter narrows the export (images and file
@@ -37,6 +39,8 @@ struct ShareCollectionButton: View {
         Menu {
             Button("Save to…") { Task { await save() } }
             Button("Share") { Task { await share() } }
+            Divider()
+            Button("Share Drive Link") { showingDriveShare = true }
         } label: {
             Group {
                 if preparing {
@@ -58,6 +62,11 @@ struct ShareCollectionButton: View {
         .disabled(preparing || count == 0 || exportURLs.isEmpty)
         .help("Share collection")
         .accessibilityLabel("Share collection")
+        .sheet(isPresented: $showingDriveShare) {
+            DriveShareSheet(auth: googleAuth, title: title, urls: exportURLs) {
+                showingDriveShare = false
+            }
+        }
     }
 
     private func makePDF(pageSize: CGSize) async -> URL? {
