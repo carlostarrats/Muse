@@ -59,6 +59,12 @@ are the load-bearing reference artifacts.
 - `docs/possible-updates.md` — low-priority, non-blocking backlog (cosmetic
   code tidiness + deferred decisions). Nothing here is a problem; fold items in
   opportunistically when shipping something else. Don't cut a release for them.
+- `docs/search-bar-fill-investigation.md` — **deferred.** Why the center search
+  field can't be made to fill the toolbar Safari-style within SwiftUI, every
+  approach tried (`.infinity`, width-tracking, `.searchable`) and why each
+  failed, and what a real fix (native `NSToolbar` rebuild) would cost. Read it
+  before re-attempting "make the search bar fill the space" so the dead ends
+  aren't repeated.
 
 ## Implementation status
 
