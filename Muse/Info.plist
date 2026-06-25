@@ -19,6 +19,22 @@
 	     mach-lookup entitlements). Without it the installer can't launch. -->
 	<key>SUEnableInstallerLauncherService</key>
 	<true/>
+	<!-- Google OAuth native redirect (reverse-client-id custom scheme). The
+	     actual scheme string is filled when the owner sets DriveConfig.clientID
+	     (com.googleusercontent.apps.<reverse-client-id>) — see
+	     web/share/README.md. Used by ASWebAuthenticationSession to receive the
+	     authorization code. No secret involved (PKCE public client). -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.tarrats.Muse.googleoauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.REPLACE_WITH_REVERSE_CLIENT_ID</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSUbiquitousContainers</key>
 	<dict>
 		<key>iCloud.com.tarrats.Muse</key>
