@@ -2,11 +2,11 @@
 //  TagSelection.swift
 //  Muse
 //
-//  Pure transition + banner-text logic for the multi-tag chip filter. The grid
-//  filters by the INTERSECTION (AND) of the selected tags; this type owns the
-//  ordered-set mutations and the "Viewing … and …" banner wording so AppState
-//  stays a thin caller and the rules are unit-tested. `nonisolated` because the
-//  module's default actor isolation is MainActor (used from nonisolated tests).
+//  Pure transition logic for the multi-tag chip filter. The grid filters by the
+//  INTERSECTION (AND) of the selected tags; this type owns the ordered-set
+//  mutations (toggle / remove / rename) so AppState stays a thin caller and the
+//  rules are unit-tested. `nonisolated` because the module's default actor
+//  isolation is MainActor (used from nonisolated tests).
 //
 
 nonisolated enum TagSelection {
