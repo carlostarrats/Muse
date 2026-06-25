@@ -246,10 +246,14 @@ Muse/Muse/
                                    outside the grid's scroll view
     PageScrollCatcher.swift        first-responder NSView giving the grid + Collections page native
                                    Page Up/Down via PageScroll math
-    ShareCollectionButton.swift    in-collection header menu — Save to… / Share; builds an 11×14
-                                   paginated PDF. exportURLs = visibleFiles minus folders (the
-                                   on-screen filtered grid). Passes imageLayout.aspect +
+    ShareCollectionButton.swift    in-collection header menu — Save to… / Share / Share Drive Link;
+                                   builds an 11×14 paginated PDF. exportURLs = visibleFiles minus folders
+                                   (the on-screen filtered grid). Passes imageLayout.aspect +
                                    effectiveTileBackground + activeTagLabels so the PDF mirrors the grid
+    DriveShareForm.swift           DriveShareSheet: publish form (intro/label/name/date/expiry, remembered)
+                                   → progress (DriveShareService.phase) → finished link (Copy / Share)
+    ManageDriveSharesView.swift    View-menu "Manage Drive Shares…" sheet (InfoSheet-styled): open link /
+                                   unpublish (delete the Drive folder now)
     AspectRatioCache.swift         per-file aspect (h÷w) for layout: bulk DB width/height + ImageIO
                                    header fallback, off-main
     CollectionsPage.swift          dedicated Collections page (toolbar square.stack.3d.up):
@@ -344,6 +348,21 @@ Muse/Muse/
                                    (fixed ratio → uniform aspect array; per-image backdrop; non-image →
                                    QuickLook; decode 8-wide, order preserved) and draws active tagLabels as
                                    header pills on page 1 (width-clamped + truncated)
+  Sharing/Drive/                   Google Drive collection share (the only sanctioned network feature)
+    PKCE.swift                       RFC 7636 S256 verifier/challenge/state. Pure. Unit-tested
+    TokenStore.swift                 DriveTokens + TokenStoring; Keychain (device-only) + in-memory double
+    DriveConfig.swift                owner placeholders: clientID, reverse-client-id scheme, shareBaseURL
+    GoogleOAuth.swift                Auth-Code+PKCE via ASWebAuthenticationSession; exchange/refresh/revoke
+    DriveClient.swift                Drive v3 REST (ensureMuseRoot/createFolder/uploadFile multipart/
+                                     setAnyoneReader/deleteFolder); pure multipartBody is unit-tested
+    DriveShareManifest.swift         base64url URL-FRAGMENT payload (mirrors share.js keys). Unit-tested
+    DriveShareRecord.swift           DriveShareRecord + DriveShareStore (JSON, App Support) + DriveExpiry
+    DriveShareService.swift          @MainActor publish orchestrator (Phase signingIn/uploading/…/done)
+    DriveExpirySweeper.swift         launch sweep: delete folders past expiry (only if signed-in + due)
+  web/share/                       static Cloudflare page (NOT in the app target)
+    index.html · share.css           shell + styles matching the mockups
+    share.js                         decode/validate/expiry/render (textContent only); + share.test.mjs
+    _headers · README.md             strict CSP/hardening; deploy + OAuth-setup docs
   Effects/                         (was Fluid/; water + burn shaders removed — NO Metal shaders remain)
     FadeOutModifier.swift          animatable staggered opacity fade for the delete sequence
   Settings/

@@ -3949,3 +3949,58 @@ needing review. Two code-review passes (feature + cleanup) — first returned "r
 with only minor findings, all fixed; second confirmed the cleanup complete and correct. App
 built + launched; owner verified the repro and hover/underline behavior live. No new
 behavior policy: folder→folder still clears, collections still carry over.
+
+### `feat/drive-collection-share` — Google Drive collection share — 2026-06-25
+
+Backend #2 of the two-backend "share a collection" (backend #1 = the plain iCloud helper on
+`feat/icloud-collection-share`, a parallel branch off main). This is the **automated, branded,
+self-expiring** path — the client's (Martin Bruneau / The Project) real need. Full design +
+the email/mockup provenance: `docs/superpowers/specs/2026-06-25-google-drive-collection-share-design.md`;
+plan: `docs/superpowers/plans/2026-06-25-google-drive-collection-share.md`.
+
+**What shipped.** "Share Drive Link" on a collection → a small form (intro line · label · name ·
+date · expiry; name/label remembered) → Publish. Muse signs into Google once (`drive.file`,
+PKCE, no secret), ensures a tidy `My Drive/Muse/` root, creates `Muse/<collection> — <date>/`,
+uploads the displayed images + a **print-quality PDF from the originals**, flips the folder to
+link-viewable, and assembles a Cloudflare page URL with the whole manifest base64url'd into the
+**URL fragment** (so it never reaches the host). The page (`web/share/`) renders the signature +
+a portrait grid from Drive's public thumbnail endpoint and a **Save** pill for the PDF; it
+soft-expires client-side. **Muse-local expiry sweep** on launch hard-deletes folders past their
+date. View-menu **"Manage Drive Shares…"** lists shares (open link / unpublish-now).
+
+**Identity change (load-bearing).** This is the **first sanctioned network egress beyond
+Sparkle** — opt-in + user-initiated. CLAUDE.md's Network policy + the "No network calls" rule
+were updated to record the single exception; bytes go user → their own Drive, developer
+receives nothing.
+
+**Security (per the owner's "security must be perfect").** `drive.file` least-privilege; OAuth
+Auth-Code + PKCE S256, **no client secret**; tokens **Keychain-only, device-only**, never
+logged; revoke on sign-out. Page has **no API key / no secret**, manifest in the URL fragment,
+`textContent`-only render with id-regex validation under a `default-src 'none'` CSP +
+`nosniff`/`no-referrer`/`DENY` headers. Network only inside explicit user actions.
+
+**Architecture / isolation.** Pure units (`PKCE`, `DriveShareManifest`, `DriveShareRecord`/
+store + `DriveExpiry`, `DriveClient.multipartBody`, `TokenStore` double) under `GoogleOAuth` →
+`DriveClient` → `DriveShareService` (Phase machine) + `DriveExpirySweeper`; SwiftUI
+`DriveShareSheet` + `ManageDriveSharesView`. New Swift files auto-include via synchronized
+groups; the page lives outside the app target in `web/share/`.
+
+**Verification.** 12 new Swift unit tests + full `MuseTests` **TEST SUCCEEDED**; `node
+web/share/share.test.mjs` all passed; build green; French filled for all new keys. The
+OAuth/Drive/page flow is **integration-only** — it can't run until the owner provisions the
+Google OAuth client + Cloudflare domain (`DriveConfig`/Info.plist placeholders; see
+`web/share/README.md`). Signed-build + provisioned manual checklist:
+
+1. Sign in (first Publish) → consent (drive.file) → returns to Muse.
+2. Publish a small collection → progress Uploading N/N → finished link shown (Copy / Share).
+3. Drive: `My Drive/Muse/<collection> — <date>/` holds the images + `<collection>.pdf`,
+   link-shared "anyone with link can view".
+4. Open the page link → signature renders, grid fills from Drive thumbnails, **Save** downloads
+   the PDF.
+5. Set a past expiry + relaunch Muse → the folder is deleted; the page shows "expired".
+6. **View ▸ Manage Drive Shares…** → lists it; Open Link works; Delete-now (unpublish) removes
+   the folder + row.
+7. Sign out → token revoked + Keychain purged.
+8. Verify on a real build that folder-level "anyone reader" makes child image thumbnails load on
+   the page (fallback: set per-file permission); confirm the manifest stays under the URL length
+   limit for the chosen collection sizes (note the cap if exceeded).
