@@ -20,8 +20,9 @@ enum DriveConfig {
     }
     static var redirectURI: String { "\(redirectScheme):/oauth2redirect" }
 
-    /// Cloudflare Pages custom domain serving web/share/index.html at /s.
-    static let shareBaseURL = "https://share.example.com/s"
+    /// Cloudflare Pages deployment serving web/share/index.html. The manifest
+    /// rides the URL fragment, so the page link is `<shareBaseURL>#<payload>`.
+    static let shareBaseURL = "https://muse-share.pages.dev"
 
     static let scope = "https://www.googleapis.com/auth/drive.file"
 
