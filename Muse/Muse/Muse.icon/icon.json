@@ -2,11 +2,12 @@
   "fill" : "system-light",
   "groups" : [
     {
+      "hidden" : false,
       "layers" : [
         {
-          "blend-mode" : "normal",
           "fill-specializations" : [
             {
+              "appearance" : "light",
               "value" : {
                 "solid" : "srgb:0.00000,0.00000,0.00000,1.00000"
               }
@@ -14,7 +15,7 @@
             {
               "appearance" : "dark",
               "value" : {
-                "solid" : "srgb:0.57046,0.57047,0.57046,1.00000"
+                "solid" : "display-p3:0.36854,0.35295,0.35753,1.00000"
               }
             },
             {
@@ -34,10 +35,10 @@
             }
           ],
           "hidden" : false,
-          "image-name" : "Union 2.svg",
-          "name" : "Union 2",
+          "image-name" : "Subtract.svg",
+          "name" : "Subtract",
           "position" : {
-            "scale" : 2.15,
+            "scale" : 1.76,
             "translation-in-points" : [
               0,
               0
