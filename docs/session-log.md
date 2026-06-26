@@ -3949,3 +3949,76 @@ needing review. Two code-review passes (feature + cleanup) — first returned "r
 with only minor findings, all fixed; second confirmed the cleanup complete and correct. App
 built + launched; owner verified the repro and hover/underline behavior live. No new
 behavior policy: folder→folder still clears, collections still carry over.
+
+### `feat/icloud-collection-share` — iCloud collection share — 2026-06-25
+
+First of a **two-backend "share a collection" capability** (the full vision +
+client thread live in `docs/superpowers/specs/2026-06-25-icloud-collection-share-design.md`).
+Backend #2 — the automated, branded, expiring **Google Drive** web page + print PDF
+("the magic" path, Martin Bruneau's actual need) — is a **separate future spec**. This
+session shipped only the small **iCloud helper**.
+
+**Why iCloud can't be the zero-touch path (settled in brainstorming).** Apple exposes
+**no API to mint a viewable public iCloud gallery link** programmatically. The lone code
+API (`url(forPublishingUbiquitousItemAt:expiration:)`) returns a *download-a-copy* link for
+a single flat file, system-set expiry, flaky — not a gallery, not a folder. So the nice
+link still needs **one manual `Share → Copy Link`** by the user. That's acceptable here
+because the iCloud helper makes no automation promise; the zero-touch flow is the Drive
+feature, which has an API. (The owner started out picturing iCloud as "fill form → Publish →
+done" — that mental model is actually the Drive flow; iCloud was the wrong backend for it.)
+
+**What shipped.** A per-collection **"Share iCloud Link"** menu item (on the existing
+`ShareCollectionButton`): copies the collection's currently-displayed members (same set the
+PDF share uses — an active tag filter narrows it) into the app's **already public-scoped**
+iCloud container (`ICloudZone.folderURL()` → `Documents/Shared Collections/<sanitized name>/`,
+reused for re-shares so nothing piles up), waits for the OS sync daemon to finish uploading
+via `NSMetadataQuery`, then pops the native `NSSharingServicePicker` for Copy Link. A global
+**"Manage iCloud Shares…"** command in the **View menu** (`CommandGroup(after: .sidebar)`;
+the **only** surface, no in-app nav entry — owner decision) lists past shares (JSON store in
+App Support, never iCloud/SQLite) and **Delete** removes the iCloud folder to reclaim space.
+The Manage modal is styled to match the ⓘ About modal (`InfoSheet`): 24pt header +
+`SheetCloseButton`, 15/13pt rows, hairline dividers between rows only.
+
+**No new network code, no new entitlement.** Writes only into Muse's own ubiquity container
+(`Documents/Shared Collections/`); the OS daemon + the native share sheet do all remote work.
+Muse's "only network path is Sparkle" promise is unchanged.
+
+**Architecture / isolation.** Pure units (`ICloudSharePaths`, `ICloudShareRecord`/
+`ICloudShareStore`, `UploadTally`) under a `@MainActor ICloudShareService` orchestrator
+(`Phase`: idle/copying/uploading/ready/failed), plus two SwiftUI sheets
+(`ICloudShareProgressView`, `ManageICloudSharesView`). New files auto-included via the
+project's synchronized file groups.
+
+**Review hardening (because the iCloud path can't run in Debug, review IS the QA).** Two
+independent correctness-review rounds caught **9 real bugs**, all fixed — several would have
+hung or leaked the feature in the signed build. Round 1: (1) `NSMetadataQuery` used the
+**Data** scope but files live in **Documents** → upload wait would never complete (permanent
+hang); (2) `withCheckedContinuation` leaked on cancel (never resumed) — fixed with a
+`tearDownUploadWait()` that resumes exactly once; (3) block-observer **tokens** were never
+removed (`removeObserver(self)` is a no-op for `addObserver(forName:…using:)`); (4) upload
+path-match used `standardizedFileURL` (no symlink resolve) → could never equal the ubiquity
+item's `/private`-rooted path (second hang); (5) cancel/failure mid-copy orphaned an untracked
+folder → best-effort `cleanup()` on every pre-record exit; (6) share picker anchored to
+`keyWindow` (the dismissing sheet) → anchor to `mainWindow` after dismiss, `didPresent` guard.
+Round 2 (all 6 verified correct, no regressions): (7) Escape/OS sheet dismissal bypassed
+`reset()` → re-leaked query+continuation → `.sheet(onDismiss:)` now always tears down; (8)
+re-sharing a collection duplicated the Manage record → `ICloudShareStore.add` de-dupes by
+`folderPath`; (9) a superseded run's `cleanup()` could delete the **live** run's folder → a
+`generation` token (bumped only on `start()`, NOT cancel — so plain cancel still cleans its
+own folder) gates every phase/store/cleanup write. Round 3: **GREEN**, no reachable bugs left.
+
+**Verification.** 11 new unit tests (paths incl. `uniqueName` de-collision, store incl.
+folder-path de-dup, upload tally) + full `MuseTests` **TEST SUCCEEDED** (0 failures). Build
+green; French filled for all 13 new keys (state=translated). **Debug builds strip the iCloud
+entitlement** (`Muse-Debug.entitlements`), so the copy→upload→share end-to-end is verifiable
+ONLY in a **release-signed build** — unit tests cover the pure logic; iCloud I/O is
+integration-only. Signed-build manual checklist for whoever runs it:
+
+1. Collection share menu → **Share iCloud Link** → progress shows Copying → Uploading N of N →
+   native share sheet anchored to the window.
+2. **Copy Link** → paste in a browser → Apple's iCloud Drive folder page renders the images
+   (view/download only).
+3. Finder: `iCloud Drive ▸ Muse ▸ Shared Collections ▸ <collection>` holds the copies.
+4. **View ▸ Manage iCloud Shares…** lists it; **Delete** removes the folder + row.
+5. Re-share same collection → reuses the folder (no duplicate), refreshed contents.
+6. iCloud Drive signed out → "Sign in to iCloud" message, clean abort.

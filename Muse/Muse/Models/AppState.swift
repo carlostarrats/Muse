@@ -244,6 +244,9 @@ final class AppState: ObservableObject {
     /// in-collection back arrow returns here rather than to the main grid.
     @Published var showingCollections = false
 
+    /// Drives the File-menu "Manage iCloud Shares…" sheet.
+    @Published var iCloudSharesShown = false
+
     // Collection filtering (toggleCollectionsPage / visibleFiles /
     // tagSourceFiles / setActiveCollection / setCollectionCover) and the tag
     // filter (setActiveTag / removeTag / removeFromCollection) live in

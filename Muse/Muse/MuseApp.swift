@@ -209,6 +209,13 @@ struct MuseApp: App {
                 .disabled(appState.selectedFile == nil)
             }
 
+            // View menu — the global iCloud-shares list (not tied to a folder).
+            CommandGroup(after: .sidebar) {
+                Button("Manage iCloud Shares…") {
+                    appState.iCloudSharesShown = true
+                }
+            }
+
             // Menu-bar equivalents of the chip context menu — keyboard and
             // VoiceOver reachable. Enabled while a tag filter is selected.
             CommandMenu("Tags") {
