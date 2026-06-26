@@ -3958,15 +3958,29 @@ self-expiring** path — the client's (Martin Bruneau / The Project) real need. 
 the email/mockup provenance: `docs/superpowers/specs/2026-06-25-google-drive-collection-share-design.md`;
 plan: `docs/superpowers/plans/2026-06-25-google-drive-collection-share.md`.
 
-**What shipped.** "Share Drive Link" on a collection → a small form (intro line · label · name ·
-date · expiry; name/label remembered) → Publish. Muse signs into Google once (`drive.file`,
-PKCE, no secret), ensures a tidy `My Drive/Muse/` root, creates `Muse/<collection> — <date>/`,
-uploads the displayed images + a **print-quality PDF from the originals**, flips the folder to
-link-viewable, and assembles a Cloudflare page URL with the whole manifest base64url'd into the
-**URL fragment** (so it never reaches the host). The page (`web/share/`) renders the signature +
-a portrait grid from Drive's public thumbnail endpoint and a **Save** pill for the PDF; it
-soft-expires client-side. **Muse-local expiry sweep** on launch hard-deletes folders past their
-date. View-menu **"Manage Drive Shares…"** lists shares (open link / unpublish-now).
+**What shipped.** "Share Drive Link" on a collection → a small form (page title · label · name ·
+expiry; today's date is automatic; name/label remembered) → Publish. Muse signs into Google once
+(`drive.file`, PKCE, no secret), ensures a tidy `My Drive/Muse/` root, creates
+`Muse/<collection> — <date>/`, uploads the displayed images, flips the folder to link-viewable,
+and assembles a Cloudflare page URL with the whole manifest base64url'd into the **URL fragment**
+(so it never reaches the host). The page (`web/share/`) renders the signature + a portrait grid
+from Drive's public thumbnail endpoint, a **backdrop switcher** (light/grey/dark dots, persisted),
+and soft-expires client-side (inclusive of the local day). View-menu **"Manage Drive Shares…"**
+lists shares (open link / unpublish-now). **Muse-local expiry sweep** on launch hard-deletes
+folders past their date.
+
+**PDF = the recipient prints the page** (revised mid-build to match the owner's original ask:
+"a pdf size they wanted… not the webpage but the images"). "Save PDF" runs `window.print()`; a
+`@media print` stylesheet lays out just the image grid (palette forced to white/dark text via
+`!important` so a dark backdrop can't print white-on-white), and the recipient's print dialog
+chooses the paper size + Save-as-PDF. **No app-side PDF is generated or uploaded** (the earlier
+`CollectionPDFExporter` approach was wrong); the manifest carries no `pdfId`.
+
+**Provisioned + live.** OAuth iOS client created (testing mode, owner as test user) and wired
+into `DriveConfig`/Info.plist; the page is deployed to **`muse-share.pages.dev`** (Cloudflare
+Pages, via wrangler). The feature runs in a **Debug build** (the network entitlement is present;
+only iCloud is stripped in Debug) — verified end-to-end: sign-in → publish → folder + link →
+page renders → Manage/unpublish. Custom domain + Google verification remain for public release.
 
 **Identity change (load-bearing).** This is the **first sanctioned network egress beyond
 Sparkle** — opt-in + user-initiated. CLAUDE.md's Network policy + the "No network calls" rule
@@ -3985,22 +3999,20 @@ store + `DriveExpiry`, `DriveClient.multipartBody`, `TokenStore` double) under `
 `DriveShareSheet` + `ManageDriveSharesView`. New Swift files auto-include via synchronized
 groups; the page lives outside the app target in `web/share/`.
 
-**Verification.** 12 new Swift unit tests + full `MuseTests` **TEST SUCCEEDED**; `node
-web/share/share.test.mjs` all passed; build green; French filled for all new keys. The
-OAuth/Drive/page flow is **integration-only** — it can't run until the owner provisions the
-Google OAuth client + Cloudflare domain (`DriveConfig`/Info.plist placeholders; see
-`web/share/README.md`). Signed-build + provisioned manual checklist:
+**Verification.** Swift unit tests + full `MuseTests` **TEST SUCCEEDED**; `node
+web/share/share.test.mjs` all passed; build green; French filled for all new keys. Unlike the
+iCloud helper, the Drive flow **runs in a Debug build** (network entitlement present; only iCloud
+is stripped in Debug), so it was verified **end-to-end live** once the OAuth client + Cloudflare
+page were provisioned: sign-in → consent (drive.file) → publish → `My Drive/Muse/<collection> —
+<date>/` holds the images (link-shared "anyone with link") → page link renders the signature +
+grid + backdrop switcher → **Save PDF** opens the browser print dialog (recipient picks paper
+size) → **View ▸ Manage Drive Shares…** Open Link / Delete-now works → sign-out revokes + purges
+Keychain. Two independent review rounds hardened it (security GREEN, then a delta pass): print
+palette `!important` (dark-backdrop PDF), inclusive local expiry, double-publish guard.
 
-1. Sign in (first Publish) → consent (drive.file) → returns to Muse.
-2. Publish a small collection → progress Uploading N/N → finished link shown (Copy / Share).
-3. Drive: `My Drive/Muse/<collection> — <date>/` holds the images + `<collection>.pdf`,
-   link-shared "anyone with link can view".
-4. Open the page link → signature renders, grid fills from Drive thumbnails, **Save** downloads
-   the PDF.
-5. Set a past expiry + relaunch Muse → the folder is deleted; the page shows "expired".
-6. **View ▸ Manage Drive Shares…** → lists it; Open Link works; Delete-now (unpublish) removes
-   the folder + row.
-7. Sign out → token revoked + Keychain purged.
-8. Verify on a real build that folder-level "anyone reader" makes child image thumbnails load on
-   the page (fallback: set per-file permission); confirm the manifest stays under the URL length
-   limit for the chosen collection sizes (note the cap if exceeded).
+**Still outstanding for public release** (not blockers for the owner's own use in testing mode):
+a custom domain on Cloudflare + Google app verification (the 100-test-user cap applies until
+then); and the standing watch-item that folder-level "anyone reader" must make child thumbnails
+load on the page (fallback: per-file permission), plus the URL-length ceiling for very large
+collections (the manifest rides the fragment — shortening it via a folder-id + page-side Drive
+listing is the deferred enhancement if links get unwieldy).
