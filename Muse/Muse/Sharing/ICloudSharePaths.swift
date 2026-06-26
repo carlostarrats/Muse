@@ -36,6 +36,19 @@ nonisolated enum ICloudSharePaths {
         zoneDocuments.appendingPathComponent(subfolder, isDirectory: true)
     }
 
+    /// True iff `folder` is a safe, direct, non-special child of `shareRoot` —
+    /// the precondition for a destructive `removeItem` on a share folder. Used by
+    /// BOTH the copy path and the Manage-delete path so every `removeItem` is
+    /// guarded identically (a `.`/`..`/multi-component or escaping leaf, or a
+    /// corrupted stored path, would otherwise let `removeItem` hit a parent or
+    /// sibling — up to the whole iCloud Documents zone).
+    static func isContainedShareFolder(_ folder: URL, shareRoot: URL) -> Bool {
+        let leaf = folder.lastPathComponent
+        guard leaf.isEmpty == false, leaf != ".", leaf != ".." else { return false }
+        return folder.deletingLastPathComponent().standardizedFileURL.path
+            == shareRoot.standardizedFileURL.path
+    }
+
     static func shareFolder(zoneDocuments: URL, collectionName: String) -> URL {
         shareRoot(zoneDocuments: zoneDocuments)
             .appendingPathComponent(sanitizedFolderName(collectionName), isDirectory: true)
@@ -43,18 +56,21 @@ nonisolated enum ICloudSharePaths {
 
     /// The leaf folder name for a share, disambiguated so a DIFFERENT collection
     /// can never reuse (and thus clobber/repoint) another's folder. `owners`
-    /// maps an already-used leaf name → the collection that owns it. The SAME
-    /// collection reuses its name (re-share refreshes in place); a different
-    /// collection that sanitizes to the same name gets `-2`, `-3`, … Two
-    /// collections whose names differ only by sanitized characters (e.g.
-    /// "Trip/Italy" vs "Trip-Italy") would otherwise collide on one folder —
-    /// sharing the second would delete the first's copies and silently repoint
-    /// its already-distributed iCloud link at the second's images. Pure (no I/O).
-    static func uniqueFolderName(for collectionName: String, owners: [String: String]) -> String {
+    /// maps an already-used leaf name → the STABLE IDENTITY of the collection
+    /// that owns it (the collection's id, NOT its display name). The SAME
+    /// collection reuses its folder (re-share refreshes in place); a different
+    /// collection gets `-2`, `-3`, … This covers two distinct collision sources:
+    /// (1) names that sanitize to the same leaf ("Trip/Italy" vs "Trip-Italy"),
+    /// and (2) two collections sharing an IDENTICAL display name — keying on the
+    /// stable id (not the name) is what catches case 2. Without it, sharing the
+    /// second would delete the first's copies and silently repoint its
+    /// already-distributed iCloud link at the second's images. Pure (no I/O).
+    static func uniqueFolderName(for collectionName: String, identity: String,
+                                 owners: [String: String]) -> String {
         let base = sanitizedFolderName(collectionName)
         func free(_ name: String) -> Bool {
             guard let owner = owners[name] else { return true }   // unused
-            return owner == collectionName                        // already ours
+            return owner == identity                              // already ours
         }
         if free(base) { return base }
         var n = 2

@@ -14,12 +14,17 @@ export function decodeManifest(fragment) {
   } catch { return null; }
 }
 
+export const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
 export function validateManifest(m) {
   if (!m || typeof m !== 'object') return false;
   if (!Array.isArray(m.g) || m.g.length === 0) return false;
   if (!m.g.every(id => VALID_ID.test(id))) return false;
   if (m.p != null && !VALID_ID.test(m.p)) return false;
-  if (typeof m.e !== 'string' || isNaN(Date.parse(m.e))) return false;
+  // Require a strict date-only `e` (YYYY-MM-DD). isExpired/formatDate append a
+  // local time component; a value that already carried a time would yield an
+  // Invalid Date and make isExpired fail OPEN (never expire). Reject it here.
+  if (typeof m.e !== 'string' || !DATE_ONLY.test(m.e) || isNaN(Date.parse(m.e))) return false;
   for (const k of ['i', 'l', 'n', 'd']) if (typeof m[k] !== 'string') return false;
   return true;
 }

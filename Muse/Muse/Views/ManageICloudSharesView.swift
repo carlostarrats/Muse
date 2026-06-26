@@ -69,8 +69,20 @@ struct ManageICloudSharesView: View {
 
     private func delete(_ record: ICloudShareRecord) {
         // Remove the folder Muse created in its own iCloud container; the OS
-        // daemon propagates the removal. Then drop the record.
-        try? FileManager.default.removeItem(at: URL(fileURLWithPath: record.folderPath))
+        // daemon propagates the removal. Then drop the record. The path comes
+        // from the on-disk JSON store, so re-validate it the SAME way the copy
+        // path does — a corrupted/unexpected stored path must never let
+        // `removeItem` escape the share root (data-loss-sensitive container).
+        let folder = URL(fileURLWithPath: record.folderPath)
+        if let docs = ICloudZone.folderURL() {
+            let shareRoot = ICloudSharePaths.shareRoot(zoneDocuments: docs)
+            if ICloudSharePaths.isContainedShareFolder(folder, shareRoot: shareRoot) {
+                try? FileManager.default.removeItem(at: folder)
+            }
+        }
+        // Always drop the record (the user asked to remove it from the list);
+        // if the zone was unresolvable or the path failed validation we simply
+        // don't touch the filesystem.
         store.remove(id: record.id)
         records = store.all()
     }

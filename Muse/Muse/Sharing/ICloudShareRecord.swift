@@ -15,6 +15,15 @@ struct ICloudShareRecord: Codable, Identifiable, Equatable {
     let folderPath: String
     let itemCount: Int
     let createdAt: Date
+    /// The owning collection's STABLE id (optional: older records predate this
+    /// field and decode to nil). Used to disambiguate share folders so two
+    /// collections with the same display name can't clobber each other's folder.
+    /// Falls back to `collectionName` as the identity when absent.
+    var collectionID: String? = nil
+
+    /// Identity used for folder-ownership comparisons: the stable id when known,
+    /// otherwise the display name (legacy records).
+    var identity: String { collectionID ?? collectionName }
 }
 
 final class ICloudShareStore {

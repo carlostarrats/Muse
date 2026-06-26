@@ -16,9 +16,12 @@
 	</array>
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
-	<!-- Sparkle self-update needs outgoing HTTPS to fetch the appcast feed
-	     and download the signed update. This is the ONLY network access the
-	     app makes (no analytics, no telemetry). -->
+	<!-- Outgoing HTTPS, used by exactly two sanctioned paths: (1) Sparkle
+	     self-update (fetch the signed appcast feed + download the update), and
+	     (2) the opt-in Google Drive collection share (sign-in / Publish / Manage
+	     / launch expiry-sweep), where the user's own images upload to THEIR OWN
+	     Drive. No analytics, no telemetry — the developer still receives no data,
+	     so the "Data Not Collected" privacy label is unchanged. -->
 	<key>com.apple.security.network.client</key>
 	<true/>
 	<!-- Sandboxed Sparkle installs run through Sparkle's XPC services; the

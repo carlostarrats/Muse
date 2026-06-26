@@ -19,6 +19,9 @@ struct ShareCollectionButton: View {
     @EnvironmentObject private var googleAuth: GoogleOAuth
     let title: String
     let count: Int
+    /// The owning collection's stable id — used to key its iCloud share folder
+    /// so two collections with the same display name can't clobber each other.
+    let collectionID: String
 
     // Mirror the grid's current density (the bottom-right column slider).
     @AppStorage("gridColumnCount") private var gridColumns = 4
@@ -82,7 +85,7 @@ struct ShareCollectionButton: View {
     private func startICloudShare() {
         iCloudService.reset()
         showingICloudShare = true
-        iCloudService.start(title: title, urls: exportURLs)
+        iCloudService.start(title: title, collectionID: collectionID, urls: exportURLs)
     }
 
     private func makePDF(pageSize: CGSize) async -> URL? {

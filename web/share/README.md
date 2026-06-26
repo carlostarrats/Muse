@@ -23,7 +23,8 @@ share.test.mjs   pure-logic unit tests — run: node share.test.mjs
    `/s /index.html 200`, or name the file `s.html`). The `_headers` file applies
    the CSP automatically.
 3. Verify: open `https://<domain>/s#<payload>` with a real manifest — the
-   signature renders, the grid fills from Drive, **Save** downloads the PDF.
+   signature renders, the grid fills from Drive, and **Save PDF** opens the
+   browser print dialog (the recipient picks the paper size and prints to PDF).
 
 ## Google OAuth client (one-time, owner)
 
