@@ -20,7 +20,6 @@ struct DriveShareSheet: View {
     @State private var intro: String = ""
     @State private var label: String = AppSettings.driveShareLabel
     @State private var name: String = AppSettings.driveShareName
-    @State private var date = Date()
     @State private var expiry = Calendar.current.date(byAdding: .day, value: 30, to: Date()) ?? Date()
 
     init(auth: GoogleOAuth, title: String, urls: [URL], onClose: @escaping () -> Void) {
@@ -67,14 +66,15 @@ struct DriveShareSheet: View {
                   prompt: String(localized: "e.g. Sent by"))
             field(String(localized: "Name"), text: $name,
                   prompt: String(localized: "e.g. The Project"))
-            DatePicker(String(localized: "Date"), selection: $date, displayedComponents: .date)
             DatePicker(String(localized: "Expires"), selection: $expiry, displayedComponents: .date)
 
             HStack {
                 Spacer()
                 Button(String(localized: "Publish")) {
+                    // Today's date is automatic (used only in the Drive folder
+                    // name, never shown on the page) — one less field for the user.
                     let form = DriveShareForm(intro: intro, label: label, name: name,
-                                              date: date, expiry: expiry)
+                                              date: Date(), expiry: expiry)
                     service.publish(form: form, title: title, urls: urls)
                 }
                 .keyboardShortcut(.defaultAction)
