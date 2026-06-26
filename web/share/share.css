@@ -117,8 +117,9 @@ html, body {
 @media print {
   @page { margin: 0.5in; }
   /* Always print on white with dark text — never inherit the chosen screen
-     backdrop (a dark backdrop would make the title white-on-white in the PDF). */
-  html { --bg: #fff; --ink: #1c1c1e; --muted: #6a6a6a; --tile: #e2e2e2; }
+     backdrop (a dark backdrop would make the title white-on-white in the PDF).
+     !important so this beats the higher-specificity html[data-bg="dark"] rule. */
+  html { --bg: #fff !important; --ink: #1c1c1e !important; --muted: #6a6a6a !important; --tile: #e2e2e2 !important; }
   html, body { background: #fff; }
   #app { padding: 0; }
   .save, .expires, .bg-switcher { display: none !important; }
