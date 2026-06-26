@@ -356,7 +356,9 @@ Muse/Muse/
                                    header pills on page 1 (width-clamped + truncated)
   Sharing/                         collection share — backend #1: iCloud (native Copy Link)
     ICloudSharePaths.swift           pure: sanitize collection name → deterministic `Documents/Shared
-                                     Collections/<name>/` folder under the iCloud zone. Unit-tested
+                                     Collections/<name>/` folder under the iCloud zone (rejects
+                                     `.`/`..`/all-dots traversal; `uniqueFolderName` disambiguates
+                                     different collections that sanitize alike). Unit-tested
     ICloudShareRecord.swift          ICloudShareRecord + ICloudShareStore — JSON list in App Support (NOT
                                      iCloud/SQLite) of shares Muse made; newest-first. Unit-tested
     UploadTally.swift                pure reducer: uploaded/total + isComplete/fraction. Unit-tested
