@@ -4270,3 +4270,12 @@ class), now fixed:
   prune (esp. the Drive network loop), and a batched `DriveShareStore.remove(ids:)`
   (one rewrite, unit-tested) replacing per-id writes.
 Tests: 453 passed / 0 failures.
+
+**Follow-up — SettingsView footer localization shipped (same session).** The
+deferral logged above (doc fix #7) is now done, not deferred. The two `+`-
+concatenated footers in `SettingsView.swift` ("Automatic organization", "Sidebar")
+forced the verbatim `Text(_:String)` initializer, so they shipped in English; each
+is now a single string literal (→ `LocalizedStringKey`), with authored French added
+to the catalog (state `translated`). The doc's third footer ("Grid") was already a
+single literal and localized fine, so only two strings changed. Removed the resolved
+item from `possible-updates.md`. Build (Debug + Release) + UI + `MuseTests` all green.
