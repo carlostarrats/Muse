@@ -102,8 +102,11 @@ struct SettingsView: View {
         .scrollContentBackground(.hidden)
     }
 
-    /// Run a sign-in/out action with the busy spinner shown.
+    /// Run a sign-in/out action with the busy spinner shown. Guards against a
+    /// double-tap starting two flows (two browser prompts) before the button
+    /// swaps to the spinner.
     private func runAuth(_ action: () async -> Void) async {
+        guard !authBusy else { return }
         authBusy = true
         await action()
         authBusy = false
