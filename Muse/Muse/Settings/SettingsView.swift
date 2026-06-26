@@ -13,10 +13,12 @@ import SwiftUI
 
 struct SettingsView: View {
     @Binding var isPresented: Bool
+    @EnvironmentObject private var googleAuth: GoogleOAuth
     @AppStorage(AppSettings.autoTagKey) private var autoTag = true
     @AppStorage(AppSettings.autoCollectionsKey) private var autoCollections = true
     @AppStorage(AppSettings.showFileNamesKey) private var showFileNames = false
     @AppStorage(AppSettings.showCollectionsInSidebarKey) private var showCollectionsInSidebar = false
+    @State private var authBusy = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -73,12 +75,42 @@ struct SettingsView: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+
+            Section {
+                HStack {
+                    Text(googleAuth.isSignedIn
+                         ? String(localized: "Signed in to Google")
+                         : String(localized: "Not signed in"))
+                    Spacer()
+                    if authBusy {
+                        ProgressView().controlSize(.small)
+                    } else if googleAuth.isSignedIn {
+                        Button("Sign Out") { Task { await runAuth { await googleAuth.signOut() } } }
+                    } else {
+                        Button("Sign In") { Task { await runAuth { try? await googleAuth.signIn() } } }
+                    }
+                }
+            } header: {
+                Text("Google Drive")
+            } footer: {
+                Text("Sign in to publish a collection as a shareable Drive web page. Sign out to switch to a different Google account.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
+    }
+
+    /// Run a sign-in/out action with the busy spinner shown.
+    private func runAuth(_ action: () async -> Void) async {
+        authBusy = true
+        await action()
+        authBusy = false
     }
 }
 
 #Preview {
     SettingsView(isPresented: .constant(true))
+        .environmentObject(GoogleOAuth())
 }

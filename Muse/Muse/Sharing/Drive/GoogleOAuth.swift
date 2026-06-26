@@ -34,6 +34,10 @@ enum DriveAuthError: Error { case cancelled, badResponse, notSignedIn, refreshFa
             _ = try? await URLSession.shared.data(for: req)
         }
         store.clear()
+        // The remembered Muse-root folder belongs to the OLD account — drop it
+        // so the next account gets a fresh "Muse" folder (drive.file can't see
+        // the previous account's folder anyway).
+        AppSettings.driveRootFolderID = nil
         isSignedIn = false
     }
 
@@ -58,7 +62,9 @@ enum DriveAuthError: Error { case cancelled, badResponse, notSignedIn, refreshFa
             .init(name: "code_challenge_method", value: "S256"),
             .init(name: "state", value: state),
             .init(name: "access_type", value: "offline"),
-            .init(name: "prompt", value: "consent"),
+            // select_account → always show the chooser (lets the user switch
+            // personal↔business); consent → guarantees a refresh token.
+            .init(name: "prompt", value: "select_account consent"),
         ]
         let callback = try await authenticate(url: comps.url!,
                                               scheme: DriveConfig.redirectScheme)
