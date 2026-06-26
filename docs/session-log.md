@@ -4365,3 +4365,50 @@ stale-read race the token guarded.
 (0 failures). Owner confirmed the new feel ("so much better"). CLAUDE.md tag-filter +
 grid-`.id` durable constraints and the GridView in-code comment updated to describe
 the synchronous resolution.
+
+### Drive share go-live: OAuth production flip + legal pages — 2026-06-26 (`feat/next-68`)
+
+**Discovery (the load-bearing bug).** The Google Drive share shipped in release builds
+with its OAuth consent screen still in Google's **"Testing"** publishing status. In
+testing mode only manually-added test users can sign in (everyone else hits Google's
+"app is being tested" wall) and refresh tokens expire after 7 days — so the feature
+*silently did not work for the public* since launch. It worked in every owner test
+because the developer account is implicitly a tester. CLAUDE.md's Polish 18 row had
+said the feature "runs in Debug," but there is **no `#if DEBUG` gate anywhere** —
+`ShareCollectionButton`'s "Share Drive Link", the Settings sign-in row, and the
+"Manage Drive Shares…" menu item all ship in release. That stale note hid the gap.
+Not a data/liability issue (testing mode is *more* locked down) — purely "feature
+unreachable for non-test users."
+
+**Fix — go to production.** Because the only scope is `drive.file` (non-sensitive),
+production needs **no verification review / CASA audit**, only a complete consent
+screen: an authorized + ownership-verified domain plus published privacy + terms URLs.
+Built three static pages served from the existing Cloudflare Pages site
+(`muse-share.pages.dev`): `about.html` (`/about`, the App home page — kept off the
+root because share links live at the root), `privacy.html` (`/privacy`), `terms.html`
+(`/terms`), styled by a new `legal.css` (linked, not inline, to satisfy the strict
+`style-src 'self'` CSP from `_headers`). Privacy discloses the honest facts: app
+collects nothing; the two network paths (Sparkle + user-initiated Drive publish to the
+user's OWN Drive); Cloudflare as host may log visitor IPs; the manifest rides the URL
+fragment so it never reaches the server. Terms is an Acceptable-Use/CSAM-prohibition +
+"content lives in your Drive, not the developer's" + report-to-NCMEC-if-notified +
+no-warranty/liability cap (governed by California/USA). Domain ownership verified in
+Google Search Console via a `<meta name="google-site-verification">` tag added to the
+share shell + `/about` (the downloaded `google….html` file method 308-redirects under
+Cloudflare clean URLs, so the meta tag is the reliable path — leave it in place
+permanently; Google re-verifies). Consent screen flipped to **In production**.
+
+**Also this session.** (1) Share-page footer: a quiet below-the-fold bar
+(`#app { min-height: 100vh }` pushes it past the first screen) with **Expires …** on
+the left and **Privacy · Terms** on the right; the expires date was relocated out of
+the header into that bar at the owner's request. Hidden in print (the recipient's PDF),
+`min-height` reset there so it adds no blank page. (2) Settings → Google Drive
+Sign In/Out now use the shared pill `HoverButton` (made non-`private` in
+`DriveShareForm.swift`) so they get a visible hover state matching the Publish button;
+titles wrapped in `String(localized:)` (same keys as the prior `Button` literals).
+
+**Verification.** `BUILD SUCCEEDED`; `MuseTests` `** TEST SUCCEEDED **` + `MuseUITests`
+passed; `share.test.mjs` green. All five web pages return 200 with CSP headers intact.
+**Scheme quirk noted:** `xcodebuild -scheme Muse test` only runs `MuseUITests` — the
+`MuseTests` unit suite must be run with `-only-testing:MuseTests` (the Muse scheme's
+test action omits it). Pre-existing; flagged for a future scheme fix.

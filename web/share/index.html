@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
+  <!-- Google Search Console domain-ownership proof (for the OAuth consent
+       screen's authorized-domain requirement). Inert metadata. -->
+  <meta name="google-site-verification" content="vuvV6p7wp-46rDS0smZfBEj1wZbXF08K7C7sFvIXo3E" />
   <!-- Defense-in-depth CSP fallback: the primary policy is served via _headers
        (which also sets frame-ancestors / Referrer-Policy, not expressible in a
        meta tag). This mirrors it so the page is never left with NO CSP if it's
@@ -20,7 +23,6 @@
     <header class="bar">
       <div class="sig">
         <span id="intro" class="intro"></span>
-        <span id="expires" class="expires"></span>
         <button id="save" class="save" type="button">Save PDF</button>
 
         <!-- Backdrop switcher: each dot is filled with the shade it applies, so
@@ -44,6 +46,19 @@
     <div class="notice notice-expired">This share has expired.</div>
     <div class="notice notice-unavailable">This share is no longer available.</div>
   </div>
+
+  <!-- Static legal links. Plain <a> navigations (allowed under default-src
+       'none' — CSP restricts resource loads, not link clicks). Cloudflare Pages
+       serves privacy.html / terms.html at the clean /privacy and /terms paths.
+       Hidden in print so they don't bleed into the recipient's PDF. -->
+  <footer class="legal">
+    <span id="expires" class="expires"></span>
+    <span class="legal-links">
+      <a href="/privacy">Privacy</a>
+      <span class="sep" aria-hidden="true">·</span>
+      <a href="/terms">Terms</a>
+    </span>
+  </footer>
 
   <script type="module" src="share.js"></script>
 </body>
