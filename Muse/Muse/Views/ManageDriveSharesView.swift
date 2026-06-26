@@ -55,19 +55,13 @@ struct ManageDriveSharesView: View {
                     .font(.system(size: 13)).foregroundStyle(.secondary)
             }
             Spacer()
-            Button("Open Link") {
+            OpenLinkButton {
                 if let url = URL(string: record.pageURL) { NSWorkspace.shared.open(url) }
             }
-            .buttonStyle(.link)
             if deleting.contains(record.id) {
-                ProgressView().controlSize(.small)
+                ProgressView().controlSize(.small).frame(width: 18)
             } else {
-                Button(role: .destructive) { Task { await delete(record) } } label: {
-                    Image(systemName: "trash")
-                }
-                .buttonStyle(.borderless)
-                .help("Unpublish — delete this share's Drive folder now")
-                .accessibilityLabel("Unpublish Drive share")
+                TrashButton { Task { await delete(record) } }
             }
         }
     }
@@ -79,5 +73,38 @@ struct ManageDriveSharesView: View {
         try? await client.deleteFolder(id: record.folderID)
         store.remove(id: record.id)
         records = store.all()
+    }
+}
+
+/// "Open Link" — accent text that underlines + brightens on hover.
+private struct OpenLinkButton: View {
+    let action: () -> Void
+    @State private var hovering = false
+    var body: some View {
+        Button(action: action) {
+            Text("Open Link")
+                .font(.system(size: 13))
+                .foregroundStyle(Color.accentColor.opacity(hovering ? 1 : 0.85))
+                .underline(hovering)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+    }
+}
+
+/// Trash — secondary glyph that reddens on hover.
+private struct TrashButton: View {
+    let action: () -> Void
+    @State private var hovering = false
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "trash")
+                .foregroundStyle(hovering ? Color.red : Color.secondary)
+                .frame(width: 18)
+        }
+        .buttonStyle(.plain)
+        .help("Unpublish — delete this share's Drive folder now")
+        .accessibilityLabel("Unpublish Drive share")
+        .onHover { hovering = $0 }
     }
 }
