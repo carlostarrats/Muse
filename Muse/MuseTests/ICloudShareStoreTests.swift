@@ -54,4 +54,28 @@ final class ICloudShareStoreTests: XCTestCase {
         store.remove(id: "1")
         XCTAssertTrue(store.all().isEmpty)
     }
+
+    func testPruneMissingDropsGoneFoldersAndKeepsTheRest() {
+        let (store, url) = tempStore()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let gone = ICloudShareRecord(id: "1", collectionName: "Gone", folderPath: "/p/Gone",
+                                     itemCount: 1, createdAt: Date(timeIntervalSince1970: 10))
+        let live = ICloudShareRecord(id: "2", collectionName: "Live", folderPath: "/p/Live",
+                                     itemCount: 1, createdAt: Date(timeIntervalSince1970: 20))
+        store.add(gone); store.add(live)
+        // Predicate stands in for the filesystem: only "Live" still exists.
+        let kept = store.pruneMissing { $0.folderPath == "/p/Live" }
+        XCTAssertEqual(kept, [live])                 // returned survivors, newest-first
+        XCTAssertEqual(store.all(), [live])          // and persisted (gone record dropped)
+    }
+
+    func testPruneMissingKeepsAllWhenNonePruned() {
+        let (store, url) = tempStore()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let a = ICloudShareRecord(id: "1", collectionName: "A", folderPath: "/p/A",
+                                  itemCount: 1, createdAt: Date(timeIntervalSince1970: 10))
+        store.add(a)
+        XCTAssertEqual(store.pruneMissing { _ in true }, [a])
+        XCTAssertEqual(store.all(), [a])
+    }
 }

@@ -4235,3 +4235,19 @@ client-side-only expiry, folder-level "anyone reader", account-switch orphaned D
 catalog complete (434 keys, 0 missing/needs-review). CLAUDE.md gained the
 `isContainedShareFolder` / stable-id folder-identity rules folded into the existing iCloud
 share-safety gotcha.
+
+**Follow-up — prune stale Manage rows (same session).** Both Manage modals
+previously read only their JSON record store, so a share whose folder you deleted
+*outside* Muse (Finder/iCloud Drive, or the Google Drive UI) lingered as a dead
+row with no indicator. Now each prunes on open:
+- **iCloud** (`ManageICloudSharesView`): new pure `ICloudShareStore.pruneMissing(exists:)`
+  drops records whose folder is gone (unit-tested). The view gates it on a
+  resolvable iCloud zone (resolved off-main) so a temporarily-unavailable
+  container can't wipe live shares; non-contained/odd records are kept for manual
+  removal. Drops only the local record, never a file.
+- **Drive** (`ManageDriveSharesView`): checks each record via the existing
+  `DriveClient.folderExists` (the only sanctioned network in the "Manage" action).
+  Conservative — prunes ONLY on a definitive not-found (404 / trashed, which also
+  covers a since-switched account); any thrown error (offline / auth / 5xx) keeps
+  the record, and nothing is pruned while signed out.
+Tests: 452 passed / 0 failures.

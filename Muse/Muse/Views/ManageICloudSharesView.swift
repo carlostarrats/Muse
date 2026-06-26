@@ -44,7 +44,31 @@ struct ManageICloudSharesView: View {
         }
         .padding(28)
         .frame(width: 600, height: 520)
-        .onAppear { records = store.all() }
+        .onAppear {
+            records = store.all()      // show what we have immediately…
+            Task { await pruneMissing() } // …then drop any whose folder is gone.
+        }
+    }
+
+    /// Remove rows whose iCloud folder no longer exists (e.g. the user deleted it
+    /// in Finder/iCloud Drive directly). Only prunes when the iCloud zone is
+    /// reachable — if it can't be resolved we leave every record untouched, so a
+    /// temporarily-unavailable container never wipes live shares. Drops only the
+    /// local record; the (already-gone) folder is not touched.
+    private func pruneMissing() async {
+        // First zone access can block — resolve it off the main actor (mirrors
+        // the copy path), then prune on the main actor with cheap fileExists stats.
+        let docs = await Task.detached(priority: .utility) { ICloudZone.folderURL() }.value
+        guard let docs else { return }
+        let shareRoot = ICloudSharePaths.shareRoot(zoneDocuments: docs)
+        records = store.pruneMissing { record in
+            let folder = URL(fileURLWithPath: record.folderPath)
+            // A non-contained/odd record is kept so the user can still remove it
+            // by hand; a proper share survives only if its folder still exists.
+            guard ICloudSharePaths.isContainedShareFolder(folder, shareRoot: shareRoot)
+            else { return true }
+            return FileManager.default.fileExists(atPath: folder.path)
+        }
     }
 
     /// Hairline between rows (matches InfoSheet — between rows only, never

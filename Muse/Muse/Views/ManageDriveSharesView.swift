@@ -44,7 +44,30 @@ struct ManageDriveSharesView: View {
         }
         .padding(28)
         .frame(width: 520, height: 380)
-        .onAppear { records = store.all() }
+        .onAppear {
+            records = store.all()      // show what we have immediately…
+            Task { await pruneMissing() } // …then drop any whose Drive folder is gone.
+        }
+    }
+
+    /// Remove rows whose Drive folder no longer exists — the user deleted/trashed
+    /// it in Google Drive directly, or it belongs to a since-switched account
+    /// (drive.file can't see it → 404). Network happens only here, inside this
+    /// explicit "Manage" action. Conservative: prune ONLY on a definitive
+    /// not-found; any thrown error (offline / auth / 5xx) is inconclusive and the
+    /// record is kept, and nothing is pruned while signed out.
+    private func pruneMissing() async {
+        guard googleAuth.isSignedIn else { return }
+        let client = DriveClient(auth: googleAuth)
+        var goneIDs: [String] = []
+        for record in store.all() {
+            if let exists = try? await client.folderExists(id: record.folderID), exists == false {
+                goneIDs.append(record.id)
+            }
+        }
+        guard goneIDs.isEmpty == false else { return }
+        for id in goneIDs { store.remove(id: id) }
+        records = store.all()
     }
 
     private func row(_ record: DriveShareRecord) -> some View {
