@@ -11,8 +11,27 @@
        (which also sets frame-ancestors / Referrer-Policy, not expressible in a
        meta tag). This mirrors it so the page is never left with NO CSP if it's
        ever served somewhere _headers doesn't apply (preview host, renamed file). -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https://drive.google.com https://*.googleusercontent.com; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' https://drive.google.com https://*.googleusercontent.com; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'">
   <title>Shared Collection</title>
+  <!-- Favicons (same set as the marketing site). -->
+  <link rel="icon" type="image/png" href="favicon-light.png" media="(prefers-color-scheme: light)" />
+  <link rel="icon" type="image/png" href="favicon-dark.png" media="(prefers-color-scheme: dark)" />
+  <link rel="icon" type="image/png" href="favicon-light.png" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <!-- Social link-preview (Open Graph / Twitter card). Static + one-for-all:
+       scrapers don't run JS and can't read the #fragment, so the per-collection
+       title/sender never reach them. Nothing personal is exposed here. -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Muse">
+  <meta property="og:title" content="Someone shared images with you">
+  <meta property="og:description" content="Tap to view the full collection.">
+  <meta property="og:image" content="https://muse-share.pages.dev/share-img.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Someone shared images with you">
+  <meta name="twitter:description" content="Tap to view the full collection.">
+  <meta name="twitter:image" content="https://muse-share.pages.dev/share-img.jpg">
   <link rel="stylesheet" href="share.css">
 </head>
 <body>
