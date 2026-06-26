@@ -327,10 +327,6 @@ final class AppState: ObservableObject {
     /// confirm. Stored (not @Published) — extensions can't add stored props.
     var pendingNewCollectionPaths: [String] = []
 
-    /// Monotonic token so a slow tag-filter load can't clobber a newer pick.
-    /// Not `private`: read/written by `setActiveTag` in AppState+Filters.swift.
-    var tagRequestToken = 0
-
     // MARK: - Derived: visibleFiles cache
 
     /// Memoized backing for `visibleFiles` (computed in AppState+Filters.swift).
@@ -691,7 +687,7 @@ final class AppState: ObservableObject {
         // images already in place below it).
         if showingCollections { showingCollections = false }
         if activeCollectionID != nil { setActiveCollection(nil, animated: false) }
-        if !activeTagLabels.isEmpty { setActiveTag(nil, animated: false) }
+        if !activeTagLabels.isEmpty { setActiveTag(nil) }
         // Clear the search inline (not via clearSearch(), which would trigger a
         // second, skeleton-less reload on top of the one below). A stale search
         // would otherwise leave the query in the field, the grid showing search

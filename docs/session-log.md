@@ -4329,3 +4329,39 @@ container. The Drive share backend — untouched.
 No remaining iCloud-share symbol references in code. CLAUDE.md status row + durable
 constraints and `architecture-map.md` updated to record the removal and the
 "don't re-add" reason.
+
+### Tag-filter feels instant — synchronous resolution — 2026-06-25 (`feat/next-67`)
+
+**Symptom (owner):** selecting a tag inside a folder read as three jagged steps —
+the existing images slid DOWN, then disappeared, then the filtered set appeared.
+The owner wanted it to feel instant: images gone first, no downward drift.
+
+**Root cause.** `setActiveTags` committed `activeTagLabels` synchronously (so the
+"Viewing… Clear all" filter bar appeared at once, growing `TagChipsRow` and shoving
+the grid down via the `VStack(spacing: 0)`), but resolved `activeTagPaths` — the
+actual filtered set — in an async `Task` (`pathsForTag` DB read). For the frame(s)
+until the query returned, the bar was up but the grid still held the OLD, unfiltered
+images at the pushed-down position; only then did the `.id` swap to the filtered set.
+`TagChipsRow` also wrapped the bar's insertion in `.animation(…, value: activeTagLabels)`,
+so the down-shove was an animated glide.
+
+**Fix (timing only, no layout "hard rules" — owner explicitly didn't want reserved
+space etc.).** (1) Dropped the `TagChipsRow` `.animation`/`.transition` on the bar.
+(2) Made `setActiveTags` resolve the WHOLE filter SYNCHRONOUSLY: `activeTagLabels`
+AND a new `pathsForTagSync` (sync main-thread DB read) → `activeTagPaths`, all in the
+click's runloop turn, so the bar and the grid swap (`.transition(.identity)`, instant)
+land in ONE render — a single atomic snap. Removed the async `Task`, the
+`withAnimation` curve, the now-needless `tagRequestToken`, and the dead `animated`
+param on `setActiveTags`/`setActiveTag`.
+
+**Why the sync DB read is safe.** Every `queue.write` in the app is per-file — the
+Indexer hashes (line 69) and the AnalyzePipeline runs Vision BEFORE opening their
+single-file transactions, so the longest-held write is milliseconds. A sync read on
+the serial `DatabaseQueue` can at worst wait behind one such write; there are no bulk
+transactions to block on. Serial resolution also removes the old fast-Cmd-click
+stale-read race the token guarded.
+
+**Verification.** `BUILD SUCCEEDED`; full `MuseTests`/`MuseUITests` `TEST SUCCEEDED`
+(0 failures). Owner confirmed the new feel ("so much better"). CLAUDE.md tag-filter +
+grid-`.id` durable constraints and the GridView in-code comment updated to describe
+the synchronous resolution.
