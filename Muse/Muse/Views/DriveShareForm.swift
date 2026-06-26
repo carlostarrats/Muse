@@ -60,12 +60,12 @@ struct DriveShareSheet: View {
 
     private var form: some View {
         VStack(alignment: .leading, spacing: 14) {
-            field(String(localized: "Page intro"), text: $intro,
-                  prompt: String(localized: "e.g. Leslie-Ann Thomson ALDO MUAH 2025"))
+            field(String(localized: "Page Title"), text: $intro,
+                  prompt: String(localized: "Project Name"))
             field(String(localized: "Label"), text: $label,
                   prompt: String(localized: "e.g. Sent by"))
             field(String(localized: "Name"), text: $name,
-                  prompt: String(localized: "e.g. The Project"))
+                  prompt: String(localized: "Your Name"))
             DatePicker(String(localized: "Expires"), selection: $expiry, displayedComponents: .date)
 
             HStack {

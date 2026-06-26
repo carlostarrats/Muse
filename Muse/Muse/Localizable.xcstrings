@@ -4133,6 +4133,36 @@
           }
         }
       }
+    },
+    "Page Title": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Titre de la page"
+          }
+        }
+      }
+    },
+    "Project Name": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nom du projet"
+          }
+        }
+      }
+    },
+    "Your Name": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre nom"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
