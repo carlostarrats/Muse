@@ -34,3 +34,4 @@ Muse/build/
 # Release pipeline output (scripts/release.sh writes here)
 /build/
 build-release.log
+.wrangler/
