@@ -4135,3 +4135,40 @@ collision disambiguation.
 new regression tests cover traversal (`.`/`..`/`/../`) + collision disambiguation (3 cases). The
 iCloud copy path itself is integration-only (Debug strips the entitlement), so the pure
 `sanitizedFolderName`/`uniqueFolderName` units are the safety net.
+
+## 2026-06-25 — `feat/next-62` — accessibility + localization audit (since v1.2.1)
+
+The recurring sweep over everything new since the last release (v1.2.1): the iCloud +
+Drive collection-share features, the Settings Drive sign-in rows, the PaperSize PDF-export
+picker, the InfoSheet refresh, and the TagChipsRow / ViewerInfoColumn changes. Two
+parallel audits (localization, accessibility), then triaged with judgment.
+
+**Localization — already complete, no code change.** All 23 new user-facing literals are
+in `Localizable.xcstrings` with `translated` French. The audit over-reported badly: it
+flagged 7 `Text("…\(var)…")` strings as gaps, but **all 7 were false positives** —
+`Text` with interpolation IS a `LocalizedStringKey`, auto-extracted as a `%lld`/`%@`
+format key, and every one already had a French entry (`%lld images · expires %@`,
+`Uploading to iCloud… %lld of %lld`, the tag rename/delete alerts, etc.). `PaperSize.displayName`
+was already correctly hand-wrapped in `String(localized:)`. The real-risk patterns
+(AppKit `String` setters, `enum.displayName` literals) were all clean.
+
+**Accessibility — 4 genuine minor gaps fixed** (consistent with the existing
+"icon-only buttons need labels / decorative images get hidden" rules; no new invariant):
+1. `ShareCollectionButton.paperSizePopup` — the `NSPopUpButton` had no VO label (the
+   "Paper Size:" `NSTextField` is only a visual neighbor, not programmatically associated)
+   → `popup.setAccessibilityLabel(String(localized: "Paper Size"))`.
+2. `DriveShareForm` expiry `DatePicker` (`.labelsHidden()`, empty title) → `.accessibilityLabel(Text("Expires"))`.
+3. `DriveShareForm.failedView` decorative `exclamationmark.icloud` glyph → `.accessibilityHidden(true)`.
+4. `ICloudShareProgressView` same decorative glyph → `.accessibilityHidden(true)`.
+The share-list rows, Manage views, Settings buttons, and ViewerInfoColumn were already labeled.
+
+**Localization-catalog gotcha (workflow, not a must-not-break).** Adding the one new
+`Paper Size` key: both a Python re-serialize *and* `xcodebuild -exportLocalizations`
+reorder the WHOLE `.xcstrings` to Xcode's canonical key order — which differs from the
+committed file's order, producing a ~2,600-line pure-reordering diff for a 1-key add. For
+a single-key addition, prefer a minimal textual insertion at the correct alphabetical
+position (here, between `Pages` and `Paper Size:`) to keep the diff reviewable.
+
+**Verification.** App **BUILD SUCCEEDED**; full `MuseTests` + `MuseUITests` **all passed**
+(English host); catalog re-validated (434 keys, valid JSON, only `Paper Size` added, no value
+changes). CLAUDE.md unchanged — the fixes follow already-documented accessibility/localization rules.

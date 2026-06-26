@@ -74,6 +74,7 @@ struct DriveShareSheet: View {
                     .datePickerStyle(.field)
                     .labelsHidden()
                     .fixedSize()
+                    .accessibilityLabel(Text("Expires"))
             }
 
             HStack {
@@ -128,6 +129,7 @@ struct DriveShareSheet: View {
     private func failedView(_ message: String) -> some View {
         VStack(spacing: 14) {
             Image(systemName: "exclamationmark.icloud").font(.system(size: 26)).foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             Text(message).multilineTextAlignment(.center)
             HoverButton(title: String(localized: "Done"), prominent: true, isDefault: true) { onClose() }
         }

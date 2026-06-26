@@ -31,6 +31,7 @@ struct ICloudShareProgressView: View {
                 Image(systemName: "exclamationmark.icloud")
                     .font(.system(size: 28))
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
                 Text(message).multilineTextAlignment(.center)
                 Button("Done") { onClose() }
                     .keyboardShortcut(.defaultAction)
