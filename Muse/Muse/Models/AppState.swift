@@ -244,8 +244,6 @@ final class AppState: ObservableObject {
     /// in-collection back arrow returns here rather than to the main grid.
     @Published var showingCollections = false
 
-    /// Drives the View-menu "Manage iCloud Shares…" sheet.
-    @Published var iCloudSharesShown = false
     /// Drives the View-menu "Manage Drive Shares…" sheet.
     @Published var driveSharesShown = false
 

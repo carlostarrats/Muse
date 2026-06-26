@@ -19,16 +19,11 @@ struct ShareCollectionButton: View {
     @EnvironmentObject private var googleAuth: GoogleOAuth
     let title: String
     let count: Int
-    /// The owning collection's stable id — used to key its iCloud share folder
-    /// so two collections with the same display name can't clobber each other.
-    let collectionID: String
 
     // Mirror the grid's current density (the bottom-right column slider).
     @AppStorage("gridColumnCount") private var gridColumns = 4
     @State private var hovering = false
     @State private var preparing = false
-    @StateObject private var iCloudService = ICloudShareService()
-    @State private var showingICloudShare = false
     @State private var showingDriveShare = false
 
     /// The collection's CURRENTLY VISIBLE members, in grid order — the on-screen
@@ -45,7 +40,6 @@ struct ShareCollectionButton: View {
             Button("Save to…") { Task { await save() } }
             Button("Share") { Task { await share() } }
             Divider()
-            Button("Share iCloud Link") { startICloudShare() }
             Button("Share Drive Link") { showingDriveShare = true }
         } label: {
             Group {
@@ -68,24 +62,11 @@ struct ShareCollectionButton: View {
         .disabled(preparing || count == 0 || exportURLs.isEmpty)
         .help("Share collection")
         .accessibilityLabel("Share collection")
-        // onDismiss runs reset() on EVERY dismissal path — including Escape /
-        // OS-driven close — so the upload wait + query can never leak.
-        .sheet(isPresented: $showingICloudShare, onDismiss: { iCloudService.reset() }) {
-            ICloudShareProgressView(service: iCloudService) {
-                showingICloudShare = false
-            }
-        }
         .sheet(isPresented: $showingDriveShare) {
             DriveShareSheet(auth: googleAuth, title: title, urls: exportURLs) {
                 showingDriveShare = false
             }
         }
-    }
-
-    private func startICloudShare() {
-        iCloudService.reset()
-        showingICloudShare = true
-        iCloudService.start(title: title, collectionID: collectionID, urls: exportURLs)
     }
 
     private func makePDF(pageSize: CGSize) async -> URL? {

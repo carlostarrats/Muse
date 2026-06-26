@@ -119,17 +119,13 @@ struct InfoSheet: View {
                         Open a collection and use the share button in its \
                         header. Save to… lays the images out as a PDF at the \
                         paper size you pick, and Share sends that PDF on by \
-                        AirDrop, Mail, or Messages. Share iCloud Link copies \
-                        them into your iCloud Drive and gives you a link to \
-                        pass along. Share Drive Link signs you into your own \
-                        Google Drive, uploads the images there, and creates a \
-                        clean web page anyone can open in a browser — they can \
-                        switch the background and print it to a PDF at any \
-                        size. Either way nothing reaches Muse's makers: the \
-                        iCloud copy stays in your iCloud and the Drive copy \
-                        goes to your Drive. Take any link down later from the \
-                        View menu — Manage iCloud Shares… and Manage Drive \
-                        Shares….
+                        AirDrop, Mail, or Messages. Share Drive Link signs you \
+                        into your own Google Drive, uploads the images there, \
+                        and creates a clean web page anyone can open in a \
+                        browser — they can switch the background and print it \
+                        to a PDF at any size. Nothing reaches Muse's makers: \
+                        the Drive copy goes to your own Drive. Take a link \
+                        down later from the View menu — Manage Drive Shares….
                         """)
                     rowDivider
                     section("iCloud sync", """

@@ -4279,3 +4279,53 @@ is now a single string literal (→ `LocalizedStringKey`), with authored French 
 to the catalog (state `translated`). The doc's third footer ("Grid") was already a
 single literal and localized fine, so only two strings changed. Removed the resolved
 item from `possible-updates.md`. Build (Debug + Release) + UI + `MuseTests` all green.
+
+### Removed the iCloud collection-share backend — 2026-06-25 (`feat/next-66`)
+
+**What happened.** During real testing of "Share iCloud Link" in a signed build, the
+owner shared a collection to a Gmail address and the message **bounced** (Gmail
+`552-5.7.0` content block). There was also **no "Copy Link"** — the share sheet only
+offered email/AirDrop, and email attached the raw images.
+
+**Root cause (the design was wrong, not the code).** Polish 17 handed the synced
+folder to `NSSharingServicePicker(items:[folder])` on the assumption the OS would
+surface an iCloud "Copy Link" service. **It never does.** macOS *can* mint an iCloud
+Drive public link, but ONLY through **Finder's** Share menu — that affordance is a
+Finder-only feature backed by a private framework, not one of the `NSSharingService`s
+the OS hands to an app's share sheet. So the picker only ever showed file-transfer
+services; picking Mail attached the actual images → Gmail blocked them. The
+original design conflated "the OS can make iCloud links (true, in Finder)" with "our
+app's share sheet will offer iCloud links (false)". And because **Debug strips the
+iCloud entitlement**, the copy→upload→share path never ran until the owner ran it —
+the wrong assumption sailed past two review rounds straight to the first signed-build
+test. Apple exposes no API to mint a public iCloud gallery link (the lone
+`url(forPublishingUbiquitousItemAt:)` is a single-file download link, system expiry,
+flaky — not a gallery).
+
+**Decision: rip it out entirely.** The **Drive backend (Polish 18) is the real link
+path** — it has an actual API and produces a branded page. The iCloud "Share Link"
+could not deliver a link from inside the app, so keeping it was just a button that
+bounces emails.
+
+**Removed (9 files):** `Sharing/ICloudSharePaths.swift`, `ICloudShareRecord.swift`,
+`ICloudShareService.swift`, `UploadTally.swift`, `Views/ICloudShareProgressView.swift`,
+`Views/ManageICloudSharesView.swift`, and the three matching `MuseTests` files.
+**Edited:** `ShareCollectionButton` (dropped the menu item, the `iCloudService`
+`@StateObject`, the progress sheet, the `startICloudShare()` helper, and the now-orphan
+`collectionID` property) + its one call site in `CollectionsRow`; `AppState`
+(`iCloudSharesShown` flag); `ContentView` (the Manage sheet); `MuseApp` (the View-menu
+"Manage iCloud Shares…" command); `InfoSheet` ("Sharing a collection" paragraph
+rewritten Drive-only). **Localization:** removed 12 orphaned `Localizable.xcstrings`
+keys (Share iCloud Link / Manage iCloud Shares… / Copying / Uploading to iCloud… /
+Sign in to iCloud… / the old paragraph, etc.) — carefully NOT the standing
+runtime-variable INFO-card labels the exporter also marks `stale`; authored French for
+the new Drive-only paragraph.
+
+**Kept (do not confuse):** `Filesystem/ICloudZone.swift` and all iCloud **sync**
+(the "Muse" sync folder + sidecars) — a separate feature that legitimately uses the
+container. The Drive share backend — untouched.
+
+**Verification.** `BUILD SUCCEEDED`; full `MuseTests` `TEST SUCCEEDED` (0 failures).
+No remaining iCloud-share symbol references in code. CLAUDE.md status row + durable
+constraints and `architecture-map.md` updated to record the removal and the
+"don't re-add" reason.
