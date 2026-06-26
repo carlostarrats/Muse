@@ -86,6 +86,8 @@ struct InfoSheet: View {
                     section("Tags", """
                         The chip row shows the tags of the folder you're \
                         viewing. Click a chip to filter; hover for its count. \
+                        Whatever tags are active appear in a bar beneath the \
+                        chips that you can clear one at a time or all at once. \
                         Right-click a chip to rename or delete the tag \
                         everywhere; add tags from an image's right-click menu \
                         or inside the viewer.
@@ -108,10 +110,26 @@ struct InfoSheet: View {
                     rowDivider
                     section("Sharing", """
                         Share an image from the viewer — AirDrop, Mail, \
-                        Messages, or Save to Files — or share a whole \
-                        collection as a PDF from its header. From Finder, \
-                        right-click any file and choose Share → Muse to send it \
-                        into your iCloud folder.
+                        Messages, or Save to Files. From Finder, right-click \
+                        any file and choose Share → Muse to send it into your \
+                        iCloud folder.
+                        """)
+                    rowDivider
+                    section("Sharing a collection", """
+                        Open a collection and use the share button in its \
+                        header. Save to… lays the images out as a PDF at the \
+                        paper size you pick, and Share sends that PDF on by \
+                        AirDrop, Mail, or Messages. Share iCloud Link copies \
+                        them into your iCloud Drive and gives you a link to \
+                        pass along. Share Drive Link signs you into your own \
+                        Google Drive, uploads the images there, and creates a \
+                        clean web page anyone can open in a browser — they can \
+                        switch the background and print it to a PDF at any \
+                        size. Either way nothing reaches Muse's makers: the \
+                        iCloud copy stays in your iCloud and the Drive copy \
+                        goes to your Drive. Take any link down later from the \
+                        View menu — Manage iCloud Shares… and Manage Drive \
+                        Shares….
                         """)
                     rowDivider
                     section("iCloud sync", """
@@ -147,7 +165,9 @@ struct InfoSheet: View {
                         Settings (⌘,) you can turn off automatic tagging or \
                         automatic collections. Existing tags and collections \
                         stay; only future automatic work is paused, and the \
-                        manual commands still work.
+                        manual commands still work. Settings is also where you \
+                        sign in to Google Drive for collection links — and sign \
+                        out to switch accounts.
                         """)
                     rowDivider
                     section("Updates", """
@@ -166,12 +186,19 @@ struct InfoSheet: View {
                     section("Privacy & retention", """
                         Everything happens on this Mac. Muse collects nothing — \
                         no analytics, no telemetry; nothing about you or your \
-                        files is ever uploaded or shared. Its only network use \
-                        is checking for and downloading app updates (iCloud \
-                        sync, if you use it, is handled by the system). If you \
-                        remove a folder from the sidebar, its index data is \
-                        kept for 180 days — so re-adding it restores everything \
-                        instantly — then deleted automatically.
+                        files is ever sent to its makers. It uses the network \
+                        for only two things: checking for and downloading app \
+                        updates, and the Google Drive sharing you opt into — \
+                        signing in, uploading a collection to your own Drive, \
+                        and later managing or expiring those links. That \
+                        sharing uses the narrow drive.file permission, so Muse \
+                        can only ever touch the files it created in your Drive, \
+                        never the rest of it; sign out anytime. (iCloud sync \
+                        and iCloud links, if you use them, are handled by the \
+                        system.) If you remove a folder from the sidebar, its \
+                        index data is kept for 180 days — so re-adding it \
+                        restores everything instantly — then deleted \
+                        automatically.
                         """)
                 }
             }
