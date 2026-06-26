@@ -11,7 +11,7 @@ import Foundation
 
 enum DriveConfig {
     /// Google OAuth client id (iOS/macOS type). Format: NNN-xxxx.apps.googleusercontent.com
-    static let clientID = "REPLACE_WITH_GOOGLE_OAUTH_CLIENT_ID.apps.googleusercontent.com"
+    static let clientID = "572618611419-tpnrrjdskcfknc1157em3bamudbu9pt7.apps.googleusercontent.com"
 
     /// Reverse-client-id custom scheme Google uses for native redirects.
     static var redirectScheme: String {

@@ -31,7 +31,7 @@
 			<string>com.tarrats.Muse.googleoauth</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.REPLACE_WITH_REVERSE_CLIENT_ID</string>
+				<string>com.googleusercontent.apps.572618611419-tpnrrjdskcfknc1157em3bamudbu9pt7</string>
 			</array>
 		</dict>
 	</array>
