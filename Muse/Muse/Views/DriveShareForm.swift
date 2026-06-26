@@ -76,14 +76,13 @@ struct DriveShareSheet: View {
 
             HStack {
                 Spacer()
-                Button(String(localized: "Publish")) {
+                HoverButton(title: String(localized: "Publish"), prominent: true, isDefault: true) {
                     // Today's date is automatic (used only in the Drive folder
                     // name, never shown on the page) — one less field for the user.
                     let form = DriveShareForm(intro: intro, label: label, name: name,
                                               date: Date(), expiry: expiry)
                     service.publish(form: form, title: title, urls: urls)
                 }
-                .keyboardShortcut(.defaultAction)
                 .disabled(intro.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .padding(.top, 6)
@@ -113,13 +112,13 @@ struct DriveShareSheet: View {
             Text(url).font(.system(size: 12)).foregroundStyle(.secondary)
                 .textSelection(.enabled).lineLimit(2).truncationMode(.middle)
             HStack {
-                Button(String(localized: "Copy Link")) {
+                HoverButton(title: String(localized: "Copy Link")) {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(url, forType: .string)
                 }
-                Button(String(localized: "Share…")) { shareLink(url) }
+                HoverButton(title: String(localized: "Share…")) { shareLink(url) }
                 Spacer()
-                Button(String(localized: "Done")) { onClose() }.keyboardShortcut(.defaultAction)
+                HoverButton(title: String(localized: "Done"), prominent: true, isDefault: true) { onClose() }
             }
         }
     }
@@ -128,14 +127,48 @@ struct DriveShareSheet: View {
         VStack(spacing: 14) {
             Image(systemName: "exclamationmark.icloud").font(.system(size: 26)).foregroundStyle(.secondary)
             Text(message).multilineTextAlignment(.center)
-            Button(String(localized: "Done")) { onClose() }.keyboardShortcut(.defaultAction)
+            HoverButton(title: String(localized: "Done"), prominent: true, isDefault: true) { onClose() }
         }
         .frame(maxWidth: .infinity).padding(.vertical, 16)
     }
 
     private func shareLink(_ url: String) {
-        guard let contentView = NSApp.keyWindow?.contentView else { return }
-        let picker = NSSharingServicePicker(items: [url])
+        // Share the link as a real URL (NSURL), not a String — so Mail/Messages
+        // drop a clickable link into the message instead of leaving it blank.
+        guard let contentView = NSApp.keyWindow?.contentView,
+              let link = URL(string: url) else { return }
+        let picker = NSSharingServicePicker(items: [link])
         picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
+    }
+}
+
+/// A flat button with a clear hover highlight (the default macOS buttons read
+/// as inert here). Prominent = accent fill; isDefault = Return triggers it.
+private struct HoverButton: View {
+    let title: String
+    var prominent: Bool = false
+    var isDefault: Bool = false
+    let action: () -> Void
+    @State private var hovering = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 13, weight: prominent ? .semibold : .regular))
+                .foregroundStyle(prominent ? Color.white : Color.primary)
+                .padding(.horizontal, 14).padding(.vertical, 7)
+                .background(RoundedRectangle(cornerRadius: 7).fill(fill))
+                .opacity(isEnabled ? 1 : 0.4)
+                .contentShape(RoundedRectangle(cornerRadius: 7))
+        }
+        .buttonStyle(.plain)
+        .keyboardShortcut(isDefault ? .defaultAction : nil)
+        .onHover { hovering = isEnabled && $0 }
+    }
+
+    private var fill: Color {
+        if prominent { return Color.accentColor.opacity(hovering ? 0.85 : 1) }
+        return Color.primary.opacity(hovering ? 0.18 : 0.08)
     }
 }
