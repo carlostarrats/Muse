@@ -13,7 +13,10 @@
        ever served somewhere _headers doesn't apply (preview host, renamed file). -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' https://drive.google.com https://*.googleusercontent.com; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'">
   <title>Shared Collection</title>
-  <!-- Favicons (same set as the marketing site). -->
+  <!-- Favicons (same set as the marketing site). favicon.ico at the root is
+       what link-unfurlers (Slack/iMessage) probe — without it they get the
+       HTML 404 fallback and render no logo (empty icon slot). -->
+  <link rel="icon" href="favicon.ico" sizes="any" />
   <link rel="icon" type="image/png" href="favicon-light.png" media="(prefers-color-scheme: light)" />
   <link rel="icon" type="image/png" href="favicon-dark.png" media="(prefers-color-scheme: dark)" />
   <link rel="icon" type="image/png" href="favicon-light.png" />
@@ -22,7 +25,7 @@
        scrapers don't run JS and can't read the #fragment, so the per-collection
        title/sender never reach them. Nothing personal is exposed here. -->
   <meta property="og:type" content="website">
-  <meta property="og:site_name" content="Muse">
+  <meta property="og:site_name" content="Muse — Image Library">
   <meta property="og:title" content="Someone shared images with you">
   <meta property="og:description" content="Tap to view the full collection.">
   <meta property="og:image" content="https://muse-share.pages.dev/share-img.jpg">
