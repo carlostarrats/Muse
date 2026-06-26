@@ -97,7 +97,7 @@ html, body {
   border-radius: 50%;
   border: 1px solid rgba(127, 127, 127, 0.5);
   cursor: pointer;
-  outline: 2px solid transparent; outline-offset: 2px;
+  outline: 1px solid transparent; outline-offset: 2px;
   transition: outline-color 0.12s ease, transform 0.12s ease;
 }
 .bg-switcher .dot:hover { transform: scale(1.12); }
