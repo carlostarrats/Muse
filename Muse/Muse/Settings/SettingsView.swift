@@ -82,9 +82,13 @@ struct SettingsView: View {
                     if authBusy {
                         ProgressView().controlSize(.small)
                     } else if googleAuth.isSignedIn {
-                        Button("Sign Out") { Task { await runAuth { await googleAuth.signOut() } } }
+                        HoverButton(title: String(localized: "Sign Out")) {
+                            Task { await runAuth { await googleAuth.signOut() } }
+                        }
                     } else {
-                        Button("Sign In") { Task { await runAuth { try? await googleAuth.signIn() } } }
+                        HoverButton(title: String(localized: "Sign In")) {
+                            Task { await runAuth { try? await googleAuth.signIn() } }
+                        }
                     }
                 }
             } header: {
