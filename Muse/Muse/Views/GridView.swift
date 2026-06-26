@@ -156,11 +156,11 @@ struct GridView: View {
                             )
                             .padding(contentInset)
                             // Collection/tag switches replace the grid wholesale —
-                            // one clean cross-fade, not a per-tile reflow. Keyed on
-                            // `tagFilterGeneration` (commits with the RESOLVED
-                            // `activeTagPaths`), not `activeTagLabels` (commits a
-                            // frame early), so the swap doesn't flash the prior
-                            // tag's files mid-fade.
+                            // one instant swap, not a per-tile reflow. Keyed on
+                            // `tagFilterGeneration` (bumps with the RESOLVED
+                            // `activeTagPaths`), not `activeTagLabels`. With the
+                            // synchronous `setActiveTags` both land in one frame;
+                            // keying on the generation stays the gap-proof rule.
                             .id("\(appState.activeCollectionID ?? "")|\(appState.tagFilterGeneration)")
                             // Instant swap, NOT `.opacity`. Both the outgoing and
                             // incoming canvas read the same global `visibleFiles`,

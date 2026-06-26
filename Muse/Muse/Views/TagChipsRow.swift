@@ -159,10 +159,14 @@ struct TagChipsRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.bottom, 10)
-            .transition(.opacity)
         }
         }
-        .animation(.easeInOut(duration: AppState.navTransition), value: appState.activeTagLabels)
+        // No layout animation on `activeTagLabels`: animating the bar's
+        // insertion glided the WHOLE row taller over navTransition, shoving
+        // the grid down while the stale (pre-filter) images were still
+        // showing — the "images slide down, then disappear, then the filtered
+        // set appears" jag. Committing instantly lets the bar pop in place and
+        // the grid swap (already `.identity`, instant) read as one snap.
         .onChange(of: appState.tagRenameRequest) { _, label in
             if let label { renameText = label }
         }

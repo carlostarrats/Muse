@@ -332,10 +332,12 @@ extension AppState {
     /// Per-label alive-path query, scoped per `parent_dir` (tags are
     /// per-location: a duplicate sharing the file_id in an untagged folder must
     /// NOT be pulled in). Returns the absolute paths carrying `label` in their
-    /// own folder.
-    private func pathsForTag(_ label: String) async -> [String] {
+    /// own folder. SYNCHRONOUS by design so `setActiveTags` resolves the filter
+    /// within the click's own runloop turn (bar + grid swap commit in one
+    /// render); the query is tiny and indexed.
+    private func pathsForTagSync(_ label: String) -> [String] {
         guard let q = Database.shared.dbQueue else { return [] }
-        return (try? await q.read { db -> [String] in
+        return (try? q.read { db -> [String] in
             let rows = try Row.fetchAll(db, sql: """
                 SELECT p.absolute_path AS ap, t.parent_dir AS pd
                 FROM paths p JOIN tags t ON t.file_id = p.file_id
@@ -356,50 +358,42 @@ extension AppState {
     /// set (files carrying ALL of them). Empty `labels` clears the filter. One
     /// query per label (selection sizes are tiny).
     ///
-    /// `activeTagLabels` is committed SYNCHRONOUSLY (before the async path query)
-    /// so the chip highlight + banner reflect the click immediately AND the next
-    /// toggle/replace decision reads a fresh value. It used to be written only
-    /// inside the async Task, which lagged a click — two fast Cmd-clicks both read
-    /// the pre-Task set, so the first selection was lost (and a double plain-click
-    /// failed to clear). Only `activeTagPaths` (the DB-derived intersection) lands
-    /// async now; the grid crossfades when it arrives (a frame later for tiny
-    /// selections — imperceptible).
-    func setActiveTags(_ labels: [String], animated: Bool = true) {
+    /// Both `activeTagLabels` AND `activeTagPaths` commit SYNCHRONOUSLY within the
+    /// click's runloop turn (see the body for why — bar + grid swap in one render).
+    /// Committing the labels synchronously also keeps two fast Cmd-clicks correct:
+    /// each reads a fresh set, so neither drops the other's selection — the bug an
+    /// earlier async-Task design hit (the first pick was lost; a double plain-click
+    /// failed to clear).
+    func setActiveTags(_ labels: [String]) {
         clearSelection()
-        let curve = Animation.easeInOut(duration: AppState.navTransition)
-        tagRequestToken += 1
         activeTagLabels = labels
         guard !labels.isEmpty else {
-            // Clearing as part of a folder switch is INSTANT (animated: false), so
-            // the selected-tag view vanishes in one frame rather than animating
-            // away before the new folder appears.
-            if animated {
-                withAnimation(curve) { activeTagPaths = nil }
-            } else {
-                activeTagPaths = nil
-            }
+            activeTagPaths = nil
             return
         }
-        let token = tagRequestToken
-        Task { @MainActor in
-            var sets: [Set<String>] = []
-            for label in labels {
-                sets.append(Set(await pathsForTag(label)))
-            }
-            let inter = sets.dropFirst().reduce(sets.first ?? Set<String>()) {
-                $0.intersection($1)
-            }
-            if token == tagRequestToken {
-                withAnimation(curve) {
-                    activeTagPaths = inter
-                }
-            }
+        // Resolve the intersection SYNCHRONOUSLY so the filter bar (driven by
+        // `activeTagLabels`) and the grid swap (driven by the resolved
+        // `activeTagPaths`) commit in the SAME render — one atomic snap.
+        // Resolving in a Task committed the labels a frame BEFORE the paths, so
+        // the bar grew the row and shoved the still-unfiltered images down, and
+        // only THEN did the grid swap to the filtered set: the "slide down, then
+        // replace" jag the owner saw. The per-label query is tiny and indexed; a
+        // main-thread read for a user click is cheap — it only ever waits behind
+        // an in-flight write on the serial queue, a few ms and rare. (No
+        // `withAnimation`: the swap is `.transition(.identity)`, a hard cut, so
+        // the whole filter lands as one instant change with nothing to glide.)
+        var sets: [Set<String>] = []
+        for label in labels {
+            sets.append(Set(pathsForTagSync(label)))
+        }
+        activeTagPaths = sets.dropFirst().reduce(sets.first ?? Set<String>()) {
+            $0.intersection($1)
         }
     }
 
     /// Set (or clear, with nil) a SINGLE active tag — plain-click / clear.
-    func setActiveTag(_ label: String?, animated: Bool = true) {
-        setActiveTags(label.map { [$0] } ?? [], animated: animated)
+    func setActiveTag(_ label: String?) {
+        setActiveTags(label.map { [$0] } ?? [])
     }
 
     /// Cmd-click toggle: add the label if absent, remove it if present;
