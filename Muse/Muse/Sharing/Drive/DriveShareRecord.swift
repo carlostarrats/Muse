@@ -46,6 +46,14 @@ final class DriveShareStore {
     }
     func remove(id: String) { queue.sync { save(load().filter { $0.id != id }) } }
 
+    /// Drop several records in one rewrite (used by the Manage prune). No-op if
+    /// `ids` is empty so it never rewrites the file needlessly.
+    func remove(ids: [String]) {
+        guard ids.isEmpty == false else { return }
+        let drop = Set(ids)
+        queue.sync { save(load().filter { drop.contains($0.id) == false }) }
+    }
+
     private func load() -> [DriveShareRecord] {
         guard let data = try? Data(contentsOf: fileURL),
               let list = try? JSONDecoder.iso.decode([DriveShareRecord].self, from: data) else { return [] }

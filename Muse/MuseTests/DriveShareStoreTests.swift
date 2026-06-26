@@ -26,6 +26,19 @@ final class DriveShareStoreTests: XCTestCase {
         XCTAssertTrue(store.all().isEmpty)
     }
 
+    func testRemoveIdsDropsTheGivenSetInOneRewrite() {
+        let (store, url) = tempStore(); defer { try? FileManager.default.removeItem(at: url) }
+        store.add(rec("1", folder: "A", expiry: Date(timeIntervalSince1970: 10)))
+        store.add(rec("2", folder: "B", expiry: Date(timeIntervalSince1970: 20)))
+        store.add(rec("3", folder: "C", expiry: Date(timeIntervalSince1970: 30)))
+        store.remove(ids: ["1", "3"])
+        XCTAssertEqual(store.all().map(\.id), ["2"])
+        // Empty set is a no-op (and unknown ids are ignored).
+        store.remove(ids: [])
+        store.remove(ids: ["nope"])
+        XCTAssertEqual(store.all().map(\.id), ["2"])
+    }
+
     func testExpiredSelectsOnlyPastRecords() {
         let now = Date(timeIntervalSince1970: 100)
         let past = rec("p", folder: "P", expiry: Date(timeIntervalSince1970: 50))

@@ -14,6 +14,7 @@ struct ManageICloudSharesView: View {
     @Environment(\.dismiss) private var dismiss
     private let store = ICloudShareStore.default
     @State private var records: [ICloudShareRecord] = []
+    @State private var didPrune = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -46,6 +47,8 @@ struct ManageICloudSharesView: View {
         .frame(width: 600, height: 520)
         .onAppear {
             records = store.all()      // show what we have immediately…
+            guard didPrune == false else { return }
+            didPrune = true
             Task { await pruneMissing() } // …then drop any whose folder is gone.
         }
     }
@@ -98,17 +101,32 @@ struct ManageICloudSharesView: View {
         // path does — a corrupted/unexpected stored path must never let
         // `removeItem` escape the share root (data-loss-sensitive container).
         let folder = URL(fileURLWithPath: record.folderPath)
-        if let docs = ICloudZone.folderURL() {
-            let shareRoot = ICloudSharePaths.shareRoot(zoneDocuments: docs)
-            if ICloudSharePaths.isContainedShareFolder(folder, shareRoot: shareRoot) {
-                try? FileManager.default.removeItem(at: folder)
+        Task {
+            // Resolve the zone off the main actor — first access can block while
+            // the daemon resolves the container (ICloudZone contract).
+            let docs = await Task.detached(priority: .userInitiated) { ICloudZone.folderURL() }.value
+            if let docs {
+                let shareRoot = ICloudSharePaths.shareRoot(zoneDocuments: docs)
+                if ICloudSharePaths.isContainedShareFolder(folder, shareRoot: shareRoot) {
+                    // A real, contained share folder: remove it, but if removal
+                    // throws (busy / coordination), KEEP the row so the user can
+                    // retry rather than orphaning the folder with no way back.
+                    // Already-absent counts as done.
+                    let fm = FileManager.default
+                    do {
+                        if fm.fileExists(atPath: folder.path) { try fm.removeItem(at: folder) }
+                    } catch {
+                        return
+                    }
+                }
+                // A non-contained/odd path falls through: don't touch the
+                // filesystem, just drop the stale record below.
             }
+            // Drop the record: the folder is gone (or unreachable — zone
+            // unresolvable / odd path), so the user can clear the row.
+            store.remove(id: record.id)
+            records = store.all()
         }
-        // Always drop the record (the user asked to remove it from the list);
-        // if the zone was unresolvable or the path failed validation we simply
-        // don't touch the filesystem.
-        store.remove(id: record.id)
-        records = store.all()
     }
 }
 

@@ -4251,3 +4251,22 @@ row with no indicator. Now each prunes on open:
   covers a since-switched account); any thrown error (offline / auth / 5xx) keeps
   the record, and nothing is pruned while signed out.
 Tests: 452 passed / 0 failures.
+
+**QA hardening on the prune/delete paths (same session).** A review of the prune
+change surfaced two pre-existing bugs in the Manage **delete** handlers (same
+class), now fixed:
+- **Drive `delete` no longer orphans a public share.** It swallowed `deleteFolder`
+  errors with `try?` then removed the record unconditionally — so a failed delete
+  (offline / 5xx / auth / token-refresh throw) left the `anyone-reader` Drive
+  folder live while Muse forgot it (no retry, the expiry sweeper can't reach it).
+  Now: drop the record ONLY when the delete succeeds or is a 404 (already gone);
+  any thrown error keeps the row.
+- **iCloud `delete` keeps the row if the contained `removeItem` throws** (busy /
+  coordination) instead of orphaning the folder with no way to retry; an
+  already-absent folder still clears the row. Also moved its `ICloudZone.folderURL()`
+  + `removeItem` OFF the main actor (the zone's documented "call off the main
+  thread" contract — the prune path already did this).
+- Plus: a `didPrune` `@State` guard so a re-fired `onAppear` can't double-run the
+  prune (esp. the Drive network loop), and a batched `DriveShareStore.remove(ids:)`
+  (one rewrite, unit-tested) replacing per-id writes.
+Tests: 453 passed / 0 failures.
