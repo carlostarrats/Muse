@@ -141,6 +141,9 @@ struct ShareCollectionButton: View {
     private func paperSizePopup() -> NSPopUpButton {
         let popup = NSPopUpButton(frame: .zero, pullsDown: false)
         popup.translatesAutoresizingMaskIntoConstraints = false
+        // The "Paper Size:" NSTextField is only a visual neighbor — not
+        // programmatically associated — so VoiceOver needs the role spelled out.
+        popup.setAccessibilityLabel(String(localized: "Paper Size"))
         for paper in PaperSize.allCases { popup.addItem(withTitle: paper.displayName) }
         popup.selectItem(at: PaperSize.allCases.firstIndex(of: .default) ?? 0)
         return popup
