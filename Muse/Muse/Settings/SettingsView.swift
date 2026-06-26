@@ -48,9 +48,7 @@ struct SettingsView: View {
             } header: {
                 Text("Automatic organization")
             } footer: {
-                Text("Applies to folders added from now on. Tags and collections "
-                     + "you already have are kept. You can still analyze a folder "
-                     + "or build your own collections by hand at any time.")
+                Text("Applies to folders added from now on. Tags and collections you already have are kept. You can still analyze a folder or build your own collections by hand at any time.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -70,8 +68,7 @@ struct SettingsView: View {
             } header: {
                 Text("Sidebar")
             } footer: {
-                Text("Show your collections as a collapsible section beneath the "
-                     + "folders, with their own sort order.")
+                Text("Show your collections as a collapsible section beneath the folders, with their own sort order.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }

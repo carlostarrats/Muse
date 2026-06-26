@@ -4411,6 +4411,26 @@
           }
         }
       }
+    },
+    "Applies to folders added from now on. Tags and collections you already have are kept. You can still analyze a folder or build your own collections by hand at any time.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "S'applique aux dossiers ajoutés à partir de maintenant. Les étiquettes et collections que vous avez déjà sont conservées. Vous pouvez toujours analyser un dossier ou créer vos propres collections à la main à tout moment."
+          }
+        }
+      }
+    },
+    "Show your collections as a collapsible section beneath the folders, with their own sort order.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Affichez vos collections sous forme de section repliable sous les dossiers, avec leur propre ordre de tri."
+          }
+        }
+      }
     }
   },
   "version": "1.0"
