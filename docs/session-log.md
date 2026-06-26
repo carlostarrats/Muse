@@ -4409,6 +4409,10 @@ titles wrapped in `String(localized:)` (same keys as the prior `Button` literals
 
 **Verification.** `BUILD SUCCEEDED`; `MuseTests` `** TEST SUCCEEDED **` + `MuseUITests`
 passed; `share.test.mjs` green. All five web pages return 200 with CSP headers intact.
-**Scheme quirk noted:** `xcodebuild -scheme Muse test` only runs `MuseUITests` — the
-`MuseTests` unit suite must be run with `-only-testing:MuseTests` (the Muse scheme's
-test action omits it). Pre-existing; flagged for a future scheme fix.
+**Scheme fix.** `xcodebuild -scheme Muse test` previously ran ONLY `MuseUITests` — the
+`Muse` scheme was auto-generated (unshared) and its test action omitted `MuseTests`, so
+the documented "keep it green" command silently skipped the 428-test logic suite. Added
+a **shared** `Muse.xcodeproj/xcshareddata/xcschemes/Muse.xcscheme` whose TestAction lists
+BOTH `MuseTests` + `MuseUITests`; the plain command now runs the full unit suite
+(428 unit tests + UI tests, 0 failures) and the scheme is committed so every checkout
+gets it.
