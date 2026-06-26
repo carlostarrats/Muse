@@ -246,16 +246,13 @@ Muse/Muse/
                                    outside the grid's scroll view
     PageScrollCatcher.swift        first-responder NSView giving the grid + Collections page native
                                    Page Up/Down via PageScroll math
-    ShareCollectionButton.swift    in-collection header menu — Save to… / Share / Share iCloud Link /
-                                   Share Drive Link; builds an 11×14 paginated PDF. exportURLs =
-                                   visibleFiles minus folders (the on-screen filtered grid). Passes
-                                   imageLayout.aspect + effectiveTileBackground + activeTagLabels so the
-                                   PDF mirrors the grid. iCloud → ICloudShareService; Drive → DriveShareSheet
-    ICloudShareProgressView.swift  modal during copy+upload; on .ready hands the folder to
-                                   NSSharingServicePicker (Copy Link / AirDrop / Mail), then closes
-    ManageICloudSharesView.swift   View-menu "Manage iCloud Shares…" sheet (only surface; styled like
-                                   InfoSheet): list past shares (ICloudShareStore) + Delete removes the
-                                   iCloud folder to reclaim
+    ShareCollectionButton.swift    in-collection header menu — Save to… / Share / Share Drive Link;
+                                   builds an 11×14 paginated PDF. exportURLs = visibleFiles minus folders
+                                   (the on-screen filtered grid). Passes imageLayout.aspect +
+                                   effectiveTileBackground + activeTagLabels so the PDF mirrors the grid.
+                                   Drive → DriveShareSheet. (iCloud "Share Link" backend removed 2026-06-25
+                                   — NSSharingServicePicker can't mint an iCloud Copy Link for app-container
+                                   files; see CLAUDE.md. Drive is the only link path.)
     DriveShareForm.swift           DriveShareSheet: publish form (page title/label/name/expiry, remembered)
                                    → progress (DriveShareService.phase) → finished link (Copy / Share)
     ManageDriveSharesView.swift    View-menu "Manage Drive Shares…" sheet (InfoSheet-styled): open link /
@@ -354,19 +351,11 @@ Muse/Muse/
                                    (fixed ratio → uniform aspect array; per-image backdrop; non-image →
                                    QuickLook; decode 8-wide, order preserved) and draws active tagLabels as
                                    header pills on page 1 (width-clamped + truncated)
-  Sharing/                         collection share — backend #1: iCloud (native Copy Link)
-    ICloudSharePaths.swift           pure: sanitize collection name → deterministic `Documents/Shared
-                                     Collections/<name>/` folder under the iCloud zone (rejects
-                                     `.`/`..`/all-dots traversal; `uniqueFolderName` disambiguates
-                                     different collections that sanitize alike). Unit-tested
-    ICloudShareRecord.swift          ICloudShareRecord + ICloudShareStore — JSON list in App Support (NOT
-                                     iCloud/SQLite) of shares Muse made; newest-first. Unit-tested
-    UploadTally.swift                pure reducer: uploaded/total + isComplete/fraction. Unit-tested
-    ICloudShareService.swift         @MainActor orchestrator (Phase idle/copying/uploading/ready/failed):
-                                     copy members (download-then-copy dataless) → NSMetadataQuery upload
-                                     wait → record → caller presents NSSharingServicePicker. iCloud I/O,
-                                     integration-only (Debug strips the entitlement). No network code
-  Sharing/Drive/                   collection share — backend #2: Google Drive (the only sanctioned network feature)
+  Sharing/                         (iCloud backend #1 REMOVED 2026-06-25 — NSSharingServicePicker can't
+                                   mint an iCloud Copy Link for app-container files; Drive is the only
+                                   link path. See CLAUDE.md. ICloudZone.swift stays under Filesystem/ for
+                                   iCloud *sync*.)
+  Sharing/Drive/                   collection share: Google Drive (the only sanctioned network feature)
     PKCE.swift                       RFC 7636 S256 verifier/challenge/state. Pure. Unit-tested
     TokenStore.swift                 DriveTokens + TokenStoring; Keychain (device-only) + in-memory double
     DriveConfig.swift                owner placeholders: clientID, reverse-client-id scheme, shareBaseURL

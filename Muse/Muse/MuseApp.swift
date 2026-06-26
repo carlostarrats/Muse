@@ -216,11 +216,8 @@ struct MuseApp: App {
                 .disabled(appState.selectedFile == nil)
             }
 
-            // View menu — the global share lists (not tied to a folder).
+            // View menu — the global Drive share list (not tied to a folder).
             CommandGroup(after: .sidebar) {
-                Button("Manage iCloud Shares…") {
-                    appState.iCloudSharesShown = true
-                }
                 Button("Manage Drive Shares…") {
                     appState.driveSharesShown = true
                 }

@@ -320,9 +320,6 @@ struct ContentView: View {
         .sheet(isPresented: $appState.settingsShown) {
             SettingsView(isPresented: $appState.settingsShown)
         }
-        .sheet(isPresented: $appState.iCloudSharesShown) {
-            ManageICloudSharesView()
-        }
         .sheet(isPresented: $appState.driveSharesShown) {
             ManageDriveSharesView()
         }

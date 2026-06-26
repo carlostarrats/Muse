@@ -1055,16 +1055,6 @@
         }
       }
     },
-    "Copying images…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Copie des images…"
-          }
-        }
-      }
-    },
     "Could not load: %@": {
       "localizations": {
         "fr": {
@@ -1081,16 +1071,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Impossible de %@ le dossier. Vous n'avez peut-être pas la permission."
-          }
-        }
-      }
-    },
-    "Couldn't copy the images into iCloud.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible de copier les images dans iCloud."
           }
         }
       }
@@ -1346,16 +1326,6 @@
         }
       }
     },
-    "Delete iCloud share": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer le partage iCloud"
-          }
-        }
-      }
-    },
     "Delete Selected to Trash": {
       "localizations": {
         "fr": {
@@ -1372,16 +1342,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Supprimer l'étiquette…"
-          }
-        }
-      }
-    },
-    "Delete this iCloud share and free the space": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer ce partage iCloud et libérer l’espace"
           }
         }
       }
@@ -1750,16 +1710,6 @@
         }
       }
     },
-    "iCloud Shares": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Partages iCloud"
-          }
-        }
-      }
-    },
     "iCloud sync": {
       "localizations": {
         "fr": {
@@ -2028,16 +1978,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Recherche dans ce dossier les images sans étiquette et génère leurs étiquettes en arrière-plan. Les images déjà étiquetées ne sont pas modifiées. Seules des étiquettes automatiques sont créées — les étiquettes que vous avez ajoutées à la main ne sont pas restaurées."
-          }
-        }
-      }
-    },
-    "Manage iCloud Shares…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gérer les partages iCloud…"
           }
         }
       }
@@ -2409,16 +2349,6 @@
         }
       }
     },
-    "No iCloud shares yet.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucun partage iCloud pour l’instant."
-          }
-        }
-      }
-    },
     "No tags": {
       "localizations": {
         "fr": {
@@ -2585,16 +2515,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ouvrir avec"
-          }
-        }
-      }
-    },
-    "Opening share…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouverture du partage…"
           }
         }
       }
@@ -3482,16 +3402,6 @@
         }
       }
     },
-    "Sign in to iCloud and turn on iCloud Drive to share to iCloud.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connectez-vous à iCloud et activez iCloud Drive pour partager sur iCloud."
-          }
-        }
-      }
-    },
     "Size": {
       "localizations": {
         "fr": {
@@ -3834,22 +3744,6 @@
         }
       }
     },
-    "Uploading to iCloud… %lld of %lld": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Uploading to iCloud… %1$lld of %2$lld"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Téléversement vers iCloud… %lld sur %lld"
-          }
-        }
-      }
-    },
     "Vertical video on most phones": {
       "localizations": {
         "fr": {
@@ -3956,16 +3850,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zoom arrière"
-          }
-        }
-      }
-    },
-    "Share iCloud Link": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Partager le lien iCloud"
           }
         }
       }
@@ -4392,12 +4276,12 @@
         }
       }
     },
-    "Open a collection and use the share button in its header. Save to… lays the images out as a PDF at the paper size you pick, and Share sends that PDF on by AirDrop, Mail, or Messages. Share iCloud Link copies them into your iCloud Drive and gives you a link to pass along. Share Drive Link signs you into your own Google Drive, uploads the images there, and creates a clean web page anyone can open in a browser — they can switch the background and print it to a PDF at any size. Either way nothing reaches Muse's makers: the iCloud copy stays in your iCloud and the Drive copy goes to your Drive. Take any link down later from the View menu — Manage iCloud Shares… and Manage Drive Shares….": {
+    "Open a collection and use the share button in its header. Save to… lays the images out as a PDF at the paper size you pick, and Share sends that PDF on by AirDrop, Mail, or Messages. Share Drive Link signs you into your own Google Drive, uploads the images there, and creates a clean web page anyone can open in a browser — they can switch the background and print it to a PDF at any size. Nothing reaches Muse's makers: the Drive copy goes to your own Drive. Take a link down later from the View menu — Manage Drive Shares….": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ouvrez une collection et utilisez le bouton de partage de son en-tête. Enregistrer sous… dispose les images sous forme de PDF au format de papier que vous choisissez, et Partager transmet ce PDF par AirDrop, Mail ou Messages. Partager le lien iCloud les copie dans votre iCloud Drive et vous donne un lien à transmettre. Partager le lien Drive vous connecte à votre propre Google Drive, y téléverse les images et crée une page web soignée que tout le monde peut ouvrir dans un navigateur — chacun peut changer l'arrière-plan et l'imprimer en PDF au format de son choix. Dans les deux cas, rien ne parvient aux créateurs de Muse : la copie iCloud reste dans votre iCloud et la copie Drive va dans votre Drive. Retirez un lien plus tard depuis le menu Présentation — Gérer les partages iCloud… et Gérer les partages Drive…."
+            "value": "Ouvrez une collection et utilisez le bouton de partage de son en-tête. Enregistrer sous… dispose les images sous forme de PDF au format de papier que vous choisissez, et Partager transmet ce PDF par AirDrop, Mail ou Messages. Partager le lien Drive vous connecte à votre propre Google Drive, y téléverse les images et crée une page web soignée que tout le monde peut ouvrir dans un navigateur — chacun peut changer l'arrière-plan et l'imprimer en PDF au format de son choix. Rien ne parvient aux créateurs de Muse : la copie Drive va dans votre propre Drive. Retirez un lien plus tard depuis le menu Présentation — Gérer les partages Drive…."
           }
         }
       }
