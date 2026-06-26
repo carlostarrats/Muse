@@ -1,5 +1,5 @@
 /*
-  Content-Security-Policy: default-src 'none'; img-src https://drive.google.com https://*.googleusercontent.com; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'none'; img-src 'self' https://drive.google.com https://*.googleusercontent.com; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
   X-Frame-Options: DENY
