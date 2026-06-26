@@ -121,7 +121,10 @@ import Foundation
 
     private func authed(_ urlString: String) async throws -> URLRequest {
         let token = try await auth.validAccessToken()
-        var req = URLRequest(url: URL(string: urlString)!)
+        // urlString embeds ids loaded from a local share record; a tampered/
+        // corrupt id could make URL(string:) nil, so guard instead of force-unwrap.
+        guard let url = URL(string: urlString) else { throw DriveError.badResponse }
+        var req = URLRequest(url: url)
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         return req
     }
