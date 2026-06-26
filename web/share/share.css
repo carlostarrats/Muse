@@ -9,7 +9,7 @@
 
 /* Backdrop choices (set on <html data-bg> by the switcher). Text colors flip
    so the signature stays readable on any shade. Light = white (the default). */
-html[data-bg="grey"] { --bg: #b6b6b6; --ink: #1c1c1e; --muted: #5e5e5e; --tile: #a2a2a2; }
+html[data-bg="grey"] { --bg: #cfcfcf; --ink: #1c1c1e; --muted: #6a6a6a; --tile: #bcbcbc; }
 html[data-bg="dark"] { --bg: #1c1c1e; --ink: #f2f2f2; --muted: #8a8a8e; --tile: #2c2c2e; }
 
 * { box-sizing: border-box; }
@@ -102,7 +102,7 @@ html, body {
 }
 .bg-switcher .dot:hover { transform: scale(1.12); }
 .bg-switcher .dot[data-bg="light"] { background: #ffffff; }
-.bg-switcher .dot[data-bg="grey"]  { background: #b6b6b6; }
+.bg-switcher .dot[data-bg="grey"]  { background: #cfcfcf; }
 .bg-switcher .dot[data-bg="dark"]  { background: #1c1c1e; }
 .bg-switcher .dot[aria-pressed="true"] { outline-color: var(--ink); }
 
