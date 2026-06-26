@@ -25,6 +25,15 @@ export function validateManifest(m) {
 }
 
 export function isExpired(m, now) { return new Date(m.e) < now; }
+
+// Written-out month avoids locale day/month ambiguity (e.g. "Jan 24, 2026").
+// Forced to en-US so it's identical for every viewer. Parse at local midnight
+// so the day never shifts across time zones.
+export function formatDate(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  if (isNaN(d)) return iso;
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
+}
 export function thumbURL(id) { return `https://drive.google.com/thumbnail?id=${id}&sz=w1600`; }
 export function pdfURL(id) { return `https://drive.google.com/uc?export=download&id=${id}`; }
 
@@ -41,7 +50,7 @@ if (typeof document !== 'undefined') {
   } else {
     root.dataset.state = 'live';
     set('intro', m.i); set('label', m.l); set('name', m.n);
-    set('expires', `Expires ${new Date(m.e).toLocaleDateString()}`);
+    set('expires', `Expires ${formatDate(m.e)}`);
     const save = document.getElementById('save');
     if (m.p && save) { save.href = pdfURL(m.p); } else if (save) { save.style.display = 'none'; }
     const grid = document.getElementById('grid');
