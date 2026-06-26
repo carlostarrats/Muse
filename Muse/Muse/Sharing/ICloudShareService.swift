@@ -32,6 +32,11 @@ import Combine
     /// phase. NOT bumped on cancel, so a plain cancel still cleans up its own
     /// folder (the copy ran in a detached task that can't see cancellation).
     private var generation = 0
+    /// The most recent detached copy task. A detached task does NOT observe this
+    /// service's cancellation, so a superseded/double-tapped run's copy keeps
+    /// running; the next run chains on this handle so two copies never race
+    /// `removeItem`/recopy on the same folder (which would corrupt the gallery).
+    private var inFlightCopy: Task<[URL], Error>?
     private let store: ICloudShareStore
 
     init(store: ICloudShareStore = .default) { self.store = store }
@@ -68,12 +73,27 @@ import Combine
             return
         }
 
-        let folder = ICloudSharePaths.shareFolder(zoneDocuments: docs, collectionName: title)
+        // Disambiguate against other collections' live shares so a name that
+        // sanitizes to an already-used folder never reuses (and clobbers) it.
+        let owners = Dictionary(
+            store.all().map { (URL(fileURLWithPath: $0.folderPath).lastPathComponent, $0.collectionName) },
+            uniquingKeysWith: { first, _ in first })
+        let leaf = ICloudSharePaths.uniqueFolderName(for: title, owners: owners)
+        let folder = ICloudSharePaths.shareRoot(zoneDocuments: docs)
+            .appendingPathComponent(leaf, isDirectory: true)
+        let shareRoot = ICloudSharePaths.shareRoot(zoneDocuments: docs)
         let copied: [URL]
         do {
-            copied = try await Task.detached(priority: .userInitiated) {
-                try Self.copyMembers(urls, into: folder)
-            }.value
+            // Serialize the destructive copy across runs: capture the prior copy
+            // and store ours SYNCHRONOUSLY (no await between), so two runs can't
+            // both launch on one folder. The chain waits inside the detached task.
+            let prior = inFlightCopy
+            let copyTask = Task.detached(priority: .userInitiated) { () -> [URL] in
+                _ = try? await prior?.value
+                return try Self.copyMembers(urls, into: folder, shareRoot: shareRoot)
+            }
+            inFlightCopy = copyTask
+            copied = try await copyTask.value
         } catch is CancellationError {
             if gen == generation { Self.cleanup(folder) }
             return
@@ -109,8 +129,19 @@ import Combine
     /// stale files), then copy each member in, downloading dataless sources
     /// first. Returns the destination URLs actually written. Throws on
     /// CancellationError or a fatal filesystem error.
-    nonisolated private static func copyMembers(_ urls: [URL], into folder: URL) throws -> [URL] {
+    nonisolated private static func copyMembers(_ urls: [URL], into folder: URL,
+                                                shareRoot: URL) throws -> [URL] {
         let fm = FileManager.default
+        // Defense-in-depth before the destructive `removeItem`: the share folder
+        // must be a direct, non-special child of the share root. Backstops a
+        // sanitizer gap (a `.`/`..` leaf would make `removeItem` delete the
+        // PARENT — the whole iCloud Documents zone). The sanitizer already
+        // prevents this, so a real share never trips the guard.
+        let leaf = folder.lastPathComponent
+        guard leaf.isEmpty == false, leaf != ".", leaf != "..",
+              folder.deletingLastPathComponent().standardizedFileURL.path
+                == shareRoot.standardizedFileURL.path
+        else { throw CocoaError(.fileWriteInvalidFileName) }
         if fm.fileExists(atPath: folder.path) { try fm.removeItem(at: folder) }
         try fm.createDirectory(at: folder, withIntermediateDirectories: true)
 

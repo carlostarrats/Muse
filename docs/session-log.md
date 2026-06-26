@@ -4089,3 +4089,49 @@ then); and the standing watch-item that folder-level "anyone reader" must make c
 load on the page (fallback: per-file permission), plus the URL-length ceiling for very large
 collections (the manifest rides the fragment — shortening it via a folder-id + page-side Drive
 listing is the deferred enhancement if links get unwieldy).
+
+### `feat/next-60` — Share-feature security review (Drive + iCloud) — 2026-06-25
+
+Targeted adversarial security review of both "share a collection" backends (Google Drive +
+iCloud), asked of it as a hacker hunting for real exploits, then fix-and-loop until green. Two
+passes: a traditional single-reasoner read, then a 5-agent parallel adversarial fan-out (one
+hostile agent each for web/XSS, OAuth/token theft, Drive API/over-sharing, iCloud filesystem,
+crypto/secrets-PII).
+
+**Most surfaces held.** Web page: no XSS/CSP break — all manifest text renders via `textContent`,
+image IDs are regex-locked (`^[A-Za-z0-9_-]{20,}$`) before the thumbnail URL, CSP is
+`default-src 'none'`. OAuth: PKCE+ASWebAuthenticationSession double-mitigates code interception,
+`state` validated, Keychain device-only, revoke-on-signout correct. Crypto/secrets: all five hard
+privacy claims verified; no token in URL/log/UserDefaults; `SecRandomCopyBytes` CSPRNG sound.
+
+**Three real bugs found + fixed — all in the iCloud copy path (data-loss-sensitive zone):**
+1. **Path traversal (1st pass).** `ICloudSharePaths.sanitizedFolderName` mapped `/ \ :`→`-` but
+   left `.`/`..` untouched, so a collection named `..` (or `/../`) sanitized to `..` →
+   `appendingPathComponent("..")` → the clean-and-recopy `removeItem` would delete the PARENT
+   (the whole iCloud `Documents` zone). Fix: empty/`.`/`..`/all-dots → "Collection".
+2. **Name-collision repoint (agent, conf 8).** Two DIFFERENT collections sanitizing to the same
+   leaf (`Trip/Italy` vs `Trip-Italy`) shared one folder — sharing the second `removeItem`s the
+   first's folder and silently repoints its already-distributed public link at the second's
+   images (privacy leak + data loss). Fix: new pure `uniqueFolderName(for:owners:)` adds `-2`/`-3`
+   for a different owner; same collection still reuses its folder (re-share = refresh). Unit-tested.
+3. **Detached-copy race (agent, conf 8).** Double-tap / re-share ran two `copyMembers` on one
+   folder; the detached task ignores the service's cancellation, so one run's `removeItem`
+   clobbered the other's populated dir. Fix: the destructive copy chains on an `inFlightCopy`
+   handle (captured + stored synchronously) so two copies never overlap. Plus a defense-in-depth
+   guard: `copyMembers` refuses to `removeItem` unless the folder's parent == the share root
+   (backstops #1).
+
+**Found but NOT fixed — accepted design (flagged, not silently dropped):** stateless-manifest
+phishing (no signature, inherent to "manifest in fragment, no server"); client-side-only expiry
+(images stay readable via direct thumbnail URLs until the Muse-local launch sweep — already
+documented as "expiry is Muse-local"); folder-level "anyone reader" lets one leaked image ID list
+the whole share folder (per-file grant = larger redesign, the standing watch-item).
+
+**Docs.** CLAUDE.md gained an "iCloud share folder-name safety (DO NOT relax)" durable-gotcha
+bullet capturing all three invariants; `architecture-map.md` notes `uniqueFolderName`'s
+collision disambiguation.
+
+**Verification.** Full `MuseTests` **TEST SUCCEEDED**; `node web/share/share.test.mjs` all passed;
+new regression tests cover traversal (`.`/`..`/`/../`) + collision disambiguation (3 cases). The
+iCloud copy path itself is integration-only (Debug strips the entitlement), so the pure
+`sanitizedFolderName`/`uniqueFolderName` units are the safety net.
