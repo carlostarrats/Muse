@@ -89,11 +89,11 @@ html, body {
 .bg-switcher {
   display: none;
   align-self: center;
-  gap: 10px;
+  gap: 8px;
 }
 #app[data-state="live"] .bg-switcher { display: flex; }
 .bg-switcher .dot {
-  width: 18px; height: 18px; padding: 0;
+  width: 13px; height: 13px; padding: 0;
   border-radius: 50%;
   border: 1px solid rgba(127, 127, 127, 0.5);
   cursor: pointer;
