@@ -13,7 +13,7 @@ html, body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font: 400 16px/1.4 -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font: 400 16px/1.4 Helvetica, Arial, sans-serif;
 }
 
 #app { padding: 28px 32px 48px; }
@@ -45,7 +45,7 @@ html, body {
 
 .from { display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
 .label { font-size: 12px; color: var(--muted); }
-.name { font-size: 20px; color: var(--ink); }
+.name { font-size: 12px; color: var(--ink); }
 
 /* Responsive portrait grid. */
 .grid {
