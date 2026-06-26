@@ -35,7 +35,9 @@ export function formatDate(iso) {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
 }
 export function thumbURL(id) { return `https://drive.google.com/thumbnail?id=${id}&sz=w1600`; }
-export function pdfURL(id) { return `https://drive.google.com/uc?export=download&id=${id}`; }
+// Open the PDF in Drive's viewer (NOT a forced download) so the recipient
+// decides how to handle it — print at their own paper size, or download.
+export function pdfURL(id) { return `https://drive.google.com/file/d/${id}/view`; }
 
 // Browser-only render glue (skipped under node).
 if (typeof document !== 'undefined') {
