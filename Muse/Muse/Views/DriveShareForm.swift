@@ -69,9 +69,9 @@ struct DriveShareSheet: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Expires").font(.system(size: 12)).foregroundStyle(.secondary)
                 DatePicker("", selection: $expiry, in: Date()..., displayedComponents: .date)
-                    .datePickerStyle(.graphical)
+                    .datePickerStyle(.field)
                     .labelsHidden()
-                    .frame(maxWidth: 320)
+                    .fixedSize()
             }
 
             HStack {
