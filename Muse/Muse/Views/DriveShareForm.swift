@@ -2,10 +2,10 @@
 //  DriveShareForm.swift
 //  Muse
 //
-//  The "Share Drive Link" sheet: a small form (intro line · "Sent by" label ·
-//  name · date · expiry, name/label remembered between shares) that, on
-//  Publish, swaps to a progress view bound to DriveShareService.phase and ends
-//  on the finished page link (Copy / system share).
+//  The "Share Drive Link" sheet: a small form (page title · label · name ·
+//  expiry, name/label remembered between shares) that, on Publish, swaps to a
+//  progress view bound to DriveShareService.phase and ends on the finished
+//  page link (Copy / system share).
 //
 
 import SwiftUI
@@ -42,6 +42,8 @@ struct DriveShareSheet: View {
             switch service.phase {
             case .idle:
                 form
+            case .preparing:
+                progress(String(localized: "Preparing…"))
             case .signingIn:
                 progress(String(localized: "Signing in to Google…"))
             case .uploading(let i, let n):

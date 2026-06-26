@@ -4173,6 +4173,16 @@
           }
         }
       }
+    },
+    "Preparing…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Préparation…"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

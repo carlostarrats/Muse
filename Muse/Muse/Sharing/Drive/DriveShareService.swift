@@ -3,8 +3,9 @@
 //  Muse
 //
 //  Orchestrates a Drive publish: ensure sign-in → ensure Muse root → create the
-//  share folder → upload images → make + upload the print PDF → set link-
-//  sharing → assemble the page URL (manifest in the fragment) → record it.
+//  share folder → upload images → set link-sharing → assemble the page URL
+//  (manifest in the fragment) → record it. The recipient's PDF is the printed
+//  page, so nothing is generated/uploaded here.
 //  Network happens ONLY here and in the sweeper, always behind a user action.
 //
 
@@ -21,7 +22,7 @@ struct DriveShareForm {
 
 @MainActor final class DriveShareService: ObservableObject {
     enum Phase: Equatable {
-        case idle, signingIn, uploading(Int, Int), finalizing, done(String), failed(String)
+        case idle, preparing, signingIn, uploading(Int, Int), finalizing, done(String), failed(String)
     }
     @Published private(set) var phase: Phase = .idle
 
@@ -44,6 +45,10 @@ struct DriveShareForm {
         guard urls.isEmpty == false else {
             phase = .failed(String(localized: "This collection has no images to share.")); return
         }
+        // Cancel any in-flight publish and leave .idle synchronously so the form
+        // is replaced immediately — a second Publish click can't start a 2nd run.
+        cancel()
+        phase = .preparing
         task = Task { await run(form: form, title: title, urls: urls) }
     }
 

@@ -24,7 +24,10 @@ export function validateManifest(m) {
   return true;
 }
 
-export function isExpired(m, now) { return new Date(m.e) < now; }
+// Inclusive of the whole displayed day, parsed at LOCAL end-of-day so the
+// share doesn't flip to "expired" a day early in western time zones (matches
+// formatDate's local-midnight parse).
+export function isExpired(m, now) { return new Date(m.e + 'T23:59:59') < now; }
 
 // Written-out month avoids locale day/month ambiguity (e.g. "Jan 24, 2026").
 // Forced to en-US so it's identical for every viewer. Parse at local midnight

@@ -10,6 +10,8 @@ const b64url = Buffer.from(JSON.stringify(sample)).toString('base64')
 assert.deepStrictEqual(decodeManifest(b64url), sample, 'round-trip decode');
 assert.strictEqual(decodeManifest('!!!notbase64'), null, 'garbage → null');
 assert.ok(validateManifest(sample), 'valid manifest');
+const noPdf = { ...sample }; delete noPdf.p;
+assert.ok(validateManifest(noPdf), 'valid without pdfID (app no longer uploads a PDF)');
 assert.ok(!validateManifest({ ...sample, g:['short'] }), 'bad id rejected');
 assert.ok(!validateManifest({ ...sample, g:[] }), 'empty grid rejected');
 assert.ok(isExpired({ ...sample, e:'2020-01-01' }, new Date('2026-01-01')), 'past → expired');
