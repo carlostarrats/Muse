@@ -3999,6 +3999,322 @@
           }
         }
       }
+    },
+    "%lld images · expires %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$lld images · expires %2$@"
+          }
+        }
+      }
+    },
+    "Copy Link": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copier le lien"
+          }
+        }
+      }
+    },
+    "Couldn't publish to Google Drive. Check your connection and try again.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de publier sur Google Drive. Vérifiez votre connexion et réessayez."
+          }
+        }
+      }
+    },
+    "Couldn't sign in to Google. Please try again.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de se connecter à Google. Veuillez réessayer."
+          }
+        }
+      }
+    },
+    "Date": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Date"
+          }
+        }
+      }
+    },
+    "Drive Shares": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partages Drive"
+          }
+        }
+      }
+    },
+    "e.g. Leslie-Ann Thomson ALDO MUAH 2025": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "p. ex. Leslie-Ann Thomson ALDO MUAH 2025"
+          }
+        }
+      }
+    },
+    "e.g. Sent by": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "p. ex. Envoyé par"
+          }
+        }
+      }
+    },
+    "e.g. The Project": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "p. ex. The Project"
+          }
+        }
+      }
+    },
+    "Expires": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expire"
+          }
+        }
+      }
+    },
+    "Finishing…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finalisation…"
+          }
+        }
+      }
+    },
+    "Google Drive is full or the request was denied.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google Drive est plein ou la requête a été refusée."
+          }
+        }
+      }
+    },
+    "Label": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Étiquette"
+          }
+        }
+      }
+    },
+    "Manage Drive Shares…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gérer les partages Drive…"
+          }
+        }
+      }
+    },
+    "No Drive shares yet.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun partage Drive pour l’instant."
+          }
+        }
+      }
+    },
+    "Open Link": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir le lien"
+          }
+        }
+      }
+    },
+    "Page intro": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intro de la page"
+          }
+        }
+      }
+    },
+    "Publish": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publier"
+          }
+        }
+      }
+    },
+    "Sent by": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoyé par"
+          }
+        }
+      }
+    },
+    "Share Drive Link": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partager le lien Drive"
+          }
+        }
+      }
+    },
+    "Share…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partager…"
+          }
+        }
+      }
+    },
+    "Signing in to Google…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connexion à Google…"
+          }
+        }
+      }
+    },
+    "Unpublish — delete this share's Drive folder now": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dépublier — supprimer maintenant le dossier Drive de ce partage"
+          }
+        }
+      }
+    },
+    "Unpublish Drive share": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dépublier le partage Drive"
+          }
+        }
+      }
+    },
+    "Uploading %lld of %lld…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Uploading %1$lld of %2$lld…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Téléversement de %lld sur %lld…"
+          }
+        }
+      }
+    },
+    "Your share is live.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre partage est en ligne."
+          }
+        }
+      }
+    },
+    "Page Title": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Titre de la page"
+          }
+        }
+      }
+    },
+    "Project Name": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nom du projet"
+          }
+        }
+      }
+    },
+    "Your Name": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre nom"
+          }
+        }
+      }
+    },
+    "View Collection": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voir la collection"
+          }
+        }
+      }
+    },
+    "Preparing…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Préparation…"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

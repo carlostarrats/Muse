@@ -19,12 +19,16 @@ local-first, Apple-Intelligence-native, and free forever.
   it must be a separate target/config with Sparkle compiled out.) Release
   workflow: `docs/RELEASING.md`.
 - Pricing: **Free**, no IAPs, no subscriptions, no ads
-- Network policy: **Update-only**. No analytics, no telemetry, no data
-  collection, no remote content fetches. The **only** network access is
-  Sparkle: fetching its signed appcast feed + downloading the update, gated
-  by `com.apple.security.network.client` (added 2026-06-15 for Sparkle, the
-  sole network code path). Every download is EdDSA-verified against the
-  embedded `SUPublicEDKey`. `SUEnableAutomaticChecks = true` so Sparkle checks
+- Network policy: **Update-only, plus one explicit opt-in publish path.** No
+  analytics, no telemetry, no data collection, no remote content fetches. Two
+  sanctioned network code paths, both gated by `com.apple.security.network.client`:
+  (1) **Sparkle** — fetching its signed appcast feed + downloading the update;
+  (2) **Google Drive collection share** (`feat/drive-collection-share`,
+  2026-06-25) — when the user signs into Google and presses Publish, the
+  selected images + form text upload to **the user's own Drive** (OAuth
+  `drive.file`, PKCE). This is opt-in + user-initiated; the developer still
+  receives no data (bytes go user → their Drive). Every Sparkle download is
+  EdDSA-verified against the embedded `SUPublicEDKey`. `SUEnableAutomaticChecks = true` so Sparkle checks
   quietly in the background with no UI unless an update exists (the first-run
   consent prompt was removed 2026-06-15 — it was a confusing first launch and
   its modal stole focus from the main window).
@@ -96,7 +100,8 @@ are the load-bearing reference artifacts.
 | Polish 14 — Duplicates modal redesign: grid-style tile selection (blue inset ring, no tint, image fits), KEEP badge follows survivors, suggested deletes pre-selected + overridable, reveal-in-Finder per tile, "never delete a whole group" protection (2-copy swap / 3+ lock) | ✅ built, unmerged | `feat/next-23` |
 | Polish 15 — synchronized toolbar-icon recolor on mood change (all nav icons flip white↔black together, in lockstep with the background fade; `MoodPalette.iconColor` + `View.moodToolbarIcon`) | ✅ built, unmerged | `feat/next-24` |
 | Polish 16 — accessibility pass on features added since `feat/next-17` (next-18→24): VoiceOver labels/traits, a menu-bar "New Collection from Selection…" command, an icon-only-button label sweep across the whole app, and a `CollectionCard` rework (one activatable element w/ name+count label, selected trait, primary + named-Delete actions) | ✅ shipped | `feat/next-25` |
-| Polish 17 — iCloud collection share (backend #1 of a two-backend "share a collection"; Drive is a separate future spec): per-collection "Share iCloud Link" copies members into the app's public-scoped iCloud container (`Documents/Shared Collections/<name>/`, reused on re-share) → waits for upload via `NSMetadataQuery` → native share sheet for Copy Link. View-menu "Manage iCloud Shares…" lists past shares (JSON store, not iCloud/SQLite; modal styled like the ⓘ About sheet) + Delete-to-reclaim. Pure path/store/upload-tally units; iCloud I/O integration-only. No network code, no new entitlement | ✅ built, unmerged | `feat/icloud-collection-share` |
+| Polish 17 — iCloud collection share (backend #1 of a two-backend "share a collection"): per-collection "Share iCloud Link" copies members into the app's public-scoped iCloud container (`Documents/Shared Collections/<name>/`, reused on re-share) → waits for upload via `NSMetadataQuery` → native share sheet for Copy Link. View-menu "Manage iCloud Shares…" lists past shares (JSON store, not iCloud/SQLite; modal styled like the ⓘ About sheet) + Delete-to-reclaim. Pure path/store/upload-tally units; iCloud I/O integration-only. No network code, no new entitlement | ✅ merged | `feat/icloud-collection-share` |
+| Polish 18 — Google Drive collection share (backend #2, the "magic" path): "Share Drive Link" → OAuth `drive.file`/PKCE sign-in → upload images into a tidy `My Drive/Muse/<collection> — <date>/` → link-share → branded Cloudflare page (`muse-share.pages.dev`; manifest in the URL fragment, images from Drive thumbnails, backdrop switcher light/grey/dark). **PDF = the recipient prints the page** (`window.print()` + print stylesheet, they pick the paper size) — NO app-side PDF generated/uploaded. View-menu "Manage Drive Shares…" (open link / unpublish). Muse-local expiry sweep deletes the folder past its date. **First sanctioned network egress beyond Sparkle** — opt-in, user-initiated. OAuth client + Cloudflare Pages provisioned (testing mode); runs in Debug. Pure units (PKCE/manifest/store/expiry/multipart) + JS tests. | ✅ merged | `feat/drive-collection-share` |
 
 > **2026-06-16 session — three feature branches off `main`, not yet merged.**
 > Each has its own spec + plan in `docs/superpowers/`. Merge order is
@@ -126,8 +131,9 @@ most critical are also Claude memories (linked). Full repro/why is in
 - **Classification never reads dataless iCloud bytes.** `AssetKind`'s ImageIO header sniff (extensionless-image fallback) guards on `.ubiquitousItemDownloadingStatusKey` and skips not-downloaded placeholders — reading bytes would force a download to classify a file the user is just browsing. Reclassifies once local. Same spirit as `Indexer.isDataless` / `HashService` dataless-nil.
 - **Tags are per `(file_id, parent_dir)`**, not per content hash. A duplicate in another folder has its own tags; deletes never leak across folders; NO library-wide tag delete. Other content-derived metadata (palette/caption/dims/intent/feature-print/FTS) stays content-hash-keyed. Memory: `muse-tags-are-per-file-not-per-content-hash`.
 - **iCloud container is data-loss-sensitive.** Debug builds sign with `*-Debug.entitlements` (production minus the three iCloud keys) so dev churn can't make `bird` purge the production ubiquity container. Ship updates via **Sparkle only** (atomic in-place swap preserves identity) — never tell users to drag a new DMG over the old app.
-- **No live SQLite in iCloud** (corruption trap) — sync is per-asset JSON sidecars via `NSFileCoordinator`. CloudKit rejected (adds a network surface; the only network path is Sparkle's appcast).
-- **iCloud collection share writes ONLY under the app container's `Documents/Shared Collections/`** (via `ICloudZone.folderURL()`, reused for re-shares). It reuses the existing public-scoped container — NO new entitlement, NO network code (the OS sync daemon + native share sheet do all remote work; the "only network path is Sparkle" promise holds). Apple has **no API to mint a public iCloud gallery link**, so the link step is a manual `Share → Copy Link` (the zero-touch branded path is the separate future **Drive** backend, which has an API). Debug builds strip iCloud, so the copy→upload→share path is verifiable only in a **release-signed build**; all pure logic (`ICloudSharePaths`, `ICloudShareStore`, `UploadTally`) is unit-tested, iCloud I/O integration-only. The shares list lives ONLY in the View-menu "Manage iCloud Shares…" command (no in-app nav entry, by design).
+- **No live SQLite in iCloud** (corruption trap) — sync is per-asset JSON sidecars via `NSFileCoordinator`. CloudKit rejected (adds a network surface; the network paths are Sparkle + the opt-in Drive publish).
+- **iCloud collection share writes ONLY under the app container's `Documents/Shared Collections/`** (via `ICloudZone.folderURL()`, reused for re-shares). It reuses the existing public-scoped container — NO new entitlement, NO network code (the OS sync daemon + native share sheet do all remote work). Apple has **no API to mint a public iCloud gallery link**, so the link step is a manual `Share → Copy Link` (the zero-touch branded path is the **Drive** backend, which has an API). Debug builds strip iCloud, so the copy→upload→share path is verifiable only in a **release-signed build**; all pure logic (`ICloudSharePaths`, `ICloudShareStore`, `UploadTally`) is unit-tested, iCloud I/O integration-only. The shares list lives ONLY in the View-menu "Manage iCloud Shares…" command (no in-app nav entry, by design).
+- **Google Drive share security invariants (DO NOT relax).** Scope is EXACTLY `drive.file` (Muse touches only files it created — never broaden to `drive`/`drive.readonly`; that triggers the CASA audit too). OAuth is **Authorization Code + PKCE S256, NO client secret** in the app; tokens live ONLY in Keychain (`…AfterFirstUnlockThisDeviceOnly`, never UserDefaults/logs/synced); sign-out revokes. The share page is a static file with **no API key and no secret** — the manifest rides the URL **fragment** (`#…`, never sent to the host), rendered via `textContent` only with id-regex validation under a `default-src 'none'` CSP. Network happens ONLY inside an explicit user action (sign-in/Publish/Manage/expiry-sweep). Expiry is **Muse-local** (launch sweep deletes the Drive folder it created). The recipient's PDF is the **printed page** (`window.print()`), no app-side PDF. Files live in `Sharing/Drive/`; the page in `web/share/` (deployed to `muse-share.pages.dev`).
 - **Sidebar rows: never use `.onDrag`.** It installs an AppKit drag source on the shared hosting view and eats single-clicks. Reorder is a live `DragGesture` off a trailing grip + an opaque on-top overlay (both folder + collection lists).
 - **`bookmarks.$roots` sink delivers synchronously** — don't add `.receive(on:)`; the non-animated reorder commit relies on synchronous delivery.
 - **Fixed-viewport overlay effects:** per-element `.layerEffect`/`.visualEffect` is the wrong tool (breaks containers, only on-screen elements). The gradual-blur attempt was fully reverted.
@@ -215,10 +221,15 @@ locating where something lives. High-level layout of `Muse/Muse/`:
   `NSWorkspace.shared.recycle`. Don't `unlink` user files. Ever.
 - **No editing UI** — every "edit this" path goes through Open With…
   (`NSWorkspace.shared.open(url, withApplicationAt: ...)`).
-- **No network calls** — if you find yourself reaching for `URLSession`,
-  stop. The sandbox doesn't allow it. Markdown/SVG viewers have hard
-  guards against remote loads. New third-party deps must be audited
-  for network surface.
+- **No network calls — with exactly ONE sanctioned exception.** If you reach
+  for `URLSession`, stop, UNLESS you're in the **Google Drive share** code
+  (`Sharing/Drive/`), the only feature allowed network egress (besides
+  Sparkle), and only inside an explicit user action (sign-in / Publish /
+  Manage / the expiry sweep). Everywhere else the rule holds: Markdown/SVG
+  viewers have hard guards against remote loads; new third-party deps must be
+  audited for network surface. Drive uses `drive.file` (least privilege),
+  PKCE (no client secret), Keychain-only device-only tokens, and the page
+  carries its manifest in the URL fragment (no secrets, no API key).
 - **AppState is @MainActor**. So is most of the data layer. Background
   work (hashing, Vision) goes through `Task.detached(priority:)` or
   the `Indexer` actor's queues.

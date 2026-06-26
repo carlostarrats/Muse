@@ -4022,3 +4022,70 @@ integration-only. Signed-build manual checklist for whoever runs it:
 4. **View ▸ Manage iCloud Shares…** lists it; **Delete** removes the folder + row.
 5. Re-share same collection → reuses the folder (no duplicate), refreshed contents.
 6. iCloud Drive signed out → "Sign in to iCloud" message, clean abort.
+
+### `feat/drive-collection-share` — Google Drive collection share — 2026-06-25
+
+Backend #2 of the two-backend "share a collection" (backend #1 = the plain iCloud helper on
+`feat/icloud-collection-share`, a parallel branch off main). This is the **automated, branded,
+self-expiring** path — the client's (Martin Bruneau / The Project) real need. Full design +
+the email/mockup provenance: `docs/superpowers/specs/2026-06-25-google-drive-collection-share-design.md`;
+plan: `docs/superpowers/plans/2026-06-25-google-drive-collection-share.md`.
+
+**What shipped.** "Share Drive Link" on a collection → a small form (page title · label · name ·
+expiry; today's date is automatic; name/label remembered) → Publish. Muse signs into Google once
+(`drive.file`, PKCE, no secret), ensures a tidy `My Drive/Muse/` root, creates
+`Muse/<collection> — <date>/`, uploads the displayed images, flips the folder to link-viewable,
+and assembles a Cloudflare page URL with the whole manifest base64url'd into the **URL fragment**
+(so it never reaches the host). The page (`web/share/`) renders the signature + a portrait grid
+from Drive's public thumbnail endpoint, a **backdrop switcher** (light/grey/dark dots, persisted),
+and soft-expires client-side (inclusive of the local day). View-menu **"Manage Drive Shares…"**
+lists shares (open link / unpublish-now). **Muse-local expiry sweep** on launch hard-deletes
+folders past their date.
+
+**PDF = the recipient prints the page** (revised mid-build to match the owner's original ask:
+"a pdf size they wanted… not the webpage but the images"). "Save PDF" runs `window.print()`; a
+`@media print` stylesheet lays out just the image grid (palette forced to white/dark text via
+`!important` so a dark backdrop can't print white-on-white), and the recipient's print dialog
+chooses the paper size + Save-as-PDF. **No app-side PDF is generated or uploaded** (the earlier
+`CollectionPDFExporter` approach was wrong); the manifest carries no `pdfId`.
+
+**Provisioned + live.** OAuth iOS client created (testing mode, owner as test user) and wired
+into `DriveConfig`/Info.plist; the page is deployed to **`muse-share.pages.dev`** (Cloudflare
+Pages, via wrangler). The feature runs in a **Debug build** (the network entitlement is present;
+only iCloud is stripped in Debug) — verified end-to-end: sign-in → publish → folder + link →
+page renders → Manage/unpublish. Custom domain + Google verification remain for public release.
+
+**Identity change (load-bearing).** This is the **first sanctioned network egress beyond
+Sparkle** — opt-in + user-initiated. CLAUDE.md's Network policy + the "No network calls" rule
+were updated to record the single exception; bytes go user → their own Drive, developer
+receives nothing.
+
+**Security (per the owner's "security must be perfect").** `drive.file` least-privilege; OAuth
+Auth-Code + PKCE S256, **no client secret**; tokens **Keychain-only, device-only**, never
+logged; revoke on sign-out. Page has **no API key / no secret**, manifest in the URL fragment,
+`textContent`-only render with id-regex validation under a `default-src 'none'` CSP +
+`nosniff`/`no-referrer`/`DENY` headers. Network only inside explicit user actions.
+
+**Architecture / isolation.** Pure units (`PKCE`, `DriveShareManifest`, `DriveShareRecord`/
+store + `DriveExpiry`, `DriveClient.multipartBody`, `TokenStore` double) under `GoogleOAuth` →
+`DriveClient` → `DriveShareService` (Phase machine) + `DriveExpirySweeper`; SwiftUI
+`DriveShareSheet` + `ManageDriveSharesView`. New Swift files auto-include via synchronized
+groups; the page lives outside the app target in `web/share/`.
+
+**Verification.** Swift unit tests + full `MuseTests` **TEST SUCCEEDED**; `node
+web/share/share.test.mjs` all passed; build green; French filled for all new keys. Unlike the
+iCloud helper, the Drive flow **runs in a Debug build** (network entitlement present; only iCloud
+is stripped in Debug), so it was verified **end-to-end live** once the OAuth client + Cloudflare
+page were provisioned: sign-in → consent (drive.file) → publish → `My Drive/Muse/<collection> —
+<date>/` holds the images (link-shared "anyone with link") → page link renders the signature +
+grid + backdrop switcher → **Save PDF** opens the browser print dialog (recipient picks paper
+size) → **View ▸ Manage Drive Shares…** Open Link / Delete-now works → sign-out revokes + purges
+Keychain. Two independent review rounds hardened it (security GREEN, then a delta pass): print
+palette `!important` (dark-backdrop PDF), inclusive local expiry, double-publish guard.
+
+**Still outstanding for public release** (not blockers for the owner's own use in testing mode):
+a custom domain on Cloudflare + Google app verification (the 100-test-user cap applies until
+then); and the standing watch-item that folder-level "anyone reader" must make child thumbnails
+load on the page (fallback: per-file permission), plus the URL-length ceiling for very large
+collections (the manifest rides the fragment — shortening it via a folder-id + page-side Drive
+listing is the deferred enhancement if links get unwieldy).

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Shared Collection</title>
+  <link rel="stylesheet" href="share.css">
+</head>
+<body>
+  <!-- All text nodes are filled by share.js via textContent (never innerHTML).
+       The manifest rides the URL fragment, so nothing personal reaches the
+       server. data-state drives which UI shows (live / expired / unavailable). -->
+  <div id="app" data-state="loading">
+    <header class="bar">
+      <div class="sig">
+        <span id="intro" class="intro"></span>
+        <span id="expires" class="expires"></span>
+        <button id="save" class="save" type="button">Save PDF</button>
+
+        <!-- Backdrop switcher: each dot is filled with the shade it applies, so
+             it needs no text. Sits just right of Save (same gap each side).
+             Screen-only; wired + persisted in share.js. -->
+        <div class="bg-switcher" role="group" aria-label="Background color">
+          <button class="dot" type="button" data-bg="light" aria-label="White background"></button>
+          <button class="dot" type="button" data-bg="grey" aria-label="Grey background"></button>
+          <button class="dot" type="button" data-bg="dark" aria-label="Dark background"></button>
+        </div>
+      </div>
+
+      <div class="from">
+        <span id="label" class="label"></span>
+        <span id="name" class="name"></span>
+      </div>
+    </header>
+
+    <main id="grid" class="grid"></main>
+
+    <div class="notice notice-expired">This share has expired.</div>
+    <div class="notice notice-unavailable">This share is no longer available.</div>
+  </div>
+
+  <script type="module" src="share.js"></script>
+</body>
+</html>

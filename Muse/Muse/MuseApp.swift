@@ -14,6 +14,9 @@ struct MuseApp: App {
     /// Sparkle self-updater (direct-distribution build only). Started at
     /// launch so background checks honor the user's preference.
     @StateObject private var updater = UpdaterController()
+    /// Shared Google sign-in for the Drive share feature — one instance for the
+    /// share UI, the Manage sheet, and the launch expiry sweep.
+    @StateObject private var googleAuth = GoogleOAuth()
 
     /// Pin / Unpin label reflects the selected folder's current state.
     private var pinMenuTitle: String {
@@ -82,6 +85,7 @@ struct MuseApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(appState)
+                .environmentObject(googleAuth)
                 .task {
                     ThumbnailCache.shared.enforceDiskCap()
                     // 180-day retention for data of removed folders.
@@ -92,6 +96,9 @@ struct MuseApp: App {
                                                             rootPaths: roots)
                     }
                     Task { await IntentBackfill.run() }
+                    // Hard-delete any Drive shares past their expiry (no-op if
+                    // not signed in or nothing is due).
+                    await DriveExpirySweeper.sweep(auth: googleAuth)
                 }
         }
         .commands {
@@ -209,10 +216,13 @@ struct MuseApp: App {
                 .disabled(appState.selectedFile == nil)
             }
 
-            // View menu — the global iCloud-shares list (not tied to a folder).
+            // View menu — the global share lists (not tied to a folder).
             CommandGroup(after: .sidebar) {
                 Button("Manage iCloud Shares…") {
                     appState.iCloudSharesShown = true
+                }
+                Button("Manage Drive Shares…") {
+                    appState.driveSharesShown = true
                 }
             }
 

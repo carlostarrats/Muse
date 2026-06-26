@@ -16,6 +16,7 @@ import UniformTypeIdentifiers
 
 struct ShareCollectionButton: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject private var googleAuth: GoogleOAuth
     let title: String
     let count: Int
 
@@ -25,6 +26,7 @@ struct ShareCollectionButton: View {
     @State private var preparing = false
     @StateObject private var iCloudService = ICloudShareService()
     @State private var showingICloudShare = false
+    @State private var showingDriveShare = false
 
     /// The collection's CURRENTLY VISIBLE members, in grid order — the on-screen
     /// set, so an active tag/facet filter narrows the export (images and file
@@ -41,6 +43,7 @@ struct ShareCollectionButton: View {
             Button("Share") { Task { await share() } }
             Divider()
             Button("Share iCloud Link") { startICloudShare() }
+            Button("Share Drive Link") { showingDriveShare = true }
         } label: {
             Group {
                 if preparing {
@@ -67,6 +70,11 @@ struct ShareCollectionButton: View {
         .sheet(isPresented: $showingICloudShare, onDismiss: { iCloudService.reset() }) {
             ICloudShareProgressView(service: iCloudService) {
                 showingICloudShare = false
+            }
+        }
+        .sheet(isPresented: $showingDriveShare) {
+            DriveShareSheet(auth: googleAuth, title: title, urls: exportURLs) {
+                showingDriveShare = false
             }
         }
     }

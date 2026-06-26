@@ -1,0 +1,138 @@
+/* Matches the Muse share mockups: light-grey field, top-left signature bar,
+   responsive portrait grid. */
+:root {
+  --bg: #ffffff;
+  --ink: #1c1c1e;
+  --muted: #8a8a8e;
+  --tile: #e2e2e2;
+}
+
+/* Backdrop choices (set on <html data-bg> by the switcher). Text colors flip
+   so the signature stays readable on any shade. Light = white (the default). */
+html[data-bg="grey"] { --bg: #cfcfcf; --ink: #1c1c1e; --muted: #6a6a6a; --tile: #bcbcbc; }
+html[data-bg="dark"] { --bg: #1c1c1e; --ink: #f2f2f2; --muted: #8a8a8e; --tile: #2c2c2e; }
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 16px/1.4 Helvetica, Arial, sans-serif;
+}
+
+#app { padding: 28px 32px 48px; }
+
+/* Header bar: signature left (intro + expires + Save), "Sent by name" right. */
+.bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+.sig { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.intro { font-size: 20px; color: var(--ink); }
+.expires { font-size: 12px; color: var(--muted); }
+.save {
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  background: rgba(127, 127, 127, 0.22);
+  border: none;
+  border-radius: 999px;
+  padding: 4px 13px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.save:hover { background: var(--ink); color: var(--bg); }
+
+.from { display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
+.label { font-size: 12px; color: var(--muted); }
+.name { font-size: 12px; color: var(--ink); }
+
+/* Responsive portrait grid. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 16px;
+}
+.grid img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  background: var(--tile);
+  display: block;
+}
+
+/* State machine: show only what matches data-state. */
+.notice {
+  display: none;
+  margin-top: 64px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+#app[data-state="live"] .notice { display: none; }
+#app[data-state="expired"] .grid,
+#app[data-state="expired"] .expires,
+#app[data-state="expired"] .save { display: none; }
+#app[data-state="expired"] .notice-expired { display: block; }
+#app[data-state="unavailable"] .bar,
+#app[data-state="unavailable"] .grid { display: none; }
+#app[data-state="unavailable"] .notice-unavailable { display: block; }
+#app[data-state="loading"] .notice { display: none; }
+
+/* Backdrop switcher — sits centered in the header (scrolls with the page, never
+   covers images). Each dot is filled with the shade it sets. Live state only. */
+.bg-switcher {
+  display: none;
+  align-self: center;
+  gap: 8px;
+}
+#app[data-state="live"] .bg-switcher { display: flex; }
+.bg-switcher .dot {
+  width: 13px; height: 13px; padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(127, 127, 127, 0.5);
+  cursor: pointer;
+  outline: 1px solid transparent; outline-offset: 2px;
+  transition: outline-color 0.12s ease, transform 0.12s ease;
+}
+.bg-switcher .dot:hover { transform: scale(1.12); }
+.bg-switcher .dot[data-bg="light"] { background: #ffffff; }
+.bg-switcher .dot[data-bg="grey"]  { background: #cfcfcf; }
+.bg-switcher .dot[data-bg="dark"]  { background: #1c1c1e; }
+.bg-switcher .dot[aria-pressed="true"] { outline-color: var(--ink); }
+
+@media (max-width: 600px) {
+  .bar { flex-direction: column; gap: 12px; }
+  .intro { font-size: 17px; }
+}
+
+/* Print = the PDF. A clean reflection of the page: the signature line, then
+   the images grid. The recipient's print dialog picks the paper size and
+   Save-as-PDF. Interactive chrome (Save button, expiry) is hidden. */
+@media print {
+  @page { margin: 0.5in; }
+  /* Always print on white with dark text — never inherit the chosen screen
+     backdrop (a dark backdrop would make the title white-on-white in the PDF).
+     !important so this beats the higher-specificity html[data-bg="dark"] rule. */
+  html { --bg: #fff !important; --ink: #1c1c1e !important; --muted: #6a6a6a !important; --tile: #e2e2e2 !important; }
+  html, body { background: #fff; }
+  #app { padding: 0; }
+  .save, .expires, .bg-switcher { display: none !important; }
+  .bar { margin-bottom: 18px; }
+  .intro, .name { font-size: 14px; }
+  .label { font-size: 10px; }
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .grid img {
+    break-inside: avoid;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

@@ -323,6 +323,9 @@ struct ContentView: View {
         .sheet(isPresented: $appState.iCloudSharesShown) {
             ManageICloudSharesView()
         }
+        .sheet(isPresented: $appState.driveSharesShown) {
+            ManageDriveSharesView()
+        }
         .sheet(isPresented: $appState.reconnectShown) {
             if let model = appState.reconnectModel {
                 ReconnectWizard(model: model, isPresented: $appState.reconnectShown,
