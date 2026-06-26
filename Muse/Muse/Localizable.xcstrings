@@ -4163,6 +4163,16 @@
           }
         }
       }
+    },
+    "View Collection": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voir la collection"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -133,11 +133,16 @@ struct DriveShareSheet: View {
     }
 
     private func shareLink(_ url: String) {
-        // Share the link as a real URL (NSURL), not a String — so Mail/Messages
-        // drop a clickable link into the message instead of leaving it blank.
+        // Share a "View Collection" hyperlink (attributed string) rather than the
+        // raw URL: the page payload lives in the URL fragment, which Mail's
+        // auto-linker breaks on — so the bare URL ends up only partly clickable
+        // and lands on "not available". An attributed link keeps the WHOLE url
+        // intact behind clean anchor text that's fully clickable.
         guard let contentView = NSApp.keyWindow?.contentView,
               let link = URL(string: url) else { return }
-        let picker = NSSharingServicePicker(items: [link])
+        let text = NSMutableAttributedString(string: String(localized: "View Collection"))
+        text.addAttribute(.link, value: link, range: NSRange(location: 0, length: text.length))
+        let picker = NSSharingServicePicker(items: [text])
         picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
     }
 }
