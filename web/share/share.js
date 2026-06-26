@@ -34,10 +34,8 @@ export function formatDate(iso) {
   if (isNaN(d)) return iso;
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
 }
-export function thumbURL(id) { return `https://drive.google.com/thumbnail?id=${id}&sz=w1600`; }
-// Open the PDF in Drive's viewer (NOT a forced download) so the recipient
-// decides how to handle it — print at their own paper size, or download.
-export function pdfURL(id) { return `https://drive.google.com/file/d/${id}/view`; }
+// Larger size for crisp printing (the page is printed to make the PDF).
+export function thumbURL(id) { return `https://drive.google.com/thumbnail?id=${id}&sz=w2048`; }
 
 // Browser-only render glue (skipped under node).
 if (typeof document !== 'undefined') {
@@ -53,8 +51,10 @@ if (typeof document !== 'undefined') {
     root.dataset.state = 'live';
     set('intro', m.i); set('label', m.l); set('name', m.n);
     set('expires', `Expires ${formatDate(m.e)}`);
+    // "Save PDF" = print the page. The recipient's print dialog chooses the
+    // paper size and Save-as-PDF; the print stylesheet lays out just the images.
     const save = document.getElementById('save');
-    if (m.p && save) { save.href = pdfURL(m.p); } else if (save) { save.style.display = 'none'; }
+    if (save) save.addEventListener('click', () => window.print());
     const grid = document.getElementById('grid');
     for (const id of m.g) {
       const img = document.createElement('img');

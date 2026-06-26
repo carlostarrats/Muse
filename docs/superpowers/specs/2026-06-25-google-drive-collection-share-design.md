@@ -213,14 +213,24 @@ the PDF + images, so any still-open page degrades to "unavailable" — consisten
   if there are stored unexpired-past records AND a valid token; otherwise no
   network at all.
 
-## PDF (print quality)
+## PDF — the page prints itself, recipient picks the size
 
-Generated **locally from the original files** via the existing
-`CollectionPDFExporter` (ImageIO downsample from originals — sharp, print-
-ready, NOT the web thumbnails), at the default 11×14 (the existing paper-size
-choice can be surfaced later). Uploaded into the share's Drive folder; the
-page's **Save** pill links to it for download. Deleted with the folder at
-expiry.
+Per the owner's original ask ("a pdf size they wanted so who u sent to could
+print it out — not the webpage but the images"), the **"Save PDF"** button is
+**`window.print()`** on the share page, NOT an app-generated file. A
+`@media print` stylesheet lays out a clean **reflection of the page** (the
+signature line + the image grid, with the button/expiry hidden). The
+**recipient's own print dialog** chooses the **paper size** and Save-as-PDF —
+so the size is the recipient's decision, exactly as specified.
+
+Consequences (corrected from the earlier draft, which wrongly used
+`CollectionPDFExporter` at a fixed 11×14):
+- **No app-side PDF generation and no PDF uploaded to Drive.** `DriveShareService`
+  does not call `CollectionPDFExporter`; the manifest carries no `pdfId`.
+- Print images use a **larger Drive thumbnail** (`sz=w2048`) so the printed
+  output is crisp.
+- The PDF therefore always matches the web page and is never the app's
+  collection-PDF styling.
 
 ## UI surfaces
 

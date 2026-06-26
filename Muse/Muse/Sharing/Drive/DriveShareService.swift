@@ -74,22 +74,15 @@ struct DriveShareForm {
                 }
 
                 phase = .finalizing
-                // Print-quality PDF from ORIGINALS (existing exporter), uploaded too.
-                var pdfID: String?
-                if let pdf = await CollectionPDFExporter.makePDF(
-                    urls: urls, title: title, count: urls.count, columns: 4,
-                    layoutAspect: nil, tileBackdrop: nil, tagLabels: [],
-                    pageSize: PaperSize.default.size) {
-                    pdfID = try? await client.uploadFile(url: pdf, name: "\(title).pdf",
-                                                         mime: "application/pdf", parent: folderID)
-                }
-
                 try await client.setAnyoneReader(fileID: folderID)
 
+                // No app-side PDF: the share page prints itself (a clean
+                // reflection of the image grid) so the RECIPIENT picks the
+                // paper size in their own print dialog — what the spec asked for.
                 let manifest = DriveShareManifest(
                     intro: form.intro, label: form.label, name: form.name,
                     date: iso.string(from: form.date), expiry: iso.string(from: form.expiry),
-                    imageIDs: imageIDs, pdfID: pdfID)
+                    imageIDs: imageIDs, pdfID: nil)
                 let pageURL = manifest.pageURL(base: DriveConfig.shareBaseURL)
 
                 store.add(DriveShareRecord(id: UUID().uuidString, collectionName: title,

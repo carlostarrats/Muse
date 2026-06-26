@@ -30,13 +30,15 @@ html, body {
 .intro { font-size: 20px; color: var(--ink); }
 .expires { font-size: 12px; color: var(--muted); }
 .save {
+  font: inherit;
   font-size: 12px;
   color: var(--ink);
-  text-decoration: none;
   background: rgba(0, 0, 0, 0.06);
+  border: none;
   border-radius: 999px;
   padding: 4px 13px;
   white-space: nowrap;
+  cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
 }
 .save:hover { background: var(--ink); color: #fff; }
@@ -80,4 +82,26 @@ html, body {
 @media (max-width: 600px) {
   .bar { flex-direction: column; gap: 12px; }
   .intro, .label, .name { font-size: 17px; }
+}
+
+/* Print = the PDF. A clean reflection of the page: the signature line, then
+   the images grid. The recipient's print dialog picks the paper size and
+   Save-as-PDF. Interactive chrome (Save button, expiry) is hidden. */
+@media print {
+  @page { margin: 0.5in; }
+  html, body { background: #fff; }
+  #app { padding: 0; }
+  .save, .expires { display: none !important; }
+  .bar { margin-bottom: 18px; }
+  .intro, .name { font-size: 14px; }
+  .label { font-size: 10px; }
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .grid img {
+    break-inside: avoid;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }
