@@ -61,5 +61,21 @@ if (typeof document !== 'undefined') {
       img.loading = 'lazy'; img.src = thumbURL(id); img.alt = '';
       grid.appendChild(img);
     }
+    setupBackdropSwitcher();
   }
+}
+
+// Backdrop switcher (screen-only): apply a shade, mark the active dot, and
+// remember the viewer's choice across visits.
+function setupBackdropSwitcher() {
+  const dots = document.querySelectorAll('.bg-switcher .dot');
+  const apply = (name) => {
+    document.documentElement.setAttribute('data-bg', name);
+    dots.forEach(d => d.setAttribute('aria-pressed', String(d.dataset.bg === name)));
+    try { localStorage.setItem('museBg', name); } catch { /* private mode */ }
+  };
+  let saved = null;
+  try { saved = localStorage.getItem('museBg'); } catch { /* private mode */ }
+  apply(['light', 'grey', 'dark'].includes(saved) ? saved : 'light');
+  dots.forEach(d => d.addEventListener('click', () => apply(d.dataset.bg)));
 }

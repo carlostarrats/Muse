@@ -28,6 +28,14 @@
 
     <div class="notice notice-expired">This share has expired.</div>
     <div class="notice notice-unavailable">This share is no longer available.</div>
+
+    <!-- Backdrop switcher: each dot is filled with the shade it applies, so it
+         needs no text. Screen-only; wired + persisted in share.js. -->
+    <div class="bg-switcher" role="group" aria-label="Background color">
+      <button class="dot" type="button" data-bg="light" aria-label="Light background"></button>
+      <button class="dot" type="button" data-bg="grey" aria-label="Grey background"></button>
+      <button class="dot" type="button" data-bg="dark" aria-label="Dark background"></button>
+    </div>
   </div>
 
   <script type="module" src="share.js"></script>
