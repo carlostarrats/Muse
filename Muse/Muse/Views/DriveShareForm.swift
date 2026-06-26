@@ -66,7 +66,13 @@ struct DriveShareSheet: View {
                   prompt: String(localized: "e.g. Sent by"))
             field(String(localized: "Name"), text: $name,
                   prompt: String(localized: "Your Name"))
-            DatePicker(String(localized: "Expires"), selection: $expiry, displayedComponents: .date)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Expires").font(.system(size: 12)).foregroundStyle(.secondary)
+                DatePicker("", selection: $expiry, in: Date()..., displayedComponents: .date)
+                    .datePickerStyle(.graphical)
+                    .labelsHidden()
+                    .frame(maxWidth: 320)
+            }
 
             HStack {
                 Spacer()
