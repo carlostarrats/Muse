@@ -14,6 +14,7 @@ struct ManageICloudSharesView: View {
     @Environment(\.dismiss) private var dismiss
     private let store = ICloudShareStore.default
     @State private var records: [ICloudShareRecord] = []
+    @State private var didPrune = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -44,7 +45,33 @@ struct ManageICloudSharesView: View {
         }
         .padding(28)
         .frame(width: 600, height: 520)
-        .onAppear { records = store.all() }
+        .onAppear {
+            records = store.all()      // show what we have immediately…
+            guard didPrune == false else { return }
+            didPrune = true
+            Task { await pruneMissing() } // …then drop any whose folder is gone.
+        }
+    }
+
+    /// Remove rows whose iCloud folder no longer exists (e.g. the user deleted it
+    /// in Finder/iCloud Drive directly). Only prunes when the iCloud zone is
+    /// reachable — if it can't be resolved we leave every record untouched, so a
+    /// temporarily-unavailable container never wipes live shares. Drops only the
+    /// local record; the (already-gone) folder is not touched.
+    private func pruneMissing() async {
+        // First zone access can block — resolve it off the main actor (mirrors
+        // the copy path), then prune on the main actor with cheap fileExists stats.
+        let docs = await Task.detached(priority: .utility) { ICloudZone.folderURL() }.value
+        guard let docs else { return }
+        let shareRoot = ICloudSharePaths.shareRoot(zoneDocuments: docs)
+        records = store.pruneMissing { record in
+            let folder = URL(fileURLWithPath: record.folderPath)
+            // A non-contained/odd record is kept so the user can still remove it
+            // by hand; a proper share survives only if its folder still exists.
+            guard ICloudSharePaths.isContainedShareFolder(folder, shareRoot: shareRoot)
+            else { return true }
+            return FileManager.default.fileExists(atPath: folder.path)
+        }
     }
 
     /// Hairline between rows (matches InfoSheet — between rows only, never
@@ -69,10 +96,37 @@ struct ManageICloudSharesView: View {
 
     private func delete(_ record: ICloudShareRecord) {
         // Remove the folder Muse created in its own iCloud container; the OS
-        // daemon propagates the removal. Then drop the record.
-        try? FileManager.default.removeItem(at: URL(fileURLWithPath: record.folderPath))
-        store.remove(id: record.id)
-        records = store.all()
+        // daemon propagates the removal. Then drop the record. The path comes
+        // from the on-disk JSON store, so re-validate it the SAME way the copy
+        // path does — a corrupted/unexpected stored path must never let
+        // `removeItem` escape the share root (data-loss-sensitive container).
+        let folder = URL(fileURLWithPath: record.folderPath)
+        Task {
+            // Resolve the zone off the main actor — first access can block while
+            // the daemon resolves the container (ICloudZone contract).
+            let docs = await Task.detached(priority: .userInitiated) { ICloudZone.folderURL() }.value
+            if let docs {
+                let shareRoot = ICloudSharePaths.shareRoot(zoneDocuments: docs)
+                if ICloudSharePaths.isContainedShareFolder(folder, shareRoot: shareRoot) {
+                    // A real, contained share folder: remove it, but if removal
+                    // throws (busy / coordination), KEEP the row so the user can
+                    // retry rather than orphaning the folder with no way back.
+                    // Already-absent counts as done.
+                    let fm = FileManager.default
+                    do {
+                        if fm.fileExists(atPath: folder.path) { try fm.removeItem(at: folder) }
+                    } catch {
+                        return
+                    }
+                }
+                // A non-contained/odd path falls through: don't touch the
+                // filesystem, just drop the stale record below.
+            }
+            // Drop the record: the folder is gone (or unreachable — zone
+            // unresolvable / odd path), so the user can clear the row.
+            store.remove(id: record.id)
+            records = store.all()
+        }
     }
 }
 

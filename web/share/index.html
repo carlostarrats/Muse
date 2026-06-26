@@ -4,6 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
+  <!-- Defense-in-depth CSP fallback: the primary policy is served via _headers
+       (which also sets frame-ancestors / Referrer-Policy, not expressible in a
+       meta tag). This mirrors it so the page is never left with NO CSP if it's
+       ever served somewhere _headers doesn't apply (preview host, renamed file). -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https://drive.google.com https://*.googleusercontent.com; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'">
   <title>Shared Collection</title>
   <link rel="stylesheet" href="share.css">
 </head>

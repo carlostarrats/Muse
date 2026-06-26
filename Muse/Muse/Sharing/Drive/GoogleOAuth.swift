@@ -16,6 +16,11 @@ enum DriveAuthError: Error { case cancelled, badResponse, notSignedIn, refreshFa
 @MainActor final class GoogleOAuth: NSObject, ObservableObject {
     private let store: TokenStoring
     @Published private(set) var isSignedIn: Bool
+    /// In-flight token refresh, shared by concurrent callers. The first caller
+    /// starts it; the rest await the same task instead of each firing their own
+    /// refresh round-trip (which, with a rotating-refresh-token IdP, could let
+    /// one refresh invalidate another's token). Cleared when it settles.
+    private var inFlightRefresh: Task<String, Error>?
 
     init(store: TokenStoring = KeychainTokenStore()) {
         self.store = store
@@ -45,7 +50,21 @@ enum DriveAuthError: Error { case cancelled, badResponse, notSignedIn, refreshFa
     func validAccessToken() async throws -> String {
         guard let tokens = store.load() else { throw DriveAuthError.notSignedIn }
         if tokens.expiry.timeIntervalSinceNow > 60 { return tokens.accessToken }
-        return try await refresh(tokens.refreshToken)
+        // Coalesce: if a refresh is already running, await it rather than firing
+        // a second. The check + assignment below run without an `await` between
+        // them (MainActor), so only the first caller creates the task.
+        if let inFlight = inFlightRefresh { return try await inFlight.value }
+        let refreshToken = tokens.refreshToken
+        let task = Task<String, Error> { try await self.refresh(refreshToken) }
+        inFlightRefresh = task
+        do {
+            let token = try await task.value
+            inFlightRefresh = nil
+            return token
+        } catch {
+            inFlightRefresh = nil
+            throw error
+        }
     }
 
     func signIn() async throws {

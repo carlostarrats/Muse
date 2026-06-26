@@ -16,6 +16,7 @@ struct ManageDriveSharesView: View {
     private let store = DriveShareStore.default
     @State private var records: [DriveShareRecord] = []
     @State private var deleting: Set<String> = []
+    @State private var didPrune = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -44,7 +45,32 @@ struct ManageDriveSharesView: View {
         }
         .padding(28)
         .frame(width: 520, height: 380)
-        .onAppear { records = store.all() }
+        .onAppear {
+            records = store.all()      // show what we have immediately…
+            guard didPrune == false else { return }
+            didPrune = true
+            Task { await pruneMissing() } // …then drop any whose Drive folder is gone.
+        }
+    }
+
+    /// Remove rows whose Drive folder no longer exists — the user deleted/trashed
+    /// it in Google Drive directly, or it belongs to a since-switched account
+    /// (drive.file can't see it → 404). Network happens only here, inside this
+    /// explicit "Manage" action. Conservative: prune ONLY on a definitive
+    /// not-found; any thrown error (offline / auth / 5xx) is inconclusive and the
+    /// record is kept, and nothing is pruned while signed out.
+    private func pruneMissing() async {
+        guard googleAuth.isSignedIn else { return }
+        let client = DriveClient(auth: googleAuth)
+        var goneIDs: [String] = []
+        for record in store.all() {
+            if let exists = try? await client.folderExists(id: record.folderID), exists == false {
+                goneIDs.append(record.id)
+            }
+        }
+        guard goneIDs.isEmpty == false else { return }
+        store.remove(ids: goneIDs)   // single rewrite, not one per id
+        records = store.all()
     }
 
     private func row(_ record: DriveShareRecord) -> some View {
@@ -70,7 +96,14 @@ struct ManageDriveSharesView: View {
         deleting.insert(record.id)
         defer { deleting.remove(record.id) }
         let client = DriveClient(auth: googleAuth)
-        try? await client.deleteFolder(id: record.folderID)
+        // Drop the local record ONLY if the folder is definitively gone.
+        // `deleteFolder` treats 404 as success (already gone), so a genuinely
+        // missing folder still clears the row; but a real failure (offline / 5xx
+        // / auth / token-refresh throw) must KEEP the record — the share folder
+        // is public (anyone-reader) and a forgotten record can never be retried
+        // or swept, leaving an orphaned live link.
+        do { try await client.deleteFolder(id: record.folderID) }
+        catch { return }
         store.remove(id: record.id)
         records = store.all()
     }

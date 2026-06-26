@@ -120,3 +120,19 @@ Scope touches `FolderReader.files`, `FolderStat.compute` (+ its tests),
 `GridView` (folder-card rendering + navigate-on-open), and the subfolders-toggle
 interaction. Needs its own brainstorm → spec → plan (the click/navigation +
 toggle reconciliation are the real design questions). Not started.
+
+---
+
+## SettingsView footers built with `+` ship in English (pre-existing, low)
+
+`SettingsView.swift` — the "Automatic organization", "Grid", and "Sidebar"
+section footers are each `Text("…" + "…" + "…")`. `Text("a" + "b")` resolves to
+the **verbatim** `Text(_:String)` initializer (`LocalizedStringKey` has no `+`),
+so they ship in English regardless of the catalog — French users see English
+footers. (The newer Google Drive footer is a single literal and localizes fine.)
+
+Surfaced in the 2026-06-25 health-review pass. Not a regression — these predate
+v1.2.1. Fix is mechanical (wrap each whole footer as one `String(localized:)`
+key) but needs accurate **French** translations authored for the three new keys,
+so it's deferred rather than shipped half-translated. Fold in when next touching
+`SettingsView` or the localization catalog.

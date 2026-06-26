@@ -15,6 +15,15 @@ struct ICloudShareRecord: Codable, Identifiable, Equatable {
     let folderPath: String
     let itemCount: Int
     let createdAt: Date
+    /// The owning collection's STABLE id (optional: older records predate this
+    /// field and decode to nil). Used to disambiguate share folders so two
+    /// collections with the same display name can't clobber each other's folder.
+    /// Falls back to `collectionName` as the identity when absent.
+    var collectionID: String? = nil
+
+    /// Identity used for folder-ownership comparisons: the stable id when known,
+    /// otherwise the display name (legacy records).
+    var identity: String { collectionID ?? collectionName }
 }
 
 final class ICloudShareStore {
@@ -49,6 +58,21 @@ final class ICloudShareStore {
 
     func remove(id: String) {
         queue.sync { save(load().filter { $0.id != id }) }
+    }
+
+    /// Drop records whose folder is gone, per `exists`, and return the survivors
+    /// (newest-first). Rewrites the store only when something was actually
+    /// pruned. The predicate runs on the store's serial queue. CALLER CONTRACT:
+    /// only call this when iCloud is reachable (resolvable zone) — otherwise a
+    /// temporarily-unavailable container would read as "all folders missing" and
+    /// prune live shares. This drops only the local RECORD, never any file.
+    func pruneMissing(exists: (ICloudShareRecord) -> Bool) -> [ICloudShareRecord] {
+        queue.sync {
+            let all = load()
+            let kept = all.filter(exists)
+            if kept.count != all.count { save(kept) }
+            return kept.sorted { $0.createdAt > $1.createdAt }
+        }
     }
 
     private func load() -> [ICloudShareRecord] {

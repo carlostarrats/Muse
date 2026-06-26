@@ -47,29 +47,46 @@ final class ICloudSharePathsTests: XCTestCase {
     }
 
     func testUniqueFolderNameReusesForSameCollection() {
-        // Re-sharing the SAME collection reuses its folder (refresh in place).
-        let owners = ["Kitchen Inspo": "Kitchen Inspo"]
-        XCTAssertEqual(ICloudSharePaths.uniqueFolderName(for: "Kitchen Inspo", owners: owners),
+        // Re-sharing the SAME collection (same stable identity) reuses its folder
+        // (refresh in place), regardless of any display-name edits.
+        let owners = ["Kitchen Inspo": "id-A"]
+        XCTAssertEqual(ICloudSharePaths.uniqueFolderName(for: "Kitchen Inspo",
+                                                         identity: "id-A", owners: owners),
                        "Kitchen Inspo")
+    }
+
+    func testUniqueFolderNameDisambiguatesIdenticalDisplayNames() {
+        // Two DIFFERENT collections with the SAME display name must NOT share one
+        // folder — keying on the stable id (not the name) is what catches this.
+        // The second gets "-2"; without it, sharing the second would delete the
+        // first's images and silently repoint its live link.
+        let owners = ["Kitchen Inspo": "id-A"]
+        XCTAssertEqual(ICloudSharePaths.uniqueFolderName(for: "Kitchen Inspo",
+                                                         identity: "id-B", owners: owners),
+                       "Kitchen Inspo-2")
     }
 
     func testUniqueFolderNameDisambiguatesCollidingCollections() {
         // "Trip/Italy" and "Trip-Italy" both sanitize to "Trip-Italy". The second
-        // collection must NOT reuse the first's folder (which would delete the
-        // first's images and repoint its live link). It gets "-2".
-        let owners = ["Trip-Italy": "Trip/Italy"]
-        XCTAssertEqual(ICloudSharePaths.uniqueFolderName(for: "Trip-Italy", owners: owners),
+        // collection (a different identity) must NOT reuse the first's folder
+        // (which would delete the first's images and repoint its live link). "-2".
+        let owners = ["Trip-Italy": "id-A"]
+        XCTAssertEqual(ICloudSharePaths.uniqueFolderName(for: "Trip-Italy",
+                                                         identity: "id-B", owners: owners),
                        "Trip-Italy-2")
         // And re-sharing the SECOND collection keeps its own "-2" folder.
-        let owners2 = ["Trip-Italy": "Trip/Italy", "Trip-Italy-2": "Trip-Italy"]
-        XCTAssertEqual(ICloudSharePaths.uniqueFolderName(for: "Trip-Italy", owners: owners2),
+        let owners2 = ["Trip-Italy": "id-A", "Trip-Italy-2": "id-B"]
+        XCTAssertEqual(ICloudSharePaths.uniqueFolderName(for: "Trip-Italy",
+                                                         identity: "id-B", owners: owners2),
                        "Trip-Italy-2")
         // A third colliding collection climbs to "-3".
-        let owners3 = ["Trip-Italy": "Trip/Italy", "Trip-Italy-2": "Trip\\Italy"]
-        XCTAssertEqual(ICloudSharePaths.uniqueFolderName(for: "Trip:Italy", owners: owners3),
+        let owners3 = ["Trip-Italy": "id-A", "Trip-Italy-2": "id-B"]
+        XCTAssertEqual(ICloudSharePaths.uniqueFolderName(for: "Trip:Italy",
+                                                         identity: "id-C", owners: owners3),
                        "Trip-Italy-3")
-        // The first collection still reuses the base folder.
-        XCTAssertEqual(ICloudSharePaths.uniqueFolderName(for: "Trip/Italy", owners: owners3),
+        // The first collection (id-A) still reuses the base folder.
+        XCTAssertEqual(ICloudSharePaths.uniqueFolderName(for: "Trip/Italy",
+                                                         identity: "id-A", owners: owners3),
                        "Trip-Italy")
     }
 

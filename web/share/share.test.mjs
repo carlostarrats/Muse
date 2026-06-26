@@ -14,6 +14,11 @@ const noPdf = { ...sample }; delete noPdf.p;
 assert.ok(validateManifest(noPdf), 'valid without pdfID (app no longer uploads a PDF)');
 assert.ok(!validateManifest({ ...sample, g:['short'] }), 'bad id rejected');
 assert.ok(!validateManifest({ ...sample, g:[] }), 'empty grid rejected');
+// `e` must be strict date-only — a value with a time component would make
+// isExpired fail OPEN (Invalid Date < now === false). Reject it at validation.
+assert.ok(!validateManifest({ ...sample, e:'2026-04-04T12:00:00' }), 'datetime e rejected (no fail-open)');
+assert.ok(!validateManifest({ ...sample, e:'2026/04/04' }), 'non-ISO date rejected');
+assert.ok(!validateManifest({ ...sample, e:'not-a-date' }), 'garbage date rejected');
 assert.ok(isExpired({ ...sample, e:'2020-01-01' }, new Date('2026-01-01')), 'past → expired');
 assert.ok(!isExpired(sample, new Date('2026-04-02')), 'before expiry → live');
 assert.ok(VALID_ID.test('aaaaaaaaaaaaaaaaaaaa'), 'id regex ok');

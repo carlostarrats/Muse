@@ -51,18 +51,22 @@ import Combine
         tearDownUploadWait()
     }
 
-    func start(title: String, urls: [URL]) {
+    func start(title: String, collectionID: String, urls: [URL]) {
         guard urls.isEmpty == false else {
             phase = .failed(String(localized: "This collection has no images to share."))
             return
         }
+        // Supersede any in-flight run: tear down a prior upload wait (resume its
+        // continuation, stop its query) so starting a second share never strands
+        // the old run on an overwritten continuation or leaks its NSMetadataQuery.
+        cancel()
         generation &+= 1
         let gen = generation
         phase = .copying
-        task = Task { await run(title: title, urls: urls, gen: gen) }
+        task = Task { await run(title: title, collectionID: collectionID, urls: urls, gen: gen) }
     }
 
-    private func run(title: String, urls: [URL], gen: Int) async {
+    private func run(title: String, collectionID: String, urls: [URL], gen: Int) async {
         // Resolve the iCloud zone off the main thread (first access can block).
         guard let docs = await Task.detached(priority: .userInitiated, operation: {
             ICloudZone.folderURL()
@@ -76,9 +80,9 @@ import Combine
         // Disambiguate against other collections' live shares so a name that
         // sanitizes to an already-used folder never reuses (and clobbers) it.
         let owners = Dictionary(
-            store.all().map { (URL(fileURLWithPath: $0.folderPath).lastPathComponent, $0.collectionName) },
+            store.all().map { (URL(fileURLWithPath: $0.folderPath).lastPathComponent, $0.identity) },
             uniquingKeysWith: { first, _ in first })
-        let leaf = ICloudSharePaths.uniqueFolderName(for: title, owners: owners)
+        let leaf = ICloudSharePaths.uniqueFolderName(for: title, identity: collectionID, owners: owners)
         let folder = ICloudSharePaths.shareRoot(zoneDocuments: docs)
             .appendingPathComponent(leaf, isDirectory: true)
         let shareRoot = ICloudSharePaths.shareRoot(zoneDocuments: docs)
@@ -116,7 +120,7 @@ import Combine
         // Record the share now (folder exists); count is what we copied.
         store.add(ICloudShareRecord(id: UUID().uuidString, collectionName: title,
                                     folderPath: folder.path, itemCount: copied.count,
-                                    createdAt: Date()))
+                                    createdAt: Date(), collectionID: collectionID))
 
         phase = .uploading(UploadTally(uploaded: 0, total: copied.count))
         await waitForUpload(of: copied)
@@ -137,10 +141,7 @@ import Combine
         // sanitizer gap (a `.`/`..` leaf would make `removeItem` delete the
         // PARENT — the whole iCloud Documents zone). The sanitizer already
         // prevents this, so a real share never trips the guard.
-        let leaf = folder.lastPathComponent
-        guard leaf.isEmpty == false, leaf != ".", leaf != "..",
-              folder.deletingLastPathComponent().standardizedFileURL.path
-                == shareRoot.standardizedFileURL.path
+        guard ICloudSharePaths.isContainedShareFolder(folder, shareRoot: shareRoot)
         else { throw CocoaError(.fileWriteInvalidFileName) }
         if fm.fileExists(atPath: folder.path) { try fm.removeItem(at: folder) }
         try fm.createDirectory(at: folder, withIntermediateDirectories: true)

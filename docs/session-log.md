@@ -4172,3 +4172,101 @@ position (here, between `Pages` and `Paper Size:`) to keep the diff reviewable.
 **Verification.** App **BUILD SUCCEEDED**; full `MuseTests` + `MuseUITests` **all passed**
 (English host); catalog re-validated (434 keys, valid JSON, only `Paper Size` added, no value
 changes). CLAUDE.md unchanged — the fixes follow already-documented accessibility/localization rules.
+
+## 2026-06-25 — `feat/next-63` — pre-release health + security review (since v1.2.1)
+
+A broad "review everything new since the last release for health, bugs, leakage,
+security; fix-and-loop until green" pass. The diff since v1.2.1 is dominated by the
+two collection-share backends (iCloud + Google Drive), the active-tag filter bar, and
+PaperSize PDF export. Four parallel review agents (Drive security, iCloud data-loss,
+web/XSS, Swift concurrency/memory) plus a direct sweep of `Info.plist`, entitlements,
+`DriveConfig`, `MuseApp`, and the French catalog. Baseline build + full tests green
+before and after.
+
+**Most surfaces held** (verified, not assumed). Drive: scope is exactly `drive.file`,
+PKCE S256 / no client secret, tokens Keychain-only `AfterFirstUnlockThisDeviceOnly`
+(never logged / UserDefaults / synced), revoke-on-signout, network only in user actions +
+the launch expiry-sweep. Web page: no XSS sink (all `textContent`), Drive-ID regex-locked,
+CSP `default-src 'none'`. Swift UI changes (TagChipsRow / TagSelection / ContentView): no
+retain cycles, selection pruning intact, the TextField-vs-`@Published` constraint actually
+*fixed* by the diff (drafts moved to local `@State`). Network egress confirmed limited to
+the two Drive files; no secret logging anywhere.
+
+**Fixed:**
+1. **HIGH — iCloud Manage-delete had no containment guard.** `ManageICloudSharesView.delete`
+   did `removeItem(at: URL(fileURLWithPath: record.folderPath))` straight from the on-disk
+   JSON store — the one destructive `removeItem` in the feature NOT re-validated against the
+   share root (unlike `copyMembers`). A corrupted/empty stored path could target the wrong
+   thing inside the container. Fix: extracted the copy-path guard into a shared pure
+   `ICloudSharePaths.isContainedShareFolder(_:shareRoot:)` (leaf non-empty/`.`/`..` + parent
+   == share root) and gated the delete on it; the record is always dropped regardless.
+2. **MEDIUM — iCloud identical-display-name folder clobber.** `feat/next-60` disambiguated
+   DIFFERENT names that *sanitize* to the same leaf, but two collections with an IDENTICAL
+   display name still shared one folder (re-sharing the second `removeItem`s the first's
+   folder and silently repoints its live link). Fix: `uniqueFolderName` now keys ownership on
+   the collection's STABLE id (threaded through `ShareCollectionButton`→`start`→the record's
+   new optional `collectionID`), not the display name. New regression test.
+3. **MEDIUM — iCloud upload-wait continuation/query leak.** `start()` bumped `generation` and
+   overwrote `task`/the upload continuation without resuming the prior one, stranding a prior
+   in-flight `run()` and leaking its `NSMetadataQuery`. Fix: `start()` now calls `cancel()`
+   (resume + stop) before superseding. (The only caller already `reset()`s first; this makes
+   `start()` self-protective.)
+4. **MEDIUM — Drive token-refresh race.** Two concurrent `validAccessToken()` callers could
+   both observe an expired token and fire parallel refreshes. Fix: coalesce on an
+   `inFlightRefresh` task (latent today since uploads are sequential, but future-proofs against
+   parallel uploads / a rotating-refresh-token IdP).
+5. **LOW — web expiry fail-open.** `validateManifest` accepted any `Date.parse`-able `e`, but
+   `isExpired` appends a local time component — a value already carrying a time yielded an
+   Invalid Date and was treated as NOT expired (never expires). Fix: require strict
+   `YYYY-MM-DD` (`DATE_ONLY`); JS tests cover the rejected datetime/garbage cases.
+6. **LOW — web defense-in-depth headers.** Added a `<meta>` CSP fallback (so the page is never
+   left with no CSP if served where `_headers` doesn't apply) + `Strict-Transport-Security`.
+7. **Doc fixes.** `Muse.entitlements` comment claimed network is used "ONLY" by Sparkle — now
+   names both sanctioned paths (Sparkle + opt-in Drive, bytes user→their own Drive, label
+   unchanged). `web/share/README.md` stale "Save downloads the PDF" → print-to-PDF. Pre-existing
+   `SettingsView` `+`-concatenated footers (ship in English) logged to `possible-updates.md`
+   (deferred — needs authored French, predates v1.2.1).
+
+**Accepted as designed (re-confirmed, not regressions):** stateless-manifest phishing,
+client-side-only expiry, folder-level "anyone reader", account-switch orphaned Drive folders.
+
+**Verification.** Baseline + post-fix `xcodebuild build` **SUCCEEDED**; full `MuseTests`
+**450 tests, 0 failures** (TEST SUCCEEDED); `node web/share/share.test.mjs` all passed; French
+catalog complete (434 keys, 0 missing/needs-review). CLAUDE.md gained the
+`isContainedShareFolder` / stable-id folder-identity rules folded into the existing iCloud
+share-safety gotcha.
+
+**Follow-up — prune stale Manage rows (same session).** Both Manage modals
+previously read only their JSON record store, so a share whose folder you deleted
+*outside* Muse (Finder/iCloud Drive, or the Google Drive UI) lingered as a dead
+row with no indicator. Now each prunes on open:
+- **iCloud** (`ManageICloudSharesView`): new pure `ICloudShareStore.pruneMissing(exists:)`
+  drops records whose folder is gone (unit-tested). The view gates it on a
+  resolvable iCloud zone (resolved off-main) so a temporarily-unavailable
+  container can't wipe live shares; non-contained/odd records are kept for manual
+  removal. Drops only the local record, never a file.
+- **Drive** (`ManageDriveSharesView`): checks each record via the existing
+  `DriveClient.folderExists` (the only sanctioned network in the "Manage" action).
+  Conservative — prunes ONLY on a definitive not-found (404 / trashed, which also
+  covers a since-switched account); any thrown error (offline / auth / 5xx) keeps
+  the record, and nothing is pruned while signed out.
+Tests: 452 passed / 0 failures.
+
+**QA hardening on the prune/delete paths (same session).** A review of the prune
+change surfaced two pre-existing bugs in the Manage **delete** handlers (same
+class), now fixed:
+- **Drive `delete` no longer orphans a public share.** It swallowed `deleteFolder`
+  errors with `try?` then removed the record unconditionally — so a failed delete
+  (offline / 5xx / auth / token-refresh throw) left the `anyone-reader` Drive
+  folder live while Muse forgot it (no retry, the expiry sweeper can't reach it).
+  Now: drop the record ONLY when the delete succeeds or is a 404 (already gone);
+  any thrown error keeps the row.
+- **iCloud `delete` keeps the row if the contained `removeItem` throws** (busy /
+  coordination) instead of orphaning the folder with no way to retry; an
+  already-absent folder still clears the row. Also moved its `ICloudZone.folderURL()`
+  + `removeItem` OFF the main actor (the zone's documented "call off the main
+  thread" contract — the prune path already did this).
+- Plus: a `didPrune` `@State` guard so a re-fired `onAppear` can't double-run the
+  prune (esp. the Drive network loop), and a batched `DriveShareStore.remove(ids:)`
+  (one rewrite, unit-tested) replacing per-id writes.
+Tests: 453 passed / 0 failures.
