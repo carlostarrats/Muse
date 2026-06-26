@@ -153,7 +153,8 @@ struct DriveShareSheet: View {
 
 /// A flat button with a clear hover highlight (the default macOS buttons read
 /// as inert here). Prominent = accent fill; isDefault = Return triggers it.
-private struct HoverButton: View {
+/// Shared with the Settings → Google Drive sign-in/out row.
+struct HoverButton: View {
     let title: String
     var prominent: Bool = false
     var isDefault: Bool = false

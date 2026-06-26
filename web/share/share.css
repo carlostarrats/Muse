@@ -21,9 +21,12 @@ html, body {
   font: 400 16px/1.4 Helvetica, Arial, sans-serif;
 }
 
-#app { padding: 28px 32px 48px; }
+/* The content area fills at least one full screen so the footer sits just below
+   the fold — out of the way until you scroll down, never floating mid-page on a
+   short collection and never pinned always-visible. */
+#app { min-height: 100vh; padding: 28px 32px 48px; }
 
-/* Header bar: signature left (intro + expires + Save), "Sent by name" right. */
+/* Header bar: signature left (intro + Save), "Sent by name" right. */
 .bar {
   display: flex;
   align-items: baseline;
@@ -76,7 +79,6 @@ html, body {
 }
 #app[data-state="live"] .notice { display: none; }
 #app[data-state="expired"] .grid,
-#app[data-state="expired"] .expires,
 #app[data-state="expired"] .save { display: none; }
 #app[data-state="expired"] .notice-expired { display: block; }
 #app[data-state="unavailable"] .bar,
@@ -106,6 +108,21 @@ html, body {
 .bg-switcher .dot[data-bg="dark"]  { background: #1c1c1e; }
 .bg-switcher .dot[aria-pressed="true"] { outline-color: var(--ink); }
 
+/* Bottom bar — expires on the left, legal links on the right. Below the fold. */
+.legal {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px 16px;
+  margin: 24px 32px 40px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.legal a { color: var(--muted); text-decoration: none; }
+.legal a:hover { color: var(--ink); text-decoration: underline; }
+.legal .sep { margin: 0 8px; }
+
 @media (max-width: 600px) {
   .bar { flex-direction: column; gap: 12px; }
   .intro { font-size: 17px; }
@@ -121,8 +138,8 @@ html, body {
      !important so this beats the higher-specificity html[data-bg="dark"] rule. */
   html { --bg: #fff !important; --ink: #1c1c1e !important; --muted: #6a6a6a !important; --tile: #e2e2e2 !important; }
   html, body { background: #fff; }
-  #app { padding: 0; }
-  .save, .expires, .bg-switcher { display: none !important; }
+  #app { padding: 0; min-height: 0; }
+  .save, .expires, .bg-switcher, .legal { display: none !important; }
   .bar { margin-bottom: 18px; }
   .intro, .name { font-size: 14px; }
   .label { font-size: 10px; }
