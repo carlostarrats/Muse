@@ -110,8 +110,8 @@ struct CollectionSidebarRow: View {
         }
         .contextMenu {
             Button("Rename…") {
-                appState.setActiveCollection(id)
-                appState.collectionRenameRequest = true
+                appState.collectionRenameAlertRequest = CollectionRenameAlertRequest(
+                    id: id, currentName: loaded.collection.name)
             }
             Button("Delete…") { confirmDelete = true }
             if manual {
@@ -129,8 +129,8 @@ struct CollectionSidebarRow: View {
         .accessibilityAction { appState.setActiveCollection(id) }
         .accessibilityActions {
             Button("Rename Collection") {
-                appState.setActiveCollection(id)
-                appState.collectionRenameRequest = true
+                appState.collectionRenameAlertRequest = CollectionRenameAlertRequest(
+                    id: id, currentName: loaded.collection.name)
             }
             Button("Delete Collection") { confirmDelete = true }
             // Move actions only when Manual sort permits reordering, and only in

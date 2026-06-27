@@ -348,6 +348,7 @@ struct ContentView: View {
             Text(appState.folderOpError ?? "")
         }
         .modifier(NameCollectionAlert())
+        .modifier(CollectionRenameAlert())
         // Preload the tag-label list for the selection menu, and keep it fresh
         // as tags change.
         .task { appState.refreshTagLabels() }
@@ -589,6 +590,38 @@ private struct NameCollectionAlert: ViewModifier {
             }
             .onChange(of: appState.newCollectionRequest) { _, open in
                 if open { draft = "" }
+            }
+    }
+}
+
+/// The sidebar collection-rename prompt — the modal counterpart to folder
+/// rename (`FolderNameAlerts`). Same local-`@State` draft trick as the other
+/// name prompts so typing doesn't re-evaluate the whole ContentView. Seeded
+/// with the collection's current name on open, keyed on the request's `id` so
+/// re-targeting the same collection re-seeds (closing always passes nil first).
+private struct CollectionRenameAlert: ViewModifier {
+    @EnvironmentObject private var appState: AppState
+    @State private var draft = ""
+
+    func body(content: Content) -> some View {
+        content
+            .alert("Rename Collection", isPresented: Binding(
+                get: { appState.collectionRenameAlertRequest != nil },
+                set: { if !$0 { appState.collectionRenameAlertRequest = nil } }
+            )) {
+                TextField("Collection name", text: $draft)
+                Button("Rename") {
+                    if let req = appState.collectionRenameAlertRequest {
+                        appState.collectionRenameAlertRequest = nil
+                        appState.renameCollection(id: req.id, to: draft)
+                    }
+                }
+                Button("Cancel", role: .cancel) { appState.collectionRenameAlertRequest = nil }
+            } message: {
+                Text("Renames the collection. Its images are kept.")
+            }
+            .onChange(of: appState.collectionRenameAlertRequest?.id) { _, id in
+                if id != nil { draft = appState.collectionRenameAlertRequest?.currentName ?? "" }
             }
     }
 }

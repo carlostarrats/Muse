@@ -4481,3 +4481,36 @@ now-orphaned `"Select All"` xcstrings key (the system item is localized by AppKi
 `AppDelegate` — together they're what makes the single, validated standard item drive
 the grid. Independent adversarial review (full lens matrix) returned no blockers.
 `BUILD SUCCEEDED`; `MuseTests` + `MuseUITests` 0 failures.
+
+### Sidebar collection rename — modal, not navigate — 2026-06-27 (`feat/next-78`)
+
+Owner bug: right-clicking a collection in the sidebar and choosing **Rename…**
+silently *navigated into* the collection page instead of popping a rename dialog
+the way folders do. Root cause: the sidebar action called `setActiveCollection(id)`
+(navigation) then set the `collectionRenameRequest` bool, which only triggers the
+collection-page header's **inline** edit — there was no rename modal for collections,
+only for folders (`FolderNameAlerts`).
+
+**Fix.** Gave collections a modal mirroring folder rename, with no navigation:
+- `AppState.collectionRenameAlertRequest: CollectionRenameAlertRequest?` (a small
+  id + current-name struct) — kept **distinct** from the existing `collectionRenameRequest`
+  bool so the two paths don't collide.
+- `AppState.renameCollection(id:to:)` — trims, no-ops on empty, persists via
+  `CollectionStore.rename` then `CollectionsEngine.reload()` (same as the inline commit).
+- `CollectionRenameAlert` modifier in `ContentView` (same local-`@State` draft trick +
+  id-keyed re-seed as `FolderNameAlerts`), applied next to `NameCollectionAlert`.
+- `CollectionSidebarRow` context menu **and** VoiceOver action now set the alert request
+  (seeded with the current name) instead of navigating + flipping the inline bool.
+
+**Two paths coexist by design — don't unify them:** the *sidebar* right-click renames via
+this modal; the *in-page header* + the menu-bar **Rename Collection…** command (disabled
+unless `activeCollectionID != nil`) still rename **inline** via `collectionRenameRequest`.
+Merging them would break the menu-bar/header flow.
+
+**Visual parity follow-up.** First cut omitted the alert's `message:` line; against the
+folder dialog (which has one) the shorter sheet read as a "different animation" when
+flipping between them (owner-reported). Added a matching message — "Renames the collection.
+Its images are kept." — so both dialogs share the same shape. That's the lone new
+localization key (fr filled manually); the title/field/buttons reuse existing fr strings.
+
+`BUILD SUCCEEDED`; `MuseTests` 436 / `MuseUITests` 6, 0 failures.
