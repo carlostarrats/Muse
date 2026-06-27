@@ -617,6 +617,8 @@ private struct CollectionRenameAlert: ViewModifier {
                     }
                 }
                 Button("Cancel", role: .cancel) { appState.collectionRenameAlertRequest = nil }
+            } message: {
+                Text("Renames the collection. Its images are kept.")
             }
             .onChange(of: appState.collectionRenameAlertRequest?.id) { _, id in
                 if id != nil { draft = appState.collectionRenameAlertRequest?.currentName ?? "" }

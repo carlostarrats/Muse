@@ -4507,6 +4507,10 @@ this modal; the *in-page header* + the menu-bar **Rename Collection…** command
 unless `activeCollectionID != nil`) still rename **inline** via `collectionRenameRequest`.
 Merging them would break the menu-bar/header flow.
 
-No new localization keys — the alert reuses existing fr-translated strings ("Rename
-Collection", "Collection name", "Rename", "Cancel"). `BUILD SUCCEEDED`; `MuseTests` 436 /
-`MuseUITests` 6, 0 failures.
+**Visual parity follow-up.** First cut omitted the alert's `message:` line; against the
+folder dialog (which has one) the shorter sheet read as a "different animation" when
+flipping between them (owner-reported). Added a matching message — "Renames the collection.
+Its images are kept." — so both dialogs share the same shape. That's the lone new
+localization key (fr filled manually); the title/field/buttons reuse existing fr strings.
+
+`BUILD SUCCEEDED`; `MuseTests` 436 / `MuseUITests` 6, 0 failures.

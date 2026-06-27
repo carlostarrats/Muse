@@ -4305,6 +4305,17 @@
           }
         }
       }
+    },
+    "Renames the collection. Its images are kept.": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renomme la collection. Ses images sont conservées."
+          }
+        }
+      }
     }
   },
   "version": "1.0"
