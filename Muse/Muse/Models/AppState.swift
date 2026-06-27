@@ -19,6 +19,14 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
+/// A pending sidebar collection-rename modal: the target collection id plus its
+/// current name, used only to seed the rename field's draft (mirrors how
+/// `folderRenameRequest` carries a `FolderNode`).
+struct CollectionRenameAlertRequest: Identifiable, Equatable {
+    let id: String
+    let currentName: String
+}
+
 @MainActor
 final class AppState: ObservableObject {
 
@@ -298,6 +306,12 @@ final class AppState: ObservableObject {
     /// Menu-bar triggers for the in-collection header's rename/delete.
     @Published var collectionRenameRequest = false
     @Published var collectionDeleteRequest = false
+
+    /// Sidebar collection-rename MODAL request (carries the id + current name to
+    /// seed the field). Distinct from `collectionRenameRequest`, the in-page
+    /// inline-edit trigger: the sidebar right-click renames via an alert that
+    /// mirrors folder rename and must NOT navigate into the collection first.
+    @Published var collectionRenameAlertRequest: CollectionRenameAlertRequest?
     @Published var deleteAllTagsRequest = false
     @Published var regenerateTagsRequest = false
 

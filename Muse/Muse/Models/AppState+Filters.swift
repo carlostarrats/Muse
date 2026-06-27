@@ -196,6 +196,19 @@ extension AppState {
         }
     }
 
+    /// Persist a collection rename from the sidebar modal. Mirrors the in-page
+    /// inline-edit commit (`CollectionsRow.commitRename`): trims, no-ops on an
+    /// empty name, writes via `CollectionStore`, then reloads the engine. Unlike
+    /// the old sidebar path it does NOT navigate into the collection.
+    func renameCollection(id: String, to newName: String) {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let q = Database.shared.dbQueue else { return }
+        Task { @MainActor in
+            try? await CollectionStore.rename(queue: q, id: id, name: trimmed)
+            await CollectionsEngine.shared.reload()
+        }
+    }
+
     // MARK: - Tag chip filter (main grid)
 
     /// Remove `label` from `urls` (the right-clicked tile or the whole
