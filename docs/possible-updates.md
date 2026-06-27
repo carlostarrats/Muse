@@ -120,3 +120,48 @@ Scope touches `FolderReader.files`, `FolderStat.compute` (+ its tests),
 `GridView` (folder-card rendering + navigate-on-open), and the subfolders-toggle
 interaction. Needs its own brainstorm → spec → plan (the click/navigation +
 toggle reconciliation are the real design questions). Not started.
+
+---
+
+## macOS 27 multimodal pass — richer tags + better "vibe" search — DEFERRED, WAIT FOR OS (noted 2026-06-27)
+
+**Gated on macOS 27 shipping** (referenced from its dev release notes / WWDC 2026).
+Owner intends a holistic pass over **tags + search** once the OS is out. Do NOT
+start until the OS and SDK are GA.
+
+**The opportunity.** Today semantic search compares the query phrase only to each
+file's **stored text description** (Vision tags + caption + first 300 chars of OCR,
+embedded via `NLEmbedding.sentenceEmbedding`) — it never looks at the pixels at
+search time. So mood/aesthetic queries ("posters with a happy vibe", "white wedding
+dresses for summer") are only as good as the text Vision produced per file, and fail
+on thinly-tagged images. See the search-capability analysis in the 2026-06-27
+session discussion.
+
+**What macOS 27 adds that's relevant:**
+- **Foundation Models is now multimodal** — pass the actual image alongside a text
+  prompt to the on-device model; it can reason about visual content (objects, text,
+  mood/scene). This is the high-leverage piece.
+- **Vision framework modernized** — adds image *aesthetics* scoring + holistic body
+  pose; `GenerateImageFeaturePrintRequest` still there.
+
+**The fix is at the ANALYSIS stage, not the search stage.** In `AnalyzePipeline`,
+hand the multimodal model the image and ask for a rich, mood-aware caption; that
+caption flows into the **same** embedding pipeline that already exists — so semantic
+"vibe" recall improves dramatically with **no search-architecture rewrite**. Likewise
+richer/mood-aware auto-tags.
+
+**Caveats to design around (don't skip these):**
+1. It's a **generative** model, not a CLIP-style image↔text embedding — still a text
+   bridge (richer text, but text). macOS 27 did not (per public info) ship a unified
+   pixel↔query embedding API, so true pixel-level text→image search remains off-table.
+2. **Cost/latency** — captioning every image through a multimodal LLM is far heavier
+   than today's Vision pass. Make it opt-in / background enrichment, not the default
+   indexing path.
+3. **Capability gating is brutal for the audience** — Muse's floor is macOS 14.6 and
+   Foundation Models is already gated to Apple-Intelligence Macs. A macOS-27-only,
+   AI-only feature reaches a small slice of users, so it MUST degrade gracefully to
+   today's Vision-tag path for everyone else (same pattern as collection naming).
+
+Needs its own brainstorm → spec → plan when the OS lands. Scope will center on
+`AnalyzePipeline` (caption/tag generation + the embedding build), capability gating,
+and the auto-tag/auto-collection settings seam. Not started.
