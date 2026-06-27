@@ -3603,16 +3603,6 @@
         }
       }
     },
-    "The collection is removed. Your images stay on disk.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La collection est supprimée. Vos images restent sur le disque."
-          }
-        }
-      }
-    },
     "The folder was renamed, but updating its tags failed.": {
       "localizations": {
         "fr": {

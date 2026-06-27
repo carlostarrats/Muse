@@ -73,13 +73,8 @@ private struct ActiveCollectionHeader: View {
             TrashButton { confirmDelete = true }
         }
         .onChange(of: loaded.collection.id) { _, _ in cancelEdit() }
-        // Menu-bar Collections commands route through these flags.
-        .onChange(of: appState.collectionRenameRequest) { _, requested in
-            if requested {
-                appState.collectionRenameRequest = false
-                startEdit()
-            }
-        }
+        // Menu-bar "Delete Collection…" routes through this flag. (Rename now
+        // opens the shared modal via collectionRenameAlertRequest, not inline.)
         .onChange(of: appState.collectionDeleteRequest) { _, requested in
             if requested {
                 appState.collectionDeleteRequest = false
@@ -295,7 +290,7 @@ struct CollectionCard: View {
             Button("Delete", role: .destructive) { deleteCollection() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("The collection is removed. Your images stay on disk.")
+            Text("The collection is removed everywhere. Your images stay on disk.")
         }
         .help(loaded.collection.name)
         // The card is a tap target (not a Button), so VoiceOver saw two loose

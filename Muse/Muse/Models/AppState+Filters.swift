@@ -196,6 +196,18 @@ extension AppState {
         }
     }
 
+    /// Open the rename modal for the currently-active collection (menu-bar
+    /// "Collections → Rename Collection…"). Routes to the SAME dialog as the
+    /// sidebar "Rename…" so every "Rename Collection…" entry point behaves
+    /// alike (and like folder rename) — no-op outside a collection.
+    func requestRenameActiveCollection() {
+        guard let id = activeCollectionID,
+              let name = CollectionsEngine.shared.collections
+                  .first(where: { $0.collection.id == id })?.collection.name
+        else { return }
+        collectionRenameAlertRequest = CollectionRenameAlertRequest(id: id, currentName: name)
+    }
+
     /// Persist a collection rename from the sidebar modal. Mirrors the in-page
     /// inline-edit commit (`CollectionsRow.commitRename`): trims, no-ops on an
     /// empty name, writes via `CollectionStore`, then reloads the engine. Unlike

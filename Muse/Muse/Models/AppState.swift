@@ -303,14 +303,14 @@ final class AppState: ObservableObject {
     @Published var tagRenameRequest: String?
     @Published var tagDeleteRequest: String?
 
-    /// Menu-bar triggers for the in-collection header's rename/delete.
-    @Published var collectionRenameRequest = false
+    /// Menu-bar trigger for the in-collection header's delete confirmation.
     @Published var collectionDeleteRequest = false
 
-    /// Sidebar collection-rename MODAL request (carries the id + current name to
-    /// seed the field). Distinct from `collectionRenameRequest`, the in-page
-    /// inline-edit trigger: the sidebar right-click renames via an alert that
-    /// mirrors folder rename and must NOT navigate into the collection first.
+    /// Collection-rename MODAL request (carries the id + current name to seed the
+    /// field). Every "Rename Collection…" entry point — the sidebar right-click
+    /// AND the menu-bar command — routes here, so rename always opens an alert
+    /// that mirrors folder rename (never navigates/inline-edits). The in-page
+    /// header's "Edit" pill is the one remaining inline-edit affordance.
     @Published var collectionRenameAlertRequest: CollectionRenameAlertRequest?
     @Published var deleteAllTagsRequest = false
     @Published var regenerateTagsRequest = false
