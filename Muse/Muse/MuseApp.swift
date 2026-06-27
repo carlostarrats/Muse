@@ -10,6 +10,9 @@ import AppKit
 
 @main
 struct MuseApp: App {
+    /// Last responder in the chain for the standard Edit-menu "Select All"
+    /// (and its menu validation) — see `AppDelegate` below.
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var appState = AppState()
     /// Sparkle self-updater (direct-distribution build only). Started at
     /// launch so background checks honor the user's preference.
@@ -86,6 +89,7 @@ struct MuseApp: App {
             ContentView()
                 .environmentObject(appState)
                 .environmentObject(googleAuth)
+                .onAppear { appDelegate.appState = appState }
                 .task {
                     ThumbnailCache.shared.enforceDiskCap()
                     // 180-day retention for data of removed folders.
@@ -121,17 +125,14 @@ struct MuseApp: App {
 
             // Folder actions on the current selection live in the Edit menu.
             // Image selection commands, like Finder's Edit menu.
+            //
+            // We do NOT add our own "Select All": SwiftUI's standard Edit menu
+            // already provides one (routed through the AppKit responder chain),
+            // and adding a second produced a confusing duplicate. Instead the
+            // AppDelegate implements `selectAll(_:)` so the system item drives
+            // the grid (the field editor still wins ⌘A while a text field is
+            // focused). Only "Deselect All" is bespoke (no system equivalent).
             CommandGroup(after: .pasteboard) {
-                Button("Select All") {
-                    // If a text field (e.g. the search box) has focus, ⌘A must
-                    // select its text, like every Mac app — not the grid images.
-                    if let editor = NSApp.keyWindow?.firstResponder as? NSText {
-                        editor.selectAll(nil)
-                    } else {
-                        appState.selectAllVisible()
-                    }
-                }
-                .keyboardShortcut("a", modifiers: .command)
                 Button("Deselect All") { appState.clearSelection() }
                     .keyboardShortcut("a", modifiers: [.command, .shift])
                     .disabled(appState.selectedFiles.isEmpty)
@@ -218,8 +219,10 @@ struct MuseApp: App {
 
             // View menu — the global Drive share list (not tied to a folder).
             CommandGroup(after: .sidebar) {
-                Button("Manage Drive Shares…") {
+                Button {
                     appState.driveSharesShown = true
+                } label: {
+                    Label("Manage Drive Shares…", systemImage: "link")
                 }
             }
 
@@ -327,5 +330,32 @@ struct MuseApp: App {
         }
         // Settings is presented as an in-app modal sheet from ContentView
         // (see AppState.settingsShown), not the native Preferences window.
+    }
+}
+
+/// Minimal app delegate that exists solely to back the standard Edit-menu
+/// "Select All" for the image grid. SwiftUI auto-generates that menu item and
+/// routes its `selectAll(_:)` action through the AppKit responder chain; the
+/// SwiftUI grid isn't an AppKit responder, so without this the item stayed
+/// permanently disabled (and we'd added a confusing second, custom "Select
+/// All" to compensate). The delegate is the last link in the responder chain,
+/// so a focused text field's field editor still wins ⌘A (selecting its text);
+/// only when nothing else handles it does the grid select-all run.
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
+    weak var appState: AppState?
+
+    // Supplying a custom delegate drops SwiftUI's default; keep secure state
+    // restoration on (avoids the "secure coding not enabled" runtime warning).
+    func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
+
+    @objc func selectAll(_ sender: Any?) {
+        appState?.selectAllVisible()
+    }
+
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        if item.action == #selector(selectAll(_:)) {
+            return !(appState?.visibleFiles.isEmpty ?? true)
+        }
+        return true
     }
 }

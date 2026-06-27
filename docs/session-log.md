@@ -4450,3 +4450,34 @@ real); fix (rule active) → beacon UNHIT **and** the SVG still renders (`didFin
 a low-severity hardening: `DriveClient.authed` force-unwrapped `URL(string:)!` on an id
 read from a tamperable local share record → now a guarded throw (crash-on-launch removed).
 `BUILD SUCCEEDED`; `MuseTests` + `MuseUITests` 0 failures; `share.test.mjs` green.
+
+### Menu polish — icons + the duplicate "Select All" — 2026-06-27 (`feat/next-74`)
+
+Two small menu fixes from owner screenshots.
+
+**Icons.** "Check for Updates…" (`CheckForUpdatesView`) and "Manage Drive Shares…"
+(View-menu command) were bare `Button("title")`s — no glyph, unlike the system items
+(About/Cut/Copy) that macOS 26 draws with icons. Switched each to
+`Button { } label: { Label("title", systemImage:) }` (`arrow.triangle.2.circlepath`,
+`link`). The literal stays `Label`'s first arg so it still extracts under the SAME
+xcstrings key — no localization regression (both keys already had fr).
+
+**Two "Select All".** The Edit menu showed a greyed `Select All ⌘A` (SwiftUI's
+auto-generated standard item, whose `selectAll:` routes through the AppKit responder
+chain — and the SwiftUI grid is no responder, so it never enabled) AND a working black
+`Select All` (a custom `Button` we'd added to compensate). Fix: **delete the custom
+button** and give the *standard* item a target by adding the app's first
+`NSApplicationDelegate` (`@NSApplicationDelegateAdaptor`) implementing `selectAll(_:)` →
+`appState.selectAllVisible()` + `validateMenuItem` (enabled only when `visibleFiles`
+non-empty). The delegate is the terminal link in the responder chain, so a focused
+search field's field editor still wins ⌘A for its text — preserving the old custom
+button's `firstResponder as? NSText` branch without the manual check. `appState` is
+wired in via `.onAppear`; `applicationSupportsSecureRestorableState` returns true
+(the custom delegate replaces SwiftUI's default, which would otherwise drop secure
+state restoration). "Deselect All" stays bespoke (no system equivalent). Pruned the
+now-orphaned `"Select All"` xcstrings key (the system item is localized by AppKit).
+
+**Don't undo:** never re-add a custom "Select All" command, and don't delete the
+`AppDelegate` — together they're what makes the single, validated standard item drive
+the grid. Independent adversarial review (full lens matrix) returned no blockers.
+`BUILD SUCCEEDED`; `MuseTests` + `MuseUITests` 0 failures.

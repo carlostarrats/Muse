@@ -3222,16 +3222,6 @@
         }
       }
     },
-    "Select All": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tout sélectionner"
-          }
-        }
-      }
-    },
     "Set as Collection Cover": {
       "localizations": {
         "fr": {

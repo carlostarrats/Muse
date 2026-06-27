@@ -8,7 +8,9 @@ must-not-break rules are in `../CLAUDE.md` → Durable constraints & gotchas.
 Muse/Muse/
   MuseApp.swift                    entry point; launch tasks (ThumbnailCache LRU
                                    prune, 180-day Housekeeping prune, IntentBackfill);
-                                   owns the Sparkle updater + "Check for Updates…"
+                                   owns the Sparkle updater + "Check for Updates…";
+                                   `AppDelegate` backs the standard Edit ▸ Select All
+                                   (responder-chain `selectAll(_:)` → selectAllVisible)
   Updates/
     Updater.swift                  Sparkle SPUStandardUpdaterController wrapper +
                                    CheckForUpdatesView. Direct-distribution self-
