@@ -122,7 +122,14 @@ enum SearchService {
 
     /// Escape a user query for FTS5: split into tokens, prefix-match each,
     /// AND them together. Defensive against punctuation that breaks the parser.
-    private static func ftsEscape(_ raw: String) -> String {
+    ///
+    /// Common English stopwords are dropped before the AND so a natural phrase
+    /// ("white wedding dresses for summer") isn't sabotaged by forcing a
+    /// rare-token AND on a filler word ("for") that an image's filename/OCR/
+    /// caption rarely contains. The semantic layer still sees the full phrase;
+    /// this only affects the exact-match (FTS5) tier. If a query is ALL
+    /// stopwords, every token is kept so a literal search still matches.
+    static func ftsEscape(_ raw: String) -> String {
         let cleaned = raw.replacingOccurrences(
             of: "[\"\\(\\)*]",
             with: " ",
@@ -130,8 +137,25 @@ enum SearchService {
         )
         let tokens = cleaned
             .split(whereSeparator: { $0.isWhitespace })
+            .map(String.init)
             .filter { !$0.isEmpty }
         if tokens.isEmpty { return "\"\"" }
-        return tokens.map { "\"\($0)\"*" }.joined(separator: " AND ")
+        let content = tokens.filter { !ftsStopwords.contains($0.lowercased()) }
+        // All-stopword query → keep every token (don't strip to nothing).
+        let used = content.isEmpty ? tokens : content
+        return used.map { "\"\($0)\"*" }.joined(separator: " AND ")
     }
+
+    /// Filler words that carry no signal for an image search and would only
+    /// over-constrain the FTS5 AND. Deliberately small + conservative, and
+    /// avoids English words that are meaningful CONTENT nouns in a shipped
+    /// language — notably French "or" (gold) and "as" (ace), which must stay
+    /// searchable. Don't add those back; a wrong strip silently drops a real
+    /// term. (English-only by design; non-English filler isn't stripped, which
+    /// is no worse than before — only ever a recall win, never a wrong miss.)
+    private static let ftsStopwords: Set<String> = [
+        "a", "an", "and", "the", "of", "to", "in", "on", "at", "by", "for",
+        "from", "with", "that", "this", "these", "those", "is", "are", "was",
+        "were", "be", "it", "its", "have", "has", "had",
+    ]
 }
