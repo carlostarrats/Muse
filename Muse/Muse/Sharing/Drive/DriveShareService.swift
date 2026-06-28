@@ -22,7 +22,7 @@ struct DriveShareForm {
 
 @MainActor final class DriveShareService: ObservableObject {
     enum Phase: Equatable {
-        case idle, preparing, signingIn, uploading(Int, Int), finalizing, done(String), failed(String)
+        case idle, preparing, signingIn, uploading(Int, Int), finalizing, done(String), doneUntracked(String), failed(String)
     }
     @Published private(set) var phase: Phase = .idle
 
@@ -90,14 +90,17 @@ struct DriveShareForm {
                     imageIDs: imageIDs, pdfID: nil)
                 let pageURL = manifest.pageURL(base: DriveConfig.shareBaseURL)
 
-                store.add(DriveShareRecord(id: UUID().uuidString, collectionName: title,
+                let tracked = store.add(DriveShareRecord(id: UUID().uuidString, collectionName: title,
                                            folderID: folderID, pageURL: pageURL,
                                            itemCount: imageIDs.count, createdAt: Date(),
                                            expiry: form.expiry))
                 // Remember the form text for next time.
                 AppSettings.driveShareName = form.name
                 AppSettings.driveShareLabel = form.label
-                phase = .done(pageURL)
+                // The share is live + public either way; if the local record
+                // didn't persist, warn so the user copies the link now (Manage
+                // can't see an untracked folder to unpublish it later).
+                phase = tracked ? .done(pageURL) : .doneUntracked(pageURL)
             } catch {
                 // Any failure after the folder exists → delete it so we never
                 // orphan an untracked folder in the user's Drive, then surface.

@@ -39,6 +39,21 @@ final class DriveShareStoreTests: XCTestCase {
         XCTAssertEqual(store.all().map(\.id), ["2"])
     }
 
+    func testAddReturnsTrueWhenPersisted() {
+        let (store, url) = tempStore(); defer { try? FileManager.default.removeItem(at: url) }
+        // The return value gates the publish UI's "couldn't track this share"
+        // warning, so a successful write must report true.
+        XCTAssertTrue(store.add(rec("1", folder: "F", expiry: Date(timeIntervalSince1970: 10))))
+    }
+
+    func testAddReturnsFalseWhenWriteFails() {
+        // A path whose parent directory doesn't exist → the atomic write throws,
+        // so add must report false (the share is live but untracked → warn).
+        let bad = URL(fileURLWithPath: "/no/such/dir/\(UUID().uuidString)/driveShares.json")
+        let store = DriveShareStore(fileURL: bad)
+        XCTAssertFalse(store.add(rec("1", folder: "F", expiry: Date(timeIntervalSince1970: 10))))
+    }
+
     func testExpiredSelectsOnlyPastRecords() {
         let now = Date(timeIntervalSince1970: 100)
         let past = rec("p", folder: "P", expiry: Date(timeIntervalSince1970: 50))

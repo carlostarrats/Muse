@@ -4553,3 +4553,89 @@ is a real `Button`. Removed the orphaned `"Save name"` catalog key. (The big edi
 the only inline editor in the app; nothing else relied on it.)
 
 `BUILD SUCCEEDED`; `MuseTests` 436 / `MuseUITests` 6, 0 failures.
+
+### Health / security review pass — 2026-06-27 (on `feat/next-80`)
+
+Post-1.3.3 sweep: "review the codebase for health, bugs, leakage, security; fix; loop until
+green." Reviewed the diff since `v1.3.3` (the collection-rename modal unification — clean,
+fully localized incl. the interpolated `Delete "%@"?` title) plus four parallel deep audits
+across the highest-risk surfaces.
+
+- **Drive-share security** — all six documented invariants re-verified intact in code: scope is
+  exactly `drive.file`; Authorization-Code + PKCE S256 with no embedded client secret; tokens
+  only in Keychain (`…AfterFirstUnlockThisDeviceOnly`, no `kSecAttrSynchronizable`, never
+  logged/UserDefaults), sign-out revokes; network egress only inside explicit user actions (the
+  launch expiry-sweep is gated on an existing *expired* local record + a token, the one
+  sanctioned non-gesture path); the static share page carries its manifest in the URL **fragment**,
+  renders via `textContent` with id-regex validation under `default-src 'none'`, no API key/secret;
+  CSPRNG verifier/state with `state` validated on redirect. No violations.
+- **Network / WebKit leak** — zero-network invariant holds: the only `URLSession` lives in
+  `Sharing/Drive/`, the only `WKWebView` in `SVGViewerView` (whose install-before-load,
+  fail-closed `WKContentRuleList` blocking http(s)/ws(s)/host-bearing `file://` subresources is
+  intact and unweakened; JS off; no `allowUniversalAccessFromFileURLs`), Sparkle is EdDSA-verified.
+  Markdown viewer has no web stack.
+- **Resource / memory leak** — clean across security-scoped access (balanced; `openStarred`'s
+  one-per-pin scope is the documented bounded exception), FSEvents lifecycle (`FolderWatcher`
+  Stop→Invalidate→Release in `stop()`/`deinit`), Combine sinks (all `[weak self]`), CGImageSource
+  bridging (ARC), and AV/Font viewer teardown (`dismantleNSView` pause+nil; font unregister in
+  `defer`).
+- **Concurrency / state-divergence** — `AnalyzePipeline` pass-claim, tag-filter sync resolution,
+  and every path-prefix `hasPrefix` guard verified correct. **One real bug found + fixed:**
+  `runSearch` (`AppState+Search.swift`) narrowed `visibleFiles` to the search result set without
+  clearing the selection, so a folder-selected file absent from the results stayed in
+  `selectedFiles` and could ride into Move/Delete/Collection/Tag/Share via `effectiveSelectionURLs`
+  (which rebuilds URLs for off-view paths). Added `clearSelection()` after the stale-token guard —
+  search was the lone narrowing input that skipped the documented "narrow ⇒ prune/clear selection"
+  rule. CLAUDE.md durable-constraints note updated to list search among the compliant paths.
+
+`BUILD SUCCEEDED`; `MuseTests` 436 / `MuseUITests` 6, 0 failures (re-run after the fix).
+
+**Round 2 — QA / error-path / logic pass.** Three more parallel audits (error-paths & failure
+modes, pure-logic correctness + test-coverage, rename edge cases + i18n). Three fixes:
+
+- **`pinMenuTitle` shipped in English (localization regression).** Edit-menu Pin/Unpin label is a
+  `String`-typed computed property in `MuseApp.swift`, so its `"Pin Folder"`/`"Unpin Folder"`
+  literals aren't in an extractable SwiftUI position — they shipped untranslated (catalog had bare
+  `"Pin"`/`"Unpin"` but not the `…Folder` variants). Wrapped each in `String(localized:)` and added
+  the two French keys (`Épingler/Désépingler le dossier`). The classic "literal returned from a
+  `String` property doesn't extract" trap.
+- **Tampered-backup crash hardened.** `ReconnectModel` built `Dictionary(uniqueKeysWithValues:)`
+  over archive occurrences — traps on a duplicate `original_path`. A legit `.muselibrary` has unique
+  paths, but a corrupt/hand-edited one passes decode then hard-crashed Restore→Locate (inconsistent
+  with the rest of the restore path, which fails gracefully). Switched to
+  `uniquingKeysWith: { first, _ in first }`.
+- **Masonry packing now tested.** The variable-aspect shortest-column pack (the function's whole
+  purpose) had zero tests — only uniform-aspect cases were covered. Added 4: shortest-column
+  placement, empty input, non-positive width, and the columns≤0 clamp.
+
+The logic audit found **no real bugs** in the load-bearing pure algorithms (`DuplicateDeleteRules`
+never-empty-a-group incl. overlapping groups, selection/page-scroll/reorder/escape math, smart sort,
+color/palette all verified correct). The rename-edge-case audit confirmed the reworked flow is sound
+(empty/whitespace no-ops, active-collection header refreshes via the engine `@ObservedObject`,
+auto-namer never clobbers a manual rename, same-id reseed matches folder rename). Surfaced but NOT
+fixed here (pre-existing, rare-trigger, need a UX decision on error surface / undo parity, so left
+for a deliberate scoped change): swallowed-write silent failures in the Drive share-record save
+(orphaned-link risk), PDF "Save to…" (reports success on a failed write), and the duplicates-modal
+delete (no failure surface, no undo).
+
+**Round 3 — wired up the three swallowed-write error surfaces.** Each got the existing pattern that
+fits its context (not a uniform toast):
+
+- **Drive share-record save → inline, persistent warning.** `DriveShareStore.save`/`add` now return
+  whether the write persisted; `DriveShareService` adds a `.doneUntracked(pageURL)` phase used when
+  the (live, public) share couldn't be recorded locally. `DriveShareForm.doneView(_, tracked:)`
+  shows an orange "couldn't add this to your share list — copy the link now, or you won't be able to
+  manage/unpublish it later" line and keeps the link on screen. A toast was wrong here: the link is
+  the only handle the user gets, so it must NOT vanish. (2 unit tests on the new `add` return value.)
+- **PDF "Save to…" → modal alert.** `ShareCollectionButton.save()` replaced its `try?`-swallowed
+  read+write with a `do/catch` (and treats a nil PDF as failure too), surfacing a "Couldn't Save the
+  PDF" alert. A discrete save the user just triggered warrants a confirming alert (the macOS norm),
+  not a transient toast.
+- **Duplicates-modal delete → grid toast.** `DuplicatesView.deleteSelected` recycles the whole batch
+  in one `recycle(_:completionHandler:)` call and, when the returned trashed-map is short, posts a
+  "Some files couldn't be moved to the Trash." toast via `appState.deletion.toast` — matching
+  `DeleteCoordinator`'s existing failure toast. (Batch-undo parity was left out of scope — even a
+  successful multi-delete has no undo today, a documented v1 limitation.)
+
+All four new user-facing strings localized (fr). `BUILD SUCCEEDED`; `MuseTests` 442 / `MuseUITests` 6,
+0 failures.

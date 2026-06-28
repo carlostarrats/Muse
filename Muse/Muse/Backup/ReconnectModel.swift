@@ -120,11 +120,15 @@ final class ReconnectModel: ObservableObject {
         // disk files (their real content hashes).
         let disk = await diskFiles(under: location, queue: queue)
         let occurrences = archive.files.flatMap { $0.occurrences }.filter { $0.root_path == id }
-        let expected = Dictionary(uniqueKeysWithValues:
+        // `uniquingKeysWith` (not `uniqueKeysWithValues:`, which traps on a
+        // duplicate key): a legit archive has unique original_paths, but a
+        // corrupt/hand-edited .muselibrary can repeat one — fail gracefully
+        // (keep the first) rather than crash the whole Restore.
+        let expected = Dictionary(
             occurrences.compactMap { o -> (String, String)? in
                 guard let h = hashForOriginalPath[o.original_path] else { return nil }
                 return (o.original_path, h)
-            })
+            }, uniquingKeysWith: { first, _ in first })
         let match = ReconnectMatcher.match(occurrences: occurrences, disk: disk, expectedHash: expected)
         let nameOnlyCount = match.matches.filter { $0.kind == .nameOnly }.count
 

@@ -31,6 +31,13 @@ extension AppState {
         let results = await SearchService.search(query: trimmed, scope: scope)
         // A newer search — or clearSearch() — invalidates this stale result.
         guard token == searchRequestToken else { return }
+        // Search narrows visibleFiles to a different scope (the global/folder
+        // result set), so drop the prior selection — otherwise a folder-selected
+        // file that isn't in the results stays in selectedFiles and rides into
+        // Move/Delete/Collection/Tag/Share via effectiveSelectionURLs (which
+        // rebuilds URLs for off-view paths). Mirrors select(folder:)/
+        // setActiveCollection/setActiveTags, the other scope-change inputs.
+        clearSelection()
         isSearchActive = true
         // search results keep relevance rank; sort modes apply to folder browsing only
         currentFiles = results

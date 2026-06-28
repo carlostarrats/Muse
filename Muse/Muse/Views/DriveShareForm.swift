@@ -51,7 +51,9 @@ struct DriveShareSheet: View {
             case .finalizing:
                 progress(String(localized: "Finishing…"))
             case .done(let url):
-                doneView(url)
+                doneView(url, tracked: true)
+            case .doneUntracked(let url):
+                doneView(url, tracked: false)
             case .failed(let message):
                 failedView(message)
             }
@@ -109,9 +111,21 @@ struct DriveShareSheet: View {
         .padding(.vertical, 24)
     }
 
-    private func doneView(_ url: String) -> some View {
+    private func doneView(_ url: String, tracked: Bool) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Your share is live.").font(.system(size: 15, weight: .semibold))
+            if !tracked {
+                // The folder is public, but Muse couldn't record it locally, so
+                // "Manage Drive Shares" can never unpublish it. Keep this warning
+                // (and the link) on screen until the user dismisses — a toast
+                // would vanish before they copy the only handle they'll get.
+                Label(String(localized: "Muse couldn't add this to your share list — copy the link now, or you won't be able to manage or unpublish it from Muse later."),
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.orange)
+                    .labelStyle(.titleAndIcon)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Text(url).font(.system(size: 12)).foregroundStyle(.secondary)
                 .textSelection(.enabled).lineLimit(2).truncationMode(.middle)
             HStack {

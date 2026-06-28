@@ -38,20 +38,25 @@ final class DriveShareStore {
 
     func all() -> [DriveShareRecord] { queue.sync { load().sorted { $0.createdAt > $1.createdAt } } }
 
-    func add(_ r: DriveShareRecord) {
+    /// Returns whether the record was persisted. The caller (DriveShareService)
+    /// uses this to warn when a live, public share couldn't be saved to the
+    /// local list — without a record, Manage/expiry-sweep can never find or
+    /// unpublish it, so the user must copy the link before dismissing.
+    @discardableResult
+    func add(_ r: DriveShareRecord) -> Bool {
         queue.sync {
             var list = load().filter { $0.id != r.id && $0.folderID != r.folderID }
-            list.append(r); save(list)
+            list.append(r); return save(list)
         }
     }
-    func remove(id: String) { queue.sync { save(load().filter { $0.id != id }) } }
+    func remove(id: String) { queue.sync { _ = save(load().filter { $0.id != id }) } }
 
     /// Drop several records in one rewrite (used by the Manage prune). No-op if
     /// `ids` is empty so it never rewrites the file needlessly.
     func remove(ids: [String]) {
         guard ids.isEmpty == false else { return }
         let drop = Set(ids)
-        queue.sync { save(load().filter { drop.contains($0.id) == false }) }
+        queue.sync { _ = save(load().filter { drop.contains($0.id) == false }) }
     }
 
     private func load() -> [DriveShareRecord] {
@@ -59,9 +64,11 @@ final class DriveShareStore {
               let list = try? JSONDecoder.iso.decode([DriveShareRecord].self, from: data) else { return [] }
         return list
     }
-    private func save(_ list: [DriveShareRecord]) {
-        guard let data = try? JSONEncoder.iso.encode(list) else { return }
-        try? data.write(to: fileURL, options: .atomic)
+    @discardableResult
+    private func save(_ list: [DriveShareRecord]) -> Bool {
+        guard let data = try? JSONEncoder.iso.encode(list) else { return false }
+        do { try data.write(to: fileURL, options: .atomic); return true }
+        catch { return false }
     }
 }
 
