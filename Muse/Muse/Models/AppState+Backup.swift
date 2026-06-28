@@ -45,6 +45,7 @@ extension AppState {
                 try data.write(to: dest, options: .atomic)
             } catch {
                 print("[Backup] export failed: \(error)")
+                backupError = String(localized: "The backup couldn’t be saved. Check that the location is writable and has enough free space, then try again.")
             }
         }
     }
@@ -66,6 +67,7 @@ extension AppState {
             reconnectShown = true
         } catch {
             print("[Backup] restore load failed: \(error)")
+            backupError = String(localized: "That file couldn’t be opened as a Muse backup. It may be the wrong file, or damaged.")
         }
     }
 }

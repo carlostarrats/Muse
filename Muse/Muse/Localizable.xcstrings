@@ -1266,16 +1266,6 @@
         }
       }
     },
-    "Delete all tags in this folder?": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer toutes les étiquettes de ce dossier ?"
-          }
-        }
-      }
-    },
     "Delete All Tags…": {
       "localizations": {
         "fr": {
@@ -1958,16 +1948,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Lieu"
-          }
-        }
-      }
-    },
-    "Looks for images in this folder that have no tags and generates tags for them in the background. Images that already have tags are left alone. Only automatic tags are created — tags you added by hand aren't restored.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recherche dans ce dossier les images sans étiquette et génère leurs étiquettes en arrière-plan. Les images déjà étiquetées ne sont pas modifiées. Seules des étiquettes automatiques sont créées — les étiquettes que vous avez ajoutées à la main ne sont pas restaurées."
           }
         }
       }
@@ -2787,16 +2767,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Régénérer"
-          }
-        }
-      }
-    },
-    "Regenerate tags for this folder?": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Régénérer les étiquettes de ce dossier ?"
           }
         }
       }
@@ -3633,16 +3603,6 @@
         }
       }
     },
-    "This removes every tag on the images in this folder — both automatic tags and ones you've added yourself. Tags you added by hand can't be recovered. Your images stay on disk.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cela retire toutes les étiquettes des images de ce dossier — à la fois les étiquettes automatiques et celles que vous avez ajoutées vous-même. Les étiquettes ajoutées à la main ne peuvent pas être récupérées. Vos images restent sur le disque."
-          }
-        }
-      }
-    },
     "TIFF": {
       "localizations": {
         "fr": {
@@ -4307,26 +4267,6 @@
         }
       }
     },
-    "Couldn't Save the PDF": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible d’enregistrer le PDF"
-          }
-        }
-      }
-    },
-    "The PDF couldn't be written. Check that the location is writable and has enough free space.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le PDF n’a pas pu être écrit. Vérifiez que l’emplacement est accessible en écriture et dispose de suffisamment d’espace libre."
-          }
-        }
-      }
-    },
     "Muse couldn't add this to your share list — copy the link now, or you won't be able to manage or unpublish it from Muse later.": {
       "localizations": {
         "fr": {
@@ -4383,6 +4323,116 @@
           "stringUnit": {
             "state": "translated",
             "value": "Autoriser l’accès"
+          }
+        }
+      }
+    },
+    "Delete all tags in this view?": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer toutes les étiquettes de cette vue ?"
+          }
+        }
+      }
+    },
+    "This removes every tag on the images in this view — both automatic tags and ones you've added yourself. Tags you added by hand can't be recovered. Your images stay on disk.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cela retire toutes les étiquettes des images de cette vue — à la fois les étiquettes automatiques et celles que vous avez ajoutées vous-même. Les étiquettes ajoutées à la main ne peuvent pas être récupérées. Vos images restent sur le disque."
+          }
+        }
+      }
+    },
+    "Regenerate tags in this view?": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Régénérer les étiquettes de cette vue ?"
+          }
+        }
+      }
+    },
+    "Looks for images in this view that have no tags and generates tags for them in the background. Images that already have tags are left alone. Only automatic tags are created — tags you added by hand aren't restored.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recherche dans cette vue les images sans étiquette et génère leurs étiquettes en arrière-plan. Les images déjà étiquetées ne sont pas modifiées. Seules des étiquettes automatiques sont créées — les étiquettes que vous avez ajoutées à la main ne sont pas restaurées."
+          }
+        }
+      }
+    },
+    "Couldn’t Export the PDF": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible d’exporter le PDF"
+          }
+        }
+      }
+    },
+    "The PDF couldn’t be prepared — some images may be unreadable — or the location couldn’t be written. Check the images and that the location is writable with enough free space.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le PDF n’a pas pu être préparé — certaines images sont peut-être illisibles — ou l’emplacement n’a pas pu être écrit. Vérifiez les images et que l’emplacement est accessible en écriture avec suffisamment d’espace libre."
+          }
+        }
+      }
+    },
+    "Backup": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sauvegarde"
+          }
+        }
+      }
+    },
+    "The backup couldn’t be saved. Check that the location is writable and has enough free space, then try again.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La sauvegarde n’a pas pu être enregistrée. Vérifiez que l’emplacement est accessible en écriture et dispose de suffisamment d’espace libre, puis réessayez."
+          }
+        }
+      }
+    },
+    "That file couldn’t be opened as a Muse backup. It may be the wrong file, or damaged.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce fichier n’a pas pu être ouvert comme sauvegarde Muse. Il s’agit peut-être du mauvais fichier, ou il est endommagé."
+          }
+        }
+      }
+    },
+    "Couldn’t Unpublish": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de dépublier"
+          }
+        }
+      }
+    },
+    "The Drive folder couldn’t be deleted — you may be offline or signed out. The share is still live; try again, or remove it from Google Drive directly.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le dossier Drive n’a pas pu être supprimé — vous êtes peut-être hors ligne ou déconnecté. Le partage est toujours actif ; réessayez, ou supprimez-le directement depuis Google Drive."
           }
         }
       }

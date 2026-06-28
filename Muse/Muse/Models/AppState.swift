@@ -332,6 +332,10 @@ final class AppState: ObservableObject {
     @Published var folderRenameRequest: FolderNode?
     /// Set to a message to surface a folder-op failure alert.
     @Published var folderOpError: String?
+    /// Set to a message to surface a backup export/restore failure alert. A
+    /// silent failure here is dangerous — the user would believe a backup
+    /// succeeded (or that a restore file is fine) when it isn't.
+    @Published var backupError: String?
 
     /// Presentation flag for the "Name Collection" modal (new-collection-from-
     /// selection). The collection is created only on confirm — see

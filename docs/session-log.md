@@ -4791,3 +4791,33 @@ permission" string, which is why it was undebuggable. Fix verified by the owner 
 - **Process note:** green build + unit suite ≠ feature works — the suite can't exercise the sandbox. Verify
   sandbox/filesystem/runtime features in the actual running app before claiming done (memory:
   `verify-runtime-not-just-tests`).
+
+### Intent-vs-outcome audit — does every action do what its label says? — 2026-06-28 (`feat/next-84`)
+
+Prompted by the rename bug (a "Rename" item that couldn't deliver): audited EVERY user-facing action
+(context menus, menu-bar commands, App Intents, toolbar, viewer, drag/drop, share/export/Drive/backup,
+settings) for label-promises-X-but-code-does-Y, with priority on filesystem/sandbox/silent-failure. Three
+parallel review agents enumerated + traced ~60 actions; each finding was then adversarially re-verified
+against the code before fixing. 5 real, reachable mismatches fixed; the local-SQLite `try?` swallows were
+left alone (they don't fail in normal use — adding alerts to each would be padding). `BUILD SUCCEEDED`;
+`MuseTests` + `MuseUITests` green.
+
+- **Wrong target set (same class as rename):**
+  - "Delete All Tags" / "Regenerate Tags" used `currentFiles` (the underlying FOLDER) while a collection was
+    on screen — the grid renders `activeCollectionFiles`, so they hit the folder, not the collection the user
+    sees. Now use `tagSourceFiles` (matches single-tag delete); dialog copy "this folder" → "this view"
+    (these commands are reachable inside collections). Durable rule added to CLAUDE.md.
+  - "Find Duplicates in Folder" wasn't disabled during search, so it scanned the (cross-folder) search result
+    set — betraying the "in Folder" label. Now `.disabled(isSearchActive)`, matching the other folder-scoped
+    commands.
+- **Silent failure (action appears to do nothing / falsely succeeds):**
+  - Backup **export** and **restore** swallowed errors with `print()` only — a silent backup failure is
+    dangerous (user believes they're protected). Added a `backupError` alert (export: write failed; restore:
+    not a valid/whole backup file).
+  - Collection **Share** (PDF) silently returned on a nil PDF (all images undecodable) — only "Save to…" had
+    feedback. Routed both through one `exportFailed` alert (`saveFailed` renamed).
+  - Drive **Unpublish** silently returned on any non-404 error (correctly keeping the still-live public folder)
+    with no feedback — the trash button looked dead. Added a `unpublishFailed` alert.
+- New strings localized (FR); 6 orphaned keys removed. Verified the move/trash/create paths already surface
+  failures (`moveFailureNames`/`folderOpError`) and that rename was the unique write-outside-security-scope
+  case — no other rename-class sandbox bug lurks.

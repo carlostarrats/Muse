@@ -198,6 +198,11 @@ struct MuseApp: App {
                 Button("Find Duplicates in Folder") {
                     appState.findDuplicatesInCurrentFolder()
                 }
+                // Scoped to a folder — during search `currentFiles` is the
+                // (cross-folder) search result set, not a folder, so the scan
+                // would betray the "in Folder" label. Disable, matching the
+                // other folder-scoped commands.
+                .disabled(appState.isSearchActive)
 
                 Divider()
 
