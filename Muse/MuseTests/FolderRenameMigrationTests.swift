@@ -107,6 +107,35 @@ final class FolderRenameMigrationSQLTests: XCTestCase {
         }
     }
 
+    func testApplyClearsStaleTargetTagAndStillMigrates() throws {
+        // A previously-deleted folder that occupied the rename TARGET can leave a
+        // durable tag row there (PathReconciler marks paths dead but tags survive).
+        // The tags rewrite would then hit UNIQUE(file_id, parent_dir, label) and
+        // roll back the WHOLE transaction (disk renamed, DB reverted). The
+        // destination pre-clear must drop the stale tag so the rename completes.
+        let q = try freshQueue()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at) VALUES ('f1','h1','image',0)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('p1','f1','/a/Old/x.png',1)")
+            // The source tag we expect to migrate to /a/New …
+            try db.execute(sql: "INSERT INTO tags (id, file_id, label, source, confidence, parent_dir) VALUES ('t1','f1','blue','manual',NULL,'/a/Old')")
+            // … and a STALE tag for the same (file_id, label) already at /a/New —
+            // would collide on rewrite without the pre-clear.
+            try db.execute(sql: "INSERT INTO tags (id, file_id, label, source, confidence, parent_dir) VALUES ('stale','f1','blue','vision',0.9,'/a/New')")
+
+            // Must NOT throw (no UNIQUE rollback).
+            try FolderRenameMigration.apply(db, old: "/a/Old", new: "/a/New", newName: "New")
+        }
+        try q.read { db in
+            // paths migrated (transaction committed)
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT absolute_path FROM paths WHERE id='p1'"), "/a/New/x.png")
+            // exactly one (f1,'/a/New','blue') tag — the migrated source row; the stale one cleared
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tags WHERE file_id='f1' AND parent_dir='/a/New' AND label='blue'"), 1)
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT id FROM tags WHERE file_id='f1' AND parent_dir='/a/New' AND label='blue'"), "t1")
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT source FROM tags WHERE file_id='f1' AND parent_dir='/a/New' AND label='blue'"), "manual")
+        }
+    }
+
     func testApplyCaseOnlyRenameMigratesSourceRows() throws {
         // A case-only rename (/a/Photos → /a/photos) on a case-insensitive
         // volume: the binary pre-clear must NOT touch the source rows, and the

@@ -11,7 +11,7 @@ import Foundation
 import AppKit
 import AuthenticationServices
 
-enum DriveAuthError: Error { case cancelled, badResponse, notSignedIn, refreshFailed }
+enum DriveAuthError: Error { case cancelled, badResponse, notSignedIn, refreshFailed, invalidGrant }
 
 @MainActor final class GoogleOAuth: NSObject, ObservableObject {
     private let store: TokenStoring
@@ -120,10 +120,21 @@ enum DriveAuthError: Error { case cancelled, badResponse, notSignedIn, refreshFa
             "refresh_token": refreshToken,
             "grant_type": "refresh_token",
         ]
-        guard let json = try? await postForm(DriveConfig.tokenEndpoint, body),
-              let access = json["access_token"] as? String,
+        let json: [String: Any]
+        do {
+            json = try await postForm(DriveConfig.tokenEndpoint, body)
+        } catch DriveAuthError.invalidGrant {
+            // The refresh token is DEFINITIVELY dead (revoked / expired / account
+            // changed). Only here do we drop credentials and force re-sign-in.
+            store.clear(); isSignedIn = false
+            throw DriveAuthError.refreshFailed
+        }
+        // Any other failure (network drop, 5xx, malformed body) propagates as a
+        // transient throw WITHOUT clearing the still-valid refresh token — a flaky
+        // connection must not silently sign the user out.
+        guard let access = json["access_token"] as? String,
               let expiresIn = json["expires_in"] as? Double
-        else { store.clear(); isSignedIn = false; throw DriveAuthError.refreshFailed }
+        else { throw DriveAuthError.badResponse }
         // Google may not re-send the refresh token; keep the existing one.
         store.save(DriveTokens(accessToken: access, refreshToken: refreshToken,
                                expiry: Date().addingTimeInterval(expiresIn)))
@@ -137,9 +148,17 @@ enum DriveAuthError: Error { case cancelled, badResponse, notSignedIn, refreshFa
         req.httpBody = fields.map { "\($0.key)=\($0.value.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? $0.value)" }
             .joined(separator: "&").data(using: .utf8)
         let (data, resp) = try await URLSession.shared.data(for: req)
-        guard (resp as? HTTPURLResponse)?.statusCode == 200,
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { throw DriveAuthError.badResponse }
+        let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        guard status == 200, let json else {
+            // Surface a definitively-dead grant distinctly so the refresh path can
+            // tell "token revoked/expired" (clear + re-auth) from a transient
+            // network/server failure (keep the token, retry later).
+            if let err = json?["error"] as? String, err == "invalid_grant" {
+                throw DriveAuthError.invalidGrant
+            }
+            throw DriveAuthError.badResponse
+        }
         return json
     }
 

@@ -47,6 +47,12 @@ final class ShareViewController: NSViewController {
                 else { continue }
                 if let url = try? await loadFileURL(provider) {
                     copyIn(url, to: dest)
+                } else if let (data, ext) = try? await loadImageData(provider) {
+                    // An image shared as in-memory data (no file URL) — e.g. from an
+                    // app that doesn't back it with a file. The guard admits these
+                    // (Info.plist advertises image activation), so handle them
+                    // instead of silently dropping: write the bytes to a file.
+                    writeImageData(data, ext: ext, to: dest)
                 }
             }
         }
@@ -65,6 +71,30 @@ final class ShareViewController: NSViewController {
                     cont.resume(returning: nil)
                 }
             }
+        }
+    }
+
+    /// Load an in-memory image as raw bytes + a filename extension derived from
+    /// its most specific registered image type (e.g. public.jpeg → "jpeg").
+    private func loadImageData(_ provider: NSItemProvider) async throws -> (Data, String)? {
+        guard let typeID = provider.registeredTypeIdentifiers.first(where: {
+            UTType($0)?.conforms(to: .image) == true
+        }), let utType = UTType(typeID) else { return nil }
+        let data: Data? = try await withCheckedThrowingContinuation { cont in
+            provider.loadDataRepresentation(forTypeIdentifier: typeID) { d, e in
+                if let e { cont.resume(throwing: e) } else { cont.resume(returning: d) }
+            }
+        }
+        guard let data, !data.isEmpty else { return nil }
+        return (data, utType.preferredFilenameExtension ?? "img")
+    }
+
+    private func writeImageData(_ data: Data, ext: String, to dest: URL) {
+        let target = uniqueDestination(for: "Shared Image.\(ext)", in: dest)
+        var coordError: NSError?
+        NSFileCoordinator().coordinate(writingItemAt: target, options: .forReplacing,
+                                       error: &coordError) { writeURL in
+            try? data.write(to: writeURL)
         }
     }
 

@@ -59,6 +59,19 @@ final class AspectRatioCache: ObservableObject {
     }
     private var pendingBump = false
 
+    /// Drop cached ratios for paths no longer on screen, bounding the cache to
+    /// roughly one folder's worth across a long session (the same reason
+    /// `tileFrames` is cleared on folder switch). Re-resolving on revisit is a
+    /// cheap bulk DB read, so this trades a tiny re-read for bounded memory.
+    /// No-ops on an empty set so a transient mid-load empty `visibleFiles` doesn't
+    /// wipe the cache.
+    func prune(toVisible files: [FileNode]) {
+        guard !files.isEmpty else { return }
+        let keep = Set(files.map { $0.url.standardizedFileURL.path })
+        ratios = ratios.filter { keep.contains($0.key) }
+        resolved = resolved.filter { keep.contains($0) }
+    }
+
     /// Resolve dimensions for `files` off the main thread. DB-known dimensions
     /// publish IMMEDIATELY; the ImageIO header reads for the rest run
     /// CONCURRENTLY and publish in small batches. The old version did a single

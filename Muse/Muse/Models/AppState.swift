@@ -460,6 +460,12 @@ final class AppState: ObservableObject {
             guard let self else { return }
             self.currentFiles.removeAll { $0.url == url }
             if self.selectedFile?.url == url { self.selectedFile = nil }
+            // Also drop the trashed file from the multi-selection Set (it's
+            // independent of currentFiles); leaving it there lets a later bulk
+            // action rebuild a URL for a path that no longer exists.
+            let deletedPath = url.standardizedFileURL.path
+            self.selectedFiles.remove(deletedPath)
+            if self.selectionAnchor == deletedPath { self.selectionAnchor = nil }
             // The in-view file set shrank — refresh the chip counts (a tag that
             // only lived on the deleted file should drop out).
             self.reloadTagChips()
@@ -550,9 +556,10 @@ final class AppState: ObservableObject {
             guard let url = note.userInfo?["url"] as? URL else { return }
             Task { @MainActor in
                 self?.openFromIntent(url: url)
-                let urls = self?.currentFiles
-                    .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
-                    .map { $0.url } ?? []
+                // Enumerate the folder DIRECTLY, not via currentFiles: openFromIntent
+                // kicks off an async grid load that leaves currentFiles empty at this
+                // point, so reading it here would scan nothing.
+                let urls = await self?.analyzableURLs(at: url) ?? []
                 await DuplicateFinder.shared.scan(in: urls)
             }
         }
@@ -562,7 +569,11 @@ final class AppState: ObservableObject {
             guard let url = note.userInfo?["url"] as? URL else { return }
             Task { @MainActor in
                 self?.openFromIntent(url: url)
-                await self?.analyzeCurrentFolder()
+                // Same as above: enumerate the folder directly rather than reading
+                // the (just-cleared, still-loading) currentFiles.
+                let urls = await self?.analyzableURLs(at: url) ?? []
+                await AnalyzePipeline.shared.analyzeFolderManual(urls)
+                self?.resort()
             }
         }
 
@@ -588,6 +599,24 @@ final class AppState: ObservableObject {
         // Otherwise just open as an ad-hoc folder (no persistence)
         let folder = FolderNode(url: url)
         select(folder: folder)
+    }
+
+    /// Image/raw/psd file URLs in `url`, enumerated off the grid for the
+    /// duplicate/analyze App-Intent paths. These must NOT read `currentFiles`:
+    /// `openFromIntent` starts an async grid load that leaves it empty at the
+    /// moment the intent runs, so the intent would operate on nothing. Honors the
+    /// current show-subfolders / show-hidden settings, matching the grid.
+    func analyzableURLs(at url: URL) async -> [URL] {
+        let showSub = showSubfolders
+        let showHid = showHidden
+        return await Task.detached(priority: .userInitiated) {
+            let raw = showSub
+                ? Self.enumerateRecursive(at: url, showHidden: showHid)
+                : FolderReader.files(in: url, showHidden: showHid, includeFolders: false)
+            return raw
+                .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
+                .map { $0.url }
+        }.value
     }
 
     // MARK: - Roots wiring
@@ -675,6 +704,10 @@ final class AppState: ObservableObject {
             selectedFolder = nil
             currentFiles = []
             selectedFile = nil
+            // The grid just emptied — drop any selection from the removed root so
+            // a still-reachable action (e.g. "New Collection from Selection…")
+            // can't operate on files in the folder the user just removed.
+            clearSelection()
             reloadTagChips()
         }
         rebuildRootNodes()
@@ -700,7 +733,15 @@ final class AppState: ObservableObject {
         // view vanishes in one frame; then the folder fades in (tag row first,
         // images already in place below it).
         if showingCollections { showingCollections = false }
-        if activeCollectionID != nil { setActiveCollection(nil, animated: false) }
+        // Always tear down (unconditionally, NOT `if activeCollectionID != nil`):
+        // setActiveCollection commits activeCollectionID only AFTER an await, so
+        // while a collection is still loading activeCollectionID is still nil and
+        // a conditional teardown would skip — leaving the token un-bumped, so the
+        // in-flight load's `token == collectionRequestToken` guard passes and it
+        // commits the collection filter on top of the just-selected folder. The
+        // unconditional call bumps the token (invalidating any in-flight load) and
+        // no-ops its publishes when nothing is active.
+        setActiveCollection(nil, animated: false)
         if !activeTagLabels.isEmpty { setActiveTag(nil) }
         // Clear the search inline (not via clearSearch(), which would trigger a
         // second, skeleton-less reload on top of the one below). A stale search
@@ -982,6 +1023,16 @@ final class AppState: ObservableObject {
 
     func toggleSubfolders() {
         showSubfolders.toggle()
+        // Turning subfolders OFF narrows visibleFiles to the top level, dropping
+        // every subfolder file — and the selection Set is independent of
+        // visibleFiles (effectiveSelectionURLs rebuilds URLs for off-view paths),
+        // so a co-selected subfolder file would otherwise ride into a
+        // destructive/move flow. Clear the selection, like every other narrowing
+        // scope change. Turning ON only WIDENS (top-level files stay visible), so
+        // the existing selection is still valid — don't disturb it.
+        // reloadCurrentFiles publishes asynchronously, so prune-to-visible can't
+        // run here; clear is the correct match for the narrowing direction.
+        if !showSubfolders { clearSelection() }
         reloadCurrentFiles()
     }
 

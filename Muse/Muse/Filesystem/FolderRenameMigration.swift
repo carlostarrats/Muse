@@ -48,9 +48,9 @@ enum FolderRenameMigration {
         // for a case-only rename the source rows ("/a/Photos") never match the
         // NEW prefix ("/a/photos") — the pre-clear is a safe no-op and the
         // rewrites still produce binary-distinct rows (no collision).
-        // DO NOT make this case-insensitive (NOCASE) or extend it to delete
-        // tags at the destination: that WOULD destroy the source rows in a
-        // case-only rename.
+        // DO NOT make this case-insensitive (NOCASE): a NOCASE match WOULD
+        // destroy the source rows in a case-only rename. (The BINARY tags
+        // pre-clear below is safe for the same reason the paths/starred ones are.)
         try db.execute(sql: """
             DELETE FROM starred_folders
             WHERE absolute_path = ?
@@ -60,6 +60,17 @@ enum FolderRenameMigration {
             UPDATE paths SET is_alive = 0
             WHERE is_alive = 1
               AND (absolute_path = ? OR SUBSTR(absolute_path, 1, LENGTH(?) + 1) = ? || '/')
+            """, arguments: [new, new, new])
+        // tags has UNIQUE(file_id, parent_dir, label). A previously-deleted folder
+        // that occupied the new name leaves durable tag rows at the destination
+        // (PathReconciler only marks paths dead; tag rows survive). The rewrite
+        // below would then collide and roll back the WHOLE rename transaction,
+        // leaving disk renamed but the DB reverted. Pre-clear those stale rows,
+        // same BINARY-safe pattern as paths/starred_folders above.
+        try db.execute(sql: """
+            DELETE FROM tags
+            WHERE parent_dir = ?
+               OR SUBSTR(parent_dir, 1, LENGTH(?) + 1) = ? || '/'
             """, arguments: [new, new, new])
 
         try db.execute(sql: """

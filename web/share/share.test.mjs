@@ -14,6 +14,12 @@ const noPdf = { ...sample }; delete noPdf.p;
 assert.ok(validateManifest(noPdf), 'valid without pdfID (app no longer uploads a PDF)');
 assert.ok(!validateManifest({ ...sample, g:['short'] }), 'bad id rejected');
 assert.ok(!validateManifest({ ...sample, g:[] }), 'empty grid rejected');
+// The fragment is unsigned + attacker-supplyable; an over-large grid would flood
+// the recipient's browser with <img>/network requests. Cap it.
+const bigGrid = Array.from({ length: 1001 }, () => 'aaaaaaaaaaaaaaaaaaaa');
+assert.ok(!validateManifest({ ...sample, g: bigGrid }), 'oversized grid rejected');
+const maxGrid = Array.from({ length: 1000 }, () => 'aaaaaaaaaaaaaaaaaaaa');
+assert.ok(validateManifest({ ...sample, g: maxGrid }), 'grid at the cap accepted');
 // `e` must be strict date-only — a value with a time component would make
 // isExpired fail OPEN (Invalid Date < now === false). Reject it at validation.
 assert.ok(!validateManifest({ ...sample, e:'2026-04-04T12:00:00' }), 'datetime e rejected (no fail-open)');

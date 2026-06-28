@@ -54,8 +54,11 @@ final class CollectionsEngine: ObservableObject {
 
         // --- Intent track (typed screenshots) — runs regardless of embeddings.
         let intentMembers: [(fileID: String, bucket: String)] = (try? await q.read { db in
+            // DISTINCT: a file with several alive paths (same content in multiple
+            // folders) JOINs to one row per path; without it the threshold gate
+            // counts paths, not files. qualifyingBuckets also dedupes defensively.
             try Row.fetchAll(db, sql: """
-                SELECT f.id AS id, f.intent AS intent FROM files f
+                SELECT DISTINCT f.id AS id, f.intent AS intent FROM files f
                 JOIN paths p ON p.file_id = f.id
                 WHERE f.intent IS NOT NULL AND p.is_alive = 1
                 """).map { (fileID: $0["id"] as String, bucket: $0["intent"] as String) }
@@ -77,20 +80,33 @@ final class CollectionsEngine: ObservableObject {
         }
 
         // --- Emergent track — everything EXCEPT typed screenshots.
-        let typedIDs: Set<String> = (try? await q.read { db in
-            try Set(String.fetchAll(db, sql: "SELECT id FROM files WHERE intent IS NOT NULL"))
-        }) ?? []
-        let items: [ClusterItem] = (try? await q.read { db in
-            let rows = try EmbeddingRow.fetchAll(db)
-            return rows.compactMap { row -> ClusterItem? in
-                guard !typedIDs.contains(row.file_id) else { return nil }
-                return ClusterItem(id: row.file_id,
-                                   textVector: VectorMath.fromData(row.vector),
-                                   featurePrint: nil)
+        // These reads feed the destructive stale-deletion below: if the embeddings
+        // read transiently fails but the membership read succeeds, present clusters
+        // look absent and unprotected auto-collections (including renamed ones) get
+        // hard-deleted. So read inside one do/catch and bail the emergent pass on
+        // ANY failure rather than treating "couldn't read" as "nothing there". The
+        // intent track above already committed; the next pass retries.
+        let typedIDs: Set<String>
+        let items: [ClusterItem]
+        let old: [String: Set<String>]
+        do {
+            typedIDs = try await q.read { db in
+                try Set(String.fetchAll(db, sql: "SELECT id FROM files WHERE intent IS NOT NULL"))
             }
-        }) ?? []
-
-        let old = (try? await CollectionStore.currentMembership(queue: q)) ?? [:]
+            items = try await q.read { db in
+                let rows = try EmbeddingRow.fetchAll(db)
+                return rows.compactMap { row -> ClusterItem? in
+                    guard !typedIDs.contains(row.file_id) else { return nil }
+                    return ClusterItem(id: row.file_id,
+                                       textVector: VectorMath.fromData(row.vector),
+                                       featurePrint: nil)
+                }
+            }
+            old = try await CollectionStore.currentMembership(queue: q)
+        } catch {
+            await reload()
+            return
+        }
         var matched: [CollectionIdentity.Matched] = []
         if !items.isEmpty {
             let clusterer = registry.clusterer
@@ -100,12 +116,34 @@ final class CollectionsEngine: ObservableObject {
         }
 
         // Drop collections that no longer exist — but never manual collections,
-        // collections holding manual members, or live intent collections.
+        // collections holding manual members, live intent collections, or HIDDEN
+        // collections. A "deleted" collection is a durable is_hidden tombstone the
+        // recluster must never clear: if its membership drifts so it no longer
+        // matches a cluster, hard-deleting it would let an equivalent cluster
+        // re-form un-hidden, silently undoing the user's delete.
         let liveIDs = Set(matched.map(\.id)).union(intentLiveIDs)
-        let protected = (try? await CollectionStore.protectedCollectionIDs(queue: q)) ?? []
-        for staleID in old.keys where !liveIDs.contains(staleID) && !protected.contains(staleID) {
-            try? await q.write { db in
-                try db.execute(sql: "DELETE FROM collections WHERE id = ?", arguments: [staleID])
+        // Protected (manual) + hidden (tombstone) collections must survive the
+        // stale sweep. Read both fail-CLOSED: if either read throws transiently,
+        // SKIP the destructive deletion entirely this pass rather than delete a
+        // protected/tombstoned collection because a flaky read returned an empty
+        // guard set (a `try?`/`?? []` here would re-open the exact bug the hidden
+        // exclusion fixes). The upserts below still run; next pass retries the sweep.
+        let pruneGuards: (protected: Set<String>, hidden: Set<String>)?
+        do {
+            let protected = try await CollectionStore.protectedCollectionIDs(queue: q)
+            let hidden = try await q.read { db in
+                try Set(String.fetchAll(db, sql: "SELECT id FROM collections WHERE is_hidden = 1"))
+            }
+            pruneGuards = (protected, hidden)
+        } catch {
+            pruneGuards = nil
+        }
+        if let guards = pruneGuards {
+            for staleID in old.keys
+            where !liveIDs.contains(staleID) && !guards.protected.contains(staleID) && !guards.hidden.contains(staleID) {
+                try? await q.write { db in
+                    try db.execute(sql: "DELETE FROM collections WHERE id = ?", arguments: [staleID])
+                }
             }
         }
 

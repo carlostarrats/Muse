@@ -4639,3 +4639,130 @@ fits its context (not a uniform toast):
 
 All four new user-facing strings localized (fr). `BUILD SUCCEEDED`; `MuseTests` 442 / `MuseUITests` 6,
 0 failures.
+
+### Whole-codebase review pass — 2026-06-27 (on `feat/next-81`)
+
+A thorough, full-codebase review (not a diff) fanned out across every subsystem
+to find latent bugs the test suite didn't cover. Fixed 14, added 6 regression
+tests (5 Swift + 1 JS). `BUILD SUCCEEDED`; `MuseTests` 453 / 0 failures; `share.js`
+JS tests green.
+
+**Data-integrity (the load-bearing ones):**
+
+- **Indexer shared-row split on edit-in-place.** Two byte-identical files in two
+  folders dedupe onto ONE `files` row (content_hash is UNIQUE). Editing one copy
+  hit the "pure edit-in-place" branch and rewrote the *shared* row's hash/size/dims
+  + reset `analyzed_hash` — corrupting the untouched sibling and triggering a hash
+  **ping-pong** (each folder's next index pass flipped `content_hash` back, re-hashing
+  + re-Visioning forever — the exact "welded metadata" class the iCloud path already
+  guards). Fix (`Indexer.reconcile`): when the row has >1 alive path, SPLIT — move only
+  the edited path onto a fresh row for the new content, carry its location's tags
+  (`UPDATE tags … WHERE file_id=old AND parent_dir=editedDir`), leave the original row +
+  other paths/tags intact. `reconcile` made `internal` for testing; 2 new tests
+  (`IndexerReconcileTests`).
+- **Folder-rename tags UNIQUE collision → whole-transaction rollback.**
+  `FolderRenameMigration.apply` pre-cleared stale destination rows for `paths` +
+  `starred_folders` but NOT `tags` (which has `UNIQUE(file_id, parent_dir, label)`).
+  A previously-deleted folder occupying the new name leaves durable tag rows there
+  (PathReconciler only marks *paths* dead), so the tags rewrite could collide and roll
+  back the entire rename — disk renamed, DB reverted (ghost paths + lost tags). Added the
+  same BINARY-safe destination pre-clear for `tags`. New SQL test.
+- **CollectionsEngine recluster could hard-delete live/hidden collections.** Two bugs:
+  (1) the emergent embeddings/membership reads were `try?`-swallowed, so a transient read
+  failure made present clusters look absent and the stale-deletion loop wiped unprotected
+  auto-collections (incl. renamed ones) — now read inside one `do/catch` that bails the pass
+  on any failure. (2) The stale loop didn't exclude `is_hidden` rows, so a "deleted" collection
+  whose membership drifted lost its durable tombstone and could re-form un-hidden — now skipped.
+- **Intent-collection threshold inflated by duplicate alive paths.** The intent query
+  JOINed `paths` with no `DISTINCT`, so one screenshot copied into N folders counted N times
+  and a single image could surface a full intent collection. Added `DISTINCT` + a defensive
+  per-bucket dedupe in `IntentCollections.qualifyingBuckets` (now counts distinct files).
+  2 new tests.
+
+**Selection / visibleFiles desync (the "narrowing input must clear selection" rule had gaps):**
+
+- `toggleSubfolders` (subfolders OFF drops subfolder files), `removeRoot` (grid empties), and
+  the burn-delete `onRemove` (trashed file stays in the multi-selection `Set`) all left stale
+  paths in `selectedFiles` that `effectiveSelectionURLs` would rebuild into a destructive/move
+  flow. All three now clear/prune in lockstep with every other narrowing input.
+- **Folder-nav-during-collection-load race.** `setActiveCollection` commits `activeCollectionID`
+  only after an `await`, so a folder click while a collection was loading skipped the conditional
+  teardown, left the request token un-bumped, and the in-flight load committed the collection
+  filter on top of the new folder. `select(folder:)` now tears down unconditionally (bumps the token).
+
+**Viewers / UX:**
+
+- `TextViewerView` re-read the whole file + reset scroll/selection on every parent re-render
+  (mood change, resize) — now URL-guarded via a Coordinator, like `PDFViewerView`.
+- `ModelViewerView` parsed `SCNScene` synchronously in `body` on every render (main-thread jank +
+  camera reset) — now parsed once off-main into `@State`, keyed by url.
+- `AudioPlayerView` didn't pause the outgoing player before swapping URLs (brief overlap) — now
+  pauses first, matching `VideoPlayerView`.
+
+**Drive share security/robustness:**
+
+- OAuth `refresh()` dropped a still-valid refresh token (full sign-out) on ANY failure incl. a
+  network blip/5xx. Now `postForm` distinguishes a definitive `invalid_grant` (clear + re-auth)
+  from transient failures (propagate, keep the token).
+- Share page `validateManifest` capped the grid at 1000 IDs — the unsigned URL-fragment manifest is
+  attacker-supplyable, so an oversized `g` would flood the recipient's browser. JS test added.
+
+Consciously deferred (low-severity / by-design tradeoffs, not bugs): Indexer actor hash-serialization
+(perf), dedup log-bin boundary recall, `analyze(folder:)` per-URL DB round-trips (perf), LIKE-wildcard
+tag recall, PDF-export up-front decode memory for very large collections, `StarStore` stale-bookmark
+refresh, case-only-rename error-code precision.
+
+### Whole-codebase review pass — round 2 (Views + lifecycle + self-QA) — 2026-06-27 (on `feat/next-81`)
+
+Second review pass on the same branch: covered the areas round 1 didn't reach deeply (Views layer,
+app lifecycle, App Intents, share extension) AND adversarially re-verified round 1's 14 fixes. Fixed 7
+more (1 functional bug + 6 refinements/hardening), added 1 regression test. `BUILD SUCCEEDED`;
+`MuseTests` 454 / 0 failures.
+
+**App Intents operated on an empty file set (functional bug).** `FindDuplicatesIntent` / `AnalyzeFolderIntent`
+posted a notification whose observer called `openFromIntent(url:)` then immediately read `currentFiles` —
+but `openFromIntent → select(folder:) → reloadCurrentFiles` clears `currentFiles` and re-enumerates
+OFF-MAIN, so the read got `[]` every time and the intents scanned/analyzed nothing (deterministic, not a
+race). Added `AppState.analyzableURLs(at:)` which enumerates the folder URL directly (honoring
+show-subfolders/-hidden), and both observers now use it instead of `currentFiles`.
+
+**Hardening the round-1 fixes (from the adversarial self-QA):**
+- **Indexer split now carries manual collection membership.** The shared-row split moved tags but not
+  `collection_members` (file_id-keyed), so editing one copy silently ejected it from collections the user
+  had manually added it to. Now COPIES manual memberships to the new identity (sibling keeps its too; auto
+  membership is left for the recluster). New test.
+- **CollectionsEngine stale-sweep guards now fail CLOSED.** The `protected`/`hidden` reads that protect
+  manual + tombstoned collections were `try?`/`?? []` — a transient read failure emptied the guard set and
+  re-opened the exact hard-delete the hidden-exclusion fixed. Both reads moved into a `do/catch` that skips
+  the destructive sweep entirely on failure (upserts still run; next pass retries).
+- **`toggleSubfolders` clears the selection only when narrowing.** Round 1 cleared on both directions;
+  turning subfolders ON only widens `visibleFiles`, so the selection is still valid — don't disturb it.
+
+**Other latent bugs found this pass:**
+- **`AspectRatioCache` grew unbounded** (ratios/resolved never pruned across a long session, unlike
+  `tileFrames`). Added `prune(toVisible:)`, called on folder/filter switch in `GridView`, bounding it to
+  ~one folder's worth.
+- **`CollectionCover` kept a stale thumbnail** when a collection shrank to empty (the card instance
+  persists across reloads, and `loadCover`'s early-returns didn't clear `cover`). Now clears it.
+- **Share extension silently dropped image-only providers.** The guard admitted `UTType.image` providers
+  but `loadFileURL` only handled file URLs, so an in-memory image share was dropped. Added an
+  image-data fallback (`loadImageData`/`writeImageData`) that writes the bytes to a file.
+
+Round-1 fixes that the self-QA confirmed CORRECT and complete (no change needed): the Indexer split control
+flow + UNIQUE-safety, FolderRenameMigration BINARY pre-clear, the IntentCollections dedupe, the selection
+key-format match, and the GoogleOAuth refresh/`invalid_grant` handling (revoke uses its own request, unaffected).
+
+Still deferred (low severity): re-sort thumbnail flash on tile reuse (cosmetic), share-extension copy-failure
+surfacing (no-UI), cold-launch App-Intent notification race (needs a pending-intent slot).
+
+### Review pass round 3 (self-review of the fixes) — 2026-06-27 (on `feat/next-81`)
+
+Adversarially re-reviewed ONLY the changes from rounds 1–2. 12 of 13 changed source files confirmed correct;
+found one residual issue in the round-1 Indexer split and fixed it. `BUILD SUCCEEDED`; `MuseTests` 455 / 0.
+
+- **Indexer split: same-folder identical sibling lost its shared tags.** Tags are keyed (file_id, parent_dir),
+  so two byte-identical files in the SAME folder share one tag-row set. The split's `UPDATE tags SET file_id`
+  *moved* those rows to the edited copy, stripping the unedited same-folder sibling (the cross-folder case was
+  already fine — different parent_dir). Now: if the original retains another alive path in the same folder, COPY
+  the tags (both keep them); otherwise MOVE (avoids orphan rows). New test covers the same-folder case; the
+  manual-collection-membership carry was already a COPY and correct for both cases.
