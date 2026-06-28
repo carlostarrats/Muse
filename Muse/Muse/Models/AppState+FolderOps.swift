@@ -47,55 +47,77 @@ extension AppState {
     func renameFolder(_ node: FolderNode, to name: String) {
         let oldURL = node.url
         switch FolderOps.rename(oldURL, to: name) {
+        case .success(let newURL):
+            finishRename(node: node, oldURL: oldURL, newURL: newURL)
+        case .failure(.parentNotWritable):
+            // Top-level (root) folder: the sandbox denied the in-place move
+            // because it writes to the parent directory, which the root's own
+            // security scope doesn't cover. Ask the user to grant one-time access
+            // to the parent, then retry the move under that grant.
+            guard let parentScope = bookmarks.grantParentAccess(forRenaming: oldURL) else {
+                return   // user cancelled the grant — a no-op, not an error
+            }
+            defer { parentScope.stopAccessingSecurityScopedResource() }
+            switch FolderOps.rename(oldURL, to: name) {
+            case .success(let newURL):
+                finishRename(node: node, oldURL: oldURL, newURL: newURL)
+            case .failure(let e):
+                folderOpError = Self.message(for: e, verb: String(localized: "rename"))
+            }
         case .failure(let e):
             folderOpError = Self.message(for: e, verb: String(localized: "rename"))
-        case .success(let newURL):
-            // No-op rename (same name) — FolderOps returns the original URL.
-            guard newURL.standardizedFileURL != oldURL.standardizedFileURL else { return }
-            let oldPath = oldURL.standardizedFileURL.path
-            let newPath = newURL.standardizedFileURL.path
+        }
+    }
 
-            // Sidebar refresh (disk already moved; these are synchronous).
-            if node.isRoot, let root = bookmarks.roots.first(where: {
-                bookmarks.url(for: $0) == oldURL
-            }) {
-                // rootRenamed mutates bookmarks.roots → the $roots sink rebuilds
-                // rootNodes with the new URL/name.
-                if !bookmarks.rootRenamed(root, to: newURL) {
-                    folderOpError = String(localized: "Couldn’t finish renaming the folder.")
-                }
-            } else {
-                node.parent?.reloadChildren()
+    /// Post-move bookkeeping shared by the direct rename and the grant-and-retry
+    /// path: refresh the sidebar, migrate the DB/tags/pins, and follow the
+    /// selection if it sat at or under the renamed folder.
+    private func finishRename(node: FolderNode, oldURL: URL, newURL: URL) {
+        // No-op rename (same name) — FolderOps returns the original URL.
+        guard newURL.standardizedFileURL != oldURL.standardizedFileURL else { return }
+        let oldPath = oldURL.standardizedFileURL.path
+        let newPath = newURL.standardizedFileURL.path
+
+        // Sidebar refresh (disk already moved; these are synchronous).
+        if node.isRoot, let root = bookmarks.roots.first(where: {
+            bookmarks.url(for: $0) == oldURL
+        }) {
+            // rootRenamed mutates bookmarks.roots → the $roots sink rebuilds
+            // rootNodes with the new URL/name.
+            if !bookmarks.rootRenamed(root, to: newURL) {
+                folderOpError = String(localized: "Couldn’t finish renaming the folder.")
             }
+        } else {
+            node.parent?.reloadChildren()
+        }
 
-            // Does the active selection sit AT or UNDER the renamed folder?
-            // (renaming an ancestor of the open folder must follow it, not
-            // strand the grid on a now-nonexistent path).
-            let selPath = selectedFolder?.url.standardizedFileURL.path
-            let selectedWasRoot = selectedFolder?.isRoot ?? false
-            let newSelPath: String? = selPath.flatMap {
-                FolderRenameMigration.rewrite(path: $0, old: oldPath, new: newPath)
+        // Does the active selection sit AT or UNDER the renamed folder?
+        // (renaming an ancestor of the open folder must follow it, not
+        // strand the grid on a now-nonexistent path).
+        let selPath = selectedFolder?.url.standardizedFileURL.path
+        let selectedWasRoot = selectedFolder?.isRoot ?? false
+        let newSelPath: String? = selPath.flatMap {
+            FolderRenameMigration.rewrite(path: $0, old: oldPath, new: newPath)
+        }
+
+        // Migrate the DB FIRST, then reselect — the reselect triggers a
+        // re-index of the new location, which must not run before the
+        // path/tag rows are rewritten (a half-migrated state loses tags and
+        // could collide on the alive-path unique index).
+        Task { [weak self] in
+            let ok = await Self.migratePaths(old: oldPath, new: newPath,
+                                             newName: newURL.lastPathComponent)
+            guard let self else { return }
+            if !ok {
+                self.folderOpError = String(localized: "The folder was renamed, but updating its tags failed.")
             }
-
-            // Migrate the DB FIRST, then reselect — the reselect triggers a
-            // re-index of the new location, which must not run before the
-            // path/tag rows are rewritten (a half-migrated state loses tags and
-            // could collide on the alive-path unique index).
-            Task { [weak self] in
-                let ok = await Self.migratePaths(old: oldPath, new: newPath,
-                                                 newName: newURL.lastPathComponent)
-                guard let self else { return }
-                if !ok {
-                    self.folderOpError = String(localized: "The folder was renamed, but updating its tags failed.")
-                }
-                self.tagsVersion &+= 1
-                self.stars.load()   // refresh pin paths/labels after migration
-                if let newSelPath {
-                    let url = URL(fileURLWithPath: newSelPath)
-                    let node = self.findNode(withURL: url)
-                        ?? FolderNode(url: url, isRoot: selectedWasRoot && newSelPath == newPath)
-                    self.select(folder: node)
-                }
+            self.tagsVersion &+= 1
+            self.stars.load()   // refresh pin paths/labels after migration
+            if let newSelPath {
+                let url = URL(fileURLWithPath: newSelPath)
+                let node = self.findNode(withURL: url)
+                    ?? FolderNode(url: url, isRoot: selectedWasRoot && newSelPath == newPath)
+                self.select(folder: node)
             }
         }
     }
@@ -135,7 +157,10 @@ extension AppState {
         case .emptyName:   return String(localized: "Please enter a folder name.")
         case .invalidName: return String(localized: "A folder name can’t contain “/” or “:”.")
         case .collision:   return String(localized: "A folder with that name already exists here.")
-        case .ioError:     return String(localized: "Couldn’t \(verb) the folder. You may not have permission.")
+        case .ioError(let detail): return String(localized: "Couldn’t \(verb) the folder.") + "\n\n" + detail
+        // Normally intercepted by the grant-and-retry path; this is the fallback
+        // if the user declined the access grant or the retry still couldn't write.
+        case .parentNotWritable: return String(localized: "Couldn’t \(verb) the folder — Muse needs access to the folder that contains it.")
         }
     }
 }
