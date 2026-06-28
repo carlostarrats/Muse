@@ -4553,3 +4553,39 @@ is a real `Button`. Removed the orphaned `"Save name"` catalog key. (The big edi
 the only inline editor in the app; nothing else relied on it.)
 
 `BUILD SUCCEEDED`; `MuseTests` 436 / `MuseUITests` 6, 0 failures.
+
+### Health / security review pass — 2026-06-27 (on `feat/next-80`)
+
+Post-1.3.3 sweep: "review the codebase for health, bugs, leakage, security; fix; loop until
+green." Reviewed the diff since `v1.3.3` (the collection-rename modal unification — clean,
+fully localized incl. the interpolated `Delete "%@"?` title) plus four parallel deep audits
+across the highest-risk surfaces.
+
+- **Drive-share security** — all six documented invariants re-verified intact in code: scope is
+  exactly `drive.file`; Authorization-Code + PKCE S256 with no embedded client secret; tokens
+  only in Keychain (`…AfterFirstUnlockThisDeviceOnly`, no `kSecAttrSynchronizable`, never
+  logged/UserDefaults), sign-out revokes; network egress only inside explicit user actions (the
+  launch expiry-sweep is gated on an existing *expired* local record + a token, the one
+  sanctioned non-gesture path); the static share page carries its manifest in the URL **fragment**,
+  renders via `textContent` with id-regex validation under `default-src 'none'`, no API key/secret;
+  CSPRNG verifier/state with `state` validated on redirect. No violations.
+- **Network / WebKit leak** — zero-network invariant holds: the only `URLSession` lives in
+  `Sharing/Drive/`, the only `WKWebView` in `SVGViewerView` (whose install-before-load,
+  fail-closed `WKContentRuleList` blocking http(s)/ws(s)/host-bearing `file://` subresources is
+  intact and unweakened; JS off; no `allowUniversalAccessFromFileURLs`), Sparkle is EdDSA-verified.
+  Markdown viewer has no web stack.
+- **Resource / memory leak** — clean across security-scoped access (balanced; `openStarred`'s
+  one-per-pin scope is the documented bounded exception), FSEvents lifecycle (`FolderWatcher`
+  Stop→Invalidate→Release in `stop()`/`deinit`), Combine sinks (all `[weak self]`), CGImageSource
+  bridging (ARC), and AV/Font viewer teardown (`dismantleNSView` pause+nil; font unregister in
+  `defer`).
+- **Concurrency / state-divergence** — `AnalyzePipeline` pass-claim, tag-filter sync resolution,
+  and every path-prefix `hasPrefix` guard verified correct. **One real bug found + fixed:**
+  `runSearch` (`AppState+Search.swift`) narrowed `visibleFiles` to the search result set without
+  clearing the selection, so a folder-selected file absent from the results stayed in
+  `selectedFiles` and could ride into Move/Delete/Collection/Tag/Share via `effectiveSelectionURLs`
+  (which rebuilds URLs for off-view paths). Added `clearSelection()` after the stale-token guard —
+  search was the lone narrowing input that skipped the documented "narrow ⇒ prune/clear selection"
+  rule. CLAUDE.md durable-constraints note updated to list search among the compliant paths.
+
+`BUILD SUCCEEDED`; `MuseTests` 436 / `MuseUITests` 6, 0 failures (re-run after the fix).
