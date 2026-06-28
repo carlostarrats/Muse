@@ -153,6 +153,39 @@ final class BookmarkStore: ObservableObject {
         return true
     }
 
+    // MARK: - Parent-access grant (for renaming a root)
+
+    /// Renaming a top-level folder writes to its PARENT directory, which a
+    /// root's own security-scoped bookmark doesn't cover (the sandbox grants the
+    /// folder's contents, not the right to rename the folder itself). Show a
+    /// folder picker pointed at the parent so the user grants one-time access to
+    /// it; returns the granted parent URL with access already STARTED (the caller
+    /// must `stopAccessingSecurityScopedResource()` once the move is done), or
+    /// nil if the user cancelled or chose a folder that doesn't contain the
+    /// target. Access is transient — we deliberately do NOT persist a parent
+    /// bookmark (Muse's library is the folder, not its parent).
+    func grantParentAccess(forRenaming folder: URL) -> URL? {
+        let parent = folder.deletingLastPathComponent()
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        // Open AT the parent so clicking "Grant Access" with nothing selected
+        // returns the parent itself (the standard grant-this-folder pattern).
+        panel.directoryURL = parent
+        panel.message = String(localized: "To rename this folder, grant Muse access to the folder that contains it.")
+        panel.prompt = String(localized: "Grant Access")
+        guard panel.runModal() == .OK, let chosen = panel.url else { return nil }
+        // The chosen folder must be an ANCESTOR of the target (its parent or
+        // higher) — only then does the grant cover the parent directory the move
+        // writes to. Choosing the target folder itself wouldn't help.
+        let chosenPath = chosen.standardizedFileURL.path
+        let folderPath = folder.standardizedFileURL.path
+        guard folderPath.hasPrefix(chosenPath + "/") else { return nil }
+        guard chosen.startAccessingSecurityScopedResource() else { return nil }
+        return chosen
+    }
+
     // MARK: - Access
 
     /// Returns the resolved URL for a root, or nil if the bookmark is stale or

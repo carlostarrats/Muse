@@ -80,4 +80,31 @@ final class FolderOpsTests: XCTestCase {
         let dst = try XCTUnwrap(try? FolderOps.rename(src, to: "Same").get())
         XCTAssertEqual(dst.standardizedFileURL, src.standardizedFileURL)
     }
+
+    // MARK: - Permission classification (drives the root-rename grant flow)
+
+    func testIsPermissionDeniedCocoaWriteNoPermission() {
+        let e = NSError(domain: NSCocoaErrorDomain, code: NSFileWriteNoPermissionError)
+        XCTAssertTrue(FolderOps.isPermissionDenied(e))
+    }
+    func testIsPermissionDeniedPosixEPERMandEACCES() {
+        XCTAssertTrue(FolderOps.isPermissionDenied(
+            NSError(domain: NSPOSIXErrorDomain, code: Int(EPERM))))
+        XCTAssertTrue(FolderOps.isPermissionDenied(
+            NSError(domain: NSPOSIXErrorDomain, code: Int(EACCES))))
+    }
+    func testIsPermissionDeniedUnderlyingPosix() {
+        // Cocoa errors from FileManager wrap the real POSIX errno under
+        // NSUnderlyingErrorKey — the classifier must unwrap it.
+        let underlying = NSError(domain: NSPOSIXErrorDomain, code: Int(EACCES))
+        let e = NSError(domain: NSCocoaErrorDomain, code: NSFileWriteUnknownError,
+                        userInfo: [NSUnderlyingErrorKey: underlying])
+        XCTAssertTrue(FolderOps.isPermissionDenied(e))
+    }
+    func testIsPermissionDeniedFalseForNonPermissionErrors() {
+        XCTAssertFalse(FolderOps.isPermissionDenied(
+            NSError(domain: NSCocoaErrorDomain, code: NSFileWriteOutOfSpaceError)))
+        XCTAssertFalse(FolderOps.isPermissionDenied(
+            NSError(domain: NSPOSIXErrorDomain, code: Int(ENOENT))))
+    }
 }

@@ -1065,16 +1065,6 @@
         }
       }
     },
-    "Couldn’t %@ the folder. You may not have permission.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible de %@ le dossier. Vous n'avez peut-être pas la permission."
-          }
-        }
-      }
-    },
     "Couldn’t finish renaming the folder.": {
       "localizations": {
         "fr": {
@@ -4353,6 +4343,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "Certains fichiers n’ont pas pu être placés dans la corbeille."
+          }
+        }
+      }
+    },
+    "Couldn’t %@ the folder.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de %@ le dossier."
+          }
+        }
+      }
+    },
+    "Couldn’t %@ the folder — Muse needs access to the folder that contains it.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de %@ le dossier — Muse a besoin d’accéder au dossier qui le contient."
+          }
+        }
+      }
+    },
+    "To rename this folder, grant Muse access to the folder that contains it.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pour renommer ce dossier, autorisez Muse à accéder au dossier qui le contient."
+          }
+        }
+      }
+    },
+    "Grant Access": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autoriser l’accès"
           }
         }
       }

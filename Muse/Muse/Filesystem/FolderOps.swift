@@ -12,7 +12,27 @@
 import Foundation
 
 enum FolderOps {
-    enum OpError: Error, Equatable { case emptyName, invalidName, collision, ioError }
+    // `ioError` carries the OS failure reason for display; `parentNotWritable`
+    // is the sandbox case — renaming a top-level (root) folder writes to its
+    // PARENT directory, which a folder's own security-scoped bookmark doesn't
+    // cover, so the caller must obtain a one-time grant on the parent and retry.
+    enum OpError: Error, Equatable { case emptyName, invalidName, collision, ioError(String), parentNotWritable }
+
+    /// True when a FileManager error is the OS denying the write for permission
+    /// reasons (sandbox or POSIX). This is the reliable signal that a root rename
+    /// needs a parent-folder grant: `isWritableFile` can report a parent as
+    /// POSIX-writable (e.g. the home directory) even when the sandbox will still
+    /// deny the move, so we also inspect the Cocoa code and the underlying POSIX
+    /// EPERM/EACCES.
+    static func isPermissionDenied(_ error: Error) -> Bool {
+        let ns = error as NSError
+        if ns.domain == NSCocoaErrorDomain && ns.code == NSFileWriteNoPermissionError { return true }
+        if ns.domain == NSPOSIXErrorDomain && (ns.code == Int(EPERM) || ns.code == Int(EACCES)) { return true }
+        if let underlying = ns.userInfo[NSUnderlyingErrorKey] as? NSError,
+           underlying.domain == NSPOSIXErrorDomain,
+           underlying.code == Int(EPERM) || underlying.code == Int(EACCES) { return true }
+        return false
+    }
 
     /// Trim and validate a proposed folder name. Rejects empty names, path
     /// separators ("/" and ":" — the latter is the legacy HFS separator Finder
@@ -40,7 +60,14 @@ enum FolderOps {
                 try FileManager.default.createDirectory(
                     at: target, withIntermediateDirectories: false)
                 return .success(target)
-            } catch { return .failure(.ioError) }
+            } catch {
+                let writable = FileManager.default.isWritableFile(atPath: parent.path)
+                NSLog("[Muse] createSubfolder failed at %@ (parent writable: %@): %@",
+                      target.path, writable ? "true" : "false", String(describing: error))
+                if !writable { return .failure(.parentNotWritable) }
+                let ns = error as NSError
+                return .failure(.ioError(ns.localizedFailureReason ?? ns.localizedDescription))
+            }
         }
     }
 
@@ -70,7 +97,14 @@ enum FolderOps {
             do {
                 try FileManager.default.moveItem(at: folder, to: target)
                 return .success(target)
-            } catch { return .failure(.ioError) }
+            } catch {
+                let writable = FileManager.default.isWritableFile(atPath: parent.path)
+                NSLog("[Muse] rename failed %@ → %@ (parent writable: %@): %@",
+                      folder.path, target.path, writable ? "true" : "false", String(describing: error))
+                if !writable || isPermissionDenied(error) { return .failure(.parentNotWritable) }
+                let ns = error as NSError
+                return .failure(.ioError(ns.localizedFailureReason ?? ns.localizedDescription))
+            }
         }
     }
 }

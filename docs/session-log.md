@@ -4766,3 +4766,28 @@ found one residual issue in the round-1 Indexer split and fixed it. `BUILD SUCCE
   already fine — different parent_dir). Now: if the original retains another alive path in the same folder, COPY
   the tags (both keep them); otherwise MOVE (avoids orphan rows). New test covers the same-folder case; the
   manual-collection-membership carry was already a COPY and correct for both cases.
+
+### Folder rename failed on root folders — sandbox parent-grant + real-error surfacing — 2026-06-28 (`feat/next-83`)
+
+Owner reported "Couldn't rename the folder. You may not have permission." renaming a top-level (sidebar)
+folder. Root cause: renaming a folder writes to its PARENT directory, and a root's security-scoped bookmark
+grants the folder's *contents*, not its parent — so the in-place `FileManager.moveItem` is sandbox-denied.
+The old code swallowed the real `NSError` (`catch { .ioError }`) and substituted a *guessed* "may not have
+permission" string, which is why it was undebuggable. Fix verified by the owner against a real on-disk rename.
+
+- **Surface the real OS error.** `FolderOps` rename/create now log the failure + parent-writability via `NSLog`
+  and return `.ioError(String)` carrying the OS `localizedFailureReason` (shown in the alert) instead of a blind
+  guess. New `.parentNotWritable` case distinguishes the sandbox-parent case.
+- **Grant-and-retry for root rename (owner chose "really rename on disk").** `renameFolder` responds to
+  `.parentNotWritable` by calling `BookmarkStore.grantParentAccess(forRenaming:)` — an `NSOpenPanel` pointed at
+  the parent ("Grant Access" returns the shown dir) — then retries the move under that transient powerbox scope
+  and repoints the root bookmark. The parent grant is NOT persisted (the library is the folder, not its parent).
+  Subfolders (parent already in scope) never see the picker. Extracted shared `finishRename` for both paths.
+- **Robust classification.** `isPermissionDenied` keys off Cocoa `NSFileWriteNoPermissionError` + underlying
+  POSIX `EPERM`/`EACCES`, not just `isWritableFile` — a root in the home dir reports the parent POSIX-writable
+  even though the sandbox denies the write. 4 new `FolderOpsTests` cover the classifier.
+- New strings localized (FR): the grant panel message/prompt + the two folder-error messages; orphaned
+  "…You may not have permission." key removed. `BUILD SUCCEEDED`; `MuseTests` + `MuseUITests` green.
+- **Process note:** green build + unit suite ≠ feature works — the suite can't exercise the sandbox. Verify
+  sandbox/filesystem/runtime features in the actual running app before claiming done (memory:
+  `verify-runtime-not-just-tests`).
