@@ -307,10 +307,10 @@ final class AppState: ObservableObject {
     @Published var collectionDeleteRequest = false
 
     /// Collection-rename MODAL request (carries the id + current name to seed the
-    /// field). Every "Rename Collection…" entry point — the sidebar right-click
-    /// AND the menu-bar command — routes here, so rename always opens an alert
-    /// that mirrors folder rename (never navigates/inline-edits). The in-page
-    /// header's "Edit" pill is the one remaining inline-edit affordance.
+    /// field). EVERY "Rename Collection…" entry point routes here — the sidebar
+    /// right-click, the menu-bar command, and the in-page header's title-tap /
+    /// "Edit" pill — so rename always opens an alert that mirrors folder rename
+    /// (never navigates, never inline-edits). There is no inline rename anymore.
     @Published var collectionRenameAlertRequest: CollectionRenameAlertRequest?
     @Published var deleteAllTagsRequest = false
     @Published var regenerateTagsRequest = false

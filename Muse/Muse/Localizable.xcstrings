@@ -3122,16 +3122,6 @@
         }
       }
     },
-    "Save name": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enregistrer le nom"
-          }
-        }
-      }
-    },
     "Save to…": {
       "localizations": {
         "fr": {
