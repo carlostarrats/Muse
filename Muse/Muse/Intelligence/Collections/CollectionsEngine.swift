@@ -122,14 +122,28 @@ final class CollectionsEngine: ObservableObject {
         // matches a cluster, hard-deleting it would let an equivalent cluster
         // re-form un-hidden, silently undoing the user's delete.
         let liveIDs = Set(matched.map(\.id)).union(intentLiveIDs)
-        let protected = (try? await CollectionStore.protectedCollectionIDs(queue: q)) ?? []
-        let hidden: Set<String> = (try? await q.read { db in
-            try Set(String.fetchAll(db, sql: "SELECT id FROM collections WHERE is_hidden = 1"))
-        }) ?? []
-        for staleID in old.keys
-        where !liveIDs.contains(staleID) && !protected.contains(staleID) && !hidden.contains(staleID) {
-            try? await q.write { db in
-                try db.execute(sql: "DELETE FROM collections WHERE id = ?", arguments: [staleID])
+        // Protected (manual) + hidden (tombstone) collections must survive the
+        // stale sweep. Read both fail-CLOSED: if either read throws transiently,
+        // SKIP the destructive deletion entirely this pass rather than delete a
+        // protected/tombstoned collection because a flaky read returned an empty
+        // guard set (a `try?`/`?? []` here would re-open the exact bug the hidden
+        // exclusion fixes). The upserts below still run; next pass retries the sweep.
+        let pruneGuards: (protected: Set<String>, hidden: Set<String>)?
+        do {
+            let protected = try await CollectionStore.protectedCollectionIDs(queue: q)
+            let hidden = try await q.read { db in
+                try Set(String.fetchAll(db, sql: "SELECT id FROM collections WHERE is_hidden = 1"))
+            }
+            pruneGuards = (protected, hidden)
+        } catch {
+            pruneGuards = nil
+        }
+        if let guards = pruneGuards {
+            for staleID in old.keys
+            where !liveIDs.contains(staleID) && !guards.protected.contains(staleID) && !guards.hidden.contains(staleID) {
+                try? await q.write { db in
+                    try db.execute(sql: "DELETE FROM collections WHERE id = ?", arguments: [staleID])
+                }
             }
         }
 

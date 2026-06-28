@@ -556,9 +556,10 @@ final class AppState: ObservableObject {
             guard let url = note.userInfo?["url"] as? URL else { return }
             Task { @MainActor in
                 self?.openFromIntent(url: url)
-                let urls = self?.currentFiles
-                    .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
-                    .map { $0.url } ?? []
+                // Enumerate the folder DIRECTLY, not via currentFiles: openFromIntent
+                // kicks off an async grid load that leaves currentFiles empty at this
+                // point, so reading it here would scan nothing.
+                let urls = await self?.analyzableURLs(at: url) ?? []
                 await DuplicateFinder.shared.scan(in: urls)
             }
         }
@@ -568,7 +569,11 @@ final class AppState: ObservableObject {
             guard let url = note.userInfo?["url"] as? URL else { return }
             Task { @MainActor in
                 self?.openFromIntent(url: url)
-                await self?.analyzeCurrentFolder()
+                // Same as above: enumerate the folder directly rather than reading
+                // the (just-cleared, still-loading) currentFiles.
+                let urls = await self?.analyzableURLs(at: url) ?? []
+                await AnalyzePipeline.shared.analyzeFolderManual(urls)
+                self?.resort()
             }
         }
 
@@ -594,6 +599,24 @@ final class AppState: ObservableObject {
         // Otherwise just open as an ad-hoc folder (no persistence)
         let folder = FolderNode(url: url)
         select(folder: folder)
+    }
+
+    /// Image/raw/psd file URLs in `url`, enumerated off the grid for the
+    /// duplicate/analyze App-Intent paths. These must NOT read `currentFiles`:
+    /// `openFromIntent` starts an async grid load that leaves it empty at the
+    /// moment the intent runs, so the intent would operate on nothing. Honors the
+    /// current show-subfolders / show-hidden settings, matching the grid.
+    func analyzableURLs(at url: URL) async -> [URL] {
+        let showSub = showSubfolders
+        let showHid = showHidden
+        return await Task.detached(priority: .userInitiated) {
+            let raw = showSub
+                ? Self.enumerateRecursive(at: url, showHidden: showHid)
+                : FolderReader.files(in: url, showHidden: showHid, includeFolders: false)
+            return raw
+                .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
+                .map { $0.url }
+        }.value
     }
 
     // MARK: - Roots wiring
@@ -1000,15 +1023,16 @@ final class AppState: ObservableObject {
 
     func toggleSubfolders() {
         showSubfolders.toggle()
-        // Toggling subfolders OFF narrows visibleFiles to the top level, dropping
-        // every subfolder file — but the selection Set is independent of
-        // visibleFiles and effectiveSelectionURLs rebuilds URLs for off-view
-        // paths, so a co-selected subfolder file would otherwise ride into a
+        // Turning subfolders OFF narrows visibleFiles to the top level, dropping
+        // every subfolder file — and the selection Set is independent of
+        // visibleFiles (effectiveSelectionURLs rebuilds URLs for off-view paths),
+        // so a co-selected subfolder file would otherwise ride into a
         // destructive/move flow. Clear the selection, like every other narrowing
-        // scope change (folder-select, search, collection-scope). reloadCurrentFiles
-        // publishes asynchronously, so prune-to-visible can't run here — clear is
-        // the correct match.
-        clearSelection()
+        // scope change. Turning ON only WIDENS (top-level files stay visible), so
+        // the existing selection is still valid — don't disturb it.
+        // reloadCurrentFiles publishes asynchronously, so prune-to-visible can't
+        // run here; clear is the correct match for the narrowing direction.
+        if !showSubfolders { clearSelection() }
         reloadCurrentFiles()
     }
 

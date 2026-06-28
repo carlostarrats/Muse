@@ -210,6 +210,9 @@ struct GridView: View {
                 recompute(width: max(0, newSize.width - contentInset * 2))
             }
             .onChange(of: gridSignature) { _, _ in
+                // Drop the previous set's cached ratios before loading the new one,
+                // so the cache stays bounded to roughly the on-screen folder.
+                aspects.prune(toVisible: appState.visibleFiles)
                 aspects.load(appState.visibleFiles)
                 recompute(width: contentWidth)
             }

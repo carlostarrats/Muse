@@ -310,8 +310,11 @@ private struct CollectionCover: View {
     }
 
     private func loadCover() async {
-        // An empty collection has no cover to load — leave it plain grey.
-        guard !isEmpty else { return }
+        // An empty collection has no cover to load — leave it plain grey. Clear any
+        // previously-loaded cover too: the card instance persists across engine
+        // reloads (keyed by collection id), so a collection that shrinks to empty
+        // would otherwise keep showing its old thumbnail.
+        guard !isEmpty else { cover = nil; return }
         guard let q = Database.shared.dbQueue else { return }
         // Prefer the user-chosen cover (if still an alive member); otherwise
         // fall back to the first alive member.
@@ -324,7 +327,7 @@ private struct CollectionCover: View {
             path = (try? await CollectionStore.alivePaths(
                 queue: q, collectionID: collectionID, limit: 1))?.first
         }
-        guard let path else { return }
+        guard let path else { cover = nil; return }
         let url = URL(fileURLWithPath: path)
         // 320 matches the grid/viewer probe size, so the bitmap is
         // already in the shared cache.

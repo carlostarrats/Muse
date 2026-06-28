@@ -4711,3 +4711,46 @@ Consciously deferred (low-severity / by-design tradeoffs, not bugs): Indexer act
 (perf), dedup log-bin boundary recall, `analyze(folder:)` per-URL DB round-trips (perf), LIKE-wildcard
 tag recall, PDF-export up-front decode memory for very large collections, `StarStore` stale-bookmark
 refresh, case-only-rename error-code precision.
+
+### Whole-codebase review pass — round 2 (Views + lifecycle + self-QA) — 2026-06-27 (on `feat/next-81`)
+
+Second review pass on the same branch: covered the areas round 1 didn't reach deeply (Views layer,
+app lifecycle, App Intents, share extension) AND adversarially re-verified round 1's 14 fixes. Fixed 7
+more (1 functional bug + 6 refinements/hardening), added 1 regression test. `BUILD SUCCEEDED`;
+`MuseTests` 454 / 0 failures.
+
+**App Intents operated on an empty file set (functional bug).** `FindDuplicatesIntent` / `AnalyzeFolderIntent`
+posted a notification whose observer called `openFromIntent(url:)` then immediately read `currentFiles` —
+but `openFromIntent → select(folder:) → reloadCurrentFiles` clears `currentFiles` and re-enumerates
+OFF-MAIN, so the read got `[]` every time and the intents scanned/analyzed nothing (deterministic, not a
+race). Added `AppState.analyzableURLs(at:)` which enumerates the folder URL directly (honoring
+show-subfolders/-hidden), and both observers now use it instead of `currentFiles`.
+
+**Hardening the round-1 fixes (from the adversarial self-QA):**
+- **Indexer split now carries manual collection membership.** The shared-row split moved tags but not
+  `collection_members` (file_id-keyed), so editing one copy silently ejected it from collections the user
+  had manually added it to. Now COPIES manual memberships to the new identity (sibling keeps its too; auto
+  membership is left for the recluster). New test.
+- **CollectionsEngine stale-sweep guards now fail CLOSED.** The `protected`/`hidden` reads that protect
+  manual + tombstoned collections were `try?`/`?? []` — a transient read failure emptied the guard set and
+  re-opened the exact hard-delete the hidden-exclusion fixed. Both reads moved into a `do/catch` that skips
+  the destructive sweep entirely on failure (upserts still run; next pass retries).
+- **`toggleSubfolders` clears the selection only when narrowing.** Round 1 cleared on both directions;
+  turning subfolders ON only widens `visibleFiles`, so the selection is still valid — don't disturb it.
+
+**Other latent bugs found this pass:**
+- **`AspectRatioCache` grew unbounded** (ratios/resolved never pruned across a long session, unlike
+  `tileFrames`). Added `prune(toVisible:)`, called on folder/filter switch in `GridView`, bounding it to
+  ~one folder's worth.
+- **`CollectionCover` kept a stale thumbnail** when a collection shrank to empty (the card instance
+  persists across reloads, and `loadCover`'s early-returns didn't clear `cover`). Now clears it.
+- **Share extension silently dropped image-only providers.** The guard admitted `UTType.image` providers
+  but `loadFileURL` only handled file URLs, so an in-memory image share was dropped. Added an
+  image-data fallback (`loadImageData`/`writeImageData`) that writes the bytes to a file.
+
+Round-1 fixes that the self-QA confirmed CORRECT and complete (no change needed): the Indexer split control
+flow + UNIQUE-safety, FolderRenameMigration BINARY pre-clear, the IntentCollections dedupe, the selection
+key-format match, and the GoogleOAuth refresh/`invalid_grant` handling (revoke uses its own request, unaffected).
+
+Still deferred (low severity): re-sort thumbnail flash on tile reuse (cosmetic), share-extension copy-failure
+surfacing (no-UI), cold-launch App-Intent notification race (needs a pending-intent slot).

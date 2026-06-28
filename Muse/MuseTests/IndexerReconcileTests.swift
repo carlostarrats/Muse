@@ -57,6 +57,32 @@ final class IndexerReconcileTests: XCTestCase {
         }
     }
 
+    func testSplitCarriesManualCollectionMembership() throws {
+        let q = try freshQueue()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at, analyzed_hash) VALUES ('f1','h1','image',0,'h1')")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('pA','f1','/a/x.png',1)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('pB','f1','/b/x.png',1)")
+            // A manual collection the shared file belongs to, plus an AUTO one.
+            try db.execute(sql: "INSERT INTO collections (id, name, is_hidden, model_version, created_at, updated_at, sort_order) VALUES ('cManual','Faves',0,'manual',0,0,0)")
+            try db.execute(sql: "INSERT INTO collections (id, name, is_hidden, model_version, created_at, updated_at, sort_order) VALUES ('cAuto','Cluster',0,'cluster-v1',0,0,1)")
+            try db.execute(sql: "INSERT INTO collection_members (collection_id, file_id, added_by) VALUES ('cManual','f1','manual')")
+            try db.execute(sql: "INSERT INTO collection_members (collection_id, file_id, added_by) VALUES ('cAuto','f1','auto')")
+
+            _ = try Indexer.reconcile(db: db, absPath: "/a/x.png", hash: "h2",
+                                      kind: .image, sizeBytes: 1, createdAt: 0, modifiedAt: 1, now: 2)
+        }
+        try q.read { db in
+            let aFileID = try String.fetchOne(db, sql: "SELECT file_id FROM paths WHERE id='pA'")!
+            // Manual membership COPIED to the edited copy's new identity (so it stays
+            // in the collection the user added it to) — and the sibling keeps it too.
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM collection_members WHERE collection_id='cManual' AND file_id=?", arguments: [aFileID]), 1)
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM collection_members WHERE collection_id='cManual' AND file_id='f1'"), 1)
+            // AUTO membership is NOT carried (the recluster regenerates it).
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM collection_members WHERE collection_id='cAuto' AND file_id=?", arguments: [aFileID]), 0)
+        }
+    }
+
     func testEditingSoleCopyStillRewritesInPlace() throws {
         // The regression guard: when the row is NOT shared, an edit must still
         // rewrite the existing row in place (no spurious split).
