@@ -4754,3 +4754,15 @@ key-format match, and the GoogleOAuth refresh/`invalid_grant` handling (revoke u
 
 Still deferred (low severity): re-sort thumbnail flash on tile reuse (cosmetic), share-extension copy-failure
 surfacing (no-UI), cold-launch App-Intent notification race (needs a pending-intent slot).
+
+### Review pass round 3 (self-review of the fixes) — 2026-06-27 (on `feat/next-81`)
+
+Adversarially re-reviewed ONLY the changes from rounds 1–2. 12 of 13 changed source files confirmed correct;
+found one residual issue in the round-1 Indexer split and fixed it. `BUILD SUCCEEDED`; `MuseTests` 455 / 0.
+
+- **Indexer split: same-folder identical sibling lost its shared tags.** Tags are keyed (file_id, parent_dir),
+  so two byte-identical files in the SAME folder share one tag-row set. The split's `UPDATE tags SET file_id`
+  *moved* those rows to the edited copy, stripping the unedited same-folder sibling (the cross-folder case was
+  already fine — different parent_dir). Now: if the original retains another alive path in the same folder, COPY
+  the tags (both keep them); otherwise MOVE (avoids orphan rows). New test covers the same-folder case; the
+  manual-collection-membership carry was already a COPY and correct for both cases.

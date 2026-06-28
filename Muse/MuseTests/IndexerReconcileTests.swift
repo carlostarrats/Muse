@@ -57,6 +57,31 @@ final class IndexerReconcileTests: XCTestCase {
         }
     }
 
+    func testSplitCopiesTagsWhenSameFolderSiblingShares() throws {
+        // Two byte-identical files in the SAME folder share ONE (file_id, parent_dir)
+        // tag key. Editing one must COPY the shared tags to the edited copy's new
+        // identity, NOT move them — the unedited same-folder sibling still points at
+        // the old row and must keep its tags.
+        let q = try freshQueue()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at, analyzed_hash) VALUES ('f1','h1','image',0,'h1')")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('pA','f1','/a/x.png',1)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('pB','f1','/a/y.png',1)")
+            try db.execute(sql: "INSERT INTO tags (id, file_id, label, source, confidence, parent_dir) VALUES ('t1','f1','blue','manual',NULL,'/a')")
+
+            _ = try Indexer.reconcile(db: db, absPath: "/a/x.png", hash: "h2",
+                                      kind: .image, sizeBytes: 1, createdAt: 0, modifiedAt: 1, now: 2)
+        }
+        try q.read { db in
+            let aFileID = try String.fetchOne(db, sql: "SELECT file_id FROM paths WHERE id='pA'")!
+            XCTAssertNotEqual(aFileID, "f1")
+            // Edited copy got the tag …
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tags WHERE file_id=? AND parent_dir='/a' AND label='blue'", arguments: [aFileID]), 1)
+            // … and the unedited same-folder sibling KEPT it (still on f1).
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tags WHERE file_id='f1' AND parent_dir='/a' AND label='blue'"), 1)
+        }
+    }
+
     func testSplitCarriesManualCollectionMembership() throws {
         let q = try freshQueue()
         try q.write { db in

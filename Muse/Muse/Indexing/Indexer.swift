@@ -182,9 +182,30 @@ actor Indexer {
                                            created: createdAt, modified: modifiedAt, now: now)
                     try newFile.insert(db)
                     let dir = TagScope.parentDir(ofPath: absPath)
-                    try db.execute(sql:
-                        "UPDATE tags SET file_id = ? WHERE file_id = ? AND parent_dir = ?",
-                        arguments: [newFile.id, file.id, dir])
+                    // Tags are keyed (file_id, parent_dir). If the original row KEEPS
+                    // another alive path in THIS SAME folder (a byte-identical
+                    // same-folder copy), its (file_id, dir) tag rows are shared with
+                    // that still-present sibling — COPY them to the new identity so
+                    // neither copy loses them. Otherwise the original no longer
+                    // surfaces this folder's tags (its remaining paths are in other
+                    // folders), so MOVE them, which also avoids orphan rows.
+                    let keepsSiblingInDir = try PathRow
+                        .filter(PathRow.Columns.file_id == file.id)
+                        .filter(PathRow.Columns.is_alive == 1)
+                        .filter(PathRow.Columns.absolute_path != absPath)
+                        .fetchAll(db)
+                        .contains { TagScope.parentDir(ofPath: $0.absolute_path) == dir }
+                    if keepsSiblingInDir {
+                        try db.execute(sql: """
+                            INSERT OR IGNORE INTO tags (id, file_id, parent_dir, label, source, confidence, model_version)
+                            SELECT lower(hex(randomblob(16))), ?, parent_dir, label, source, confidence, model_version
+                            FROM tags WHERE file_id = ? AND parent_dir = ?
+                            """, arguments: [newFile.id, file.id, dir])
+                    } else {
+                        try db.execute(sql:
+                            "UPDATE tags SET file_id = ? WHERE file_id = ? AND parent_dir = ?",
+                            arguments: [newFile.id, file.id, dir])
+                    }
                     // Manual collection membership is content-identity (file_id)
                     // keyed and is precious user data — carry it to the edited
                     // copy's new identity so an edit doesn't silently eject the
