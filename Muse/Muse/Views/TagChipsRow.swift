@@ -189,17 +189,17 @@ struct TagChipsRow: View {
         } message: {
             Text("Removes “\(appState.tagDeleteRequest ?? "")” from the images in this view. Other folders keep their tags. Your images stay on disk.")
         }
-        .alert("Delete all tags in this folder?", isPresented: $appState.deleteAllTagsRequest) {
+        .alert("Delete all tags in this view?", isPresented: $appState.deleteAllTagsRequest) {
             Button("Delete All", role: .destructive) { commitDeleteAllTags() }
             Button("Cancel", role: .cancel) { appState.deleteAllTagsRequest = false }
         } message: {
-            Text("This removes every tag on the images in this folder — both automatic tags and ones you've added yourself. Tags you added by hand can't be recovered. Your images stay on disk.")
+            Text("This removes every tag on the images in this view — both automatic tags and ones you've added yourself. Tags you added by hand can't be recovered. Your images stay on disk.")
         }
-        .alert("Regenerate tags for this folder?", isPresented: $appState.regenerateTagsRequest) {
+        .alert("Regenerate tags in this view?", isPresented: $appState.regenerateTagsRequest) {
             Button("Regenerate") { commitRegenerateTags() }
             Button("Cancel", role: .cancel) { appState.regenerateTagsRequest = false }
         } message: {
-            Text("Looks for images in this folder that have no tags and generates tags for them in the background. Images that already have tags are left alone. Only automatic tags are created — tags you added by hand aren't restored.")
+            Text("Looks for images in this view that have no tags and generates tags for them in the background. Images that already have tags are left alone. Only automatic tags are created — tags you added by hand aren't restored.")
         }
     }
 
@@ -230,7 +230,12 @@ struct TagChipsRow: View {
 
     private func commitDeleteAllTags() {
         appState.deleteAllTagsRequest = false
-        let urls = appState.currentFiles.map { $0.url }
+        // Scope to the visible set — the current folder, or the active
+        // collection's members when viewing a collection — matching the
+        // single-tag delete (commitDelete) and the chips themselves. Using raw
+        // `currentFiles` would wrongly hit the underlying folder while a
+        // collection is on screen.
+        let urls = appState.tagSourceFiles.map { $0.url }
         Task { @MainActor in
             await TagStore.shared.deleteAllTags(forURLs: urls)
             appState.setActiveTag(nil)
@@ -240,7 +245,9 @@ struct TagChipsRow: View {
 
     private func commitRegenerateTags() {
         appState.regenerateTagsRequest = false
-        let urls = appState.currentFiles.map { $0.url }
+        // Same scoping as commitDeleteAllTags: the visible set (folder or active
+        // collection), not the underlying folder.
+        let urls = appState.tagSourceFiles.map { $0.url }
         Task { @MainActor in
             await AnalyzePipeline.shared.regenerateTagless(in: urls)
             appState.tagsVersion += 1

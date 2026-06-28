@@ -347,6 +347,14 @@ struct ContentView: View {
         } message: {
             Text(appState.folderOpError ?? "")
         }
+        .alert("Backup", isPresented: Binding(
+            get: { appState.backupError != nil },
+            set: { if !$0 { appState.backupError = nil } }
+        )) {
+            Button("OK", role: .cancel) { appState.backupError = nil }
+        } message: {
+            Text(appState.backupError ?? "")
+        }
         .modifier(NameCollectionAlert())
         .modifier(CollectionRenameAlert())
         // Preload the tag-label list for the selection menu, and keep it fresh

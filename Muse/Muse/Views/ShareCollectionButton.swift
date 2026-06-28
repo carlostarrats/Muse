@@ -25,7 +25,7 @@ struct ShareCollectionButton: View {
     @State private var hovering = false
     @State private var preparing = false
     @State private var showingDriveShare = false
-    @State private var saveFailed = false
+    @State private var exportFailed = false
 
     /// The collection's CURRENTLY VISIBLE members, in grid order — the on-screen
     /// set, so an active tag/facet filter narrows the export (images and file
@@ -68,10 +68,10 @@ struct ShareCollectionButton: View {
                 showingDriveShare = false
             }
         }
-        .alert("Couldn't Save the PDF", isPresented: $saveFailed) {
+        .alert("Couldn’t Export the PDF", isPresented: $exportFailed) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("The PDF couldn't be written. Check that the location is writable and has enough free space.")
+            Text("The PDF couldn’t be prepared — some images may be unreadable — or the location couldn’t be written. Check the images and that the location is writable with enough free space.")
         }
     }
 
@@ -108,14 +108,14 @@ struct ShareCollectionButton: View {
         // silent no-op otherwise — the panel closes looking like success. Surface
         // it: a save the user just triggered warrants a confirming alert (the
         // macOS norm), not a transient toast.
-        guard let pdf = await makePDF(pageSize: paper.size) else { saveFailed = true; return }
+        guard let pdf = await makePDF(pageSize: paper.size) else { exportFailed = true; return }
         do {
             // Atomic overwrite — no pre-delete window that could destroy an
             // existing file if the write fails.
             let data = try Data(contentsOf: pdf)
             try data.write(to: dest, options: .atomic)
         } catch {
-            saveFailed = true
+            exportFailed = true
         }
     }
 
@@ -123,7 +123,9 @@ struct ShareCollectionButton: View {
         preparing = true
         defer { preparing = false }
         // Share keeps the default 11×14; only Save to… offers a size choice.
-        guard let pdf = await makePDF(pageSize: PaperSize.default.size) else { return }
+        // A nil PDF (all images undecodable) is otherwise a silent no-op — the
+        // menu closes and no share sheet appears. Surface it like Save does.
+        guard let pdf = await makePDF(pageSize: PaperSize.default.size) else { exportFailed = true; return }
         guard let contentView = NSApp.keyWindow?.contentView else { return }
         let picker = NSSharingServicePicker(items: [pdf])
         picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)

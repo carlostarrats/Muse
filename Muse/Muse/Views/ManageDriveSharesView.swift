@@ -17,6 +17,7 @@ struct ManageDriveSharesView: View {
     @State private var records: [DriveShareRecord] = []
     @State private var deleting: Set<String> = []
     @State private var didPrune = false
+    @State private var unpublishFailed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -45,6 +46,11 @@ struct ManageDriveSharesView: View {
         }
         .padding(28)
         .frame(width: 520, height: 380)
+        .alert("Couldn’t Unpublish", isPresented: $unpublishFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("The Drive folder couldn’t be deleted — you may be offline or signed out. The share is still live; try again, or remove it from Google Drive directly.")
+        }
         .onAppear {
             records = store.all()      // show what we have immediately…
             guard didPrune == false else { return }
@@ -103,7 +109,12 @@ struct ManageDriveSharesView: View {
         // is public (anyone-reader) and a forgotten record can never be retried
         // or swept, leaving an orphaned live link.
         do { try await client.deleteFolder(id: record.folderID) }
-        catch { return }
+        catch {
+            // Keep the record (the public folder may still be live), but tell the
+            // user — a silent return looks like the trash button did nothing.
+            unpublishFailed = true
+            return
+        }
         store.remove(id: record.id)
         records = store.all()
     }
