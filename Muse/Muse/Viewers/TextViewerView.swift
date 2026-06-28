@@ -14,6 +14,12 @@ struct TextViewerView: NSViewRepresentable {
     let isCode: Bool
     let isRTF: Bool
 
+    final class Coordinator {
+        var loadedURL: URL?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
@@ -46,12 +52,20 @@ struct TextViewerView: NSViewRepresentable {
 
         scrollView.documentView = textView
         load(into: textView)
+        context.coordinator.loadedURL = url
         return scrollView
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? NSTextView else { return }
+        // Only re-read when the URL actually changes. SwiftUI calls updateNSView
+        // on every parent re-render (mood-background change, window resize, …);
+        // an unconditional reload re-reads the whole file from disk and resets
+        // scroll position + text selection to the top each time. Mirrors the
+        // documentURL guard in PDFViewerView.
+        guard context.coordinator.loadedURL != url else { return }
         load(into: textView)
+        context.coordinator.loadedURL = url
     }
 
     private func load(into textView: NSTextView) {

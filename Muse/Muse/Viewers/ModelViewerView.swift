@@ -14,11 +14,36 @@ import AppKit
 struct ModelViewerView: View {
     let url: URL
 
+    private enum LoadState {
+        case loading
+        case loaded(SCNScene)
+        case failed
+    }
+    @State private var state: LoadState = .loading
+
     var body: some View {
-        if let scene = try? SCNScene(url: url, options: nil) {
-            SceneViewWrapper(scene: scene)
-        } else {
-            QuickLookFallback(url: url)
+        // Parse the scene ONCE, off the main thread, keyed by url — never in
+        // `body`. The old `try? SCNScene(url:)` in body re-parsed the whole model
+        // (heavy I/O + geometry) on every re-render and handed SceneViewWrapper a
+        // fresh scene each time, resetting the camera on unrelated UI changes.
+        Group {
+            switch state {
+            case .loading:
+                ProgressView().controlSize(.small)
+            case .loaded(let scene):
+                SceneViewWrapper(scene: scene)
+            case .failed:
+                QuickLookFallback(url: url)
+            }
+        }
+        .task(id: url) {
+            state = .loading
+            let target = url
+            let scene = await Task.detached(priority: .userInitiated) {
+                try? SCNScene(url: target, options: nil)
+            }.value
+            guard !Task.isCancelled else { return }
+            state = scene.map(LoadState.loaded) ?? .failed
         }
     }
 }

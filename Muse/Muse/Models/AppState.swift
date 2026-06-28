@@ -460,6 +460,12 @@ final class AppState: ObservableObject {
             guard let self else { return }
             self.currentFiles.removeAll { $0.url == url }
             if self.selectedFile?.url == url { self.selectedFile = nil }
+            // Also drop the trashed file from the multi-selection Set (it's
+            // independent of currentFiles); leaving it there lets a later bulk
+            // action rebuild a URL for a path that no longer exists.
+            let deletedPath = url.standardizedFileURL.path
+            self.selectedFiles.remove(deletedPath)
+            if self.selectionAnchor == deletedPath { self.selectionAnchor = nil }
             // The in-view file set shrank — refresh the chip counts (a tag that
             // only lived on the deleted file should drop out).
             self.reloadTagChips()
@@ -675,6 +681,10 @@ final class AppState: ObservableObject {
             selectedFolder = nil
             currentFiles = []
             selectedFile = nil
+            // The grid just emptied — drop any selection from the removed root so
+            // a still-reachable action (e.g. "New Collection from Selection…")
+            // can't operate on files in the folder the user just removed.
+            clearSelection()
             reloadTagChips()
         }
         rebuildRootNodes()
@@ -700,7 +710,15 @@ final class AppState: ObservableObject {
         // view vanishes in one frame; then the folder fades in (tag row first,
         // images already in place below it).
         if showingCollections { showingCollections = false }
-        if activeCollectionID != nil { setActiveCollection(nil, animated: false) }
+        // Always tear down (unconditionally, NOT `if activeCollectionID != nil`):
+        // setActiveCollection commits activeCollectionID only AFTER an await, so
+        // while a collection is still loading activeCollectionID is still nil and
+        // a conditional teardown would skip — leaving the token un-bumped, so the
+        // in-flight load's `token == collectionRequestToken` guard passes and it
+        // commits the collection filter on top of the just-selected folder. The
+        // unconditional call bumps the token (invalidating any in-flight load) and
+        // no-ops its publishes when nothing is active.
+        setActiveCollection(nil, animated: false)
         if !activeTagLabels.isEmpty { setActiveTag(nil) }
         // Clear the search inline (not via clearSearch(), which would trigger a
         // second, skeleton-less reload on top of the one below). A stale search
@@ -982,6 +1000,15 @@ final class AppState: ObservableObject {
 
     func toggleSubfolders() {
         showSubfolders.toggle()
+        // Toggling subfolders OFF narrows visibleFiles to the top level, dropping
+        // every subfolder file — but the selection Set is independent of
+        // visibleFiles and effectiveSelectionURLs rebuilds URLs for off-view
+        // paths, so a co-selected subfolder file would otherwise ride into a
+        // destructive/move flow. Clear the selection, like every other narrowing
+        // scope change (folder-select, search, collection-scope). reloadCurrentFiles
+        // publishes asynchronously, so prune-to-visible can't run here — clear is
+        // the correct match.
+        clearSelection()
         reloadCurrentFiles()
     }
 

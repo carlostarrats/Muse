@@ -19,6 +19,12 @@ export const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 export function validateManifest(m) {
   if (!m || typeof m !== 'object') return false;
   if (!Array.isArray(m.g) || m.g.length === 0) return false;
+  // Cap the grid: the manifest rides an unsigned URL fragment, so anyone handing
+  // a victim a link controls m.g. Without a bound, a crafted fragment with tens
+  // of thousands of valid-looking IDs would make the page build that many <img>
+  // elements and fire that many Drive requests, hanging the recipient's browser.
+  // A real Muse share is far smaller than this.
+  if (m.g.length > 1000) return false;
   if (!m.g.every(id => VALID_ID.test(id))) return false;
   if (m.p != null && !VALID_ID.test(m.p)) return false;
   // Require a strict date-only `e` (YYYY-MM-DD). isExpired/formatDate append a

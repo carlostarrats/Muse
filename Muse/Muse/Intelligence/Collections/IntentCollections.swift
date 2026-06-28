@@ -13,8 +13,15 @@ enum IntentCollections {
         members: [(fileID: String, bucket: String)],
         threshold: Int = threshold
     ) -> [String: [String]] {
-        var byBucket: [String: [String]] = [:]
-        for m in members { byBucket[m.bucket, default: []].append(m.fileID) }
-        return byBucket.filter { $0.value.count >= threshold }
+        // Dedupe fileIDs per bucket: the same content can exist under several
+        // alive paths (copied into multiple folders), and the upstream query
+        // JOINs paths, so a single screenshot can appear N times. Counting
+        // entries would let one distinct image cross the threshold N-fold.
+        // The gate must count DISTINCT files.
+        var byBucket: [String: Set<String>] = [:]
+        for m in members { byBucket[m.bucket, default: []].insert(m.fileID) }
+        return byBucket
+            .filter { $0.value.count >= threshold }
+            .mapValues { Array($0) }
     }
 }

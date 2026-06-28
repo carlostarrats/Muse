@@ -93,8 +93,10 @@ actor Indexer {
     /// Returns `true` when an already-known alive path now hashes to different
     /// content (a genuine in-place edit) — so the caller can drop stale
     /// thumbnails and re-run analysis. New files / new paths return `false`.
+    // internal (not private) so MuseTests can exercise the identity-reconcile
+    // edge cases (e.g. the shared-row split on edit-in-place).
     @discardableResult
-    private static func reconcile(
+    static func reconcile(
         db: GRDB.Database,
         absPath: String,
         hash: String,
@@ -156,17 +158,48 @@ actor Indexer {
                 refreshed.last_seen_at = now
                 try refreshed.update(db)
             } else {
-                // Pure edit-in-place: update hash on the existing file row.
-                // Reset analyzed_hash so the analyze pass re-runs Vision — a
-                // crop/edit can change colors, dimensions, and OCR'd text, so
-                // the old tags/palette must not stick. (analyzed_hash != the
-                // new content_hash also makes analyzePending pick it up.)
-                file.content_hash = hash
-                file.size_bytes = sizeBytes
-                file.modified_at = modifiedAt
-                file.last_seen_at = now
-                file.analyzed_hash = nil
-                try file.update(db)
+                // The new content is genuinely new (no existing row has this
+                // hash). But this files row may be SHARED by more than one alive
+                // path: two byte-identical files in different folders dedupe onto
+                // a single content_hash row (the "brand-new path pointing at known
+                // content" branch below). Editing ONE copy must not rewrite the
+                // shared row — that welds the new hash/size/dims onto the untouched
+                // sibling and marks it unanalyzed, and on the sibling's next index
+                // pass its real (old) bytes hash differently again, flipping the
+                // row's content_hash back: the two copies then ping-pong the shared
+                // row and re-hash/re-Vision forever.
+                let aliveCount = try PathRow
+                    .filter(PathRow.Columns.file_id == file.id)
+                    .filter(PathRow.Columns.is_alive == 1)
+                    .fetchCount(db)
+                if aliveCount > 1 {
+                    // SPLIT: move only this edited path onto a fresh row for the new
+                    // content, carrying its location's tags (manual tags are
+                    // precious; vision tags regenerate since analyzed_hash is nil).
+                    // The original row, its other paths, and their tags are left
+                    // intact for the unedited sibling(s).
+                    var newFile = makeFile(hash: hash, kind: kind, size: sizeBytes,
+                                           created: createdAt, modified: modifiedAt, now: now)
+                    try newFile.insert(db)
+                    let dir = TagScope.parentDir(ofPath: absPath)
+                    try db.execute(sql:
+                        "UPDATE tags SET file_id = ? WHERE file_id = ? AND parent_dir = ?",
+                        arguments: [newFile.id, file.id, dir])
+                    path.file_id = newFile.id
+                    try path.update(db)
+                } else {
+                    // Pure edit-in-place: update hash on the existing file row.
+                    // Reset analyzed_hash so the analyze pass re-runs Vision — a
+                    // crop/edit can change colors, dimensions, and OCR'd text, so
+                    // the old tags/palette must not stick. (analyzed_hash != the
+                    // new content_hash also makes analyzePending pick it up.)
+                    file.content_hash = hash
+                    file.size_bytes = sizeBytes
+                    file.modified_at = modifiedAt
+                    file.last_seen_at = now
+                    file.analyzed_hash = nil
+                    try file.update(db)
+                }
             }
             return true
         }

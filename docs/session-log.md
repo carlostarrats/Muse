@@ -4639,3 +4639,75 @@ fits its context (not a uniform toast):
 
 All four new user-facing strings localized (fr). `BUILD SUCCEEDED`; `MuseTests` 442 / `MuseUITests` 6,
 0 failures.
+
+### Whole-codebase review pass — 2026-06-27 (on `feat/next-81`)
+
+A thorough, full-codebase review (not a diff) fanned out across every subsystem
+to find latent bugs the test suite didn't cover. Fixed 14, added 6 regression
+tests (5 Swift + 1 JS). `BUILD SUCCEEDED`; `MuseTests` 453 / 0 failures; `share.js`
+JS tests green.
+
+**Data-integrity (the load-bearing ones):**
+
+- **Indexer shared-row split on edit-in-place.** Two byte-identical files in two
+  folders dedupe onto ONE `files` row (content_hash is UNIQUE). Editing one copy
+  hit the "pure edit-in-place" branch and rewrote the *shared* row's hash/size/dims
+  + reset `analyzed_hash` — corrupting the untouched sibling and triggering a hash
+  **ping-pong** (each folder's next index pass flipped `content_hash` back, re-hashing
+  + re-Visioning forever — the exact "welded metadata" class the iCloud path already
+  guards). Fix (`Indexer.reconcile`): when the row has >1 alive path, SPLIT — move only
+  the edited path onto a fresh row for the new content, carry its location's tags
+  (`UPDATE tags … WHERE file_id=old AND parent_dir=editedDir`), leave the original row +
+  other paths/tags intact. `reconcile` made `internal` for testing; 2 new tests
+  (`IndexerReconcileTests`).
+- **Folder-rename tags UNIQUE collision → whole-transaction rollback.**
+  `FolderRenameMigration.apply` pre-cleared stale destination rows for `paths` +
+  `starred_folders` but NOT `tags` (which has `UNIQUE(file_id, parent_dir, label)`).
+  A previously-deleted folder occupying the new name leaves durable tag rows there
+  (PathReconciler only marks *paths* dead), so the tags rewrite could collide and roll
+  back the entire rename — disk renamed, DB reverted (ghost paths + lost tags). Added the
+  same BINARY-safe destination pre-clear for `tags`. New SQL test.
+- **CollectionsEngine recluster could hard-delete live/hidden collections.** Two bugs:
+  (1) the emergent embeddings/membership reads were `try?`-swallowed, so a transient read
+  failure made present clusters look absent and the stale-deletion loop wiped unprotected
+  auto-collections (incl. renamed ones) — now read inside one `do/catch` that bails the pass
+  on any failure. (2) The stale loop didn't exclude `is_hidden` rows, so a "deleted" collection
+  whose membership drifted lost its durable tombstone and could re-form un-hidden — now skipped.
+- **Intent-collection threshold inflated by duplicate alive paths.** The intent query
+  JOINed `paths` with no `DISTINCT`, so one screenshot copied into N folders counted N times
+  and a single image could surface a full intent collection. Added `DISTINCT` + a defensive
+  per-bucket dedupe in `IntentCollections.qualifyingBuckets` (now counts distinct files).
+  2 new tests.
+
+**Selection / visibleFiles desync (the "narrowing input must clear selection" rule had gaps):**
+
+- `toggleSubfolders` (subfolders OFF drops subfolder files), `removeRoot` (grid empties), and
+  the burn-delete `onRemove` (trashed file stays in the multi-selection `Set`) all left stale
+  paths in `selectedFiles` that `effectiveSelectionURLs` would rebuild into a destructive/move
+  flow. All three now clear/prune in lockstep with every other narrowing input.
+- **Folder-nav-during-collection-load race.** `setActiveCollection` commits `activeCollectionID`
+  only after an `await`, so a folder click while a collection was loading skipped the conditional
+  teardown, left the request token un-bumped, and the in-flight load committed the collection
+  filter on top of the new folder. `select(folder:)` now tears down unconditionally (bumps the token).
+
+**Viewers / UX:**
+
+- `TextViewerView` re-read the whole file + reset scroll/selection on every parent re-render
+  (mood change, resize) — now URL-guarded via a Coordinator, like `PDFViewerView`.
+- `ModelViewerView` parsed `SCNScene` synchronously in `body` on every render (main-thread jank +
+  camera reset) — now parsed once off-main into `@State`, keyed by url.
+- `AudioPlayerView` didn't pause the outgoing player before swapping URLs (brief overlap) — now
+  pauses first, matching `VideoPlayerView`.
+
+**Drive share security/robustness:**
+
+- OAuth `refresh()` dropped a still-valid refresh token (full sign-out) on ANY failure incl. a
+  network blip/5xx. Now `postForm` distinguishes a definitive `invalid_grant` (clear + re-auth)
+  from transient failures (propagate, keep the token).
+- Share page `validateManifest` capped the grid at 1000 IDs — the unsigned URL-fragment manifest is
+  attacker-supplyable, so an oversized `g` would flood the recipient's browser. JS test added.
+
+Consciously deferred (low-severity / by-design tradeoffs, not bugs): Indexer actor hash-serialization
+(perf), dedup log-bin boundary recall, `analyze(folder:)` per-URL DB round-trips (perf), LIKE-wildcard
+tag recall, PDF-export up-front decode memory for very large collections, `StarStore` stale-bookmark
+refresh, case-only-rename error-code precision.

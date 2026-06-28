@@ -97,6 +97,9 @@ private struct AVKitPlayer: NSViewRepresentable {
 
     func updateNSView(_ nsView: AVPlayerView, context: Context) {
         if (nsView.player?.currentItem?.asset as? AVURLAsset)?.url != url {
+            // Pause the outgoing player before replacing it; otherwise it keeps
+            // playing until it deallocs, briefly overlapping the new track.
+            nsView.player?.pause()
             nsView.player = AVPlayer(url: url)
         }
     }
