@@ -23,8 +23,11 @@ struct MuseApp: App {
 
     /// Pin / Unpin label reflects the selected folder's current state.
     private var pinMenuTitle: String {
-        guard let folder = appState.selectedFolder else { return "Pin Folder" }
-        return appState.stars.isStarred(folder.url) ? "Unpin Folder" : "Pin Folder"
+        // String-typed property, so these literals aren't in an extractable
+        // SwiftUI position — hand-wrap each or they ship in English.
+        guard let folder = appState.selectedFolder else { return String(localized: "Pin Folder") }
+        return appState.stars.isStarred(folder.url)
+            ? String(localized: "Unpin Folder") : String(localized: "Pin Folder")
     }
 
     /// The added root matching the current selection, if it is a root —

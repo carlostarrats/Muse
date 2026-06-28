@@ -2640,6 +2640,16 @@
         }
       }
     },
+    "Pin Folder": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Épingler le dossier"
+          }
+        }
+      }
+    },
     "Places": {
       "localizations": {
         "fr": {
@@ -3700,6 +3710,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Désépingler"
+          }
+        }
+      }
+    },
+    "Unpin Folder": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Désépingler le dossier"
           }
         }
       }

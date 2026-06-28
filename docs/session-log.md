@@ -4589,3 +4589,33 @@ across the highest-risk surfaces.
   rule. CLAUDE.md durable-constraints note updated to list search among the compliant paths.
 
 `BUILD SUCCEEDED`; `MuseTests` 436 / `MuseUITests` 6, 0 failures (re-run after the fix).
+
+**Round 2 — QA / error-path / logic pass.** Three more parallel audits (error-paths & failure
+modes, pure-logic correctness + test-coverage, rename edge cases + i18n). Three fixes:
+
+- **`pinMenuTitle` shipped in English (localization regression).** Edit-menu Pin/Unpin label is a
+  `String`-typed computed property in `MuseApp.swift`, so its `"Pin Folder"`/`"Unpin Folder"`
+  literals aren't in an extractable SwiftUI position — they shipped untranslated (catalog had bare
+  `"Pin"`/`"Unpin"` but not the `…Folder` variants). Wrapped each in `String(localized:)` and added
+  the two French keys (`Épingler/Désépingler le dossier`). The classic "literal returned from a
+  `String` property doesn't extract" trap.
+- **Tampered-backup crash hardened.** `ReconnectModel` built `Dictionary(uniqueKeysWithValues:)`
+  over archive occurrences — traps on a duplicate `original_path`. A legit `.muselibrary` has unique
+  paths, but a corrupt/hand-edited one passes decode then hard-crashed Restore→Locate (inconsistent
+  with the rest of the restore path, which fails gracefully). Switched to
+  `uniquingKeysWith: { first, _ in first }`.
+- **Masonry packing now tested.** The variable-aspect shortest-column pack (the function's whole
+  purpose) had zero tests — only uniform-aspect cases were covered. Added 4: shortest-column
+  placement, empty input, non-positive width, and the columns≤0 clamp.
+
+The logic audit found **no real bugs** in the load-bearing pure algorithms (`DuplicateDeleteRules`
+never-empty-a-group incl. overlapping groups, selection/page-scroll/reorder/escape math, smart sort,
+color/palette all verified correct). The rename-edge-case audit confirmed the reworked flow is sound
+(empty/whitespace no-ops, active-collection header refreshes via the engine `@ObservedObject`,
+auto-namer never clobbers a manual rename, same-id reseed matches folder rename). Surfaced but NOT
+fixed here (pre-existing, rare-trigger, need a UX decision on error surface / undo parity, so left
+for a deliberate scoped change): swallowed-write silent failures in the Drive share-record save
+(orphaned-link risk), PDF "Save to…" (reports success on a failed write), and the duplicates-modal
+delete (no failure surface, no undo).
+
+`BUILD SUCCEEDED`; `MuseTests` 440 / `MuseUITests` 6, 0 failures.
