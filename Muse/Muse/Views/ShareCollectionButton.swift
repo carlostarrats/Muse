@@ -25,6 +25,7 @@ struct ShareCollectionButton: View {
     @State private var hovering = false
     @State private var preparing = false
     @State private var showingDriveShare = false
+    @State private var saveFailed = false
 
     /// The collection's CURRENTLY VISIBLE members, in grid order — the on-screen
     /// set, so an active tag/facet filter narrows the export (images and file
@@ -67,6 +68,11 @@ struct ShareCollectionButton: View {
                 showingDriveShare = false
             }
         }
+        .alert("Couldn't Save the PDF", isPresented: $saveFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("The PDF couldn't be written. Check that the location is writable and has enough free space.")
+        }
     }
 
     private func makePDF(pageSize: CGSize) async -> URL? {
@@ -98,11 +104,18 @@ struct ShareCollectionButton: View {
 
         preparing = true
         defer { preparing = false }
-        guard let pdf = await makePDF(pageSize: paper.size) else { return }
-        // Atomic overwrite — no pre-delete window that could destroy an
-        // existing file if the write fails.
-        if let data = try? Data(contentsOf: pdf) {
-            try? data.write(to: dest, options: .atomic)
+        // A nil PDF (every image undecodable/vanished) or a failed write is a
+        // silent no-op otherwise — the panel closes looking like success. Surface
+        // it: a save the user just triggered warrants a confirming alert (the
+        // macOS norm), not a transient toast.
+        guard let pdf = await makePDF(pageSize: paper.size) else { saveFailed = true; return }
+        do {
+            // Atomic overwrite — no pre-delete window that could destroy an
+            // existing file if the write fails.
+            let data = try Data(contentsOf: pdf)
+            try data.write(to: dest, options: .atomic)
+        } catch {
+            saveFailed = true
         }
     }
 

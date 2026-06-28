@@ -213,16 +213,23 @@ struct DuplicatesView: View {
 
     private func deleteSelected() {
         let urls = Array(selected)
-        Task.detached(priority: .userInitiated) {
-            for url in urls {
-                NSWorkspace.shared.recycle([url], completionHandler: nil)
-            }
-        }
         selected.removeAll()
         // The shown groups still reference the now-trashed files and don't
         // re-derive here, so leaving the modal open looks like nothing
         // happened. Close it — the files are on their way to the Trash.
         isPresented = false
+        // Recycle the whole batch; the completion's dictionary maps each
+        // SUCCESSFULLY-trashed original → its Trash URL, so anything missing
+        // failed. Surface failures over the grid (matching DeleteCoordinator's
+        // "Couldn't move to Trash" toast) instead of dropping them silently.
+        NSWorkspace.shared.recycle(urls) { trashed, _ in
+            let failed = urls.count - trashed.count
+            guard failed > 0 else { return }
+            Task { @MainActor in
+                appState.deletion.toast = ToastData(
+                    message: String(localized: "Some files couldn't be moved to the Trash."))
+            }
+        }
     }
 }
 

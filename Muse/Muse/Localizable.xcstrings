@@ -4316,6 +4316,46 @@
           }
         }
       }
+    },
+    "Couldn't Save the PDF": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible d’enregistrer le PDF"
+          }
+        }
+      }
+    },
+    "The PDF couldn't be written. Check that the location is writable and has enough free space.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le PDF n’a pas pu être écrit. Vérifiez que l’emplacement est accessible en écriture et dispose de suffisamment d’espace libre."
+          }
+        }
+      }
+    },
+    "Muse couldn't add this to your share list — copy the link now, or you won't be able to manage or unpublish it from Muse later.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muse n’a pas pu ajouter ce partage à votre liste — copiez le lien maintenant, sinon vous ne pourrez plus le gérer ni le dépublier depuis Muse."
+          }
+        }
+      }
+    },
+    "Some files couldn't be moved to the Trash.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Certains fichiers n’ont pas pu être placés dans la corbeille."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

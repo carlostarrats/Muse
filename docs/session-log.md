@@ -4618,4 +4618,24 @@ for a deliberate scoped change): swallowed-write silent failures in the Drive sh
 (orphaned-link risk), PDF "Save to…" (reports success on a failed write), and the duplicates-modal
 delete (no failure surface, no undo).
 
-`BUILD SUCCEEDED`; `MuseTests` 440 / `MuseUITests` 6, 0 failures.
+**Round 3 — wired up the three swallowed-write error surfaces.** Each got the existing pattern that
+fits its context (not a uniform toast):
+
+- **Drive share-record save → inline, persistent warning.** `DriveShareStore.save`/`add` now return
+  whether the write persisted; `DriveShareService` adds a `.doneUntracked(pageURL)` phase used when
+  the (live, public) share couldn't be recorded locally. `DriveShareForm.doneView(_, tracked:)`
+  shows an orange "couldn't add this to your share list — copy the link now, or you won't be able to
+  manage/unpublish it later" line and keeps the link on screen. A toast was wrong here: the link is
+  the only handle the user gets, so it must NOT vanish. (2 unit tests on the new `add` return value.)
+- **PDF "Save to…" → modal alert.** `ShareCollectionButton.save()` replaced its `try?`-swallowed
+  read+write with a `do/catch` (and treats a nil PDF as failure too), surfacing a "Couldn't Save the
+  PDF" alert. A discrete save the user just triggered warrants a confirming alert (the macOS norm),
+  not a transient toast.
+- **Duplicates-modal delete → grid toast.** `DuplicatesView.deleteSelected` recycles the whole batch
+  in one `recycle(_:completionHandler:)` call and, when the returned trashed-map is short, posts a
+  "Some files couldn't be moved to the Trash." toast via `appState.deletion.toast` — matching
+  `DeleteCoordinator`'s existing failure toast. (Batch-undo parity was left out of scope — even a
+  successful multi-delete has no undo today, a documented v1 limitation.)
+
+All four new user-facing strings localized (fr). `BUILD SUCCEEDED`; `MuseTests` 442 / `MuseUITests` 6,
+0 failures.
