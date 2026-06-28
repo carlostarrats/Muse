@@ -3122,16 +3122,6 @@
         }
       }
     },
-    "Save name": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enregistrer le nom"
-          }
-        }
-      }
-    },
     "Save to…": {
       "localizations": {
         "fr": {
@@ -3599,16 +3589,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "La collection est supprimée partout. Vos images restent sur le disque."
-          }
-        }
-      }
-    },
-    "The collection is removed. Your images stay on disk.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La collection est supprimée. Vos images restent sur le disque."
           }
         }
       }

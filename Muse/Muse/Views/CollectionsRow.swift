@@ -29,57 +29,31 @@ struct CollectionsRow: View {
     }
 }
 
-/// In-collection header: back arrow, rename-in-place title (commits on
-/// return or focus loss, persisted globally via CollectionStore.rename),
-/// member count, and delete with a confirmation alert.
+/// In-collection header: back arrow, title (tap or the "Edit" pill opens the
+/// shared rename modal — same dialog as the sidebar + menu-bar, mirroring
+/// folder rename), member count, and delete with a confirmation alert.
 private struct ActiveCollectionHeader: View {
     @EnvironmentObject var appState: AppState
     let loaded: CollectionStore.Loaded
 
-    @State private var editing = false
-    @State private var name = ""
     @State private var confirmDelete = false
-    @FocusState private var nameFocused: Bool
 
     var body: some View {
         HStack(spacing: 18) {
             BackArrowButton { appState.setActiveCollection(nil) }
-            if editing {
-                TextField("Collection name", text: $name)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 42, weight: .semibold))
-                    .focused($nameFocused)
-                    .onSubmit { commitRename() }
-                    .onExitCommand { cancelEdit() }
-                    .fixedSize()
-                    .onAppear { nameFocused = true }
-                HStack(spacing: 8) {
-                    HeaderIconButton(systemName: "checkmark",
-                                     help: String(localized: "Save name")) { commitRename() }
-                    HeaderIconButton(systemName: "xmark",
-                                     help: String(localized: "Cancel")) { cancelEdit() }
-                }
-            } else {
-                Text(loaded.collection.name)
-                    .font(.system(size: 42, weight: .semibold))
-                    .onTapGesture { startEdit() }
-                Text("\(loaded.aliveCount)")
-                    .font(.system(size: 42, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                EditPill { startEdit() }
-            }
+            Text(loaded.collection.name)
+                .font(.system(size: 42, weight: .semibold))
+                .onTapGesture { requestRename() }
+            Text("\(loaded.aliveCount)")
+                .font(.system(size: 42, weight: .semibold))
+                .foregroundStyle(.secondary)
+            EditPill { requestRename() }
             Spacer()
             ShareCollectionButton(title: loaded.collection.name, count: loaded.aliveCount)
             TrashButton { confirmDelete = true }
         }
-        .onChange(of: loaded.collection.id) { _, _ in cancelEdit() }
-        // Menu-bar Collections commands route through these flags.
-        .onChange(of: appState.collectionRenameRequest) { _, requested in
-            if requested {
-                appState.collectionRenameRequest = false
-                startEdit()
-            }
-        }
+        // Menu-bar "Delete Collection…" routes through this flag. (Rename now
+        // opens the shared modal via collectionRenameAlertRequest, not inline.)
         .onChange(of: appState.collectionDeleteRequest) { _, requested in
             if requested {
                 appState.collectionDeleteRequest = false
@@ -94,27 +68,11 @@ private struct ActiveCollectionHeader: View {
         }
     }
 
-    private func startEdit() {
-        name = loaded.collection.name
-        editing = true
-    }
-
-    private func cancelEdit() {
-        editing = false
-        name = loaded.collection.name
-    }
-
-    private func commitRename() {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        editing = false
-        guard !trimmed.isEmpty, trimmed != loaded.collection.name else { return }
-        let id = loaded.collection.id
-        Task { @MainActor in
-            if let q = Database.shared.dbQueue {
-                try? await CollectionStore.rename(queue: q, id: id, name: trimmed)
-                await CollectionsEngine.shared.reload()
-            }
-        }
+    /// Open the shared rename modal seeded with this collection (the same
+    /// CollectionRenameAlertRequest the sidebar + menu-bar use).
+    private func requestRename() {
+        appState.collectionRenameAlertRequest = CollectionRenameAlertRequest(
+            id: loaded.collection.id, currentName: loaded.collection.name)
     }
 
     private func deleteCollection() {
@@ -133,7 +91,7 @@ private struct ActiveCollectionHeader: View {
     }
 }
 
-/// Small pill that reads "Edit"; triggers inline rename of the collection.
+/// Small pill that reads "Edit"; opens the collection rename modal.
 private struct EditPill: View {
     var action: () -> Void
     @State private var hovering = false
@@ -150,28 +108,6 @@ private struct EditPill: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help("Rename collection")
-    }
-}
-
-/// Mid-size circular icon button for the header's edit controls.
-private struct HeaderIconButton: View {
-    let systemName: String
-    let help: String
-    var action: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(hovering ? .primary : .secondary)
-                .frame(width: 26, height: 26)
-                .background(Circle().fill(.primary.opacity(hovering ? 0.16 : 0.08)))
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .help(help)
-        .accessibilityLabel(help)
     }
 }
 
@@ -295,7 +231,7 @@ struct CollectionCard: View {
             Button("Delete", role: .destructive) { deleteCollection() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("The collection is removed. Your images stay on disk.")
+            Text("The collection is removed everywhere. Your images stay on disk.")
         }
         .help(loaded.collection.name)
         // The card is a tap target (not a Button), so VoiceOver saw two loose

@@ -4502,15 +4502,54 @@ only for folders (`FolderNameAlerts`).
 - `CollectionSidebarRow` context menu **and** VoiceOver action now set the alert request
   (seeded with the current name) instead of navigating + flipping the inline bool.
 
-**Two paths coexist by design — don't unify them:** the *sidebar* right-click renames via
-this modal; the *in-page header* + the menu-bar **Rename Collection…** command (disabled
-unless `activeCollectionID != nil`) still rename **inline** via `collectionRenameRequest`.
-Merging them would break the menu-bar/header flow.
+**[Superseded by `feat/next-79`, below.]** This entry originally read "two paths coexist by
+design — don't unify them" (sidebar = modal; menu-bar **Rename Collection…** + in-page header
+= inline via `collectionRenameRequest`). next-79 unified **all** collection-rename entry points
+onto the one modal and removed the inline editor outright — `collectionRenameRequest` and the
+inline `TextField`/`startEdit`/`commitRename` are gone.
 
 **Visual parity follow-up.** First cut omitted the alert's `message:` line; against the
 folder dialog (which has one) the shorter sheet read as a "different animation" when
 flipping between them (owner-reported). Added a matching message — "Renames the collection.
 Its images are kept." — so both dialogs share the same shape. That's the lone new
 localization key (fr filled manually); the title/field/buttons reuse existing fr strings.
+
+`BUILD SUCCEEDED`; `MuseTests` 436 / `MuseUITests` 6, 0 failures.
+
+### Collection rename/delete consistency sweep — 2026-06-27 (`feat/next-79`)
+
+Follow-on to next-78. Bug hunt for the *same class* of defect it fixed — "same action,
+different behavior" divergences, plus the dialog per-keystroke lag class. Findings + fixes:
+
+1. **Collection rename still had two UIs.** next-78 routed the *sidebar* "Rename…" to the
+   modal but left the menu-bar **Collections → Rename Collection…** on the old inline path
+   (`collectionRenameRequest` → header `startEdit()`), so the same-named command behaved
+   differently and its `…` ellipsis (= "opens a dialog") lied. **Fix:** new
+   `AppState.requestRenameActiveCollection()` looks up the active collection's name from
+   `CollectionsEngine` and opens the shared `collectionRenameAlertRequest` modal — now every
+   "Rename Collection…" entry point (sidebar + menu-bar) matches folder rename. The
+   `collectionRenameRequest` bool + its dead `ActiveCollectionHeader.onChange` are deleted.
+2. **Sidebar delete alert title was generic** (`"Delete Collection"`) while the page header +
+   card name it. Reused the existing `Delete “%@”?` key.
+3. **Collections-page card delete message** was missing "everywhere" vs the other two
+   surfaces. Reused the existing "…removed everywhere…" key; removed the now-orphaned
+   "The collection is removed. Your images stay on disk." key from the catalog.
+
+No new localization keys (both reworded strings reuse already-translated fr keys). Also
+audited every `TextField` for the next-58 dialog-typing-lag pattern (binding a per-keystroke
+field to a `@Published` on `AppState`): all clean — every draft is local `@State`; the column
+slider is `@AppStorage`.
+
+**Follow-up — in-page rename also moved to the modal (owner-requested).** The first cut kept
+the in-collection-page header's title-tap / "Edit" pill as inline editing, scoping #1 to the
+menu-bar command. Demoing it, the owner expected "editing in a collection" to be the modal too
+— folders have **no** inline rename, so the inline title was the last inconsistency. Removed
+the inline editor from `ActiveCollectionHeader` (the `editing`/`name`/`nameFocused` state, the
+`TextField` branch, `startEdit`/`cancelEdit`/`commitRename`, and the now-unused `HeaderIconButton`);
+the title tap **and** the "Edit" pill now both call `requestRename()` → the shared
+`collectionRenameAlertRequest` modal. Rename is now the same dialog from **every** surface
+(sidebar, menu-bar, in-page), exactly like folders. VoiceOver path preserved: the "Edit" pill
+is a real `Button`. Removed the orphaned `"Save name"` catalog key. (The big editable title was
+the only inline editor in the app; nothing else relied on it.)
 
 `BUILD SUCCEEDED`; `MuseTests` 436 / `MuseUITests` 6, 0 failures.

@@ -284,7 +284,7 @@ struct MuseApp: App {
                 Divider()
 
                 Button("Rename Collection…") {
-                    appState.collectionRenameRequest = true
+                    appState.requestRenameActiveCollection()
                 }
                 .disabled(appState.activeCollectionID == nil)
 

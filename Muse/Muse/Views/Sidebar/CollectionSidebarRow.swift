@@ -146,7 +146,7 @@ struct CollectionSidebarRow: View {
                 }
             }
         }
-        .alert("Delete Collection", isPresented: $confirmDelete) {
+        .alert("Delete “\(loaded.collection.name)”?", isPresented: $confirmDelete) {
             Button("Delete", role: .destructive) {
                 let cid = id
                 Task { @MainActor in
