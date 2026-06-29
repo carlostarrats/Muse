@@ -76,6 +76,7 @@ if (typeof document !== 'undefined') {
       grid.appendChild(img);
     }
     setupBackdropSwitcher();
+    setupGridSizer();
   }
 }
 
@@ -92,4 +93,98 @@ function setupBackdropSwitcher() {
   try { saved = localStorage.getItem('museBg'); } catch { /* private mode */ }
   apply(['light', 'grey', 'dark'].includes(saved) ? saved : 'light');
   dots.forEach(d => d.addEventListener('click', () => apply(d.dataset.bg)));
+}
+
+// Grid sizer (screen-only): a custom shadcn-style slider that sets how many
+// columns the grid renders (2–6, default 4) by writing --cols on the grid, and
+// remembers the choice across visits. Custom (not <input range>) so click-to-jump
+// works in Safari; supports drag + arrow keys, and exposes ARIA slider state.
+function setupGridSizer() {
+  const slider = document.getElementById('cols');
+  const grid = document.getElementById('grid');
+  if (!slider || !grid) return;
+  const MIN = 1, MAX = 6;
+  const track = slider.querySelector('.slider-track');
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const clamp = (n) => Math.min(MAX, Math.max(MIN, Math.round(n)));
+  const pctFromX = (x) => {
+    const r = track.getBoundingClientRect();
+    return Math.min(1, Math.max(0, (x - r.left) / r.width));
+  };
+  const pctForCols = (c) => (c - MIN) / (MAX - MIN);
+
+  let saved = null;
+  try { saved = localStorage.getItem('museCols'); } catch { /* private mode */ }
+  let curCols = clamp(parseInt(saved, 10) || 4);
+
+  // Recolumn with a FLIP morph: capture each near-viewport tile's frame, apply
+  // the new column count, then animate the tiles from their old frame to the new
+  // one (grow/shrink + slide) via a transform transition. Bounded to the visible
+  // tiles, so the cost stays flat regardless of how many images the share holds;
+  // off-screen tiles just reflow. reduceMotion → instant.
+  const recolumn = (c) => {
+    const tiles = grid.children;
+    const vh = window.innerHeight;
+    const animated = [], first = [];
+    if (!reduceMotion) {
+      for (const t of tiles) {
+        const r = t.getBoundingClientRect();
+        if (r.bottom > -0.5 * vh && r.top < 1.5 * vh) { animated.push(t); first.push(r); }
+      }
+    }
+    grid.style.setProperty('--cols', String(c));
+    animated.forEach((t, i) => {
+      const f = first[i], l = t.getBoundingClientRect();
+      const s = l.width ? f.width / l.width : 1;
+      t.style.transition = 'none';
+      t.style.transformOrigin = 'top left';
+      t.style.transform = `translate(${f.left - l.left}px, ${f.top - l.top}px) scale(${s})`;
+    });
+    void grid.offsetWidth; // flush the inverted transforms before playing
+    animated.forEach((t) => {
+      t.style.transition = 'transform 0.22s ease';
+      t.style.transform = '';
+    });
+  };
+
+  const setThumb = (p) => slider.style.setProperty('--range-pct', `${p * 100}%`);
+  const setCols = (c) => {
+    if (c === curCols) return;
+    curCols = c;
+    slider.setAttribute('aria-valuenow', String(c));
+    try { localStorage.setItem('museCols', String(c)); } catch { /* private mode */ }
+    recolumn(c);
+  };
+
+  // Initial paint (no animation).
+  grid.style.setProperty('--cols', String(curCols));
+  slider.setAttribute('aria-valuenow', String(curCols));
+  setThumb(pctForCols(curCols));
+
+  let dragging = false;
+  const dragTo = (x) => {
+    const p = pctFromX(x);
+    setThumb(p);                          // thumb follows the pointer 1:1 (no hard stops)
+    setCols(clamp(MIN + p * (MAX - MIN))); // grid recolumns live, FLIP-animated
+  };
+  slider.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    slider.classList.add('dragging');
+    slider.setPointerCapture(e.pointerId);
+    slider.focus();
+    dragTo(e.clientX);
+  });
+  slider.addEventListener('pointermove', (e) => { if (dragging) dragTo(e.clientX); });
+  const endDrag = () => {
+    if (!dragging) return;
+    dragging = false;
+    slider.classList.remove('dragging');
+    setThumb(pctForCols(curCols));        // snap the thumb to the closest logical spot (glides)
+  };
+  slider.addEventListener('pointerup', endDrag);
+  slider.addEventListener('pointercancel', endDrag);
+  slider.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { setCols(clamp(curCols - 1)); setThumb(pctForCols(curCols)); e.preventDefault(); }
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { setCols(clamp(curCols + 1)); setThumb(pctForCols(curCols)); e.preventDefault(); }
+  });
 }

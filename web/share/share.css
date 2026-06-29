@@ -5,12 +5,13 @@
   --ink: #1c1c1e;
   --muted: #8a8a8e;
   --tile: #e2e2e2;
+  --ring: rgba(0, 0, 0, 0.18);
 }
 
 /* Backdrop choices (set on <html data-bg> by the switcher). Text colors flip
    so the signature stays readable on any shade. Light = white (the default). */
-html[data-bg="grey"] { --bg: #cfcfcf; --ink: #1c1c1e; --muted: #6a6a6a; --tile: #bcbcbc; }
-html[data-bg="dark"] { --bg: #1c1c1e; --ink: #f2f2f2; --muted: #8a8a8e; --tile: #2c2c2e; }
+html[data-bg="grey"] { --bg: #cfcfcf; --ink: #1c1c1e; --muted: #6a6a6a; --tile: #bcbcbc; --ring: rgba(0, 0, 0, 0.24); }
+html[data-bg="dark"] { --bg: #1c1c1e; --ink: #f2f2f2; --muted: #8a8a8e; --tile: #2c2c2e; --ring: rgba(255, 255, 255, 0.28); }
 
 * { box-sizing: border-box; }
 
@@ -55,17 +56,22 @@ html, body {
 .label { font-size: 12px; color: var(--muted); }
 .name { font-size: 12px; color: var(--ink); }
 
-/* Responsive portrait grid. */
+/* Fixed-column grid. Each cell is square and the image fits fully inside
+   (object-fit: contain), so portrait AND landscape both show uncropped. No tile
+   fill — the surround is transparent, so the chosen page backdrop shows through
+   the space around every image. Column count is the viewer's choice via the
+   grid sizer (default 4), carried on --cols. */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(var(--cols, 4), 1fr);
+  /* More space between rows than columns so mixed-height images read as
+     separate rows rather than blurring together vertically. */
+  gap: 40px 16px;
 }
 .grid img {
   width: 100%;
-  aspect-ratio: 3 / 4;
-  object-fit: cover;
-  background: var(--tile);
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
   display: block;
 }
 
@@ -108,6 +114,89 @@ html, body {
 .bg-switcher .dot[data-bg="dark"]  { background: #1c1c1e; }
 .bg-switcher .dot[aria-pressed="true"] { outline-color: var(--ink); }
 
+/* Grid sizer — floats bottom-right (live state only, like the app's resizer).
+   Sets the column count (2–6, default 4); the choice persists. Hidden in print
+   and on the expired/unavailable states. Wired in share.js. */
+.grid-sizer {
+  display: none;
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: rgba(127, 127, 127, 0.22);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+#app[data-state="live"] .grid-sizer { display: flex; }
+.grid-sizer-label { font-size: 11px; color: var(--muted); }
+
+/* shadcn-style slider (custom div — native range won't click-to-jump in Safari).
+   A 6px rounded muted track with an --ink fill, and a 15px white thumb with an
+   --ink border + soft shadow that gains a focus/hover ring. --range-pct (set in
+   share.js) positions both the fill width and the thumb. */
+.slider {
+  position: relative;
+  width: 108px;
+  height: 16px;
+  /* Horizontal padding leaves room for the thumb's overhang at each end, so at
+     the far-left value it doesn't collide with the "Grid" label. */
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  touch-action: none;
+  outline: none;
+}
+.slider-track {
+  position: relative;
+  height: 4px;
+  width: 100%;
+  border-radius: 999px;
+  background: rgba(127, 127, 127, 0.30);
+}
+.slider-range {
+  position: absolute;
+  left: 0;
+  height: 100%;
+  width: var(--range-pct, 50%);
+  border-radius: 999px;
+  background: var(--ink);
+  transition: width 0.12s ease;
+}
+/* Thumb lives inside the track so its position maps to the track, not the
+   padded outer box. */
+.slider-thumb {
+  position: absolute;
+  left: var(--range-pct, 50%);
+  top: 50%;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 1.25px solid var(--ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transform: translate(-50%, -50%);
+  transition: left 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+}
+.slider:hover .slider-thumb,
+.slider:focus-visible .slider-thumb {
+  transform: translate(-50%, -50%) scale(1.12);
+  box-shadow: 0 0 0 4px var(--ring);
+}
+
+/* While dragging, the thumb tracks the pointer 1:1 (no transition lag, no hard
+   stops); on release it glides to the snapped position via the base transition.
+   The grid tiles morph their resize via inline transform transitions set in JS
+   (FLIP). Reduced-motion disables the slider glide (and the FLIP is JS-guarded). */
+.slider.dragging .slider-thumb,
+.slider.dragging .slider-range { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .slider-thumb, .slider-range { transition: none; }
+}
+
 /* Bottom bar — expires on the left, legal links on the right. Below the fold. */
 .legal {
   display: flex;
@@ -139,7 +228,7 @@ html, body {
   html { --bg: #fff !important; --ink: #1c1c1e !important; --muted: #6a6a6a !important; --tile: #e2e2e2 !important; }
   html, body { background: #fff; }
   #app { padding: 0; min-height: 0; }
-  .save, .expires, .bg-switcher, .legal { display: none !important; }
+  .save, .expires, .bg-switcher, .grid-sizer, .legal { display: none !important; }
   .bar { margin-bottom: 18px; }
   .intro, .name { font-size: 14px; }
   .label { font-size: 10px; }

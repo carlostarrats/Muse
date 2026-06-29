@@ -65,6 +65,21 @@
 
     <main id="grid" class="grid"></main>
 
+    <!-- Grid sizer: floats bottom-right (screen + live only). Sets the column
+         count. A custom div slider (shadcn-style) — native <input range> doesn't
+         click-to-jump in Safari. Wired + persisted in share.js. Default 4. -->
+    <div class="grid-sizer">
+      <span class="grid-sizer-label">Grid</span>
+      <div id="cols" class="slider" role="slider" tabindex="0"
+           aria-label="Number of columns"
+           aria-valuemin="1" aria-valuemax="6" aria-valuenow="4">
+        <div class="slider-track">
+          <div class="slider-range"></div>
+          <div class="slider-thumb"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="notice notice-expired">This share has expired.</div>
     <div class="notice notice-unavailable">This share is no longer available.</div>
   </div>
