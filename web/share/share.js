@@ -95,10 +95,11 @@ function setupBackdropSwitcher() {
   dots.forEach(d => d.addEventListener('click', () => apply(d.dataset.bg)));
 }
 
-// Grid sizer (screen-only): a custom shadcn-style slider that sets how many
-// columns the grid renders (2–6, default 4) by writing --cols on the grid, and
-// remembers the choice across visits. Custom (not <input range>) so click-to-jump
-// works in Safari; supports drag + arrow keys, and exposes ARIA slider state.
+// Grid sizer (screen-only): a custom shadcn-style slider that sets the grid's
+// column density (1–6, default 4) by writing a target --tile-min on the grid (the
+// grid itself stays responsive via auto-fill), and remembers the choice across
+// visits. Custom (not <input range>) so click-to-jump works in Safari; supports
+// drag + arrow keys, and exposes ARIA slider state.
 function setupGridSizer() {
   const slider = document.getElementById('cols');
   const grid = document.getElementById('grid');
@@ -112,6 +113,18 @@ function setupGridSizer() {
     return Math.min(1, Math.max(0, (x - r.left) / r.width));
   };
   const pctForCols = (c) => (c - MIN) / (MAX - MIN);
+
+  // The grid is responsive (auto-fill on a target tile size). Translate the
+  // chosen column density into the tile size that yields exactly c columns at
+  // the CURRENT grid width; auto-fill then reflows the count as the window
+  // resizes. GAP must match the CSS column-gap. (-1px biases against rounding up
+  // to c+1 columns at the selection width.)
+  const GAP = 20;
+  const tileMinFor = (c) => {
+    const w = grid.clientWidth || 800;
+    return Math.max(40, (w - (c - 1) * GAP) / c - 1);
+  };
+  const setTile = (c) => grid.style.setProperty('--tile-min', `${tileMinFor(c)}px`);
 
   let saved = null;
   try { saved = localStorage.getItem('museCols'); } catch { /* private mode */ }
@@ -132,7 +145,7 @@ function setupGridSizer() {
         if (r.bottom > -0.5 * vh && r.top < 1.5 * vh) { animated.push(t); first.push(r); }
       }
     }
-    grid.style.setProperty('--cols', String(c));
+    setTile(c);
     animated.forEach((t, i) => {
       const f = first[i], l = t.getBoundingClientRect();
       const s = l.width ? f.width / l.width : 1;
@@ -157,7 +170,7 @@ function setupGridSizer() {
   };
 
   // Initial paint (no animation).
-  grid.style.setProperty('--cols', String(curCols));
+  setTile(curCols);
   slider.setAttribute('aria-valuenow', String(curCols));
   setThumb(pctForCols(curCols));
 

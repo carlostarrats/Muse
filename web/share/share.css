@@ -56,17 +56,19 @@ html, body {
 .label { font-size: 12px; color: var(--muted); }
 .name { font-size: 12px; color: var(--ink); }
 
-/* Fixed-column grid. Each cell is square and the image fits fully inside
+/* Responsive grid. Each cell is square and the image fits fully inside
    (object-fit: contain), so portrait AND landscape both show uncropped. No tile
    fill — the surround is transparent, so the chosen page backdrop shows through
-   the space around every image. Column count is the viewer's choice via the
-   grid sizer (default 4), carried on --cols. */
+   the space around every image. The grid sizer sets a target TILE SIZE
+   (--tile-min, computed in share.js from the chosen column density at the
+   current width); auto-fill then reflows the column count responsively around
+   it as the window resizes. min(…, 100%) prevents overflow on narrow screens. */
 .grid {
   display: grid;
-  grid-template-columns: repeat(var(--cols, 4), 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(min(var(--tile-min, 200px), 100%), 1fr));
   /* More space between rows than columns so mixed-height images read as
      separate rows rather than blurring together vertically. */
-  gap: 40px 16px;
+  gap: 40px 20px;
 }
 .grid img {
   width: 100%;
