@@ -75,6 +75,7 @@ html, body {
   aspect-ratio: 1 / 1;
   object-fit: contain;
   display: block;
+  cursor: pointer;
 }
 
 /* State machine: show only what matches data-state. */
@@ -122,7 +123,8 @@ html, body {
 .grid-sizer {
   display: none;
   position: fixed;
-  right: 20px;
+  left: 50%;
+  transform: translateX(-50%);
   bottom: 20px;
   align-items: center;
   gap: 8px;
@@ -199,6 +201,57 @@ html, body {
   .slider-thumb, .slider-range { transition: none; }
 }
 
+/* Click-to-enlarge lightbox. The overlay blurs only the viewport behind it
+   (backdrop-filter), so its cost is bounded regardless of page length. The
+   enlarged image reuses the already-loaded thumbnail — no new request. */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6vh 6vw;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  animation: lb-fade 0.16s ease;
+}
+.lightbox[hidden] { display: none; }
+.lightbox-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45);
+  animation: lb-in 0.18s ease;
+}
+.lightbox-close {
+  position: fixed;
+  top: 16px;
+  right: 20px;
+  width: 38px;
+  height: 38px;
+  color: #fff;
+  outline: none;
+  background: rgba(127, 127, 127, 0.32);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: background 0.12s ease;
+}
+.lightbox-close:hover { background: rgba(127, 127, 127, 0.55); }
+@keyframes lb-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes lb-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .lightbox, .lightbox-img { animation: none; }
+}
+
 /* Bottom bar — expires on the left, legal links on the right. Below the fold. */
 .legal {
   display: flex;
@@ -230,7 +283,7 @@ html, body {
   html { --bg: #fff !important; --ink: #1c1c1e !important; --muted: #6a6a6a !important; --tile: #e2e2e2 !important; }
   html, body { background: #fff; }
   #app { padding: 0; min-height: 0; }
-  .save, .expires, .bg-switcher, .grid-sizer, .legal { display: none !important; }
+  .save, .expires, .bg-switcher, .grid-sizer, .legal, .lightbox { display: none !important; }
   .bar { margin-bottom: 18px; }
   .intro, .name { font-size: 14px; }
   .label { font-size: 10px; }

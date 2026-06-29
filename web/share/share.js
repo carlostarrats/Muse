@@ -77,7 +77,53 @@ if (typeof document !== 'undefined') {
     }
     setupBackdropSwitcher();
     setupGridSizer();
+    setupLightbox();
   }
+}
+
+// Click-to-enlarge: a viewport-blur overlay showing the clicked image, reusing
+// the already-loaded thumbnail (no new request). One reused overlay + a single
+// delegated listener, so cost is independent of image count. Close via the ×,
+// Esc, or a click on the backdrop. While open it behaves as a proper modal: the
+// page behind is made `inert` (non-focusable / hidden from AT), page scroll is
+// locked, focus moves into the dialog and is trapped, and returns on close.
+function setupLightbox() {
+  const box = document.getElementById('lightbox');
+  const grid = document.getElementById('grid');
+  if (!box || !grid) return;
+  const bimg = document.getElementById('lightbox-img');
+  const closeBtn = document.getElementById('lightbox-close');
+  // The page content behind the dialog (everything but the lightbox itself).
+  const background = [document.getElementById('app'), document.querySelector('.legal')].filter(Boolean);
+  let lastFocus = null;
+  const open = (src) => {
+    bimg.src = src;
+    box.hidden = false;
+    background.forEach((el) => { el.inert = true; });   // inert background (focus + AT)
+    document.documentElement.style.overflow = 'hidden'; // scroll lock
+    lastFocus = document.activeElement;
+    closeBtn.focus();
+  };
+  const close = () => {
+    if (box.hidden) return;
+    box.hidden = true;
+    bimg.removeAttribute('src');
+    background.forEach((el) => { el.inert = false; });
+    document.documentElement.style.overflow = '';
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  };
+  grid.addEventListener('click', (e) => {
+    const img = e.target.closest('img');
+    if (img && img.src) open(img.src);
+  });
+  closeBtn.addEventListener('click', close);
+  box.addEventListener('click', (e) => { if (e.target === box) close(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  // Focus trap: the dialog has a single focusable control, so keep Tab on it
+  // (works even where `inert` is unsupported).
+  box.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') { e.preventDefault(); closeBtn.focus(); }
+  });
 }
 
 // Backdrop switcher (screen-only): apply a shade, mark the active dot, and
