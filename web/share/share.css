@@ -118,14 +118,16 @@ html, body {
 .bg-switcher .dot[aria-pressed="true"] { outline-color: var(--ink); }
 
 /* Grid sizer — floats bottom-right (live state only, like the app's resizer).
-   Sets the column count (2–6, default 4); the choice persists. Hidden in print
-   and on the expired/unavailable states. Wired in share.js. */
+   Sets the column count (1–6, default 4); the choice persists. Floats
+   bottom-center, always visible while live. `bottom` is tuned so that when the
+   page is scrolled to the end, the pill lines up with the legal row's text line
+   (expires / Privacy · Terms). Hidden in print and on expired/unavailable. */
 .grid-sizer {
   display: none;
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: 20px;
+  bottom: 33px;
   align-items: center;
   gap: 8px;
   padding: 7px 13px;
