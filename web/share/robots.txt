@@ -1,0 +1,9 @@
+# The legal pages also carry <meta name="robots" content="noindex, nofollow">.
+# Note: email-harvesting bots ignore robots.txt — the obfuscated "[at]" address
+# on those pages is the actual anti-spam measure. /about stays crawlable because
+# it is the OAuth consent home page (Google must reach it for verification).
+User-agent: *
+Disallow: /privacy
+Disallow: /privacy.html
+Disallow: /terms
+Disallow: /terms.html
