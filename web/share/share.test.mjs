@@ -1,7 +1,7 @@
 // share.test.mjs  — run: node web/share/share.test.mjs
 import assert from 'node:assert';
 import { deflateSync, strToU8 } from './fflate.module.js';
-import { decodeManifest, validateManifest, isExpired, thumbURL, VALID_ID } from './share.js';
+import { decodeManifest, validateManifest, isExpired, thumbURL, VALID_ID, sanitizeText } from './share.js';
 
 // Decompression-bomb guard: the fragment is attacker-suppliable, so a tiny
 // compressed payload that inflates past the cap must NOT allocate unbounded
@@ -45,6 +45,21 @@ assert.ok(validateManifest(sample), 'valid without filenames (f optional)');
 assert.ok(!validateManifest({ ...sample, f:['only-one'] }), 'filenames length mismatch rejected');
 assert.ok(!validateManifest({ ...sample, f:[1, 2] }), 'non-string filenames rejected');
 assert.ok(!validateManifest({ ...sample, f:'notarray' }), 'non-array filenames rejected');
+
+// Hardening (low-sev): bound attacker-supplied display strings + ids so a single
+// field can't be a multi-MB node within the inflate budget.
+assert.ok(!validateManifest({ ...sample, i: 'x'.repeat(4097) }), 'oversized intro field rejected');
+assert.ok(validateManifest({ ...sample, i: 'x'.repeat(4096) }), 'intro at the field cap accepted');
+assert.ok(!validateManifest({ ...sample, f: [ 'x'.repeat(1025), 'ok.jpg' ] }), 'oversized filename rejected');
+assert.ok(!VALID_ID.test('a'.repeat(201)), 'over-long id rejected (upper bound)');
+assert.ok(VALID_ID.test('a'.repeat(200)), 'id at the upper bound accepted');
+
+// sanitizeText strips bidi-override / zero-width / control chars (anti-spoofing)
+// while leaving normal text intact.
+assert.strictEqual(sanitizeText('invoice\u202Egnp.scr'), 'invoicegnp.scr', 'RTL override stripped');
+assert.strictEqual(sanitizeText('a\u200Bb\uFEFFc\u0007d'), 'abcd', 'zero-width + control chars stripped');
+assert.strictEqual(sanitizeText('Sunset_final.jpg'), 'Sunset_final.jpg', 'normal filename untouched');
+
 const noPdf = { ...sample }; delete noPdf.p;
 assert.ok(validateManifest(noPdf), 'valid without pdfID (app no longer uploads a PDF)');
 assert.ok(!validateManifest({ ...sample, g:['short'] }), 'bad id rejected');
