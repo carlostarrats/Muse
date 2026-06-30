@@ -2179,16 +2179,6 @@
         }
       }
     },
-    "Muse opens almost anything in place: images, PDFs, video, audio, fonts, Markdown, and code or text. Click an image for a full-screen view with zoom, pan, and a details panel; its Share button also offers Open With. Select images in the grid with a click, ⌘-click, or Shift-click, then right-click for actions — move to a folder, add to a collection, add a tag, share, or Open With. Anything without a dedicated viewer falls back to Quick Look.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Muse ouvre presque tout sur place : images, PDF, vidéo, audio, polices, Markdown, ainsi que code ou texte. Cliquez sur une image pour une vue plein écran avec zoom, déplacement et un panneau de détails ; son bouton Partager propose aussi Ouvrir avec. Sélectionnez des images dans la grille par un clic, un ⌘-clic ou un Maj-clic, puis cliquez avec le bouton droit pour accéder aux actions — déplacer vers un dossier, ajouter à une collection, ajouter un tag, partager ou Ouvrir avec. Tout ce qui n'a pas de visualiseur dédié bascule sur Coup d'œil."
-          }
-        }
-      }
-    },
     "Name": {
       "localizations": {
         "fr": {
@@ -4433,6 +4423,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Le dossier Drive n’a pas pu être supprimé — vous êtes peut-être hors ligne ou déconnecté. Le partage est toujours actif ; réessayez, ou supprimez-le directement depuis Google Drive."
+          }
+        }
+      }
+    },
+    "Muse opens almost anything in place: images, PDFs, video, audio, fonts, Markdown, and code or text. Click an image for a full-screen view with zoom, pan, and a details panel; its Share button also offers Open With. Select images in the grid with a click, ⌘-click, or Shift-click, then right-click for actions — move to a folder, add to a collection, add a tag, share, or Open With. Anything without a dedicated viewer falls back to Quick Look. A few uncommon formats won't preview here, or won't show on a shared web page, because that depends on what Apple and Google can render — not on Muse.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muse ouvre presque tout sur place : images, PDF, vidéo, audio, polices, Markdown, ainsi que code ou texte. Cliquez sur une image pour une vue plein écran avec zoom, déplacement et un panneau de détails ; son bouton Partager propose aussi Ouvrir avec. Sélectionnez des images dans la grille par un clic, un ⌘-clic ou un Maj-clic, puis cliquez avec le bouton droit pour accéder aux actions — déplacer vers un dossier, ajouter à une collection, ajouter un tag, partager ou Ouvrir avec. Tout ce qui n'a pas de visualiseur dédié bascule sur Coup d'œil. Certains formats peu courants ne s'affichent pas ici, ou n'apparaissent pas sur une page web partagée, car cela dépend de ce qu'Apple et Google peuvent afficher — pas de Muse."
           }
         }
       }

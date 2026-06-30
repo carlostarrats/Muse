@@ -56,7 +56,9 @@ struct InfoSheet: View {
                         Shift-click, then right-click for actions — move to a \
                         folder, add to a collection, add a tag, share, or Open \
                         With. Anything without a dedicated viewer falls back to \
-                        Quick Look.
+                        Quick Look. A few uncommon formats won't preview here, or \
+                        won't show on a shared web page, because that depends on \
+                        what Apple and Google can render — not on Muse.
                         """)
                     rowDivider
                     section("Analysis", """
