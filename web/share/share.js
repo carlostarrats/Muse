@@ -233,7 +233,10 @@ function setupBackdropSwitcher() {
   let saved = null;
   try { saved = localStorage.getItem('museBg'); } catch { /* private mode */ }
   apply(['light', 'grey', 'dark'].includes(saved) ? saved : 'light');
-  dots.forEach(d => d.addEventListener('click', () => apply(d.dataset.bg)));
+  dots.forEach(d => d.addEventListener('click', () => {
+    const bg = d.dataset.bg;
+    if (['light', 'grey', 'dark'].includes(bg)) apply(bg);
+  }));
 }
 
 // Grid sizer (screen-only): a custom shadcn-style slider that sets the grid's

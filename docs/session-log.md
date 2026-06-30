@@ -4875,4 +4875,54 @@ rendering the exact `section()` view via `ImageRenderer`: the link shows in acce
 `.foregroundStyle(.secondary)` body (secondary does NOT flatten link runs), and `Text(LocalizedStringKey)`
 links are tappable via the default `openURL`. The web/`web/share/` change must be **deployed** to Cloudflare
 Pages for the link target to show the new section (the page is still valid without it). `BUILD SUCCEEDED`;
+
+### Health review + bug fixes — 2026-06-30 (on `feat/next-101`)
+
+Comprehensive health, security, and correctness review of everything shipped since 1.3.6 (feat/next-94 through
+feat/next-100). All 36 unit test suites were green before the review; remained green after.
+
+**Bugs found and fixed (4 files):**
+
+1. **`SidebarView.swift` — stale `= false` default for `showCollectionsInSidebar`.** `feat/next-100` updated
+   `AppSettings.showCollectionsInSidebar` (`?? true`) and `SettingsView` (`@AppStorage … = true`) but missed
+   `SidebarView`, which still held `= false`. New users with no UserDefaults key would see the Settings toggle
+   read ON but Collections silently absent from the sidebar. Fixed to `= true`. Existing users who explicitly
+   stored `false` are unaffected (`@AppStorage` reads the stored value; the default only fires when the key is
+   absent).
+
+2. **`ImageMetadataStripperTests.swift` — three tests were missing source-sanity guards.** Tests asserting a
+   field is absent from the stripped output are vacuous if the fixture never embedded the field in the first
+   place (ImageIO can silently drop unrecognised dict keys during encode). Three tests now guard with
+   `XCTSkip` if the needle isn't in the source bytes / source property dict:
+   - `testStripRemovesMakerNote` — `kCGImagePropertyMakerAppleDictionary` with fake keys `"1"/"2"` may not
+     survive JPEG encode.
+   - `testStripPNGRemovesEXIFGPS` — GPS in PNG is not guaranteed to survive encode on all hosts.
+   - `testStripMultiFrameMetadataStripped` — now guards both the per-page AND container needles in one guard.
+
+3. **`web/share/index.html` — missing `tabindex="-1"` on the lightbox dialog.** ARIA authoring practices
+   require dialog containers to have `tabindex="-1"` so programmatic focus and AT boundary anchoring work
+   correctly. Added.
+
+4. **`web/share/share.js` — backdrop switcher dot click path skipped the whitelist.** The `localStorage` read
+   path validated the saved value against `['light', 'grey', 'dark']` before calling `apply()`, but the dot
+   `click` handler passed `d.dataset.bg` directly without validation. A tampered `data-bg` attribute could have
+   written an arbitrary string into both `localStorage` and `data-bg`. Fixed: dot click now checks
+   `['light', 'grey', 'dark'].includes(bg)` before calling `apply(bg)`.
+
+**Items reviewed and confirmed correct (no changes):**
+- `ImageMetadataStripper.swift` — strip logic, lossless vs re-encode path selection, verifier (`isClean`),
+  fail-closed design, XMP namespace byte scan, PNG text chunk scope guard. All correct.
+- `DriveClient.uploadFile` — `Task.detached` correctly escapes `@MainActor` for CPU-heavy strip; throw from
+  `strip` propagates and aborts upload before any data reaches Drive.
+- `DriveShareManifest.swift` — DEFLATE (raw RFC-1951) / inflate correct; JS zip-bomb guard (4 MB `out` buffer)
+  in place; `f` filenames always length-match `g` image ids.
+- Keychain: `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, no logging of tokens, `signOut` revokes then
+  clears unconditionally.
+- OAuth/PKCE: S256 via CryptoKit, no client secret, `state` CSRF guard verified before code extraction,
+  redirect to custom scheme.
+- `URLSession` calls confined to `Sharing/Drive/` only — zero unexpected network egress.
+- Drive expiry sweep: `deleteFolder` treats 404 as success; orphaned-account records are cleanly dropped.
+- Share page XSS: every attacker-supplied string through `textContent` + `sanitizeText`. Drive id in
+  `thumbURL` gated by `VALID_ID` regex. Focus trap covers Shift+Tab. Skeleton `.loaded` covers all races.
+  Print CSS `inline-flex` prevents cross-page tile splits. `privacy.html` Drive-identity disclosure accurate.
 `MuseTests` + UI tests green.

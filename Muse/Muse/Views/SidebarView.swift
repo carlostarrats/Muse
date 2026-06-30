@@ -40,7 +40,7 @@ struct SidebarView: View {
 
     /// When on, the sidebar shows a second COLLECTIONS section beneath FOLDERS.
     /// Off = the sidebar is exactly the original folders-only experience.
-    @AppStorage(AppSettings.showCollectionsInSidebarKey) private var showCollectionsInSidebar = false
+    @AppStorage(AppSettings.showCollectionsInSidebarKey) private var showCollectionsInSidebar = true
     @ObservedObject private var collectionsEngine = CollectionsEngine.shared
     // Plain @State (seeded from + persisted to UserDefaults) rather than
     // @AppStorage so the collapse can animate via `withAnimation` — a

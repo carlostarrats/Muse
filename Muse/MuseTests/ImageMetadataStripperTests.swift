@@ -223,6 +223,13 @@ final class ImageMetadataStripperTests: XCTestCase {
             throw XCTSkip("PNG encode unavailable")
         }
         defer { try? FileManager.default.removeItem(at: url) }
+        // Sanity: ImageIO doesn't guarantee GPS survives PNG encoding on all hosts.
+        // If the dict wasn't embedded, the absence assertion below is vacuous.
+        let beforeSrc = CGImageSourceCreateWithData(try Data(contentsOf: url) as CFData, nil)!
+        let beforeProps = (CGImageSourceCopyPropertiesAtIndex(beforeSrc, 0, nil) as? [CFString: Any]) ?? [:]
+        guard beforeProps[kCGImagePropertyGPSDictionary] != nil else {
+            throw XCTSkip("host did not embed GPS in PNG; nothing to assert")
+        }
         let out = try ImageMetadataStripper.strip(url: url, mime: "image/png")
         let src = CGImageSourceCreateWithData(out.data as CFData, nil)!
         let p = (CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any]) ?? [:]
@@ -300,6 +307,12 @@ final class ImageMetadataStripperTests: XCTestCase {
         ]
         guard let url = makeImage(type: .jpeg, props: props) else { throw XCTSkip("JPEG encode unavailable") }
         defer { try? FileManager.default.removeItem(at: url) }
+        // Sanity: if ImageIO silently dropped the MakerApple dict during JPEG encode
+        // (because "1"/"2" aren't real MakerApple keys), the needle won't be in the
+        // source bytes and every assertion below would pass vacuously.
+        guard try Data(contentsOf: url).range(of: Data(needle.utf8)) != nil else {
+            throw XCTSkip("host did not embed maker note; nothing to assert")
+        }
         let out = try ImageMetadataStripper.strip(url: url, mime: "image/jpeg")
         XCTAssertNil(out.data.range(of: Data(needle.utf8)), "maker note must be stripped")
         let src = CGImageSourceCreateWithData(out.data as CFData, nil)!
@@ -338,8 +351,9 @@ final class ImageMetadataStripperTests: XCTestCase {
         try (data as Data).write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
         let raw = try Data(contentsOf: url)
-        guard raw.range(of: Data(needlePage.utf8)) != nil else {
-            throw XCTSkip("host did not embed TIFF page metadata")
+        guard raw.range(of: Data(needlePage.utf8)) != nil,
+              raw.range(of: Data(needleContainer.utf8)) != nil else {
+            throw XCTSkip("host did not embed TIFF page/container metadata; nothing to assert")
         }
         let out = try ImageMetadataStripper.strip(url: url, mime: "image/tiff")
         XCTAssertNil(out.data.range(of: Data(needlePage.utf8)), "per-page metadata must be stripped")
