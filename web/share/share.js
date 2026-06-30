@@ -324,6 +324,11 @@ function setupGridSizer() {
   slider.addEventListener('pointerdown', (e) => {
     dragging = true;
     slider.classList.add('dragging');
+    // Suppress the browser's drag-to-select while the slider is dragged — a
+    // pointer drag that begins on the slider would otherwise rubber-band a
+    // text/image selection across the grid behind it. Scoped to the drag only
+    // (removed in endDrag), so normal selection is untouched. See .sizer-dragging.
+    document.documentElement.classList.add('sizer-dragging');
     slider.setPointerCapture(e.pointerId);
     slider.focus();
     dragTo(e.clientX);
@@ -333,6 +338,7 @@ function setupGridSizer() {
     if (!dragging) return;
     dragging = false;
     slider.classList.remove('dragging');
+    document.documentElement.classList.remove('sizer-dragging');
     setThumb(pctForCols(curCols));        // snap the thumb to the closest logical spot (glides)
   };
   slider.addEventListener('pointerup', endDrag);

@@ -234,6 +234,18 @@ html, body {
 }
 #app[data-state="live"] .grid-sizer { display: flex; }
 .grid-sizer-label { font-size: 11px; color: var(--muted); }
+/* The sizer is chrome, not content — never let a drag/double-click select the
+   "Grid" label or slider parts. */
+.grid-sizer { user-select: none; -webkit-user-select: none; }
+
+/* While the grid sizer is being dragged (class set on <html> in share.js),
+   suppress page-wide selection so the drag doesn't rubber-band a text/image
+   selection across the grid. Active only for the duration of the drag, so it
+   changes no normal interaction. */
+html.sizer-dragging, html.sizer-dragging * {
+  user-select: none;
+  -webkit-user-select: none;
+}
 
 /* shadcn-style slider (custom div — native range won't click-to-jump in Safari).
    A 6px rounded muted track with an --ink fill, and a 15px white thumb with an
