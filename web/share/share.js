@@ -135,7 +135,18 @@ if (typeof document !== 'undefined') {
       btn.type = 'button';
       btn.className = 'tile';
       const img = document.createElement('img');
-      img.loading = 'lazy'; img.src = thumbURL(id); img.alt = '';
+      img.loading = 'lazy'; img.alt = '';
+      // Each tile shows a shimmering skeleton (CSS `.tile::before`) until its
+      // Drive thumbnail paints; `.loaded` drops the skeleton and fades the image
+      // in. Handlers are attached BEFORE `src` so a cached image that completes
+      // synchronously still clears the skeleton, and `img.complete` covers the
+      // same race for good measure. `error` reveals too, so a thumbnail that
+      // fails (404/expired Drive file) doesn't leave a perpetual shimmer.
+      const reveal = () => btn.classList.add('loaded');
+      img.addEventListener('load', reveal);
+      img.addEventListener('error', reveal);
+      img.src = thumbURL(id);
+      if (img.complete && img.naturalWidth) reveal();
       btn.appendChild(img);
       const name = names ? sanitizeText(names[idx]) : '';
       if (name) {
