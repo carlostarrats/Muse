@@ -89,4 +89,42 @@ final class AssetKindTests: XCTestCase {
         try XCTUnwrap("definitely not an image".data(using: .utf8)).write(to: url)
         XCTAssertEqual(AssetKind.detect(at: url), .unknown)
     }
+
+    // Every camera-RAW extension we ship (one per brand on rawsamples.ch, plus
+    // phone/action-cam DNG variants) must register as `.raw` so it sorts under
+    // the RAW filter facet. This is classification ONLY — whether the pixels
+    // decode is gated by Apple's camera-RAW codec, which this list can't change.
+    // Detection here is a pure extension-map lookup (no bytes read), so an empty
+    // placeholder file with the extension is enough to assert the mapping.
+    func testCameraRawExtensionsClassifyAsRaw() throws {
+        let rawExtensions = [
+            "cr2", "cr3", "crw",          // Canon
+            "nef", "nrw",                 // Nikon
+            "arw", "sr2", "srf",          // Sony
+            "dng", "gpr",                 // Adobe DNG (iPhone ProRAW / Android) + GoPro
+            "orf",                        // Olympus
+            "rw2", "raw",                 // Panasonic
+            "raf",                        // Fujifilm
+            "srw",                        // Samsung
+            "pef",                        // Pentax
+            "rwl",                        // Leica
+            "3fr", "fff",                 // Hasselblad / Imacon
+            "iiq", "cap",                 // Phase One
+            "mef",                        // Mamiya
+            "mos",                        // Leaf
+            "x3f",                        // Sigma / Foveon
+            "erf",                        // Epson
+            "dcr", "kdc", "k25",          // Kodak
+            "mrw",                        // Minolta
+            "bay",                        // Casio
+        ]
+        for ext in rawExtensions {
+            XCTAssertEqual(AssetKind.byExtension[ext], .raw,
+                           "extension .\(ext) should map to .raw")
+            let url = tempDir.appendingPathComponent("sample.\(ext)")
+            FileManager.default.createFile(atPath: url.path, contents: Data())
+            XCTAssertEqual(AssetKind.detect(at: url), .raw,
+                           "a .\(ext) file should classify as .raw")
+        }
+    }
 }

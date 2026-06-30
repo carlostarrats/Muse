@@ -145,7 +145,31 @@ extension AssetKind {
         var map: [String: AssetKind] = [:]
         let mapping: [(AssetKind, [String])] = [
             (.image,    ["jpg", "jpeg", "png", "heic", "heif", "webp", "gif", "tiff", "tif", "bmp", "ico"]),
-            (.raw,      ["cr2", "cr3", "nef", "arw", "dng", "orf", "rw2", "raf", "srw", "pef"]),
+            // One per camera brand on rawsamples.ch + phone/action-cam DNG.
+            // This is CLASSIFICATION only (so the file shows as RAW and sorts
+            // under the RAW filter); whether ImageIO actually decodes the pixels
+            // is gated by Apple's camera-RAW codec, which this list can't widen.
+            // ThumbnailCache falls back to QuickLook, and HeroStage does too, so
+            // a labeled-but-undecodable RAW still gets the best preview available.
+            (.raw,      ["cr2", "cr3", "crw",          // Canon
+                         "nef", "nrw",                 // Nikon
+                         "arw", "sr2", "srf",          // Sony
+                         "dng", "gpr",                 // Adobe DNG (iPhone/Android) + GoPro
+                         "orf",                        // Olympus
+                         "rw2", "raw",                 // Panasonic
+                         "raf",                        // Fujifilm
+                         "srw",                        // Samsung
+                         "pef",                        // Pentax
+                         "rwl",                        // Leica
+                         "3fr", "fff",                 // Hasselblad / Imacon
+                         "iiq", "cap",                 // Phase One
+                         "mef",                        // Mamiya
+                         "mos",                        // Leaf
+                         "x3f",                        // Sigma / Foveon
+                         "erf",                        // Epson
+                         "dcr", "kdc", "k25",          // Kodak
+                         "mrw",                        // Minolta
+                         "bay"]),                      // Casio
             (.psd,      ["psd"]),
             (.svg,      ["svg"]),
             (.pdf,      ["pdf"]),

@@ -4821,3 +4821,30 @@ left alone (they don't fail in normal use — adding alerts to each would be pad
 - New strings localized (FR); 6 orphaned keys removed. Verified the move/trash/create paths already surface
   failures (`moveFailureNames`/`folderOpError`) and that rename was the unique write-outside-security-scope
   case — no other rename-class sandbox bug lurks.
+
+### Broader camera-RAW coverage — every brand registers as RAW — 2026-06-29 (`feat/next-91`)
+
+Prompted by a Mamiya `.mef` showing as an unknown file card. RAW support splits into **three independent
+layers**; the fix touches only the one Muse owns. (Captured as memory `muse-raw-support-three-layers`.)
+
+1. **Classification / filter facet — ours.** `AssetKind.byExtension` was the gate: only 10 RAW exts
+   (`cr2/cr3/nef/arw/dng/orf/rw2/raf/srw/pef`). Anything else fell through to a UTType/ImageIO sniff and, for
+   formats macOS doesn't recognize, landed as `.unknown`. Expanded to ~28 — one per brand on rawsamples.ch +
+   phone/action-cam DNG: Canon `crw`, Nikon `nrw`, Sony `sr2/srf`, GoPro `gpr`, Panasonic/Leica `raw`, Leica
+   `rwl`, Hasselblad `3fr/fff`, Phase One `iiq/cap`, Mamiya `mef`, Leaf `mos`, Sigma `x3f`, Epson `erf`, Kodak
+   `dcr/kdc/k25`, Minolta `mrw`, Casio `bay`. Everything downstream (filter facet via `KindFacet.leaf`, viewer
+   routing, analysis, thumbnails) keys on `AssetKind.raw`, NOT on extension lists, so this single map drives it
+   all — no other list to sync, no Info.plist UTI to touch. Test `testCameraRawExtensionsClassifyAsRaw` asserts
+   all 28. Accepted tradeoff: a rare non-image with a collision-prone ext (`cap`/`dcr`/`raw`) now buckets under
+   RAW and renders a type icon — bounded, no crash (all decode paths are nil-guarded).
+2. **Decode / display — Apple's, NOT ours.** Thumbnails + hero viewer decode via ImageIO / Apple's camera-RAW
+   codec (a finite, model-specific list). Widening the ext list does NOT make an unsupported body render.
+   Closed the one gap we control: `HeroStage.loadFullRes` was pure ImageIO with no fallback (blank on nil); it
+   now falls through to the shared `ThumbnailCache` path (QuickLook best-rep → type icon), matching what the
+   grid thumbnails already do. So a labeled-but-undecodable RAW is never blank.
+3. **Share link — Google's, NOT ours.** Left as-is. The Drive share uploads native bytes; the page renders from
+   `drive.google.com/thumbnail` — RAW shows only for formats Google can thumbnail. Reliable display would need
+   RAW→JPEG conversion before upload (departs from the upload-native-bytes design) — owner declined for now.
+
+`BUILD SUCCEEDED`; `MuseTests` green (457). **Runtime decode against real RAW samples (layer 2) is still a
+manual step** — green classification tests don't exercise Apple's codec (memory: `verify-runtime-not-just-tests`).
