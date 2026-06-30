@@ -125,9 +125,14 @@ struct InfoSheet: View {
                         into your own Google Drive, uploads the images there, \
                         and creates a clean web page anyone can open in a \
                         browser — they can switch the background and print it \
-                        to a PDF at any size. Nothing reaches Muse's makers: \
-                        the Drive copy goes to your own Drive. Take a link \
-                        down later from the View menu — Manage Drive Shares….
+                        to a PDF at any size. Muse asks Google for the narrowest \
+                        permission, so it can only ever touch the files it \
+                        creates in your Drive — never the rest of it — and the \
+                        captions you type ride inside the link itself, not on \
+                        any server. Nothing reaches Muse's makers: the Drive \
+                        copy goes to your own Drive. Take a link down later from \
+                        the View menu — Manage Drive Shares…. \
+                        [Read exactly how a share link works.](https://muse-share.pages.dev/privacy#how-it-works)
                         """)
                     rowDivider
                     section("iCloud sync", """
