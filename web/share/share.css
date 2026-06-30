@@ -13,7 +13,9 @@
 
 /* Backdrop choices (set on <html data-bg> by the switcher). Text colors flip
    so the signature stays readable on any shade. Light = white (the default). */
-html[data-bg="grey"] { --bg: #cfcfcf; --ink: #1c1c1e; --muted: #6a6a6a; --tile: #bcbcbc; --ring: rgba(0, 0, 0, 0.24); --caption: #505050; }
+/* --tile drives the loading skeleton; on the grey field it's set LIGHTER than the
+   backdrop (not darker) so the placeholder reads clearly instead of blending in. */
+html[data-bg="grey"] { --bg: #cfcfcf; --ink: #1c1c1e; --muted: #6a6a6a; --tile: #e0e0e0; --ring: rgba(0, 0, 0, 0.24); --caption: #505050; }
 html[data-bg="dark"] { --bg: #1c1c1e; --ink: #f2f2f2; --muted: #8a8a8e; --tile: #2c2c2e; --ring: rgba(255, 255, 255, 0.28); --caption: #a6a6aa; }
 
 * { box-sizing: border-box; }
@@ -82,6 +84,7 @@ html, body {
 .tile {
   margin: 0;
   padding: 0;
+  position: relative;   /* anchors the loading skeleton (.tile::before) */
   border: none;
   background: none;
   font: inherit;
@@ -115,7 +118,12 @@ html, body {
   object-fit: contain;
   flex: 0 0 auto;
   display: block;
+  /* Fade in once loaded (the .loaded class is added in share.js on img load),
+     so the thumbnail dissolves over its skeleton instead of popping in. */
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
+.tile.loaded img { opacity: 1; }
 .tile-name {
   font-size: 11px;
   line-height: 1.3;
@@ -131,6 +139,36 @@ html, body {
   -webkit-line-clamp: 2;
   line-clamp: 2;
   overflow: hidden;
+}
+
+/* Loading skeleton: a shimmering placeholder over the image region of each cell
+   (the caption area below — the bottom 36px the image reserves — is left clear,
+   since the filename is already known and shows immediately). Drive thumbnails
+   can take a moment, so without this the grid sits empty then pops. Uses the
+   backdrop-aware --tile token as the base with a soft highlight sweeping across.
+   Removed the instant the image paints (.loaded, set in share.js). The image
+   fades in on top (see .tile img), so they cross-dissolve. */
+.tile::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 36px 0;
+  border-radius: 4px;
+  background-color: var(--tile);
+  background-image: linear-gradient(100deg,
+    transparent 30%, rgba(255, 255, 255, 0.28) 50%, transparent 70%);
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: tile-shimmer 1.4s linear infinite;
+}
+.tile.loaded::before { display: none; }
+@keyframes tile-shimmer {
+  from { background-position: 150% 0; }
+  to   { background-position: -150% 0; }
+}
+/* Reduced motion: keep a static placeholder tint, no sweep. */
+@media (prefers-reduced-motion: reduce) {
+  .tile::before { background-image: none; animation: none; }
+  .tile img { transition: none; }
 }
 
 /* State machine: show only what matches data-state. */
@@ -379,4 +417,8 @@ html, body {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+  /* No loading shimmer in the printed PDF, and never hold an image at opacity 0
+     if it somehow prints before its load event fired. */
+  .tile::before { display: none !important; }
+  .tile img { opacity: 1 !important; }
 }
