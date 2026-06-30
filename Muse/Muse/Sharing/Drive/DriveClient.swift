@@ -60,14 +60,19 @@ import Foundation
     // MARK: files
 
     func uploadFile(url: URL, name: String, mime: String, parent: String) async throws -> String {
-        let data = try Data(contentsOf: url)
+        // Strip all private metadata (GPS/EXIF/camera/IPTC/XMP/maker notes)
+        // BEFORE upload: the file is made anyone-readable and its id rides the
+        // public share URL, so the original — not just the EXIF-free Google
+        // thumbnail — is reachable by recipients. Fail-closed (throws) rather
+        // than ever upload an un-stripped original.
+        let stripped = try ImageMetadataStripper.strip(url: url, mime: mime)
         let boundary = "muse-\(UUID().uuidString)"
         var req = try await authed(uploadEndpoint)
         req.httpMethod = "POST"
         req.setValue("multipart/related; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         req.httpBody = Self.multipartBody(
             metadata: ["name": name, "parents": [parent]],
-            fileData: data, mime: mime, boundary: boundary)
+            fileData: stripped.data, mime: stripped.mime, boundary: boundary)
         let (respData, resp) = try await URLSession.shared.data(for: req)
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard code == 200,

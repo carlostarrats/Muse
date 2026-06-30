@@ -363,7 +363,10 @@ Muse/Muse/
     DriveConfig.swift                owner placeholders: clientID, reverse-client-id scheme, shareBaseURL
     GoogleOAuth.swift                Auth-Code+PKCE via ASWebAuthenticationSession; exchange/refresh/revoke
     DriveClient.swift                Drive v3 REST (ensureMuseRoot/createFolder/uploadFile multipart/
-                                     setAnyoneReader/deleteFolder); pure multipartBody is unit-tested
+                                     setAnyoneReader/deleteFolder); uploadFile strips metadata first;
+                                     pure multipartBody is unit-tested
+    ImageMetadataStripper.swift      strips GPS/EXIF/camera/IPTC/XMP/maker-notes before upload (lossless,
+                                     keeps orientation + animation frames; fail-closed). Unit-tested
     DriveShareManifest.swift         base64url URL-FRAGMENT payload (mirrors share.js keys). Unit-tested
     DriveShareRecord.swift           DriveShareRecord + DriveShareStore (JSON, App Support) + DriveExpiry
     DriveShareService.swift          @MainActor publish orchestrator (Phase signingIn/uploading/…/done)
