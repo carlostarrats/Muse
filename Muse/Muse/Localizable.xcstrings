@@ -3382,12 +3382,52 @@
         }
       }
     },
+    "Sort by": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trier par"
+          }
+        }
+      }
+    },
     "Sort collections": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Trier les collections"
+          }
+        }
+      }
+    },
+    "Sort order": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ordre de tri"
+          }
+        }
+      }
+    },
+    "Earliest": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Au plus tôt"
+          }
+        }
+      }
+    },
+    "Latest": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Au plus tard"
           }
         }
       }
@@ -3784,18 +3824,42 @@
         }
       }
     },
-    "%lld images · expires %@": {
+    "%lld images": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "new",
-            "value": "%1$lld images · expires %2$@"
-          }
-        },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld images · expire %@"
+            "value": "%lld images"
+          }
+        }
+      }
+    },
+    "created %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "créé le %@"
+          }
+        }
+      }
+    },
+    "expires %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "expire le %@"
+          }
+        }
+      }
+    },
+    "Created": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Créé"
           }
         }
       }
@@ -3890,6 +3954,16 @@
         }
       }
     },
+    "(click date to customize)": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(cliquez sur la date pour modifier)"
+          }
+        }
+      }
+    },
     "Finishing…": {
       "localizations": {
         "fr": {
@@ -3916,6 +3990,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Étiquette"
+          }
+        }
+      }
+    },
+    "Manage Drive Shares": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gérer les partages Drive"
           }
         }
       }
