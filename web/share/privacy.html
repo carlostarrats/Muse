@@ -45,6 +45,49 @@
           Drive is governed by Google's own Privacy Policy.</li>
     </ul>
 
+    <h2 id="how-it-works">How sharing a collection works</h2>
+    <p>The link can feel like magic, so here is exactly what happens, step by
+       step. The short version: the images go to <em>your</em> Google Drive, the
+       captions ride inside the link, and the people who make Muse never see any
+       of it.</p>
+    <ol>
+      <li><strong>You sign in to your own Google account.</strong> Muse uses
+          Google's standard sign-in (OAuth, with PKCE and no shared secret stored
+          in the app). It asks for the narrowest possible permission —
+          <code>drive.file</code> — which lets Muse see and manage <em>only the
+          files it creates</em> in your Drive. It cannot read, list, or touch
+          anything else you keep there. The resulting access token is stored in
+          your Mac's Keychain, on this device only; it is never written to logs,
+          never synced, and signing out revokes it.</li>
+      <li><strong>Muse uploads the images to your Drive.</strong> The pictures you
+          selected are copied into a tidy folder in your own Drive (named for the
+          collection and date). They live under your account and count against
+          your storage — the developer has no copy and no access.</li>
+      <li><strong>Muse builds the link.</strong> The title, the per-image
+          captions, the layout, and the IDs of the uploaded images are bundled
+          into a small manifest. That manifest is encoded (and compressed) into
+          the part of the URL <em>after the <code>#</code></em> — the "fragment".
+          By web standards a fragment is never sent to the server that hosts the
+          page, so the host never learns your captions or which images you
+          shared.</li>
+      <li><strong>You send the link.</strong> However you send it — Messages,
+          email, anywhere — is your choice and outside Muse.</li>
+      <li><strong>The recipient opens a plain static page.</strong> The page is a
+          fixed file on Cloudflare Pages with no database, no API key, and no
+          secret. Their browser reads the manifest from the link, then loads each
+          picture <em>directly from your Google Drive</em> (via Drive's own image
+          links). The page runs under a strict content-security policy and treats
+          everything in the link as untrusted text, so a tampered link can't do
+          more than show garbled text.</li>
+      <li><strong>The recipient can print it to a PDF.</strong> "Save as PDF" uses
+          their browser's own print, at whatever paper size they pick. Muse does
+          not generate or upload a PDF.</li>
+      <li><strong>You stay in control.</strong> Take a share down anytime from
+          Muse's <strong>Manage Drive Shares</strong> (which deletes the Drive
+          folder it made), or delete the folder yourself in Drive. Muse also
+          sweeps expired shares for you.</li>
+    </ol>
+
     <h2>The share web page</h2>
     <p>A share link opens a static page hosted on Cloudflare Pages. A few things
        are worth being clear about:</p>
@@ -78,7 +121,8 @@
     <p>We may update this policy. The date above reflects the current version.</p>
 
     <h2>Contact</h2>
-    <p>Questions about privacy: <a href="mailto:carlostarrats00@gmail.com">carlostarrats00@gmail.com</a></p>
+    <p>Questions about privacy: carlostarrats00[at]gmail.com (replace
+       <code>[at]</code> with <code>@</code>).</p>
 
     <hr>
     <a class="back" href="/terms">Terms of Use →</a>

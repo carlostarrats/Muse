@@ -23,7 +23,7 @@ h2 { font-size: 17px; font-weight: 600; margin: 36px 0 8px; }
 p, li { font-size: 15px; }
 .updated { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
 a { color: var(--ink); }
-ul { padding-left: 20px; }
+ul, ol { padding-left: 20px; }
 li { margin: 4px 0; }
 
 hr { border: none; border-top: 1px solid var(--rule); margin: 40px 0; }

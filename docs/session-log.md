@@ -4848,3 +4848,31 @@ layers**; the fix touches only the one Muse owns. (Captured as memory `muse-raw-
 
 `BUILD SUCCEEDED`; `MuseTests` green (457). **Runtime decode against real RAW samples (layer 2) is still a
 manual step** — green classification tests don't exercise Apple's codec (memory: `verify-runtime-not-just-tests`).
+
+### About-modal copy: unsupported-format note + "how a share link works" explainer — 2026-06-29 (`feat/next-92`)
+
+Two owner-prompted ⓘ About-modal copy passes, both localized (EN+FR, re-keyed in `Localizable.xcstrings`).
+
+1. **Unsupported formats note.** Owner got the "some files won't show" question. Added one short, high-level
+   line to **Viewing & selecting**: a few uncommon formats won't preview in-app or render on a shared web page,
+   "because that depends on what Apple and Google can render — not on Muse." Maps to the
+   `muse-raw-support-three-layers` split: **Apple** = the in-app decode path (ImageIO/QuickLook), **Google** =
+   the Drive share page's `drive.google.com/thumbnail` renderer.
+2. **How a share link works — explainer + deep link.** The modal's **Sharing a collection** section was too
+   high-level for the questions people actually asked. Added the concrete specifics inline (narrowest
+   `drive.file` permission — only files Muse creates; captions ride *inside the link*, not on any server) and a
+   tappable Markdown link → `https://muse-share.pages.dev/privacy#how-it-works`. The full plain-but-precise
+   7-step walkthrough lives in a new `web/share/privacy.html` section (anchored `#how-it-works`): PKCE sign-in +
+   Keychain-only device token, upload to the user's own Drive, manifest/captions in the URL `#fragment` (never
+   sent to the host), static page with no API key/secret + strict CSP treating link text as untrusted, browser
+   `print()` for PDF, teardown via Manage Drive Shares + the local expiry sweep. `legal.css` gained `ol`
+   list-indent styling. Cross-checked every claim against the Drive durable-constraints — accurate. **Not a
+   security concern:** the design is safe by construction (open-source, no secret in the page, fragment-not-sent
+   is a web standard, least-privilege scope), so explaining it leaks nothing and builds trust.
+
+First inline Markdown link in the app UI — **runtime-verified** (memory: `verify-runtime-not-just-tests`) by
+rendering the exact `section()` view via `ImageRenderer`: the link shows in accent-blue, distinct from the
+`.foregroundStyle(.secondary)` body (secondary does NOT flatten link runs), and `Text(LocalizedStringKey)`
+links are tappable via the default `openURL`. The web/`web/share/` change must be **deployed** to Cloudflare
+Pages for the link target to show the new section (the page is still valid without it). `BUILD SUCCEEDED`;
+`MuseTests` + UI tests green.
