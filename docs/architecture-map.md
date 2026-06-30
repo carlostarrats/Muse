@@ -365,8 +365,10 @@ Muse/Muse/
     DriveClient.swift                Drive v3 REST (ensureMuseRoot/createFolder/uploadFile multipart/
                                      setAnyoneReader/deleteFolder); uploadFile strips metadata first;
                                      pure multipartBody is unit-tested
-    ImageMetadataStripper.swift      strips GPS/EXIF/camera/IPTC/XMP/maker-notes before upload (lossless,
-                                     keeps orientation + animation frames; fail-closed). Unit-tested
+    ImageMetadataStripper.swift      strips GPS/EXIF/camera/IPTC/XMP/maker-notes/thumbnail before upload
+                                     (single-frame re-encodes from pixels = clean by construction;
+                                     multi-frame stays lossless; every output re-verified via isClean;
+                                     fail-closed). Adversarial-tested per format (HEIC/PNG/TIFF/GIF/…)
     DriveShareManifest.swift         base64url URL-FRAGMENT payload (mirrors share.js keys). Unit-tested
     DriveShareRecord.swift           DriveShareRecord + DriveShareStore (JSON, App Support) + DriveExpiry
     DriveShareService.swift          @MainActor publish orchestrator (Phase signingIn/uploading/…/done)
