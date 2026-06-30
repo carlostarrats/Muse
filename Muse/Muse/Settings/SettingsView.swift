@@ -17,7 +17,7 @@ struct SettingsView: View {
     @AppStorage(AppSettings.autoTagKey) private var autoTag = true
     @AppStorage(AppSettings.autoCollectionsKey) private var autoCollections = true
     @AppStorage(AppSettings.showFileNamesKey) private var showFileNames = false
-    @AppStorage(AppSettings.showCollectionsInSidebarKey) private var showCollectionsInSidebar = false
+    @AppStorage(AppSettings.showCollectionsInSidebarKey) private var showCollectionsInSidebar = true
     @State private var authBusy = false
 
     var body: some View {

@@ -126,9 +126,9 @@ enum AppSettings {
 
     static let showCollectionsInSidebarKey = "showCollectionsInSidebar"
 
-    /// Show the Collections section in the sidebar. Default false. Unset → off.
+    /// Show the Collections section in the sidebar. Default true. Unset → on.
     static var showCollectionsInSidebar: Bool {
-        UserDefaults.standard.object(forKey: showCollectionsInSidebarKey) as? Bool ?? false
+        UserDefaults.standard.object(forKey: showCollectionsInSidebarKey) as? Bool ?? true
     }
 
     static let sidebarCollectionSortModeKey = "sidebarCollectionSortMode"
