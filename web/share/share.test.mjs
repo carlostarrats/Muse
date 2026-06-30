@@ -1,15 +1,50 @@
 // share.test.mjs  — run: node web/share/share.test.mjs
 import assert from 'node:assert';
+import { deflateSync, strToU8 } from './fflate.module.js';
 import { decodeManifest, validateManifest, isExpired, thumbURL, VALID_ID } from './share.js';
+
+// Decompression-bomb guard: the fragment is attacker-suppliable, so a tiny
+// compressed payload that inflates past the cap must NOT allocate unbounded
+// memory — it's truncated to garbage and rejected (null), not hung.
+{
+  const bomb = deflateSync(new Uint8Array(8 * 1024 * 1024)); // 8MB zeros -> tiny
+  const framed = new Uint8Array(bomb.length + 1); framed[0] = 1; framed.set(bomb, 1);
+  const frag = Buffer.from(framed).toString('base64').replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  const t0 = Date.now();
+  assert.strictEqual(decodeManifest(frag), null, 'decompression bomb rejected');
+  assert.ok(Date.now() - t0 < 1000, 'bomb handled promptly (bounded, no hang)');
+}
 
 const sample = { i:'Intro', l:'Sent by', n:'The Project', d:'2026-04-01',
   e:'2026-04-04', g:['aaaaaaaaaaaaaaaaaaaa','bbbbbbbbbbbbbbbbbbbb'], p:'cccccccccccccccccccc' };
 const b64url = Buffer.from(JSON.stringify(sample)).toString('base64')
   .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 
-assert.deepStrictEqual(decodeManifest(b64url), sample, 'round-trip decode');
+// Legacy (uncompressed) links — produced by app builds before compression — must
+// still decode. The first byte is JSON's '{' (0x7B), never the 0x01 marker.
+assert.deepStrictEqual(decodeManifest(b64url), sample, 'legacy uncompressed round-trip decode');
 assert.strictEqual(decodeManifest('!!!notbase64'), null, 'garbage → null');
-assert.ok(validateManifest(sample), 'valid manifest');
+
+// Compressed links: [0x01 marker][raw deflate of the JSON], base64url. Mirrors
+// what the Swift app emits (verified cross-language: Swift COMPRESSION_ZLIB ↔
+// fflate inflateSync).
+function compress(obj) {
+  const deflated = deflateSync(strToU8(JSON.stringify(obj)));
+  const withMarker = new Uint8Array(deflated.length + 1);
+  withMarker[0] = 1; withMarker.set(deflated, 1);
+  return Buffer.from(withMarker).toString('base64').replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+const withNames = { ...sample, f:['Sunset_final.jpg','IMG_4821.png'] };
+assert.deepStrictEqual(decodeManifest(compress(withNames)), withNames, 'compressed round-trip decode');
+assert.deepStrictEqual(decodeManifest(compress(sample)), sample, 'compressed decode without filenames');
+
+// Filenames (`f`) are optional; when present they must be a string array matching
+// the image count exactly (no mis-pairing of a name to the wrong image).
+assert.ok(validateManifest(withNames), 'valid with matching filenames');
+assert.ok(validateManifest(sample), 'valid without filenames (f optional)');
+assert.ok(!validateManifest({ ...sample, f:['only-one'] }), 'filenames length mismatch rejected');
+assert.ok(!validateManifest({ ...sample, f:[1, 2] }), 'non-string filenames rejected');
+assert.ok(!validateManifest({ ...sample, f:'notarray' }), 'non-array filenames rejected');
 const noPdf = { ...sample }; delete noPdf.p;
 assert.ok(validateManifest(noPdf), 'valid without pdfID (app no longer uploads a PDF)');
 assert.ok(!validateManifest({ ...sample, g:['short'] }), 'bad id rejected');

@@ -70,12 +70,27 @@ html, body {
      separate rows rather than blurring together vertically. */
   gap: 40px 20px;
 }
-.grid img {
+/* Each grid cell is a <figure>: a square image with an optional filename caption
+   under it. */
+.tile {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tile img {
   width: 100%;
   aspect-ratio: 1 / 1;
   object-fit: contain;
   display: block;
   cursor: pointer;
+}
+.tile-name {
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--muted);
+  text-align: center;
+  overflow-wrap: anywhere;   /* show the full name; wrap long ones rather than clip */
 }
 
 /* State machine: show only what matches data-state. */
@@ -220,14 +235,30 @@ html, body {
   animation: lb-fade 0.16s ease;
 }
 .lightbox[hidden] { display: none; }
+.lightbox-figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  animation: lb-in 0.18s ease;
+}
 .lightbox-img {
   max-width: 100%;
-  max-height: 100%;
+  max-height: 82vh;   /* leave room under the image for the filename caption */
   object-fit: contain;
   border-radius: 4px;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45);
-  animation: lb-in 0.18s ease;
 }
+.lightbox-name {
+  max-width: 100%;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.lightbox-name:empty { display: none; }
 .lightbox-close {
   position: fixed;
   top: 16px;
@@ -251,7 +282,7 @@ html, body {
 @keyframes lb-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes lb-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) {
-  .lightbox, .lightbox-img { animation: none; }
+  .lightbox, .lightbox-figure { animation: none; }
 }
 
 /* Bottom bar — expires on the left, legal links on the right. Below the fold. */
@@ -291,9 +322,10 @@ html, body {
   .label { font-size: 10px; }
   .grid {
     grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
+    gap: 14px 10px;
   }
-  .grid img {
+  /* Keep each image with its filename caption on the same page. */
+  .tile {
     break-inside: avoid;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;

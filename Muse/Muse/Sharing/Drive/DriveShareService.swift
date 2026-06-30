@@ -69,12 +69,14 @@ struct DriveShareForm {
             do {
                 phase = .uploading(0, urls.count)
                 var imageIDs: [String] = []
+                var filenames: [String] = []
                 for (i, url) in urls.enumerated() {
                     if Task.isCancelled { try? await client.deleteFolder(id: folderID); return }
                     let mime = Self.mimeType(for: url)
                     let id = try await client.uploadFile(url: url, name: url.lastPathComponent,
                                                          mime: mime, parent: folderID)
                     imageIDs.append(id)
+                    filenames.append(url.lastPathComponent)
                     phase = .uploading(i + 1, urls.count)
                 }
 
@@ -87,7 +89,7 @@ struct DriveShareForm {
                 let manifest = DriveShareManifest(
                     intro: form.intro, label: form.label, name: form.name,
                     date: iso.string(from: form.date), expiry: iso.string(from: form.expiry),
-                    imageIDs: imageIDs, pdfID: nil)
+                    imageIDs: imageIDs, filenames: filenames, pdfID: nil)
                 let pageURL = manifest.pageURL(base: DriveConfig.shareBaseURL)
 
                 let tracked = store.add(DriveShareRecord(id: UUID().uuidString, collectionName: title,
