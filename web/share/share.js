@@ -2,7 +2,27 @@
 // glue; tests import only these pure functions.
 import { inflateSync, strFromU8 } from './fflate.module.js';
 
-export const VALID_ID = /^[A-Za-z0-9_-]{20,}$/;
+// Upper-bounded: real Drive ids are ~33 chars. Without a max, a crafted fragment
+// (within the inflate cap) could carry multi-MB "ids" that build multi-MB img.src
+// URLs. 200 is far above any real id.
+export const VALID_ID = /^[A-Za-z0-9_-]{20,200}$/;
+
+// Caps on attacker-supplied display strings (signature fields / filenames), so a
+// single field can't be a multi-MB text node even within the inflate budget.
+const MAX_FIELD = 4096;
+const MAX_NAME = 1024;
+
+// Neutralize bidi-override / zero-width / control characters in attacker-supplied
+// display text (filenames + signature), so a crafted name can't visually reorder
+// itself (e.g. an RTL override hiding a ".scr" extension as ".txt"). textContent
+// already blocks markup; this blocks visual spoofing. Pairs with `unicode-bidi:
+// isolate` on the captions in CSS.
+export function sanitizeText(s) {
+  // C0/C1 controls + DEL, zero-width + bidi marks (200B-200F), bidi
+  // embeddings/overrides (202A-202E), word-joiner range (2060-2064), bidi
+  // isolates/deprecated (2066-206F), and BOM (FEFF).
+  return String(s).replace(/[\u0000-\u001F\u007F-\u009F\u061C\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF]/g, '');
+}
 
 // base64url → bytes (browser atob / node Buffer).
 function b64urlToBytes(fragment) {
@@ -59,13 +79,13 @@ export function validateManifest(m) {
   // point — a mismatched array is treated as a malformed/tampered manifest).
   if (m.f != null) {
     if (!Array.isArray(m.f) || m.f.length !== m.g.length) return false;
-    if (!m.f.every(s => typeof s === 'string')) return false;
+    if (!m.f.every(s => typeof s === 'string' && s.length <= MAX_NAME)) return false;
   }
   // Require a strict date-only `e` (YYYY-MM-DD). isExpired/formatDate append a
   // local time component; a value that already carried a time would yield an
   // Invalid Date and make isExpired fail OPEN (never expire). Reject it here.
   if (typeof m.e !== 'string' || !DATE_ONLY.test(m.e) || isNaN(Date.parse(m.e))) return false;
-  for (const k of ['i', 'l', 'n', 'd']) if (typeof m[k] !== 'string') return false;
+  for (const k of ['i', 'l', 'n', 'd']) if (typeof m[k] !== 'string' || m[k].length > MAX_FIELD) return false;
   return true;
 }
 
@@ -89,7 +109,7 @@ export function thumbURL(id) { return `https://drive.google.com/thumbnail?id=${i
 if (typeof document !== 'undefined') {
   const m = decodeManifest(location.hash.slice(1));
   const root = document.getElementById('app');
-  const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+  const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = sanitizeText(text); };
   if (!m || !validateManifest(m)) {
     root.dataset.state = 'unavailable';
   } else if (isExpired(m, new Date())) {
@@ -105,22 +125,27 @@ if (typeof document !== 'undefined') {
     if (save) save.addEventListener('click', () => window.print());
     const grid = document.getElementById('grid');
     // Filenames ride the manifest (key `f`) only when the app included them, and
-    // only used when they pair 1:1 with the images. Each tile is a <figure> so the
-    // optional caption sits under its image.
+    // only used when they pair 1:1 with the images. Each tile is a real <button>
+    // so it's keyboard-operable (Enter/Space → click, which the delegated grid
+    // listener handles) and announced as a control; its accessible name is the
+    // filename. The optional caption (sanitized) sits under the image.
     const names = (Array.isArray(m.f) && m.f.length === m.g.length) ? m.f : null;
     m.g.forEach((id, idx) => {
-      const fig = document.createElement('figure');
-      fig.className = 'tile';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tile';
       const img = document.createElement('img');
       img.loading = 'lazy'; img.src = thumbURL(id); img.alt = '';
-      fig.appendChild(img);
-      if (names) {
-        const cap = document.createElement('figcaption');
+      btn.appendChild(img);
+      const name = names ? sanitizeText(names[idx]) : '';
+      if (name) {
+        const cap = document.createElement('span');
         cap.className = 'tile-name';
-        cap.textContent = names[idx];   // textContent — never innerHTML
-        fig.appendChild(cap);
+        cap.textContent = name;   // textContent — never innerHTML
+        btn.appendChild(cap);
       }
-      grid.appendChild(fig);
+      btn.setAttribute('aria-label', name || `Image ${idx + 1}`);
+      grid.appendChild(btn);
     });
     setupBackdropSwitcher();
     setupGridSizer();
@@ -147,6 +172,9 @@ function setupLightbox() {
   const open = (src, name) => {
     bimg.src = src;
     if (bname) bname.textContent = name || '';   // filename under the enlarged image
+    // Announce the filename as the dialog's accessible name so a screen reader
+    // conveys which image is open on focus.
+    box.setAttribute('aria-label', name ? `Image preview: ${name}` : 'Image preview');
     box.hidden = false;
     background.forEach((el) => { el.inert = true; });   // inert background (focus + AT)
     document.documentElement.style.overflow = 'hidden'; // scroll lock
@@ -162,12 +190,14 @@ function setupLightbox() {
     document.documentElement.style.overflow = '';
     if (lastFocus && lastFocus.focus) lastFocus.focus();
   };
-  // Clicking anywhere on a tile (image or its caption) opens that image.
+  // A tile is a <button>, so keyboard activation (Enter/Space) fires a click that
+  // bubbles here too — one handler covers mouse + keyboard.
   grid.addEventListener('click', (e) => {
-    const fig = e.target.closest('figure.tile');
-    const img = fig ? fig.querySelector('img') : e.target.closest('img');
+    const tile = e.target.closest('.tile');
+    if (!tile) return;
+    const img = tile.querySelector('img');
     if (!img || !img.src) return;
-    const cap = fig ? fig.querySelector('.tile-name') : null;
+    const cap = tile.querySelector('.tile-name');
     open(img.src, cap ? cap.textContent : '');
   });
   closeBtn.addEventListener('click', close);
