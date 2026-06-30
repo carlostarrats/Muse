@@ -71,7 +71,10 @@ struct DriveShareSheet: View {
             field(String(localized: "Name"), text: $name,
                   prompt: String(localized: "Your Name"))
             VStack(alignment: .leading, spacing: 4) {
-                Text("Expires").font(.system(size: 12)).foregroundStyle(.secondary)
+                (Text("Expires").foregroundStyle(.secondary)
+                 + Text(verbatim: "  ")
+                 + Text("(click date to customize)").foregroundStyle(Color.accentColor))
+                    .font(.system(size: 12))
                 DatePicker("", selection: $expiry, in: Date()..., displayedComponents: .date)
                     .datePickerStyle(.field)
                     .labelsHidden()
