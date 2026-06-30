@@ -4897,7 +4897,12 @@ feat/next-100). All 36 unit test suites were green before the review; remained g
    - `testStripRemovesMakerNote` — `kCGImagePropertyMakerAppleDictionary` with fake keys `"1"/"2"` may not
      survive JPEG encode.
    - `testStripPNGRemovesEXIFGPS` — GPS in PNG is not guaranteed to survive encode on all hosts.
-   - `testStripMultiFrameMetadataStripped` — now guards both the per-page AND container needles in one guard.
+   - `testStripMultiFrameMetadataStripped` — gates the whole test on the per-page needle (the primary thing
+     under test, reliably embedded) and asserts container-make removal only when that needle WAS embedded.
+     (A first pass guarded on BOTH needles in one `guard`, which made the test SKIP entirely on hosts whose
+     TIFF encoder omits the container-level make — losing the valid per-page + frame-preservation coverage.
+     Caught in self-review: the suite reported 1 skip; split into gate-on-page + conditional-container so the
+     test runs and asserts everything it can on every host.)
 
 3. **`web/share/index.html` — missing `tabindex="-1"` on the lightbox dialog.** ARIA authoring practices
    require dialog containers to have `tabindex="-1"` so programmatic focus and AT boundary anchoring work
