@@ -1,15 +1,42 @@
 // share.js — pure manifest logic (browser + node). The page imports the render
 // glue; tests import only these pure functions.
+import { inflateSync, strFromU8 } from './fflate.module.js';
+
 export const VALID_ID = /^[A-Za-z0-9_-]{20,}$/;
 
+// base64url → bytes (browser atob / node Buffer).
+function b64urlToBytes(fragment) {
+  let s = fragment.replace(/-/g, '+').replace(/_/g, '/');
+  while (s.length % 4) s += '=';
+  if (typeof atob === 'function') {
+    const bin = atob(s);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+  return new Uint8Array(Buffer.from(s, 'base64'));
+}
+
+// Bounds the decompressed size. The fragment is unsigned + attacker-suppliable,
+// so a crafted "zip bomb" (tiny compressed payload that inflates to gigabytes)
+// would otherwise let inflate allocate unbounded memory and hang the recipient's
+// browser. fflate fills at most this buffer (it truncates past it rather than
+// growing), so a bomb yields garbage → JSON.parse throws → null. A real manifest
+// (≤1000 images + filenames) is well under this.
+const MAX_INFLATED = 4 * 1024 * 1024;
+
+// The manifest fragment is either raw UTF-8 JSON (legacy links, first byte '{' =
+// 0x7B) or [0x01 marker][raw-DEFLATE of the JSON] (compressed links the app emits
+// when that's smaller). The app picks whichever is shorter; we detect via the
+// marker so both keep working. DEFLATE is raw RFC-1951 — matches Swift's
+// COMPRESSION_ZLIB (verified cross-language).
 export function decodeManifest(fragment) {
   if (!fragment) return null;
   try {
-    let s = fragment.replace(/-/g, '+').replace(/_/g, '/');
-    while (s.length % 4) s += '=';
-    const json = (typeof atob === 'function')
-      ? decodeURIComponent(escape(atob(s)))
-      : Buffer.from(s, 'base64').toString('utf8');
+    const bytes = b64urlToBytes(fragment);
+    const json = bytes[0] === 0x01
+      ? strFromU8(inflateSync(bytes.subarray(1), { out: new Uint8Array(MAX_INFLATED) }))
+      : strFromU8(bytes);
     return JSON.parse(json);
   } catch { return null; }
 }
@@ -27,6 +54,13 @@ export function validateManifest(m) {
   if (m.g.length > 1000) return false;
   if (!m.g.every(id => VALID_ID.test(id))) return false;
   if (m.p != null && !VALID_ID.test(m.p)) return false;
+  // Filenames are optional; when present they must be a string array exactly as
+  // long as the image list, so each name pairs with the right image (the whole
+  // point — a mismatched array is treated as a malformed/tampered manifest).
+  if (m.f != null) {
+    if (!Array.isArray(m.f) || m.f.length !== m.g.length) return false;
+    if (!m.f.every(s => typeof s === 'string')) return false;
+  }
   // Require a strict date-only `e` (YYYY-MM-DD). isExpired/formatDate append a
   // local time component; a value that already carried a time would yield an
   // Invalid Date and make isExpired fail OPEN (never expire). Reject it here.
@@ -70,11 +104,24 @@ if (typeof document !== 'undefined') {
     const save = document.getElementById('save');
     if (save) save.addEventListener('click', () => window.print());
     const grid = document.getElementById('grid');
-    for (const id of m.g) {
+    // Filenames ride the manifest (key `f`) only when the app included them, and
+    // only used when they pair 1:1 with the images. Each tile is a <figure> so the
+    // optional caption sits under its image.
+    const names = (Array.isArray(m.f) && m.f.length === m.g.length) ? m.f : null;
+    m.g.forEach((id, idx) => {
+      const fig = document.createElement('figure');
+      fig.className = 'tile';
       const img = document.createElement('img');
       img.loading = 'lazy'; img.src = thumbURL(id); img.alt = '';
-      grid.appendChild(img);
-    }
+      fig.appendChild(img);
+      if (names) {
+        const cap = document.createElement('figcaption');
+        cap.className = 'tile-name';
+        cap.textContent = names[idx];   // textContent — never innerHTML
+        fig.appendChild(cap);
+      }
+      grid.appendChild(fig);
+    });
     setupBackdropSwitcher();
     setupGridSizer();
     setupLightbox();
@@ -92,12 +139,14 @@ function setupLightbox() {
   const grid = document.getElementById('grid');
   if (!box || !grid) return;
   const bimg = document.getElementById('lightbox-img');
+  const bname = document.getElementById('lightbox-name');
   const closeBtn = document.getElementById('lightbox-close');
   // The page content behind the dialog (everything but the lightbox itself).
   const background = [document.getElementById('app'), document.querySelector('.legal')].filter(Boolean);
   let lastFocus = null;
-  const open = (src) => {
+  const open = (src, name) => {
     bimg.src = src;
+    if (bname) bname.textContent = name || '';   // filename under the enlarged image
     box.hidden = false;
     background.forEach((el) => { el.inert = true; });   // inert background (focus + AT)
     document.documentElement.style.overflow = 'hidden'; // scroll lock
@@ -108,13 +157,18 @@ function setupLightbox() {
     if (box.hidden) return;
     box.hidden = true;
     bimg.removeAttribute('src');
+    if (bname) bname.textContent = '';
     background.forEach((el) => { el.inert = false; });
     document.documentElement.style.overflow = '';
     if (lastFocus && lastFocus.focus) lastFocus.focus();
   };
+  // Clicking anywhere on a tile (image or its caption) opens that image.
   grid.addEventListener('click', (e) => {
-    const img = e.target.closest('img');
-    if (img && img.src) open(img.src);
+    const fig = e.target.closest('figure.tile');
+    const img = fig ? fig.querySelector('img') : e.target.closest('img');
+    if (!img || !img.src) return;
+    const cap = fig ? fig.querySelector('.tile-name') : null;
+    open(img.src, cap ? cap.textContent : '');
   });
   closeBtn.addEventListener('click', close);
   box.addEventListener('click', (e) => { if (e.target === box) close(); });

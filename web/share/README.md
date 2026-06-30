@@ -1,17 +1,28 @@
 # Muse — Drive share page
 
 A single static page that renders a shared Muse collection. It is **stateless**:
-the entire payload (signature text, expiry, ordered Drive image ids, optional
-PDF id) is base64url-encoded into the URL **fragment** (`…/s#<payload>`), so it
-never reaches the server. Images load from Drive's public thumbnail endpoint;
-the page holds no secrets and no API key.
+the entire payload (signature text, expiry, ordered Drive image ids, per-image
+filenames, optional PDF id) is encoded into the URL **fragment**
+(`…/s#<payload>`), so it never reaches the server. Images load from Drive's
+public thumbnail endpoint; the page holds no secrets and no API key.
+
+The fragment is base64url of either the raw JSON manifest **or** (when smaller)
+`[0x01 marker][raw-DEFLATE of the JSON]` — the app picks whichever is shorter, so
+adding filenames doesn't bloat the link. DEFLATE is raw RFC-1951 (Swift
+`COMPRESSION_ZLIB` ⇄ fflate `inflateSync`, verified cross-language). Legacy
+uncompressed links (first byte `{`) still decode. **Security: the fragment is
+unsigned + attacker-suppliable, so `decodeManifest` caps the inflate output
+(`MAX_INFLATED`) — a decompression bomb is truncated to garbage and rejected,
+never an unbounded allocation. Don't remove that cap.** Filenames (`f`) are
+optional and must match the image count 1:1 or they're dropped.
 
 ```
-index.html   shell (intro + gallery + expired/unavailable states)
-share.js     decode + validate manifest, soft-expiry, render (textContent only)
-share.css    matches the Muse mockups
-_headers     Cloudflare strict CSP + hardening
-share.test.mjs   pure-logic unit tests — run: node share.test.mjs
+index.html         shell (intro + gallery + lightbox + expired/unavailable)
+share.js           decode (+inflate) + validate manifest, soft-expiry, render (textContent only)
+share.css          matches the Muse mockups
+fflate.module.js   vendored DEFLATE decompressor (MIT; pure-compute, no network) — see fflate.LICENSE.txt
+_headers           Cloudflare strict CSP + hardening
+share.test.mjs     pure-logic unit tests (incl. compression + bomb guard) — run: node share.test.mjs
 ```
 
 ## Deploy to Cloudflare Pages
