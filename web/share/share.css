@@ -419,16 +419,29 @@ html.sizer-dragging, html.sizer-dragging * {
   .bar { margin-bottom: 18px; }
   .intro, .name { font-size: 14px; }
   .label { font-size: 10px; }
+  /* Lay the printed grid out as atomic inline-flex tiles in plain block flow
+     instead of CSS grid. CSS-grid items fragment unreliably — Chrome/Safari can
+     slice an image across a page break even with break-inside:avoid. An
+     inline-flex box is an *atomic* inline-level box the print engine never
+     splits, so a tile that won't fit drops whole to the next page (its row line
+     moves with it) and images are never cut. Screen layout (the real .grid) is
+     untouched — this is @media print only. 3 columns: 32% each + 2% gutters on
+     the middle column = 100%. (The DOM has no whitespace between tiles, so
+     inline-block spacing gaps don't apply.) */
   .grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 14px 10px;
+    display: block;
+    gap: 0;
   }
-  /* Keep each image with its filename caption on the same page. */
   .tile {
-    break-inside: avoid;
+    display: inline-flex;       /* atomic → unbreakable across pages */
+    vertical-align: top;
+    width: 32%;
+    margin: 0 0 14px;
+    break-inside: avoid;        /* belt-and-suspenders; the atomic box already won't split */
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+  .tile:nth-child(3n-1) { margin-left: 2%; margin-right: 2%; }
   /* No loading shimmer in the printed PDF, and never hold an image at opacity 0
      if it somehow prints before its load event fired. */
   .tile::before { display: none !important; }
