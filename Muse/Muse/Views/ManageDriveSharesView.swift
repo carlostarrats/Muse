@@ -10,8 +10,8 @@
 import SwiftUI
 import AppKit
 
-/// Which date the Manage list sorts on, and in which direction. Persisted so
-/// the choice sticks between openings.
+/// Which date the Manage list sorts on, and in which direction. Not persisted —
+/// the view resets to Expires · Earliest on each open (see `sortKey`/`sortOrder`).
 enum DriveShareSortKey: String { case expires, created }
 enum DriveShareSortOrder: String { case soonest, latest }
 
@@ -121,9 +121,11 @@ struct ManageDriveSharesView: View {
         }
     }
 
-    /// Thin column separator between the metadata fields.
+    /// Thin column separator between the metadata fields. Decorative — hidden
+    /// from VoiceOver so the "|" glyph isn't read aloud between fields.
     private var metaPipe: some View {
         Text(verbatim: "|").foregroundStyle(.tertiary).padding(.horizontal, 8)
+            .accessibilityHidden(true)
     }
 
     private func row(_ record: DriveShareRecord) -> some View {
@@ -140,14 +142,16 @@ struct ManageDriveSharesView: View {
                 }
                 .font(.system(size: 13)).foregroundStyle(.secondary)
             }
+            // Name + metadata read as one VoiceOver element (pipes excluded).
+            .accessibilityElement(children: .combine)
             Spacer()
-            OpenLinkButton {
+            OpenLinkButton(shareName: record.collectionName) {
                 if let url = URL(string: record.pageURL) { NSWorkspace.shared.open(url) }
             }
             if deleting.contains(record.id) {
                 ProgressView().controlSize(.small).frame(width: 18)
             } else {
-                TrashButton { Task { await delete(record) } }
+                TrashButton(shareName: record.collectionName) { Task { await delete(record) } }
             }
         }
     }
@@ -174,8 +178,10 @@ struct ManageDriveSharesView: View {
     }
 }
 
-/// "Open Link" — a bordered button (accent label), filled on hover.
+/// "Open Link" — a bordered button (accent label), filled on hover. Carries the
+/// share name so each row's button has a distinct VoiceOver label.
 private struct OpenLinkButton: View {
+    let shareName: String
     let action: () -> Void
     @State private var hovering = false
     var body: some View {
@@ -191,12 +197,15 @@ private struct OpenLinkButton: View {
                 .contentShape(RoundedRectangle(cornerRadius: 7))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Text("Open the link for \(shareName)"))
         .onHover { hovering = $0 }
     }
 }
 
-/// Trash — a bordered icon button that reddens + fills on hover.
+/// Trash — a bordered icon button that reddens + fills on hover. Carries the
+/// share name so each row's button has a distinct VoiceOver label.
 private struct TrashButton: View {
+    let shareName: String
     let action: () -> Void
     @State private var hovering = false
     var body: some View {
@@ -213,7 +222,7 @@ private struct TrashButton: View {
         }
         .buttonStyle(.plain)
         .help("Unpublish — delete this share's Drive folder now")
-        .accessibilityLabel("Unpublish Drive share")
+        .accessibilityLabel(Text("Unpublish the Drive share for \(shareName)"))
         .onHover { hovering = $0 }
     }
 }

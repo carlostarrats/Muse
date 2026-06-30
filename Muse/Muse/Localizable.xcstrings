@@ -4034,6 +4034,16 @@
         }
       }
     },
+    "Open the link for %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir le lien de %@"
+          }
+        }
+      }
+    },
     "Page intro": {
       "localizations": {
         "fr": {
@@ -4104,12 +4114,12 @@
         }
       }
     },
-    "Unpublish Drive share": {
+    "Unpublish the Drive share for %@": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dépublier le partage Drive"
+            "value": "Dépublier le partage Drive de %@"
           }
         }
       }
