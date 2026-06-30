@@ -59,10 +59,14 @@ html, body {
 .label { font-size: 12px; color: var(--muted); }
 .name { font-size: 12px; color: var(--ink); }
 
-/* Responsive grid. Each cell is square and the image fits fully inside
-   (object-fit: contain), so portrait AND landscape both show uncropped. No tile
-   fill — the surround is transparent, so the chosen page backdrop shows through
-   the space around every image. The grid sizer sets a target TILE SIZE
+/* Responsive grid. Each cell is a FIXED 4:3 PORTRAIT box (taller than wide —
+   portrait is the dominant photo ratio) so the rows always line up. The image
+   inside is NOT forced to the box shape: it's sized to its OWN true ratio (capped
+   to fit), and the [image + caption] stack is centered in the cell as one group.
+   So the caption always hugs the image — a short landscape floats centered with
+   even space above and below, instead of the caption pinning to the box bottom.
+   No tile fill — the surround is transparent, so the chosen page backdrop shows
+   through the space around every image. The grid sizer sets a target TILE SIZE
    (--tile-min, computed in share.js from the chosen column density at the
    current width); auto-fill then reflows the column count responsively around
    it as the window resizes. min(…, 100%) prevents overflow on narrow screens. */
@@ -73,8 +77,8 @@ html, body {
      separate rows rather than blurring together vertically. */
   gap: 40px 20px;
 }
-/* Each grid cell is a <button> (keyboard-operable; opens the lightbox): a square
-   image with an optional filename caption under it. Button chrome is reset. */
+/* Each grid cell is a <button> (keyboard-operable; opens the lightbox): a 4:3
+   portrait image box with an optional filename caption under it. Chrome reset. */
 .tile {
   margin: 0;
   padding: 0;
@@ -83,10 +87,16 @@ html, body {
   font: inherit;
   color: inherit;
   width: 100%;
+  /* Fixed 4:3 portrait cell — uniform across the grid so rows align. The image +
+     caption stack is centered inside it as one group (see .tile img). */
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
   -webkit-appearance: none;
   appearance: none;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 6px;
   cursor: pointer;
 }
@@ -96,9 +106,14 @@ html, body {
   border-radius: 3px;
 }
 .tile img {
-  width: 100%;
-  aspect-ratio: 1 / 1;
+  /* Sized to the image's OWN ratio (no forced aspect-ratio), capped to the cell.
+     max-height reserves room for up to a 2-line caption (11px × 1.3 × 2 + the 6px
+     gap ≈ 35px) so the centered group never overflows the fixed cell. The element
+     box ends up matching the rendered picture, so the caption hugs it. */
+  max-width: 100%;
+  max-height: calc(100% - 36px);
   object-fit: contain;
+  flex: 0 0 auto;
   display: block;
 }
 .tile-name {
@@ -108,6 +123,14 @@ html, body {
   text-align: center;
   overflow-wrap: anywhere;   /* show the full name; wrap long ones rather than clip */
   unicode-bidi: isolate;     /* contain any residual directional chars (defense-in-depth) */
+  flex: 0 0 auto;
+  /* Bound long filenames to 2 lines so the image's max-height reserve holds (the
+     full name still shows in the lightbox + the button's accessible name). */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
 
 /* State machine: show only what matches data-state. */
