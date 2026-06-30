@@ -194,7 +194,20 @@ struct HeroStage: View {
         if let img, u == url {
             image = img
             withAnimation(.easeOut(duration: 0.2)) { displayRect = fitRect }
+            return
         }
+        // ImageIO returned nil — the source isn't decodable by it (e.g. a RAW
+        // format Apple's camera codec doesn't support). Fall back to the shared
+        // thumbnail path, which tries QuickLook's best representation (some
+        // formats render there even when ImageIO can't) and otherwise yields the
+        // system type icon — anything is better than leaving the viewer blank.
+        guard u == url,
+              let fallback = await ThumbnailCache.shared.thumbnail(
+                  for: u, size: CGSize(width: target, height: target), scale: 1.0),
+              u == url
+        else { return }
+        image = fallback
+        withAnimation(.easeOut(duration: 0.2)) { displayRect = fitRect }
     }
 
     private var panGesture: some Gesture {
