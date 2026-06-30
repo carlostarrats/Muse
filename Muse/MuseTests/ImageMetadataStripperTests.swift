@@ -170,6 +170,199 @@ final class ImageMetadataStripperTests: XCTestCase {
         XCTAssertNil(out.data.range(of: needle), "XMP metadata (location etc.) must be stripped")
     }
 
+    // MARK: - Per-format adversarial coverage (from the security review)
+
+    /// Encode a solid image of `type` carrying arbitrary metadata `props`. Returns
+    /// nil if the host's ImageIO can't ENCODE that type (caller XCTSkips).
+    private func makeImage(type: UTType, props: [CFString: Any],
+                          width: Int = 40, height: Int = 28) -> URL? {
+        let cs = CGColorSpace(name: CGColorSpace.sRGB)!
+        guard let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                  bytesPerRow: 0, space: cs,
+                                  bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return nil }
+        ctx.setFillColor(CGColor(red: 0.4, green: 0.55, blue: 0.65, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        guard let cg = ctx.makeImage() else { return nil }
+        let data = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(data, type.identifier as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(dest, cg, props as CFDictionary)
+        guard CGImageDestinationFinalize(dest) else { return nil }
+        let ext = type.preferredFilenameExtension ?? "img"
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("muse-fmt-\(UUID().uuidString).\(ext)")
+        try? (data as Data).write(to: url)
+        return url
+    }
+
+    private func gpsDict() -> [CFString: Any] {
+        [kCGImagePropertyGPSLatitude: 37.7749, kCGImagePropertyGPSLatitudeRef: "N",
+         kCGImagePropertyGPSLongitude: 122.4194, kCGImagePropertyGPSLongitudeRef: "W"]
+    }
+
+    /// HEIC = iPhone's native format and the most important real-world case
+    /// (iPhone photos carry GPS in a separate EXIF item, not inline like JPEG).
+    func testStripHEICRemovesGPSAndPrivateText() throws {
+        let needle = "MUSE-HEIC-NEEDLE"
+        let props: [CFString: Any] = [
+            kCGImagePropertyGPSDictionary: gpsDict(),
+            kCGImagePropertyExifDictionary: [kCGImagePropertyExifUserComment: needle],
+            kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFMake: needle + "-MAKE"],
+        ]
+        guard let url = makeImage(type: .heic, props: props) else { throw XCTSkip("HEIC encode unavailable on host") }
+        defer { try? FileManager.default.removeItem(at: url) }
+        guard try Data(contentsOf: url).range(of: Data(needle.utf8)) != nil else {
+            throw XCTSkip("host did not embed HEIC metadata; nothing to assert")
+        }
+        let out = try ImageMetadataStripper.strip(url: url, mime: "image/heic")
+        XCTAssertNil(out.data.range(of: Data(needle.utf8)), "HEIC private text must be stripped")
+        XCTAssertTrue(ImageMetadataStripper.isClean(out.data), "stripped HEIC must verify clean")
+    }
+
+    func testStripPNGRemovesEXIFGPS() throws {
+        guard let url = makeImage(type: .png, props: [kCGImagePropertyGPSDictionary: gpsDict()]) else {
+            throw XCTSkip("PNG encode unavailable")
+        }
+        defer { try? FileManager.default.removeItem(at: url) }
+        let out = try ImageMetadataStripper.strip(url: url, mime: "image/png")
+        let src = CGImageSourceCreateWithData(out.data as CFData, nil)!
+        let p = (CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any]) ?? [:]
+        XCTAssertNil(p[kCGImagePropertyGPSDictionary], "PNG GPS must be stripped")
+        XCTAssertTrue(ImageMetadataStripper.isClean(out.data))
+    }
+
+    func testStripTIFFRemovesGPSAndIPTC() throws {
+        let needle = "MUSE-TIFF-NEEDLE"
+        let props: [CFString: Any] = [
+            kCGImagePropertyGPSDictionary: gpsDict(),
+            kCGImagePropertyIPTCDictionary: [kCGImagePropertyIPTCCaptionAbstract: needle],
+            kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFMake: needle + "-MAKE"],
+        ]
+        guard let url = makeImage(type: .tiff, props: props) else { throw XCTSkip("TIFF encode unavailable") }
+        defer { try? FileManager.default.removeItem(at: url) }
+        guard try Data(contentsOf: url).range(of: Data(needle.utf8)) != nil else {
+            throw XCTSkip("host did not embed TIFF metadata")
+        }
+        let out = try ImageMetadataStripper.strip(url: url, mime: "image/tiff")
+        XCTAssertNil(out.data.range(of: Data(needle.utf8)), "TIFF private metadata must be stripped")
+        XCTAssertTrue(ImageMetadataStripper.isClean(out.data))
+    }
+
+    /// A JPEG's EXIF can embed a small thumbnail JPEG. The privacy guarantee:
+    /// a thumbnailed image with GPS must come out with NO GPS anywhere. (ImageIO
+    /// won't let us inject independent GPS into the IFD1 thumbnail, but the strip
+    /// re-encodes from decoded pixels, so any thumbnail in the OUTPUT is rebuilt
+    /// from already-clean pixels and carries nothing — verified via isClean.)
+    func testStripThumbnailedImageLeaksNoGPS() throws {
+        let needle = "MUSE-THUMB-NEEDLE"
+        let cs = CGColorSpace(name: CGColorSpace.sRGB)!
+        let ctx = CGContext(data: nil, width: 256, height: 256, bitsPerComponent: 8, bytesPerRow: 0,
+                            space: cs, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
+        ctx.setFillColor(CGColor(red: 0.8, green: 0.2, blue: 0.2, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: 256, height: 256))
+        let cg = ctx.makeImage()!
+        let data = NSMutableData()
+        let dest = CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil)!
+        CGImageDestinationAddImage(dest, cg, [
+            kCGImageDestinationEmbedThumbnail: kCFBooleanTrue!,
+            kCGImagePropertyGPSDictionary: gpsDict(),
+            kCGImagePropertyExifDictionary: [kCGImagePropertyExifUserComment: needle],
+        ] as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(dest))
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("muse-thumb-\(UUID().uuidString).jpg")
+        try (data as Data).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        // Sanity: the fixture really has an embedded thumbnail AND GPS AND the needle.
+        let onlyEmbedded = [kCGImageSourceCreateThumbnailFromImageIfAbsent: false] as CFDictionary
+        let srcBefore = CGImageSourceCreateWithData(try Data(contentsOf: url) as CFData, nil)!
+        guard CGImageSourceCreateThumbnailAtIndex(srcBefore, 0, onlyEmbedded) != nil else {
+            throw XCTSkip("host did not embed a thumbnail; nothing to assert")
+        }
+        let beforeProps = (CGImageSourceCopyPropertiesAtIndex(srcBefore, 0, nil) as? [CFString: Any]) ?? [:]
+        XCTAssertNotNil(beforeProps[kCGImagePropertyGPSDictionary], "fixture should carry GPS")
+        XCTAssertNotNil(try Data(contentsOf: url).range(of: Data(needle.utf8)))
+
+        let out = try ImageMetadataStripper.strip(url: url, mime: "image/jpeg")
+        let after = (CGImageSourceCopyPropertiesAtIndex(
+            CGImageSourceCreateWithData(out.data as CFData, nil)!, 0, nil) as? [CFString: Any]) ?? [:]
+        XCTAssertNil(after[kCGImagePropertyGPSDictionary], "GPS must be gone on a thumbnailed image")
+        XCTAssertNil(out.data.range(of: Data(needle.utf8)), "private text must be gone")
+        XCTAssertTrue(ImageMetadataStripper.isClean(out.data), "thumbnailed image must verify clean")
+    }
+
+    /// Apple MakerNote can encode burst/run identifiers and location hints.
+    func testStripRemovesMakerNote() throws {
+        let needle = "MUSE-MAKERAPPLE-NEEDLE"
+        let props: [CFString: Any] = [
+            kCGImagePropertyExifDictionary: [kCGImagePropertyExifUserComment: "x"],
+            kCGImagePropertyMakerAppleDictionary: ["1": needle, "2": needle],
+        ]
+        guard let url = makeImage(type: .jpeg, props: props) else { throw XCTSkip("JPEG encode unavailable") }
+        defer { try? FileManager.default.removeItem(at: url) }
+        let out = try ImageMetadataStripper.strip(url: url, mime: "image/jpeg")
+        XCTAssertNil(out.data.range(of: Data(needle.utf8)), "maker note must be stripped")
+        let src = CGImageSourceCreateWithData(out.data as CFData, nil)!
+        let p = (CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any]) ?? [:]
+        XCTAssertNil(p[kCGImagePropertyMakerAppleDictionary], "MakerApple dict must be gone")
+        XCTAssertTrue(ImageMetadataStripper.isClean(out.data))
+    }
+
+    /// Multi-frame container fail-open: the multi-frame path must strip BOTH
+    /// per-page AND container-level private metadata, not just GPS, while keeping
+    /// every page. A multi-page TIFF reliably carries page metadata.
+    func testStripMultiFrameMetadataStripped() throws {
+        let needleContainer = "MUSE-MF-CONTAINER-NEEDLE"
+        let needlePage = "MUSE-MF-PAGE-NEEDLE"
+        let cs = CGColorSpace(name: CGColorSpace.sRGB)!
+        let data = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(data, UTType.tiff.identifier as CFString, 2, nil) else {
+            throw XCTSkip("TIFF encode unavailable")
+        }
+        CGImageDestinationSetProperties(dest, [
+            kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFMake: needleContainer],
+        ] as CFDictionary)
+        for f in 0..<2 {
+            let ctx = CGContext(data: nil, width: 24, height: 24, bitsPerComponent: 8, bytesPerRow: 0,
+                                space: cs, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
+            ctx.setFillColor(CGColor(red: CGFloat(f), green: 0.4, blue: 0.6, alpha: 1))
+            ctx.fill(CGRect(x: 0, y: 0, width: 24, height: 24))
+            CGImageDestinationAddImage(dest, ctx.makeImage()!, [
+                kCGImagePropertyGPSDictionary: gpsDict(),
+                kCGImagePropertyIPTCDictionary: [kCGImagePropertyIPTCCaptionAbstract: needlePage],
+            ] as CFDictionary)
+        }
+        guard CGImageDestinationFinalize(dest) else { throw XCTSkip("multi-page TIFF finalize failed") }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("muse-mf-\(UUID().uuidString).tiff")
+        try (data as Data).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let raw = try Data(contentsOf: url)
+        guard raw.range(of: Data(needlePage.utf8)) != nil else {
+            throw XCTSkip("host did not embed TIFF page metadata")
+        }
+        let out = try ImageMetadataStripper.strip(url: url, mime: "image/tiff")
+        XCTAssertNil(out.data.range(of: Data(needlePage.utf8)), "per-page metadata must be stripped")
+        XCTAssertNil(out.data.range(of: Data(needleContainer.utf8)), "container metadata must be stripped")
+        XCTAssertTrue(ImageMetadataStripper.isClean(out.data))
+        // Both pages must survive (multi-frame path must not collapse the image).
+        let src = CGImageSourceCreateWithData(out.data as CFData, nil)!
+        XCTAssertEqual(CGImageSourceGetCount(src), 2, "both TIFF pages preserved")
+    }
+
+    /// The reported mime must reflect the ACTUAL bytes, not the (possibly lying)
+    /// file extension — or Drive stores a mislabeled file the thumbnailer can't read.
+    func testMimeReflectsActualBytesNotExtension() throws {
+        guard let jpegURL = makeImage(type: .jpeg, props: [:]) else { throw XCTSkip("JPEG encode unavailable") }
+        defer { try? FileManager.default.removeItem(at: jpegURL) }
+        let liar = FileManager.default.temporaryDirectory
+            .appendingPathComponent("muse-liar-\(UUID().uuidString).png")   // .png ext, JPEG bytes
+        try Data(contentsOf: jpegURL).write(to: liar)
+        defer { try? FileManager.default.removeItem(at: liar) }
+        let out = try ImageMetadataStripper.strip(url: liar, mime: "image/png")
+        XCTAssertEqual(out.mime, "image/jpeg", "mime must come from the bytes, not the extension")
+    }
+
     func testStripThrowsOnNonImage() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("muse-notimage-\(UUID().uuidString).bin")

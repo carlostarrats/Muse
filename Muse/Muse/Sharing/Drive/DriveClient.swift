@@ -64,8 +64,11 @@ import Foundation
         // BEFORE upload: the file is made anyone-readable and its id rides the
         // public share URL, so the original — not just the EXIF-free Google
         // thumbnail — is reachable by recipients. Fail-closed (throws) rather
-        // than ever upload an un-stripped original.
-        let stripped = try ImageMetadataStripper.strip(url: url, mime: mime)
+        // than ever upload an un-stripped original. Run off the main actor —
+        // decode/re-encode is heavy CPU + memory and DriveClient is @MainActor.
+        let stripped = try await Task.detached(priority: .utility) {
+            try ImageMetadataStripper.strip(url: url, mime: mime)
+        }.value
         let boundary = "muse-\(UUID().uuidString)"
         var req = try await authed(uploadEndpoint)
         req.httpMethod = "POST"
