@@ -5016,3 +5016,36 @@ ones → one adversarial subagent to verify the fixes → loop green.
   `drive.file`, no client secret, Keychain device-only tokens).
 
 `MuseTests` (470, +1) + UI tests green.
+
+### Adversarial security review (hacker-persona subagents) — 2026-06-30 (`feat/next-103`)
+
+Followed the health review with a targeted, sub-agent-driven adversarial pass: four attacker-persona
+subagents (OAuth/token interception, malicious share-link → recipient, malicious file → viewer egress/DoS,
+SQL/path/multipart/sandbox) → verify each finding → fix → two verification rounds looping until closed.
+
+- **DEFENDED, no change (verified):** OAuth/token flow (ASWebAuthenticationSession-bound callback with no
+  stray URL handler, per-flow S256 PKCE from `SecRandomCopyBytes`, validated `state`, device-only non-synced
+  Keychain, revoke-on-signout, coalesced refresh, hardcoded HTTPS); the public share page (no XSS/CSP/network
+  regression, 4 MB inflate cap empirically holds against a 64 MB bomb); FTS5/SQL (double-escaped + fully
+  parameter-bound), path containment (sibling-safe `+ "/"` everywhere), rename migration (`SUBSTR` not `LIKE`),
+  multipart filename (JSON-escaped).
+- **HIGH — AVFoundation reference-movie / HLS egress (fixed).** Every `AVURLAsset`/`AVPlayer` was built bare,
+  so a QuickTime reference movie (`rmra`/`rdrf` remote data-ref) or HLS playlist could beacon the viewer's IP
+  on mere folder open (thumbnail prewarm opens the asset) — a direct break of the "no network" promise. Added
+  `AVURLAsset.noNetwork(url:)` / `AVPlayer.noNetwork(url:)` (`AVURLAssetReferenceRestrictionsKey = .forbidAll`)
+  and routed all 7 sites through it. Also closed the QuickLook residual (its out-of-process AVFoundation is
+  unrestricted): `ThumbnailCache.generate` returns an `NSWorkspace` type icon for an unframable video instead
+  of falling through to QuickLook, and `CollectionPDFExporter` frame-extracts videos via `.noNetwork`.
+- **MEDIUM — image decompression-bomb OOM (fixed).** No pixel-count ceiling before decode: a few-KB PNG at
+  40000×40000 OOM-kills the process on folder open (prewarm) or on index (auto-tag). Added
+  `ThumbnailCache.withinDecodeBudget` (300 MP header-only, overflow-safe) and wired it into every automatic
+  full-raster decode: grid thumbnail, hero full-res, `PaletteExtractor`, `VisionServices`, and the exporter.
+- **LOW — MIME header injection (hardened).** `DriveClient` interpolated the upload `mime` raw into a
+  `Content-Type` header; every source is a UTType-registry value today, but pinned it to an RFC-2045 token
+  grammar (`isValidMIME`, +3 tests) so a future caller can't make it CRLF-injectable.
+- **Accepted/inherent:** public OAuth client is impersonable (platform property of PKCE public clients, no
+  token theft); SVG/PDF/font render-bombs are out-of-process (degrade the preview, not the app); a recipient
+  seeing the sharer's Google account name is the documented, disclosed platform limit.
+
+New durable constraints recorded in CLAUDE.md (AV `.noNetwork`, decode budget, mime token guard).
+`MuseTests` (473, +3) + UI tests green.

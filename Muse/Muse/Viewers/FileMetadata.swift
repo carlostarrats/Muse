@@ -299,14 +299,14 @@ nonisolated struct FileMetadata: Equatable {
     }
 
     private static func loadMedia(url: URL) async -> FileMetadata {
-        let asset = AVURLAsset(url: url)
+        let asset = AVURLAsset.noNetwork(url: url)
         guard let duration = try? await asset.load(.duration) else { return .empty }
         let seconds = CMTimeGetSeconds(duration)
         return mediaMetadata(durationSeconds: seconds.isFinite ? seconds : nil)
     }
 
     private static func loadVideo(url: URL) async -> FileMetadata {
-        let asset = AVURLAsset(url: url)
+        let asset = AVURLAsset.noNetwork(url: url)
         let seconds: Double? = (try? await asset.load(.duration))
             .map { CMTimeGetSeconds($0) }
             .flatMap { ($0.isFinite && $0 > 0) ? $0 : nil }

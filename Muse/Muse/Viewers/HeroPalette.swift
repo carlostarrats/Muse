@@ -67,7 +67,7 @@ enum HeroPalette {
             return []
         }
         return await Task.detached(priority: .userInitiated) { () -> [String] in
-            let asset = AVURLAsset(url: url)
+            let asset = AVURLAsset.noNetwork(url: url)
             let gen = AVAssetImageGenerator(asset: asset)
             gen.appliesPreferredTrackTransform = true
             gen.maximumSize = CGSize(width: 48, height: 48)

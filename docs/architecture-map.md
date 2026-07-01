@@ -116,6 +116,9 @@ Muse/Muse/
                                    Key on standardized path; invalidate(_:) drops mem+disk so
                                    an in-place edit regenerates. Non-image → QuickLook .all
                                    (real macOS icon/preview)
+    AVURLAsset+NoNetwork.swift     `.noNetwork(url:)` helpers pinning every AVFoundation
+                                   asset to reference-restrictions .forbidAll — a reference
+                                   movie / HLS remote data-ref can't phone home. Use everywhere.
     Sidecar.swift                  portable per-asset metadata value type (Codable);
                                    maps to/from FileRow+TagRow; deterministic merge (manual wins)
     SidecarStore.swift             read/write .muse/<hash>.json with NSFileCoordinator

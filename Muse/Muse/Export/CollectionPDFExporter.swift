@@ -14,6 +14,8 @@ import ImageIO
 import CoreText
 import Foundation
 import QuickLookThumbnailing
+import AVFoundation
+import AppKit
 
 enum CollectionPDFExporter {
 
@@ -91,7 +93,7 @@ enum CollectionPDFExporter {
                     let url = urls[i]
                     group.addTask {
                         if let cg = imageIOThumbnail(url, maxPixel: maxPixel) { return (i, cg) }
-                        return (i, await quickLookThumbnail(url, maxPixel: maxPixel))
+                        return (i, await fallbackThumbnail(url, maxPixel: maxPixel))
                     }
                 }
                 while next < min(maxConcurrent, urls.count) { schedule(next); next += 1 }
@@ -192,7 +194,11 @@ enum CollectionPDFExporter {
     /// Downsampled, orientation-corrected image thumbnail via ImageIO, or nil
     /// when the file isn't an ImageIO-decodable image (e.g. zip/pdf/doc).
     private static func imageIOThumbnail(_ url: URL, maxPixel: Int) -> CGImage? {
-        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        // Same decompression-bomb guard as the grid path — refuse a header that
+        // declares an absurd pixel count before decoding (export is user-driven,
+        // but a planted image in a shared collection shouldn't OOM the export).
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+              ThumbnailCache.withinDecodeBudget(src) else { return nil }
         let opts: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
@@ -201,8 +207,45 @@ enum CollectionPDFExporter {
         return CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary)
     }
 
+    /// Thumbnail for a file ImageIO couldn't decode. A VIDEO is frame-extracted
+    /// from the reference-RESTRICTED asset and NEVER handed to QuickLook: its
+    /// out-of-process AVFoundation is unrestricted and would resolve a crafted
+    /// reference-movie's remote data reference, breaking the "no network"
+    /// promise (same reason `ThumbnailCache.generate` keeps videos off QuickLook).
+    /// Everything else (pdf/doc/zip…) uses QuickLook's type icon / content preview.
+    private static func fallbackThumbnail(_ url: URL, maxPixel: Int) async -> CGImage? {
+        if AssetKind.detect(at: url) == .video {
+            if let cg = await restrictedVideoFrame(url, maxPixel: maxPixel) { return cg }
+            return typeIcon(url, maxPixel: maxPixel)
+        }
+        return await quickLookThumbnail(url, maxPixel: maxPixel)
+    }
+
+    /// A representative frame from the reference-restricted asset (no network),
+    /// ~1s in (10% of duration for short clips) to skip black openings — mirrors
+    /// `ThumbnailCache.videoFrame`.
+    private static func restrictedVideoFrame(_ url: URL, maxPixel: Int) async -> CGImage? {
+        let asset = AVURLAsset.noNetwork(url: url)
+        guard let duration = try? await asset.load(.duration) else { return nil }
+        let gen = AVAssetImageGenerator(asset: asset)
+        gen.appliesPreferredTrackTransform = true
+        gen.maximumSize = CGSize(width: maxPixel, height: maxPixel)
+        let secs = min(1.0, max(0, duration.seconds * 0.1))
+        let time = CMTime(seconds: secs, preferredTimescale: 600)
+        return try? await gen.image(at: time).image
+    }
+
+    /// The static macOS type icon rendered to a CGImage — no content decode, no
+    /// network. Fallback for a video whose restricted frame extraction failed.
+    private static func typeIcon(_ url: URL, maxPixel: Int) -> CGImage? {
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        var rect = CGRect(x: 0, y: 0, width: maxPixel, height: maxPixel)
+        return icon.cgImage(forProposedRect: &rect, context: nil, hints: nil)
+    }
+
     /// The macOS type icon / content preview for a non-image file, via QuickLook
     /// (`.all` → same source as the grid's cards). Runs off the main thread.
+    /// Callers must NOT route videos here — see `fallbackThumbnail`.
     private static func quickLookThumbnail(_ url: URL, maxPixel: Int) async -> CGImage? {
         let size = CGSize(width: maxPixel, height: maxPixel)
         let req = QLThumbnailGenerator.Request(

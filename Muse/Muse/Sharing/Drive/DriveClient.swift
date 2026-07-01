@@ -103,14 +103,35 @@ import Foundation
         var body = Data()
         func append(_ s: String) { body.append(Data(s.utf8)) }
         let metaJSON = (try? JSONSerialization.data(withJSONObject: metadata)) ?? Data("{}".utf8)
+        // Defense-in-depth: `mime` is interpolated raw into a header line, so a
+        // CR/LF (or any non-token byte) in it could forge extra headers or a
+        // whole extra multipart part. Every caller's mime is currently a UTType-
+        // registry value or a hardcoded constant (never CRLF-bearing), but pin it
+        // to a strict `type/subtype` token grammar so a future caller can't turn
+        // this into a header-injection foothold — anything off-grammar collapses
+        // to the neutral default rather than reaching the header.
+        let safeMime = isValidMIME(mime) ? mime : "application/octet-stream"
         append("--\(boundary)\r\n")
         append("Content-Type: application/json; charset=UTF-8\r\n\r\n")
         body.append(metaJSON); append("\r\n")
         append("--\(boundary)\r\n")
-        append("Content-Type: \(mime)\r\n\r\n")
+        append("Content-Type: \(safeMime)\r\n\r\n")
         body.append(fileData); append("\r\n")
         append("--\(boundary)--\r\n")
         return body
+    }
+
+    /// Strict RFC-2045 `type/subtype` token check: rejects CR/LF, whitespace, and
+    /// header separators, so an interpolated mime can never inject a header line.
+    static func isValidMIME(_ s: String) -> Bool {
+        guard (1...255).contains(s.utf8.count) else { return false }
+        let token = CharacterSet(charactersIn:
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&'*+-.^_`|~")
+        let parts = s.split(separator: "/", omittingEmptySubsequences: false)
+        guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else { return false }
+        return parts.allSatisfy { part in
+            part.unicodeScalars.allSatisfy { token.contains($0) }
+        }
     }
 
     private func postJSON(_ endpoint: String, _ object: [String: Any]) async throws -> String {

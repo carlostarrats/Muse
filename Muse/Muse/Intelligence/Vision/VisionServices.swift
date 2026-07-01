@@ -12,6 +12,7 @@ import Foundation
 import Vision
 import AppKit
 import CoreImage
+import ImageIO
 
 struct VisionResult {
     var classifications: [String: Float] = [:]   // label → confidence
@@ -55,6 +56,13 @@ enum VisionServices {
 
     private static func loadCGImage(url: URL) async -> CGImage? {
         await Task.detached(priority: .userInitiated) {
+            // Decompression-bomb guard: Vision analysis runs AUTOMATICALLY on
+            // index of a freshly-added file (no click), and NSImage(contentsOf:)
+            // → cgImage forces a full-raster decode with no downsample — so a
+            // planted image declaring an absurd pixel count would OOM the process.
+            // Read the header dims first (cheap) and refuse past the budget.
+            guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+                  ThumbnailCache.withinDecodeBudget(src) else { return nil }
             guard let img = NSImage(contentsOf: url) else { return nil }
             var rect = CGRect(origin: .zero, size: img.size)
             return img.cgImage(forProposedRect: &rect, context: nil, hints: nil)

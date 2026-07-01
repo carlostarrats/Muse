@@ -20,7 +20,7 @@ struct VideoPlayerView: NSViewRepresentable {
         view.videoGravity = .resizeAspect
         view.wantsLayer = true
         view.layer?.backgroundColor = NSColor.clear.cgColor
-        view.player = AVPlayer(url: url)
+        view.player = AVPlayer.noNetwork(url: url)
         view.player?.play()
         return view
     }
@@ -28,7 +28,7 @@ struct VideoPlayerView: NSViewRepresentable {
     func updateNSView(_ nsView: AVPlayerView, context: Context) {
         if (nsView.player?.currentItem?.asset as? AVURLAsset)?.url != url {
             nsView.player?.pause()
-            nsView.player = AVPlayer(url: url)
+            nsView.player = AVPlayer.noNetwork(url: url)
             nsView.player?.play()
         }
     }
