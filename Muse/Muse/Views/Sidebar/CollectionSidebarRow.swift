@@ -19,6 +19,7 @@ import AppKit
 /// (swapping with the count on hover) drives the live drag-reorder.
 struct CollectionSidebarRow: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject private var googleAuth: GoogleOAuth
     @Environment(\.sidebarReordering) private var isReordering
     let loaded: CollectionStore.Loaded
     let index: Int
@@ -26,8 +27,15 @@ struct CollectionSidebarRow: View {
     let manual: Bool
     var reorder: ReorderContext? = nil
 
+    // Mirror the grid's current density (the bottom-right column slider) —
+    // same global setting `ShareCollectionButton` reads for the open collection.
+    @AppStorage("gridColumnCount") private var gridColumns = 4
     @State private var isHovered = false
     @State private var confirmDelete = false
+    @State private var preparingExport = false
+    @State private var showingDriveShare = false
+    @State private var driveShareURLs: [URL] = []
+    @State private var exportFailed = false
 
     private var id: String { loaded.collection.id }
 
@@ -109,6 +117,11 @@ struct CollectionSidebarRow: View {
             withAnimation(.easeOut(duration: 0.12)) { isHovered = hovering }
         }
         .contextMenu {
+            Button("Save to…") { Task { await exportSave() } }
+                .disabled(loaded.aliveCount == 0 || preparingExport)
+            Button("Share Drive Link") { Task { await exportDriveShare() } }
+                .disabled(loaded.aliveCount == 0 || preparingExport)
+            Divider()
             Button("Rename…") {
                 appState.collectionRenameAlertRequest = CollectionRenameAlertRequest(
                     id: id, currentName: loaded.collection.name)
@@ -128,6 +141,10 @@ struct CollectionSidebarRow: View {
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction { appState.setActiveCollection(id) }
         .accessibilityActions {
+            if loaded.aliveCount > 0 {
+                Button("Save to…") { Task { await exportSave() } }
+                Button("Share Drive Link") { Task { await exportDriveShare() } }
+            }
             Button("Rename Collection") {
                 appState.collectionRenameAlertRequest = CollectionRenameAlertRequest(
                     id: id, currentName: loaded.collection.name)
@@ -160,12 +177,48 @@ struct CollectionSidebarRow: View {
         } message: {
             Text("The collection is removed everywhere. Your images stay on disk.")
         }
+        .sheet(isPresented: $showingDriveShare) {
+            DriveShareSheet(auth: googleAuth, title: loaded.collection.name, urls: driveShareURLs) {
+                showingDriveShare = false
+            }
+        }
+        .alert("Couldn’t Export the PDF", isPresented: $exportFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("The PDF couldn’t be prepared — some images may be unreadable — or the location couldn’t be written. Check the images and that the location is writable with enough free space.")
+        }
     }
 
     private var rowFill: Color {
         if isSelected { return Color.accentColor.opacity(0.14) }
         let showHover = isHovered && !isReordering
         return Color.primary.opacity(showHover ? SidebarView.rowHoverFillOpacity : 0)
+    }
+
+    // MARK: - Export (Save to… / Share Drive Link)
+
+    /// Member URLs for THIS row's collection (not necessarily the active
+    /// one) — same reachability rule as the grid (`AppState.setActiveCollection`):
+    /// only members under a currently mounted root are exportable.
+    private func exportURLs() async -> [URL] {
+        await appState.exportableURLs(forCollection: id)
+    }
+
+    private func exportSave() async {
+        let urls = await exportURLs()
+        guard !urls.isEmpty else { exportFailed = true; return }
+        preparingExport = true
+        defer { preparingExport = false }
+        let outcome = await CollectionPDFSave.run(
+            title: loaded.collection.name, urls: urls, appState: appState, gridColumns: gridColumns)
+        if outcome == .failed { exportFailed = true }
+    }
+
+    private func exportDriveShare() async {
+        let urls = await exportURLs()
+        guard !urls.isEmpty else { exportFailed = true; return }
+        driveShareURLs = urls
+        showingDriveShare = true
     }
 }
 

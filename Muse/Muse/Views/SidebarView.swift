@@ -417,10 +417,12 @@ struct SidebarView: View {
 
     // MARK: - Bottom bar
 
-    /// One "Add Folder" pill when off; two compact pills (Add Folder + Add
-    /// Collection) when the Collections section is shown.
+    /// One "Add Folder" pill when off (or on first run, before any folder
+    /// exists — a collection with nothing behind it is a dead end, so Add
+    /// Collection isn't offered yet); two compact pills (Add Folder + Add
+    /// Collection) once the Collections section is shown AND a folder exists.
     @ViewBuilder private var bottomBar: some View {
-        if showCollectionsInSidebar {
+        if showCollectionsInSidebar && !appState.rootNodes.isEmpty {
             HStack(spacing: 10) {
                 AddPillButton(systemImage: "folder", label: String(localized: "Add Folder")) {
                     appState.pickAndAddRoot()

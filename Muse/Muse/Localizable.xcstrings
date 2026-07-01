@@ -22,6 +22,16 @@
         }
       }
     },
+    "Get started by adding a folder": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commencez par ajouter un dossier"
+          }
+        }
+      }
+    },
     "…or create a new one": {
       "localizations": {
         "fr": {

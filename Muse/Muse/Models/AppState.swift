@@ -715,6 +715,18 @@ final class AppState: ObservableObject {
             reloadTagChips()
         }
         rebuildRootNodes()
+        // If that was the LAST folder, back out of any active collection and
+        // the Collections page. Without a folder no collection content is
+        // reachable, so the sidebar + Collections page (deliberately) show
+        // nothing — but the grid would otherwise keep rendering the active
+        // collection's header over now-unreachable tiles, an incoherent ghost
+        // state, and "Get started by adding a folder" is the only real next
+        // step (you can't make collections without folders). The collection
+        // rows are untouched and reappear the moment a folder is re-added.
+        if rootNodes.isEmpty {
+            if activeCollectionID != nil { setActiveCollection(nil) }
+            if showingCollections { showingCollections = false }
+        }
     }
 
     // MARK: - Folder selection

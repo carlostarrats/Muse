@@ -26,6 +26,17 @@ struct CollectionsPage: View {
     /// Date Modified + direction). Reactive: changing the toolbar sort or arrow
     /// updates `appState.collectionSort*`, which re-runs this computed property.
     private var sorted: [CollectionStore.Loaded] {
+        // No folders → no real collection content is reachable. CollectionStore's
+        // own reachability fallback deliberately skips filtering when its
+        // internal `rootPaths` is empty (so a brief launch-race window for
+        // users who DO have folders doesn't flicker every count to zero) —
+        // that same fallback otherwise leaves ghost collections with stale
+        // counts on screen once every folder's been removed. `AppState.rootNodes`
+        // is synchronous and reliable (unlike the engine's internal
+        // `rootPaths`), so gate the DISPLAYED list here instead of touching
+        // that fallback. The underlying rows are untouched — they reappear
+        // the moment a folder's added back.
+        guard !appState.rootNodes.isEmpty else { return [] }
         let loaded = engine.collections
         let items = loaded.map {
             CollectionSort.Item(id: $0.collection.id,
@@ -65,34 +76,50 @@ struct CollectionsPage: View {
                 let cover = CGSize(width: cardWidth, height: cardWidth / 2)
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        // Page Up / Page Down scrolls the cards a screenful at a time.
-                        PageScrollCatcher(isActive: { appState.selectedFile == nil })
-                            .frame(width: 0, height: 0)
-                        header
-                        if sorted.isEmpty {
-                            emptyState
-                        } else {
-                            LazyVGrid(
-                                columns: Array(
-                                    repeating: GridItem(.fixed(cardWidth), spacing: hGap),
-                                    count: columns),
-                                alignment: .leading,
-                                spacing: vGap
-                            ) {
-                                ForEach(sorted, id: \.collection.id) { loaded in
-                                    CollectionCard(loaded: loaded, coverSize: cover)
+                    // ZStack, not sequential VStack flow: the empty state
+                    // fills and centers in the FULL `geo.size.height` — same
+                    // "ignore whatever floating chrome sits above" approach
+                    // GridView's empty state uses (confirmed correct there).
+                    // Stacking it as a THIRD VStack row instead (below a real
+                    // header row) means its own height gets ADDED to the
+                    // header's, overflowing the actual viewport — the exact
+                    // bug that made it read as sitting too low.
+                    ZStack(alignment: .topLeading) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            // Page Up / Page Down scrolls the cards a screenful at a time.
+                            PageScrollCatcher(isActive: { appState.selectedFile == nil })
+                                .frame(width: 0, height: 0)
+                            header
+                            if !sorted.isEmpty {
+                                LazyVGrid(
+                                    columns: Array(
+                                        repeating: GridItem(.fixed(cardWidth), spacing: hGap),
+                                        count: columns),
+                                    alignment: .leading,
+                                    spacing: vGap
+                                ) {
+                                    ForEach(sorted, id: \.collection.id) { loaded in
+                                        CollectionCard(loaded: loaded, coverSize: cover)
+                                    }
                                 }
+                                .padding(.horizontal, hInset)
+                                // Matches the in-collection grid's top content inset
+                                // (20) so the gap under the title is identical there
+                                // (header's 48 + the grid's 20).
+                                .padding(.top, 20)
+                                .padding(.bottom, 24)
                             }
-                            .padding(.horizontal, hInset)
-                            // Matches the in-collection grid's top content inset
-                            // (20) so the gap under the title is identical there
-                            // (header's 48 + the grid's 20).
-                            .padding(.top, 20)
-                            .padding(.bottom, 24)
+                        }
+                        if sorted.isEmpty {
+                            emptyState(viewportHeight: geo.size.height)
                         }
                     }
                 }
+                // See GridView's identical modifier: a ScrollView still
+                // permits rubber-band drag/bounce even when content exactly
+                // fills the viewport, which reads as "not really centered."
+                // Nothing to scroll to in the empty state, so disable it.
+                .scrollDisabled(sorted.isEmpty)
             }
         }
         .background(appState.moodPalette.background)
@@ -122,21 +149,19 @@ struct CollectionsPage: View {
         appState.requestNewCollection()
     }
 
-    private var emptyState: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "square.stack.3d.up")
-                .font(.system(size: 40, weight: .light))
-                .foregroundStyle(.tertiary)
-            Text("No collections yet")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Text("Collections form automatically as Muse analyzes your images — or tap + to make your own.")
-                .font(.callout)
-                .foregroundStyle(.tertiary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 80)
+    // Text weight/color matches GridView's empty state exactly (`.title3` /
+    // `.secondary`) so the two read as the same design, not two different
+    // one-offs.
+    private func emptyState(viewportHeight: CGFloat) -> some View {
+        // `.padding` before `.frame(minHeight:)`, not after — see GridView's
+        // identical fix. Padding after adds its own inset on top of the
+        // already-viewport-tall frame, overflowing the visible area and
+        // reading as "too low" once scroll is disabled and the excess clips.
+        Text("No collections yet")
+            .font(.title3)
+            .foregroundStyle(.secondary)
+            .padding(40)
+            .frame(maxWidth: .infinity, minHeight: viewportHeight)
     }
 }
 

@@ -170,6 +170,28 @@ extension AppState {
         }
     }
 
+    /// Export-ready file URLs for ANY collection by id — not necessarily the
+    /// currently OPEN one (unlike `ShareCollectionButton.exportURLs`, which
+    /// reads the live `visibleFiles`). Same reachability rule as
+    /// `setActiveCollection`: members must sit under a currently mounted
+    /// root, so a sidebar-menu export never offers a file the sandbox can't
+    /// actually read.
+    func exportableURLs(forCollection id: String) async -> [URL] {
+        // No folders → nothing reachable to export, matching the UI guards
+        // that hide collections entirely when `rootNodes` is empty. This is
+        // ALWAYS a user-initiated call (a menu tap), never the launch-race
+        // window `setActiveCollection` tolerates, so — unlike there — an
+        // empty-roots fallback to "unfiltered" would be wrong, not just
+        // inconsistent.
+        guard !rootNodes.isEmpty, let q = Database.shared.dbQueue else { return [] }
+        let paths = (try? await CollectionStore.alivePaths(queue: q, collectionID: id)) ?? []
+        let rootPaths = rootNodes.map { $0.url.standardizedFileURL.path }
+        let reachable = paths.filter { CollectionStore.isUnderAnyRoot($0, roots: rootPaths) }
+        return reachable.compactMap { path in
+            FileManager.default.fileExists(atPath: path) ? URL(fileURLWithPath: path) : nil
+        }
+    }
+
     /// Whether the bulk-tag menu commands (Delete All / Regenerate) may fire.
     /// Their confirmation alerts live on TagChipsRow, which is unmounted during
     /// search and on the Collections card page — firing a request there would
@@ -433,6 +455,12 @@ extension AppState {
     /// (`sidebarCollectionSortMode`) — never the Collections-page sort. The
     /// sidebar UI reads this; it re-runs when CollectionsEngine publishes.
     var sidebarCollections: [CollectionStore.Loaded] {
+        // Same "no folders → no reachable content" guard as CollectionsPage's
+        // `sorted` — without it, a user with starred folders but zero added
+        // roots would still see ghost collections with stale counts (the
+        // sidebar's own top-level empty state only fires when BOTH rootNodes
+        // and starred are empty). Underlying rows are untouched.
+        guard !rootNodes.isEmpty else { return [] }
         let loaded = CollectionsEngine.shared.collections
         let items = loaded.map {
             SidebarCollectionSort.Item(id: $0.collection.id,

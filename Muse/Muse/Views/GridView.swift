@@ -131,7 +131,7 @@ struct GridView: View {
                             // tag row later shifts. Content appears already in place.
                             Color.clear
                         } else {
-                            emptyState
+                            emptyState(viewportHeight: geo.size.height)
                         }
                     } else if !(appState.isSearchActive || appState.tagRowReady) {
                         // Files are ready but the tag row hasn't sized yet — hold on
@@ -177,6 +177,13 @@ struct GridView: View {
                 }
             }
             .coordinateSpace(name: "gridScroll")
+            // The empty state's `minHeight: viewportHeight` should make its
+            // content exactly fill the viewport with nothing left to scroll —
+            // but a ScrollView still permits its normal rubber-band drag/
+            // bounce regardless of whether content actually overflows, which
+            // reads as "not really centered" the moment you touch it. There's
+            // nothing to scroll TO in the empty state, so disable it outright.
+            .scrollDisabled(appState.visibleFiles.isEmpty)
             .background {
                 // Tapping anywhere in the empty grid background (margins, gaps,
                 // below the tiles) deselects. Tiles consume their own taps.
@@ -503,35 +510,37 @@ struct GridView: View {
         .help("Images per row")
     }
 
+    /// Takes the viewport height explicitly (mirrors `masonryCanvas(viewportHeight:)`
+    /// above) — a ScrollView doesn't hand its content a bounded height, so
+    /// `.frame(maxHeight: .infinity)` alone would just collapse to intrinsic
+    /// size instead of actually filling the visible area, leaving this
+    /// pinned near the top instead of centered.
     @ViewBuilder
-    private var emptyState: some View {
-        // A plain empty folder shows nothing — just blank space. Only the
-        // states that need guidance (no folder picked, or a collection filter
-        // with no members here) get a message.
-        if let message = emptyStateMessage {
-            VStack(spacing: 14) {
-                Image(systemName: "tray")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.tertiary)
-                    .accessibilityHidden(true)
-                Text(message)
+    private func emptyState(viewportHeight: CGFloat) -> some View {
+        // A plain empty folder shows nothing — just blank space. The one
+        // state that needs guidance is first run (no folder ever added); a
+        // collection filter with no members here, or a picked folder that's
+        // simply empty, both stay blank by design (the folder/collection
+        // header already explains where you are).
+        if appState.activeCollectionID == nil && appState.rootNodes.isEmpty {
+            VStack(spacing: 16) {
+                Text("Get started by adding a folder")
                     .font(.title3)
                     .foregroundStyle(.secondary)
+                AddFolderPillButton { appState.pickAndAddRoot() }
+                    .fixedSize()
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // `.padding` must come BEFORE `.frame(minHeight:)`, not after —
+            // padding applied after adds its own inset on TOP of the already-
+            // viewport-tall frame (80pt total, 40 top + 40 bottom), so the
+            // real content became taller than the visible viewport. With
+            // scroll disabled the overflow just clips instead of scrolling
+            // into view, and the centered text reads as sitting too low.
+            // Padding first keeps the padded content small, so the frame's
+            // minHeight is what actually determines the total size.
             .padding(40)
+            .frame(maxWidth: .infinity, minHeight: viewportHeight)
         }
-    }
-
-    private var emptyStateMessage: String? {
-        // Inside a collection, an empty result shows nothing — no icon, no
-        // message, just blank space under the header (the header already
-        // names the collection).
-        if appState.activeCollectionID != nil {
-            return nil
-        }
-        // No folder picked → blank space, never a "Select a folder" tray prompt.
-        return nil
     }
 }
 

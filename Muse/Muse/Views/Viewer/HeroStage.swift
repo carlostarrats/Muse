@@ -50,6 +50,15 @@ struct HeroStage: View {
     @State private var displayRect: CGRect = .zero
     @State private var image: NSImage?
     @State private var dragStartPan: CGSize? = nil
+    @State private var isDraggingPan = false
+    /// Plain "is the pointer over the image" — independent of whether we've
+    /// actually pushed a cursor for it (see `isHoverPushed`).
+    @State private var isHoveringImage = false
+    /// Whether `NSCursor.openHand` is CURRENTLY on the push/pop stack for
+    /// this hover session. Tracked separately from `isHoveringImage` so
+    /// `syncHoverCursor()` can push/pop exactly once per state transition —
+    /// mismatched push/pop calls corrupt the stack for the rest of the app.
+    @State private var isHoverPushed = false
     @State private var openedAt = Date.distantPast
     /// Fades out across the close flight so the image lands shadowless,
     /// exactly like the grid tile it's about to become.
@@ -59,6 +68,7 @@ struct HeroStage: View {
         ViewerGeometry.fitRect(imageSize: image?.size ?? sourceFrame.size,
                                viewport: viewport)
     }
+
 
     var body: some View {
         // ZStack, not Group: with `if let image` empty, a Group has no child
@@ -89,10 +99,16 @@ struct HeroStage: View {
                     // entirely inside FlightEffect's animated transform.
                     .position(x: base.midX, y: base.midY)
                     .gesture(panGesture)
+                    .onHover { hovering in
+                        isHoveringImage = hovering
+                        syncHoverCursor()
+                    }
             }
         }
         .onAppear { open() }
+        .onDisappear { resetCursorState() }
         .onChange(of: isClosing) { _, closing in if closing { close() } }
+        .onChange(of: zoom) { _, _ in syncHoverCursor() }
         .onChange(of: sourceFrame) { _, newFrame in
             // The toolbar returns as the close flight starts, shifting the
             // grid — retarget mid-flight so we land on the tile's real spot.
@@ -149,6 +165,7 @@ struct HeroStage: View {
     }
 
     private func close() {
+        resetCursorState()
         withAnimation(.timingCurve(0.3, 1.08, 0.35, 1, duration: 0.34)) {
             zoom = 1; pan = .zero
             displayRect = sourceFrame
@@ -158,6 +175,7 @@ struct HeroStage: View {
     }
 
     private func flipTo() {
+        resetCursorState()
         zoom = 1; pan = .zero
         // thumbnail swaps in fast; .task(id: url) handles the full-res load
         if let quick = Self.quickThumbnail(for: url) {
@@ -214,6 +232,21 @@ struct HeroStage: View {
         DragGesture()
             .onChanged { v in
                 guard zoom > 1, burnProgress <= 0 else { return }
+                if dragStartPan == nil {
+                    // `push()` survives continuous mouse movement (unlike a
+                    // bare `.set()`, which AppKit's per-mouse-move cursor
+                    // recalculation clobbers the instant the pointer moves
+                    // again) — confirmed live: an `.onHover`-triggered
+                    // `.set()` reverted to the plain arrow on the very next
+                    // move, while `push()`/`pop()` held reliably through an
+                    // entire drag. `isHoverPushed` is left untouched here —
+                    // dragging can only start while already hovering the
+                    // zoomed image, so its openHand push is always further
+                    // down the SAME stack; popping just this closedHand at
+                    // drag-end reveals it again with no extra work.
+                    isDraggingPan = true
+                    NSCursor.closedHand.push()
+                }
                 let start = dragStartPan ?? pan
                 dragStartPan = start
                 pan = ViewerGeometry.clampPan(
@@ -221,6 +254,42 @@ struct HeroStage: View {
                            height: start.height + v.translation.height),
                     fittedSize: displayRect.size, zoom: zoom)
             }
-            .onEnded { _ in dragStartPan = nil }
+            .onEnded { _ in
+                dragStartPan = nil
+                guard isDraggingPan else { return }
+                isDraggingPan = false
+                NSCursor.pop()
+            }
+    }
+
+    /// Pushes/pops `NSCursor.openHand` to match "hovering the image AND
+    /// zoomed past fit" — called on every hover transition and every zoom
+    /// change (pinch/scroll/toolbar +/-/Fit, none of which move the mouse,
+    /// so a plain hover-only check would miss a zoom change that happens
+    /// while the pointer sits still over the image). Never touches the
+    /// stack while `isDraggingPan`— its closedHand push is always ABOVE
+    /// this one; popping this one out from under it would corrupt the
+    /// LIFO order. Idempotent per state: only pushes/pops on an actual
+    /// true→false/false→true transition, tracked via `isHoverPushed`.
+    private func syncHoverCursor() {
+        guard !isDraggingPan else { return }
+        let shouldPush = isHoveringImage && zoom > 1
+        if shouldPush && !isHoverPushed {
+            isHoverPushed = true
+            NSCursor.openHand.push()
+        } else if !shouldPush && isHoverPushed {
+            isHoverPushed = false
+            NSCursor.pop()
+        }
+    }
+
+    /// Unwinds whatever's on the cursor stack for this view, in LIFO order —
+    /// the drag's closedHand (if mid-drag) before the hover's openHand.
+    /// Called on close/flip/unmount so a viewer transition never leaves a
+    /// stale push haunting the cursor stack for whatever comes next.
+    private func resetCursorState() {
+        if isDraggingPan { isDraggingPan = false; NSCursor.pop() }
+        if isHoverPushed { isHoverPushed = false; NSCursor.pop() }
+        isHoveringImage = false
     }
 }
