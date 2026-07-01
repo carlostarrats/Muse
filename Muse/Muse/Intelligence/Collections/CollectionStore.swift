@@ -284,6 +284,30 @@ enum CollectionStore {
         }
     }
 
+    /// How many alive files sit under the current roots — i.e. images the grid
+    /// could actually show anywhere in the library. Drives the "no images → no
+    /// Collections UI" gate (the collection rows themselves are content, so an
+    /// empty library must show none, not even empty hand-made ones). Uses the same
+    /// `isUnderAnyRoot` recursive-prefix rule as the count so "reachable" means the
+    /// same thing in both places. Returns -1 when `rootPaths` is empty (roots not
+    /// yet pushed at launch) so the caller can treat it as "unknown → don't hide"
+    /// and avoid flickering collections away during the launch race.
+    static func reachableFileCount(queue: DatabaseQueue, rootPaths: [String]) async throws -> Int {
+        guard !rootPaths.isEmpty else { return -1 }
+        return try await queue.read { db in
+            var clauses: [String] = []
+            var args: [DatabaseValueConvertible] = []
+            for root in rootPaths {
+                let prefix = root + "/"
+                clauses.append("(absolute_path = ? OR SUBSTR(absolute_path, 1, LENGTH(?)) = ?)")
+                args.append(root); args.append(prefix); args.append(prefix)
+            }
+            let sql = "SELECT COUNT(*) FROM paths WHERE is_alive = 1 AND ("
+                + clauses.joined(separator: " OR ") + ")"
+            return try Int.fetchOne(db, sql: sql, arguments: StatementArguments(args)) ?? 0
+        }
+    }
+
     /// Alive absolute paths for a collection's members (for mosaics and
     /// grid filtering). Optional limit for cover thumbnails.
     static func alivePaths(queue: DatabaseQueue, collectionID: String,

@@ -20,6 +20,15 @@ final class CollectionsEngine: ObservableObject {
     @Published var collections: [CollectionStore.Loaded] = []
     @Published var isClustering = false
 
+    /// Whether the library has ANY reachable image (an alive file under a current
+    /// root). The Collections UI is content-gated on this — no images to view
+    /// anywhere means nothing to collect, so the sidebar section, the Collections
+    /// page, and even empty hand-made collections all hide. Distinct from "no
+    /// folders": the always-present, app-managed iCloud "Muse" folder is a root but
+    /// may hold nothing, so folder-existence is the wrong axis. Defaults to true so
+    /// nothing hides before the first reload; recomputed on every reload().
+    @Published var hasReachableContent = true
+
     /// Standardized paths of the active roots, pushed by AppState whenever the
     /// root list changes. The badge/card count is narrowed to members under one
     /// of these so it matches what the grid can actually show (Lever 1 of the
@@ -40,6 +49,10 @@ final class CollectionsEngine: ObservableObject {
     func reload() async {
         guard let q = Database.shared.dbQueue else { return }
         collections = (try? await CollectionStore.fetchAll(queue: q, rootPaths: rootPaths)) ?? []
+        // -1 = roots not yet pushed (launch race) → treat as "unknown, has content"
+        // so collections never flicker away before AppState sets the roots.
+        let reachable = (try? await CollectionStore.reachableFileCount(queue: q, rootPaths: rootPaths)) ?? -1
+        hasReachableContent = reachable != 0
     }
 
     func recluster() async {

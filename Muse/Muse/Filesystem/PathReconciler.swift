@@ -103,6 +103,33 @@ nonisolated enum PathReconciler {
         }) ?? 0
     }
 
+    /// Reconcile a root's ENTIRE subtree by confirming each alive row still
+    /// exists on disk — regardless of how deep it is. The enumeration-based
+    /// `reconcile` above only reaches the *browsed depth* (non-recursive = direct
+    /// children), so a file whose containing subfolder was deleted wholesale (e.g.
+    /// a removed feature's leftover staging dir) is never in scope and its ghost
+    /// `is_alive = 1` row lingers forever — inflating collection counts for a
+    /// folder the user can no longer browse into. This pass walks every alive path
+    /// under `root` and marks dead the ones that are genuinely gone.
+    ///
+    /// Per-file existence is DATALESS-SAFE and so avoids the partial-iCloud-
+    /// materialization data-loss trap that a recursive enumeration-diff would hit:
+    /// a not-yet-downloaded iCloud file still has a filesystem entry
+    /// (`fileExists == true`), and an old-style evicted file is caught by
+    /// `isEvictedPlaceholder`. Only a file with no entry at all — a real deletion —
+    /// is flipped. `exists` is injectable so the diff is unit-testable without disk.
+    @discardableResult
+    static func reconcileByExistence(
+        root: URL, queue: DatabaseQueue,
+        exists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0)
+                                     || isEvictedPlaceholder($0) }
+    ) -> Int {
+        let rootPath = root.standardizedFileURL.path
+        let alive = aliveUnder(folder: rootPath, queue: queue)
+        let gone = alive.filter { !exists($0) }
+        return markDead(gone, queue: queue)
+    }
+
     /// Full per-folder reconcile. `present` = standardized paths the folder
     /// enumeration found. Returns the number of rows marked dead.
     @discardableResult

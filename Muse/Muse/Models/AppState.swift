@@ -43,6 +43,40 @@ final class AppState: ObservableObject {
     /// Root nodes for the sidebar tree, one per active root.
     @Published var rootNodes: [FolderNode] = []
 
+    /// Roots whose full subtree has already been existence-reconciled this
+    /// session (the deep-deletion self-heal, `PathReconciler.reconcileByExistence`).
+    /// The pass is idempotent, but a per-file `fileExists` sweep over a large root
+    /// is wasteful to repeat on every reselect — so run it at most once per root
+    /// per launch. Live deletions during the session are caught by FSEvents.
+    private var existenceReconciledRoots: Set<URL> = []
+
+    /// Verify a root's ENTIRE subtree against disk (dataless-safe) to clear ghost
+    /// `is_alive` rows a browsed-depth reconcile can't reach — e.g. files whose
+    /// whole subfolder was deleted (a removed feature's staging dir), which would
+    /// otherwise keep inflating collection counts for a folder no longer
+    /// browseable. Runs at most once per root per launch (idempotent, but a
+    /// per-file `fileExists` sweep is wasteful to repeat; live deletions are caught
+    /// by FSEvents). Reloads the collection counts if anything was cleared.
+    func reconcileRootByExistence(_ root: URL) async {
+        guard existenceReconciledRoots.insert(root).inserted else { return }
+        guard let queue = Database.shared.dbQueue else { return }
+        let cleared = await Task.detached(priority: .utility) {
+            PathReconciler.reconcileByExistence(root: root, queue: queue)
+        }.value
+        if cleared > 0 { await CollectionsEngine.shared.reload() }
+    }
+
+    /// Proactively existence-reconcile every current root (guarded once per root
+    /// per launch). Called when the root set is established so ghost rows clear —
+    /// and content-gated collections hide — WITHOUT waiting for the user to select
+    /// the folder (the always-present iCloud "Muse" root is never auto-selected on
+    /// launch, so a lazy on-select pass alone would leave collections visible).
+    func reconcileAllRootsByExistence() {
+        guard Database.shared.dbQueue != nil else { return }
+        let roots = rootNodes.map(\.url)
+        Task { for root in roots { await reconcileRootByExistence(root) } }
+    }
+
     /// The auto-discovered iCloud zone folder URL, resolved off-main at launch.
     /// nil when the user isn't signed into iCloud. Surfaced as a sidebar root.
     @Published var iCloudFolderURL: URL?
@@ -660,6 +694,10 @@ final class AppState: ObservableObject {
         // narrowed to members under an active root so it matches what the grid
         // can show (Lever 1, 2026-06-19 count-vs-contents fix).
         CollectionsEngine.shared.setRoots(rootNodes.map(\.url))
+        // Clear ghost `is_alive` rows under each root (deleted files a browsed-depth
+        // reconcile can't reach) so content-gated collections hide promptly — even
+        // for the iCloud "Muse" root, which is never auto-selected on launch.
+        reconcileAllRootsByExistence()
     }
 
     /// Resolve the iCloud folder once at launch and surface it in the sidebar.
@@ -887,6 +925,12 @@ final class AppState: ObservableObject {
         let mode = sortMode
         let reversed = sortReversed
         let tagSort = tagSortMode
+        // The root whose subtree contains this folder — used for the deep-deletion
+        // existence reconcile below (folder prefix rule, trailing-slash guarded so a
+        // sibling like ".../Muse Extra" never matches ".../Muse").
+        let containingRoot = rootNodes.map(\.url).first {
+            folderURL == $0 || folderURL.path.hasPrefix($0.path + "/")
+        }
 
         // Reuse unchanged nodes so live reloads keep tile @State (thumbnails,
         // in-flight animations). A fresh selection clears instead — nothing to
@@ -960,6 +1004,17 @@ final class AppState: ObservableObject {
                         folder: folderURL, recursive: showSub,
                         present: present, queue: dbQueue)
                 }
+            }
+            // Deep-deletion self-heal (runs on any fresh select, not gated on the
+            // trustworthy-enumeration guard above since it verifies each file
+            // individually): the browsed-depth reconcile only reaches direct
+            // children, so a file whose whole subfolder was deleted — no longer
+            // browseable — keeps a ghost `is_alive` row that still inflates
+            // collection counts (which match a root's subtree recursively). Verify
+            // the containing root's entire subtree by on-disk existence
+            // (dataless-safe), once per root per launch.
+            if freshSelect, dbQueue != nil, let root = containingRoot {
+                await self.reconcileRootByExistence(root)
             }
             var chipRows: [(label: String, count: Int)] = []
             if freshSelect, let dbQueue {

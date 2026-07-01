@@ -186,11 +186,18 @@ struct SidebarView: View {
                     sortHeader
                     folderList
                 }
-                Color.clear.frame(height: 14)
-                SectionHeader(title: String(localized: "COLLECTIONS"), collapsed: $collectionsCollapsed)
-                if !collectionsCollapsed {
-                    collectionsSortHeader
-                    collectionsList
+                // Content-gated: with no reachable images anywhere, there's
+                // nothing to collect, so the whole COLLECTIONS section hides — not
+                // just its rows (an "COLLECTIONS" header over an empty list read as
+                // a bug when the user had removed everything). Reappears the moment
+                // reachable images exist again.
+                if collectionsEngine.hasReachableContent {
+                    Color.clear.frame(height: 14)
+                    SectionHeader(title: String(localized: "COLLECTIONS"), collapsed: $collectionsCollapsed)
+                    if !collectionsCollapsed {
+                        collectionsSortHeader
+                        collectionsList
+                    }
                 }
             }
         }
@@ -422,7 +429,10 @@ struct SidebarView: View {
     /// Collection isn't offered yet); two compact pills (Add Folder + Add
     /// Collection) once the Collections section is shown AND a folder exists.
     @ViewBuilder private var bottomBar: some View {
-        if showCollectionsInSidebar && !appState.rootNodes.isEmpty {
+        // Offer "Add Collection" only when there ARE reachable images to collect;
+        // an empty library gets just "Add Folder" (the real next step), matching the
+        // content-gated COLLECTIONS section above.
+        if showCollectionsInSidebar && collectionsEngine.hasReachableContent {
             HStack(spacing: 10) {
                 AddPillButton(systemImage: "folder", label: String(localized: "Add Folder")) {
                     appState.pickAndAddRoot()

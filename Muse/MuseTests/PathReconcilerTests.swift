@@ -115,6 +115,45 @@ final class PathReconcilerTests: XCTestCase {
         XCTAssertEqual(try isAlive(q, "/Users/me/Inspo/f1499.jpg"), 0)
     }
 
+    // MARK: - Existence-based whole-subtree reconcile (deep-deletion self-heal)
+
+    func testReconcileByExistenceMarksDeepGoneFilesDead() throws {
+        // The exact shape of the shipped bug: a file deep under the root whose
+        // containing subfolder was deleted wholesale. A shallow (browsed-depth)
+        // reconcile can never reach it; the existence pass must.
+        let q = try makeQueue()
+        let root = URL(fileURLWithPath: "/Users/me/Muse")
+        try insertAlivePath(q, "/Users/me/Muse/Shared Collections/Articles/gone.jpg")
+        try insertAlivePath(q, "/Users/me/Muse/kept.jpg")
+
+        // On disk: only kept.jpg exists.
+        let onDisk: Set<String> = ["/Users/me/Muse/kept.jpg"]
+        let n = PathReconciler.reconcileByExistence(root: root, queue: q,
+                                                    exists: { onDisk.contains($0) })
+
+        XCTAssertEqual(n, 1)
+        XCTAssertEqual(try isAlive(q, "/Users/me/Muse/Shared Collections/Articles/gone.jpg"), 0)
+        XCTAssertEqual(try isAlive(q, "/Users/me/Muse/kept.jpg"), 1)
+    }
+
+    func testReconcileByExistenceKeepsDatalessAndOutOfRoot() throws {
+        // A dataless iCloud file reports fileExists == true, so `exists` returns
+        // true for it — it must stay alive. And a file under a DIFFERENT root is
+        // out of prefix scope and must never be touched by this root's pass.
+        let q = try makeQueue()
+        let root = URL(fileURLWithPath: "/Users/me/Muse")
+        try insertAlivePath(q, "/Users/me/Muse/dataless.jpg")     // present (dataless)
+        try insertAlivePath(q, "/Users/me/Other/x.jpg")           // different root
+
+        let onDisk: Set<String> = ["/Users/me/Muse/dataless.jpg"]
+        let n = PathReconciler.reconcileByExistence(root: root, queue: q,
+                                                    exists: { onDisk.contains($0) })
+
+        XCTAssertEqual(n, 0)
+        XCTAssertEqual(try isAlive(q, "/Users/me/Muse/dataless.jpg"), 1)
+        XCTAssertEqual(try isAlive(q, "/Users/me/Other/x.jpg"), 1)
+    }
+
     func testReconcileNonRecursiveIgnoresSubfolderFiles() throws {
         let q = try makeQueue()
         try insertAlivePath(q, "/Users/me/Inspo/a.jpg")

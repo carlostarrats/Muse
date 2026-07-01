@@ -14,6 +14,10 @@ import AppKit
 
 struct GridView: View {
     @EnvironmentObject var appState: AppState
+    // Observed so the first-run empty state reacts to reachable-content changes
+    // (e.g. the last images going away leaves an empty library that needs the
+    // "add a folder" guidance, even while the always-present iCloud root remains).
+    @ObservedObject private var collectionsEngine = CollectionsEngine.shared
 
     private let spacing: CGFloat = 14
     private let contentInset: CGFloat = 20
@@ -517,12 +521,14 @@ struct GridView: View {
     /// pinned near the top instead of centered.
     @ViewBuilder
     private func emptyState(viewportHeight: CGFloat) -> some View {
-        // A plain empty folder shows nothing — just blank space. The one
-        // state that needs guidance is first run (no folder ever added); a
-        // collection filter with no members here, or a picked folder that's
-        // simply empty, both stay blank by design (the folder/collection
-        // header already explains where you are).
-        if appState.activeCollectionID == nil && appState.rootNodes.isEmpty {
+        // A plain empty folder shows nothing — just blank space. The one state
+        // that needs guidance is an empty LIBRARY (no reachable images anywhere):
+        // first run, or every real folder removed leaving only the always-present,
+        // possibly-empty iCloud "Muse" root — a `rootNodes.isEmpty` check misses
+        // that and left the whole window blank with no next step. A collection
+        // filter with no members, or one empty folder while others hold images,
+        // both stay blank by design (the header already explains where you are).
+        if appState.activeCollectionID == nil && !collectionsEngine.hasReachableContent {
             VStack(spacing: 16) {
                 Text("Get started by adding a folder")
                     .font(.title3)
