@@ -177,12 +177,16 @@ extension AppState {
     /// root, so a sidebar-menu export never offers a file the sandbox can't
     /// actually read.
     func exportableURLs(forCollection id: String) async -> [URL] {
-        guard let q = Database.shared.dbQueue else { return [] }
+        // No folders → nothing reachable to export, matching the UI guards
+        // that hide collections entirely when `rootNodes` is empty. This is
+        // ALWAYS a user-initiated call (a menu tap), never the launch-race
+        // window `setActiveCollection` tolerates, so — unlike there — an
+        // empty-roots fallback to "unfiltered" would be wrong, not just
+        // inconsistent.
+        guard !rootNodes.isEmpty, let q = Database.shared.dbQueue else { return [] }
         let paths = (try? await CollectionStore.alivePaths(queue: q, collectionID: id)) ?? []
         let rootPaths = rootNodes.map { $0.url.standardizedFileURL.path }
-        let reachable = rootPaths.isEmpty
-            ? paths
-            : paths.filter { CollectionStore.isUnderAnyRoot($0, roots: rootPaths) }
+        let reachable = paths.filter { CollectionStore.isUnderAnyRoot($0, roots: rootPaths) }
         return reachable.compactMap { path in
             FileManager.default.fileExists(atPath: path) ? URL(fileURLWithPath: path) : nil
         }

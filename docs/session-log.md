@@ -4931,3 +4931,47 @@ feat/next-100). All 36 unit test suites were green before the review; remained g
   `thumbURL` gated by `VALID_ID` regex. Focus trap covers Shift+Tab. Skeleton `.loaded` covers all races.
   Print CSS `inline-flex` prevents cross-page tile splits. `privacy.html` Drive-identity disclosure accurate.
 `MuseTests` + UI tests green.
+
+### Collection share cleanup + sidebar export, hero zoom cursor, first-run empty states — 2026-06-30 (`feat/next-102`)
+
+A batch of UX fixes, then a QA/review pass.
+
+- **Collection PDF-share menu:** dropped the generic "Share" (`NSSharingServicePicker`) item — confusing next
+  to "Share Drive Link", and both share the same collection. The "Save to…" flow (NSSavePanel + paper-size
+  accessory + atomic write) was factored out of `ShareCollectionButton` into a shared
+  `CollectionPDFSave.run(...)` so other surfaces can reuse it.
+- **Sidebar collection context menu** gained "Save to…" + "Share Drive Link", working on ANY collection (not
+  just the currently-open one) via new `AppState.exportableURLs(forCollection:)` — fetches a collection's
+  reachable members by id (same root-reachability rule as `setActiveCollection`), so the export never offers
+  a file the sandbox can't read.
+- **Hero zoom/pan cursor:** open-hand while zoomed + hovering the image, closed-hand while dragging, arrow at
+  fit / over the chrome. Uses `NSCursor.push()/pop()`, NOT `.set()` — a bare `.set()` is silently clobbered by
+  AppKit's per-mouse-move cursor recalculation the instant the pointer moves again (the exact reason the drag
+  cursor already worked but a hover `.set()` didn't). Balanced via `isHoverPushed`/`isDraggingPan` flags;
+  `resetCursorState()` unwinds the stack LIFO on close/flip/unmount so no push leaks to the next view. First
+  attempt (AppKit cursor *rects* via `NSViewRepresentable`) never engaged — legacy cursor-rect geometry
+  doesn't follow SwiftUI's `.scaleEffect`/GeometryEffect transforms. **Known accepted limit:** the FIRST zoom
+  needs one mouse move (or a click) before the hand appears.
+- **Sidebar add-pill buttons** (Add Folder / Add Collection): added `.contentShape(Rectangle())` — the tap/
+  hover region was hugging the glyphs, not the full capsule — plus `.help(...)` hover tooltips.
+- **First-run empty states:** the grid shows "Get started by adding a folder" + a working Add Folder button;
+  the Collections page shows "No collections yet" matching the grid's text weight/color. Both center via
+  `.padding(…)` BEFORE `.frame(minHeight: viewportHeight)` (padding *after* the frame overflowed the viewport
+  by 80pt and read as "too low"), with `.scrollDisabled` while empty so there's no rubber-band that reads as
+  off-center. CollectionsPage centers its message as a ZStack overlay over the full `geo` height (not stacked
+  below the header, which double-counted its height).
+- **No folders → collections hidden everywhere:** the Add Collection pill, the sidebar COLLECTIONS list, and
+  the Collections-page cards all hide when `rootNodes.isEmpty` (you can't make/populate a collection without a
+  folder, and `CollectionStore.fetchAll`'s empty-roots fallback would otherwise leave ghost cards with stale
+  counts). **DISPLAY-TIME ONLY** — guarded on `rootNodes.isEmpty` at each list site; the DB rows are untouched
+  and reappear the instant a folder is re-added. `removeRoot` also backs out of an active collection + the
+  Collections page on last-folder removal (else the grid kept rendering a ghost collection header over
+  now-unreachable tiles — the state-divergence bug the review pass caught).
+- **QA pass (review subagent + fixes):** the removeRoot ghost-collection coherence bug above; hardened
+  `exportableURLs` to return `[]` on empty roots (it's always a user action, never the launch-race window
+  `setActiveCollection`'s unfiltered fallback exists for); localized the one genuinely new string
+  ("Get started by adding a folder" → "Commencez par ajouter un dossier"; every other menu/label string was
+  already translated). Accepted-minor, left as-is: the Save toolbar spinner now also spins while the save
+  panel is open (cosmetic — fixing means splitting the shared helper's panel phase from its render phase).
+
+`MuseTests` (469) + UI tests green.
