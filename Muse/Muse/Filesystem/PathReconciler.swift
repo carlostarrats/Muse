@@ -118,16 +118,37 @@ nonisolated enum PathReconciler {
     /// (`fileExists == true`), and an old-style evicted file is caught by
     /// `isEvictedPlaceholder`. Only a file with no entry at all — a real deletion —
     /// is flipped. `exists` is injectable so the diff is unit-testable without disk.
-    @discardableResult
+    ///
+    /// FAILS CLOSED on an unreachable root. Per-file existence protects the
+    /// individual-dataless-file case, but NOT the case where the ROOT itself is
+    /// transiently gone — an unplugged external volume, an iCloud container not yet
+    /// materialized on a cold launch, a folder renamed under a stale bookmark,
+    /// revoked scope. There EVERY child reports `fileExists == false` and the whole
+    /// subtree would flip `is_alive = 0` in one write — the exact mass-false-deletion
+    /// the enumeration path's `trustworthy` guard exists to prevent, and worse here
+    /// because deep files it kills are never revived by normal browsing. So the root
+    /// is first proven listable (`rootReachable`); if it can't even be enumerated,
+    /// NOTHING is touched and `reachable == false` tells the caller to retry later
+    /// rather than record the root as done. A genuinely emptied-but-reachable folder
+    /// still reconciles (the listing succeeds; its former children are truly gone).
+    /// Both probes are injectable for disk-free unit tests.
+    struct ExistenceResult { let reachable: Bool; let cleared: Int }
+
     static func reconcileByExistence(
         root: URL, queue: DatabaseQueue,
         exists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0)
-                                     || isEvictedPlaceholder($0) }
-    ) -> Int {
+                                     || isEvictedPlaceholder($0) },
+        rootReachable: (String) -> Bool = {
+            (try? FileManager.default.contentsOfDirectory(atPath: $0)) != nil
+        }
+    ) -> ExistenceResult {
         let rootPath = root.standardizedFileURL.path
+        guard rootReachable(rootPath) else {
+            return ExistenceResult(reachable: false, cleared: 0)
+        }
         let alive = aliveUnder(folder: rootPath, queue: queue)
         let gone = alive.filter { !exists($0) }
-        return markDead(gone, queue: queue)
+        return ExistenceResult(reachable: true, cleared: markDead(gone, queue: queue))
     }
 
     /// Full per-folder reconcile. `present` = standardized paths the folder

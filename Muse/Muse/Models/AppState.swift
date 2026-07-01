@@ -58,12 +58,20 @@ final class AppState: ObservableObject {
     /// per-file `fileExists` sweep is wasteful to repeat; live deletions are caught
     /// by FSEvents). Reloads the collection counts if anything was cleared.
     func reconcileRootByExistence(_ root: URL) async {
-        guard existenceReconciledRoots.insert(root).inserted else { return }
+        // Check the queue BEFORE claiming, so a (currently impossible) nil-queue call
+        // can't record the root as done without ever running the sweep.
         guard let queue = Database.shared.dbQueue else { return }
-        let cleared = await Task.detached(priority: .utility) {
+        // Synchronous claim on the MainActor (race-safe: Set.insert is atomic, no
+        // await between entry and here, so exactly one caller wins) — but RELEASED
+        // below if the root proved unreachable, so a transiently-offline root
+        // (unplugged volume / un-materialized iCloud container) still self-heals on
+        // a later rebuild instead of being permanently skipped for the session.
+        guard existenceReconciledRoots.insert(root).inserted else { return }
+        let result = await Task.detached(priority: .utility) {
             PathReconciler.reconcileByExistence(root: root, queue: queue)
         }.value
-        if cleared > 0 { await CollectionsEngine.shared.reload() }
+        if !result.reachable { existenceReconciledRoots.remove(root) }
+        if result.cleared > 0 { await CollectionsEngine.shared.reload() }
     }
 
     /// Proactively existence-reconcile every current root (guarded once per root
@@ -490,6 +498,7 @@ final class AppState: ObservableObject {
     private var bookmarksCancellable: AnyCancellable?
     private var starsCancellable: AnyCancellable?
     private var folderStatsCancellable: AnyCancellable?
+    private var reachabilityCancellable: AnyCancellable?
 
     init() {
         updateAutoMoodTimer()
@@ -545,6 +554,22 @@ final class AppState: ObservableObject {
             .sink { [weak self] _ in self?.objectWillChange.send() }
         folderStatsCancellable = folderStats.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
+
+        // When the library loses ALL reachable images, the content-gated Collections
+        // UI empties — so don't strand the user inside a now-ungated collection or on
+        // the empty Collections page (a blank grid whose "add a folder" guidance is
+        // suppressed while a collection is active). Back out to the main view, where
+        // the placeholder shows. Covers both removing the last local folder (the empty
+        // iCloud "Muse" root remains, so `rootNodes.isEmpty` never fires) and a
+        // background existence sweep clearing the last reachable rows. dropFirst so the
+        // default `true` at construction doesn't back out on launch.
+        reachabilityCancellable = CollectionsEngine.shared.$hasReachableContent
+            .dropFirst()
+            .sink { [weak self] hasContent in
+                guard let self, !hasContent else { return }
+                if self.activeCollectionID != nil { self.setActiveCollection(nil) }
+                if self.showingCollections { self.showingCollections = false }
+            }
 
         // Any tag edit (add / remove / rename / regenerate, from anywhere) bumps
         // tagsVersion — re-derive the chip labels from one place instead of each
@@ -1013,8 +1038,13 @@ final class AppState: ObservableObject {
             // collection counts (which match a root's subtree recursively). Verify
             // the containing root's entire subtree by on-disk existence
             // (dataless-safe), once per root per launch.
+            // Fire-and-forget: this deep per-file sweep must NOT sit in the grid's
+            // critical path — nothing below needs its result (chip counts read the
+            // folder's own paths; the sweep does its own `reload()` when it clears
+            // rows), and awaiting it here would stall the grid publish behind a
+            // full-subtree stat walk on a large root.
             if freshSelect, dbQueue != nil, let root = containingRoot {
-                await self.reconcileRootByExistence(root)
+                Task { await self.reconcileRootByExistence(root) }
             }
             var chipRows: [(label: String, count: Int)] = []
             if freshSelect, let dbQueue {

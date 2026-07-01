@@ -126,14 +126,38 @@ final class PathReconcilerTests: XCTestCase {
         try insertAlivePath(q, "/Users/me/Muse/Shared Collections/Articles/gone.jpg")
         try insertAlivePath(q, "/Users/me/Muse/kept.jpg")
 
-        // On disk: only kept.jpg exists.
+        // On disk: only kept.jpg exists. Root is reachable (listable).
         let onDisk: Set<String> = ["/Users/me/Muse/kept.jpg"]
-        let n = PathReconciler.reconcileByExistence(root: root, queue: q,
-                                                    exists: { onDisk.contains($0) })
+        let r = PathReconciler.reconcileByExistence(root: root, queue: q,
+                                                    exists: { onDisk.contains($0) },
+                                                    rootReachable: { _ in true })
 
-        XCTAssertEqual(n, 1)
+        XCTAssertTrue(r.reachable)
+        XCTAssertEqual(r.cleared, 1)
         XCTAssertEqual(try isAlive(q, "/Users/me/Muse/Shared Collections/Articles/gone.jpg"), 0)
         XCTAssertEqual(try isAlive(q, "/Users/me/Muse/kept.jpg"), 1)
+    }
+
+    func testReconcileByExistenceBailsClosedOnUnreachableRoot() throws {
+        // CRITICAL data-loss guard: when the ROOT itself can't be listed (unplugged
+        // external volume, un-materialized iCloud container on a cold launch, folder
+        // renamed under a stale bookmark), EVERY child reports fileExists == false.
+        // The pass must touch NOTHING and report not-reachable — never mass-flip the
+        // whole subtree dead. (Adversarial review, post-1.3.7.)
+        let q = try makeQueue()
+        let root = URL(fileURLWithPath: "/Volumes/Photos")
+        try insertAlivePath(q, "/Volumes/Photos/a.jpg")
+        try insertAlivePath(q, "/Volumes/Photos/sub/b.jpg")
+
+        // exists returns false for everything (disk gone), but rootReachable is false.
+        let r = PathReconciler.reconcileByExistence(root: root, queue: q,
+                                                    exists: { _ in false },
+                                                    rootReachable: { _ in false })
+
+        XCTAssertFalse(r.reachable)
+        XCTAssertEqual(r.cleared, 0)
+        XCTAssertEqual(try isAlive(q, "/Volumes/Photos/a.jpg"), 1, "must NOT mass-delete on an unreachable root")
+        XCTAssertEqual(try isAlive(q, "/Volumes/Photos/sub/b.jpg"), 1)
     }
 
     func testReconcileByExistenceKeepsDatalessAndOutOfRoot() throws {
@@ -146,10 +170,12 @@ final class PathReconcilerTests: XCTestCase {
         try insertAlivePath(q, "/Users/me/Other/x.jpg")           // different root
 
         let onDisk: Set<String> = ["/Users/me/Muse/dataless.jpg"]
-        let n = PathReconciler.reconcileByExistence(root: root, queue: q,
-                                                    exists: { onDisk.contains($0) })
+        let r = PathReconciler.reconcileByExistence(root: root, queue: q,
+                                                    exists: { onDisk.contains($0) },
+                                                    rootReachable: { _ in true })
 
-        XCTAssertEqual(n, 0)
+        XCTAssertTrue(r.reachable)
+        XCTAssertEqual(r.cleared, 0)
         XCTAssertEqual(try isAlive(q, "/Users/me/Muse/dataless.jpg"), 1)
         XCTAssertEqual(try isAlive(q, "/Users/me/Other/x.jpg"), 1)
     }

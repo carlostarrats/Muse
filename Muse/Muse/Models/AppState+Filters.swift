@@ -461,12 +461,13 @@ extension AppState {
     /// (`sidebarCollectionSortMode`) — never the Collections-page sort. The
     /// sidebar UI reads this; it re-runs when CollectionsEngine publishes.
     var sidebarCollections: [CollectionStore.Loaded] {
-        // Content gate: no reachable image anywhere → no collections (they're
-        // backed by images, so an empty library shows none). Distinct from "no
-        // folders" — the always-present iCloud "Muse" root may hold nothing, so a
-        // `rootNodes.isEmpty` check misses it (the shipped bug). Underlying rows
-        // are untouched and reappear the moment reachable images exist again.
-        guard CollectionsEngine.shared.hasReachableContent else { return [] }
+        // Gate on BOTH a real root AND reachable content. Content catches the
+        // always-present, empty iCloud "Muse" root (folder-existence alone missed it
+        // — the shipped bug); `rootNodes` catches genuine zero-roots (the reachable
+        // sentinel reads "unknown → has content" before roots are pushed, which alone
+        // would show ghost collections with stale counts at zero folders). Underlying
+        // rows are untouched and reappear the moment reachable images exist again.
+        guard !rootNodes.isEmpty, CollectionsEngine.shared.hasReachableContent else { return [] }
         let loaded = CollectionsEngine.shared.collections
         let items = loaded.map {
             SidebarCollectionSort.Item(id: $0.collection.id,
