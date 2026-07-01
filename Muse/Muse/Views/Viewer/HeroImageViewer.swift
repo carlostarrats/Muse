@@ -202,6 +202,12 @@ struct HeroImageViewer: View {
             .padding(.top, 20)
             .padding(.bottom, 28)
             .padding(.trailing, ViewerGeometry.columnMargin - 12)
+            // No explicit cursor handling needed here: HeroStage's image only
+            // PUSHES the open-hand cursor while its own onHover reports
+            // true, and pops it the instant the pointer moves onto this
+            // column (SwiftUI's onHover correctly yields to the front-most
+            // hit-testable view at a point) — leaving the system default
+            // arrow, which is exactly what this column wants.
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .opacity(chromeVisible ? 1 : 0)
             .allowsHitTesting(chromeVisible && !isClosing)

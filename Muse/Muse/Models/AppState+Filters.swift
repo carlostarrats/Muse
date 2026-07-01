@@ -170,6 +170,24 @@ extension AppState {
         }
     }
 
+    /// Export-ready file URLs for ANY collection by id — not necessarily the
+    /// currently OPEN one (unlike `ShareCollectionButton.exportURLs`, which
+    /// reads the live `visibleFiles`). Same reachability rule as
+    /// `setActiveCollection`: members must sit under a currently mounted
+    /// root, so a sidebar-menu export never offers a file the sandbox can't
+    /// actually read.
+    func exportableURLs(forCollection id: String) async -> [URL] {
+        guard let q = Database.shared.dbQueue else { return [] }
+        let paths = (try? await CollectionStore.alivePaths(queue: q, collectionID: id)) ?? []
+        let rootPaths = rootNodes.map { $0.url.standardizedFileURL.path }
+        let reachable = rootPaths.isEmpty
+            ? paths
+            : paths.filter { CollectionStore.isUnderAnyRoot($0, roots: rootPaths) }
+        return reachable.compactMap { path in
+            FileManager.default.fileExists(atPath: path) ? URL(fileURLWithPath: path) : nil
+        }
+    }
+
     /// Whether the bulk-tag menu commands (Delete All / Regenerate) may fire.
     /// Their confirmation alerts live on TagChipsRow, which is unmounted during
     /// search and on the Collections card page — firing a request there would

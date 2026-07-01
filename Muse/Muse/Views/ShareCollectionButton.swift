@@ -3,16 +3,13 @@
 //  Muse
 //
 //  In-collection header control: a menu with "Save to…" (NSSavePanel with a
-//  Paper Size dropdown, defaulted to Desktop) and "Share" (standard
-//  NSSharingServicePicker). Both build a paginated PDF of the collection's
-//  displayed images — Save renders at the chosen paper size after the panel is
-//  confirmed; Share uses the default size. Nothing about the system share sheet
-//  is customized; no new entitlement is needed.
+//  Paper Size dropdown, defaulted to Desktop, builds a paginated PDF of the
+//  collection's displayed images) and "Share Drive Link" (Google Drive
+//  publish). No generic system share sheet — "Share Drive Link" is the only
+//  share path, to avoid offering two confusingly similar share actions.
 //
 
 import SwiftUI
-import AppKit
-import UniformTypeIdentifiers
 
 struct ShareCollectionButton: View {
     @EnvironmentObject var appState: AppState
@@ -39,8 +36,6 @@ struct ShareCollectionButton: View {
     var body: some View {
         Menu {
             Button("Save to…") { Task { await save() } }
-            Button("Share") { Task { await share() } }
-            Divider()
             Button("Share Drive Link") { showingDriveShare = true }
         } label: {
             Group {
@@ -75,108 +70,16 @@ struct ShareCollectionButton: View {
         }
     }
 
-    private func makePDF(pageSize: CGSize) async -> URL? {
-        let urls = exportURLs
-        let layoutAspect = appState.imageLayout.aspect
-        let backdrop = appState.effectiveTileBackground
-            .backdropRGB(for: appState.moodPalette)?.cgColor
-        return await CollectionPDFExporter.makePDF(
-            urls: urls, title: title, count: urls.count, columns: gridColumns,
-            layoutAspect: layoutAspect, tileBackdrop: backdrop,
-            tagLabels: appState.activeTagLabels, pageSize: pageSize)
-    }
-
     private func save() async {
-        // Show the panel (with a Paper Size dropdown) FIRST, then render at the
-        // chosen size — the page size has to be known before makePDF runs.
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [UTType.pdf]
-        panel.nameFieldStringValue = "\(title).pdf"
-        panel.directoryURL = FileManager.default
-            .urls(for: .desktopDirectory, in: .userDomainMask).first
-        let popup = paperSizePopup()
-        panel.accessoryView = paperSizeAccessory(popup)
-        guard panel.runModal() == .OK, let dest = panel.url else { return }
-
-        // Map the popup's selected row back through allCases (same order drove
-        // the population, so the index can't drift); fall back to the default.
-        let paper = PaperSize.allCases[safe: popup.indexOfSelectedItem] ?? .default
-
         preparing = true
         defer { preparing = false }
-        // A nil PDF (every image undecodable/vanished) or a failed write is a
+        let outcome = await CollectionPDFSave.run(
+            title: title, urls: exportURLs, appState: appState, gridColumns: gridColumns,
+            tagLabels: appState.activeTagLabels)
+        // A failure (every image undecodable/vanished, or a failed write) is a
         // silent no-op otherwise — the panel closes looking like success. Surface
         // it: a save the user just triggered warrants a confirming alert (the
-        // macOS norm), not a transient toast.
-        guard let pdf = await makePDF(pageSize: paper.size) else { exportFailed = true; return }
-        do {
-            // Atomic overwrite — no pre-delete window that could destroy an
-            // existing file if the write fails.
-            let data = try Data(contentsOf: pdf)
-            try data.write(to: dest, options: .atomic)
-        } catch {
-            exportFailed = true
-        }
-    }
-
-    private func share() async {
-        preparing = true
-        defer { preparing = false }
-        // Share keeps the default 11×14; only Save to… offers a size choice.
-        // A nil PDF (all images undecodable) is otherwise a silent no-op — the
-        // menu closes and no share sheet appears. Surface it like Save does.
-        guard let pdf = await makePDF(pageSize: PaperSize.default.size) else { exportFailed = true; return }
-        guard let contentView = NSApp.keyWindow?.contentView else { return }
-        let picker = NSSharingServicePicker(items: [pdf])
-        picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
-    }
-
-    // MARK: - Paper-size accessory view
-
-    /// A popup listing every `PaperSize` (in `allCases` order), preselected to
-    /// the default — the read-back in `save()` relies on this same order. Width
-    /// is governed by the 260 pt minimum in `paperSizeAccessory`; the centered
-    /// stack never stretches it past that.
-    private func paperSizePopup() -> NSPopUpButton {
-        let popup = NSPopUpButton(frame: .zero, pullsDown: false)
-        popup.translatesAutoresizingMaskIntoConstraints = false
-        // The "Paper Size:" NSTextField is only a visual neighbor — not
-        // programmatically associated — so VoiceOver needs the role spelled out.
-        popup.setAccessibilityLabel(String(localized: "Paper Size"))
-        for paper in PaperSize.allCases { popup.addItem(withTitle: paper.displayName) }
-        popup.selectItem(at: PaperSize.allCases.firstIndex(of: .default) ?? 0)
-        return popup
-    }
-
-    /// "Paper Size:" label + the popup as a compact row, centered in the
-    /// panel-width accessory band (the panel stretches the container, so the
-    /// inner stack is centered rather than pinned to both edges — keeping the
-    /// popup at its intrinsic width instead of running the full panel width).
-    private func paperSizeAccessory(_ popup: NSPopUpButton) -> NSView {
-        let label = NSTextField(labelWithString: String(localized: "Paper Size:"))
-        let stack = NSStackView(views: [label, popup])
-        stack.orientation = .horizontal
-        stack.spacing = 8
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        let container = NSView()
-        container.addSubview(stack)
-        NSLayoutConstraint.activate([
-            container.heightAnchor.constraint(equalToConstant: 44),
-            stack.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            stack.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            stack.leadingAnchor.constraint(greaterThanOrEqualTo: container.leadingAnchor, constant: 20),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -20),
-            // Comfortable minimum width — roomier than the popup's intrinsic
-            // size without stretching to the full panel width.
-            popup.widthAnchor.constraint(greaterThanOrEqualToConstant: 260),
-        ])
-        return container
-    }
-}
-
-private extension Array {
-    /// Bounds-checked index — nil instead of a crash for an out-of-range row.
-    subscript(safe index: Int) -> Element? {
-        indices.contains(index) ? self[index] : nil
+        // macOS norm), not a transient toast. A user cancel is not a failure.
+        if outcome == .failed { exportFailed = true }
     }
 }
