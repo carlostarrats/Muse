@@ -297,10 +297,23 @@ final class ThumbnailCache: ObservableObject {
 
         // Videos: grab a frame ~1s in (10% of duration for short clips)
         // instead of QuickLook's first frame — openings are so often black
-        // or mid-fade. QuickLook remains the fallback if extraction fails.
-        if kind == .video,
-           let frame = await videoFrame(url: url, size: size, scale: scale) {
-            return frame
+        // or mid-fade. `videoFrame` uses the reference-RESTRICTED asset.
+        if kind == .video {
+            if let frame = await videoFrame(url: url, size: size, scale: scale) {
+                return frame
+            }
+            // Do NOT fall through to QuickLook for a video whose frame extraction
+            // failed. QuickLook thumbnails it in its OWN unrestricted, out-of-
+            // process AVFoundation instance Muse can't constrain — which would
+            // reopen the reference-movie remote-fetch egress that `.noNetwork`
+            // closes (a crafted pure-remote reference movie fails the restricted
+            // extractor, then QuickLook would resolve it). A video AVFoundation
+            // can't frame is one the app can't play anyway (every player uses
+            // AVFoundation), so the honest, egress-free result is the static type
+            // icon — no content decode, no network.
+            let icon = NSWorkspace.shared.icon(forFile: url.path)
+            icon.size = size
+            return icon
         }
 
         // Plain raster images (incl. RAW/PSD, which CGImageSource handles)
@@ -337,12 +350,35 @@ final class ThumbnailCache: ObservableObject {
         }
     }
 
+    /// Generous ceiling (300 megapixels) on the pixel count Muse will hand to an
+    /// ImageIO decode. No consumer photo — even a large scan — approaches this;
+    /// it exists purely to refuse a decompression bomb.
+    nonisolated static let maxDecodePixels = 300_000_000
+
+    /// Decompression-bomb guard: a tiny file can DECLARE enormous dimensions
+    /// (e.g. a few-KB PNG at 40000×40000 ≈ 1.6 Gpx), and for formats ImageIO
+    /// can't stream-downsample (PNG/TIFF/BMP) even a thumbnail request first
+    /// materializes the FULL raster — multi-GB — OOM-killing the process. Because
+    /// thumbnailing runs on mere folder open (prewarm), a planted file would
+    /// crash on open with no click. Read ONLY the header dimensions (cheap, no
+    /// decode) and refuse past the ceiling. Missing dims → allow (can't pre-judge;
+    /// the bomb formats always declare them). Overflow-safe.
+    nonisolated static func withinDecodeBudget(_ src: CGImageSource) -> Bool {
+        guard let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
+              let w = (props[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue,
+              let h = (props[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue
+        else { return true }
+        let (product, overflow) = w.multipliedReportingOverflow(by: h)
+        return !overflow && product <= maxDecodePixels
+    }
+
     /// Downsampled thumbnail via ImageIO — honors EXIF orientation and forces
     /// the decode now (off-main), so the main thread never lazily decodes on
     /// first draw. Returns nil only for a genuinely unreadable/non-image file.
     private nonisolated static func imageIOThumbnail(url: URL, size: CGSize,
                                                      scale: CGFloat) -> NSImage? {
-        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+              withinDecodeBudget(src) else { return nil }
         let maxPixel = Int(max(size.width, size.height) * scale)
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -361,7 +397,7 @@ final class ThumbnailCache: ObservableObject {
     /// (zero tolerance before; a black frame 0 must not sneak back in).
     private nonisolated static func videoFrame(url: URL, size: CGSize,
                                                scale: CGFloat) async -> NSImage? {
-        let asset = AVURLAsset(url: url)
+        let asset = AVURLAsset.noNetwork(url: url)
         guard let duration = try? await asset.load(.duration) else { return nil }
         let seconds = CMTimeGetSeconds(duration)
         guard seconds.isFinite, seconds > 0 else { return nil }

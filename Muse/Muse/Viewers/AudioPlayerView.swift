@@ -60,7 +60,7 @@ struct AudioPlayerView: View {
     }
 
     private func loadMetadata() async {
-        let asset = AVURLAsset(url: url)
+        let asset = AVURLAsset.noNetwork(url: url)
         do {
             let metadata = try await asset.load(.metadata)
             for item in metadata {
@@ -90,7 +90,7 @@ private struct AVKitPlayer: NSViewRepresentable {
     func makeNSView(context: Context) -> AVPlayerView {
         let view = AVPlayerView()
         view.controlsStyle = .inline
-        view.player = AVPlayer(url: url)
+        view.player = AVPlayer.noNetwork(url: url)
         view.showsFullScreenToggleButton = false
         return view
     }
@@ -100,7 +100,7 @@ private struct AVKitPlayer: NSViewRepresentable {
             // Pause the outgoing player before replacing it; otherwise it keeps
             // playing until it deallocs, briefly overlapping the new track.
             nsView.player?.pause()
-            nsView.player = AVPlayer(url: url)
+            nsView.player = AVPlayer.noNetwork(url: url)
         }
     }
 

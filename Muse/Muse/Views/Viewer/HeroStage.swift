@@ -198,7 +198,11 @@ struct HeroStage: View {
         let maxDim = Int(max(viewport.width, viewport.height) * 2.5)
         let target = min(max(maxDim, 1600), 4096)
         let img = await Task.detached(priority: .userInitiated) { () -> NSImage? in
-            guard let src = CGImageSourceCreateWithURL(u as CFURL, nil) else { return nil }
+            // Same decompression-bomb guard as the grid thumbnail path — refuse
+            // to decode a header that declares an absurd pixel count (falls
+            // through to the QuickLook path below, which downsamples safely).
+            guard let src = CGImageSourceCreateWithURL(u as CFURL, nil),
+                  ThumbnailCache.withinDecodeBudget(src) else { return nil }
             let opts: [CFString: Any] = [
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
                 kCGImageSourceCreateThumbnailWithTransform: true,

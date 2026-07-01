@@ -4975,3 +4975,77 @@ A batch of UX fixes, then a QA/review pass.
   panel is open (cosmetic — fixing means splitting the shared helper's panel phase from its render phase).
 
 `MuseTests` (469) + UI tests green.
+
+### Post-1.3.6 health + security review (accessibility/localization + adversarial pass) — 2026-06-30 (`feat/next-103`)
+
+Reviewed everything merged since v1.3.6 (next-95→102) for accessibility, localization, health, leaks, and
+security. Method: five parallel review subagents (metadata stripper, hero cursor stack, PDF/share export
+paths, empty-state/`rootNodes` guards, web share page) → verify each finding against the code → fix confirmed
+ones → one adversarial subagent to verify the fixes → loop green.
+
+- **Accessibility + localization: already complete.** Every new user-facing string since 1.3.6 is wrapped +
+  French-translated (catalog reports 0 untranslated `fr`); `PaperSize.displayName`'s AppKit popup titles are
+  explicitly `String(localized:)`. New interactive elements (`CollectionSidebarRow` context menu, paper-size
+  `NSPopUpButton`, add pills, first-run `AddFolderPillButton`) all carry labels/traits/parallel
+  `.accessibilityActions`. Nothing to fix.
+- **Bug — removing a NON-active root left ghost collection tiles + unpruned selection** (`removeRoot`). The
+  backout only ran for the active root or a fully-emptied root list; removing one of several roots while
+  viewing a multi-root collection kept `activeCollectionFiles` rendering the removed root's now-unreachable
+  tiles under a count that had already shrunk, and never pruned the selection. Fix: an `else if
+  activeCollectionID != nil` branch re-calls `setActiveCollection(activeCollectionID)` on any root removal
+  (re-applies the reachability filter + clears selection). See the updated durable-constraints note.
+- **Bug — sidebar collection export ignored the active sort** (`exportableURLs(forCollection:)`). The
+  sidebar-menu Save/Share of an arbitrary collection returned members in raw `alivePaths` (DB add-order)
+  while the open-collection header exports the grid's sorted order; now it runs the same
+  `SmartSorter.apply(sortMode, …, reversed:)` so both lay out identically.
+- **Leak — the exporter's temp PDF was never deleted** (`CollectionPDFSave.run`). Added a `defer` cleanup
+  (guarded against the degenerate `dest == pdf` case) so a full-size copy isn't left in the sandbox tmp dir.
+- **Robustness/privacy — metadata stripper `reencode` verified `isClean` only once, so the JPEG fallback was
+  dead.** A clean PNG whose compressed IDAT coincidentally contained a `tEXt`/`zTXt`/`iTXt` byte run tripped
+  the deliberately-conservative (fail-closed) byte scan and aborted the *whole* publish. Moved the `isClean`
+  gate INSIDE the per-format loop so an unverified source-format output falls through to JPEG (no PNG chunk
+  framing → verifies clean) instead of throwing — reachable fallback, no weakening of the guarantee (only a
+  verified-clean output is ever returned; neither verifies → nil → fail closed). The adversarial stripper
+  finding (multi-frame EXIF/MakerNote "hidden in bytes") proved NOT a leak: unlike XMP (invisible to the
+  property API, hence the byte scan), EXIF/IPTC/GPS/Maker ARE surfaced by `CGImageSourceCopyPropertiesAtIndex`
+  → caught by `isClean`'s field check → re-encode fallback. Added `testStripMultiFrameEXIFAndMakerNoteStripped`
+  to lock it in.
+- **Clean, no change:** hero NSCursor push/pop stack (balanced across every close/flip/drag/zoom transition —
+  two self-healing hover-latency gaps only); web share page (no XSS/CSP/network/zip-bomb regression since
+  1.3.6 — backdrop-switcher change is a hardening; a11y improved); Drive OAuth invariants (scope exactly
+  `drive.file`, no client secret, Keychain device-only tokens).
+
+`MuseTests` (470, +1) + UI tests green.
+
+### Adversarial security review (hacker-persona subagents) — 2026-06-30 (`feat/next-103`)
+
+Followed the health review with a targeted, sub-agent-driven adversarial pass: four attacker-persona
+subagents (OAuth/token interception, malicious share-link → recipient, malicious file → viewer egress/DoS,
+SQL/path/multipart/sandbox) → verify each finding → fix → two verification rounds looping until closed.
+
+- **DEFENDED, no change (verified):** OAuth/token flow (ASWebAuthenticationSession-bound callback with no
+  stray URL handler, per-flow S256 PKCE from `SecRandomCopyBytes`, validated `state`, device-only non-synced
+  Keychain, revoke-on-signout, coalesced refresh, hardcoded HTTPS); the public share page (no XSS/CSP/network
+  regression, 4 MB inflate cap empirically holds against a 64 MB bomb); FTS5/SQL (double-escaped + fully
+  parameter-bound), path containment (sibling-safe `+ "/"` everywhere), rename migration (`SUBSTR` not `LIKE`),
+  multipart filename (JSON-escaped).
+- **HIGH — AVFoundation reference-movie / HLS egress (fixed).** Every `AVURLAsset`/`AVPlayer` was built bare,
+  so a QuickTime reference movie (`rmra`/`rdrf` remote data-ref) or HLS playlist could beacon the viewer's IP
+  on mere folder open (thumbnail prewarm opens the asset) — a direct break of the "no network" promise. Added
+  `AVURLAsset.noNetwork(url:)` / `AVPlayer.noNetwork(url:)` (`AVURLAssetReferenceRestrictionsKey = .forbidAll`)
+  and routed all 7 sites through it. Also closed the QuickLook residual (its out-of-process AVFoundation is
+  unrestricted): `ThumbnailCache.generate` returns an `NSWorkspace` type icon for an unframable video instead
+  of falling through to QuickLook, and `CollectionPDFExporter` frame-extracts videos via `.noNetwork`.
+- **MEDIUM — image decompression-bomb OOM (fixed).** No pixel-count ceiling before decode: a few-KB PNG at
+  40000×40000 OOM-kills the process on folder open (prewarm) or on index (auto-tag). Added
+  `ThumbnailCache.withinDecodeBudget` (300 MP header-only, overflow-safe) and wired it into every automatic
+  full-raster decode: grid thumbnail, hero full-res, `PaletteExtractor`, `VisionServices`, and the exporter.
+- **LOW — MIME header injection (hardened).** `DriveClient` interpolated the upload `mime` raw into a
+  `Content-Type` header; every source is a UTType-registry value today, but pinned it to an RFC-2045 token
+  grammar (`isValidMIME`, +3 tests) so a future caller can't make it CRLF-injectable.
+- **Accepted/inherent:** public OAuth client is impersonable (platform property of PKCE public clients, no
+  token theft); SVG/PDF/font render-bombs are out-of-process (degrade the preview, not the app); a recipient
+  seeing the sharer's Google account name is the documented, disclosed platform limit.
+
+New durable constraints recorded in CLAUDE.md (AV `.noNetwork`, decode budget, mime token guard).
+`MuseTests` (473, +3) + UI tests green.

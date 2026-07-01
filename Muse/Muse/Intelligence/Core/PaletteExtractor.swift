@@ -64,7 +64,13 @@ enum PaletteExtractor {
     /// Decode an image, downsample to ~32x32, and return its RGB pixels in a
     /// known layout. Backs `weightedPalette`.
     private static func downsampledRGB(for url: URL) -> [(Double, Double, Double)]? {
+        // Decompression-bomb guard: palette extraction runs AUTOMATICALLY on
+        // index of a freshly-added file (the same no-click trigger the grid
+        // thumbnail guard closes), and this thumbnail request materializes the
+        // full raster for PNG/TIFF/BMP just like `imageIOThumbnail` — so refuse
+        // an absurd declared pixel count before decoding.
         guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+              ThumbnailCache.withinDecodeBudget(src),
               let thumb = CGImageSourceCreateThumbnailAtIndex(src, 0, [
                   kCGImageSourceCreateThumbnailFromImageAlways: true,
                   kCGImageSourceThumbnailMaxPixelSize: 32,

@@ -219,7 +219,7 @@ struct HeroVideoViewer: View {
             .ubiquitousItemDownloadingStatus == .notDownloaded {
             return nil
         }
-        let asset = AVURLAsset(url: url)
+        let asset = AVURLAsset.noNetwork(url: url)
         guard let track = try? await asset.loadTracks(withMediaType: .video).first,
               let size = try? await track.load(.naturalSize),
               let transform = try? await track.load(.preferredTransform) else { return nil }
