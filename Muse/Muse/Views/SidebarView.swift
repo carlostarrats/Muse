@@ -117,11 +117,11 @@ struct SidebarView: View {
         // rows make the drag-reorder frame preferences reliable.
         VStack(alignment: .leading, spacing: 1) {
             // The iCloud "Muse" folder is the fixed home — always on top, not
-            // reorderable — with a gap below it separating it from local folders.
+            // reorderable. It sits in the normal row rhythm (VStack spacing) with
+            // the local folders below it, no extra separating gap.
             if let icloud = iCloudNode {
                 FolderTreeNode(node: icloud, depth: 0,
                                topLevelCount: topLevelCount(for: icloud))
-                Color.clear.frame(height: 12)
             }
 
             if !appState.stars.starred.isEmpty {
@@ -139,7 +139,7 @@ struct SidebarView: View {
         }
         .padding(.horizontal, 8)
         .padding(.top, 6)
-        .padding(.bottom, 12)
+        .padding(.bottom, 4)
     }
 
     /// Folders-only scroll (setting OFF) — the original experience.
@@ -192,6 +192,11 @@ struct SidebarView: View {
                 // a bug when the user had removed everything). Reappears the moment
                 // reachable images exist again.
                 if collectionsEngine.hasReachableContent {
+                    // Fixed inter-section spacer (drives the COLLAPSED-state gap
+                    // between the two headers — kept at the original 14). The
+                    // OPEN-state gap is trimmed separately via folderList's bottom
+                    // padding + the shorter endDropZone, which render only when the
+                    // FOLDERS section is expanded.
                     Color.clear.frame(height: 14)
                     SectionHeader(title: String(localized: "COLLECTIONS"), collapsed: $collectionsCollapsed)
                     if !collectionsCollapsed {
@@ -719,6 +724,6 @@ struct SidebarView: View {
     /// for the insertion line (drawn by the shared overlay at the last row's
     /// bottom edge).
     private var endDropZone: some View {
-        Color.clear.frame(height: 24)
+        Color.clear.frame(height: 12)
     }
 }
