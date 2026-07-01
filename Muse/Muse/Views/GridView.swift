@@ -522,13 +522,16 @@ struct GridView: View {
     @ViewBuilder
     private func emptyState(viewportHeight: CGFloat) -> some View {
         // A plain empty folder shows nothing — just blank space. The one state
-        // that needs guidance is an empty LIBRARY (no reachable images anywhere):
-        // first run, or every real folder removed leaving only the always-present,
-        // possibly-empty iCloud "Muse" root — a `rootNodes.isEmpty` check misses
-        // that and left the whole window blank with no next step. A collection
-        // filter with no members, or one empty folder while others hold images,
-        // both stay blank by design (the header already explains where you are).
-        if appState.activeCollectionID == nil && !collectionsEngine.hasReachableContent {
+        // that needs guidance is an empty LIBRARY: NO folders at all (first run, or a
+        // non-iCloud user who removed every folder — `rootNodes.isEmpty`), OR only the
+        // always-present, empty iCloud "Muse" root left (`!hasReachableContent`). Both
+        // must show the "add a folder" onboarding; folder-existence ALONE missed the
+        // iCloud case, and content ALONE misses genuine zero-roots (the reachable-count
+        // sentinel reads as "unknown → has content" when no roots are pushed). A
+        // collection filter with no members, or one empty folder while others hold
+        // images, both stay blank by design (the header already explains where you are).
+        if appState.activeCollectionID == nil
+            && (appState.rootNodes.isEmpty || !collectionsEngine.hasReachableContent) {
             VStack(spacing: 16) {
                 Text("Get started by adding a folder")
                     .font(.title3)

@@ -186,12 +186,15 @@ struct SidebarView: View {
                     sortHeader
                     folderList
                 }
-                // Content-gated: with no reachable images anywhere, there's
-                // nothing to collect, so the whole COLLECTIONS section hides — not
-                // just its rows (an "COLLECTIONS" header over an empty list read as
-                // a bug when the user had removed everything). Reappears the moment
-                // reachable images exist again.
-                if collectionsEngine.hasReachableContent {
+                // Content-gated: with no folders at all, or only an empty iCloud
+                // "Muse" root (no reachable images anywhere), there's nothing to
+                // collect, so the whole COLLECTIONS section hides — not just its rows
+                // (a header over an empty list read as a bug when everything was
+                // removed). Requires BOTH a real root AND reachable content: content
+                // alone would show ghost collections at zero roots (the reachable
+                // sentinel reads "unknown → true" before roots are pushed). Reappears
+                // the moment reachable images exist under a root again.
+                if !appState.rootNodes.isEmpty && collectionsEngine.hasReachableContent {
                     // Fixed inter-section spacer (drives the COLLAPSED-state gap
                     // between the two headers — kept at the original 14). The
                     // OPEN-state gap is trimmed separately via folderList's bottom
@@ -434,10 +437,12 @@ struct SidebarView: View {
     /// Collection isn't offered yet); two compact pills (Add Folder + Add
     /// Collection) once the Collections section is shown AND a folder exists.
     @ViewBuilder private var bottomBar: some View {
-        // Offer "Add Collection" only when there ARE reachable images to collect;
-        // an empty library gets just "Add Folder" (the real next step), matching the
-        // content-gated COLLECTIONS section above.
-        if showCollectionsInSidebar && collectionsEngine.hasReachableContent {
+        // Offer "Add Collection" only when a real folder holds reachable images to
+        // collect; first run / empty library gets just "Add Folder" (the real next
+        // step — a collection with nothing behind it is a dead end), matching the
+        // content-gated COLLECTIONS section above (both a root AND content).
+        if showCollectionsInSidebar && !appState.rootNodes.isEmpty
+            && collectionsEngine.hasReachableContent {
             HStack(spacing: 10) {
                 AddPillButton(systemImage: "folder", label: String(localized: "Add Folder")) {
                     appState.pickAndAddRoot()

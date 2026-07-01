@@ -26,17 +26,15 @@ struct CollectionsPage: View {
     /// Date Modified + direction). Reactive: changing the toolbar sort or arrow
     /// updates `appState.collectionSort*`, which re-runs this computed property.
     private var sorted: [CollectionStore.Loaded] {
-        // No folders → no real collection content is reachable. CollectionStore's
-        // own reachability fallback deliberately skips filtering when its
-        // internal `rootPaths` is empty (so a brief launch-race window for
-        // users who DO have folders doesn't flicker every count to zero) —
-        // that same fallback otherwise leaves ghost collections with stale
-        // counts on screen once every folder's been removed. `AppState.rootNodes`
-        // is synchronous and reliable (unlike the engine's internal
-        // `rootPaths`), so gate the DISPLAYED list here instead of touching
-        // that fallback. The underlying rows are untouched — they reappear
-        // the moment a folder's added back.
-        guard CollectionsEngine.shared.hasReachableContent else { return [] }
+        // Content gate (matches SidebarView + sidebarCollections): show collections
+        // only when a real root holds reachable images. `hasReachableContent` catches
+        // the always-present, empty iCloud "Muse" root; `rootNodes` catches genuine
+        // zero-roots (the reachable-count sentinel reads "unknown → has content"
+        // before roots are pushed, which alone would leave ghost collections with
+        // stale counts on screen). Underlying rows are untouched and reappear the
+        // moment reachable images exist under a root again.
+        guard !appState.rootNodes.isEmpty,
+              CollectionsEngine.shared.hasReachableContent else { return [] }
         let loaded = engine.collections
         let items = loaded.map {
             CollectionSort.Item(id: $0.collection.id,
