@@ -36,7 +36,7 @@ struct CollectionsPage: View {
         // `rootPaths`), so gate the DISPLAYED list here instead of touching
         // that fallback. The underlying rows are untouched — they reappear
         // the moment a folder's added back.
-        guard !appState.rootNodes.isEmpty else { return [] }
+        guard CollectionsEngine.shared.hasReachableContent else { return [] }
         let loaded = engine.collections
         let items = loaded.map {
             CollectionSort.Item(id: $0.collection.id,

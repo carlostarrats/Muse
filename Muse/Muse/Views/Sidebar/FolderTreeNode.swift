@@ -61,6 +61,16 @@ struct FolderTreeNode: View {
         .onAppear { node.loadChildrenIfNeeded() }
     }
 
+    /// The app-managed iCloud "Muse" root with nothing in it (recursively empty).
+    /// Selecting it would just show a blank grid, so it's presented as
+    /// non-interactive — dimmed, no selection tap — until it actually holds files.
+    /// A nil stat (count not computed yet) stays clickable so a still-loading
+    /// folder isn't wrongly disabled.
+    private var isEmptyICloudRoot: Bool {
+        node.url == appState.iCloudFolderURL
+            && appState.folderStats.stat(for: node.url)?.recursiveFileCount == 0
+    }
+
     private var row: some View {
         HStack(spacing: 8) {
             // Disclosure: a real button so it captures its own taps,
@@ -149,11 +159,14 @@ struct FolderTreeNode: View {
                     }
                 }
             }
+            // Dim an empty iCloud "Muse" root so it reads as non-interactive.
+            .opacity(isEmptyICloudRoot ? 0.4 : 1)
             .contentShape(Rectangle())
             // Plain tap-to-select on the row label. Reliable because the only drag
             // source (the grip) is an isolated AppKit view, not a SwiftUI .onDrag
-            // on this hosting view (see SidebarView.rootRow).
-            .onTapGesture { appState.select(folder: node) }
+            // on this hosting view (see SidebarView.rootRow). No-op when the row is
+            // an empty iCloud root (nothing to show).
+            .onTapGesture { if !isEmptyICloudRoot { appState.select(folder: node) } }
         }
         .padding(.leading, CGFloat(depth) * 14)
         .padding(.horizontal, 6)

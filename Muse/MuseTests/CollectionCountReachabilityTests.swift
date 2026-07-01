@@ -121,4 +121,50 @@ final class CollectionCountReachabilityTests: XCTestCase {
         let all = try await CollectionStore.fetchAll(queue: q, rootPaths: ["/Users/me/Saved Inspo"])
         XCTAssertTrue(all.isEmpty)
     }
+
+    // MARK: - reachableFileCount (drives the "no images → no Collections UI" gate)
+
+    func testReachableFileCountCountsOnlyAliveUnderRoots() async throws {
+        // The exact shipped shape: the only root is the empty iCloud "Muse" folder;
+        // every alive file is under a DIFFERENT (removed) folder. Reachable = 0,
+        // so the Collections UI must hide even though alive rows still exist.
+        let q = try makeQueue()
+        try insertFile(q, id: "f1", at: "/Users/me/Desktop/INSPO/a.jpg")          // removed root
+        try insertFile(q, id: "f2", at: "/Users/me/Library/Mobile Documents/com~apple~CloudDocs/x.jpg")
+        let muse = "/Users/me/Library/Mobile Documents/iCloud~com~tarrats~Muse/Documents"
+
+        let count = try await CollectionStore.reachableFileCount(queue: q, rootPaths: [muse])
+        XCTAssertEqual(count, 0, "nothing lives under the Muse folder → no reachable images")
+    }
+
+    func testReachableFileCountSeesFilesUnderRootAtAnyDepth() async throws {
+        let q = try makeQueue()
+        let muse = "/Users/me/Library/Mobile Documents/iCloud~com~tarrats~Muse/Documents"
+        try insertFile(q, id: "f1", at: muse + "/photo.jpg")            // direct child
+        try insertFile(q, id: "f2", at: muse + "/Trip/deep/pic.jpg")   // nested
+        try insertFile(q, id: "f3", at: "/Users/me/Desktop/other.jpg") // out of root
+
+        let count = try await CollectionStore.reachableFileCount(queue: q, rootPaths: [muse])
+        XCTAssertEqual(count, 2, "both files under Muse (any depth) count; the outsider doesn't")
+    }
+
+    func testReachableFileCountEmptyRootsReturnsUnknownSentinel() async throws {
+        // Before AppState pushes roots, rootPaths is empty → -1 ("unknown"), so the
+        // caller keeps collections visible rather than flickering them away at launch.
+        let q = try makeQueue()
+        try insertFile(q, id: "f1", at: "/Users/me/Desktop/a.jpg")
+        let count = try await CollectionStore.reachableFileCount(queue: q, rootPaths: [])
+        XCTAssertEqual(count, -1)
+    }
+
+    func testReachableFileCountIgnoresDeadRows() async throws {
+        // A ghost row (is_alive = 0) under a root must NOT count — otherwise the
+        // reconcile that marks deleted files dead wouldn't let the UI hide.
+        let q = try makeQueue()
+        let muse = "/Users/me/Muse"
+        try insertFile(q, id: "f1", at: muse + "/a.jpg")
+        try await q.write { db in try db.execute(sql: "UPDATE paths SET is_alive = 0") }
+        let count = try await CollectionStore.reachableFileCount(queue: q, rootPaths: [muse])
+        XCTAssertEqual(count, 0)
+    }
 }
