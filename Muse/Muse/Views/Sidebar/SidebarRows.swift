@@ -76,6 +76,11 @@ struct AddFolderPillButton: View {
                 .font(.system(size: 12, weight: .medium))
                 .padding(.horizontal, 16)
                 .frame(height: 28)
+                // Without this, the tap/hover region hugs the glyphs' actual
+                // ink (icon + text runs) rather than the full label box —
+                // the padding gaps read as visually part of the pill but
+                // were dead space to the pointer.
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .background {
@@ -86,6 +91,7 @@ struct AddFolderPillButton: View {
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.12)) { isHovered = hovering }
         }
+        .help("Add Folder")
     }
 
     private var fillColor: Color {
@@ -170,6 +176,11 @@ struct AddPillButton: View {
             .font(.system(size: 12, weight: .medium))
             .frame(maxWidth: .infinity)
             .frame(height: 28)
+            // Without this, the tap/hover region hugs the two small glyphs
+            // centered in the middle of the capsule rather than the full
+            // stretched (`maxWidth: .infinity`) width — most of the visible
+            // pill was dead space to the pointer.
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .background { Capsule(style: .continuous).fill(fillColor) }
@@ -177,6 +188,7 @@ struct AddPillButton: View {
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.12)) { isHovered = hovering }
         }
+        .help(label)
         .accessibilityLabel(label)
     }
 

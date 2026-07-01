@@ -451,6 +451,12 @@ extension AppState {
     /// (`sidebarCollectionSortMode`) — never the Collections-page sort. The
     /// sidebar UI reads this; it re-runs when CollectionsEngine publishes.
     var sidebarCollections: [CollectionStore.Loaded] {
+        // Same "no folders → no reachable content" guard as CollectionsPage's
+        // `sorted` — without it, a user with starred folders but zero added
+        // roots would still see ghost collections with stale counts (the
+        // sidebar's own top-level empty state only fires when BOTH rootNodes
+        // and starred are empty). Underlying rows are untouched.
+        guard !rootNodes.isEmpty else { return [] }
         let loaded = CollectionsEngine.shared.collections
         let items = loaded.map {
             SidebarCollectionSort.Item(id: $0.collection.id,
