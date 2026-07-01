@@ -143,8 +143,11 @@ enum ImageMetadataStripper {
            let out = losslessStrip(src: src, type: srcType, orientation: orientation), isClean(out) {
             return Output(data: out, mime: actualMime)
         }
-        // Re-encode from decoded pixels (clean by construction) — still verified.
-        if let re = reencode(src: src, sourceType: srcType, orientation: orientation), isClean(re.data) {
+        // Re-encode from decoded pixels (clean by construction). reencode returns
+        // ONLY a verified-clean output — it runs isClean over each candidate format
+        // internally and falls through to JPEG if the source-format re-encode
+        // doesn't verify — so no separate isClean gate is needed here.
+        if let re = reencode(src: src, sourceType: srcType, orientation: orientation) {
             return re
         }
         // Fail closed — never upload an un-verified original.
@@ -203,7 +206,17 @@ enum ImageMetadataStripper {
         guard let cg = CGImageSourceCreateImageAtIndex(src, 0,
                 [kCGImageSourceShouldCache: false] as CFDictionary) else { return nil }
         let jpeg = UTType.jpeg.identifier as CFString
-        // Prefer the source format (keeps PNG alpha etc.); JPEG covers RAW/unwritable.
+        // Prefer the source format (keeps PNG alpha etc.); JPEG covers RAW/unwritable
+        // AND is the fallback when the source-format re-encode doesn't VERIFY clean.
+        // The verifier's byte scan is deliberately conservative (fail-closed): the
+        // PNG chunk-name scan can trip on a coincidental "tEXt"/"zTXt"/"iTXt" byte
+        // run inside compressed IDAT pixel data of an otherwise-clean PNG. Rather
+        // than abort the whole publish on that false positive, fall through to JPEG
+        // — which has no PNG chunk framing, re-encodes from the same already-clean
+        // decoded pixels, and verifies clean. Only a VERIFIED-clean output is ever
+        // returned; if neither format verifies, nil → strip() fails closed. (JPEG
+        // drops alpha, an accepted cost for this rare fallback — recipients view
+        // Google thumbnails, and clean-but-flattened beats aborting the share.)
         for type in [sourceType, jpeg] {
             let out = NSMutableData()
             guard let dest = CGImageDestinationCreateWithData(out, type, 1, nil) else { continue }
@@ -214,8 +227,12 @@ enum ImageMetadataStripper {
             if type == jpeg { opts[kCGImageDestinationLossyCompressionQuality] = 0.92 }
             CGImageDestinationAddImage(dest, cg, opts as CFDictionary)
             guard CGImageDestinationFinalize(dest) else { continue }
+            let outData = out as Data
+            // Verify THIS candidate before accepting it; an unclean source-format
+            // output falls through to the next (JPEG) rather than being returned.
+            guard isClean(outData) else { continue }
             let mime = UTType(type as String)?.preferredMIMEType ?? "image/jpeg"
-            return Output(data: out as Data, mime: mime)
+            return Output(data: outData, mime: mime)
         }
         return nil
     }

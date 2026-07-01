@@ -4975,3 +4975,44 @@ A batch of UX fixes, then a QA/review pass.
   panel is open (cosmetic — fixing means splitting the shared helper's panel phase from its render phase).
 
 `MuseTests` (469) + UI tests green.
+
+### Post-1.3.6 health + security review (accessibility/localization + adversarial pass) — 2026-06-30 (`feat/next-103`)
+
+Reviewed everything merged since v1.3.6 (next-95→102) for accessibility, localization, health, leaks, and
+security. Method: five parallel review subagents (metadata stripper, hero cursor stack, PDF/share export
+paths, empty-state/`rootNodes` guards, web share page) → verify each finding against the code → fix confirmed
+ones → one adversarial subagent to verify the fixes → loop green.
+
+- **Accessibility + localization: already complete.** Every new user-facing string since 1.3.6 is wrapped +
+  French-translated (catalog reports 0 untranslated `fr`); `PaperSize.displayName`'s AppKit popup titles are
+  explicitly `String(localized:)`. New interactive elements (`CollectionSidebarRow` context menu, paper-size
+  `NSPopUpButton`, add pills, first-run `AddFolderPillButton`) all carry labels/traits/parallel
+  `.accessibilityActions`. Nothing to fix.
+- **Bug — removing a NON-active root left ghost collection tiles + unpruned selection** (`removeRoot`). The
+  backout only ran for the active root or a fully-emptied root list; removing one of several roots while
+  viewing a multi-root collection kept `activeCollectionFiles` rendering the removed root's now-unreachable
+  tiles under a count that had already shrunk, and never pruned the selection. Fix: an `else if
+  activeCollectionID != nil` branch re-calls `setActiveCollection(activeCollectionID)` on any root removal
+  (re-applies the reachability filter + clears selection). See the updated durable-constraints note.
+- **Bug — sidebar collection export ignored the active sort** (`exportableURLs(forCollection:)`). The
+  sidebar-menu Save/Share of an arbitrary collection returned members in raw `alivePaths` (DB add-order)
+  while the open-collection header exports the grid's sorted order; now it runs the same
+  `SmartSorter.apply(sortMode, …, reversed:)` so both lay out identically.
+- **Leak — the exporter's temp PDF was never deleted** (`CollectionPDFSave.run`). Added a `defer` cleanup
+  (guarded against the degenerate `dest == pdf` case) so a full-size copy isn't left in the sandbox tmp dir.
+- **Robustness/privacy — metadata stripper `reencode` verified `isClean` only once, so the JPEG fallback was
+  dead.** A clean PNG whose compressed IDAT coincidentally contained a `tEXt`/`zTXt`/`iTXt` byte run tripped
+  the deliberately-conservative (fail-closed) byte scan and aborted the *whole* publish. Moved the `isClean`
+  gate INSIDE the per-format loop so an unverified source-format output falls through to JPEG (no PNG chunk
+  framing → verifies clean) instead of throwing — reachable fallback, no weakening of the guarantee (only a
+  verified-clean output is ever returned; neither verifies → nil → fail closed). The adversarial stripper
+  finding (multi-frame EXIF/MakerNote "hidden in bytes") proved NOT a leak: unlike XMP (invisible to the
+  property API, hence the byte scan), EXIF/IPTC/GPS/Maker ARE surfaced by `CGImageSourceCopyPropertiesAtIndex`
+  → caught by `isClean`'s field check → re-encode fallback. Added `testStripMultiFrameEXIFAndMakerNoteStripped`
+  to lock it in.
+- **Clean, no change:** hero NSCursor push/pop stack (balanced across every close/flip/drag/zoom transition —
+  two self-healing hover-latency gaps only); web share page (no XSS/CSP/network/zip-bomb regression since
+  1.3.6 — backdrop-switcher change is a hardening; a11y improved); Drive OAuth invariants (scope exactly
+  `drive.file`, no client secret, Keychain device-only tokens).
+
+`MuseTests` (470, +1) + UI tests green.

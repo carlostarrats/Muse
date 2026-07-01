@@ -43,6 +43,18 @@ enum CollectionPDFSave {
             layoutAspect: layoutAspect, tileBackdrop: backdrop,
             tagLabels: tagLabels, pageSize: paper.size
         ) else { return .failed }
+        // The exporter wrote the PDF to a title-derived path in NSTemporaryDirectory;
+        // once we've copied it to the user's chosen destination it's dead weight, so
+        // remove it on every exit (success OR a failed write) rather than leaving a
+        // full-size copy behind in the sandbox temp dir until the OS reaps it. Guard
+        // against the degenerate case where the user steered the save panel into the
+        // temp dir and picked the same name (dest == pdf) — deleting then would wipe
+        // the file we just saved.
+        defer {
+            if pdf.standardizedFileURL != dest.standardizedFileURL {
+                try? FileManager.default.removeItem(at: pdf)
+            }
+        }
         do {
             // Atomic overwrite — no pre-delete window that could destroy an
             // existing file if the write fails.

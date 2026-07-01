@@ -187,9 +187,15 @@ extension AppState {
         let paths = (try? await CollectionStore.alivePaths(queue: q, collectionID: id)) ?? []
         let rootPaths = rootNodes.map { $0.url.standardizedFileURL.path }
         let reachable = paths.filter { CollectionStore.isUnderAnyRoot($0, roots: rootPaths) }
-        return reachable.compactMap { path in
-            FileManager.default.fileExists(atPath: path) ? URL(fileURLWithPath: path) : nil
-        }
+        // Order the pages by the SAME active sort as the open-collection grid
+        // (setActiveCollection runs SmartSorter over its reachable members). A
+        // sidebar-menu export of a collection must lay out identically to
+        // opening it and exporting from its header — without this the PDF /
+        // Drive share come out in raw `alivePaths` (DB add-order) instead.
+        let nodes = SmartSorter.apply(sortMode, to: reachable.compactMap { path in
+            FileManager.default.fileExists(atPath: path) ? FileNode(url: URL(fileURLWithPath: path)) : nil
+        }, reversed: sortReversed)
+        return nodes.map { $0.url }
     }
 
     /// Whether the bulk-tag menu commands (Delete All / Regenerate) may fire.

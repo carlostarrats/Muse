@@ -726,6 +726,18 @@ final class AppState: ObservableObject {
         if rootNodes.isEmpty {
             if activeCollectionID != nil { setActiveCollection(nil) }
             if showingCollections { showingCollections = false }
+        } else if activeCollectionID != nil {
+            // A collection can span MULTIPLE roots, so removing ANY root — not
+            // just the active one — can drop members out of reach. The count
+            // (CollectionsEngine.reload) shrinks reactively, but the grid's
+            // `activeCollectionFiles` would keep rendering the removed root's
+            // now-unreachable tiles under that shrunken count — a ghost
+            // divergence. Re-resolve the active collection against the new root
+            // set: setActiveCollection re-applies the same reachability filter
+            // as the badge count AND clears the selection (its first line), so a
+            // still-reachable action (New Collection from Selection…/move/share)
+            // can't operate on a file under the folder that was just removed.
+            setActiveCollection(activeCollectionID)
         }
     }
 

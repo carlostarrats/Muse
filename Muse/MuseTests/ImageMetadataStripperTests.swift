@@ -371,6 +371,52 @@ final class ImageMetadataStripperTests: XCTestCase {
         XCTAssertEqual(CGImageSourceGetCount(src), 2, "both TIFF pages preserved")
     }
 
+    /// The multi-frame LOSSLESS path is the one branch that does NOT re-encode
+    /// from decoded pixels, so its only privacy defense is isClean. This exercises
+    /// the exact "EXIF free-text / Apple MakerNote hidden in a container's bytes"
+    /// concern from the adversarial review: a multi-page TIFF carrying an EXIF
+    /// UserComment + capture date + a MakerApple dict on every page. The privacy
+    /// guarantee holds regardless of which branch wins — if the lossless strip
+    /// honors the null the frames survive metadata-free; if isClean catches a
+    /// survivor the image re-encodes to a clean still — either way the needle is
+    /// gone and the output verifies clean.
+    func testStripMultiFrameEXIFAndMakerNoteStripped() throws {
+        let needle = "MUSE-MF-EXIF-NEEDLE"
+        let cs = CGColorSpace(name: CGColorSpace.sRGB)!
+        let data = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(data, UTType.tiff.identifier as CFString, 2, nil) else {
+            throw XCTSkip("TIFF encode unavailable")
+        }
+        for f in 0..<2 {
+            let ctx = CGContext(data: nil, width: 24, height: 24, bitsPerComponent: 8, bytesPerRow: 0,
+                                space: cs, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
+            ctx.setFillColor(CGColor(red: CGFloat(f), green: 0.3, blue: 0.7, alpha: 1))
+            ctx.fill(CGRect(x: 0, y: 0, width: 24, height: 24))
+            CGImageDestinationAddImage(dest, ctx.makeImage()!, [
+                kCGImagePropertyExifDictionary: [
+                    kCGImagePropertyExifUserComment: needle,
+                    kCGImagePropertyExifDateTimeOriginal: "2024:01:02 03:04:05",
+                ],
+                kCGImagePropertyMakerAppleDictionary: ["1": needle + "-MAKER"],
+            ] as CFDictionary)
+        }
+        guard CGImageDestinationFinalize(dest) else { throw XCTSkip("multi-page TIFF finalize failed") }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("muse-mf-exif-\(UUID().uuidString).tiff")
+        try (data as Data).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        // Gate on the host actually embedding the needle — some TIFF encoders drop
+        // unknown EXIF/maker fields, which would make the assertion vacuous.
+        guard try Data(contentsOf: url).range(of: Data(needle.utf8)) != nil else {
+            throw XCTSkip("host did not embed multi-frame EXIF/maker metadata; nothing to assert")
+        }
+        let out = try ImageMetadataStripper.strip(url: url, mime: "image/tiff")
+        XCTAssertNil(out.data.range(of: Data(needle.utf8)),
+                     "multi-frame EXIF/maker free-text must not survive (stripped or re-encoded away)")
+        XCTAssertTrue(ImageMetadataStripper.isClean(out.data),
+                      "stripped multi-frame image must verify clean")
+    }
+
     /// The reported mime must reflect the ACTUAL bytes, not the (possibly lying)
     /// file extension — or Drive stores a mislabeled file the thumbnailer can't read.
     func testMimeReflectsActualBytesNotExtension() throws {
