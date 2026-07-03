@@ -39,7 +39,7 @@ struct ReconnectWizard: View {
             footer
         }
         .padding(28)
-        .frame(width: 600, height: 720)
+        .windowFittedSheetHeight(width: 600, ideal: 720)
     }
 
     private var folderSection: some View {

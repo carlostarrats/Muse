@@ -66,7 +66,7 @@ struct ManageDriveSharesView: View {
             }
         }
         .padding(28)
-        .frame(width: 600, height: 400)
+        .windowFittedSheetHeight(width: 600, ideal: 400)
         .alert("Couldn’t Unpublish", isPresented: $unpublishFailed) {
             Button("OK", role: .cancel) {}
         } message: {

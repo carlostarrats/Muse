@@ -5189,3 +5189,22 @@ fixed too.
   path's basename for multi-path identities (same inherent ambiguity as the rename-refresh rule).
 
 Build + `MuseTests` (497, +7) + UI tests green; share.test.mjs green.
+
+### Window-fitted modal sheets — 2026-07-03 (on `feat/next-112`)
+
+Bug: a modal `.sheet` with a bare fixed `.frame(width: 600, height: 720)` spills past the bottom
+edge of a window shorter than 720 (owner-reported on the About modal) — a macOS `.sheet` sizes to
+its content's fitting height and doesn't clip to the window.
+
+- **New `View.windowFittedSheetHeight(width:ideal:)`** (`Views/WindowFittedSheetHeight.swift`) caps the
+  sheet at the presenting window's content height (read via the sheet's `sheetParent`, tracked live on
+  `NSWindow.didResizeNotification`) minus a margin, flooring at a usable min; the content `ScrollView`
+  scrolls when capped, so nothing clips. The measure-and-write is deferred one runloop turn to avoid
+  "modifying state during view update". Pure sizing math extracted to `Components/SheetFit.swift`
+  (`SheetFitTests`, +6).
+- **Applied to all four fixed-height card sheets:** About (`InfoSheet`), `ImageLayoutSheet`,
+  `ReconnectWizard`, `ManageDriveSharesView` — each had the same raw fixed frame.
+- **Left as-is (not the same bug):** `SettingsView` + `DriveShareForm` are width-only, shrink-to-content
+  (no fixed tall height); `DuplicatesView` is user-resizable (`minHeight`).
+
+Build + `MuseTests` (503, +6) + UI tests green.
