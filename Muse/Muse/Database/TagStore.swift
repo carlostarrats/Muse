@@ -119,8 +119,9 @@ final class TagStore: ObservableObject {
         guard let queue = Database.shared.dbQueue else { return }
         let trimmed = new.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed != old else { return }
+        var affectedIDs: [String] = []
         do {
-            try await queue.write { db in
+            affectedIDs = try await queue.write { db -> [String] in
                 let oldRows = try TagRow
                     .filter(TagRow.Columns.label == old)
                     .fetchAll(db)
@@ -145,10 +146,30 @@ final class TagStore: ObservableObject {
                         try moved.update(db)
                     }
                 }
+                return Array(Set(oldRows.map { $0.file_id }))
             }
         } catch {
             print("[TagStore] renameLabel failed: \(error)")
         }
+        // Re-export sidecars for renamed files living in the iCloud zone (the
+        // other TagStore mutations already do this; renames were the one gap).
+        // Chunk the IN list — a common vision label can touch tens of
+        // thousands of files, past SQLite's bound-variable limit (every other
+        // multi-id site chunks the same way).
+        guard !affectedIDs.isEmpty else { return }
+        let urls: [URL] = (try? await queue.read { db -> [URL] in
+            var paths: [String] = []
+            for chunk in stride(from: 0, to: affectedIDs.count, by: 500)
+                .map({ Array(affectedIDs[$0..<min($0 + 500, affectedIDs.count)]) }) {
+                let marks = databaseQuestionMarks(count: chunk.count)
+                paths += try String.fetchAll(db, sql: """
+                    SELECT absolute_path FROM paths
+                    WHERE is_alive = 1 AND file_id IN (\(marks))
+                    """, arguments: StatementArguments(chunk))
+            }
+            return paths.map { URL(fileURLWithPath: $0) }
+        }) ?? []
+        AnalyzePipeline.shared.exportSidecarsAfterTagEdit(for: urls)
     }
 
     /// Delete every tag (manual + vision) for the given file URLs, scoped to

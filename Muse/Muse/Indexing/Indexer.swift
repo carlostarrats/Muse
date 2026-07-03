@@ -128,6 +128,7 @@ actor Indexer {
                 try newFile.insert(db)
                 path.file_id = newFile.id
                 try path.update(db)
+                try insertBasenameFTS(db: db, fileID: newFile.id, absPath: absPath)
                 return false
             }
 
@@ -211,6 +212,7 @@ actor Indexer {
                     var newFile = makeFile(hash: hash, kind: kind, size: sizeBytes,
                                            created: createdAt, modified: modifiedAt, now: now)
                     try newFile.insert(db)
+                    try insertBasenameFTS(db: db, fileID: newFile.id, absPath: absPath)
                     let dir = TagScope.parentDir(ofPath: absPath)
                     // Tags are keyed (file_id, parent_dir). If the original row KEEPS
                     // another alive path in THIS SAME folder (a byte-identical
@@ -284,6 +286,9 @@ actor Indexer {
                 try refreshed.update(db)
                 try inheritVisionTags(db: db, fileID: target.id,
                                       toDir: TagScope.parentDir(ofPath: absPath))
+                // A file that was dead at v9-backfill time has no FTS row —
+                // seed the basename one now so it's name-searchable again.
+                try ensureBasenameFTS(db: db, fileID: target.id, absPath: absPath)
                 return false
             }
             // Otherwise: brand-new path pointing at known content
@@ -315,6 +320,9 @@ actor Indexer {
                 try db.execute(sql: "UPDATE files_fts SET basename = ? WHERE file_id = ?",
                                arguments: [(absPath as NSString).lastPathComponent, target.id])
             }
+            // The UPDATE above no-ops when the row is missing (a file dead at
+            // v9-backfill time) — make sure a basename row exists either way.
+            try ensureBasenameFTS(db: db, fileID: target.id, absPath: absPath)
             return false
         }
 
@@ -332,7 +340,29 @@ actor Indexer {
             is_alive: 1
         )
         try newPath.insert(db)
+        try insertBasenameFTS(db: db, fileID: newFile.id, absPath: absPath)
         return false
+    }
+
+    /// Seed a basename-only FTS row for a NEW file identity, whatever its
+    /// kind. Historically only analyzed images got an FTS row (`analyzeOne`
+    /// writes the full basename+OCR+caption one), so "All folders" search
+    /// could never find a PDF/video/archive by name. `analyzeOne` replaces
+    /// this row wholesale when it runs; non-analyzed kinds keep it.
+    private static func insertBasenameFTS(db: GRDB.Database, fileID: String, absPath: String) throws {
+        try db.execute(sql: """
+            INSERT INTO files_fts(file_id, basename, ocr_text, caption)
+            VALUES (?, ?, '', '')
+            """, arguments: [fileID, (absPath as NSString).lastPathComponent])
+    }
+
+    /// Insert-if-missing variant for RESURRECTED identities: never clobbers an
+    /// existing (possibly analyzed, OCR-bearing) row, only fills the gap left
+    /// for files that were dead when the v9 backfill ran.
+    private static func ensureBasenameFTS(db: GRDB.Database, fileID: String, absPath: String) throws {
+        let has = (try Int.fetchOne(db, sql:
+            "SELECT COUNT(*) FROM files_fts WHERE file_id = ?", arguments: [fileID]) ?? 0) > 0
+        if !has { try insertBasenameFTS(db: db, fileID: fileID, absPath: absPath) }
     }
 
     private static func makeFile(

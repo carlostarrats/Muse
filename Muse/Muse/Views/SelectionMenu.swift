@@ -96,8 +96,7 @@ struct SelectionActionsMenu: View {
     }
 
     private func move(to dest: URL) {
-        let moving = fileURLs
-        appState.reloadAfterMove(failed: FileMover.move(moving, into: dest))
+        appState.moveFiles(fileURLs, into: dest)
     }
 
     private func addToCollection(_ collectionID: String) {

@@ -108,6 +108,39 @@ final class IndexerReconcileTests: XCTestCase {
         }
     }
 
+    // MARK: FTS basename coverage (every kind, not just analyzed images)
+
+    func testNewNonImageFileGetsBasenameFTSRow() throws {
+        // Historically only analyzeOne wrote files_fts rows (images only), so
+        // library-wide search could never find a PDF/video by name.
+        let q = try freshQueue()
+        try q.write { db in
+            _ = try Indexer.reconcile(db: db, absPath: "/a/report.pdf", hash: "h1",
+                                      kind: .pdf, sizeBytes: 1, createdAt: 0, modifiedAt: 1, now: 2)
+        }
+        try q.read { db in
+            let fid = try String.fetchOne(db, sql: "SELECT file_id FROM paths WHERE absolute_path='/a/report.pdf'")!
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT basename FROM files_fts WHERE file_id=?", arguments: [fid]),
+                           "report.pdf")
+        }
+    }
+
+    func testBasenameFTSBackfillCoversExistingRows() throws {
+        let q = try freshQueue()
+        try q.write { db in
+            // A pre-v9 row: file + alive path, no FTS row.
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at) VALUES ('f1','h1','pdf',0)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('p1','f1','/a/notes.pdf',1)")
+            try db.execute(sql: "DELETE FROM files_fts WHERE file_id='f1'")
+            try Database.backfillBasenameFTS(db)
+        }
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT basename FROM files_fts WHERE file_id='f1'"), "notes.pdf")
+            // Idempotent — a second run must not duplicate.
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM files_fts WHERE file_id='f1'"), 1)
+        }
+    }
+
     // MARK: hash-collision edit branch (new bytes match a DIFFERENT existing row)
 
     func testCollisionEditOnSharedRowKeepsSiblingTags() throws {

@@ -253,7 +253,7 @@ struct FolderTreeNode: View {
                 (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory != true
             }
             guard !selected.isEmpty else { return false }
-            appState.reloadAfterMove(failed: FileMover.move(selected, into: node.url))
+            appState.moveFiles(selected, into: node.url)
             return true
         }
     }

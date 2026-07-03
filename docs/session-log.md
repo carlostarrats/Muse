@@ -5141,3 +5141,51 @@ O(n)/health watch list); search field still publishes per keystroke (pre-existin
 overstated what shipped).
 
 Build + `MuseTests` (490, +10) + UI tests green; share.test.mjs green (18 new assertions).
+
+### Flagged-item fixes + QA round — 2026-07-03 (same session, `feat/next-111`)
+
+Owner asked to fix everything the review had deferred, then QA the fixes. All five flagged items landed,
+then a dedicated adversarial QA subagent reviewed the diff (interleaving-focused) and its findings were
+fixed too.
+
+- **Manual tags now follow an in-app move.** New `FileMoveMigration` (repoint the alive path row +
+  carry the location's tag rows, manual included, copy-vs-move by the same same-dir-sibling rule as the
+  Indexer's split/collision branches; manual-beats-vision merge when the destination already holds rows;
+  stale alive row at the destination killed first so `paths_alive_unique` can't roll the transaction back).
+  Rationale: an in-app move (context menu / sidebar drop) is a KNOWN relocation — unlike an external move,
+  where reconcile can only inherit vision tags. Both UI entry points now route through `AppState.moveFiles`,
+  which also runs the DISK move off-main (a cross-volume move copied bytes on the main thread) and
+  re-exports iCloud sidecars for the destination. `FileMoveMigrationTests` (5).
+- **Library-wide search finds every kind by name.** `Indexer.reconcile` seeds a basename-only `files_fts`
+  row for every NEW file (3 sites; `analyzeOne` still replaces it with the full basename+OCR+caption row
+  for images), `v9_fts_basename_backfill` covers existing libraries, and the resurrect/new-path branches
+  `ensureBasenameFTS` for files that were dead at backfill time. QA caught the first backfill draft being
+  O(n²) (correlated `NOT EXISTS` on an UNINDEXED fts column, inside the migrator = launch hang on a big
+  library) — rewritten to one covered-ids Set + linear pass. +2 tests.
+- **Main-thread I/O moved off-main:** the search "extras" folder enumeration (`SearchService`), the
+  collection existence-sweep + sort (`setActiveCollection` / `exportableURLs`), and `resort()` for the
+  index-aware Color/Shape modes. The async resort publishes behind `resortToken` + `folderLoadToken` +
+  `collectionRequestToken` + (QA finding) `searchRequestToken`/`isSearchActive` — a stale sort landing
+  after `runSearch` would overwrite ranked results with the folder set — and publishes the INTERSECTION
+  with the live grid so direct removals (burn-delete, hero delete, removeRoot), which bump no token,
+  can't be resurrected from the pre-delete snapshot (additions always arrive via token-bumping paths).
+- **Search field no longer publishes per keystroke.** `searchQuery` commits in `runSearchNow` (debounce
+  fire / Return), not per key — the per-key `@Published` write re-evaluated the whole shell. Support
+  plumbing: EscapeResolver's `searchPresent` also checks the LOCAL field text (uncommitted query still
+  peels on first Esc); `select(folder:)` bumps a new `searchDismissToken` so uncommitted text + its
+  pending debounce clear on folder click (searchQuery may already be "" — the sync alone can't catch it);
+  the Esc `.clearSearch` case clears the local field explicitly; and (QA finding) the scope toggle re-runs
+  the FIELD text, not the stale committed query it used to re-run + whose newer debounce it killed.
+- **`renameLabel` re-exports iCloud sidecars** for every affected file (was the one TagStore mutation
+  that didn't), with the id→path lookup chunked at 500 (QA finding: a common vision label can exceed
+  SQLite's bound-variable limit; the failure was a silent skip).
+- QA-verified clean: `FileMoveMigration` edge shapes (same-basename batch, same-target skip, sibling-rule
+  exclusion direction, partial-unique coexistence, Q32 merge in all three shapes), Sendable captures on
+  every new `Task.detached`, `setActiveCollection` guard placement, the full search-flow state machine
+  (buttoned by the two fixes above), and all behavioral invariants (relevance rank, narrowing-prune,
+  Escape order, folder-skip on drop, post-move collection re-resolve).
+- Still open, documented: an already-running index pass can mark the source dead before the move
+  migration runs (degrades to external-move semantics, no corruption); backfill picks the first alive
+  path's basename for multi-path identities (same inherent ambiguity as the rename-refresh rule).
+
+Build + `MuseTests` (497, +7) + UI tests green; share.test.mjs green.
