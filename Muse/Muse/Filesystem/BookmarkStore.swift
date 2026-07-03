@@ -196,9 +196,22 @@ final class BookmarkStore: ObservableObject {
     }
 
     private func activate(_ root: Root) {
-        guard let url = root.resolveURL() else { return }
+        guard let (url, isStale) = root.resolveURLReportingStale() else { return }
         if url.startAccessingSecurityScopedResource() {
             accessedURLs[root.id] = url
+            // Honor the system's stale flag: re-mint + persist fresh bookmark
+            // data now, while the old one still resolves — ignored long enough,
+            // a stale bookmark eventually stops resolving and the root silently
+            // vanishes from the sidebar.
+            if isStale,
+               let fresh = try? url.bookmarkData(options: [.withSecurityScope],
+                                                 includingResourceValuesForKeys: nil,
+                                                 relativeTo: nil),
+               let i = roots.firstIndex(where: { $0.id == root.id }) {
+                roots[i] = Root(id: root.id, displayName: root.displayName,
+                                bookmarkData: fresh, addedAt: root.addedAt)
+                save()
+            }
         }
     }
 

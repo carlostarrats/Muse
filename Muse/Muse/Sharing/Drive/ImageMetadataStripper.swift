@@ -50,7 +50,7 @@ enum ImageMetadataStripper {
         let mime: String
     }
 
-    enum StripError: Error { case notAnImage, encodeFailed }
+    enum StripError: Error { case notAnImage, encodeFailed, tooLarge }
 
     // MARK: dictionaries
 
@@ -125,6 +125,11 @@ enum ImageMetadataStripper {
               let srcType = CGImageSourceGetType(src) else {
             throw StripError.notAnImage
         }
+        // Decompression-bomb guard: the re-encode materializes the full raster
+        // (and even a "lossless" frame copy may decode for format conversion).
+        // A few-KB PNG declaring 40000×40000 would otherwise OOM the publish
+        // mid-flight. Same 300 MP header-only budget as every other decode site.
+        guard ThumbnailCache.withinDecodeBudget(src) else { throw StripError.tooLarge }
         let imgProps = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any]
         let orientation = (imgProps?[kCGImagePropertyOrientation] as? UInt32) ?? 1
         // Mime from the ACTUAL bytes, not the caller's extension guess.
@@ -244,9 +249,22 @@ enum ImageMetadataStripper {
     /// the bytes still carry metadata, e.g. HEIC items / PNG chunks / XMP packets).
     static func isClean(_ data: Data) -> Bool {
         // Byte markers (format-scoped to avoid false positives in pixel data).
+        // Beyond the core XMP packet namespaces, the PRIVATE-content XMP
+        // namespaces are needles too: a GIF's "XMP DataXMP" application
+        // extension is allowed through the structural walk below (ImageIO
+        // legitimately writes an orientation-only packet there), so the
+        // payload vetting happens HERE — real editor XMP carrying EXIF/GPS,
+        // creator, or IPTC data declares one of these and gets rejected.
+        // (These exact URL strings appearing by chance inside compressed pixel
+        // data is negligible, and the failure mode is fail-closed: the file
+        // falls to a re-encode, never an un-stripped upload.)
         let always: [String] = [
             "http://ns.adobe.com/xap/1.0/",        // XMP packet namespace
             "http://ns.adobe.com/xmp/extension/",  // extended (multi-segment) XMP
+            "http://ns.adobe.com/exif/1.0/",       // EXIF-in-XMP (incl. GPS)
+            "http://ns.adobe.com/photoshop/1.0/",  // authorship/credit fields
+            "http://purl.org/dc/elements/1.1/",    // Dublin Core (creator/description)
+            "http://iptc.org/std/Iptc4xmpCore/1.0/xmlns/",  // IPTC-in-XMP
         ]
         for m in always where data.range(of: Data(m.utf8)) != nil { return false }
         // NOTE: we deliberately do NOT scan for the "Exif\0\0" APP1 marker — a
@@ -262,6 +280,14 @@ enum ImageMetadataStripper {
         if data.starts(with: [0x89, 0x50, 0x4E, 0x47]) {
             for chunk in ["tEXt", "zTXt", "iTXt"] where data.range(of: Data(chunk.utf8)) != nil { return false }
         }
+        // GIF free-text — the multi-frame lossless path preserves the GIF
+        // container/frame dicts (animation timing) and a frame copy can
+        // round-trip comment-extension blocks that ImageIO never surfaces as
+        // properties. A naive byte scan for the 0x21 0xFE marker would false-
+        // positive inside LZW pixel data, so walk the actual block structure:
+        // comment (0xFE) / plain-text (0x01) / non-animation application
+        // extensions = private text survived. Malformed structure = fail closed.
+        if data.starts(with: Array("GIF8".utf8)), gifCarriesPrivateText(data) { return false }
 
         guard let src = CGImageSourceCreateWithData(data as CFData, nil) else { return false }
         let count = max(1, CGImageSourceGetCount(src))
@@ -277,6 +303,76 @@ enum ImageMetadataStripper {
         // GPS/content; the strip drops that via kCGImageDestinationEmbedThumbnail
         // = false on both paths (verified by testStripRemovesEmbeddedThumbnail).
         return true
+    }
+
+    /// Structural GIF walk (header → blocks → trailer). Returns true if the
+    /// stream carries a comment extension (0xFE), a plain-text extension
+    /// (0x01), or an application extension other than the allowed three:
+    /// NETSCAPE2.0 / ANIMEXTS1.0 (pure animation-loop control, no payload
+    /// text) and "XMP DataXMP" — ImageIO itself writes an orientation-only
+    /// XMP packet into every lossless GIF copy (GIF has no native orientation
+    /// field), so XMP presence can't be rejected structurally; its CONTENT is
+    /// vetted by the private-namespace needle scan in `isClean`, which runs
+    /// before this walk. Anything malformed also returns true — fail closed;
+    /// the caller then falls through to the (still) re-encode, whose fresh
+    /// ImageIO-written GIF walks clean.
+    private static func gifCarriesPrivateText(_ data: Data) -> Bool {
+        let bytes = [UInt8](data)
+        // Header (6) + logical screen descriptor (7).
+        guard bytes.count >= 13 else { return true }
+        var i = 13
+        // Global color table: flag bit 7 of packed byte 10, size 3·2^((f&7)+1).
+        if bytes[10] & 0x80 != 0 { i += 3 << ((Int(bytes[10]) & 0x07) + 1) }
+
+        // Skips a chain of data sub-blocks ([len][bytes…]) ending at a 0x00
+        // terminator; returns the index after the terminator, or nil if truncated.
+        func skipSubBlocks(_ start: Int) -> Int? {
+            var j = start
+            while j < bytes.count {
+                let len = Int(bytes[j]); j += 1
+                if len == 0 { return j }
+                j += len
+            }
+            return nil
+        }
+
+        while i < bytes.count {
+            switch bytes[i] {
+            case 0x3B:  // trailer — clean end of stream
+                return false
+            case 0x2C:  // image descriptor
+                guard i + 10 <= bytes.count else { return true }
+                let packed = bytes[i + 9]
+                i += 10
+                if packed & 0x80 != 0 { i += 3 << ((Int(packed) & 0x07) + 1) }
+                i += 1  // LZW minimum code size
+                guard let next = skipSubBlocks(i) else { return true }
+                i = next
+            case 0x21:  // extension
+                guard i + 2 <= bytes.count else { return true }
+                let label = bytes[i + 1]
+                i += 2
+                switch label {
+                case 0xFE, 0x01:  // comment / plain text
+                    return true
+                case 0xFF:  // application — allow loop controls + vetted XMP
+                    guard i < bytes.count else { return true }
+                    let idLen = Int(bytes[i])
+                    guard idLen == 11, i + 1 + idLen <= bytes.count,
+                          let appID = String(bytes: bytes[(i + 1)..<(i + 1 + idLen)], encoding: .ascii),
+                          appID == "NETSCAPE2.0" || appID == "ANIMEXTS1.0" || appID == "XMP DataXMP"
+                    else { return true }
+                    guard let next = skipSubBlocks(i) else { return true }
+                    i = next
+                default:  // graphic control (0xF9) etc. — data-free of text
+                    guard let next = skipSubBlocks(i) else { return true }
+                    i = next
+                }
+            default:
+                return true  // unknown block — fail closed
+            }
+        }
+        return true  // no trailer — truncated stream, fail closed
     }
 
     private static func hasPrivate(_ props: [CFString: Any]) -> Bool {

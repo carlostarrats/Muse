@@ -456,7 +456,16 @@ struct ContentView: View {
     @ToolbarContentBuilder
     private func subfoldersItem(_ placement: ToolbarItemPlacement) -> some ToolbarContent {
         ToolbarItem(placement: placement) {
-            Toggle(isOn: $appState.showSubfolders) {
+            // The binding routes the click through toggleSubfolders() — the
+            // single owner of the flip + its side effects (narrowing-direction
+            // selection clear, reload). Binding straight to $showSubfolders
+            // with an .onChange calling toggleSubfolders() double-drove the
+            // value: the Toggle wrote it, then the handler flipped it AGAIN,
+            // re-firing onChange — extra reloads, and the transient
+            // opposite-state pass cleared the selection on the widening
+            // direction too, against the documented rule.
+            Toggle(isOn: Binding(get: { appState.showSubfolders },
+                                 set: { _ in appState.toggleSubfolders() })) {
                 Image(systemName: "rectangle.stack")
                     .moodToolbarIcon(appState.moodPalette,
                                      selected: appState.showSubfolders)
@@ -467,9 +476,6 @@ struct ContentView: View {
             // Icon-only toggle: give VoiceOver a stable name (its on/off state is
             // announced by the toggle itself).
             .accessibilityLabel("Show files in subfolders")
-            .onChange(of: appState.showSubfolders) { _, _ in
-                appState.toggleSubfolders()
-            }
             .disabled(appState.isSearchActive || inCollectionsContext)
         }
     }

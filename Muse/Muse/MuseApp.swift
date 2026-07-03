@@ -97,10 +97,29 @@ struct MuseApp: App {
                     ThumbnailCache.shared.enforceDiskCap()
                     // 180-day retention for data of removed folders.
                     if let queue = Database.shared.dbQueue {
-                        let roots = appState.bookmarks.roots
+                        let persisted = appState.bookmarks.roots
+                        let resolved = persisted
                             .compactMap { $0.resolveURL()?.standardizedFileURL.path }
-                        await Housekeeping.pruneUnreachable(queue: queue,
-                                                            rootPaths: roots)
+                        // Fail closed: a root that can't resolve right now
+                        // (unplugged volume, stale bookmark) would read as
+                        // "unreachable" and get its whole subtree hard-deleted
+                        // — skip this launch instead. Same guard class as
+                        // PathReconciler.rootReachable, but for a permanent
+                        // DELETE, so the bar is stricter: ALL roots must
+                        // resolve before any prune runs.
+                        if resolved.count == persisted.count {
+                            // The iCloud "Muse" root is never a bookmark root;
+                            // resolve it directly (off-main — first container
+                            // access can block) rather than trusting the
+                            // async-discovered appState.iCloudFolderURL, which
+                            // may not be populated yet this early in launch.
+                            let icloud = await Task.detached(priority: .utility) {
+                                ICloudZone.folderURL()?.standardizedFileURL.path
+                            }.value
+                            await Housekeeping.pruneUnreachable(queue: queue,
+                                                                rootPaths: resolved,
+                                                                icloudRoot: icloud)
+                        }
                     }
                     Task { await IntentBackfill.run() }
                     // Hard-delete any Drive shares past their expiry (no-op if

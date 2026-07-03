@@ -52,6 +52,16 @@
         }
       }
     },
+    "\"%@\" couldn't be prepared for sharing. Remove it from the collection and try again.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "« %@ » n'a pas pu être préparé pour le partage. Retirez-le de la collection et réessayez."
+          }
+        }
+      }
+    },
     "%@": {
       "localizations": {
         "fr": {

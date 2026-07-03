@@ -3,7 +3,7 @@
 A single static page that renders a shared Muse collection. It is **stateless**:
 the entire payload (signature text, expiry, ordered Drive image ids, per-image
 filenames, optional PDF id) is encoded into the URL **fragment**
-(`…/s#<payload>`), so it never reaches the server. Images load from Drive's
+(`https://<domain>/#<payload>`), so it never reaches the server. Images load from Drive's
 public thumbnail endpoint; the page holds no secrets and no API key.
 
 The fragment is base64url of either the raw JSON manifest **or** (when smaller)
@@ -29,11 +29,10 @@ share.test.mjs     pure-logic unit tests (incl. compression + bomb guard) — ru
 
 1. Create a Pages project from this `web/share/` directory (or upload it).
 2. Add a **custom domain** (e.g. `share.yourdomain.com`). The page is served at
-   that domain's root; Muse builds links as `https://<domain>/s#<payload>` — set
-   the Pages route so `/s` serves `index.html` (a `_redirects` line
-   `/s /index.html 200`, or name the file `s.html`). The `_headers` file applies
-   the CSP automatically.
-3. Verify: open `https://<domain>/s#<payload>` with a real manifest — the
+   that domain's root; Muse builds links as `https://<domain>/#<payload>`
+   (`DriveConfig.shareBaseURL` is the bare root — no `/s` route needed). The
+   `_headers` file applies the CSP automatically.
+3. Verify: open `https://<domain>/#<payload>` with a real manifest — the
    signature renders, the grid fills from Drive, and **Save PDF** opens the
    browser print dialog (the recipient picks the paper size and prints to PDF).
 
@@ -46,7 +45,7 @@ share.test.mjs     pure-logic unit tests (incl. compression + bomb guard) — ru
    **published privacy policy** URL, scope **`.../auth/drive.file`** only.
 4. In the app, fill:
    - `DriveConfig.clientID` → your `NNN-xxxx.apps.googleusercontent.com`
-   - `DriveConfig.shareBaseURL` → `https://<domain>/s`
+   - `DriveConfig.shareBaseURL` → `https://<domain>` (the root, no path)
    - `Info.plist` `CFBundleURLSchemes` → the **reverse client id**
      `com.googleusercontent.apps.NNN-xxxx`
 5. Submit for **verification** (drive.file is non-sensitive → lightweight, no

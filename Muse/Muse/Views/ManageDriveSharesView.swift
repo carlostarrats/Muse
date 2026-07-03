@@ -146,7 +146,11 @@ struct ManageDriveSharesView: View {
             .accessibilityElement(children: .combine)
             Spacer()
             OpenLinkButton(shareName: record.collectionName) {
-                if let url = URL(string: record.pageURL) { NSWorkspace.shared.open(url) }
+                // driveShares.json is plaintext in App Support — don't hand an
+                // arbitrary (possibly tampered/corrupted) scheme to NSWorkspace;
+                // only open URLs that are actually ours.
+                if record.pageURL.hasPrefix(DriveConfig.shareBaseURL),
+                   let url = URL(string: record.pageURL) { NSWorkspace.shared.open(url) }
             }
             if deleting.contains(record.id) {
                 ProgressView().controlSize(.small).frame(width: 18)

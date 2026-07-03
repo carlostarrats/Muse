@@ -506,11 +506,14 @@ final class AppState: ObservableObject {
         deletion.onRemove = { [weak self] url in
             guard let self else { return }
             self.currentFiles.removeAll { $0.url == url }
+            let deletedPath = url.standardizedFileURL.path
+            // The grid renders activeCollectionFiles while a collection is
+            // open — drop the tile there too or it ghosts back after the burn.
+            self.dropFromActiveCollection(path: deletedPath)
             if self.selectedFile?.url == url { self.selectedFile = nil }
             // Also drop the trashed file from the multi-selection Set (it's
             // independent of currentFiles); leaving it there lets a later bulk
             // action rebuild a URL for a path that no longer exists.
-            let deletedPath = url.standardizedFileURL.path
             self.selectedFiles.remove(deletedPath)
             if self.selectionAnchor == deletedPath { self.selectionAnchor = nil }
             // The in-view file set shrank — refresh the chip counts (a tag that
@@ -521,6 +524,13 @@ final class AppState: ObservableObject {
             guard let self else { return }
             // The disk restore already happened; only resurface the tile
             // if the current scope still contains it.
+            if let cid = self.activeCollectionID {
+                // A collection is open: onRemove dropped the tile from
+                // activeCollectionFiles, so re-resolve the collection to bring
+                // the restored member back (membership is DB-backed and intact).
+                self.setActiveCollection(cid, animated: false)
+                return
+            }
             if self.isSearchActive {
                 // Re-rank instead of appending into unrelated results.
                 Task { await self.runSearch(self.searchQuery) }
@@ -927,6 +937,12 @@ final class AppState: ObservableObject {
            !FileManager.default.fileExists(atPath: open.url.path) {
             selectedFile = nil
         }
+        // A move from inside an open collection changes member paths on disk —
+        // re-resolve the collection (re-reads member paths + reachability) so
+        // moved-away tiles don't linger as ghosts the share/export flows read.
+        if let cid = activeCollectionID {
+            setActiveCollection(cid, animated: false)
+        }
         reloadCurrentFilesPublic()
         if !failed.isEmpty {
             moveFailureNames = failed.map { $0.lastPathComponent }
@@ -1075,7 +1091,11 @@ final class AppState: ObservableObject {
                 } else {
                     // Live reload (FSEvents / subfolders toggle / clear search):
                     // the grid is already shown, so just refresh the chips for the
-                    // current scope (no gate).
+                    // current scope (no gate). A live reload can NARROW the set
+                    // (file deleted/moved externally, Duplicates batch delete) —
+                    // prune the selection so a gone file can't ride into
+                    // move/collection/tag/share via effectiveSelectionURLs.
+                    self.pruneSelectionToVisible()
                     self.reloadTagChips()
                 }
                 if thenIndex { self.scheduleIndexing(for: folderURL, verifyICloud: verifyICloud) }

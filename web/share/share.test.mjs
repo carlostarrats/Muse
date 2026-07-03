@@ -80,4 +80,31 @@ assert.ok(!isExpired(sample, new Date('2026-04-02')), 'before expiry → live');
 assert.ok(VALID_ID.test('aaaaaaaaaaaaaaaaaaaa'), 'id regex ok');
 assert.ok(!VALID_ID.test('short'), 'short id rejected');
 assert.ok(thumbURL('aaaaaaaaaaaaaaaaaaaa').startsWith('https://drive.google.com/thumbnail?id='), 'thumb url');
+
+// VALID_ID's charset is the ONLY thing keeping thumbURL injection-proof (the id
+// is interpolated into the Drive URL): pin that no URL-significant character
+// gets through — no scheme (:), path (/ .), query (& ? =), host (@), or space.
+for (const ch of [':', '/', '.', '&', '?', '=', '@', '#', ' ', '%', '"', "'", '<', '>']) {
+  const id = 'aaaaaaaaaa' + ch + 'aaaaaaaaaa';
+  assert.ok(!VALID_ID.test(id), `id containing "${ch}" rejected`);
+  assert.ok(!validateManifest({ ...sample, g: [id] }), `manifest with "${ch}" id rejected`);
+}
+
+// A framed (0x01) fragment whose DEFLATE stream is corrupt must yield null,
+// never a throw that breaks the page script.
+{
+  const junk = new Uint8Array(64).fill(0xAB); junk[0] = 1;
+  const frag = Buffer.from(junk).toString('base64').replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  assert.strictEqual(decodeManifest(frag), null, 'corrupt DEFLATE with marker → null');
+}
+
+// Invalid pdf id (`p`) must fail validation like a bad grid id would.
+assert.ok(!validateManifest({ ...sample, p: 'short' }), 'bad pdf id rejected');
+assert.ok(!validateManifest({ ...sample, p: 42 }), 'non-string pdf id rejected');
+
+// Expiry boundary: the link stays live THROUGH the displayed expiry day
+// (local end-of-day rule) and reads expired the day after.
+assert.ok(!isExpired(sample, new Date('2026-04-04T23:00:00')), 'live through the expiry day');
+assert.ok(isExpired(sample, new Date('2026-04-05T01:00:00')), 'expired the day after');
+
 console.log('share.js: all tests passed');

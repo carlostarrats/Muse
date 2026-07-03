@@ -5049,3 +5049,95 @@ SQL/path/multipart/sandbox) → verify each finding → fix → two verification
 
 New durable constraints recorded in CLAUDE.md (AV `.noNetwork`, decode budget, mime token guard).
 `MuseTests` (473, +3) + UI tests green.
+
+## 2026-07-03 — `feat/next-111` — whole-codebase health + security review (six-subsystem fan-out)
+
+Owner asked for a full-repo health/security pass ("particularly the Google/Cloudflare sharing feature"),
+fix-everything, loop-until-green. Ran six parallel review subagents (Drive Swift · share web page · viewers/
+egress · database/indexing · AppState/views · filesystem/iCloud/backup), verified each finding in code, fixed,
+then re-ran the suite. Every previously-documented durable invariant was re-verified intact (AV `.noNetwork`
+everywhere, SVG rule-list, video-never-QuickLook, entitlements, PKCE/Keychain/scope, FTS escaping, split-on-edit,
+prune rules, selection-prune matrix, virtualized grid…). What changed:
+
+**Data-loss (HIGH) — retention prune could purge live roots.** `Housekeeping.pruneUnreachable` took only
+bookmark-resolved roots: the iCloud "Muse" root (never a bookmark) and any transiently-unresolvable root
+(unplugged volume, stale bookmark) read as "unreachable", so their >180-day-stale files were hard-DELETED with
+cascades. Now: the launch call skips the prune unless EVERY persisted root resolves; the iCloud root is resolved
+directly (`ICloudZone.folderURL()`, off-main) and passed as a new `icloudRoot` param; when it can't resolve, any
+`/Mobile Documents/` path is protected wholesale (fail safe). New `HousekeepingTests` (6) pin all of it.
+
+**Indexer collision branch now mirrors the split branch.** Edit-in-place whose NEW bytes match a *different*
+existing row unconditionally `unionTags`'d ALL folders' tags onto the target and dropped manual collection
+memberships — stripping an untouched sibling's tags (same defect class the split branch guards). Now scoped to
+the edited path's folder (copy-vs-move by the same same-dir-sibling rule), manual memberships copied.
+`unionTags` gained `parentDir:`/`deleteOriginals:` (defaults preserve old callers). +3 reconcile tests. Also:
+external rename (resurrect-as-new-path branch) now refreshes the FTS basename when the file has a sole alive
+path, and `analyzeOne` captures the content hash BEFORE Vision and commits nothing if the file changed mid-pass
+(stale-tags-stamped-as-analyzed TOCTOU).
+
+**Drive share hardening (the requested focus).**
+- Cancel actually works now: cleanup `deleteFolder` ran inside the already-cancelled task, where URLSession
+  throws `CancellationError` before the network — the folder was never deleted (orphaned, untracked). Cleanup
+  now runs in a fresh unstructured Task (`cleanupFolder`).
+- Closing the sheet mid-publish cancels the run (`.onDisappear { service.cancel() }`) — before, the upload
+  continued headless and `setAnyoneReader` made the collection public into a dismissed sheet.
+- Phase writes are generation-guarded (`setPhase(_:ifCurrent:)`) so a superseded run's terminal writes can't
+  clobber a re-publish's live UI.
+- Drive share sends raster images only (`.image/.raw/.psd`); a PDF/video file card aborted the whole publish
+  fail-closed with a misleading "check your connection". Per-file strip failures now name the file
+  (`PublishError.unshareableImage`, localized FR).
+- `ImageMetadataStripper`: decode-budget guard (300 MP) before any strip decode (bomb → clean `.tooLarge`
+  abort, not OOM mid-publish); `isClean` gained a STRUCTURAL GIF walk (comment / plain-text / non-animation
+  application extensions = dirty; malformed = dirty) closing the "GIF free-text survives the lossless animation
+  path invisibly" verifier gap — naive `0x21 0xFE` byte-scan was rejected (false-positives inside LZW pixel
+  data would kill legit animations). "XMP DataXMP" application extensions pass the walk — ImageIO writes an
+  orientation-only packet on every lossless GIF copy — with content vetted by NEW private-XMP-namespace
+  needles (exif/photoshop/dc/iptc join xap). +1 stripper test (spliced comment → flagged + stripped).
+- `GoogleOAuth.authenticate`: `start() == false` (no presentation anchor) leaked the continuation forever
+  (publish stuck on "Signing in…"); now resumes with an error, retains the session while presented, and a
+  cancellation handler dismisses the browser sheet when the surrounding task is cancelled.
+- Manage Drive Shares "Open Link" validates `record.pageURL` against `DriveConfig.shareBaseURL` before
+  `NSWorkspace.open` (the store file is plaintext in App Support).
+- Web page: clean across XSS/CSP/bomb/redirect/leakage lenses (no code changes needed); share.test.mjs gained
+  the missing pins (id charset negatives ×14, corrupt-DEFLATE-with-marker → null, bad `p`, expiry boundary);
+  README's stale `/s`-route instructions fixed (links are `https://<domain>/#<payload>` at the root);
+  privacy.html now says two localStorage keys (bg + grid density). "Open-source" claim on about/terms verified
+  TRUE (repo public, MIT).
+
+**iCloud sidecars actually merge now.** `Sidecar.merge` (built + tested for last-writer-wins) had zero
+production callers — the analyze pass blind-overwrote `.muse/<hash>.json`, so a vision-only pass on device B
+could clobber device A's manual tags in the synced record. The analyze path now merges with any on-disk
+sidecar; NEW: manual tag edits (add/remove/delete-all/remove-label) re-export the sidecar via
+`AnalyzePipeline.exportSidecarsAfterTagEdit` — written WITHOUT merge (local DB is authoritative, incl.
+deletions; merging would resurrect a just-deleted tag). Known gap left open: library-wide `renameLabel` has no
+URLs and doesn't re-export.
+
+**UI-state ghosts (collection views).** Trash/burn-delete, both hero-viewer deletes, move-to-folder, and the
+hero COLLECTION-pill remove all mutated `currentFiles`/the store only — the grid renders
+`activeCollectionFiles`, so the tile ghosted back ~0.25s later and RODE INTO "Save to…"/"Share Drive Link"
+(`visibleFiles`). New `AppState.dropFromActiveCollection(path:)` called from all delete paths; restore + move
+re-resolve the open collection; the hero pill-remove mirrors `removeFromCollection`'s bookkeeping. Also: the
+toolbar subfolders Toggle double-drove `showSubfolders` (binding wrote it, `.onChange` toggled it AGAIN —
+extra reloads + a selection clear on the widening direction); now a custom Binding routes the click through
+`toggleSubfolders()` once. FSEvents live reloads + Duplicates batch delete now `pruneSelectionToVisible()`
+after the non-fresh publish. Hero tag add/remove bumps `tagsVersion` (was the sole non-bumping mutation path).
+`bulkTagCommandsAvailable` gates on `tagSourceFiles` (not the underlying folder).
+
+**Filesystem/bookmarks.** Pinned-folder bookmarks were minted READ-ONLY (`.securityScopeAllowOnlyReadAccess`)
+— trash/rename/move failed in exactly the pin-outlives-its-root case the bookmark exists for; now read-write
+like roots (legacy pins upgrade when they go stale). Stale bookmarks are now actually re-minted + persisted
+(`Root.resolveURLReportingStale()` + `BookmarkStore.activate`; `StarStore.resolveURL` same) — the doc comment
+claimed this but both ignored `bookmarkDataIsStale`. Backup: `ReconnectModel` enumerates with
+`.skipsHiddenFiles, .skipsPackageDescendants` (was indexing bundle innards + hidden files on restore);
+`BackupBuilder` attributes nested-root files by LONGEST prefix (restoring `/a/b` alone found zero occurrences).
+`HeroPalette.quickPalette` got the missing decode-budget guard (bomb PNG OOM'd on hero open — the one
+`withinDecodeBudget` gap).
+
+**Deferred (flagged, owner call / backlog):** manual tags don't follow an in-app MOVE of a sole copy
+(per-location rule vs. rename-migration precedent — product decision); FTS has no basename rows for non-image
+kinds (library-wide search misses PDFs/videos by name unless enumerated); `SearchService` extras pass +
+`setActiveCollection` reachability sweep + `FileMover` run synchronous main-thread I/O (matches the standing
+O(n)/health watch list); search field still publishes per keystroke (pre-existing; CLAUDE.md rationale
+overstated what shipped).
+
+Build + `MuseTests` (490, +10) + UI tests green; share.test.mjs green (18 new assertions).

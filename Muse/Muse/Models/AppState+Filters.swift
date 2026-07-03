@@ -205,7 +205,12 @@ extension AppState {
     /// Gate the menu items to exactly where TagChipsRow is mounted (a real
     /// folder grid or inside a collection) with files present.
     var bulkTagCommandsAvailable: Bool {
-        !currentFiles.isEmpty
+        // tagSourceFiles, not currentFiles: inside a collection the grid shows
+        // the collection's members while currentFiles is still the underlying
+        // FOLDER — gating on the folder wrongly disables the commands when it
+        // happens to be empty (inverse of the wrong-target class the
+        // tagSourceFiles rule exists for).
+        !tagSourceFiles.isEmpty
             && !isSearchActive
             && !(showingCollections && activeCollectionID == nil)
     }
@@ -289,6 +294,17 @@ extension AppState {
             }
             clearSelection()
         }
+    }
+
+    /// Drop a just-trashed file from the OPEN collection's view state. The grid
+    /// renders `activeCollectionFiles` while a collection is on screen, so
+    /// removing a deleted file only from `currentFiles` leaves a ghost tile
+    /// that reappears after the burn fade and rides into "Save to…"/"Share
+    /// Drive Link" (both read `visibleFiles`). Call alongside every
+    /// currentFiles removal. `path` must be a standardized path.
+    func dropFromActiveCollection(path: String) {
+        activeCollectionPaths?.remove(path)
+        activeCollectionFiles?.removeAll { $0.url.standardizedFileURL.path == path }
     }
 
     /// Remove `urls` from collection `id` (the right-clicked tile or the whole

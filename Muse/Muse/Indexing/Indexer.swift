@@ -147,9 +147,39 @@ actor Indexer {
 
             // Hash changed — edit-in-place
             if let target = existingFileByHash, target.id != file.id {
-                // Hash collision: re-link path to the matching files row,
-                // union tags, prune previous file row if orphaned.
-                try unionTags(db: db, fromFileID: file.id, toFileID: target.id)
+                // Hash collision: the edited path's new bytes match a DIFFERENT
+                // existing row — re-link the path to it. The old row may be
+                // SHARED (other alive paths in other folders): unioning ALL its
+                // tags would strip the untouched siblings' tags off their
+                // identity (same defect class the split branch below guards
+                // against), so when the row is shared, scope the carry to THIS
+                // path's folder — copy-vs-move by the same same-dir-sibling
+                // rule as the split branch.
+                let dir = TagScope.parentDir(ofPath: absPath)
+                let otherAlive = try PathRow
+                    .filter(PathRow.Columns.file_id == file.id)
+                    .filter(PathRow.Columns.is_alive == 1)
+                    .filter(PathRow.Columns.absolute_path != absPath)
+                    .fetchAll(db)
+                if otherAlive.isEmpty {
+                    // Sole alive path — the old identity is done for; union
+                    // everything as before.
+                    try unionTags(db: db, fromFileID: file.id, toFileID: target.id)
+                } else {
+                    let keepsSiblingInDir = otherAlive
+                        .contains { TagScope.parentDir(ofPath: $0.absolute_path) == dir }
+                    try unionTags(db: db, fromFileID: file.id, toFileID: target.id,
+                                  parentDir: dir, deleteOriginals: !keepsSiblingInDir)
+                }
+                // Manual collection membership is precious user data keyed on
+                // the old identity — copy it to the new one, mirroring the
+                // split branch (COPY, not move: a surviving sibling still
+                // resolves via the old file_id and legitimately stays a member).
+                try db.execute(sql: """
+                    INSERT OR IGNORE INTO collection_members (collection_id, file_id, added_by)
+                    SELECT collection_id, ?, added_by FROM collection_members
+                    WHERE file_id = ? AND added_by = 'manual'
+                    """, arguments: [target.id, file.id])
                 path.file_id = target.id
                 try path.update(db)
                 try pruneIfOrphaned(db: db, fileID: file.id)
@@ -270,6 +300,21 @@ actor Indexer {
             try refreshed.update(db)
             try inheritVisionTags(db: db, fileID: target.id,
                                   toDir: TagScope.parentDir(ofPath: absPath))
+            // An external RENAME lands here (old path dies, same content
+            // reappears under a new name). The FTS basename was written at
+            // analyze time and content didn't change, so it would keep the OLD
+            // name forever — "everywhere" search then misses the file by its
+            // current name. Refresh it when this is now the file's sole alive
+            // path (with several paths the one FTS basename is ambiguous —
+            // leave it).
+            let aliveNow = try PathRow
+                .filter(PathRow.Columns.file_id == target.id)
+                .filter(PathRow.Columns.is_alive == 1)
+                .fetchCount(db)
+            if aliveNow == 1 {
+                try db.execute(sql: "UPDATE files_fts SET basename = ? WHERE file_id = ?",
+                               arguments: [(absPath as NSString).lastPathComponent, target.id])
+            }
             return false
         }
 
@@ -322,8 +367,15 @@ actor Indexer {
     /// it's manual, or replace it with the manual incoming row, otherwise
     /// ignore the incoming.
     // internal (not private) so MuseTests can exercise the per-folder merge.
-    static func unionTags(db: GRDB.Database, fromFileID: String, toFileID: String) throws {
-        let fromTags = try TagRow.filter(TagRow.Columns.file_id == fromFileID).fetchAll(db)
+    /// `parentDir` scopes the union to one folder's tag rows (nil = all —
+    /// correct only when the source identity has no other alive paths).
+    /// `deleteOriginals: false` copies instead of moving, for when a
+    /// same-folder sibling still surfaces the source rows.
+    static func unionTags(db: GRDB.Database, fromFileID: String, toFileID: String,
+                          parentDir: String? = nil, deleteOriginals: Bool = true) throws {
+        var query = TagRow.filter(TagRow.Columns.file_id == fromFileID)
+        if let parentDir { query = query.filter(TagRow.Columns.parent_dir == parentDir) }
+        let fromTags = try query.fetchAll(db)
         for var t in fromTags {
             // Conflict is per (file_id, parent_dir): the same physical file at
             // the same path keeps its folder scope when it re-links to `to`.
@@ -348,8 +400,12 @@ actor Indexer {
                 try t.insert(db)
             }
         }
-        // Delete the originals once unioned
-        try TagRow.filter(TagRow.Columns.file_id == fromFileID).deleteAll(db)
+        // Delete the originals once unioned (scoped the same way as the read).
+        if deleteOriginals {
+            var doomed = TagRow.filter(TagRow.Columns.file_id == fromFileID)
+            if let parentDir { doomed = doomed.filter(TagRow.Columns.parent_dir == parentDir) }
+            try doomed.deleteAll(db)
+        }
     }
 
     /// A brand-new path of already-known content inherits the file's VISION

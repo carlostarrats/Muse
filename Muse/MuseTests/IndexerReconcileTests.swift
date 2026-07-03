@@ -108,6 +108,88 @@ final class IndexerReconcileTests: XCTestCase {
         }
     }
 
+    // MARK: hash-collision edit branch (new bytes match a DIFFERENT existing row)
+
+    func testCollisionEditOnSharedRowKeepsSiblingTags() throws {
+        // f1 is SHARED by /a and /b; editing /a's copy so its bytes match f2
+        // must carry only /a's tags to f2 — the untouched /b sibling keeps its
+        // tags on f1 (the unscoped union moved EVERY folder's tags off f1).
+        let q = try freshQueue()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at, analyzed_hash) VALUES ('f1','h1','image',0,'h1')")
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at, analyzed_hash) VALUES ('f2','h2','image',0,'h2')")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('pA','f1','/a/x.png',1)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('pB','f1','/b/x.png',1)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('pC','f2','/c/y.png',1)")
+            try db.execute(sql: "INSERT INTO tags (id, file_id, label, source, confidence, parent_dir) VALUES ('tA','f1','blue','manual',NULL,'/a')")
+            try db.execute(sql: "INSERT INTO tags (id, file_id, label, source, confidence, parent_dir) VALUES ('tB','f1','red','manual',NULL,'/b')")
+
+            _ = try Indexer.reconcile(db: db, absPath: "/a/x.png", hash: "h2",
+                                      kind: .image, sizeBytes: 1, createdAt: 0, modifiedAt: 1, now: 2)
+        }
+        try q.read { db in
+            // The edited path re-linked to the colliding row.
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT file_id FROM paths WHERE id='pA'"), "f2")
+            // /a's tag followed it, scoped to /a.
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tags WHERE file_id='f2' AND parent_dir='/a' AND label='blue'"), 1)
+            // The /b sibling's tag stayed on f1, and f1 itself is untouched.
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tags WHERE file_id='f1' AND parent_dir='/b' AND label='red'"), 1)
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT content_hash FROM files WHERE id='f1'"), "h1")
+            // No /b tags leaked onto f2.
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tags WHERE file_id='f2' AND parent_dir='/b'"), 0)
+        }
+    }
+
+    func testCollisionEditCopiesTagsWhenSameFolderSiblingShares() throws {
+        // Same-folder byte-identical sibling: the (f1, /a) tag rows are shared
+        // with the still-present sibling, so the collision carry must COPY
+        // them to f2, not move them.
+        let q = try freshQueue()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at, analyzed_hash) VALUES ('f1','h1','image',0,'h1')")
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at, analyzed_hash) VALUES ('f2','h2','image',0,'h2')")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('pA','f1','/a/x.png',1)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('pB','f1','/a/y.png',1)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('pC','f2','/c/y.png',1)")
+            try db.execute(sql: "INSERT INTO tags (id, file_id, label, source, confidence, parent_dir) VALUES ('t1','f1','blue','manual',NULL,'/a')")
+
+            _ = try Indexer.reconcile(db: db, absPath: "/a/x.png", hash: "h2",
+                                      kind: .image, sizeBytes: 1, createdAt: 0, modifiedAt: 1, now: 2)
+        }
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT file_id FROM paths WHERE id='pA'"), "f2")
+            // Edited copy got the tag on its new identity …
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tags WHERE file_id='f2' AND parent_dir='/a' AND label='blue'"), 1)
+            // … and the unedited same-folder sibling KEPT it on f1.
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tags WHERE file_id='f1' AND parent_dir='/a' AND label='blue'"), 1)
+        }
+    }
+
+    func testCollisionEditSoleCopyUnionsAllTagsAndCarriesMembership() throws {
+        // Sole alive path: the old identity is finished — everything unions to
+        // the colliding row (pre-existing behavior), and manual collection
+        // membership follows the edited file to its new identity.
+        let q = try freshQueue()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at, analyzed_hash) VALUES ('f1','h1','image',0,'h1')")
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at, analyzed_hash) VALUES ('f2','h2','image',0,'h2')")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('pA','f1','/a/x.png',1)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('pC','f2','/c/y.png',1)")
+            try db.execute(sql: "INSERT INTO tags (id, file_id, label, source, confidence, parent_dir) VALUES ('t1','f1','blue','manual',NULL,'/a')")
+            try db.execute(sql: "INSERT INTO collections (id, name, is_hidden, model_version, created_at, updated_at, sort_order) VALUES ('cManual','Faves',0,'manual',0,0,0)")
+            try db.execute(sql: "INSERT INTO collection_members (collection_id, file_id, added_by) VALUES ('cManual','f1','manual')")
+
+            _ = try Indexer.reconcile(db: db, absPath: "/a/x.png", hash: "h2",
+                                      kind: .image, sizeBytes: 1, createdAt: 0, modifiedAt: 1, now: 2)
+        }
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT file_id FROM paths WHERE id='pA'"), "f2")
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tags WHERE file_id='f2' AND parent_dir='/a' AND label='blue'"), 1)
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tags WHERE file_id='f1'"), 0)
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM collection_members WHERE collection_id='cManual' AND file_id='f2'"), 1)
+        }
+    }
+
     func testEditingSoleCopyStillRewritesInPlace() throws {
         // The regression guard: when the row is NOT shared, an edit must still
         // rewrite the existing row in place (no spurious split).

@@ -99,7 +99,13 @@ final class ReconnectModel: ObservableObject {
             var pairs: [(URL, AssetKind)] = []
             var images: [URL] = []
             let fm = FileManager.default
-            guard let en = fm.enumerator(at: location, includingPropertiesForKeys: [.isRegularFileKey])
+            // Match the app's indexing policy (FolderReader): hidden files
+            // excluded, packages opaque — default options would index hidden
+            // media and files INSIDE bundles (.app/.photoslibrary), creating
+            // alive rows the grid never shows but search/FTS still surfaces.
+            guard let en = fm.enumerator(at: location,
+                                         includingPropertiesForKeys: [.isRegularFileKey],
+                                         options: [.skipsHiddenFiles, .skipsPackageDescendants])
             else { return ([], []) }
             for case let url as URL in en {
                 guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true

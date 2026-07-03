@@ -102,6 +102,10 @@ final class TagStore: ObservableObject {
         } catch {
             print("[TagStore] addManualTag failed: \(error)")
         }
+        // Keep the synced record current for iCloud-zone files (no-op otherwise):
+        // the analyze pass won't re-export for a tag edit (analyzed_hash is
+        // deliberately untouched), so hydrate-only devices would never see it.
+        AnalyzePipeline.shared.exportSidecarsAfterTagEdit(for: [url])
         return await tags(for: url)
     }
 
@@ -168,6 +172,7 @@ final class TagStore: ObservableObject {
         } catch {
             print("[TagStore] deleteAllTags failed: \(error)")
         }
+        AnalyzePipeline.shared.exportSidecarsAfterTagEdit(for: urls)
     }
 
     func removeTag(_ tag: TagRow, for url: URL) async -> [TagRow] {
@@ -180,6 +185,7 @@ final class TagStore: ObservableObject {
         } catch {
             print("[TagStore] removeTag failed: \(error)")
         }
+        AnalyzePipeline.shared.exportSidecarsAfterTagEdit(for: [url])
         return await tags(for: url)
     }
 
@@ -202,5 +208,6 @@ final class TagStore: ObservableObject {
         } catch {
             print("[TagStore] removeLabel failed: \(error)")
         }
+        AnalyzePipeline.shared.exportSidecarsAfterTagEdit(for: urls)
     }
 }

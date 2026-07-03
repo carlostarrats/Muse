@@ -132,6 +132,36 @@ final class ImageMetadataStripperTests: XCTestCase {
         XCTAssertEqual(out.mime, "image/gif", "animated GIF keeps its format")
     }
 
+    func testStripRemovesGIFCommentText() throws {
+        // GIF comment extensions never surface as ImageIO properties, and the
+        // lossless multi-frame path can round-trip them — the structural GIF
+        // walk in isClean is what catches them. Splice a comment block into a
+        // clean animated GIF and verify (a) the verifier flags it and (b) the
+        // strip output carries no trace of it.
+        let url = try makeAnimatedGIF(frames: 2)
+        defer { try? FileManager.default.removeItem(at: url) }
+        var data = try Data(contentsOf: url)
+        XCTAssertEqual(data.last, 0x3B, "sanity: GIF ends with the trailer")
+        let secret = "SECRET-ADDRESS".data(using: .ascii)!
+        var block = Data([0x21, 0xFE, UInt8(secret.count)])   // comment extension
+        block.append(secret)
+        block.append(0x00)                                    // sub-block terminator
+        data.removeLast()
+        data.append(block)
+        data.append(0x3B)
+
+        let tainted = FileManager.default.temporaryDirectory
+            .appendingPathComponent("muse-gif-comment-\(UUID().uuidString).gif")
+        try data.write(to: tainted)
+        defer { try? FileManager.default.removeItem(at: tainted) }
+
+        XCTAssertFalse(ImageMetadataStripper.isClean(data),
+                       "the verifier must flag a GIF comment extension")
+        let out = try ImageMetadataStripper.strip(url: tainted, mime: "image/gif")
+        XCTAssertNil(out.data.range(of: secret), "comment text must not survive the strip")
+        XCTAssertTrue(ImageMetadataStripper.isClean(out.data))
+    }
+
     /// Build a JPEG whose XMP packet carries a recognizable secret string
     /// (location data is often duplicated into XMP, not just the EXIF IFD).
     private func makeJPEGWithXMP(secret: String) throws -> URL {
