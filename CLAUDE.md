@@ -328,15 +328,20 @@ before implementation.
    "Add Folder" in the sidebar to point Muse at any folder on disk.
 3. Toolbar — controls left-aligned, **search alone at the far right** (no
    centered `.principal` search anymore; centering collided with the controls
-   as the window narrowed). Order (left → right): sidebar toggle · sort ·
-   filter (line.3.horizontal.decrease.circle — funnel popover: kind/date/size
-   facets, engaged-blue when active, stays live during search) ·
-   sort-direction arrow (flips the active mode's order — newest↔oldest, A↔Z,
-   …) · tag-sort · show-subfolders · Collections (square.stack.3d.up) · Image
-   Layout (square.grid.2x2) · background mood (paintpalette — popover also
-   holds the Tile Background picker) · ⓘ About · … · search. Every control is
-   its OWN pill — see the ToolbarSpacer durable constraint for the two-variant
-   (Tahoe/Sequoia) plumbing in `ContentView`. Search is native `.searchable`:
+   as the window narrowed). Order (left → right): sidebar toggle ·
+   **[sort · sort-direction arrow · filter]** (one grouped capsule on Tahoe —
+   sort-direction flips newest↔oldest / A↔Z; filter is
+   line.3.horizontal.decrease.circle, a kind/date/size funnel popover,
+   engaged-blue when active, live during search) · tag-sort · show-subfolders ·
+   **[Collections (square.stack.3d.up) · Image Layout (square.grid.2x2) ·
+   background mood (paintpalette — popover also holds the Tile Background
+   picker)]** (a second grouped capsule) · ⓘ About · … · search. The two
+   bracketed clusters are grouped (adjacent items with NO ToolbarSpacer between
+   them merge into one macOS-26 glass capsule); tag-sort, subfolders, and About
+   stay individual pills. NOTE: a toolbar `Menu` shows its chevron only if it's
+   a standalone pill — to let **sort** join its group its `.menuIndicator` is
+   `.hidden` (a chevron Menu refuses to merge). See the ToolbarSpacer durable
+   constraint for the two-variant (Tahoe/Sequoia) plumbing in `ContentView`. Search is native `.searchable`:
    it sits at the far right and COLLAPSES to a magnifier icon on a narrow
    window (buttons roll into the » overflow), Notes-style. (The grid/cloud/galaxy view
    picker and the water effect were removed 2026-06-13; the clear-collection ✕

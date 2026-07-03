@@ -378,11 +378,12 @@ struct ContentView: View {
     @available(macOS 26.0, *)
     @ToolbarContentBuilder
     private var spacedLeadingA: some ToolbarContent {
+        // Sort · direction (newest-first) · filter share ONE capsule — no spacers
+        // between them (adjacent unspaced items merge by default). The spacer AFTER
+        // filter closes the group; tag + subfolders each get their own pill.
         sortItem(.automatic)
-        ToolbarSpacer(.fixed)
-        filterItem(.automatic)
-        ToolbarSpacer(.fixed)
         directionItem(.automatic)
+        filterItem(.automatic)
         ToolbarSpacer(.fixed)
         tagItem(.automatic)
         ToolbarSpacer(.fixed)
@@ -393,21 +394,25 @@ struct ContentView: View {
     @available(macOS 26.0, *)
     @ToolbarContentBuilder
     private var spacedLeadingB: some ToolbarContent {
+        // Collections · Image Layout · Background (mood) share ONE capsule — no
+        // spacers between them (none is a chevron Menu, so they merge cleanly).
+        // The spacer AFTER mood closes the group; info stays its own pill.
         collectionsItem(.automatic)
-        ToolbarSpacer(.fixed)
         layoutItem(.automatic)
-        ToolbarSpacer(.fixed)
         moodItem(.automatic)
         ToolbarSpacer(.fixed)
         infoItem(.automatic)
         ToolbarSpacer(.flexible)
     }
 
+    // Sonoma/Sequoia don't merge items into a shared capsule, so these render
+    // individually regardless — but keep the sort · direction · filter ORDER
+    // consistent with the Tahoe grouping above.
     @ToolbarContentBuilder
     private var plainLeading: some ToolbarContent {
         sortItem(.navigation)
-        filterItem(.navigation)
         directionItem(.navigation)
+        filterItem(.navigation)
         tagItem(.navigation)
         subfoldersItem(.navigation)
         collectionsItem(.navigation)
@@ -588,6 +593,10 @@ struct ContentView: View {
             Image(systemName: "arrow.up.and.down.text.horizontal")
                 .moodToolbarIcon(appState.moodPalette)
         }
+        // Hide the dropdown chevron: with it, macOS 26 renders the Menu as its
+        // OWN isolated glass pill and it won't merge with the adjacent
+        // direction/filter controls into the "sorting" cluster.
+        .menuIndicator(.hidden)
         .help("Sort: \(isCollectionsPage ? appState.collectionSortMode.displayName : appState.sortMode.displayName)")
         .accessibilityLabel("Sort")
     }
