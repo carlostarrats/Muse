@@ -408,11 +408,14 @@ struct ContentView: View {
     @available(macOS 26.0, *)
     @ToolbarContentBuilder
     private var spacedLeadingB: some ToolbarContent {
-        // Collections · Image Layout · Background (mood) share ONE capsule — no
+        // Collections · Image Layout · Manage Drive Links share ONE capsule — no
         // spacers between them (none is a chevron Menu, so they merge cleanly).
-        // The spacer AFTER mood closes the group; info stays its own pill.
+        // The spacer AFTER manage-drive-links closes the group; Background (mood)
+        // and info each stay their own pill.
         collectionsItem(.automatic)
         layoutItem(.automatic)
+        manageDriveLinksItem(.automatic)
+        ToolbarSpacer(.fixed)
         moodItem(.automatic)
         ToolbarSpacer(.fixed)
         infoItem(.automatic)
@@ -431,6 +434,7 @@ struct ContentView: View {
         subfoldersItem(.navigation)
         collectionsItem(.navigation)
         layoutItem(.navigation)
+        manageDriveLinksItem(.navigation)
         moodItem(.navigation)
         infoItem(.navigation)
     }
@@ -523,6 +527,25 @@ struct ContentView: View {
             // Icon-only button: give VoiceOver an explicit name (the SF Symbol's
             // derived label reads "square grid 2x2").
             .accessibilityLabel("Image Layout")
+            .disabled(appState.isSearchActive)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private func manageDriveLinksItem(_ placement: ToolbarItemPlacement) -> some ToolbarContent {
+        // Opens the global Drive share list (the same sheet as the View-menu
+        // "Manage Drive Shares…"). Uses the "link" symbol to read as a
+        // share-link affordance. Greyed out during search, like its
+        // capsule-mates Collections and Image Layout.
+        ToolbarItem(placement: placement) {
+            Button {
+                appState.driveSharesShown = true
+            } label: {
+                Image(systemName: "link")
+                    .moodToolbarIcon(appState.moodPalette)
+            }
+            .help("Manage Drive Shares")
+            .accessibilityLabel("Manage Drive Shares")
             .disabled(appState.isSearchActive)
         }
     }
