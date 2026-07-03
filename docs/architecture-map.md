@@ -313,9 +313,8 @@ Muse/Muse/
     Spatial/
       SeededRandom.swift           SplitMix64 + FNV-1a (kept: grid seed + hero). Cloud/Galaxy views removed
   Components/
-    SearchBar.swift                debounced FTS5 search. Native NSSearchField wrapped in
-                                   NSViewRepresentable; appearance follows mood. Magnifier dropdown
-                                   picks scope — All vs This Folder (default This Folder)
+    (search field: now native SwiftUI `.searchable` in ContentView — All/This Folder
+     via `.searchScopes`, 250ms debounce; the old NativeSearchField was removed 2026-07-02)
     GridSelection.swift            pure selection math (single / Cmd-toggle / Shift-range → set +
                                    anchor), unit-tested
     PageScroll.swift               pure Page Up/Down math (newOriginY: overlap + clamp), unit-tested
