@@ -78,7 +78,8 @@ if you turn it on, is handled entirely by the system.
 ### Make it yours
 - Background moods: Light, Dark, Auto (light by day, dark at night), or a
   custom color.
-- Drive it from anywhere via Shortcuts, Siri, and Spotlight (App Intents).
+- Drive it from anywhere via Shortcuts, Siri, and Spotlight (App Intents) —
+  and any Shortcut you build is reachable from launchers like Raycast or Alfred.
 
 ## Staying up to date
 
