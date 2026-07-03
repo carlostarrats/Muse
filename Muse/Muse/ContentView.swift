@@ -531,7 +531,8 @@ struct ContentView: View {
     // MARK: - Search wiring (native `.searchable`)
 
     /// Field text changed. Push it to `AppState.searchQuery` and either clear (on
-    /// empty) or debounce a run — the same contract the old NativeSearchField had.
+    /// empty) or debounce a run (250ms) — the same debounce contract the search
+    /// field has always had.
     private func handleSearchTextChange(_ newValue: String) {
         guard newValue != appState.searchQuery else { return }
         appState.searchQuery = newValue
