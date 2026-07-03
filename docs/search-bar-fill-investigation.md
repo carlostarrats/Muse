@@ -1,5 +1,19 @@
 # Search-bar "fill the space" investigation (2026-06-25)
 
+> **RESOLVED / SUPERSEDED (2026-07-02).** The search field is no longer centered.
+> The toolbar was reorganized to a left-aligned control strip with search pinned
+> at the far RIGHT via native **`.searchable(placement: .toolbar)`** — approach #4
+> below, which was rejected in June ONLY because that ask wanted a *centered* field
+> (`.searchable` places it right-aligned). Right-aligned is now the desired look, so
+> `.searchable` became the correct, cheap answer: it collapses to a magnifier icon
+> when the window narrows and expands on click (Notes/Mail behavior), and the
+> leading buttons roll into the `»` overflow — all native, no AppKit rebuild. The
+> custom `NativeSearchField` (centered, mood-tinted) is retired; the accepted
+> tradeoff is the field follows the system look instead of the mood. See
+> `ContentView.swift` (`.searchable` + `.searchScopes` + the search-wiring helpers)
+> and the toolbar durable-constraint in CLAUDE.md. The rest of this doc is kept as
+> the historical record of why the *centered-fill* variant was a dead end.
+
 Status: **deferred, not shipped.** Working tree was reverted to clean; no code
 changed. This doc preserves the findings so a future session doesn't repeat the
 dead ends.

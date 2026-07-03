@@ -10,6 +10,13 @@
 import SwiftUI
 import AppKit
 
+/// Scope tag for the native `.searchScopes` picker. Distinct from `SearchScope`
+/// (the SearchService enum that carries a folder URL) — this is just the UI
+/// choice, mapped to `AppState.searchAllFolders`.
+private enum SearchFolderScope: Hashable {
+    case all, thisFolder
+}
+
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
     @ObservedObject private var indexProgress = IndexProgress.shared
@@ -20,6 +27,13 @@ struct ContentView: View {
     @State private var infoShown = false
     @State private var imageLayoutShown = false
     @State private var filterPopoverShown = false
+
+    // Native `.searchable` state (replaced the custom centered NSSearchField).
+    // `searchText` is the field's live text; it's kept LOCAL so per-keystroke
+    // typing re-evaluates only what the binding touches, and the query is pushed
+    // to `AppState.searchQuery` + debounced from `handleSearchTextChange`.
+    @State private var searchText = ""
+    @State private var searchDebounce: Task<Void, Never>?
 
     /// The Collections page is the card grid — showing collections with no
     /// single collection drilled into (and not while searching).
@@ -50,170 +64,66 @@ struct ContentView: View {
         NavigationSplitView {
             SidebarView()
         } detail: {
-            ZStack {
-                HStack(spacing: 0) {
-                    // ZStack (not VStack) so the page⇄grid swap CROSS-fades in
-                    // place — both occupy the same slot during the transition
-                    // instead of one collapsing and the other growing from the
-                    // top (the abrupt "top-down" reload).
-                    ZStack {
-                        if isCollectionsPage {
-                            // Dedicated Collections page — no tag chips here.
-                            CollectionsPage()
-                                .transition(Self.pageReveal)
-                        } else {
-                            // Chips stay pinned — on the main grid AND inside a
-                            // collection (so tags filter within a collection).
-                            // The collection header lives inside the grid's
-                            // scroll view and scrolls with it. Hidden only
-                            // during search and on the Collections page.
-                            VStack(spacing: 0) {
-                                // Chips stay mounted during search too — tags now
-                                // narrow within the search result set (AND).
-                                TagChipsRow()
-                                GridView()
-                            }
-                            .transition(Self.pageReveal)
-                        }
+            // The OS check must wrap the `.toolbar` APPLICATION, not live inside
+            // the builder: any `if #available` (buildLimitedAvailability) anywhere
+            // in a toolbar content tree erases the structure SwiftUI uses to
+            // resolve `ToolbarSpacer` group breaks — the spacers were silently
+            // ignored and every adjacent item fused into one glass capsule
+            // (verified live; two builder-level gating shapes both failed). Out
+            // here the check costs a Group and each branch hands `.toolbar` a
+            // FLAT item list, exactly the shape the API is documented against.
+            Group {
+                if #available(macOS 26.0, *) {
+                    detailCore.toolbar {
+                        spacedLeadingA
+                        spacedLeadingB
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(appState.moodPalette.background)
-                    .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
-                    // Search enter/exit still crossfades via this ambient animation.
-                    .animation(.easeInOut(duration: AppState.navTransition), value: appState.isSearchActive)
-                    // NOTE: deliberately NO ambient animation on isCollectionsPage or
-                    // activeCollectionID. Those transitions are driven explicitly by
-                    // withAnimation inside toggleCollectionsPage / setActiveCollection /
-                    // setActiveTag, so a FOLDER switch can tear the old tag/collection
-                    // view down INSTANTLY (animated: false) — it vanishes in one frame
-                    // instead of animating away in visible steps before the new folder
-                    // fades in.
+                    // The empty title area still flexes, shoving the `.automatic`
+                    // strip toward the center — removing the title item frees the
+                    // controls to sit flush left.
+                    .toolbar(removing: .title)
+                } else {
+                    detailCore.toolbar {
+                        plainLeading
+                    }
                 }
-
             }
-            .toolbar {
-                // Far left, beside the sidebar toggle — fully separate from search.
-                // Sort mode + its direction arrow share ONE item (an HStack) so
-                // macOS renders them as a single "sorting" cluster — otherwise
-                // separate adjacent items fuse the arrow into the folder
-                // (show-subfolders) cluster on its right.
-                ToolbarItem(placement: .navigation) {
-                    HStack(spacing: 2) {
-                        // The sort menu + direction arrow are live on the
-                        // Collections page (they sort the cards) and on the grid;
-                        // only search disables them (results are ranked by
-                        // relevance). The funnel sits BETWEEN sort-by and the
-                        // direction arrow and has the OPPOSITE enablement: live
-                        // during search (it narrows results) but dead on the
-                        // Collections CARD page (cards aren't filtered) — so each
-                        // control carries its own `.disabled`, not the HStack.
-                        sortMenu
-                            .disabled(appState.isSearchActive)
-                        filterMenu
-                            .disabled(isCollectionsPage)
-                        // Flip the active sort mode's direction (newest↔oldest, A↔Z, …).
-                        sortDirectionButton
-                            .disabled(appState.isSearchActive)
-                    }
-                }
-
-                // Tag-chip sort order (Most Used / A→Z) — its own item, sitting
-                // between the grid sort cluster and the show-subfolders toggle.
-                ToolbarItem(placement: .navigation) {
-                    tagSortMenu
-                        // The tag chips show on the grid, inside a collection, and
-                        // now over search results too — only the Collections card
-                        // page has no chip row.
-                        .disabled(isCollectionsPage)
-                }
-
-                // Its own item (own surface), sitting next to sort.
-                ToolbarItem(placement: .navigation) {
-                    Toggle(isOn: $appState.showSubfolders) {
-                        Image(systemName: "rectangle.stack")
-                            .moodToolbarIcon(appState.moodPalette,
-                                             selected: appState.showSubfolders)
-                    }
-                    .help(appState.showSubfolders
-                          ? "Hide files inside subfolders"
-                          : "Show files inside subfolders")
-                    // Icon-only toggle: give VoiceOver a stable name (its on/off
-                    // state is announced by the toggle itself).
-                    .accessibilityLabel("Show files in subfolders")
-                    .onChange(of: appState.showSubfolders) { _, _ in
-                        appState.toggleSubfolders()
-                    }
-                    // Toggling subfolders mid-search re-loads the whole folder
-                    // listing, dropping you out of the results — confusing. Also
-                    // dead in the Collections world (card page + inside a
-                    // collection): a collection is a flat membership with no
-                    // subfolders to reveal.
-                    .disabled(appState.isSearchActive || inCollectionsContext)
-                }
-
-                ToolbarItem(placement: .principal) {
-                    SearchBar()
-                }
-
-                // Collections page toggle — sits to the LEFT of the mood
-                // (color) button. No selected/blue state: it's navigation with
-                // its own back button, not a sticky mode you toggle off here.
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        appState.toggleCollectionsPage()
-                    } label: {
-                        Image(systemName: "square.stack.3d.up")
-                            .moodToolbarIcon(appState.moodPalette)
-                    }
-                    .help("Collections")
-                    .accessibilityLabel("Collections")
-                    // Toggling collections mid-search yanks you out of the
-                    // search and (in a library-wide search) re-highlights a
-                    // folder — confusing. Disable until the search is cleared.
-                    .disabled(appState.isSearchActive)
-                }
-
-                // Image Layout — sits between Collections and the mood (color)
-                // button. Opens the layout modal; the choice applies to every
-                // grid instantly.
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        imageLayoutShown = true
-                    } label: {
-                        Image(systemName: "square.grid.2x2")
-                            .moodToolbarIcon(appState.moodPalette)
-                    }
-                    .help("Image Layout")
-                    // Icon-only button: give VoiceOver an explicit name (the
-                    // SF Symbol's derived label reads "square grid 2x2").
-                    .accessibilityLabel("Image Layout")
-                    // Same as Collections: layout has no meaning over ranked
-                    // search results.
-                    .disabled(appState.isSearchActive)
-                }
-
-                // Mood and info grouped together as one cluster (macOS fuses
-                // adjacent trailing items; a ToolbarSpacer would separate them
-                // but only with a wider-than-default gap).
-                ToolbarItem(placement: .primaryAction) {
-                    moodMenu
-                }
-
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        infoShown = true
-                    } label: {
-                        Image(systemName: "info.circle")
-                            .moodToolbarIcon(appState.moodPalette)
-                    }
-                    .help("About Muse — how indexing, analysis, collections, and tags work")
-                    .accessibilityLabel("About Muse")
-                }
+            // Search is a native `.searchable` field (an `NSSearchToolbarItem`):
+            // the system pins it at the trailing edge and, when the window
+            // narrows, COLLAPSES it to a magnifier icon that expands on click
+            // (the Notes/Mail behavior) while the leading buttons roll into the »
+            // overflow — instead of the field just vanishing. This replaced the
+            // custom centered NSSearchField; the tradeoff is the field no longer
+            // mood-tints (it follows the system look). Scope (All / This Folder)
+            // is the native `.searchScopes` picker; debounce + query-injection are
+            // wired through the onChange handlers below.
+            .searchable(text: $searchText,
+                        placement: .toolbar,
+                        prompt: Text("Search files, tags, captions…"))
+            .searchScopes(Binding(
+                get: { appState.searchAllFolders ? SearchFolderScope.all : .thisFolder },
+                set: { setSearchScope($0) }
+            )) {
+                Text("All").tag(SearchFolderScope.all)
+                Text("This Folder").tag(SearchFolderScope.thisFolder)
+            }
+            .onChange(of: searchText) { _, newValue in
+                handleSearchTextChange(newValue)
+            }
+            // Programmatic query push (viewer tag taps) or an external clear
+            // (folder select) — mirror it into the field, and kill any in-flight
+            // debounce on clear so a just-dismissed query doesn't re-fire.
+            .onChange(of: appState.searchQuery) { _, newValue in
+                if searchText != newValue { searchText = newValue }
+                if newValue.isEmpty { searchDebounce?.cancel() }
+            }
+            .onSubmit(of: .search) {
+                runSearchNow(searchText)
             }
             // Transparent title bar so the sidebar card flows continuously up
             // to the top and curves with the window corner (Lineform-style).
             .toolbarBackground(.hidden, for: .windowToolbar)
-            // No window title — the toolbar starts at the search bar.
+            // No window title — the toolbar is a bare control strip.
             .navigationTitle("")
             // The viewer covers everything (prototype) — no toolbar above it.
             // Must hide in the same transaction the viewer mounts: the stage
@@ -390,6 +300,266 @@ struct ContentView: View {
         .preferredColorScheme(appState.moodPalette.scheme)
     }
 
+    // MARK: - Detail core
+
+    /// The grid/Collections stage the detail toolbar hangs off. Extracted so the
+    /// body can apply `.toolbar` twice (spaced on macOS 26, plain earlier) under
+    /// an `if #available` that lives OUTSIDE the toolbar builder — see the
+    /// comment at the call site.
+    private var detailCore: some View {
+        ZStack {
+            HStack(spacing: 0) {
+                // ZStack (not VStack) so the page⇄grid swap CROSS-fades in
+                // place — both occupy the same slot during the transition
+                // instead of one collapsing and the other growing from the
+                // top (the abrupt "top-down" reload).
+                ZStack {
+                    if isCollectionsPage {
+                        // Dedicated Collections page — no tag chips here.
+                        CollectionsPage()
+                            .transition(Self.pageReveal)
+                    } else {
+                        // Chips stay pinned — on the main grid AND inside a
+                        // collection (so tags filter within a collection).
+                        // The collection header lives inside the grid's
+                        // scroll view and scrolls with it. Hidden only
+                        // during search and on the Collections page.
+                        VStack(spacing: 0) {
+                            // Chips stay mounted during search too — tags now
+                            // narrow within the search result set (AND).
+                            TagChipsRow()
+                            GridView()
+                        }
+                        .transition(Self.pageReveal)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(appState.moodPalette.background)
+                .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
+                // Search enter/exit still crossfades via this ambient animation.
+                .animation(.easeInOut(duration: AppState.navTransition), value: appState.isSearchActive)
+                // NOTE: deliberately NO ambient animation on isCollectionsPage or
+                // activeCollectionID. Those transitions are driven explicitly by
+                // withAnimation inside toggleCollectionsPage / setActiveCollection /
+                // setActiveTag, so a FOLDER switch can tear the old tag/collection
+                // view down INSTANTLY (animated: false) — it vanishes in one frame
+                // instead of animating away in visible steps before the new folder
+                // fades in.
+            }
+        }
+    }
+
+    // MARK: - Toolbar content
+    //
+    // LAYOUT: all controls left-aligned (`.navigation`); search alone at the far
+    // RIGHT (`.primaryAction`). Each control is its OWN pill (like the folder
+    // toggle). On macOS 26 (Tahoe, liquid glass) adjacent toolbar items MERGE into
+    // one shared glass capsule; a fixed `ToolbarSpacer` between each forces them
+    // apart. `ToolbarSpacer` is macOS-26-only, so the body applies the SPACED
+    // variant on 26 and the PLAIN variant on Sonoma/Sequoia (which never merge —
+    // each item already renders individually). Each button is defined ONCE below
+    // and composed twice, so there's zero logic duplication; the spaced list is
+    // split in two because `@ToolbarContentBuilder.buildBlock` tops out at 10
+    // elements (9 items + 8 spacers = 17). These lists must stay FLAT — an
+    // `if #available` inside a toolbar builder erases the structure the spacers
+    // need and they get silently ignored (verified live, twice).
+    //
+    // Per-item `.disabled` differs: sort/direction/Collections/Layout die during
+    // search; the funnel stays live during search but dies on the Collections CARD
+    // page; subfolders dies during search AND in the Collections world; mood/info
+    // are always live.
+
+    // The SPACED variant lives entirely in the `.automatic` (trailing) section:
+    // ToolbarSpacer group-breaks are honored there but silently IGNORED between
+    // `.navigation`-placed items (verified live — three `.navigation` shapes all
+    // rendered fused). Fixed spacers split each control into its own pill; the
+    // FLEXIBLE spacer expands between the controls and the search field, pinning
+    // the strip left and the search right within the section.
+    @available(macOS 26.0, *)
+    @ToolbarContentBuilder
+    private var spacedLeadingA: some ToolbarContent {
+        // Sort · direction (newest-first) · filter share ONE capsule — no spacers
+        // between them (adjacent unspaced items merge by default). The spacer AFTER
+        // filter closes the group; tag + subfolders each get their own pill.
+        sortItem(.automatic)
+        directionItem(.automatic)
+        filterItem(.automatic)
+        ToolbarSpacer(.fixed)
+        tagItem(.automatic)
+        ToolbarSpacer(.fixed)
+        subfoldersItem(.automatic)
+        ToolbarSpacer(.fixed)
+    }
+
+    @available(macOS 26.0, *)
+    @ToolbarContentBuilder
+    private var spacedLeadingB: some ToolbarContent {
+        // Collections · Image Layout · Background (mood) share ONE capsule — no
+        // spacers between them (none is a chevron Menu, so they merge cleanly).
+        // The spacer AFTER mood closes the group; info stays its own pill.
+        collectionsItem(.automatic)
+        layoutItem(.automatic)
+        moodItem(.automatic)
+        ToolbarSpacer(.fixed)
+        infoItem(.automatic)
+        ToolbarSpacer(.flexible)
+    }
+
+    // Sonoma/Sequoia don't merge items into a shared capsule, so these render
+    // individually regardless — but keep the sort · direction · filter ORDER
+    // consistent with the Tahoe grouping above.
+    @ToolbarContentBuilder
+    private var plainLeading: some ToolbarContent {
+        sortItem(.navigation)
+        directionItem(.navigation)
+        filterItem(.navigation)
+        tagItem(.navigation)
+        subfoldersItem(.navigation)
+        collectionsItem(.navigation)
+        layoutItem(.navigation)
+        moodItem(.navigation)
+        infoItem(.navigation)
+    }
+
+    // Individual items — each renders as its own pill.
+
+    @ToolbarContentBuilder
+    private func sortItem(_ placement: ToolbarItemPlacement) -> some ToolbarContent {
+        ToolbarItem(placement: placement) {
+            sortMenu.disabled(appState.isSearchActive)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private func filterItem(_ placement: ToolbarItemPlacement) -> some ToolbarContent {
+        ToolbarItem(placement: placement) {
+            filterMenu.disabled(isCollectionsPage)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private func directionItem(_ placement: ToolbarItemPlacement) -> some ToolbarContent {
+        // Flip the active sort mode's direction (newest↔oldest, A↔Z, …).
+        ToolbarItem(placement: placement) {
+            sortDirectionButton.disabled(appState.isSearchActive)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private func tagItem(_ placement: ToolbarItemPlacement) -> some ToolbarContent {
+        // Tag-chip sort order (Most Used / A→Z).
+        ToolbarItem(placement: placement) {
+            tagSortMenu.disabled(isCollectionsPage)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private func subfoldersItem(_ placement: ToolbarItemPlacement) -> some ToolbarContent {
+        ToolbarItem(placement: placement) {
+            Toggle(isOn: $appState.showSubfolders) {
+                Image(systemName: "rectangle.stack")
+                    .moodToolbarIcon(appState.moodPalette,
+                                     selected: appState.showSubfolders)
+            }
+            .help(appState.showSubfolders
+                  ? "Hide files inside subfolders"
+                  : "Show files inside subfolders")
+            // Icon-only toggle: give VoiceOver a stable name (its on/off state is
+            // announced by the toggle itself).
+            .accessibilityLabel("Show files in subfolders")
+            .onChange(of: appState.showSubfolders) { _, _ in
+                appState.toggleSubfolders()
+            }
+            .disabled(appState.isSearchActive || inCollectionsContext)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private func collectionsItem(_ placement: ToolbarItemPlacement) -> some ToolbarContent {
+        // No selected/blue state: it's navigation with its own back button.
+        ToolbarItem(placement: placement) {
+            Button {
+                appState.toggleCollectionsPage()
+            } label: {
+                Image(systemName: "square.stack.3d.up")
+                    .moodToolbarIcon(appState.moodPalette)
+            }
+            .help("Collections")
+            .accessibilityLabel("Collections")
+            .disabled(appState.isSearchActive)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private func layoutItem(_ placement: ToolbarItemPlacement) -> some ToolbarContent {
+        ToolbarItem(placement: placement) {
+            Button {
+                imageLayoutShown = true
+            } label: {
+                Image(systemName: "square.grid.2x2")
+                    .moodToolbarIcon(appState.moodPalette)
+            }
+            .help("Image Layout")
+            // Icon-only button: give VoiceOver an explicit name (the SF Symbol's
+            // derived label reads "square grid 2x2").
+            .accessibilityLabel("Image Layout")
+            .disabled(appState.isSearchActive)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private func moodItem(_ placement: ToolbarItemPlacement) -> some ToolbarContent {
+        ToolbarItem(placement: placement) {
+            moodMenu
+        }
+    }
+
+    @ToolbarContentBuilder
+    private func infoItem(_ placement: ToolbarItemPlacement) -> some ToolbarContent {
+        ToolbarItem(placement: placement) {
+            Button {
+                infoShown = true
+            } label: {
+                Image(systemName: "info.circle")
+                    .moodToolbarIcon(appState.moodPalette)
+            }
+            .help("About Muse — how indexing, analysis, collections, and tags work")
+            .accessibilityLabel("About Muse")
+        }
+    }
+
+    // MARK: - Search wiring (native `.searchable`)
+
+    /// Field text changed. Push it to `AppState.searchQuery` and either clear (on
+    /// empty) or debounce a run — the same contract the old NativeSearchField had.
+    private func handleSearchTextChange(_ newValue: String) {
+        guard newValue != appState.searchQuery else { return }
+        appState.searchQuery = newValue
+        if newValue.isEmpty {
+            appState.clearSearch()
+        } else {
+            searchDebounce?.cancel()
+            searchDebounce = Task {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                if !Task.isCancelled { runSearchNow(newValue) }
+            }
+        }
+    }
+
+    /// Scope picker (All / This Folder) changed. Re-run an active, non-empty
+    /// search immediately under the new scope; an idle search just stores it.
+    private func setSearchScope(_ scope: SearchFolderScope) {
+        let allFolders = (scope == .all)
+        guard appState.searchAllFolders != allFolders else { return }
+        appState.searchAllFolders = allFolders
+        let q = appState.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        if appState.isSearchActive, !q.isEmpty { runSearchNow(q) }
+    }
+
+    private func runSearchNow(_ query: String) {
+        Task { await appState.runSearch(query) }
+    }
+
     @ViewBuilder
     private var sortMenu: some View {
         // On the Collections page the menu sorts the cards (collection modes
@@ -423,6 +593,10 @@ struct ContentView: View {
             Image(systemName: "arrow.up.and.down.text.horizontal")
                 .moodToolbarIcon(appState.moodPalette)
         }
+        // Hide the dropdown chevron: with it, macOS 26 renders the Menu as its
+        // OWN isolated glass pill and it won't merge with the adjacent
+        // direction/filter controls into the "sorting" cluster.
+        .menuIndicator(.hidden)
         .help("Sort: \(isCollectionsPage ? appState.collectionSortMode.displayName : appState.sortMode.displayName)")
         .accessibilityLabel("Sort")
     }

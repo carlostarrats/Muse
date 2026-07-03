@@ -154,6 +154,8 @@ most critical are also Claude memories (linked). Full repro/why is in
 - **Bulk tag delete leaves `analyzed_hash` untouched** so the auto-tagger never resurrects removed tags; they return only via explicit Regenerate.
 - **Bulk tag ops (Delete All Tags / Regenerate) scope to `tagSourceFiles`, NOT `currentFiles`.** `currentFiles` is the underlying FOLDER even while a collection is on screen (the grid renders `activeCollectionFiles`), so using it makes "Delete All Tags" hit the folder, not the collection the user is viewing — the same wrong-target class as single-tag delete (which already uses `tagSourceFiles`). The bulk dialogs say "in this view" (not "this folder") for the same reason — they're reachable inside collections.
 - **Duplicates modal never fully deletes a group** — ≥1 copy always kept. A file can be in several groups (byte-exact + filename + visual), so `DuplicateDeleteRules` checks EVERY group it belongs to, not just the first: emptying a group is refused (3+) or swaps (2-copy); cross-group pre-seed conflicts reconciled by `rescued`. Don't reintroduce a per-first-group check.
+- **Search is native `.searchable(placement: .toolbar)`, NOT a custom toolbar item.** This is what gives the Notes/Mail behavior: the field pins to the far-right toolbar edge, COLLAPSES to a magnifier icon when the window narrows (expands on click), and lets the leading buttons roll into the `»` overflow — instead of the field vanishing. It's an `NSSearchToolbarItem` under the hood. Scope (All / This Folder) is `.searchScopes` (bound to `AppState.searchAllFolders`); the 250ms debounce + `AppState.searchQuery` push + programmatic query-injection are wired via the `.onChange`/`.onSubmit` handlers + `handleSearchTextChange`/`setSearchScope`/`runSearchNow` in `ContentView`. `searchText` is LOCAL `@State` (don't bind `.searchable` straight to `AppState.searchQuery` — per-keystroke `objectWillChange` re-evals the whole shell). Tradeoff accepted: the field follows the SYSTEM look, no mood tint (the old centered mood-tinted `NativeSearchField` in `SearchBar.swift` is now DEAD CODE — retired, safe to delete). See `docs/search-bar-fill-investigation.md` for why the old centered-fill variant was a dead end and why right-aligned `.searchable` is the answer.
+- **Toolbar pills: `ToolbarSpacer` works ONLY in the trailing (`.automatic`) section, and ONLY in a FLAT builder.** On macOS 26 adjacent toolbar items fuse into one glass capsule; the split is `ToolbarSpacer(.fixed)` between items — but it's silently IGNORED between `.navigation`-placed items (three shapes verified live), and ANY `if #available` inside a toolbar content builder erases the group breaks too. So `ContentView` branches OUTSIDE `.toolbar` (`if #available(macOS 26.0, *)` around `detailCore.toolbar{…}`): Tahoe gets `.automatic` items + unconditional fixed spacers + a trailing `ToolbarSpacer(.flexible)` (pins the strip left) + `.toolbar(removing: .title)` (the empty title area otherwise flexes and shoves the strip off the left edge); Sonoma/Sequoia get `.navigation` items (no merging there, no spacers needed). Search is NOT in this builder — it's the `.searchable` field (see above), which the system pins right in both variants. Items are placement-parameterized funcs so both variants share one definition. Don't move the availability check into the builder, don't put spacers in `.navigation`, and keep the spaced lists flat. `@ToolbarContentBuilder.buildBlock` tops out at 10 elements.
 - **Never drive a perpetual animation with a global `withAnimation(.repeatForever)` in `.onAppear`.** The transaction stays live and leaks into ANY view repositioned in the same update cycle (most visibly the AppKit toolbar — `GridView`'s `ShimmerBand` drifted the toolbar icons). Use value-scoped `.animation(_:value:)` to confine the repeat to its subtree.
 - **A `ScrollView` clips to its OWN frame — reserve floating-toolbar clearance ABOVE the scroll view, not as inner padding.** The toolbar background is hidden, so any scroll surface reaching the toolbar edge slides content under it. Inner `.padding(.top:)` scrolls away with content. Every top-level scroll surface (grid AND `CollectionsPage`) needs its own reserve, kept on the shared `TagChipsRow.noTagsTopClearance` constant.
 - **Sidebar live-drag reorder must commit the new order SYNCHRONOUSLY, and the reorderable list must be a NON-lazy stack.** (1) The commit clears lift offsets in a `withTransaction(disablesAnimations)` block that ASSUMES the list is already reordered — so the reorder must land in that same synchronous transaction (folders get it free via `$roots`; collections update `CollectionsEngine.collections` sort_order in place synchronously, then persist async). (2) A reorderable `ForEach` must be a plain `VStack` by stable id, NOT `LazyVStack` over `Array(enumerated())` (which makes a reorder read as insert/remove and fly rows in). Animate with a list-scoped `.animation(_:value:)`.
@@ -324,16 +326,26 @@ before implementation.
 1. Open `Muse/Muse.xcodeproj` in Xcode 16+.
 2. Build & run (Cmd+R). The app starts on a clean shell — click
    "Add Folder" in the sidebar to point Muse at any folder on disk.
-3. Toolbar (left → right): sidebar toggle · sort · sort-direction arrow
-   (flips the active mode's order — newest↔oldest, A↔Z, …) · filter
-   (line.3.horizontal.decrease.circle — funnel popover: kind/date/size facets,
-   engaged-blue when active, stays live during search) · show-subfolders ·
-   search (center) · Collections (square.stack.3d.up) · Image Layout
-   (square.grid.2x2) · background mood (paintpalette — popover also holds the
-   Tile Background picker) ·
-   ⓘ About. (The grid/cloud/galaxy view picker and the water effect were
-   removed 2026-06-13; the clear-collection ✕ was removed in favor of back
-   arrows.) Find Duplicates lives in the File menu; Pin/Unpin Folder and
+3. Toolbar — controls left-aligned, **search alone at the far right** (no
+   centered `.principal` search anymore; centering collided with the controls
+   as the window narrowed). Order (left → right): sidebar toggle ·
+   **[sort · sort-direction arrow · filter]** (one grouped capsule on Tahoe —
+   sort-direction flips newest↔oldest / A↔Z; filter is
+   line.3.horizontal.decrease.circle, a kind/date/size funnel popover,
+   engaged-blue when active, live during search) · tag-sort · show-subfolders ·
+   **[Collections (square.stack.3d.up) · Image Layout (square.grid.2x2) ·
+   background mood (paintpalette — popover also holds the Tile Background
+   picker)]** (a second grouped capsule) · ⓘ About · … · search. The two
+   bracketed clusters are grouped (adjacent items with NO ToolbarSpacer between
+   them merge into one macOS-26 glass capsule); tag-sort, subfolders, and About
+   stay individual pills. NOTE: a toolbar `Menu` shows its chevron only if it's
+   a standalone pill — to let **sort** join its group its `.menuIndicator` is
+   `.hidden` (a chevron Menu refuses to merge). See the ToolbarSpacer durable
+   constraint for the two-variant (Tahoe/Sequoia) plumbing in `ContentView`. Search is native `.searchable`:
+   it sits at the far right and COLLAPSES to a magnifier icon on a narrow
+   window (buttons roll into the » overflow), Notes-style. (The grid/cloud/galaxy view
+   picker and the water effect were removed 2026-06-13; the clear-collection ✕
+   was removed in favor of back arrows.) Find Duplicates lives in the File menu; Pin/Unpin Folder and
    Remove Folder live in the Edit menu; analysis runs automatically.
 4. Sandboxed container path:
    `~/Library/Containers/com.tarrats.Muse/Data/Library/Application Support/Muse/`.
