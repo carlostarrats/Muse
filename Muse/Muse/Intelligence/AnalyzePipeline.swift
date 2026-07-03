@@ -257,7 +257,15 @@ final class AnalyzePipeline: ObservableObject {
     /// `.muse/<hash>.json` sidecar so it syncs to other devices. No-op for
     /// local-zone files / when iCloudFolder is nil. Reads the freshly-written
     /// FileRow + tags back out; does the file write off the main actor.
-    private func writeSidecarIfICloud(fileID: String, url: URL) async {
+    ///
+    /// `mergeExisting` (the analyze path): merge with any sidecar already on
+    /// disk — another device's synced record may carry MANUAL tags this device
+    /// hasn't hydrated yet, and a blind overwrite would drop them from the
+    /// synced record (`Sidecar.merge`: last-writer-wins scalars, tag union
+    /// with manual-beats-vision). Manual tag EDITS pass false — there the
+    /// local DB is authoritative (including deletions) and merging would
+    /// resurrect a just-deleted tag from the old sidecar.
+    private func writeSidecarIfICloud(fileID: String, url: URL, mergeExisting: Bool) async {
         guard ICloudZone.contains(url, folder: iCloudFolder) else { return }
         guard let queue = Database.shared.dbQueue else { return }
         let now = Int64(Date().timeIntervalSince1970)
@@ -274,13 +282,45 @@ final class AnalyzePipeline: ObservableObject {
         }
         guard let (file, tags) = bundle,
               let sidecar = Sidecar.build(from: file, tags: tags, updatedAt: now) else { return }
+        let hash = sidecar.content_hash
         // Sidecar + URL are Sendable; write off-main so the (tiny) coordinated
         // disk write never blocks the main actor. Log on failure — a silent
         // write failure would silently defeat the "no re-Vision on sync" promise.
         await Task.detached {
-            do { try SidecarStore.write(sidecar, forAsset: url) }
+            do {
+                var out = sidecar
+                if mergeExisting,
+                   let existing = SidecarStore.read(forAsset: url, contentHash: hash) {
+                    out = Sidecar.merge(existing, sidecar)
+                }
+                try SidecarStore.write(out, forAsset: url)
+            }
             catch { print("[AnalyzePipeline] sidecar write failed for \(url.lastPathComponent): \(error)") }
         }.value
+    }
+
+    /// Re-export sidecars after a MANUAL tag edit to iCloud-zone files. The
+    /// analyze pass is the only other sidecar writer and deliberately doesn't
+    /// re-run on tag edits (analyzed_hash untouched), so without this a
+    /// hydrate-only device keeps the pre-edit tag set forever. Fire-and-forget;
+    /// non-iCloud URLs are filtered out cheaply first.
+    func exportSidecarsAfterTagEdit(for urls: [URL]) {
+        let zone = iCloudFolder
+        let inZone = urls.filter { ICloudZone.contains($0, folder: zone) }
+        guard !inZone.isEmpty, let queue = Database.shared.dbQueue else { return }
+        Task {
+            for url in inZone {
+                let absPath = url.standardizedFileURL.path
+                let fid: String? = (try? await queue.read { db in
+                    try PathRow
+                        .filter(PathRow.Columns.absolute_path == absPath)
+                        .filter(PathRow.Columns.is_alive == 1)
+                        .fetchOne(db)?.file_id
+                }) ?? nil
+                guard let fid else { continue }
+                await writeSidecarIfICloud(fileID: fid, url: url, mergeExisting: false)
+            }
+        }
     }
 
     private func analyzeOne(fileID: String, url: URL) async {
@@ -288,10 +328,19 @@ final class AnalyzePipeline: ObservableObject {
         let kind = AssetKind.detect(at: url)
         guard kind == .image || kind == .raw || kind == .psd else { return }
 
+        guard let queue = Database.shared.dbQueue else { return }
+        // Capture the content identity BEFORE Vision runs. The file can be
+        // edited + re-indexed while a long pass is in flight; stamping
+        // analyzed_hash from a commit-time re-read would mark tags/caption
+        // derived from the OLD bytes as analyzed-at-the-NEW-hash — stale
+        // results that analyzePending never repairs until the next edit.
+        let analyzedHash: String? = (try? await queue.read { db in
+            try FileRow.filter(FileRow.Columns.id == fileID).fetchOne(db)?.content_hash
+        }) ?? nil
+        guard let analyzedHash else { return }
+
         let registry = IntelligenceRegistry.shared
         guard let out = await registry.tagger.analyze(url: url) else { return }
-
-        guard let queue = Database.shared.dbQueue else { return }
         let caption = out.caption
         let basename = url.lastPathComponent
         let now = Int64(Date().timeIntervalSince1970)
@@ -315,26 +364,30 @@ final class AnalyzePipeline: ObservableObject {
         let finalIntentKey = intentKey
         let finalIntentVersion = intentVersion
 
+        var committed = false
         do {
-            try await queue.write { db in
-                // Update files row
-                if var file = try FileRow.filter(FileRow.Columns.id == fileID).fetchOne(db) {
-                    file.width = out.width
-                    file.height = out.height
-                    file.caption = caption
-                    file.dominant_color = out.dominantColor
-                    file.palette = paletteJSON
-                    if let fp = out.featurePrint {
-                        file.feature_print = fp
-                    }
-                    file.last_seen_at = now
-                    // Mark analyzed-at-this-content so the automatic pass
-                    // skips it until the file's bytes actually change.
-                    file.analyzed_hash = file.content_hash
-                    file.intent = finalIntentKey
-                    file.intent_model_version = finalIntentVersion
-                    try file.update(db)
+            committed = try await queue.write { db -> Bool in
+                // Update files row — but ONLY if the content is still the bytes
+                // Vision saw. If the file was edited + re-indexed mid-pass,
+                // writing would stamp stale results as analyzed-at-the-new-hash;
+                // skipping leaves analyzed_hash stale so the next pass redoes it.
+                guard var file = try FileRow.filter(FileRow.Columns.id == fileID).fetchOne(db),
+                      file.content_hash == analyzedHash else { return false }
+                file.width = out.width
+                file.height = out.height
+                file.caption = caption
+                file.dominant_color = out.dominantColor
+                file.palette = paletteJSON
+                if let fp = out.featurePrint {
+                    file.feature_print = fp
                 }
+                file.last_seen_at = now
+                // Mark analyzed-at-this-content so the automatic pass
+                // skips it until the file's bytes actually change.
+                file.analyzed_hash = analyzedHash
+                file.intent = finalIntentKey
+                file.intent_model_version = finalIntentVersion
+                try file.update(db)
 
                 // Vision tags apply to EVERY folder this content lives in
                 // (identical pixels → identical vision tags), independently per
@@ -389,10 +442,14 @@ final class AnalyzePipeline: ObservableObject {
                     INSERT INTO files_fts(file_id, basename, ocr_text, caption)
                     VALUES (?, ?, ?, ?)
                 """, arguments: [fileID, basename, out.ocrText, caption])
+                return true
             }
         } catch {
             print("[AnalyzePipeline] write failed: \(error)")
         }
+        // Content changed mid-pass (or the row vanished) — the embedding and
+        // sidecar would describe the OLD bytes; skip them too.
+        guard committed else { return }
 
         // Embedding write — separate from the main transaction; embedder may be nil.
         if let embedder = registry.embedder {
@@ -410,6 +467,6 @@ final class AnalyzePipeline: ObservableObject {
             }
         }
 
-        await writeSidecarIfICloud(fileID: fileID, url: url)
+        await writeSidecarIfICloud(fileID: fileID, url: url, mergeExisting: true)
     }
 }

@@ -50,8 +50,13 @@ final class StarStore: ObservableObject {
 
     func star(folder: URL) {
         guard let queue = Database.shared.dbQueue else { return }
+        // Read-WRITE scope, same as BookmarkStore.addRoot: a pin opened after
+        // its root was removed is browsed THROUGH this bookmark, and Move to
+        // Trash / rename / move need write access — a read-only scope made
+        // exactly those ops fail with afpAccessDenied in the one case the
+        // bookmark exists for.
         let bookmark = try? folder.bookmarkData(
-            options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess],
+            options: [.withSecurityScope],
             includingResourceValuesForKeys: nil,
             relativeTo: nil
         )
@@ -92,17 +97,37 @@ final class StarStore: ObservableObject {
         return starred.contains { $0.path == path }
     }
 
-    /// Resolve a starred folder back to a URL with security scope.
+    /// Resolve a starred folder back to a URL with security scope. When the
+    /// system reports the bookmark stale, a fresh one is re-minted + persisted
+    /// (stale bookmarks keep resolving for a while, then fail for good and the
+    /// pin dies). Re-minting also upgrades legacy read-only pin bookmarks to
+    /// read-write the next time they go stale.
     func resolveURL(for star: StarredFolder) -> URL? {
         guard let data = star.bookmarkData else {
             return URL(fileURLWithPath: star.path)
         }
         var isStale = false
-        return try? URL(
+        guard let url = try? URL(
             resolvingBookmarkData: data,
             options: [.withSecurityScope],
             relativeTo: nil,
             bookmarkDataIsStale: &isStale
-        )
+        ) else { return nil }
+        if isStale { remint(star: star, from: url) }
+        return url
+    }
+
+    private func remint(star: StarredFolder, from url: URL) {
+        guard let queue = Database.shared.dbQueue else { return }
+        // Minting bookmark data needs an active scope on the URL.
+        let started = url.startAccessingSecurityScopedResource()
+        defer { if started { url.stopAccessingSecurityScopedResource() } }
+        guard let fresh = try? url.bookmarkData(options: [.withSecurityScope],
+                                                includingResourceValuesForKeys: nil,
+                                                relativeTo: nil) else { return }
+        try? queue.write { db in
+            try db.execute(sql: "UPDATE starred_folders SET bookmark_data = ? WHERE id = ?",
+                           arguments: [fresh, star.id])
+        }
     }
 }

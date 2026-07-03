@@ -42,6 +42,7 @@ struct ViewerInfoColumn<Chrome: View>: View {
     @ViewBuilder var chrome: () -> Chrome
 
     @ObservedObject private var engine = CollectionsEngine.shared
+    @EnvironmentObject private var appState: AppState
     @State private var hoveredCollectionPill: Int?
     @State private var hoveredTagPill: Int?
     @State private var collectionsExpanded = false
@@ -138,6 +139,20 @@ struct ViewerInfoColumn<Chrome: View>: View {
                          try await CollectionStore.removeFile(queue: queue, fileID: fileID,
                                                               collectionID: pill.id)
                          await engine.reload()
+                         // Keep the OPEN collection's grid in sync — the grid
+                         // renders activeCollectionFiles, so a store-only
+                         // removal leaves the tile ghosting behind the viewer
+                         // (and riding into export/share). Mirrors
+                         // AppState.removeFromCollection's bookkeeping.
+                         if appState.activeCollectionID == pill.id {
+                             appState.dropFromActiveCollection(
+                                 path: url.standardizedFileURL.path)
+                             if appState.activeCollectionFiles?.isEmpty == true {
+                                 appState.setActiveCollection(nil)
+                             } else {
+                                 appState.reloadTagChips()
+                             }
+                         }
                          show(String(localized: "Removed from \(pill.label)"))
                      }
                  }) {
@@ -185,6 +200,12 @@ struct ViewerInfoColumn<Chrome: View>: View {
                      Task {
                          _ = await TagStore.shared.removeTag(tag, for: url)
                          await refresh()
+                         // Every tag mutation must bump tagsVersion (grid-side
+                         // paths all do) — it re-derives the chip row, counts,
+                         // and the right-click Add Tag list; without it a
+                         // filtered-out tag's tile lingers until an unrelated
+                         // edit.
+                         appState.tagsVersion &+= 1
                          show(String(localized: "Removed \(VocabularyLocalizer.shared.display(pill.label))"))
                      }
                  }) {
@@ -196,6 +217,7 @@ struct ViewerInfoColumn<Chrome: View>: View {
                                  _ = await TagStore.shared.addManualTag(label: candidate.label, for: url)
                                  await refresh()
                                  await loadTagSuggestions()
+                                 appState.tagsVersion &+= 1
                                  show(String(localized: "Added \(VocabularyLocalizer.shared.display(candidate.label))"))
                              }
                          },
@@ -203,6 +225,7 @@ struct ViewerInfoColumn<Chrome: View>: View {
                              Task {
                                  _ = await TagStore.shared.addManualTag(label: label, for: url)
                                  await refresh()
+                                 appState.tagsVersion &+= 1
                                  show(String(localized: "Added \(label)"))
                              }
                          })

@@ -153,10 +153,16 @@ extension AppState {
                 ? paths
                 : paths.filter { CollectionStore.isUnderAnyRoot($0, roots: rootPaths) }
             // Members that still exist on disk, sorted by the active sort mode.
-            let nodes = SmartSorter.apply(sortMode, to: reachable.compactMap { path in
-                FileManager.default.fileExists(atPath: path)
-                    ? FileNode(url: URL(fileURLWithPath: path)) : nil
-            }, reversed: sortReversed)
+            // Existence sweep + FileNode stat + (for Color/Shape) SmartSorter's
+            // DB read are all per-member I/O — run OFF the main actor; the
+            // token guard below already covers the extra suspension.
+            let mode = sortMode, rev = sortReversed
+            let nodes = await Task.detached(priority: .userInitiated) { () -> [FileNode] in
+                SmartSorter.apply(mode, to: reachable.compactMap { path in
+                    FileManager.default.fileExists(atPath: path)
+                        ? FileNode(url: URL(fileURLWithPath: path)) : nil
+                }, reversed: rev)
+            }.value
             // Don't clobber a newer selection that landed while loading.
             if token == collectionRequestToken {
                 withAnimation(curve) {
@@ -192,9 +198,15 @@ extension AppState {
         // sidebar-menu export of a collection must lay out identically to
         // opening it and exporting from its header — without this the PDF /
         // Drive share come out in raw `alivePaths` (DB add-order) instead.
-        let nodes = SmartSorter.apply(sortMode, to: reachable.compactMap { path in
-            FileManager.default.fileExists(atPath: path) ? FileNode(url: URL(fileURLWithPath: path)) : nil
-        }, reversed: sortReversed)
+        // Same off-main rule as setActiveCollection: per-member existence
+        // stats + the indexed sorts' DB read don't belong on the main actor.
+        let mode = sortMode, rev = sortReversed
+        let nodes = await Task.detached(priority: .userInitiated) { () -> [FileNode] in
+            SmartSorter.apply(mode, to: reachable.compactMap { path in
+                FileManager.default.fileExists(atPath: path)
+                    ? FileNode(url: URL(fileURLWithPath: path)) : nil
+            }, reversed: rev)
+        }.value
         return nodes.map { $0.url }
     }
 
@@ -205,7 +217,12 @@ extension AppState {
     /// Gate the menu items to exactly where TagChipsRow is mounted (a real
     /// folder grid or inside a collection) with files present.
     var bulkTagCommandsAvailable: Bool {
-        !currentFiles.isEmpty
+        // tagSourceFiles, not currentFiles: inside a collection the grid shows
+        // the collection's members while currentFiles is still the underlying
+        // FOLDER — gating on the folder wrongly disables the commands when it
+        // happens to be empty (inverse of the wrong-target class the
+        // tagSourceFiles rule exists for).
+        !tagSourceFiles.isEmpty
             && !isSearchActive
             && !(showingCollections && activeCollectionID == nil)
     }
@@ -289,6 +306,17 @@ extension AppState {
             }
             clearSelection()
         }
+    }
+
+    /// Drop a just-trashed file from the OPEN collection's view state. The grid
+    /// renders `activeCollectionFiles` while a collection is on screen, so
+    /// removing a deleted file only from `currentFiles` leaves a ghost tile
+    /// that reappears after the burn fade and rides into "Save to…"/"Share
+    /// Drive Link" (both read `visibleFiles`). Call alongside every
+    /// currentFiles removal. `path` must be a standardized path.
+    func dropFromActiveCollection(path: String) {
+        activeCollectionPaths?.remove(path)
+        activeCollectionFiles?.removeAll { $0.url.standardizedFileURL.path == path }
     }
 
     /// Remove `urls` from collection `id` (the right-clicked tile or the whole

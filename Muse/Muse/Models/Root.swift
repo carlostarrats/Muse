@@ -15,17 +15,27 @@ struct Root: Identifiable, Hashable, Codable {
     let bookmarkData: Data
     let addedAt: Date
 
-    /// Resolves the bookmark to a URL, refreshing if the bookmark is stale.
-    /// Returned URL must have `startAccessingSecurityScopedResource()` called
-    /// on it before reading, balanced by `stopAccessingSecurityScopedResource()`.
+    /// Resolves the bookmark to a URL. Returned URL must have
+    /// `startAccessingSecurityScopedResource()` called on it before reading,
+    /// balanced by `stopAccessingSecurityScopedResource()`. Staleness is NOT
+    /// handled here (a struct can't persist the re-minted data) — callers that
+    /// own storage use `resolveURLReportingStale()` and re-mint.
     func resolveURL() -> URL? {
+        resolveURLReportingStale()?.url
+    }
+
+    /// Like `resolveURL()`, but also reports the system's stale flag so the
+    /// owning store can re-mint + persist fresh bookmark data — a stale
+    /// bookmark keeps resolving for a while, then fails for good, silently
+    /// dropping the root from the sidebar.
+    func resolveURLReportingStale() -> (url: URL, isStale: Bool)? {
         var isStale = false
-        let url = try? URL(
+        guard let url = try? URL(
             resolvingBookmarkData: bookmarkData,
             options: [.withSecurityScope],
             relativeTo: nil,
             bookmarkDataIsStale: &isStale
-        )
-        return url
+        ) else { return nil }
+        return (url, isStale)
     }
 }

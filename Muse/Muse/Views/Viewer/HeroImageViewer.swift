@@ -397,6 +397,9 @@ struct HeroImageViewer: View {
             // grid, and selectedFile = nil unmounts the viewer.
             withAnimation(.easeIn(duration: 0.2)) {
                 appState.currentFiles.removeAll { $0.url == url }
+                // The grid renders activeCollectionFiles while a collection is
+                // open — drop the tile there too or it ghosts back on close.
+                appState.dropFromActiveCollection(path: url.standardizedFileURL.path)
             }
             appState.deletion.toast = ToastData(message: String(localized: "Moved to Trash"),
                                                 actionLabel: String(localized: "Undo")) {

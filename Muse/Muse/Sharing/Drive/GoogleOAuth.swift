@@ -21,6 +21,9 @@ enum DriveAuthError: Error { case cancelled, badResponse, notSignedIn, refreshFa
     /// refresh round-trip (which, with a rotating-refresh-token IdP, could let
     /// one refresh invalidate another's token). Cleared when it settles.
     private var inFlightRefresh: Task<String, Error>?
+    /// The presented browser sign-in sheet, retained for its whole presentation
+    /// and cancellable when the surrounding task is (sheet closed mid-sign-in).
+    private var activeAuthSession: ASWebAuthenticationSession?
 
     init(store: TokenStoring = KeychainTokenStore()) {
         self.store = store
@@ -165,16 +168,34 @@ enum DriveAuthError: Error { case cancelled, badResponse, notSignedIn, refreshFa
     // MARK: ASWebAuthenticationSession
 
     private func authenticate(url: URL, scheme: String) async throws -> URL {
-        try await withCheckedThrowingContinuation { cont in
-            let session = ASWebAuthenticationSession(url: url, callbackURLScheme: scheme) { callback, error in
-                if let callback { cont.resume(returning: callback) }
-                else if (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin {
-                    cont.resume(throwing: DriveAuthError.cancelled)
-                } else { cont.resume(throwing: error ?? DriveAuthError.badResponse) }
+        try Task.checkCancellation()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { cont in
+                let session = ASWebAuthenticationSession(url: url, callbackURLScheme: scheme) { [weak self] callback, error in
+                    Task { @MainActor in self?.activeAuthSession = nil }
+                    if let callback { cont.resume(returning: callback) }
+                    else if (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin {
+                        cont.resume(throwing: DriveAuthError.cancelled)
+                    } else { cont.resume(throwing: error ?? DriveAuthError.badResponse) }
+                }
+                session.presentationContextProvider = self
+                session.prefersEphemeralWebBrowserSession = false
+                // Hold the session while presented — a local alone relies on the
+                // framework keeping it alive.
+                activeAuthSession = session
+                // start() == false means it couldn't present (no anchor); the
+                // completion handler then NEVER fires, so resume here or the
+                // continuation — and the whole publish/sign-in — hangs forever.
+                if session.start() == false {
+                    activeAuthSession = nil
+                    cont.resume(throwing: DriveAuthError.badResponse)
+                }
             }
-            session.presentationContextProvider = self
-            session.prefersEphemeralWebBrowserSession = false
-            session.start()
+        } onCancel: {
+            // Closing the share sheet cancels the publish task mid-sign-in;
+            // dismiss the browser sheet so its completion resumes (canceledLogin
+            // → DriveAuthError.cancelled) instead of dangling.
+            Task { @MainActor [weak self] in self?.activeAuthSession?.cancel() }
         }
     }
 }

@@ -33,10 +33,24 @@ struct ShareCollectionButton: View {
         }
     }
 
+    /// Drive share uploads only raster images (the metadata stripper re-encodes
+    /// them; a PDF/video/other file card can't be stripped, so it would abort
+    /// the whole publish fail-closed with a misleading error). PDF export
+    /// ("Save to…") keeps the full visible set including file cards.
+    private var driveShareURLs: [URL] {
+        appState.visibleFiles.compactMap { node in
+            switch node.kind {
+            case .image, .raw, .psd: return node.url
+            default: return nil
+            }
+        }
+    }
+
     var body: some View {
         Menu {
             Button("Save to…") { Task { await save() } }
             Button("Share Drive Link") { showingDriveShare = true }
+                .disabled(driveShareURLs.isEmpty)
         } label: {
             Group {
                 if preparing {
@@ -59,7 +73,7 @@ struct ShareCollectionButton: View {
         .help("Share collection")
         .accessibilityLabel("Share collection")
         .sheet(isPresented: $showingDriveShare) {
-            DriveShareSheet(auth: googleAuth, title: title, urls: exportURLs) {
+            DriveShareSheet(auth: googleAuth, title: title, urls: driveShareURLs) {
                 showingDriveShare = false
             }
         }

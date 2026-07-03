@@ -48,7 +48,11 @@ enum HeroPalette {
     /// Image: a tiny ImageIO thumbnail decoded to RGBA → `paletteHexes`.
     nonisolated static func quickPalette(at url: URL) async -> [String] {
         await Task.detached(priority: .userInitiated) { () -> [String] in
+            // Budget guard: even a 48px thumbnail request first materializes the
+            // FULL raster for formats ImageIO can't stream-downsample (PNG/TIFF/
+            // BMP) — without it a few-KB decompression-bomb PNG OOMs on hero open.
             guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+                  ThumbnailCache.withinDecodeBudget(src),
                   let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, [
                       kCGImageSourceCreateThumbnailFromImageAlways: true,
                       kCGImageSourceThumbnailMaxPixelSize: 48,

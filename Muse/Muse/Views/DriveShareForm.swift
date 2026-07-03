@@ -60,6 +60,12 @@ struct DriveShareSheet: View {
         }
         .padding(28)
         .frame(width: 460)
+        // Closing the sheet by ANY path must abort an in-flight publish —
+        // otherwise the upload continues headless, setAnyoneReader fires, and
+        // the collection goes public with the link rendered into a dismissed
+        // sheet the user never sees. cancel() after .done is a no-op (the task
+        // already finished), so the live share from a normal Done is untouched.
+        .onDisappear { service.cancel() }
     }
 
     private var form: some View {

@@ -150,6 +150,9 @@ struct HeroVideoViewer: View {
             let ticket = try await TrashManager.trash(url)
             withAnimation(.easeIn(duration: 0.2)) {
                 appState.currentFiles.removeAll { $0.url == url }
+                // The grid renders activeCollectionFiles while a collection is
+                // open — drop the tile there too or it ghosts back on close.
+                appState.dropFromActiveCollection(path: url.standardizedFileURL.path)
             }
             // Hand the Undo toast to the always-present GridToastHost so it
             // survives the viewer unmount.

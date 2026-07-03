@@ -49,8 +49,13 @@ enum BackupBuilder {
                 let occurrences = paths.map { p -> BackupOccurrence in
                     let url = URL(fileURLWithPath: p.absolute_path)
                     let parent = url.deletingLastPathComponent().path
-                    let rootPath = roots.first { p.absolute_path == $0.path
-                        || p.absolute_path.hasPrefix($0.path + "/") }?.path
+                    // LONGEST matching prefix, not first match — with nested
+                    // roots (/a and /a/b) a file under /a/b must attribute to
+                    // /a/b, or restoring that root alone finds zero occurrences.
+                    let rootPath = roots
+                        .filter { p.absolute_path == $0.path
+                            || p.absolute_path.hasPrefix($0.path + "/") }
+                        .max(by: { $0.path.count < $1.path.count })?.path
                     return BackupOccurrence(
                         original_path: p.absolute_path,
                         basename: url.lastPathComponent,

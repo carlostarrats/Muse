@@ -318,7 +318,40 @@ final class Database {
             try Database.backfillCollectionSortOrder(db)
         }
 
+        migrator.registerMigration("v9_fts_basename_backfill") { db in
+            // Historically only ANALYZED IMAGES got a files_fts row (written by
+            // analyzeOne), so library-wide search could never find a PDF/video/
+            // archive by name. Indexer now seeds a basename-only row for every
+            // new file; this backfills the rows for everything already indexed.
+            try Database.backfillBasenameFTS(db)
+        }
+
         return migrator
+    }
+
+    /// Insert a basename-only files_fts row for every file that has none,
+    /// using its first alive path's last component. Idempotent (guarded by
+    /// NOT EXISTS); files with no alive path are skipped (housekeeping owns
+    /// their lifecycle). `nonisolated` to match `makeMigrator()`.
+    nonisolated static func backfillBasenameFTS(_ db: GRDB.Database) throws {
+        // files_fts.file_id is UNINDEXED, so a correlated NOT EXISTS would be
+        // a full FTS scan PER files row — O(n²) inside the migrator, i.e. a
+        // launch hang on a large library. Fetch the covered ids once instead.
+        let covered = Set(try String.fetchAll(db, sql: "SELECT file_id FROM files_fts"))
+        let rows = try Row.fetchAll(db, sql: """
+            SELECT f.id AS fid,
+                   (SELECT p.absolute_path FROM paths p
+                    WHERE p.file_id = f.id AND p.is_alive = 1 LIMIT 1) AS path
+            FROM files f
+            """)
+        for row in rows {
+            guard let fid: String = row["fid"], !covered.contains(fid),
+                  let path: String = row["path"] else { continue }
+            try db.execute(sql: """
+                INSERT INTO files_fts(file_id, basename, ocr_text, caption)
+                VALUES (?, ?, '', '')
+                """, arguments: [fid, (path as NSString).lastPathComponent])
+        }
     }
 
     /// Assign collections.sort_order = 0,1,2,… ordered by created_at then name,

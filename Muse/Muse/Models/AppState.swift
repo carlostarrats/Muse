@@ -250,6 +250,11 @@ final class AppState: ObservableObject {
 
     /// Active search query. Empty when no search.
     @Published var searchQuery: String = ""
+    /// Bumped when AppState-side navigation dismisses search (folder select).
+    /// The field text lives as LOCAL @State in ContentView; this signals it to
+    /// clear uncommitted text + cancel the pending debounce (searchQuery alone
+    /// can't — it may already be empty when nothing was committed yet).
+    @Published var searchDismissToken = 0
 
     /// True when search results, not folder contents, are showing in the grid.
     @Published var isSearchActive: Bool = false {
@@ -506,11 +511,14 @@ final class AppState: ObservableObject {
         deletion.onRemove = { [weak self] url in
             guard let self else { return }
             self.currentFiles.removeAll { $0.url == url }
+            let deletedPath = url.standardizedFileURL.path
+            // The grid renders activeCollectionFiles while a collection is
+            // open — drop the tile there too or it ghosts back after the burn.
+            self.dropFromActiveCollection(path: deletedPath)
             if self.selectedFile?.url == url { self.selectedFile = nil }
             // Also drop the trashed file from the multi-selection Set (it's
             // independent of currentFiles); leaving it there lets a later bulk
             // action rebuild a URL for a path that no longer exists.
-            let deletedPath = url.standardizedFileURL.path
             self.selectedFiles.remove(deletedPath)
             if self.selectionAnchor == deletedPath { self.selectionAnchor = nil }
             // The in-view file set shrank — refresh the chip counts (a tag that
@@ -521,6 +529,13 @@ final class AppState: ObservableObject {
             guard let self else { return }
             // The disk restore already happened; only resurface the tile
             // if the current scope still contains it.
+            if let cid = self.activeCollectionID {
+                // A collection is open: onRemove dropped the tile from
+                // activeCollectionFiles, so re-resolve the collection to bring
+                // the restored member back (membership is DB-backed and intact).
+                self.setActiveCollection(cid, animated: false)
+                return
+            }
             if self.isSearchActive {
                 // Re-rank instead of appending into unrelated results.
                 Task { await self.runSearch(self.searchQuery) }
@@ -843,6 +858,11 @@ final class AppState: ObservableObject {
             searchQuery = ""
             isSearchActive = false
         }
+        // The field's live text is LOCAL @State in ContentView (searchQuery
+        // commits only when a run fires), so typed-but-not-yet-run text + its
+        // pending debounce can't be cleared through searchQuery alone — signal
+        // the field explicitly or the debounce fires ON TOP of this folder.
+        searchDismissToken &+= 1
         searchAllFolders = false      // a deliberate folder pick defaults to it
         startWatching(folder.url)
         reloadCurrentFiles(showLoading: true, thenIndex: true, verifyICloud: true)
@@ -908,6 +928,8 @@ final class AppState: ObservableObject {
 
     /// Monotonic token so a slow folder load can't clobber a newer selection.
     private var folderLoadToken = 0
+    /// Stale guard for the async (Color/Shape) `resort()` path.
+    private var resortToken = 0
 
     /// Enumerate + merge + sort the active folder OFF the main thread, then
     /// publish on main. `showLoading` clears the grid to a skeleton (fresh
@@ -916,6 +938,46 @@ final class AppState: ObservableObject {
     /// + thumbnail-prewarm + analysis pass once the files have landed.
     /// Public reload entry point (e.g. after a drag-move changes the folder).
     func reloadCurrentFilesPublic() { reloadCurrentFiles(thenIndex: true) }
+
+    /// Move `urls` into `destination`: disk move OFF-MAIN (a cross-volume move
+    /// copies bytes — running it synchronously from the context menu / sidebar
+    /// drop froze the main thread), then the DB follow-through
+    /// (`FileMoveMigration`: repoint the alive path row + carry the location's
+    /// tags, manual included — an in-app move is a KNOWN relocation, unlike an
+    /// external one), then the usual reload/alert.
+    func moveFiles(_ urls: [URL], into destination: URL) {
+        Task { @MainActor in
+            let failed = await Task.detached(priority: .userInitiated) {
+                FileMover.move(urls, into: destination)
+            }.value
+            let failedPaths = Set(failed.map { $0.standardizedFileURL.path })
+            let moves: [(from: String, to: String)] = urls.compactMap { url in
+                let from = url.standardizedFileURL.path
+                guard !failedPaths.contains(from) else { return nil }
+                let to = destination.appendingPathComponent(url.lastPathComponent)
+                    .standardizedFileURL.path
+                return from == to ? nil : (from, to)
+            }
+            if !moves.isEmpty, let queue = Database.shared.dbQueue {
+                do {
+                    try await queue.write { db in
+                        try FileMoveMigration.apply(db, moves: moves)
+                    }
+                } catch {
+                    // The disk move already happened; a failed migration only
+                    // degrades to external-move semantics (vision-only inherit
+                    // after reconcile) — log it, don't fail the move.
+                    print("[AppState] move DB migration failed: \(error)")
+                }
+                // A move into/within the iCloud zone re-scoped tag rows — keep
+                // the synced sidecar current (no-op for non-iCloud targets;
+                // same rule as every TagStore mutation).
+                AnalyzePipeline.shared.exportSidecarsAfterTagEdit(
+                    for: moves.map { URL(fileURLWithPath: $0.to) })
+            }
+            reloadAfterMove(failed: failed)
+        }
+    }
 
     /// After a move: clear selection, reload the current folder, and (if any
     /// failed) surface a brief alert listing the unmoved files.
@@ -926,6 +988,12 @@ final class AppState: ObservableObject {
         if let open = selectedFile,
            !FileManager.default.fileExists(atPath: open.url.path) {
             selectedFile = nil
+        }
+        // A move from inside an open collection changes member paths on disk —
+        // re-resolve the collection (re-reads member paths + reachability) so
+        // moved-away tiles don't linger as ghosts the share/export flows read.
+        if let cid = activeCollectionID {
+            setActiveCollection(cid, animated: false)
         }
         reloadCurrentFilesPublic()
         if !failed.isEmpty {
@@ -1075,7 +1143,11 @@ final class AppState: ObservableObject {
                 } else {
                     // Live reload (FSEvents / subfolders toggle / clear search):
                     // the grid is already shown, so just refresh the chips for the
-                    // current scope (no gate).
+                    // current scope (no gate). A live reload can NARROW the set
+                    // (file deleted/moved externally, Duplicates batch delete) —
+                    // prune the selection so a gone file can't ride into
+                    // move/collection/tag/share via effectiveSelectionURLs.
+                    self.pruneSelectionToVisible()
                     self.reloadTagChips()
                 }
                 if thenIndex { self.scheduleIndexing(for: folderURL, verifyICloud: verifyICloud) }
@@ -1092,10 +1164,53 @@ final class AppState: ObservableObject {
     func resort() {
         // Don't re-sort search results; they maintain relevance ranking
         guard !isSearchActive else { return }
-        currentFiles = FolderOrdering.foldersFirst(
-            SmartSorter.apply(sortMode, to: currentFiles, reversed: sortReversed))
-        if let collectionFiles = activeCollectionFiles {
-            activeCollectionFiles = SmartSorter.apply(sortMode, to: collectionFiles, reversed: sortReversed)
+        let mode = sortMode, rev = sortReversed
+        guard mode == .dominantColor || mode == .shape else {
+            // Pure in-memory compares — instant, keep synchronous.
+            currentFiles = FolderOrdering.foldersFirst(
+                SmartSorter.apply(mode, to: currentFiles, reversed: rev))
+            if let collectionFiles = activeCollectionFiles {
+                activeCollectionFiles = SmartSorter.apply(mode, to: collectionFiles, reversed: rev)
+            }
+            return
+        }
+        // Color/Shape are index-aware — SmartSorter does a synchronous GRDB
+        // fetch for them, so run those OFF the main actor and publish behind
+        // stale guards (a folder/collection switch, a search landing, or a
+        // newer resort mid-sort must not be clobbered by this result).
+        resortToken += 1
+        let token = resortToken
+        let fToken = folderLoadToken
+        let cToken = collectionRequestToken
+        let sToken = searchRequestToken
+        let files = currentFiles
+        let collection = activeCollectionFiles
+        Task { @MainActor in
+            let sorted = await Task.detached(priority: .userInitiated) {
+                () -> (files: [FileNode], collection: [FileNode]?) in
+                (FolderOrdering.foldersFirst(SmartSorter.apply(mode, to: files, reversed: rev)),
+                 collection.map { SmartSorter.apply(mode, to: $0, reversed: rev) })
+            }.value
+            // searchRequestToken + isSearchActive: runSearch replaces
+            // currentFiles with RANKED results without any reload — a stale
+            // sort landing after it would overwrite relevance order with the
+            // folder set (the "search results keep relevance rank" invariant).
+            guard token == resortToken, fToken == folderLoadToken,
+                  cToken == collectionRequestToken, sToken == searchRequestToken,
+                  !isSearchActive else { return }
+            // Publish the INTERSECTION with what's on screen now: direct
+            // removals (burn-delete, hero delete, removeRoot) mutate
+            // currentFiles without bumping any of the tokens above, and a
+            // wholesale overwrite would resurrect the trashed tile from this
+            // pre-delete snapshot. Additions always arrive via
+            // reloadCurrentFiles (bumps folderLoadToken) or onRestore (calls
+            // resort() → bumps resortToken), so filtering can't drop them.
+            let present = Set(currentFiles.map(\.url))
+            currentFiles = sorted.files.filter { present.contains($0.url) }
+            if let sortedCollection = sorted.collection, let live = activeCollectionFiles {
+                let livePresent = Set(live.map(\.url))
+                activeCollectionFiles = sortedCollection.filter { livePresent.contains($0.url) }
+            }
         }
     }
 

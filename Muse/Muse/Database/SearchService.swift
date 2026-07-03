@@ -104,17 +104,26 @@ enum SearchService {
         // Also do a basename substring match on enumerated files (so search
         // works even when files aren't indexed yet, scoped to current folder).
         // These unranked extras sort by modifiedAt and trail the ranked hits.
+        // The enumeration is a full stat sweep of the folder — run it OFF the
+        // main actor (this method is @MainActor; on a multi-thousand-file
+        // folder it janked every debounced keystroke).
         var extras: [FileNode] = []
         if case .currentFolder(let url) = scope {
-            let candidates = FolderReader.files(in: url, showHidden: false)
             let lower = trimmed.lowercased()
-            for f in candidates {
-                if f.basename.lowercased().contains(lower),
-                   !ranked.contains(where: { $0.url.standardizedFileURL == f.url.standardizedFileURL }),
-                   !extras.contains(where: { $0.url.standardizedFileURL == f.url.standardizedFileURL }) {
-                    extras.append(f)
+            let rankedPaths = Set(ranked.map { $0.url.standardizedFileURL })
+            extras = await Task.detached(priority: .userInitiated) { () -> [FileNode] in
+                var out: [FileNode] = []
+                var seen = Set<URL>()
+                for f in FolderReader.files(in: url, showHidden: false) {
+                    let std = f.url.standardizedFileURL
+                    if f.basename.lowercased().contains(lower),
+                       !rankedPaths.contains(std), !seen.contains(std) {
+                        out.append(f)
+                        seen.insert(std)
+                    }
                 }
-            }
+                return out
+            }.value
         }
 
         return ranked + extras.sorted { ($0.modifiedAt ?? .distantPast) > ($1.modifiedAt ?? .distantPast) }

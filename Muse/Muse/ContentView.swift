@@ -117,6 +117,13 @@ struct ContentView: View {
                 if searchText != newValue { searchText = newValue }
                 if newValue.isEmpty { searchDebounce?.cancel() }
             }
+            // Folder select dismisses search — clear uncommitted local text +
+            // the pending debounce (searchQuery may already be "" when nothing
+            // was committed, so the sync above can't catch this case).
+            .onChange(of: appState.searchDismissToken) { _, _ in
+                searchDebounce?.cancel()
+                if !searchText.isEmpty { searchText = "" }
+            }
             .onSubmit(of: .search) {
                 runSearchNow(searchText)
             }
@@ -167,10 +174,12 @@ struct ContentView: View {
                     $0.kind == .image || $0.kind == .raw || $0.kind == .psd
                 } ?? false
                 // "Search present" mirrors selectFolder's teardown check so a
-                // typed-but-not-yet-fired query (debounce in flight) is peeled too.
+                // typed-but-not-yet-fired query (debounce in flight) is peeled
+                // too — the field text is LOCAL @State now (searchQuery commits
+                // only when a run fires), so check BOTH.
                 let searchPresent = EscapeResolver.searchPresent(
                     isSearchActive: appState.isSearchActive,
-                    queryIsEmpty: appState.searchQuery.isEmpty)
+                    queryIsEmpty: appState.searchQuery.isEmpty && searchText.isEmpty)
                 switch EscapeResolver.action(
                     hasSelectedFile: selected != nil,
                     selectedFileIsHero: isHero,
@@ -200,6 +209,11 @@ struct ContentView: View {
                 case .clearSearch:
                     // Peel the search first (it left any collection intact), so
                     // this returns to the collection's members or the folder grid.
+                    // Clear the LOCAL field + pending debounce explicitly — with
+                    // an uncommitted query, searchQuery is already "" so the
+                    // searchQuery→searchText sync won't fire.
+                    searchDebounce?.cancel()
+                    searchText = ""
                     appState.clearSearch()
                 case .clearTags:
                     // Clear the whole tag set in one press (not one tag at a time).
@@ -456,7 +470,16 @@ struct ContentView: View {
     @ToolbarContentBuilder
     private func subfoldersItem(_ placement: ToolbarItemPlacement) -> some ToolbarContent {
         ToolbarItem(placement: placement) {
-            Toggle(isOn: $appState.showSubfolders) {
+            // The binding routes the click through toggleSubfolders() — the
+            // single owner of the flip + its side effects (narrowing-direction
+            // selection clear, reload). Binding straight to $showSubfolders
+            // with an .onChange calling toggleSubfolders() double-drove the
+            // value: the Toggle wrote it, then the handler flipped it AGAIN,
+            // re-firing onChange — extra reloads, and the transient
+            // opposite-state pass cleared the selection on the widening
+            // direction too, against the documented rule.
+            Toggle(isOn: Binding(get: { appState.showSubfolders },
+                                 set: { _ in appState.toggleSubfolders() })) {
                 Image(systemName: "rectangle.stack")
                     .moodToolbarIcon(appState.moodPalette,
                                      selected: appState.showSubfolders)
@@ -467,9 +490,6 @@ struct ContentView: View {
             // Icon-only toggle: give VoiceOver a stable name (its on/off state is
             // announced by the toggle itself).
             .accessibilityLabel("Show files in subfolders")
-            .onChange(of: appState.showSubfolders) { _, _ in
-                appState.toggleSubfolders()
-            }
             .disabled(appState.isSearchActive || inCollectionsContext)
         }
     }
@@ -530,16 +550,22 @@ struct ContentView: View {
 
     // MARK: - Search wiring (native `.searchable`)
 
-    /// Field text changed. Push it to `AppState.searchQuery` and either clear (on
-    /// empty) or debounce a run (250ms) — the same debounce contract the search
-    /// field has always had.
+    /// Field text changed. Debounce a run (250ms) or clear on empty. The text
+    /// is NOT pushed into `AppState.searchQuery` per keystroke — that's a
+    /// @Published on the monolithic AppState, so each key re-evaluated the
+    /// whole shell (the exact cost the local-@State field exists to avoid).
+    /// The committed-query publish happens in `runSearchNow` when the
+    /// debounce fires / Return commits.
     private func handleSearchTextChange(_ newValue: String) {
+        // Kill any pending run FIRST — a backspace-to-empty must not let a
+        // stale keystroke's debounce fire after the field cleared.
+        searchDebounce?.cancel()
+        // Matches the committed query → this is the programmatic-injection
+        // echo (the searchQuery → searchText sync below) — nothing to run.
         guard newValue != appState.searchQuery else { return }
-        appState.searchQuery = newValue
         if newValue.isEmpty {
             appState.clearSearch()
         } else {
-            searchDebounce?.cancel()
             searchDebounce = Task {
                 try? await Task.sleep(nanoseconds: 250_000_000)
                 if !Task.isCancelled { runSearchNow(newValue) }
@@ -553,11 +579,17 @@ struct ContentView: View {
         let allFolders = (scope == .all)
         guard appState.searchAllFolders != allFolders else { return }
         appState.searchAllFolders = allFolders
-        let q = appState.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Re-run the FIELD text, not the committed searchQuery: with the
+        // deferred commit, a scope toggle mid-debounce would otherwise re-run
+        // the stale committed query AND cancel the newer typed one.
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         if appState.isSearchActive, !q.isEmpty { runSearchNow(q) }
     }
 
     private func runSearchNow(_ query: String) {
+        searchDebounce?.cancel()
+        // Commit the query to AppState here (once per run, not per keystroke).
+        if appState.searchQuery != query { appState.searchQuery = query }
         Task { await appState.runSearch(query) }
     }
 
