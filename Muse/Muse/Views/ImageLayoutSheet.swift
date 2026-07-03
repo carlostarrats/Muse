@@ -48,7 +48,7 @@ struct ImageLayoutSheet: View {
             }
         }
         .padding(28)
-        .frame(width: 600, height: 720)
+        .windowFittedSheetHeight(width: 600, ideal: 720)
     }
 
     // MARK: - Common Sizes
