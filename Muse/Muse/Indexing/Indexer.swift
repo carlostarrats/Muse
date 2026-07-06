@@ -477,6 +477,89 @@ actor Indexer {
         }
     }
 
+    // MARK: - Discovery decision (pure)
+
+    /// The discovery-time decision for a single enumerated file. There is
+    /// deliberately no `.changed` case — whether edited bytes are genuinely new
+    /// content is not knowable at discovery (it needs the hash); that belongs to
+    /// `reconcile`, AFTER hashing. Discovery is skip / hash / skip-dataless only.
+    enum IndexDecision: Equatable {
+        case unchanged      // known + alive + hash present + (iCloud OR local size&mtime match) → no hashing
+        case needsHashing   // unknown path / missing file row / NULL content_hash / local size|mtime mismatch → hash
+        case skipDataless   // dataless iCloud placeholder — no local bytes to hash yet
+    }
+
+    /// The stored identity of an alive path, read from the DB. Packaged as a
+    /// pure value so `decideIndexAction` needs no queue and is exhaustively
+    /// unit-testable. A `nil` StoredIdentity means "no alive path / null
+    /// file_id / missing file row" — the old read guards that returned nil.
+    struct StoredIdentity: Equatable {
+        let fileID: String
+        let contentHash: String?
+        let size: Int64?
+        let mtime: Int64?
+        let lastSeen: Int64
+    }
+
+    /// Pure discovery decision — replicates the old `isUnchanged` + the
+    /// discovery loop's dataless/force pre-checks EXACTLY, with NO side effects
+    /// (the `last_seen` touch is handled by the caller so it can be batched).
+    ///
+    /// Ordering is load-bearing:
+    ///   1. dataless FIRST (skipped before force, before any compare)
+    ///   2. force → hash (ignores stored metadata)
+    ///   3. no stored identity → hash
+    ///   4. NULL content_hash → hash (iCloud AND local, BEFORE the iCloud trust)
+    ///   5. iCloud (isUbiquitous) → trust the stored hash; size/mtime IGNORED
+    ///   6. local → require EXACT size AND mtime match, else hash
+    static func decideIndexAction(
+        isDataless: Bool,
+        force: Bool,
+        isUbiquitous: Bool,
+        stored: StoredIdentity?,
+        onDiskSize: Int64?,
+        onDiskMtime: Int64?
+    ) -> IndexDecision {
+        if isDataless { return .skipDataless }
+        if force { return .needsHashing }
+        guard let stored else { return .needsHashing }
+        guard stored.contentHash != nil else { return .needsHashing }
+        if isUbiquitous { return .unchanged }
+        guard stored.size == onDiskSize, stored.mtime == onDiskMtime else { return .needsHashing }
+        return .unchanged
+    }
+
+    /// Batched fast-path read: the stored identity of every enumerated path in
+    /// ONE chunked `IN (...)` join per ~800 paths, instead of a read transaction
+    /// per file. Returns absPath → StoredIdentity for alive paths that have a
+    /// file row (the join `ON f.id = p.file_id` excludes null-file_id / missing
+    /// rows — the old read's nil guards). Fail-safe: a chunk whose read throws
+    /// contributes nothing, so those paths fall through to `.needsHashing`.
+    static func loadStoredIdentities(absPaths: [String],
+                                     queue: DatabaseQueue) -> [String: StoredIdentity] {
+        var map: [String: StoredIdentity] = [:]
+        map.reserveCapacity(absPaths.count)
+        for start in stride(from: 0, to: absPaths.count, by: 800) {
+            let chunk = Array(absPaths[start..<min(start + 800, absPaths.count)])
+            let rows = (try? queue.read { db -> [Row] in
+                let marks = databaseQuestionMarks(count: chunk.count)
+                return try Row.fetchAll(db, sql: """
+                    SELECT p.absolute_path AS ap, f.id AS fid, f.content_hash AS ch,
+                           f.size_bytes AS sz, f.modified_at AS mt, f.last_seen_at AS ls
+                    FROM paths p JOIN files f ON f.id = p.file_id
+                    WHERE p.is_alive = 1 AND p.absolute_path IN (\(marks))
+                    """, arguments: StatementArguments(chunk))
+            }) ?? []
+            for r in rows {
+                guard let ap: String = r["ap"], let fid: String = r["fid"] else { continue }
+                let ls: Int64 = r["ls"]   // files.last_seen_at is INTEGER NOT NULL
+                map[ap] = StoredIdentity(fileID: fid, contentHash: r["ch"],
+                                         size: r["sz"], mtime: r["mt"], lastSeen: ls)
+            }
+        }
+        return map
+    }
+
     // MARK: - Fast-path helpers
 
     /// Dataless iCloud placeholder — no local bytes to hash yet.
@@ -502,33 +585,36 @@ actor Indexer {
     ///   the whole folder on every visit. An already-hashed iCloud file is
     ///   trusted as unchanged instead. (Genuine edits arrive via sync and the
     ///   folder watcher, not by polling metadata here.)
-    private static func isUnchanged(absPath: String, sizeBytes: Int64?,
-                                    modifiedAt: Int64?, isUbiquitous: Bool,
-                                    now: Int64, queue: DatabaseQueue) -> Bool {
-        struct Known { let fileID: String; let lastSeen: Int64 }
-        let known: Known? = (try? queue.read { db -> Known? in
+    /// Delegates the decision to the pure `decideIndexAction` (shared with the
+    /// batched discovery in `indexBatch`, so the two can never diverge) and owns
+    /// only the DB read + the `last_seen_at` retention touch. Callers reach here
+    /// only for non-dataless, non-force files. `internal` (not `private`) so the
+    /// DB-backed wrapper tests can exercise it directly.
+    static func isUnchanged(absPath: String, sizeBytes: Int64?,
+                            modifiedAt: Int64?, isUbiquitous: Bool,
+                            now: Int64, queue: DatabaseQueue) -> Bool {
+        let stored: StoredIdentity? = (try? queue.read { db -> StoredIdentity? in
             guard let path = try PathRow
                     .filter(PathRow.Columns.absolute_path == absPath)
                     .filter(PathRow.Columns.is_alive == 1)
                     .fetchOne(db),
                   let fid = path.file_id,
-                  let file = try FileRow.filter(FileRow.Columns.id == fid).fetchOne(db),
-                  file.content_hash != nil
+                  let file = try FileRow.filter(FileRow.Columns.id == fid).fetchOne(db)
             else { return nil }
-            // iCloud: trust the existing hash (metadata is unreliable).
-            if isUbiquitous {
-                return Known(fileID: fid, lastSeen: file.last_seen_at)
-            }
-            // Local: require an exact size + mtime match.
-            guard file.size_bytes == sizeBytes, file.modified_at == modifiedAt
-            else { return nil }
-            return Known(fileID: fid, lastSeen: file.last_seen_at)
+            return StoredIdentity(fileID: fid, contentHash: file.content_hash,
+                                  size: file.size_bytes, mtime: file.modified_at,
+                                  lastSeen: file.last_seen_at)
         }) ?? nil
-        guard let known else { return false }
-        if now - known.lastSeen > 86_400 {
+
+        let decision = decideIndexAction(
+            isDataless: false, force: false, isUbiquitous: isUbiquitous,
+            stored: stored, onDiskSize: sizeBytes, onDiskMtime: modifiedAt)
+        guard decision == .unchanged else { return false }
+
+        if let stored, now - stored.lastSeen > 86_400 {
             try? queue.write { db in
                 try db.execute(sql: "UPDATE files SET last_seen_at = ? WHERE id = ?",
-                               arguments: [now, known.fileID])
+                               arguments: [now, stored.fileID])
             }
         }
         return true
@@ -565,24 +651,54 @@ actor Indexer {
         // (still skipping dataless placeholders, which have no bytes).
         var work: [(URL, AssetKind)] = []
         work.reserveCapacity(urls.count)
+
+        // One batched read of the whole folder's stored identities (skipped in
+        // force mode, which re-hashes everything regardless of stored metadata).
+        let storedByPath: [String: StoredIdentity] = force
+            ? [:]
+            : Self.loadStoredIdentities(absPaths: urls.map { $0.0.standardizedFileURL.path },
+                                        queue: queue)
+
+        var staleFileIDs: [String] = []
         for (url, kind) in urls {
-            if Self.isDataless(url) { continue }
-            if force { work.append((url, kind)); continue }
+            let dataless = Self.isDataless(url)
             // An iCloud item reports a downloading status; a plain local file
             // reports nil. iCloud size/mtime can't be trusted as a change
-            // signal (it oscillates on sync), so isUnchanged trusts the hash.
-            let isUbiquitous = (try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]))?
-                .ubiquitousItemDownloadingStatus != nil
+            // signal (it oscillates on sync), so decideIndexAction trusts the hash.
+            // Skipped in force mode (→ needsHashing regardless), matching the old
+            // loop's force short-circuit so the iCloud verify pass does no extra reads.
+            let isUbiquitous = force ? false
+                : (try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]))?
+                    .ubiquitousItemDownloadingStatus != nil
             let absPath = url.standardizedFileURL.path
-            let rv = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+            let rv = force ? nil : try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
             let sizeBytes = rv?.fileSize.map { Int64($0) }
             let modifiedAt = rv?.contentModificationDate.map { Int64($0.timeIntervalSince1970) }
-            if Self.isUnchanged(absPath: absPath, sizeBytes: sizeBytes,
-                                modifiedAt: modifiedAt, isUbiquitous: isUbiquitous,
-                                now: now, queue: queue) {
+            let stored = storedByPath[absPath]
+
+            switch Self.decideIndexAction(isDataless: dataless, force: force,
+                                          isUbiquitous: isUbiquitous, stored: stored,
+                                          onDiskSize: sizeBytes, onDiskMtime: modifiedAt) {
+            case .skipDataless:
+                continue
+            case .needsHashing:
+                work.append((url, kind))
+            case .unchanged:
+                if let stored, now - stored.lastSeen > 86_400 { staleFileIDs.append(stored.fileID) }
                 continue
             }
-            work.append((url, kind))
+        }
+
+        // One batched last_seen touch for every unchanged-but-stale file.
+        if !staleFileIDs.isEmpty {
+            try? await queue.write { db in
+                for start in stride(from: 0, to: staleFileIDs.count, by: 800) {
+                    let chunk = Array(staleFileIDs[start..<min(start + 800, staleFileIDs.count)])
+                    let marks = databaseQuestionMarks(count: chunk.count)
+                    try db.execute(sql: "UPDATE files SET last_seen_at = ? WHERE id IN (\(marks))",
+                                   arguments: StatementArguments([now] + chunk))
+                }
+            }
         }
         guard !work.isEmpty else { return [] }
 
