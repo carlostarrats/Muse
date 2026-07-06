@@ -109,9 +109,50 @@ struct GridView: View {
                     .contentShape(Rectangle())
                     .onTapGesture { appState.clearSelection() }
                 VStack(alignment: .leading, spacing: 0) {
-                    // Page Up / Page Down scrolls the grid a screenful at a
-                    // time. Inactive while a hero viewer covers the grid.
-                    PageScrollCatcher(isActive: { appState.selectedFile == nil })
+                    // Keyboard navigation for the grid:
+                    // • plain arrows MOVE the highlighted tile (+ auto-scroll),
+                    // • plain Space OPENS it (hero viewer / navigate-in), same as
+                    //   double-click,
+                    // • Fn+arrow / Page keys page-scroll (unchanged).
+                    // Inactive while a hero viewer covers the grid. The frames
+                    // array is the FULL precomputed masonry (index-aligned with
+                    // visibleFiles), so navigating to an off-screen tile has a
+                    // valid frame with no full-set materialization — virtualization
+                    // is untouched.
+                    PageScrollCatcher(
+                        isActive: { appState.selectedFile == nil },
+                        onArrow: { direction in
+                            let files = appState.visibleFiles
+                            guard !files.isEmpty, !frames.isEmpty else { return nil }
+                            let current = appState.currentKeyboardIndex(order: files)
+                            // Band tolerance = the column width (uniform across the
+                            // masonry) so a tile within one column-width of the
+                            // nearest row-band top counts as that row.
+                            let band = frames.first?.width ?? 1
+                            guard let newIndex = GridKeyboardNav.next(
+                                    currentIndex: current, direction: direction,
+                                    frames: frames, bandTolerance: band),
+                                  newIndex < files.count else { return nil }
+                            appState.keyboardSelect(
+                                path: files[newIndex].url.standardizedFileURL.path)
+                            let f = frames[newIndex]
+                            return KeyboardScrollTarget(
+                                tileTopInViewport: canvasMinY + f.minY,
+                                tileHeight: f.height)
+                        },
+                        onSpace: {
+                            let files = appState.visibleFiles
+                            guard let idx = appState.currentKeyboardIndex(order: files),
+                                  idx < files.count else { return }
+                            let file = files[idx]
+                            // Exact double-click path: a folder navigates in, a
+                            // file opens the hero viewer. NO Quick Look.
+                            if file.kind == .folder {
+                                appState.openSubfolder(file.url)
+                            } else {
+                                appState.selectedFile = file
+                            }
+                        })
                         .frame(width: 0, height: 0)
                         .accessibilityHidden(true)
                     // Clicking anywhere outside the grid (sidebar, search,

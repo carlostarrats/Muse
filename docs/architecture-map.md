@@ -249,8 +249,10 @@ Muse/Muse/
                                    subset and hide when empty
     OutsideClickDeselect.swift     0×0 NSView + window monitor clearing selection on any click
                                    outside the grid's scroll view
-    PageScrollCatcher.swift        first-responder NSView giving the grid + Collections page native
-                                   Page Up/Down via PageScroll math
+    PageScrollCatcher.swift        first-responder NSView owning the grid's keyboard: plain arrows MOVE
+                                   the highlight (GridKeyboardNav) + auto-scroll (GridScrollReveal),
+                                   plain Space OPENS (double-click path), Fn+arrow / Page Up/Down page
+                                   via PageScroll math; everything else forwards down the chain
     ShareCollectionButton.swift    in-collection header menu — Save to… / Share / Share Drive Link;
                                    builds an 11×14 paginated PDF. exportURLs = visibleFiles minus folders
                                    (the on-screen filtered grid). Passes imageLayout.aspect +
@@ -328,6 +330,11 @@ Muse/Muse/
     MasonryGeometry.swift          pure masonry packing (frames + height) from aspect ratios — feeds
                                    GridView's virtualization. captionHeight param reserves a per-tile
                                    caption strip
+    GridKeyboardNav.swift          pure arrow-move index math over the masonry frames: ←/→ = ±1 in
+                                   reading order (wrap+clamp), ↑/↓ = nearest row-band then closest
+                                   horizontal centre. Feeds PageScrollCatcher's onArrow. Unit-tested
+    GridScrollReveal.swift         pure clip-view "scroll the highlighted tile into view" math
+                                   (flipped coords, margin, top/bottom clamp). Unit-tested
   Backup/                          Library Backup & Restore. Export one self-contained `.muselibrary`
                                    file + reconnect it on another Mac by content hash
     BackupArchive.swift            pure Codable model; reuses Sidecar for per-file metadata.

@@ -5275,3 +5275,42 @@ the extension is LOCKED** (no `AssetKind` reclassification).
 Build + `MuseTests` (524, +19: 14 `FileNameSplit` + 4 `FileMover.rename` + 1
 same-dir migration guard) + UI tests green. Runtime (disk rename + tag/collection
 carry + collision alert) owner-verified in the running app.
+
+### Grid keyboard navigation + spacebar-open — 2026-07-06 (on `feat/next-115`)
+
+Third of the approved 2026-07 review items (spec + plan in
+`docs/superpowers/{specs,plans}/2026-07-06-grid-keyboard-nav.*`). Plain ↑↓←→ now
+MOVE a single highlighted tile (grid auto-scrolls to keep it visible) and Space
+OPENS it in the hero viewer — replacing the old plain-arrow line-scroll. Fn+arrow
+/ Page Up/Down page-scroll unchanged.
+
+- **Two pure, unit-tested components** (mirroring `MasonryGeometry`/`GridSelection`):
+  `GridKeyboardNav` (←/→ = ±1 reading order with wrap+clamp; ↑/↓ = nearest
+  row-band then closest horizontal centre — 12 tests) and `GridScrollReveal`
+  (clip-view reveal math with margin + top/bottom clamp — 6 tests).
+- **Thin wiring:** `AppState.currentKeyboardIndex(order:)`/`keyboardSelect(path:)`
+  reuse the existing `selectionAnchor` as the "current tile" (no new `@Published`);
+  `GridView` supplies `onArrow`/`onSpace` over the FULL precomputed `frames`
+  (index-aligned with `visibleFiles`, so off-screen nav has a valid frame with no
+  full-set materialization — virtualization untouched). A folder tile navigates
+  in; a file opens the hero viewer (NO Quick Look).
+- **The `.function` gotcha (runtime bug, owner-caught then fixed).** First cut
+  detected paging via `(fn && arrowKey)` and judged "plain" against a set that
+  INCLUDED `.function`. But the arrow keys THEMSELVES carry `.function` (+
+  `.numericPad`) inherently — so plain ↑/↓ read as Fn+arrow → page-scrolled, and
+  plain ←/→ failed the empty-modifier test → dead-forwarded (no move). Fix:
+  paging is detected by the dedicated keycodes (116/121) ALONE (physical Fn+Up/Down
+  remaps to those at the OS layer), and "plain" is judged against `[.command,
+  .option, .control, .shift]` only. Now a durable-constraints line in CLAUDE.md so
+  it can't be reintroduced.
+- **Masonry ←/→ is sequential, not spatial (by design, owner-confirmed OK).**
+  Because the packer fills the shortest column first (`MasonryGeometry`), "next
+  photo" (index +1) isn't always the visual-right tile — it can read as a jump
+  left/down. ←/→ = previous/next in order (guarantees every tile is reachable);
+  ↑/↓ stay spatial. Kept sequential deliberately (pure-spatial ←/→ can strand
+  tiles in a ragged masonry).
+
+No new user-facing strings (space-open reuses the tile's existing default
+accessibility action). Build + `MuseTests` (542, +18: 12 `GridKeyboardNav` + 6
+`GridScrollReveal`) + UI tests green. Runtime (arrow move/wrap/edge, Space-open,
+Fn/Page paging still works) owner-verified in the running app.

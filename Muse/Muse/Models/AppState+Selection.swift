@@ -75,4 +75,24 @@ extension AppState {
         // view is never silently dropped from an action.
         return paths.map { byPath[$0] ?? URL(fileURLWithPath: $0) }
     }
+
+    /// The index of the current highlighted tile within `files` (the grid
+    /// order), derived from the selection anchor — the "current tile" for
+    /// keyboard nav, deliberately distinct from the multi-select Set and already
+    /// maintained on every click by GridSelection.apply. nil when nothing is
+    /// highlighted yet (the first arrow then selects tile 0).
+    func currentKeyboardIndex(order files: [FileNode]) -> Int? {
+        guard let anchor = selectionAnchor else { return nil }
+        return files.firstIndex { $0.url.standardizedFileURL.path == anchor }
+    }
+
+    /// Collapse the selection to exactly the highlighted tile and record it as
+    /// the current tile. A plain arrow always yields a single-file selection;
+    /// the anchor becomes the new highlight so the next arrow moves relative to
+    /// it. This narrows the selection to a visible file (never widens it), so no
+    /// pruning is needed.
+    func keyboardSelect(path: String) {
+        selectedFiles = [path]
+        selectionAnchor = path
+    }
 }
