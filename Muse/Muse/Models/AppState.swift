@@ -377,8 +377,14 @@ final class AppState: ObservableObject {
     /// iCloud home; Rename is gated to non-iCloud folders by the callers.
     @Published var newSubfolderRequest: FolderNode?
     @Published var folderRenameRequest: FolderNode?
+    /// A pending FILE-rename modal target (single file). Seeds the rename field's
+    /// stem draft; mirrors folderRenameRequest for folders.
+    @Published var fileRenameRequest: FileNode?
     /// Set to a message to surface a folder-op failure alert.
     @Published var folderOpError: String?
+    /// User-facing file-rename error (collision / invalid name / IO). Drives a
+    /// one-button alert; nil when dismissed.
+    @Published var fileRenameError: String?
     /// Set to a message to surface a backup export/restore failure alert. A
     /// silent failure here is dangerous — the user would believe a backup
     /// succeeded (or that a restore file is fine) when it isn't.

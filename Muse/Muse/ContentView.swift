@@ -281,6 +281,15 @@ struct ContentView: View {
         }
         .modifier(NameCollectionAlert())
         .modifier(CollectionRenameAlert())
+        .modifier(FileRenameAlert())
+        .alert("Rename File", isPresented: Binding(
+            get: { appState.fileRenameError != nil },
+            set: { if !$0 { appState.fileRenameError = nil } }
+        )) {
+            Button("OK", role: .cancel) { appState.fileRenameError = nil }
+        } message: {
+            Text(appState.fileRenameError ?? "")
+        }
         // Preload the tag-label list for the selection menu, and keep it fresh
         // as tags change.
         .task { appState.refreshTagLabels() }
@@ -860,6 +869,48 @@ private struct CollectionRenameAlert: ViewModifier {
             }
             .onChange(of: appState.collectionRenameAlertRequest?.id) { _, id in
                 if id != nil { draft = appState.collectionRenameAlertRequest?.currentName ?? "" }
+            }
+    }
+}
+
+/// The FILE rename prompt — same local-`@State` draft trick as the folder/
+/// collection prompts so typing doesn't re-evaluate the whole ContentView. The
+/// field holds only the STEM (base name); the locked extension is re-appended
+/// inside AppState.renameFile. Seeded with the file's stem on open, keyed on the
+/// request's `id` so re-targeting the same file re-seeds (closing passes nil).
+private struct FileRenameAlert: ViewModifier {
+    @EnvironmentObject private var appState: AppState
+    @State private var draft = ""
+
+    func body(content: Content) -> some View {
+        content
+            .alert("Rename File", isPresented: Binding(
+                get: { appState.fileRenameRequest != nil },
+                set: { if !$0 { appState.fileRenameRequest = nil } }
+            )) {
+                TextField("Name", text: $draft)
+                Button("Rename") {
+                    if let node = appState.fileRenameRequest {
+                        appState.fileRenameRequest = nil
+                        appState.renameFile(node, to: draft)
+                    }
+                }
+                Button("Cancel", role: .cancel) { appState.fileRenameRequest = nil }
+            } message: {
+                let ext = FileNameSplit.split(appState.fileRenameRequest?.basename ?? "").ext
+                // Separate Text literals (not a ternary) so each stays a
+                // LocalizedStringKey — a ternary with an interpolated branch can
+                // resolve to the non-localizing String overload (CLAUDE.md trap).
+                if ext.isEmpty {
+                    Text("Renames the file.")
+                } else {
+                    Text("The “\(ext)” extension is kept.")
+                }
+            }
+            .onChange(of: appState.fileRenameRequest?.id) { _, id in
+                if id != nil {
+                    draft = FileNameSplit.split(appState.fileRenameRequest?.basename ?? "").stem
+                }
             }
     }
 }

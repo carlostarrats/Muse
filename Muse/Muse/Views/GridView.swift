@@ -354,6 +354,7 @@ struct GridView: View {
                             Divider()
                             if single {
                                 OpenWithMenu(url: file.url)
+                                Button("Rename…") { appState.requestRenameFile(file) }
                                 if appState.activeCollectionID != nil {
                                     Button("Set as Collection Cover") {
                                         appState.setCollectionCover(file)
@@ -406,6 +407,9 @@ struct GridView: View {
                         reveal: {
                             NSWorkspace.shared.activateFileViewerSelecting([file.url])
                         })
+                    .fileTileActions(file.kind != .folder) {
+                        appState.requestRenameFile(file)
+                    }
             }
         }
         .frame(width: layoutWidth, height: totalHeight, alignment: .topLeading)
@@ -927,6 +931,18 @@ private extension View {
                     .accessibilityAction(named: Text("New Subfolder")) { newSubfolder() }
                     .accessibilityAction(named: Text("Reveal in Finder")) { reveal() }
             }
+        } else {
+            self
+        }
+    }
+
+    /// Adds Rename as a named VoiceOver action on FILE tiles (a no-op for folder
+    /// cards, which carry their own folderCardActions). Gives the mouse-only
+    /// right-click Rename a keyboard/VoiceOver-reachable parallel.
+    @ViewBuilder
+    func fileTileActions(_ isFile: Bool, rename: @escaping () -> Void) -> some View {
+        if isFile {
+            self.accessibilityAction(named: Text("Rename")) { rename() }
         } else {
             self
         }

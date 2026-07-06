@@ -5234,3 +5234,44 @@ CPU/battery savings, no user-visible change.
   Color fidelity verified in the running app (no shift on a fresh-thumbnail folder).
 
 Build + `MuseTests` (505, +2) + UI tests green.
+
+### In-app file rename — 2026-07-06 (on `feat/next-115`)
+
+Second of the approved 2026-07 review items (spec + plan in
+`docs/superpowers/{specs,plans}/2026-07-06-file-rename.*`). Rename a single FILE
+from the grid tile's right-click context menu (single-selection only) — closing
+the most conspicuous gap vs folders, which already renamed. **Base name only;
+the extension is LOCKED** (no `AssetKind` reclassification).
+
+- **A rename is a same-dir move, so it reuses the move seam verbatim.** New
+  `AppState.renameFile` (`Models/AppState+FileOps.swift`): validate → collision-
+  refuse (names the file, never overwrites/auto-suffixes) → off-main disk rename
+  via the new **`FileMover.rename`** (the ONLY sanctioned `FileManager.moveItem`
+  for a rename; case-only `Photo.jpg`→`photo.jpg` allowed, not a self-collision)
+  → **`FileMoveMigration.apply` reused unchanged** (same-dir case already
+  repoints the path row and — since `oldDir == newDir` — skips tag re-scoping;
+  manual tags stay under `(file_id, parent_dir)`, collection memberships carry
+  because `collection_members` is keyed `(collection_id, file_id)`, not path) →
+  `reloadAfterMove` (clears selection, dismisses a hero on the old path,
+  re-resolves the active collection, reloads the folder).
+- **Pure `FileNameSplit`** (`Filesystem/FileNameSplit.swift`, tested first):
+  split into (stem, LOCKED ext = last dot-suffix; `archive.tar.gz`→`.gz`),
+  recombine, and shape-validate (empty / `/`/`:` / would-hide-a-non-dotfile;
+  an already-hidden `.gitignore` may keep its leading dot).
+- **UI:** context-menu `Rename…` (inside the existing `if single` block), a
+  local-`@State` `FileRenameAlert` modal (field holds only the stem; the locked
+  ext is re-appended in `renameFile`; seeded on open keyed on the request `id`,
+  like the folder/collection prompts — never bind the `TextField` to a
+  `@Published`), a one-button error alert, and a parallel `fileTileActions`
+  VoiceOver "Rename" action. French localized (13 strings).
+- **Deviation from spec (noted):** the spec typed the disk primitive
+  `Result<URL, Void>`, which doesn't compile (`Void` isn't `Error`); realized as
+  `URL?` (new URL / `nil`), the minimal faithful form — `renameFile` builds its
+  own error copy and needs no failure payload.
+- **Review hardening:** the modal message uses separate `Text` literals (not a
+  ternary with an interpolated branch, which can resolve to the non-localizing
+  `String` overload).
+
+Build + `MuseTests` (524, +19: 14 `FileNameSplit` + 4 `FileMover.rename` + 1
+same-dir migration guard) + UI tests green. Runtime (disk rename + tag/collection
+carry + collision alert) owner-verified in the running app.

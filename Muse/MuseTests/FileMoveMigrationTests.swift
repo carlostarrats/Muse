@@ -97,6 +97,24 @@ final class FileMoveMigrationTests: XCTestCase {
         }
     }
 
+    func testSameDirRenameRepointsPathAndKeepsTagsInPlace() throws {
+        let q = try freshQueue()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at) VALUES ('f1','h1','image',0)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('p1','f1','/a/old.png',1)")
+            try db.execute(sql: "INSERT INTO tags (id, file_id, label, source, confidence, parent_dir) VALUES ('t1','f1','blue','manual',NULL,'/a')")
+
+            // A rename is a move whose destination dir equals the source dir.
+            try FileMoveMigration.apply(db, moves: [(from: "/a/old.png", to: "/a/new.png")])
+        }
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT absolute_path FROM paths WHERE id='p1'"), "/a/new.png")
+            // Same parent dir -> the tag row is untouched (not duplicated, not moved).
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tags WHERE file_id='f1' AND parent_dir='/a' AND label='blue' AND source='manual'"), 1)
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tags WHERE file_id='f1'"), 1)
+        }
+    }
+
     func testUnindexedFileIsSkipped() throws {
         let q = try freshQueue()
         try q.write { db in

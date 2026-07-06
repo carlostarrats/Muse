@@ -1,6 +1,86 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "A file name can’t contain “/” or “:”.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un nom de fichier ne peut pas contenir « / » ni « : »."
+          }
+        }
+      }
+    },
+    "A file named “%@” already exists in this folder.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un fichier nommé « %@ » existe déjà dans ce dossier."
+          }
+        }
+      }
+    },
+    "Couldn’t rename the file.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de renommer le fichier."
+          }
+        }
+      }
+    },
+    "Please enter a name.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Veuillez saisir un nom."
+          }
+        }
+      }
+    },
+    "Rename File": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renommer le fichier"
+          }
+        }
+      }
+    },
+    "Renames the file.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renomme le fichier."
+          }
+        }
+      }
+    },
+    "That name would hide the file. A name starting with a dot makes the file hidden.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce nom masquerait le fichier. Un nom commençant par un point rend le fichier invisible."
+          }
+        }
+      }
+    },
+    "The “%@” extension is kept.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’extension « %@ » est conservée."
+          }
+        }
+      }
+    },
     "": {
       "localizations": {
         "fr": {
