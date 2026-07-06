@@ -243,6 +243,7 @@ struct ContentView: View {
         }
         .sheet(isPresented: $appState.settingsShown) {
             SettingsView(isPresented: $appState.settingsShown)
+                .environmentObject(appState)
         }
         .sheet(isPresented: $appState.driveSharesShown) {
             ManageDriveSharesView()

@@ -41,6 +41,7 @@ struct SidebarView: View {
     /// When on, the sidebar shows a second COLLECTIONS section beneath FOLDERS.
     /// Off = the sidebar is exactly the original folders-only experience.
     @AppStorage(AppSettings.showCollectionsInSidebarKey) private var showCollectionsInSidebar = true
+    @AppStorage(AppSettings.showICloudFolderInSidebarKey) private var showICloudFolder = true
     @ObservedObject private var collectionsEngine = CollectionsEngine.shared
     // Plain @State (seeded from + persisted to UserDefaults) rather than
     // @AppStorage so the collapse can animate via `withAnimation` — a
@@ -119,7 +120,17 @@ struct SidebarView: View {
             // The iCloud "Muse" folder is the fixed home — always on top, not
             // reorderable. It sits in the normal row rhythm (VStack spacing) with
             // the local folders below it, no extra separating gap.
-            if let icloud = iCloudNode {
+            // The user may hide the iCloud row from the sidebar ONLY while it's
+            // empty (Settings → Sidebar); a folder with files always shows. The
+            // gate reads the live recursive count, not just the persisted flag,
+            // so a folder that gains files reappears on its own. (iCloudNode
+            // being non-nil already means iCloud is configured.)
+            if let icloud = iCloudNode,
+               ICloudSidebarVisibility.rowVisible(
+                   ICloudSidebarVisibility.presence(
+                       configured: true,
+                       recursiveFileCount: appState.folderStats.stat(for: icloud.url)?.recursiveFileCount),
+                   showSetting: showICloudFolder) {
                 FolderTreeNode(node: icloud, depth: 0,
                                topLevelCount: topLevelCount(for: icloud))
             }

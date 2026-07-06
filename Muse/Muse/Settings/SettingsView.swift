@@ -14,12 +14,36 @@ import SwiftUI
 struct SettingsView: View {
     @Binding var isPresented: Bool
     @EnvironmentObject private var googleAuth: GoogleOAuth
+    @EnvironmentObject private var appState: AppState
     @AppStorage(AppSettings.autoTagKey) private var autoTag = true
     @AppStorage(AppSettings.autoCollectionsKey) private var autoCollections = true
     @AppStorage(AppSettings.showFileNamesKey) private var showFileNames = false
     @AppStorage(AppSettings.showStarsOnGridKey) private var showStarsOnGrid = true
     @AppStorage(AppSettings.showCollectionsInSidebarKey) private var showCollectionsInSidebar = true
+    @AppStorage(AppSettings.showICloudFolderInSidebarKey) private var showICloudFolder = true
     @State private var authBusy = false
+
+    /// Live iCloud folder state, driving the Show-iCloud toggle's enabled state
+    /// and footer note.
+    private var iCloudPresence: ICloudSidebarVisibility.Presence {
+        ICloudSidebarVisibility.presence(
+            configured: appState.iCloudFolderURL != nil,
+            recursiveFileCount: appState.iCloudFolderURL
+                .flatMap { appState.folderStats.stat(for: $0)?.recursiveFileCount })
+    }
+
+    /// Footer note beneath the Show-iCloud toggle — explains the disabled/hidden
+    /// state in each iCloud presence case.
+    @ViewBuilder private var iCloudFooterNote: some View {
+        switch iCloudPresence {
+        case .hasFiles:
+            Text("The iCloud folder contains files, so it can't be hidden.")
+        case .notConfigured:
+            Text("iCloud isn't set up, so the folder isn't in the sidebar. It'll appear here when iCloud is available.")
+        case .empty, .unknown:
+            Text("Hide the empty iCloud folder from the sidebar. It reappears automatically if files are added.")
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -67,12 +91,17 @@ struct SettingsView: View {
 
             Section {
                 Toggle("Show Collections in the Sidebar", isOn: $showCollectionsInSidebar)
+                Toggle("Show iCloud Folder in the Sidebar", isOn: $showICloudFolder)
+                    .disabled(ICloudSidebarVisibility.toggleDisabled(iCloudPresence))
             } header: {
                 Text("Sidebar")
             } footer: {
-                Text("Show your collections as a collapsible section beneath the folders, with their own sort order.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Show your collections as a collapsible section beneath the folders, with their own sort order.")
+                    iCloudFooterNote
+                }
+                .font(.callout)
+                .foregroundStyle(.secondary)
             }
 
             Section {
@@ -119,4 +148,5 @@ struct SettingsView: View {
 #Preview {
     SettingsView(isPresented: .constant(true))
         .environmentObject(GoogleOAuth())
+        .environmentObject(AppState())
 }
