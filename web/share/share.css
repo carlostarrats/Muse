@@ -121,9 +121,12 @@ html, body {
   /* Fade in once loaded (the .loaded class is added in share.js on img load),
      so the thumbnail dissolves over its skeleton instead of popping in. */
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.3s ease, transform 0.18s ease;
 }
 .tile.loaded img { opacity: 1; }
+/* Hover state — a subtle zoom on the image signals it's clickable (opens the
+   lightbox). Only once loaded, so it never nudges the empty skeleton. */
+.tile.loaded:hover img { transform: scale(1.04); }
 .tile-name {
   font-size: 11px;
   line-height: 1.3;
@@ -169,6 +172,7 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   .tile::before { background-image: none; animation: none; }
   .tile img { transition: none; }
+  .tile.loaded:hover img { transform: none; }
 }
 
 /* State machine: show only what matches data-state. */
@@ -347,10 +351,9 @@ html.sizer-dragging, html.sizer-dragging * {
 .lightbox-name {
   max-width: 100%;
   font-size: 12px;
-  /* Opaque white + a dark text-shadow stays legible over the blurred page
-     regardless of which (possibly light) backdrop the viewer picked. */
+  /* Opaque white over the dark scrim (rgba(0,0,0,0.35) + blur) that always sits
+     behind the lightbox — legible on any backdrop the viewer picked. */
   color: #fff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
   text-align: center;
   overflow-wrap: anywhere;
   unicode-bidi: isolate;
