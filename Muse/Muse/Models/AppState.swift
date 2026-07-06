@@ -1185,7 +1185,7 @@ final class AppState: ObservableObject {
         // Don't re-sort search results; they maintain relevance ranking
         guard !isSearchActive else { return }
         let mode = sortMode, rev = sortReversed
-        guard mode == .dominantColor || mode == .shape else {
+        guard mode == .dominantColor || mode == .shape || mode == .rating else {
             // Pure in-memory compares — instant, keep synchronous.
             currentFiles = FolderOrdering.foldersFirst(
                 SmartSorter.apply(mode, to: currentFiles, reversed: rev))
@@ -1194,8 +1194,8 @@ final class AppState: ObservableObject {
             }
             return
         }
-        // Color/Shape are index-aware — SmartSorter does a synchronous GRDB
-        // fetch for them, so run those OFF the main actor and publish behind
+        // Color/Shape/Rating are index-aware — SmartSorter does a synchronous
+        // GRDB fetch for them, so run those OFF the main actor and publish behind
         // stale guards (a folder/collection switch, a search landing, or a
         // newer resort mid-sort must not be clobbered by this result).
         resortToken += 1

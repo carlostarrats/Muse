@@ -33,6 +33,8 @@ final class SortDirectionTests: XCTestCase {
         XCTAssertFalse(SortMode.size.defaultAscending)
         XCTAssertTrue(SortMode.name.defaultAscending)
         XCTAssertTrue(SortMode.kind.defaultAscending)
+        // Rating defaults to descending: highest-rated first.
+        XCTAssertFalse(SortMode.rating.defaultAscending)
     }
 
     func testDirectionLabelsAreModeAware() {
@@ -40,5 +42,7 @@ final class SortDirectionTests: XCTestCase {
         XCTAssertEqual(SortMode.dateModified.directionLabel(ascending: true), "Oldest first")
         XCTAssertEqual(SortMode.name.directionLabel(ascending: true), "A → Z")
         XCTAssertEqual(SortMode.size.directionLabel(ascending: false), "Largest first")
+        XCTAssertEqual(SortMode.rating.directionLabel(ascending: false), "Highest first")
+        XCTAssertEqual(SortMode.rating.directionLabel(ascending: true), "Lowest first")
     }
 }
