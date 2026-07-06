@@ -44,7 +44,10 @@ Muse/Muse/
     AppState+Search.swift          runSearch / clearSearch
     AppState+Mood.swift            moodPalette / setMood / updateAutoMoodTimer
     AppState+Watcher.swift         startWatching / handleFolderEvent
-    AppState+TagChips.swift        reloadTagChips / bumpTagChipToken
+    AppState+TagChips.swift        reloadTagChips / bumpTagChipToken (also calls
+                                   reloadStarRatings — ratings track chips 1:1)
+    AppState+Rating.swift          star ratings: reloadStarRatings (per-file badge
+                                   map, off-main), setRating(selection), uniformRating
     AppState+Starring.swift        toggleStar / openStarred
     AssetKind.swift                kind enum + extension/UTType detection; classify(url:)
                                    skips detect's fileExists stat. Last-resort ImageIO
@@ -64,6 +67,10 @@ Muse/Muse/
                                    comparator (name tiebreak, missing-stat last)
     TagSortMode.swift              tag-chip sort: .count (default) / .alphabetical;
                                    drives TagChipLoader.ordered(_:sortMode:)
+    StarRating.swift               pure star-rating helper: a rating is a manual tag
+                                   whose label is a run of ★ (U+2605) 1…5. label↔count,
+                                   isRating, front-sort, mutual-exclusion resolution.
+                                   Unit-tested (StarRatingTests)
     ImageLayout.swift              global grid layout: .masonry (default) + 11 fixed
                                    aspect-ratio cases; exposes aspect/iconKind/resolve.
                                    Unit-tested
@@ -142,7 +149,12 @@ Muse/Muse/
                                    library-wide rename kept, library-wide DELETE removed
     TagChipLoader.swift            shared query logic for grid tag-chip labels (fast single-
                                    folder GROUP BY + general per-file-scope path). Pure/
-                                   nonisolated; AppState owns + calls it
+                                   nonisolated; AppState owns + calls it. ordered() front-
+                                   sorts star-rating chips (highest first)
+    RatingLoader.swift             batched per-file star-rating map (path→1…5), same
+                                   (file_id,parent_dir) scope + chunked IN as TagChipLoader;
+                                   drives the tile badge. TagStore.setRating writes ratings
+                                   (mutually exclusive)
     Housekeeping.swift             launch prune: index data unreachable from any sidebar
                                    folder, unseen >180 days
   Localization/                    display-time localization. Storage stays canonical-

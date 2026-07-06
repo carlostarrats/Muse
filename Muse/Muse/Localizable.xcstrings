@@ -3372,16 +3372,6 @@
         }
       }
     },
-    "Show each file's name beneath its thumbnail in the grid.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Afficher le nom de chaque fichier sous sa vignette dans la grille."
-          }
-        }
-      }
-    },
     "Show file names": {
       "localizations": {
         "fr": {
@@ -4627,6 +4617,87 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ouvrez une collection et utilisez le bouton de partage de son en-tête. Enregistrer sous… dispose les images sous forme de PDF au format de papier que vous choisissez, et Partager transmet ce PDF par AirDrop, Mail ou Messages. Partager le lien Drive vous connecte à votre propre Google Drive, y téléverse les images et crée une page web soignée que tout le monde peut ouvrir dans un navigateur — chacun peut changer l'arrière-plan et l'imprimer en PDF au format de son choix. Muse demande à Google l'autorisation la plus restreinte : il ne peut accéder qu'aux fichiers qu'il crée dans votre Drive — jamais au reste — et les légendes que vous saisissez sont contenues dans le lien lui-même, pas sur un serveur. Rien ne parvient aux créateurs de Muse : la copie Drive va dans votre propre Drive. Retirez un lien plus tard depuis le menu Présentation — Gérer les partages Drive…. [Découvrez précisément comment fonctionne un lien de partage.](https://muse-share.pages.dev/privacy#how-it-works)"
+          }
+        }
+      }
+    },
+    "Rating": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Note"
+          }
+        }
+      }
+    },
+    "No Rating": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune note"
+          }
+        }
+      }
+    },
+    "RATING": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOTE"
+          }
+        }
+      }
+    },
+    "Rated %lld stars": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noté %lld étoiles"
+          }
+        }
+      }
+    },
+    "Rating removed": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Note supprimée"
+          }
+        }
+      }
+    },
+    "%lld-star rating": {
+      "comment": "VoiceOver: star rating of a photo",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "note de %lld étoiles"
+          }
+        }
+      }
+    },
+    "Show star ratings": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher les notes"
+          }
+        }
+      }
+    },
+    "Show each file's name beneath its thumbnail in the grid. Star ratings still show inside a collection and in the viewer.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher le nom de chaque fichier sous sa vignette dans la grille. Les notes restent visibles dans une collection et dans la visionneuse."
           }
         }
       }

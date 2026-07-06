@@ -354,6 +354,31 @@ struct MuseApp: App {
                 }
                 .disabled(appState.activeCollectionID == nil)
             }
+
+            // Menu-bar equivalent of the tile's Rating context menu so rating
+            // isn't mouse/right-click-only (keyboard + VoiceOver). Targets the
+            // current selection, mirroring "New Collection from Selection…".
+            // ⌘0 clears, ⌘1–⌘5 set (Apple Photos convention).
+            CommandMenu("Rating") {
+                Button("No Rating") {
+                    appState.setRating(nil, forSelectionFallback: "")
+                }
+                .keyboardShortcut("0", modifiers: .command)
+                .disabled(appState.selectedFiles.isEmpty)
+
+                Divider()
+
+                ForEach(1...StarRating.maxStars, id: \.self) { n in
+                    Button(StarRating.label(for: n) ?? "") {
+                        appState.setRating(n, forSelectionFallback: "")
+                    }
+                    .keyboardShortcut(KeyEquivalent(Character("\(n)")), modifiers: .command)
+                    .disabled(appState.selectedFiles.isEmpty)
+                    .accessibilityLabel(Text(String(format: NSLocalizedString(
+                        "%lld-star rating",
+                        comment: "VoiceOver: star rating of a photo"), n)))
+                }
+            }
         }
         // Settings is presented as an in-app modal sheet from ContentView
         // (see AppState.settingsShown), not the native Preferences window.
