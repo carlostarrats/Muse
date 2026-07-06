@@ -5345,3 +5345,51 @@ computed so the context-menu checkmark still works). FR localized.
 Build + `MuseTests` (554, +12: 10 `StarRating` + 2 `TagChipLoaderOrder` front-sort)
 + UI tests green. Runtime (set/change/remove, multi-select, ⌘1–5, collection vs
 main-grid badge gating, hero card) owner-verified in the running app.
+
+### Folder-open batch reads (P4 + P6) — 2026-07-06 (`feat/next-117`)
+
+Item 5 (last) of the approved 2026-07 review list; **completes the loop.** Spec +
+plan at `docs/superpowers/{specs,plans}/2026-07-06-folder-open-batch-reads.*`.
+Collapse the per-file DB read on folder open into one chunked `IN (...)` fetch per
+folder (P4, the biggest user-facing perf win — a fully-indexed 20k folder went
+from ~20k sequential read transactions on every open to ~25), and fold the
+path→fileID N+1 in the analyze pass into the same pattern (P6). **No behavior
+change** — identical per-file decisions, identical DB mutations, fewer
+transactions.
+
+- The load-bearing move: extract the discovery decision into ONE pure
+  `Indexer.decideIndexAction(isDataless:force:isUbiquitous:stored:onDiskSize:onDiskMtime:)`
+  (`IndexDecision` = unchanged/needsHashing/skipDataless; no `.changed` — that's
+  not knowable pre-hash, it belongs to `reconcile`). Both the retained single-file
+  `isUnchanged` wrapper and the new batched `indexBatch` discovery call it, so they
+  can't diverge. The iCloud-content-hash rule (size/mtime fast path is LOCAL-only;
+  NULL hash re-hashes even iCloud, checked BEFORE the trust branch) lives entirely
+  in that one function, exhaustively truth-tabled by `IndexerDecisionTests` (9).
+- `loadStoredIdentities` = one chunked join per 800 paths; the `last_seen` touch is
+  collected and written ONCE after discovery. `AnalyzePipeline.aliveFileIDs` +
+  pure `dedupByFileID` (first-seen URL order preserved) do the P6 fold in
+  `analyze(folder:)` + `exportSidecarsAfterTagEdit`.
+- Fail-safe direction preserved: a throwing chunk / missing row → absent from the
+  map → `.needsHashing` (does the work), never a silent skip. Alive `absolute_path`
+  is UNIQUE (`paths_alive_unique`) so the dict-keyed load matches the old `fetchOne`.
+- Build gotchas: the batched `last_seen` write is now in an async context →
+  `await queue.write` (the old per-file write was inside the sync `isUnchanged`);
+  the P6 helpers are `nonisolated` (AnalyzePipeline is `@MainActor`, they touch no
+  main-actor state).
+
+Owner-verified in the running app: a fully-indexed folder shows **no** "Indexing
+N of M" pill on reopen (the whole point). `MuseTests` 574 (+20: 9 decision, 9
+fast-path/batched, 2 resolve) + UI tests green; 9 `IndexerReconcileTests` untouched.
+
+**Grid stale-tile fix (found during the above verification).** Editing a file in
+place bumped its `modified_at`; the date-sorted grid reordered and an unrelated
+reused tile briefly wore the edited file's thumbnail — the virtualized grid
+`ForEach` is keyed by slot INDEX (`id: \.self`), so a slot rebinds to a different
+file while SwiftUI reuses the cell, and the cell's decoded `@State` bitmap outlived
+the rebind. Fix = a file-stable `.id(file.url…path)` on the tile so a rebind
+remounts clean (never a stale bitmap); keyed on the PATH (not content) so an
+in-place edit of the SAME file still refreshes via the tile task's content-version
+id, not a remount. NO data corruption (the file opened correctly; thumbnails are
+per-URL, so no cross-file contamination was ever possible) — and NOT caused by
+batch-reads (decision-equivalent, touches neither grid/sort/thumbnails). Now a
+durable CLAUDE.md line. Owner-verified.

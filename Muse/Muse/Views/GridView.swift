@@ -472,6 +472,20 @@ struct GridView: View {
                     .fileTileActions(file.kind != .folder) {
                         appState.requestRenameFile(file)
                     }
+                    // Tie tile identity to the FILE, not the positional index the
+                    // ForEach iterates. The virtualized ForEach is keyed by slot
+                    // index (`id: \.self`), so when the grid reorders (e.g. an
+                    // in-place edit bumps modified_at and a date sort floats the
+                    // file to the top) a slot rebinds to a different file while
+                    // SwiftUI reuses the cell — and the cell's decoded @State
+                    // bitmap outlives the rebind, briefly showing one file's image
+                    // on another file's tile until a full remount. A file-stable
+                    // .id forces a clean remount on rebind (fresh thumbnail state),
+                    // so a tile can never display a different file's cached bitmap.
+                    // Keyed on the path (stable across content edits), so an
+                    // in-place edit of THIS file still refreshes smoothly via the
+                    // task's content-version id rather than remounting.
+                    .id(file.url.standardizedFileURL.path)
             }
         }
         .frame(width: layoutWidth, height: totalHeight, alignment: .topLeading)

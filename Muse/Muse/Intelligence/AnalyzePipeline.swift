@@ -204,6 +204,43 @@ final class AnalyzePipeline: ObservableObject {
         await analyze(folder: taglessURLs)
     }
 
+    /// Resolve standardized absolute paths to their alive file_ids in one chunked
+    /// `IN (...)` read per ~800 paths (P6 — mirrors CollectionStore.fileIDs but
+    /// returns the path→id MAP so callers keep URL pairing/order). Only paths with
+    /// an alive row and a non-null file_id appear. `internal static` so the
+    /// resolver tests reach it directly via `@testable import Muse`.
+    nonisolated static func aliveFileIDs(queue: DatabaseQueue, absPaths: [String]) async -> [String: String] {
+        guard !absPaths.isEmpty else { return [:] }
+        return (try? await queue.read { db -> [String: String] in
+            var map: [String: String] = [:]
+            for start in stride(from: 0, to: absPaths.count, by: 800) {
+                let chunk = Array(absPaths[start..<min(start + 800, absPaths.count)])
+                let marks = databaseQuestionMarks(count: chunk.count)
+                let rows = try Row.fetchAll(db, sql: """
+                    SELECT absolute_path AS ap, file_id AS fid FROM paths
+                    WHERE is_alive = 1 AND file_id IS NOT NULL AND absolute_path IN (\(marks))
+                    """, arguments: StatementArguments(chunk))
+                for r in rows {
+                    if let ap: String = r["ap"], let fid: String = r["fid"] { map[ap] = fid }
+                }
+            }
+            return map
+        }) ?? [:]
+    }
+
+    /// Dedup URLs to unique file_ids, preserving first-seen URL order (duplicate
+    /// content analyzed once, paired with its FIRST occurrence). Pure.
+    nonisolated static func dedupByFileID(urls: [URL], idByPath: [String: String]) -> [(id: String, url: URL)] {
+        var pairs: [(id: String, url: URL)] = []
+        var seen = Set<String>()
+        for url in urls {
+            guard let id = idByPath[url.standardizedFileURL.path], !seen.contains(id) else { continue }
+            seen.insert(id)
+            pairs.append((id, url))
+        }
+        return pairs
+    }
+
     func analyze(folder urls: [URL]) async {
         guard !urls.isEmpty else { return }
         guard let queue = Database.shared.dbQueue else { return }
@@ -213,25 +250,15 @@ final class AnalyzePipeline: ObservableObject {
         completed = 0
         defer { isRunning = false; current = ""; progress = 0; completed = 0; total = 0 }
 
-        // Resolve to unique file IDs first, so duplicate content (the same
-        // bytes under several paths) is analyzed ONCE — and the count reflects
-        // real files, not path count.
-        var pairs: [(id: String, url: URL)] = []
-        var seen = Set<String>()
-        for url in urls {
-            if shouldStop { return }
-            let absPath = url.standardizedFileURL.path
-            let fileID: String? = (try? await queue.read { db -> String? in
-                try PathRow
-                    .filter(PathRow.Columns.absolute_path == absPath)
-                    .filter(PathRow.Columns.is_alive == 1)
-                    .fetchOne(db)?.file_id
-            }) ?? nil
-            if let id = fileID, !seen.contains(id) {
-                seen.insert(id)
-                pairs.append((id, url))
-            }
-        }
+        // Resolve all URLs to alive file_ids in ONE batched read, then dedup by
+        // file_id preserving first-seen URL order (duplicate content — the same
+        // bytes under several paths — is analyzed ONCE, and the count reflects
+        // real files, not path count).
+        if shouldStop { return }
+        let idByPath = await Self.aliveFileIDs(queue: queue,
+                                               absPaths: urls.map { $0.standardizedFileURL.path })
+        if shouldStop { return }
+        let pairs = Self.dedupByFileID(urls: urls, idByPath: idByPath)
         total = pairs.count
         guard !pairs.isEmpty else { return }
 
@@ -309,15 +336,10 @@ final class AnalyzePipeline: ObservableObject {
         let inZone = urls.filter { ICloudZone.contains($0, folder: zone) }
         guard !inZone.isEmpty, let queue = Database.shared.dbQueue else { return }
         Task {
+            let idByPath = await Self.aliveFileIDs(queue: queue,
+                                                   absPaths: inZone.map { $0.standardizedFileURL.path })
             for url in inZone {
-                let absPath = url.standardizedFileURL.path
-                let fid: String? = (try? await queue.read { db in
-                    try PathRow
-                        .filter(PathRow.Columns.absolute_path == absPath)
-                        .filter(PathRow.Columns.is_alive == 1)
-                        .fetchOne(db)?.file_id
-                }) ?? nil
-                guard let fid else { continue }
+                guard let fid = idByPath[url.standardizedFileURL.path] else { continue }
                 await writeSidecarIfICloud(fileID: fid, url: url, mergeExisting: false)
             }
         }
