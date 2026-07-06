@@ -347,6 +347,11 @@ Muse/Muse/
                                    horizontal centre. Feeds PageScrollCatcher's onArrow. Unit-tested
     GridScrollReveal.swift         pure clip-view "scroll the highlighted tile into view" math
                                    (flipped coords, margin, top/bottom clamp). Unit-tested
+    ICloudSidebarVisibility.swift  pure decider for whether the app-managed iCloud "Muse" root shows in
+                                   the sidebar (presence from live recursive file count → rowVisible /
+                                   toggleDisabled). One source of truth shared by SidebarView's render
+                                   gate + SettingsView's "Show iCloud Folder in the Sidebar" toggle.
+                                   Unit-tested
   Backup/                          Library Backup & Restore. Export one self-contained `.muselibrary`
                                    file + reconnect it on another Mac by content hash
     BackupArchive.swift            pure Codable model; reuses Sidecar for per-file metadata.

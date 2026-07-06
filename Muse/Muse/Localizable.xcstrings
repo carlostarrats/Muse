@@ -1790,6 +1790,46 @@
         }
       }
     },
+    "Hide the empty iCloud folder from the sidebar. It reappears automatically if files are added.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Masquer le dossier iCloud vide de la barre latérale. Il réapparaît automatiquement si des fichiers y sont ajoutés."
+          }
+        }
+      }
+    },
+    "Show iCloud Folder in the Sidebar": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher le dossier iCloud dans la barre latérale"
+          }
+        }
+      }
+    },
+    "The iCloud folder contains files, so it can't be hidden.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le dossier iCloud contient des fichiers, il ne peut donc pas être masqué."
+          }
+        }
+      }
+    },
+    "iCloud isn't set up, so the folder isn't in the sidebar. It'll appear here when iCloud is available.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud n'est pas configuré, le dossier n'apparaît donc pas dans la barre latérale. Il s'affichera ici lorsque iCloud sera disponible."
+          }
+        }
+      }
+    },
     "iCloud sync": {
       "localizations": {
         "fr": {

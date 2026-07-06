@@ -139,6 +139,15 @@ enum AppSettings {
         UserDefaults.standard.object(forKey: showCollectionsInSidebarKey) as? Bool ?? true
     }
 
+    static let showICloudFolderInSidebarKey = "showICloudFolderInSidebar"
+
+    /// Show the app-managed iCloud "Muse" folder in the sidebar. Default true.
+    /// Only ever honored when the folder is EMPTY — a non-empty iCloud folder
+    /// always shows regardless of this flag. Unset → on.
+    static var showICloudFolderInSidebar: Bool {
+        UserDefaults.standard.object(forKey: showICloudFolderInSidebarKey) as? Bool ?? true
+    }
+
     static let sidebarCollectionSortModeKey = "sidebarCollectionSortMode"
 
     /// Sidebar Collections-section sort. Default `.manual`. Independent of the

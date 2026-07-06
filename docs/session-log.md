@@ -5393,3 +5393,35 @@ id, not a remount. NO data corruption (the file opened correctly; thumbnails are
 per-URL, so no cross-file contamination was ever possible) — and NOT caused by
 batch-reads (decision-equivalent, touches neither grid/sort/thumbnails). Now a
 durable CLAUDE.md line. Owner-verified.
+
+### Hide the iCloud folder in the sidebar (when empty) — 2026-07-06 (`feat/next-118`)
+
+Settings → Sidebar gained **"Show iCloud Folder in the Sidebar"** (default on) so a
+user who doesn't use the iCloud sync folder can get the app-managed "Muse" root off
+the sidebar — but only when it's safe to. Modeled on Lineform's equivalent.
+
+Three states, all driven by one pure decider `ICloudSidebarVisibility`
+(`Components/`, unit-tested): `presence(configured:recursiveFileCount:)` →
+`{notConfigured, empty, hasFiles, unknown}`, then `rowVisible` / `toggleDisabled`.
+- **Has files** (recursive count > 0): row always shows; Settings toggle greyed with
+  "contains files, so it can't be hidden."
+- **Configured & empty**: row follows the toggle; toggle enabled.
+- **Not configured** (nil iCloud URL — Debug build / signed out): row never shows;
+  toggle stays enabled with a "iCloud isn't set up…" note.
+- **Unknown** (count not computed yet): treated as visible so the row never flickers
+  out during the launch window before `folderStats` populates.
+
+Both surfaces route through the same helper reading the SAME live signal
+(`folderStats.stat(for:)?.recursiveFileCount`) the row's existing empty-dimming
+(`FolderTreeNode.isEmptyICloudRoot`) already uses — so the Settings toggle and the
+sidebar can't disagree. The render gate is in `SidebarView.folderList` (covers both
+the folders-only and two-section layouts); it re-evaluates on a file-count change
+because `folderStats.objectWillChange` is forwarded to `AppState.objectWillChange`,
+and on a toggle change via the shared `@AppStorage` key. `SettingsView` gained an
+`@EnvironmentObject AppState` (injected at the one sheet site in `ContentView`) so
+the toggle greys/ungreys live while open. Key rule (now a durable CLAUDE.md line):
+the gate reads the LIVE count, never the bare persisted bool.
+
+4 new strings localized (FR). `MuseTests` 577 (+3) green; build green. Spec +
+plan under `docs/superpowers/`. Runtime toggle behavior against a real iCloud folder
+is owner-QA (can't be automated here).
