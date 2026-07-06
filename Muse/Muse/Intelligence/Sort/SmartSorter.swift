@@ -13,6 +13,7 @@ import GRDB
 enum SortMode: String, CaseIterable, Identifiable {
     case dateModified, dateCreated, name, size, kind
     case dominantColor, shape
+    case rating
 
     var id: String { rawValue }
 
@@ -25,6 +26,7 @@ enum SortMode: String, CaseIterable, Identifiable {
         case .kind: return String(localized: "Kind")
         case .dominantColor: return String(localized: "Color")
         case .shape: return String(localized: "Shape")
+        case .rating: return String(localized: "Rating")
         }
     }
 
@@ -43,7 +45,7 @@ enum SortMode: String, CaseIterable, Identifiable {
     var defaultAscending: Bool {
         switch self {
         case .name, .kind, .dominantColor: return true   // A→Z / first bucket first
-        case .dateModified, .dateCreated, .size, .shape: return false // newest/largest/widest first
+        case .dateModified, .dateCreated, .size, .shape, .rating: return false // newest/largest/widest/highest first
         }
     }
 
@@ -56,6 +58,7 @@ enum SortMode: String, CaseIterable, Identifiable {
         case .size:                       return ascending ? String(localized: "Smallest first") : String(localized: "Largest first")
         case .shape:                      return ascending ? String(localized: "Tall → wide") : String(localized: "Wide → tall")
         case .dominantColor:              return ascending ? String(localized: "Ascending") : String(localized: "Descending")
+        case .rating:                     return ascending ? String(localized: "Lowest first") : String(localized: "Highest first")
         }
     }
 
@@ -105,6 +108,26 @@ nonisolated enum SmartSorter {
                 guard let w = row.width, let h = row.height, h > 0 else { return 0 }
                 return (w * 1000) / h
             })
+        case .rating:
+            // Highest-rated first; unrated (0) sink to the end, tiebroken by date.
+            return sortByRating(files: files)
+        }
+    }
+
+    /// Sort by manual star rating (5→1, unrated last), tiebroken by date
+    /// modified. Ratings are per-(file_id, parent_dir) manual tags read via
+    /// `RatingLoader` (a synchronous DB read — this runs off-main through
+    /// `AppState.resort()`, like the Color/Shape sorts).
+    private static func sortByRating(files: [FileNode]) -> [FileNode] {
+        guard let queue = Database.shared.dbQueue else { return files }
+        let ratings = RatingLoader.ratings(
+            paths: files.map { $0.url.standardizedFileURL.path },
+            simpleFolderDir: nil, queue: queue)
+        return files.sorted { lhs, rhs in
+            let l = ratings[lhs.url.standardizedFileURL.path] ?? 0
+            let r = ratings[rhs.url.standardizedFileURL.path] ?? 0
+            if l != r { return l > r }
+            return (lhs.modifiedAt ?? .distantPast) > (rhs.modifiedAt ?? .distantPast)
         }
     }
 
