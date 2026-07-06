@@ -18,6 +18,7 @@ enum AppSettings {
     static let autoTagKey = "autoTagNewImages"
     static let autoCollectionsKey = "autoOrganizeCollections"
     static let showFileNamesKey = "showFileNames"
+    static let showStarsOnGridKey = "showStarsOnGrid"
 
     /// Automatically run the Vision pass (tags/caption/colors/OCR) on newly
     /// indexed images. Default true. Unset → treated as on.
@@ -34,6 +35,13 @@ enum AppSettings {
     /// Unset → treated as off.
     static var showFileNames: Bool {
         UserDefaults.standard.object(forKey: showFileNamesKey) as? Bool ?? false
+    }
+
+    /// Show the star-rating badge on tiles in the MAIN (folder) grid. Default
+    /// true. Off hides the badge only in the folder grid — it still shows inside
+    /// a collection and in the hero viewer. Unset → treated as on.
+    static var showStarsOnGrid: Bool {
+        UserDefaults.standard.object(forKey: showStarsOnGridKey) as? Bool ?? true
     }
 
     // Google Drive share — remembered Muse-root folder id + last form text.

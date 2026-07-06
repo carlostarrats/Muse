@@ -31,6 +31,7 @@ extension AppState {
         let inCollection = activeCollectionID != nil
         guard let queue = Database.shared.dbQueue, !scope.isEmpty else {
             tagChipRows = []
+            reloadStarRatings()
             return
         }
         let paths = scope.map { $0.url.standardizedFileURL.path }
@@ -50,6 +51,7 @@ extension AppState {
                 }
             }
         }
+        reloadStarRatings()
     }
 
     /// Not `private`: the inline chip computation in `reloadCurrentFiles` (core)

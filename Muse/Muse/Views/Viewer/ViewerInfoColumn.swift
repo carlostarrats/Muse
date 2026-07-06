@@ -62,6 +62,7 @@ struct ViewerInfoColumn<Chrome: View>: View {
                 header
                 collectionCard
                 tagsCard
+                ratingCard
                 if !displayPalette.isEmpty {
                     colorsCard(palette: displayPalette)
                 } else if paletteLoading {
@@ -191,7 +192,11 @@ struct ViewerInfoColumn<Chrome: View>: View {
 
     private var tagsCard: some View {
         PillCard(title: String(localized: "TAGS"),
-                 pills: (details?.tags ?? []).map { PillItem(id: $0.id, label: $0.label) },
+                 // Star-rating glyph tags are shown in the RATING card below, not
+                 // here — filter them out so the file's rating isn't duplicated as
+                 // a removable "tag" pill.
+                 pills: (details?.tags ?? []).filter { !StarRating.isRating($0.label) }
+                     .map { PillItem(id: $0.id, label: $0.label) },
                  hovered: $hoveredTagPill,
                  isExpanded: $tagsExpanded,
                  onPillTap: { onTagTap($0.label) },
@@ -243,9 +248,55 @@ struct ViewerInfoColumn<Chrome: View>: View {
                 """)
         }) ?? []
         tagSuggestions = labels
-            .filter { !current.contains($0) }
+            .filter { !current.contains($0) && !StarRating.isRating($0) }
             .prefix(12)
             .map { PillItem(id: $0, label: $0) }
+    }
+
+    // MARK: - Rating card
+
+    /// Current rating derived from the file's tags (the first rating-glyph tag).
+    private var currentRating: Int? {
+        (details?.tags ?? []).compactMap { StarRating.rating(from: $0.label) }.max()
+    }
+
+    /// Shows the rating UNDER Tags (owner). Interactive: tap star N to set N; tap
+    /// the current rating to remove it (mirrors the context menu). Mutually
+    /// exclusive via TagStore.setRating; bumps tagsVersion like every hero tag
+    /// edit so the grid chips + badge refresh.
+    private var ratingCard: some View {
+        InfoCard {
+            VStack(alignment: .leading, spacing: 10) {
+                CardLabel(text: String(localized: "RATING"))
+                HStack(spacing: 4) {
+                    ForEach(1...StarRating.maxStars, id: \.self) { n in
+                        let filled = (currentRating ?? 0) >= n
+                        Button {
+                            setRating(currentRating == n ? nil : n)
+                        } label: {
+                            Image(systemName: filled ? "star.fill" : "star")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(.white.opacity(filled ? 0.95 : 0.35))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Text(String(format: NSLocalizedString(
+                            "%lld-star rating",
+                            comment: "VoiceOver: star rating of a photo"), n)))
+                    }
+                }
+            }
+        }
+    }
+
+    private func setRating(_ stars: Int?) {
+        Task {
+            await TagStore.shared.setRating(stars, forURLs: [url])
+            await refresh()
+            appState.tagsVersion &+= 1
+            show(stars == nil
+                 ? String(localized: "Rating removed")
+                 : String(localized: "Rated \(stars!) stars"))
+        }
     }
 
     // MARK: - Colors card

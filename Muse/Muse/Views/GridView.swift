@@ -27,6 +27,10 @@ struct GridView: View {
     @AppStorage("gridColumnCount") private var gridColumns = 4
     /// Off-by-default: show each file's name under its tile.
     @AppStorage(AppSettings.showFileNamesKey) private var showFileNames = false
+    /// On-by-default: show the star-rating badge on tiles. Off hides it in the
+    /// MAIN (folder) grid only — badges still show inside a collection (and in
+    /// the hero viewer, which is a separate control).
+    @AppStorage(AppSettings.showStarsOnGridKey) private var showStarsOnGrid = true
     /// Fixed under-tile caption strip height (one line of `.caption`), constant
     /// across column counts — matches the collection-PDF export's fixed caption.
     private let captionStripHeight: CGFloat = 18
@@ -34,6 +38,12 @@ struct GridView: View {
     /// The caption height actually reserved this render (0 when names are off).
     private var effectiveCaptionHeight: CGFloat {
         showFileNames ? captionStripHeight : 0
+    }
+
+    /// Whether rating badges show on the current grid: always when viewing a
+    /// collection; on the main folder grid only when the setting is on.
+    private var showsRatingBadges: Bool {
+        showStarsOnGrid || appState.activeCollectionID != nil
     }
 
     /// Manual double-click detection so single-click selection is INSTANT —
@@ -318,6 +328,8 @@ struct GridView: View {
                 TileView(file: file, order: i, deletion: appState.deletion,
                          showFileNames: showFileNames,
                          captionHeight: effectiveCaptionHeight,
+                         rating: showsRatingBadges
+                             ? appState.starRatings[file.url.standardizedFileURL.path] : nil,
                          reportAspect: { [weak aspects] ratio in
                              aspects?.report(aspect: ratio,
                                               forStandardizedPath: file.url.standardizedFileURL.path)
@@ -347,6 +359,15 @@ struct GridView: View {
                     .accessibilityAddTraits(
                         appState.selectedFiles.contains(file.url.standardizedFileURL.path)
                             ? [.isButton, .isSelected] : .isButton)
+                    // The rating badge is a11y-hidden (display-only overlay), so
+                    // announce the rating here as the tile's value.
+                    .accessibilityValue(
+                        (showsRatingBadges
+                            ? appState.starRatings[file.url.standardizedFileURL.path] : nil).map {
+                            Text(String(format: NSLocalizedString(
+                                "%lld-star rating",
+                                comment: "VoiceOver: star rating of a photo"), $0))
+                        } ?? Text(""))
                     // Primary VoiceOver action = OPEN. The mouse opens via the
                     // double-click timing window, which VoiceOver can't reproduce,
                     // so activating a tile only SELECTED it before — there was no
@@ -616,6 +637,10 @@ private struct TileView: View {
     var showFileNames: Bool = false
     /// Reserved caption strip height (0 when names are off).
     var captionHeight: CGFloat = 0
+    /// Star rating (1...5) for this file, or nil when unrated. Drives the
+    /// top-right badge. Passed from GridView so the tile re-renders when its
+    /// rating changes without subscribing to the whole starRatings map.
+    var rating: Int? = nil
     /// Reports the decoded thumbnail's exact aspect back to the layout so the
     /// tile frame matches the image (no grey letterbox).
     var reportAspect: (CGFloat) -> Void = { _ in }
@@ -745,7 +770,32 @@ private struct TileView: View {
                 }
                 .padding(isSelected ? Self.selectionInset : 0)
 
+            // Star-rating badge: top-right pill, BLACK glyphs on a near-white
+            // (250,250,250) backing, no shadow. Placed BELOW the hover veil so it
+            // darkens together with the tile on hover. Tracks the image: when
+            // selected the image shrinks inward by selectionInset, so the badge
+            // insets the same amount to stay pinned to the image's top-right
+            // corner (not sticking out past the ring). Display-only (never
+            // clickable — a tap would fight tile select/open); the rating is
+            // announced via the tile's accessibilityValue in GridView.
+            if let rating, let label = StarRating.label(for: rating) {
+                Text(label)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Capsule(style: .continuous)
+                        .fill(Color(red: 250.0 / 255.0, green: 250.0 / 255.0, blue: 250.0 / 255.0)))
+                    .padding(6)
+                    .padding(isSelected ? Self.selectionInset : 0)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity,
+                           alignment: .topTrailing)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+
             // Hover veil — unselected tiles only; a calm dark wash, no resize.
+            // Sits ABOVE the image AND the badge so both darken on hover.
             Rectangle()
                 .fill(Color.black)
                 .opacity((hovering && !isSelected) ? Self.hoverVeilOpacity : 0)

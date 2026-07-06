@@ -25,6 +25,20 @@ struct SelectionActionsMenu: View {
         }
     }
 
+    /// The rating shared by the effective selection (the checkmark target), or
+    /// nil if mixed / unrated.
+    private var currentRating: Int? {
+        appState.uniformRating(forPaths: fileURLs.map { $0.standardizedFileURL.path })
+    }
+
+    /// Localized VoiceOver label for an N-star menu item (a bare glyph reads
+    /// poorly). The number is interpolated.
+    private func ratingA11yLabel(_ n: Int) -> String {
+        String(format: NSLocalizedString("%lld-star rating",
+                                         comment: "VoiceOver: star rating of a photo"),
+               n)
+    }
+
     var body: some View {
         if !fileURLs.isEmpty {
             Menu("Add to Collection") {
@@ -49,6 +63,24 @@ struct SelectionActionsMenu: View {
                 }
             }
             Button("Share") { share() }
+            Menu("Rating") {
+                ForEach(Array((1...StarRating.maxStars).reversed()), id: \.self) { n in
+                    let label = StarRating.label(for: n) ?? ""
+                    Button {
+                        // Pick the currently-checked rating to REMOVE it (no
+                        // "Remove" verb); pick another to change.
+                        appState.setRating(currentRating == n ? nil : n,
+                                           forSelectionFallback: path)
+                    } label: {
+                        if currentRating == n {
+                            Label(label, systemImage: "checkmark")
+                        } else {
+                            Text(label)
+                        }
+                    }
+                    .accessibilityLabel(Text(ratingA11yLabel(n)))
+                }
+            }
         }
         // Remove from the tag/collection you're currently viewing. Shown only
         // in that context (a tag filter or an open collection); acts on the

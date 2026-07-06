@@ -147,6 +147,13 @@ final class AppState: ObservableObject {
     /// Monotonic token so a slow chip load can't clobber a newer scope.
     /// Not `private`: the tag-chip methods live in AppState+TagChips.swift.
     var tagChipToken = 0
+
+    /// Standardized path -> star rating (1...5) for the files in the current
+    /// scope. Drives the top-right tile badge. Recomputed by reloadStarRatings()
+    /// from the SAME seams that refresh chips (tag edits, collection change,
+    /// folder load). A monotonic token drops a stale async result.
+    @Published var starRatings: [String: Int] = [:]
+    var starRatingsToken = 0
     /// Reloads the chips whenever a tag is added / removed / renamed.
     private var tagsVersionCancellable: AnyCancellable?
     /// Tag-chip sort order (Most Used / A→Z). Persisted in AppSettings; a change
@@ -176,7 +183,13 @@ final class AppState: ObservableObject {
     @Published var allTagLabels: [String] = []
 
     func refreshTagLabels() {
-        Task { @MainActor in allTagLabels = await TagStore.shared.allLabels() }
+        // Exclude star-rating glyph labels: they're ratings, not tags. Offering
+        // one in the "Add Tag" menu would let a user attach a second rating
+        // (addManualTag doesn't enforce mutual exclusion) and reads as a bogus
+        // tag. Ratings are set via the Rating menu / hero card only.
+        Task { @MainActor in
+            allTagLabels = await TagStore.shared.allLabels().filter { !StarRating.isRating($0) }
+        }
     }
     /// Names of files a recent move couldn't relocate (drives an alert).
     @Published var moveFailureNames: [String] = []
@@ -1146,6 +1159,7 @@ final class AppState: ObservableObject {
                     self.bumpTagChipToken()
                     self.tagChipRows = chipRows
                     self.tagRowReady = true
+                    self.reloadStarRatings()
                 } else {
                     // Live reload (FSEvents / subfolders toggle / clear search):
                     // the grid is already shown, so just refresh the chips for the

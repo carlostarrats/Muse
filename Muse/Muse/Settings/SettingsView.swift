@@ -17,6 +17,7 @@ struct SettingsView: View {
     @AppStorage(AppSettings.autoTagKey) private var autoTag = true
     @AppStorage(AppSettings.autoCollectionsKey) private var autoCollections = true
     @AppStorage(AppSettings.showFileNamesKey) private var showFileNames = false
+    @AppStorage(AppSettings.showStarsOnGridKey) private var showStarsOnGrid = true
     @AppStorage(AppSettings.showCollectionsInSidebarKey) private var showCollectionsInSidebar = true
     @State private var authBusy = false
 
@@ -55,10 +56,11 @@ struct SettingsView: View {
 
             Section {
                 Toggle("Show file names", isOn: $showFileNames)
+                Toggle("Show star ratings", isOn: $showStarsOnGrid)
             } header: {
                 Text("Grid")
             } footer: {
-                Text("Show each file's name beneath its thumbnail in the grid.")
+                Text("Show each file's name beneath its thumbnail in the grid. Star ratings still show inside a collection and in the viewer.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }

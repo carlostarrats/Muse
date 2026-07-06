@@ -5314,3 +5314,34 @@ No new user-facing strings (space-open reuses the tile's existing default
 accessibility action). Build + `MuseTests` (542, +18: 12 `GridKeyboardNav` + 6
 `GridScrollReveal`) + UI tests green. Runtime (arrow move/wrap/edge, Space-open,
 Fn/Page paging still works) owner-verified in the running app.
+
+### Star ratings — 2026-07-06 (on `feat/next-116`)
+
+Item 4 of the approved 2026-07 review list. Rate photos 1–5 stars via
+right-click, a menu-bar command (⌘0–⌘5), and an interactive card in the hero
+viewer; a filled-star tile badge; free filtering. Modeled a rating as a
+**mutually-exclusive manual tag** whose label is a run of `★` (U+2605) — so
+per-`(file_id, parent_dir)` scoping, manual-beats-vision safety, and chip
+filtering all come from existing, test-pinned machinery. New pure `StarRating`
+(label↔count, `isRating`, front-sort, `resolution`); `TagStore.setRating` (the
+one write seam, one-rating-per-photo); batched `RatingLoader` → `AppState.starRatings`
+map → top-right badge. Front-sort in `TagChipLoader.ordered`. Hero RATING card
+under Tags. Settings → Grid → "Show star ratings" (default on) hides the badge on
+the MAIN folder grid only (still shows in collections + hero; the map is always
+computed so the context-menu checkmark still works). FR localized.
+
+- **Review caught the rating-as-tag leak (the significant fix).** Because a rating
+  is a real `tags` row, the glyph leaked into tag-LISTING surfaces: the grid
+  "Add Tag" menu (`allTagLabels`) offered `★★★` — and picking it calls
+  `addManualTag`, which has NO mutual exclusion, so a file could carry two ratings
+  (invariant break); the hero Tags card + its suggestions showed the rating as a
+  duplicate removable pill. Fixed by filtering `StarRating.isRating` out of all
+  three (`refreshTagLabels`, `ViewerInfoColumn` pills + suggestions). The chip row
+  + filter banner still show ratings (intended). Now a durable CLAUDE.md line.
+- Badge sits BELOW the hover veil in the tile ZStack so it darkens with the tile
+  on hover; near-white (250,250,250) pill, no shadow; insets with the image on
+  select so it doesn't stick out past the ring (owner-tuned live).
+
+Build + `MuseTests` (554, +12: 10 `StarRating` + 2 `TagChipLoaderOrder` front-sort)
++ UI tests green. Runtime (set/change/remove, multi-select, ⌘1–5, collection vs
+main-grid badge gating, hero card) owner-verified in the running app.

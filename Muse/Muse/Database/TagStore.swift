@@ -196,6 +196,67 @@ final class TagStore: ObservableObject {
         AnalyzePipeline.shared.exportSidecarsAfterTagEdit(for: urls)
     }
 
+    /// Set (or clear, with nil) the star rating for `urls`, scoped per file's
+    /// folder. MUTUALLY EXCLUSIVE: removes any existing rating tag, then adds the
+    /// new one as a MANUAL tag (manual beats vision, Q32). Other tags untouched.
+    /// The decision is `StarRating.resolution`; applied here as SQL. Like every
+    /// TagStore mutation it re-exports iCloud sidecars. No-op for an empty URL
+    /// set; `nil` (or an out-of-range value) clears the rating. Callers pass
+    /// 1...StarRating.maxStars or nil.
+    func setRating(_ stars: Int?, forURLs urls: [URL]) async {
+        guard let queue = Database.shared.dbQueue else { return }
+        let paths = urls.map { $0.standardizedFileURL.path }
+        guard !paths.isEmpty else { return }
+        do {
+            try await queue.write { db in
+                for scope in try tagScopes(forPaths: paths, db: db) {
+                    // Current rating labels in THIS (file_id, parent_dir) scope.
+                    let existing = try String.fetchAll(db, sql: """
+                        SELECT label FROM tags WHERE file_id = ? AND parent_dir = ?
+                        """, arguments: [scope.fileID, scope.dir])
+                        .filter(StarRating.isRating)
+                    let (remove, add) = StarRating.resolution(
+                        existingLabels: existing, newRating: stars)
+                    for label in remove {
+                        try db.execute(sql: """
+                            DELETE FROM tags
+                            WHERE label = ? AND file_id = ? AND parent_dir = ?
+                            """, arguments: [label, scope.fileID, scope.dir])
+                    }
+                    for label in add {
+                        // Insert-or-promote-to-manual (same branch addManualTag
+                        // uses): a vision row of this label can't exist for a
+                        // glyph run, but stay symmetric with the tag path.
+                        if let row = try TagRow
+                            .filter(TagRow.Columns.file_id == scope.fileID)
+                            .filter(TagRow.Columns.parent_dir == scope.dir)
+                            .filter(TagRow.Columns.label == label)
+                            .fetchOne(db) {
+                            var updated = row
+                            updated.source = "manual"
+                            updated.confidence = nil
+                            try updated.update(db)
+                        } else {
+                            var t = TagRow(
+                                id: UUID().uuidString,
+                                file_id: scope.fileID,
+                                parent_dir: scope.dir,
+                                label: label,
+                                source: "manual",
+                                confidence: nil,
+                                model_version: nil
+                            )
+                            try t.insert(db)
+                        }
+                    }
+                }
+            }
+        } catch {
+            print("[TagStore] setRating failed: \(error)")
+        }
+        AnalyzePipeline.shared.exportSidecarsAfterTagEdit(for: urls)
+    }
+
     func removeTag(_ tag: TagRow, for url: URL) async -> [TagRow] {
         guard let queue = Database.shared.dbQueue else { return [] }
         let tagID = tag.id

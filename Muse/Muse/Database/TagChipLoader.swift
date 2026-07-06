@@ -48,7 +48,13 @@ nonisolated enum TagChipLoader {
                 $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending
             }
         }
-        return sorted.map { (label: $0.key, count: $0.value) }
+        // Star-rating chips sort to the FRONT of the row (owner requirement),
+        // highest star count first; the rest keep the chosen mode's order.
+        let ratings = sorted
+            .filter { StarRating.isRating($0.key) }
+            .sorted { (StarRating.rating(from: $0.key) ?? 0) > (StarRating.rating(from: $1.key) ?? 0) }
+        let rest = sorted.filter { !StarRating.isRating($0.key) }
+        return (ratings + rest).map { (label: $0.key, count: $0.value) }
     }
 
     // MARK: - Query paths
