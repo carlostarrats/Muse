@@ -5208,3 +5208,29 @@ its content's fitting height and doesn't clip to the window.
   (no fixed tall height); `DuplicatesView` is user-resizable (`minHeight`).
 
 Build + `MuseTests` (503, +6) + UI tests green.
+
+### Efficiency batch P3 + P13 — 2026-07-06 (on `feat/next-115`)
+
+First of the approved 2026-07 review items built (spec + plan in
+`docs/superpowers/{specs,plans}/2026-07-06-efficiency-batch-p3-p13.*`). Two
+independent, behavior-preserving perf changes; both always-on background
+CPU/battery savings, no user-visible change.
+
+- **P3 — vectorized `VectorMath.cosine`** (`Intelligence/Core/VectorMath.swift`).
+  The scalar Double loop is now Accelerate: `vDSP_dotpr` (a·b) + `vDSP_svesq`
+  (Σa², Σb²) over the Float32 arrays, final divide/sqrt in Double. Signature +
+  guards (count-mismatch/empty → 0, zero-norm → 0) unchanged; both callers
+  (`HybridClusterer`, `SemanticSearch`) untouched. Cuts real background CPU when
+  the clusterer runs after every analyze pass. Float-vs-Double accumulation
+  differs ~1e-6 — immaterial against the coarse `0.62`/`0.45` thresholds and no
+  caller assumes strict `[-1,1]`. Pinned by a new inline-reference equivalence
+  test in `EmbedderTests`.
+- **P13 — thumbnail write via `CGImageDestination`** (`Filesystem/ThumbnailCache.swift`).
+  New `encodePNG(_:)` extracts the `CGImage` and encodes PNG into an in-memory
+  `CFMutableData`, dropping the `tiffRepresentation → NSBitmapImageRep → PNG`
+  round-trip that ran on every thumbnail write regardless of source format;
+  `writePNG` delegates to it and keeps the atomic write + fail-closed guard. New
+  `ThumbnailWriteTests` round-trips a known image (valid PNG at expected dims).
+  Color fidelity verified in the running app (no shift on a fresh-thumbnail folder).
+
+Build + `MuseTests` (505, +2) + UI tests green.

@@ -417,10 +417,21 @@ final class ThumbnailCache: ObservableObject {
                                     height: CGFloat(cg.height) / scale))
     }
 
+    /// Encode an NSImage to PNG bytes via CGImageDestination — no TIFF round-trip.
+    /// Returns nil (fail-closed) if the image has no CGImage or encoding fails.
+    nonisolated static func encodePNG(_ image: NSImage) -> Data? {
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let out = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(
+            out as CFMutableData, UTType.png.identifier as CFString, 1, nil
+        ) else { return nil }
+        CGImageDestinationAddImage(dest, cg, nil)
+        guard CGImageDestinationFinalize(dest) else { return nil }
+        return out as Data
+    }
+
     private nonisolated static func writePNG(_ image: NSImage, to url: URL) {
-        guard let tiff = image.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiff),
-              let data = bitmap.representation(using: .png, properties: [:]) else { return }
+        guard let data = encodePNG(image) else { return }
         try? data.write(to: url, options: .atomic)
     }
 
