@@ -5567,3 +5567,46 @@ fade starts. Lesson: measure before theorizing, and don't hammer the machine
 you're asking the owner to judge smoothness on. New pure units:
 `PartingFieldTests`, `ViewerGeometry.fitWithin` tests. `MuseTests` green (589
 unit + integration). No new user-facing strings.
+
+### Import Keywords & Ratings (Lightroom/Bridge/Capture One) — 2026-07-07 (`feat/next-125`)
+
+New **File > Import Keywords & Ratings…** — a read-only import that reads the
+IPTC/XMP keywords + star ratings other tools already wrote into a user's images
+(embedded, or a `.xmp` sidecar beside a RAW) and turns them into Muse **manual**
+tags + ratings. Muse never writes metadata into files (XMP *export* was rejected
+2026-06-27; this is the import half, which has no never-modify collision).
+
+Shape (spec `docs/superpowers/specs/2026-07-07-metadata-keywords-import-design.md`,
+plan `docs/superpowers/plans/2026-07-07-metadata-keywords-import.md`):
+- **Four tested units in `Muse/Muse/Import/`.** `MetadataImportRules` (pure:
+  keyword trim/dedupe, rating clamp, fill-gaps-only). `MetadataKeywordReader`
+  (ImageIO, per-field priority sidecar→embedded-XMP→IPTC; no pixel decode;
+  dataless-guarded). `MetadataImportApply` (GRDB manual-tag insert-or-promote +
+  rating-presence check, per `(file_id, parent_dir)`). `MetadataImportModel`
+  (@MainActor orchestrator) + `MetadataImportSheet` (progress/summary).
+- **Index-first, then apply** — tags attach to path rows, so the folder is
+  enumerated + `indexBatch`-ed before writes. Picking a folder ALREADY in Muse
+  attaches in place (no re-add); a new folder is added as a root first.
+- **Idempotent / non-destructive** — tags merge, ratings **fill gaps only** (a
+  Muse-set rating is never overwritten); running twice changes nothing.
+- **XMP Sidecars filter row** — RAW-workflow folders carry an `.xmp` beside every
+  photo; a new `KindFacet.xmp` lets those cards be hidden in the grid (visual
+  only). Routed by extension before the kind switch (`.xmp` has no dedicated
+  `AssetKind`).
+
+Review-pass fixes (same session): (1) readability gate uses
+`CGImageSourceGetCount`, NOT status — status isn't reliably `.statusComplete`
+for all RAW formats, exactly the files that carry sidecars, so a status gate
+would wrongly skip a readable RAW. (2) `applyKeywords` drops rating-glyph (`★`)
+labels — an imported keyword that was a run of stars would otherwise become a
+second rating tag and break `StarRating.resolution` (the tag-writing-surface
+constraint). Live-refresh verified: the import's `tagsVersion` bump flows through
+`reloadTagChips → reloadStarRatings`, so an already-open folder's chips + star
+badges update without a re-switch.
+
+**Eagle-library import** was fully designed in the same brainstorm but
+**deferred** for lack of demand — design preserved at
+`docs/future-features/eagle-library-import.md` (pointer in `possible-updates.md`).
+Social-bookmark import (Instagram/X) rejected: exports contain links, never
+other people's media. French localized; `MuseTests` green (613 unit +
+integration).
