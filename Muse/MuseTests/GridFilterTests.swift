@@ -61,7 +61,7 @@ final class GridFilterTests: XCTestCase {
         XCTAssertEqual(KindFacet.imageLeaves,
                        [.jpeg, .png, .heic, .tiff, .gif, .webp, .raw, .psd, .svg, .imageOther])
         XCTAssertEqual(KindFacet.topLevelKinds,
-                       [.video, .pdf, .document, .audio, .folder, .other])
+                       [.video, .pdf, .document, .audio, .xmp, .folder, .other])
     }
 
     // MARK: - matches
@@ -200,5 +200,29 @@ final class GridFilterTests: XCTestCase {
         // (and possibly date/size keys); it no longer decodes → falls back to none.
         let legacy = #"{"kinds":["image"],"date":"week","size":"mb1to10"}"#
         XCTAssertEqual(GridFilter.resolve(legacy), .none)
+    }
+
+    // MARK: - XMP sidecar leaf (feat/next-125)
+
+    func testXMPExtensionMapsToXMPLeafRegardlessOfKind() {
+        // .xmp sidecars have no dedicated AssetKind — they classify as text or
+        // unknown depending on the system's UTType data — so the leaf routes by
+        // EXTENSION, before the kind switch. Case-insensitive like the rest.
+        XCTAssertEqual(KindFacet.leaf(kind: .text, ext: "xmp"), .xmp)
+        XCTAssertEqual(KindFacet.leaf(kind: .unknown, ext: "xmp"), .xmp)
+        XCTAssertEqual(KindFacet.leaf(kind: .code, ext: "XMP"), .xmp)
+    }
+
+    func testXMPLeafIsAToplevelRow() {
+        XCTAssertTrue(KindFacet.topLevelKinds.contains(.xmp))
+        XCTAssertFalse(KindFacet.imageLeaves.contains(.xmp))
+    }
+
+    func testUncheckingXMPHidesSidecarsOnly() {
+        // All leaves except .xmp → sidecars filtered out, documents still shown.
+        let filter = GridFilter.none.toggling(.xmp)
+        XCTAssertFalse(filter.matches(kind: .text, ext: "xmp"))
+        XCTAssertTrue(filter.matches(kind: .text, ext: "txt"))
+        XCTAssertTrue(filter.matches(kind: .image, ext: "jpg"))
     }
 }

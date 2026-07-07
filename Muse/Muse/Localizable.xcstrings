@@ -4805,6 +4805,16 @@
         }
       }
     },
+    "XMP Sidecars" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fichiers XMP annexes"
+          }
+        }
+      }
+    },
     "Your Name" : {
       "localizations" : {
         "fr" : {

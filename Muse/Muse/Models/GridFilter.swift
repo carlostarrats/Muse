@@ -25,8 +25,11 @@ import Foundation
 enum KindFacet: String, CaseIterable, Identifiable, Codable {
     // Image-format leaves (grouped under the "Images" UI parent).
     case jpeg, png, heic, tiff, gif, webp, raw, psd, svg, imageOther
-    // Non-image kinds (each a single leaf).
-    case video, pdf, document, audio, folder, other
+    // Non-image kinds (each a single leaf). `xmp` exists so RAW-workflow
+    // folders (an .xmp sidecar beside every photo) can hide the sidecar cards
+    // without hiding real documents — user choice, nothing removed
+    // (feat/next-125, alongside the keywords & ratings import).
+    case video, pdf, document, audio, xmp, folder, other
 
     var id: String { rawValue }
 
@@ -46,6 +49,7 @@ enum KindFacet: String, CaseIterable, Identifiable, Codable {
         case .pdf:        return String(localized: "PDFs")
         case .document:   return String(localized: "Documents")
         case .audio:      return String(localized: "Audio")
+        case .xmp:        return String(localized: "XMP Sidecars")
         case .folder:     return String(localized: "Folders")
         case .other:      return String(localized: "Other")
         }
@@ -59,12 +63,16 @@ enum KindFacet: String, CaseIterable, Identifiable, Codable {
 
     /// The non-image kind leaves, in display order (the top-level rows below the
     /// "Images" group heading).
-    static let topLevelKinds: [KindFacet] = [.video, .pdf, .document, .audio, .folder, .other]
+    static let topLevelKinds: [KindFacet] = [.video, .pdf, .document, .audio, .xmp, .folder, .other]
 
     /// Resolve a file to the single leaf that controls it. Pure — the extension
     /// comes from the caller's `FileNode.url`; no IO. An image-kind file whose
     /// format isn't named maps to `imageOther` so it's always reachable.
     static func leaf(kind: AssetKind, ext: String) -> KindFacet {
+        // .xmp sidecars have no dedicated AssetKind (they classify as text or
+        // unknown depending on the system's UTType data), so route by
+        // extension before the kind switch.
+        if ext.lowercased() == "xmp" { return .xmp }
         switch kind {
         case .raw: return .raw
         case .psd: return .psd
