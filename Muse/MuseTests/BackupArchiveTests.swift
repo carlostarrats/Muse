@@ -38,4 +38,20 @@ final class BackupArchiveTests: XCTestCase {
     func testDecodeRejectsGarbage() {
         XCTAssertThrowsError(try BackupDocument.decode(Data("not json".utf8)))
     }
+
+    func testBackupOccurrenceNoteRoundTrips() throws {
+        let occ = BackupOccurrence(original_path: "/p/x.jpg", basename: "x.jpg",
+                                   root_path: "/p", parent_dir: "/p", tags: [], note: "hi")
+        let data = try JSONEncoder().encode(occ)
+        let back = try JSONDecoder().decode(BackupOccurrence.self, from: data)
+        XCTAssertEqual(back.note, "hi")
+    }
+
+    func testOldOccurrenceWithoutNoteDecodesAsNil() throws {
+        let json = """
+        {"original_path":"/p/x.jpg","basename":"x.jpg","tags":[]}
+        """.data(using: .utf8)!
+        let back = try JSONDecoder().decode(BackupOccurrence.self, from: json)
+        XCTAssertNil(back.note)
+    }
 }

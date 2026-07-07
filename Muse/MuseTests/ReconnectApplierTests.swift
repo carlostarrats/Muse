@@ -29,7 +29,8 @@ final class ReconnectApplierTests: XCTestCase {
         let occ = BackupOccurrence(original_path: "/old/Pics/cat.jpg", basename: "cat.jpg",
                                    root_path: "/old/Pics", parent_dir: "/old/Pics",
                                    tags: [SidecarTag(label: "cat", source: "manual",
-                                                     confidence: nil, model_version: nil)])
+                                                     confidence: nil, model_version: nil)],
+                                   note: "a note about this cat")
         let file = BackupFile(content_hash: "h1", meta: meta, occurrences: [occ])
         let coll = BackupCollection(id: "c1", name: "Cats", sort_order: 0,
                                     model_version: "manual", is_hidden: 0, cover_hash: "h1",
@@ -56,6 +57,18 @@ final class ReconnectApplierTests: XCTestCase {
             try String.fetchAll(db, sql: "SELECT label FROM tags WHERE file_id='nf1' AND parent_dir='/new/Pics'")
         }
         XCTAssertEqual(labels, ["cat"])
+    }
+
+    func testApplyMetaWritesNoteAtNewLocation() async throws {
+        let q = try makeIndexedQueue()
+        let arc = archive()
+        let match = OccurrenceMatch(occurrence: arc.files[0].occurrences[0],
+                                    diskPath: "/new/Pics/cat.jpg", kind: .exact)
+        try await ReconnectApplier.applyMeta(matches: [match], file: arc.files[0], queue: q)
+        let note = try await q.read { db in
+            try NoteStore.read(fileID: "nf1", parentDir: "/new/Pics", db: db)
+        }
+        XCTAssertEqual(note, "a note about this cat")
     }
 
     func testApplyCollectionsCreatesCollectionWithReconnectedMember() async throws {

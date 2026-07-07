@@ -39,6 +39,13 @@ enum BackupBuilder {
                                confidence: t.confidence, model_version: t.model_version))
             }
 
+            // Notes grouped by (file_id, parent_dir), same key shape as tags.
+            let noteRows = try NoteRow.fetchAll(db)
+            var noteByFileDir: [String: String] = [:]
+            for n in noteRows {
+                noteByFileDir["\(n.file_id)\u{1}\(n.parent_dir)"] = n.body
+            }
+
             // Build BackupFile per content-hashed file that has >=1 alive path.
             var files: [BackupFile] = []
             for (fid, file) in fileByID {
@@ -61,7 +68,8 @@ enum BackupBuilder {
                         basename: url.lastPathComponent,
                         root_path: rootPath,
                         parent_dir: parent,
-                        tags: tagsByFileDir["\(fid)\u{1}\(parent)"] ?? [])
+                        tags: tagsByFileDir["\(fid)\u{1}\(parent)"] ?? [],
+                        note: noteByFileDir["\(fid)\u{1}\(parent)"])
                 }
                 files.append(BackupFile(content_hash: hash, meta: meta, occurrences: occurrences))
             }

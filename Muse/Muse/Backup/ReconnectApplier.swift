@@ -51,6 +51,11 @@ enum ReconnectApplier {
                         var row = t; try row.insert(db)
                     }
                 }
+                // Note: apply the occurrence's note at the NEW parent_dir.
+                if let body = m.occurrence.note {
+                    try NoteStore.write(body, fileID: fid, parentDir: parentDir,
+                                        updatedAt: Int64(Date().timeIntervalSince1970), db: db)
+                }
                 // FTS mirror (basename + caption; OCR intentionally empty — same as hydrate).
                 try db.execute(sql: "DELETE FROM files_fts WHERE file_id = ?", arguments: [fid])
                 try db.execute(sql: """
