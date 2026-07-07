@@ -70,8 +70,9 @@ struct CollectionsPage: View {
                                     - hInset * 2
                                     - hGap * CGFloat(columns - 1))
                 let cardWidth = available / CGFloat(columns)
-                // Cover keeps the card's 2:1 mosaic aspect.
-                let cover = CGSize(width: cardWidth, height: cardWidth / 2)
+                // Square-ish pile cell: the scattered stack needs vertical
+                // room around the cards for the rest-state peek and hover fan.
+                let cover = CGSize(width: cardWidth, height: cardWidth * 0.9)
 
                 ScrollView {
                     // ZStack, not sequential VStack flow: the empty state

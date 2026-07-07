@@ -49,7 +49,8 @@ will visually compare the result against the video.
   the cell, directions distributed across angle sectors (jittered) so edges
   peek on all sides.
 - Fan poses: top card small lift; under-cards move outward along their rest
-  direction to ~25–55% of the cell, rotation up to ~±25°.
+  direction to ~18–34% of the cell, rotation up to ~±18° (owner-tuned down
+  from a wider first cut — the full-video spread read as "too much").
 - Deterministic: same seed → identical poses forever.
 
 ### View
@@ -57,7 +58,9 @@ will visually compare the result against the video.
   (`Views/CollectionsRow.swift`); Collections page cell becomes square-ish
   (pile area = cardWidth × ~0.9·cardWidth), row gap opens up for the fan.
 - Each card: thumbnail at its natural aspect (from the loaded `NSImage`
-  size), scaled to fit ~78% of the cell, rounded corners, soft shadow.
+  size), scaled to fit ~78% of the cell. SQUARE corners (owner call — no
+  rounding on the images) and a soft diffuse shadow (~12% black, radius 9;
+  the darker first cut read as "unrefined").
 - Hover (`.onHover` on the cell-rect `contentShape`, hit area does NOT grow
   with the fan — prevents retract flicker): spring fan-out
   (~response 0.38 / damping 0.62, visible overshoot), spring back

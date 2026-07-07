@@ -160,53 +160,54 @@ struct CollectionCard: View {
     @EnvironmentObject var appState: AppState
     let loaded: CollectionStore.Loaded
 
-    /// Cover size (a single cover image). Defaults to the compact size; the
-    /// Collections page passes a width computed to fit 4 per row.
+    /// Pile cell size. Defaults to the compact size; the Collections page
+    /// passes a width computed to fit 4 per row.
     var coverSize: CGSize = CollectionCard.defaultCoverSize
 
-    /// Compact default cover.
-    static let defaultCoverSize = CGSize(width: 240, height: 120)
+    /// Compact default pile cell — the square-ish aspect the stack needs
+    /// (matches the Collections page's cardWidth × 0.9), not the old 2:1
+    /// cover rectangle.
+    static let defaultCoverSize = CGSize(width: 240, height: 216)
 
     @State private var hovering = false
     @State private var confirmDelete = false
+    /// Keeps the pile above its neighbors while the settle-back spring is
+    /// still in flight (zIndex isn't animatable — dropping it the instant
+    /// the cursor leaves would dip retracting cards under the next pile).
+    @State private var elevated = false
+    @State private var elevationToken = 0
 
     private var isActive: Bool {
         appState.activeCollectionID == loaded.collection.id
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            CollectionCover(collectionID: loaded.collection.id,
-                            memberIDs: loaded.memberIDs,
-                            coverFileID: loaded.coverFileID,
-                            isEmpty: loaded.aliveCount == 0,
-                            size: coverSize)
-                // Hairline outline that follows the mood ("Auto") — a faint
-                // iconColor line (black on light moods, white on dark) so it
-                // adapts to the background instead of a fixed grey. Animated in
-                // lockstep with the background fade, like the toolbar icons.
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .strokeBorder(appState.moodPalette.iconColor.opacity(0.05), lineWidth: 1)
-                )
-                .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
-                // Calm dark veil on hover, same as the grid tiles — no resize.
-                // Suppressed on the active card (its accent border is the cue).
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.black)
-                        .opacity((hovering && !isActive) ? 0.2 : 0)
-                        .allowsHitTesting(false)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .strokeBorder(
-                            isActive ? Color.accentColor : Color.clear,
-                            lineWidth: 2
-                        )
-                )
-                .animation(.easeOut(duration: 0.18), value: hovering)
-                .onHover { hovering = $0 }
+        VStack(alignment: .center, spacing: 8) {
+            CollectionStackCard(collectionID: loaded.collection.id,
+                                memberIDs: loaded.memberIDs,
+                                coverFileID: loaded.coverFileID,
+                                isEmpty: loaded.aliveCount == 0,
+                                size: coverSize,
+                                fanned: hovering,
+                                isActive: isActive)
+                // Fan out fast with a visible spring overshoot; settle back a
+                // touch slower and calmer — matches the reference video.
+                .onHover { h in
+                    withAnimation(h ? .spring(response: 0.38, dampingFraction: 0.62)
+                                    : .spring(response: 0.45, dampingFraction: 0.8)) {
+                        hovering = h
+                    }
+                    elevationToken += 1
+                    if h {
+                        elevated = true
+                    } else {
+                        let token = elevationToken
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 600_000_000)
+                            if elevationToken == token { elevated = false }
+                        }
+                    }
+                }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(loaded.collection.name)
                     .font(.system(size: 15, weight: .regular))
@@ -217,7 +218,8 @@ struct CollectionCard: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .frame(width: coverSize.width, alignment: .leading)
+        .frame(width: coverSize.width, alignment: .center)
+        .zIndex(elevated ? 10 : 0)
         .contentShape(Rectangle())
         .onTapGesture {
             appState.setActiveCollection(loaded.collection.id)
@@ -263,77 +265,129 @@ struct CollectionCard: View {
     }
 }
 
-// MARK: - Cover (single image)
+// MARK: - Stack (scattered pile, fans on hover)
 
-private struct CollectionCover: View {
-    @EnvironmentObject var appState: AppState
+/// The pile of member images that replaces the old single cropped cover:
+/// up to `depth` cards at their natural aspect ratios, cover on top, loose
+/// deterministic scatter at rest (seeded by the collection id via
+/// StackScatter), fanned apart while `fanned` is true. Cards are not hit-
+/// testable — the pile's cell rect is the hover/tap target, so the fan
+/// spilling over neighbors never steals their clicks and the hover region
+/// doesn't grow (no retract flicker at the edges).
+private struct CollectionStackCard: View {
     let collectionID: String
     let memberIDs: [String]
     let coverFileID: String?
     /// No alive members → render a plain grey card (nothing to preview).
     var isEmpty: Bool = false
     let size: CGSize
+    let fanned: Bool
+    let isActive: Bool
 
-    @State private var cover: NSImage?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var cards: [NSImage] = []
 
-    /// Fill the card, then zoom a touch *past* the fit so the side that would
-    /// otherwise sit edge-to-edge gets cropped too — screenshots often carry a
-    /// thin white border, and this lets the actual content define the edges.
-    private let contentZoom: CGFloat = 1.10
+    /// Pile depth — matches the reference video's ~6-card piles.
+    static let depth = 6
 
     var body: some View {
+        let box = min(size.width, size.height) * 0.78
+        let poses = StackScatter.cards(seed: collectionID,
+                                       count: cards.count, cell: size)
         ZStack {
-            Rectangle()
-                .fill(Color.primary.opacity(0.06))
-            if let cover {
-                Image(nsImage: cover)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .scaleEffect(contentZoom)
-                    .transition(.opacity)
-            } else if !isEmpty {
-                // Placeholder glyph only while a non-empty collection's cover
-                // loads. An empty collection stays plain grey — nothing to show.
-                Image(systemName: "photo")
-                    .font(.system(size: 18))
-                    .foregroundStyle(.tertiary)
+            if cards.isEmpty {
+                // Plain grey card: the whole state for an empty collection,
+                // a placeholder while a non-empty one's thumbnails load.
+                Rectangle()
+                    .fill(Color.primary.opacity(0.06))
+                    .frame(width: box, height: box * 0.75)
+                if !isEmpty {
+                    Image(systemName: "photo")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.tertiary)
+                }
+            } else {
+                // ZStack draws first-child bottom-most; cards[0] is the TOP
+                // card, so mount deepest cards first.
+                ForEach(Array(cards.indices.reversed()), id: \.self) { i in
+                    card(cards[i],
+                         pose: (fanned && !reduceMotion) ? poses[i].fan : poses[i].rest,
+                         box: box,
+                         isTop: i == 0)
+                }
             }
         }
-        // Cover fades in once loaded rather than snapping in.
-        .animation(.easeOut(duration: 0.3), value: cover != nil)
         .frame(width: size.width, height: size.height)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .contentShape(Rectangle())
+        // Pile fades in once thumbnails land rather than snapping in.
+        .animation(.easeOut(duration: 0.3), value: cards.isEmpty)
         // Reload when the membership OR the chosen cover changes.
         .task(id: "\(memberIDs.joined(separator: ","))|\(coverFileID ?? "")") {
-            await loadCover()
+            await loadStack()
         }
     }
 
-    private func loadCover() async {
-        // An empty collection has no cover to load — leave it plain grey. Clear any
-        // previously-loaded cover too: the card instance persists across engine
-        // reloads (keyed by collection id), so a collection that shrinks to empty
-        // would otherwise keep showing its old thumbnail.
-        guard !isEmpty else { cover = nil; return }
+    @ViewBuilder
+    private func card(_ image: NSImage, pose: StackScatter.Pose,
+                      box: CGFloat, isTop: Bool) -> some View {
+        let s = StackScatter.fit(imageSize: image.size, box: box)
+        Image(nsImage: image)
+            .resizable()
+            .frame(width: s.width, height: s.height)
+            // Reduce Motion: no fan — the old calm veil on the top card is
+            // the hover cue instead.
+            .overlay(
+                Rectangle()
+                    .fill(Color.black)
+                    .opacity((isTop && reduceMotion && fanned && !isActive) ? 0.2 : 0)
+            )
+            .overlay(
+                Rectangle()
+                    .strokeBorder(
+                        (isTop && isActive) ? Color.accentColor : Color.clear,
+                        lineWidth: 2
+                    )
+            )
+            .shadow(color: .black.opacity(0.12), radius: 9, x: 0, y: 3)
+            .scaleEffect(pose.scale)
+            .rotationEffect(.degrees(pose.rotationDegrees))
+            .offset(x: pose.offset.width, y: pose.offset.height)
+            .allowsHitTesting(false)
+    }
+
+    private func loadStack() async {
+        // An empty collection has no pile to load — stay plain grey. Clear any
+        // previously-loaded cards too: the card instance persists across engine
+        // reloads (keyed by collection id), so a collection that shrinks to
+        // empty would otherwise keep showing its old pile.
+        guard !isEmpty else { cards = []; return }
         guard let q = Database.shared.dbQueue else { return }
-        // Prefer the user-chosen cover (if still an alive member); otherwise
-        // fall back to the first alive member.
-        var path: String?
+        // The user-chosen cover leads the pile (if still an alive member);
+        // the next members in order fill the rest, repeating when short.
+        var cover: String?
         if let coverFileID {
-            path = try? await CollectionStore.coverPath(
+            cover = try? await CollectionStore.coverPath(
                 queue: q, collectionID: collectionID, coverFileID: coverFileID)
         }
-        if path == nil {
-            path = (try? await CollectionStore.alivePaths(
-                queue: q, collectionID: collectionID, limit: 1))?.first
+        // depth + 1: room to dedupe the cover out of the member page.
+        let members = (try? await CollectionStore.alivePaths(
+            queue: q, collectionID: collectionID, limit: Self.depth + 1)) ?? []
+        let paths = StackScatter.stackPaths(cover: cover, members: members,
+                                            depth: Self.depth)
+        // Load each UNIQUE path once, then reference the shared bitmap for
+        // repeats — a collection with fewer images than the pile depth stacks
+        // members more than once, so `paths` carries duplicates. 320 matches
+        // the grid/viewer probe size, so these already sit in the shared cache.
+        var byPath: [String: NSImage] = [:]
+        for path in Set(paths) {
+            let url = URL(fileURLWithPath: path)
+            if let img = await ThumbnailCache.shared.thumbnail(
+                for: url, size: CGSize(width: 320, height: 320)) {
+                byPath[path] = img
+            }
         }
-        guard let path else { cover = nil; return }
-        let url = URL(fileURLWithPath: path)
-        // 320 matches the grid/viewer probe size, so the bitmap is
-        // already in the shared cache.
-        cover = await ThumbnailCache.shared.thumbnail(
-            for: url, size: CGSize(width: 320, height: 320)
-        )
+        // Reassemble in pile order (cover first), dropping any that failed.
+        cards = paths.compactMap { byPath[$0] }
     }
 }
 
