@@ -365,9 +365,14 @@ struct ViewerInfoColumn<Chrome: View>: View {
                 noteExpanded = !value.isEmpty
             }
         }
-        // File switched (e.g. arrow keys) while editing: flush to the OLD file first.
+        // File switched (e.g. arrow keys) while editing: flush to the OLD file
+        // first, then drop focus so the `details?.note` reseed (guarded on
+        // !noteFocused) re-seeds the draft from the NEW file rather than leaving
+        // the old file's text — closes a latent cross-file overwrite if the flip
+        // navigation ever fires while the field is focused.
         .onChange(of: url) { oldURL, _ in
             commitNote(to: oldURL)
+            noteFocused = false
         }
         // Blur commits.
         .onChange(of: noteFocused) { _, focused in
