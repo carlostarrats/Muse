@@ -60,6 +60,14 @@ struct ViewerInfoColumn<Chrome: View>: View {
     /// The note value we last seeded the draft from, so commit only writes on change.
     @State private var loadedNote = ""
     @FocusState private var noteFocused: Bool
+    /// Colors card: collapsible, OPEN by default. The expand/collapse choice is
+    /// GLOBAL — collapse it once and every file opens collapsed until it's
+    /// re-expanded. Backed by plain @State (seeded from UserDefaults, written
+    /// back in .onChange) rather than @AppStorage so the toggle can run inside
+    /// `withAnimation` and glide the whole column like the note/info cards — a
+    /// withAnimation transaction can't animate an @AppStorage publish (it lands
+    /// outside the transaction; see CLAUDE.md).
+    @State private var colorsExpanded = AppSettings.colorsCardExpanded
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -318,17 +326,11 @@ struct ViewerInfoColumn<Chrome: View>: View {
                 HStack {
                     CardLabel(text: String(localized: "NOTE"))
                     Spacer()
-                    Button {
+                    CopyIconButton(accessibilityLabel: String(localized: "Copy note"),
+                                   isEnabled: !noteDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
                         copyToPasteboard(noteDraft)
                         show(String(localized: "Note copied"))
-                    } label: {
-                        Image(systemName: "doc.on.doc")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.7))
                     }
-                    .buttonStyle(.plain)
-                    .disabled(noteDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .accessibilityLabel(String(localized: "Copy note"))
                     PlusCircleButton(size: 18, rotated: noteExpanded,
                                      accessibilityLabel: noteExpanded ? String(localized: "Hide note")
                                                                       : String(localized: "Show note")) {
@@ -417,22 +419,36 @@ struct ViewerInfoColumn<Chrome: View>: View {
                 HStack {
                     CardLabel(text: String(localized: "COLORS"))
                     Spacer()
-                    HoverTextButton(label: String(localized: "copy all")) {
+                    CopyIconButton(accessibilityLabel: String(localized: "Copy all colors")) {
                         copyToPasteboard(palette.joined(separator: ", "))
                         show(String(localized: "Copied \(palette.count) colors"))
                     }
-                    .accessibilityLabel("Copy all colors")
-                }
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 26, maximum: 26), spacing: 6)],
-                          alignment: .leading, spacing: 6) {
-                    ForEach(palette, id: \.self) { hex in
-                        ColorSwatch(hex: hex) {
-                            copyToPasteboard(hex)
-                            show(String(localized: "Copied \(hex)"))
+                    PlusCircleButton(size: 18, rotated: colorsExpanded,
+                                     accessibilityLabel: colorsExpanded ? String(localized: "Hide colors")
+                                                                        : String(localized: "Show colors")) {
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
+                            colorsExpanded.toggle()
                         }
                     }
                 }
+                if colorsExpanded {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 26, maximum: 26), spacing: 6)],
+                              alignment: .leading, spacing: 6) {
+                        ForEach(palette, id: \.self) { hex in
+                            ColorSwatch(hex: hex) {
+                                copyToPasteboard(hex)
+                                show(String(localized: "Copied \(hex)"))
+                            }
+                        }
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        // Persist the GLOBAL choice so a new viewer session opens the same way.
+        .onChange(of: colorsExpanded) { _, expanded in
+            UserDefaults.standard.set(expanded, forKey: AppSettings.colorsCardExpandedKey)
         }
     }
 
@@ -697,6 +713,37 @@ private struct DashedPill: View {
     }
 }
 
+/// The small "copy" icon shared by the NOTE and COLORS card headers. On hover a
+/// soft circular tint fades in behind the glyph (like the adjacent
+/// PlusCircleButton's background) so the two header controls read as one set —
+/// the glyph opacity itself stays constant (brightening it too read as weird).
+/// When disabled (empty note) it dims and drops the hover response.
+private struct CopyIconButton: View {
+    var accessibilityLabel: String
+    var isEnabled: Bool = true
+    var action: () -> Void
+    @State private var hovering = false
+
+    private var active: Bool { hovering && isEnabled }
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "doc.on.doc")
+                .font(.system(size: 11, weight: .medium))
+                // Constant glyph opacity — only the circular tint reacts to
+                // hover; brightening the icon too read as weird.
+                .foregroundStyle(.white.opacity(isEnabled ? 0.7 : 0.35))
+                .frame(width: 18, height: 18)
+                .background(Circle().fill(.white.opacity(active ? 0.28 : 0)))
+                .animation(.easeOut(duration: 0.12), value: active)
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .accessibilityLabel(accessibilityLabel)
+        .onHover { hovering = $0 }
+    }
+}
+
 private struct PlusCircleButton: View {
     let size: CGFloat
     let rotated: Bool
@@ -715,22 +762,6 @@ private struct PlusCircleButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
-        .onHover { hovering = $0 }
-    }
-}
-
-private struct HoverTextButton: View {
-    let label: String
-    var action: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            Text(label)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(hovering ? .white : .white.opacity(0.45))
-        }
-        .buttonStyle(.plain)
         .onHover { hovering = $0 }
     }
 }

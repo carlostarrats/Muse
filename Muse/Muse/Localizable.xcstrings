@@ -4726,6 +4726,16 @@
         }
       }
     },
+    "Show colors" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher les couleurs"
+          }
+        }
+      }
+    },
     "Show star ratings" : {
       "localizations" : {
         "fr" : {
@@ -5620,6 +5630,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Masquer la note"
+          }
+        }
+      }
+    },
+    "Hide colors" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masquer les couleurs"
           }
         }
       }

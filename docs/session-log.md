@@ -5694,3 +5694,39 @@ Pure units: `NoteStore` (read/write/search + scope isolation), `Sidecar`
 merge + `resolveForWrite` (clobber-guard + authoritative-write split),
 `BackupOccurrence.note` round-trip, `ReconnectApplier` restore. No grid
 badge, no Collections-page surface — notes are hero-viewer + search only.
+
+### Collapsible Colors card (hero viewer) — 2026-07-07 (`feat/next-130`)
+
+Small polish to the hero viewer's info column. The **COLORS** card is now
+collapsible (open by default), matching the Note card's chrome exactly:
+
+- **Shared `CopyIconButton`** (`ViewerInfoColumn.swift`) replaces the old
+  "copy all" `HoverTextButton` on Colors and the inline copy `Button` on Note,
+  so both cards use one control (`doc.on.doc` icon + a `PlusCircleButton` +/−
+  toggle beside it). Its hover shows only a **circular tint** behind the glyph
+  (the `PlusCircleButton`'s resting/hover background treatment); the glyph
+  opacity is **constant** — an earlier version also brightened the glyph on
+  hover and the owner rejected it ("makes it weird"). Disabled (empty note)
+  dims to 0.35 and drops the hover response. `HoverTextButton` was Colors' only
+  caller and is deleted.
+- **Global (not per-file) expand/collapse.** Unlike the note — whose expansion
+  is derived per file from `details.fileID` — the Colors choice is a single
+  GLOBAL last-choice: `AppSettings.colorsCardExpanded` (key
+  `heroColorsCardExpanded`, default `true`/open). Collapse it once and every
+  file opens collapsed until re-expanded.
+- **Why plain `@State`, not `@AppStorage`.** First cut used `@AppStorage` +
+  value-scoped `.animation(_:value:)`; the collapse then **jumped** the cards
+  below instead of gliding, because a value-scoped animation only animates
+  inside the card's own subtree — the sibling repositioning in the parent
+  `VStack` wasn't in the transaction. The Note/Info cards glide because they
+  toggle inside `withAnimation(.spring)` (a global transaction). But
+  `withAnimation` can't animate an `@AppStorage` change (the UserDefaults
+  publish lands outside the transaction — existing durable constraint). Fix:
+  seed plain `@State` from `AppSettings.colorsCardExpanded`, toggle inside
+  `withAnimation`, and persist in `.onChange(of:)`. Now the whole column
+  glides like Note/Info AND the choice persists globally.
+- French localized: `Hide colors` → "Masquer les couleurs", `Show colors` →
+  "Afficher les couleurs" (`Copy all colors` was already translated).
+
+No DB/schema change — pure UI plus one UserDefaults key. Build + 672 unit +
+6 UI tests green. Recorded as Polish 22 in CLAUDE.md's implementation table.
