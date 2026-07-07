@@ -139,7 +139,7 @@ extension AppState {
                 reloadTagChips()
                 return
             }
-            let paths = (try? await CollectionStore.alivePaths(
+            let paths = (try? await CollectionStore.alivePathsResolving(
                 queue: q, collectionID: id
             )) ?? []
             // Narrow to members under an active root FIRST, using the SAME rule
@@ -190,7 +190,7 @@ extension AppState {
         // empty-roots fallback to "unfiltered" would be wrong, not just
         // inconsistent.
         guard !rootNodes.isEmpty, let q = Database.shared.dbQueue else { return [] }
-        let paths = (try? await CollectionStore.alivePaths(queue: q, collectionID: id)) ?? []
+        let paths = (try? await CollectionStore.alivePathsResolving(queue: q, collectionID: id)) ?? []
         let rootPaths = rootNodes.map { $0.url.standardizedFileURL.path }
         let reachable = paths.filter { CollectionStore.isUnderAnyRoot($0, roots: rootPaths) }
         // Order the pages by the SAME active sort as the open-collection grid
