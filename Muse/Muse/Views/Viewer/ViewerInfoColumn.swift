@@ -355,15 +355,26 @@ struct ViewerInfoColumn<Chrome: View>: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        // Seed the draft when the loaded note changes (details arrive async after
-        // a file switch). Don't stomp an in-progress edit.
+        // Expansion default (collapsed when empty / expanded when it has text) is
+        // derived ONCE per file, keyed on details.fileID — which changes only when a
+        // genuinely different file's details load. A same-file refresh (our own
+        // refresh() after an edit) leaves fileID unchanged, so it never re-derives
+        // expansion and a manual collapse sticks.
+        .onChange(of: details?.fileID) { _, _ in
+            guard !noteFocused else { return }
+            let value = details?.note ?? ""
+            loadedNote = value
+            noteDraft = value
+            noteExpanded = !value.isEmpty
+        }
+        // Same-file note VALUE change (external sync, or our own refresh() after a
+        // commit): keep the draft in sync when not editing, but NEVER touch
+        // expansion — that belongs to the fileID handler, so a manual collapse
+        // isn't undone by the refresh a commit triggers.
         .onChange(of: details?.note) { _, newValue in
             let value = newValue ?? ""
             loadedNote = value
-            if !noteFocused {
-                noteDraft = value
-                noteExpanded = !value.isEmpty
-            }
+            if !noteFocused { noteDraft = value }
         }
         // File switched (e.g. arrow keys) while editing: flush to the OLD file
         // first, then drop focus so the `details?.note` reseed (guarded on

@@ -5629,9 +5629,14 @@ plan `docs/superpowers/plans/2026-07-07-hero-note-section.md`.
   path used by the UI, and deliberately does **not** bump `tagsVersion` (a note
   has no grid surface — re-evaluating chips/badges for it would be wasted
   work). The card defaults collapsed when the note is empty, expanded when it
-  has text, re-evaluated per file open; the draft lives in local `@State`
-  (never bound straight to `AppState`) and commits on blur / collapse /
-  file-switch / viewer-close — never per keystroke.
+  has text, re-evaluated per file open — the expansion default is keyed on
+  `details.fileID` (a genuinely new file), **not** the note value. A QA/bug-hunt
+  pass caught that deriving expansion from the note value re-expanded the card on
+  the same-file `refresh()` a commit triggers, undoing a manual collapse; the
+  `fileID`-keyed handler sets expansion once per file while the note-value handler
+  only keeps the draft in sync. The draft lives in local `@State` (never bound
+  straight to `AppState`) and commits on blur / collapse / file-switch /
+  viewer-close — never per keystroke.
 - **Searched via `LIKE`, not FTS.** `files_fts` is keyed by the immutable
   `files.id` (one row per content hash), which structurally can't hold a
   per-`(file_id, parent_dir)` value. `SearchService` adds a `notes` `LIKE ...
