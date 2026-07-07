@@ -34,8 +34,14 @@ enum MetadataImportApply {
     /// Insert each label as a MANUAL tag, or promote an existing row (vision
     /// or manual) to manual — the same branch TagStore.addManualTag uses, so
     /// re-importing (or importing over hand-typed tags) is a no-op.
+    ///
+    /// Rating-glyph labels (runs of ★) are dropped: a rating is a
+    /// mutually-exclusive manual tag written only through the separate rating
+    /// field, so letting one in as a keyword would attach a SECOND rating tag
+    /// and break StarRating.resolution (same reason every tag-writing surface
+    /// filters them — CLAUDE.md durable constraint).
     static func applyKeywords(db: GRDB.Database, scope: Scope, labels: [String]) throws {
-        for label in labels {
+        for label in labels where !StarRating.isRating(label) {
             if let existing = try TagRow
                 .filter(TagRow.Columns.file_id == scope.fileID)
                 .filter(TagRow.Columns.parent_dir == scope.dir)

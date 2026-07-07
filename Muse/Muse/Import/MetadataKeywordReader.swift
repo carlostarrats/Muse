@@ -39,16 +39,20 @@ enum MetadataKeywordReader {
             throw ReadError.dataless
         }
         let sidecar = sidecarMetadata(for: url)
-        // CGImageSourceCreateWithURL succeeds lazily even on garbage bytes —
-        // only a .statusComplete source is a readable image. An unreadable
-        // file with no sidecar throws (counted "skipped", not "had none").
+        // CGImageSourceCreateWithURL succeeds lazily even on garbage bytes, so
+        // presence alone isn't "readable image". Image COUNT is the robust
+        // signal: garbage → 0, any real container (incl. every ImageIO-supported
+        // RAW) → ≥1. (Status is NOT used — it isn't reliably .statusComplete for
+        // all RAW formats, which are exactly the files that carry sidecars, so a
+        // status gate would wrongly skip a readable RAW.) A file with neither a
+        // sidecar nor a decodable container throws (counted "skipped").
         let source = CGImageSourceCreateWithURL(url as CFURL, nil)
-            .flatMap { CGImageSourceGetStatus($0) == .statusComplete ? $0 : nil }
-        guard sidecar != nil || source != nil else { throw ReadError.unreadable }
+        let hasImages = (source.map { CGImageSourceGetCount($0) } ?? 0) > 0
+        guard sidecar != nil || hasImages else { throw ReadError.unreadable }
 
         var out = Extracted()
         if let sidecar { merge(from: sidecar, into: &out) }
-        if let source, !out.complete {
+        if hasImages, let source, !out.complete {
             if let meta = CGImageSourceCopyMetadataAtIndex(source, 0, nil) {
                 merge(from: meta, into: &out)
             }

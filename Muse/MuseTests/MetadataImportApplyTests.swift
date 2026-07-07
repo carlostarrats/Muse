@@ -77,6 +77,21 @@ final class MetadataImportApplyTests: XCTestCase {
         }
     }
 
+    func testApplyKeywordsDropsRatingGlyphLabels() throws {
+        // A rating-glyph keyword must NOT become a plain tag — that would be a
+        // second rating tag, breaking the one-rating-per-photo model. Ordinary
+        // labels in the same batch still land.
+        let q = try migrated()
+        try q.write { db in
+            try seed(db)
+            let scope = try MetadataImportApply.scope(db: db, absPath: "/A/x.jpg")!
+            try MetadataImportApply.applyKeywords(db: db, scope: scope, labels: ["★★★", "sunset"])
+            let labels = try String.fetchAll(db, sql:
+                "SELECT label FROM tags WHERE file_id='f1' AND parent_dir='/A' ORDER BY label")
+            XCTAssertEqual(labels, ["sunset"])
+        }
+    }
+
     func testHasRatingSeesRatingGlyphRunsOnly() throws {
         let q = try migrated()
         try q.write { db in
