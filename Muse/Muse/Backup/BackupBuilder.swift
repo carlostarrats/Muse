@@ -94,7 +94,8 @@ enum BackupBuilder {
                 collections.append(BackupCollection(
                     id: c.id, name: c.name, sort_order: c.sort_order,
                     model_version: c.model_version, is_hidden: c.is_hidden,
-                    cover_hash: coverHash, members: members, excluded_hashes: excluded))
+                    cover_hash: coverHash, members: members, excluded_hashes: excluded,
+                    icon: c.icon, color: c.color))
             }
 
             let starRows = try StarredFolderRow.fetchAll(db)

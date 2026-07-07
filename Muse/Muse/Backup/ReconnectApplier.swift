@@ -78,14 +78,15 @@ enum ReconnectApplier {
         try await queue.write { db in
             for c in materialized {
                 try db.execute(sql: """
-                    INSERT INTO collections (id, name, is_hidden, model_version, created_at, updated_at, cover_file_id, sort_order)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO collections (id, name, is_hidden, model_version, created_at, updated_at, cover_file_id, sort_order, icon, color)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET name = excluded.name,
                         is_hidden = excluded.is_hidden, model_version = excluded.model_version,
                         cover_file_id = excluded.cover_file_id, sort_order = excluded.sort_order,
+                        icon = excluded.icon, color = excluded.color,
                         updated_at = excluded.updated_at
                     """, arguments: [c.id, c.name, c.isHidden, c.modelVersion, now, now,
-                                     c.coverFileID, c.sortOrder])
+                                     c.coverFileID, c.sortOrder, c.icon, c.color])
                 try db.execute(sql: "DELETE FROM collection_members WHERE collection_id = ?",
                                arguments: [c.id])
                 for m in c.memberFileIDs {
