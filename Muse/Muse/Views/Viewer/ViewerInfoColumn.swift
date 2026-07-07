@@ -53,6 +53,13 @@ struct ViewerInfoColumn<Chrome: View>: View {
     @State private var newCollectionName = ""
     @State private var newTagLabel = ""
     @State private var tagSuggestions: [PillItem] = []
+    /// Note card: default collapsed when empty, expanded when it has text.
+    @State private var noteExpanded = false
+    /// Local draft — never bound to AppState. Committed on blur / collapse / file switch.
+    @State private var noteDraft = ""
+    /// The note value we last seeded the draft from, so commit only writes on change.
+    @State private var loadedNote = ""
+    @FocusState private var noteFocused: Bool
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -63,6 +70,7 @@ struct ViewerInfoColumn<Chrome: View>: View {
                 collectionCard
                 tagsCard
                 ratingCard
+                noteCard
                 if !displayPalette.isEmpty {
                     colorsCard(palette: displayPalette)
                 } else if paletteLoading {
@@ -296,6 +304,92 @@ struct ViewerInfoColumn<Chrome: View>: View {
             show(stars == nil
                  ? String(localized: "Rating removed")
                  : String(localized: "Rated \(stars!) stars"))
+        }
+    }
+
+    // MARK: - Note card
+
+    /// A user-authored free-text note, per file-in-folder. Collapsible (default
+    /// collapsed when empty, expanded when it has text). The draft is local and
+    /// commits on blur / collapse / file switch — never per keystroke.
+    private var noteCard: some View {
+        InfoCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    CardLabel(text: String(localized: "NOTE"))
+                    Spacer()
+                    Button {
+                        copyToPasteboard(noteDraft)
+                        show(String(localized: "Note copied"))
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(noteDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .accessibilityLabel(String(localized: "Copy note"))
+                    PlusCircleButton(size: 18, rotated: noteExpanded,
+                                     accessibilityLabel: noteExpanded ? String(localized: "Hide note")
+                                                                      : String(localized: "Show note")) {
+                        // Collapsing commits any pending edit first.
+                        if noteExpanded { commitNote(to: url) }
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
+                            noteExpanded.toggle()
+                        }
+                    }
+                }
+                if noteExpanded {
+                    TextField(String(localized: "Add a note…"), text: $noteDraft, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .lineLimit(2...8)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(.white.opacity(0.08)))
+                        .focused($noteFocused)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        // Seed the draft when the loaded note changes (details arrive async after
+        // a file switch). Don't stomp an in-progress edit.
+        .onChange(of: details?.note) { _, newValue in
+            let value = newValue ?? ""
+            loadedNote = value
+            if !noteFocused {
+                noteDraft = value
+                noteExpanded = !value.isEmpty
+            }
+        }
+        // File switched (e.g. arrow keys) while editing: flush to the OLD file first.
+        .onChange(of: url) { oldURL, _ in
+            commitNote(to: oldURL)
+        }
+        // Blur commits.
+        .onChange(of: noteFocused) { _, focused in
+            if !focused { commitNote(to: url) }
+        }
+        .onDisappear { commitNote(to: url) }
+        .task(id: url) {
+            let value = details?.note ?? ""
+            loadedNote = value
+            noteDraft = value
+            noteExpanded = !value.isEmpty
+        }
+    }
+
+    /// Write the draft to `target` only if it changed from the loaded value.
+    private func commitNote(to target: URL) {
+        let trimmed = noteDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed != loadedNote.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
+        loadedNote = trimmed
+        Task {
+            await TagStore.shared.setNote(trimmed, forURL: target)
+            await refresh()
         }
     }
 
