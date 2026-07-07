@@ -314,6 +314,8 @@ final class AppState: ObservableObject {
 
     /// Drives the View-menu "Manage Drive Shares…" sheet.
     @Published var driveSharesShown = false
+    /// Non-nil while the Import Keywords & Ratings sheet is up (File menu).
+    @Published var metadataImportRequest: MetadataImportRequest?
 
     // Collection filtering (toggleCollectionsPage / visibleFiles /
     // tagSourceFiles / setActiveCollection / setCollectionCover) and the tag
@@ -1244,7 +1246,9 @@ final class AppState: ObservableObject {
 
     /// Nonisolated so it can run off the main thread during a folder load.
     /// Sorting is left to SmartSorter (the caller applies the active mode).
-    private nonisolated static func enumerateRecursive(at url: URL, showHidden: Bool) -> [FileNode] {
+    /// Internal (not private): the metadata import (MetadataImportModel) is a
+    /// second caller alongside the intent paths.
+    nonisolated static func enumerateRecursive(at url: URL, showHidden: Bool) -> [FileNode] {
         let fm = FileManager.default
         guard let enumerator = fm.enumerator(
             at: url,

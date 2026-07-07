@@ -352,6 +352,19 @@ Muse/Muse/
                                    toggleDisabled). One source of truth shared by SidebarView's render
                                    gate + SettingsView's "Show iCloud Folder in the Sidebar" toggle.
                                    Unit-tested
+  Import/                          File > Import Keywords & Ratings… — read-only import of
+                                   IPTC/XMP keywords + star ratings (Lightroom/Bridge/Capture One)
+                                   into existing files as Muse manual tags + ratings.
+    MetadataImportRules.swift      pure: keyword trim/dedupe, rating clamp, fill-gaps-only decision.
+                                   Unit-tested
+    MetadataKeywordReader.swift    ImageIO read, per-field priority sidecar→embedded-XMP→IPTC;
+                                   count-based readability (RAW-safe), dataless-guarded, no pixel
+                                   decode. Unit-tested
+    MetadataImportApply.swift      GRDB statics: manual-tag insert-or-promote (rating glyphs dropped)
+                                   + rating-presence check, per (file_id, parent_dir). Unit-tested
+    MetadataImportModel.swift      @MainActor orchestrator: enumerate → index-first → read off-main →
+                                   batched writes, progress/cancel/summary, idempotent
+    MetadataImportSheet.swift      content-sized progress + summary sheet
   Backup/                          Library Backup & Restore. Export one self-contained `.muselibrary`
                                    file + reconnect it on another Mac by content hash
     BackupArchive.swift            pure Codable model; reuses Sidecar for per-file metadata.

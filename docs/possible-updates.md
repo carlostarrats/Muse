@@ -165,3 +165,14 @@ richer/mood-aware auto-tags.
 Needs its own brainstorm → spec → plan when the OS lands. Scope will center on
 `AnalyzePipeline` (caption/tag generation + the embedding build), capability gating,
 and the auto-tag/auto-collection settings seam. Not started.
+
+## Deferred: Eagle library import (designed 2026-07-07, not built)
+
+A one-time migration rescuing an Eagle (`.library`) collection into a normal
+Muse folder — tags/ratings carried, Eagle folders reborn as Muse collections
+(one copy per file, never disk duplication). Fully brainstormed + owner-approved,
+deferred for lack of Eagle-user demand. **Design doc:
+`docs/future-features/eagle-library-import.md`** — start there if demand appears;
+it also lists what the shipped Lightroom/Bridge metadata import already provides
+(the ingestion seams to reuse) and what was explicitly rejected (social bookmark
+import, disk-duplicating folder mirroring).
