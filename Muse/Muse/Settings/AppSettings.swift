@@ -19,6 +19,7 @@ enum AppSettings {
     static let autoCollectionsKey = "autoOrganizeCollections"
     static let showFileNamesKey = "showFileNames"
     static let showStarsOnGridKey = "showStarsOnGrid"
+    static let colorsCardExpandedKey = "heroColorsCardExpanded"
 
     /// Automatically run the Vision pass (tags/caption/colors/OCR) on newly
     /// indexed images. Default true. Unset → treated as on.
@@ -42,6 +43,14 @@ enum AppSettings {
     /// a collection and in the hero viewer. Unset → treated as on.
     static var showStarsOnGrid: Bool {
         UserDefaults.standard.object(forKey: showStarsOnGridKey) as? Bool ?? true
+    }
+
+    /// Hero viewer COLORS card: expanded (swatches visible) vs collapsed. This
+    /// is a GLOBAL choice — the user's last expand/collapse becomes the default
+    /// for every file (unlike the note, whose expansion is per-file). Default
+    /// true (open). Unset → treated as open.
+    static var colorsCardExpanded: Bool {
+        UserDefaults.standard.object(forKey: colorsCardExpandedKey) as? Bool ?? true
     }
 
     // Google Drive share — remembered Muse-root folder id + last form text.
