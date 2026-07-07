@@ -57,6 +57,10 @@ struct LabColor: Equatable {
 }
 
 enum ColorDistance {
+    /// 25⁷, the fixed CIEDE2000 chroma-weighting constant. Hoisted so the
+    /// hot deltaE loop (thousands of calls per search) doesn't re-`pow` it.
+    private static let pow25_7: Double = pow(25.0, 7)
+
     /// CIEDE2000 — the perceptually-accurate ΔE. Plain Euclidean LAB (CIE76)
     /// was tried first but is too non-uniform, especially in blues and light
     /// neutrals: against a real 2200-image library it couldn't separate a
@@ -70,7 +74,7 @@ enum ColorDistance {
         let c2 = (y.a * y.a + y.b * y.b).squareRoot()
         let cBar = (c1 + c2) / 2
         let cBar7 = pow(cBar, 7)
-        let g = cBar > 0 ? 0.5 * (1 - (cBar7 / (cBar7 + pow(25.0, 7))).squareRoot()) : 0.5
+        let g = cBar > 0 ? 0.5 * (1 - (cBar7 / (cBar7 + pow25_7)).squareRoot()) : 0.5
 
         let a1p = (1 + g) * x.a
         let a2p = (1 + g) * y.a
@@ -107,7 +111,7 @@ enum ColorDistance {
                 + 0.32 * cos(deg(3 * hBarP + 6)) - 0.20 * cos(deg(4 * hBarP - 63))
         let dRo = 30 * exp(-pow((hBarP - 275) / 25, 2))
         let cBarP7 = pow(cBarP, 7)
-        let rc = cBarP > 0 ? 2 * (cBarP7 / (cBarP7 + pow(25.0, 7))).squareRoot() : 0
+        let rc = cBarP > 0 ? 2 * (cBarP7 / (cBarP7 + pow25_7)).squareRoot() : 0
         let sL = 1 + (0.015 * pow(lBarP - 50, 2)) / (20 + pow(lBarP - 50, 2)).squareRoot()
         let sC = 1 + 0.045 * cBarP
         let sH = 1 + 0.015 * cBarP * t

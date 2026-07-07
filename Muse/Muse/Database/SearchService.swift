@@ -71,7 +71,10 @@ enum SearchService {
             // (closest first), resolve, return.
             if !colorQuery.isEmpty && !hasText {
                 let ranked = (colorIDs ?? []).sorted {
-                    (colorScore[$0] ?? .infinity) < (colorScore[$1] ?? .infinity)
+                    let s0 = colorScore[$0] ?? .infinity, s1 = colorScore[$1] ?? .infinity
+                    // Tiebreak on id so equal-distance files keep a stable,
+                    // repeatable order across identical searches.
+                    return s0 != s1 ? s0 < s1 : $0 < $1
                 }
                 return try aliveePaths(for: ranked, db: db)
             }
