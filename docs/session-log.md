@@ -5457,8 +5457,24 @@ and the nav no longer arrives late. Two independent bugs had been read as one:
 
 Owner-verified live through five build/test rounds (spike proved the AppKit
 fade first; presentation-layer logging measured the curves): no flash, nav
-present with the return flight. Known edges (accepted): full-screen moves the
-toolbar out of the titlebar so the lookup no-ops fail-open (toolbar just stays
-visible); ToolbarFade is view-hierarchy-shape-dependent (Sonoma→Tahoe verified
-shape, degrades to visible-toolbar if it shifts). `MuseTests` green; no new
-user-facing strings.
+present with the return flight. `MuseTests` green; no new user-facing strings.
+ToolbarFade is view-hierarchy-shape-dependent (Sonoma→Tahoe verified shape,
+degrades to visible-toolbar if it shifts).
+
+**Follow-up same session — full-screen investigated + hardened.** A hierarchy
+probe (self-driving `toggleFullScreen` + view-tree dump) confirmed macOS
+relocates the `NSToolbarView` out of the main `AppKitWindow` (which reports
+`fullScreen=1`) into a separate auto-hiding `NSToolbarFullScreenWindow`. The
+lookup was already no-op'ing there by accident (it only searches the main
+window); made it EXPLICIT — `toolbarView()` bails on a `.fullScreen` window —
+so a future lookup change can't start fading the OS-managed view. A second probe
+(drive the real `ToolbarFade` API through the bug sequence) found a genuine bug:
+the hidden `alpha`/`isHidden` CARRIES BACK to the windowed toolbar across a
+full-screen round-trip, so a hero hidden windowed → entered full-screen → closed
+there (show() no-ops in full-screen) → exited would strand the toolbar invisible
+(verified `alpha=0 isHidden=1` after exit). Fix: ToolbarFade records
+`lastIntentHidden` (even when a call no-ops) and re-asserts it on
+`didExitFullScreenNotification` (install-once observer) — verified the guard
+restores `alpha=1 isHidden=0`. All probes were temporary and removed. Full-screen
+hero open/close itself is un-automatable (needs a double-click) → owner-QA; the
+toolbar is OS-auto-hidden there so there's no flash to prevent.

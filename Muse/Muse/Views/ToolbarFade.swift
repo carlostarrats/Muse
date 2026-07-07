@@ -20,9 +20,19 @@
 //  flight. `isHidden` is set after the fade-out so the invisible strip
 //  can't swallow clicks meant for the viewer's top edge.
 //
-//  If the toolbar view can't be located (private hierarchy shifted, or
-//  full-screen moved it out of the titlebar), both calls no-op: the
-//  toolbar just stays visible — cosmetically worse, never broken.
+//  Full-screen is handled deliberately, NOT by accident: macOS relocates the
+//  NSToolbarView out of the window titlebar into a separate auto-hiding
+//  NSToolbarFullScreenWindow whose visibility the OS owns (it slides down on
+//  mouse-to-top). `toolbarView()` returns nil for a full-screen window, so both
+//  calls no-op and we never touch that OS-managed view — fading or hiding it
+//  would fight the auto-hide and could strand the toolbar hidden after
+//  full-screen exits (the view is reused when it returns to the titlebar). In
+//  full-screen the toolbar auto-hides on its own and there is no teardown, so
+//  there is no flash to prevent anyway.
+//
+//  If the toolbar view can't be located for any other reason (private hierarchy
+//  shifted on a future macOS), both calls no-op the same way: the toolbar just
+//  stays visible — cosmetically worse, never broken.
 //
 
 import AppKit
@@ -33,8 +43,18 @@ enum ToolbarFade {
     /// toolbar after a fade-in has already superseded it.
     private static var generation = 0
 
+    /// The visibility we last INTENDED (true = hidden), recorded even when the
+    /// call no-ops in full-screen. Re-applied on full-screen exit: macOS carries
+    /// the hidden alpha/`isHidden` back to the windowed toolbar view (verified),
+    /// so a hero that was hidden windowed, then closed while full-screen (where
+    /// show() can't reach the relocated view), would otherwise strand the
+    /// toolbar invisible after exiting full-screen. See `installFullScreenGuard`.
+    private static var lastIntentHidden = false
+
     /// Dissolve the toolbar out (viewer opening). Ends fully hidden.
     static func hide(duration: TimeInterval = 0.20) {
+        lastIntentHidden = true
+        installFullScreenGuard()
         guard let view = toolbarView() else { return }
         generation += 1
         let expected = generation
@@ -62,6 +82,8 @@ enum ToolbarFade {
     /// unmounted before its fade-out finished (fixed in HeroImageViewer), and
     /// was misattributed to the toolbar for a while.
     static func show(duration: TimeInterval = 0.12) {
+        lastIntentHidden = false
+        installFullScreenGuard()
         guard let view = toolbarView() else { return }
         generation += 1
         let startOpacity = view.layer?.presentation()?.opacity ?? Float(view.alphaValue)
@@ -79,14 +101,52 @@ enum ToolbarFade {
         }
     }
 
+    // MARK: - Full-screen carryover guard
+
+    private static var fullScreenGuardInstalled = false
+
+    /// Register once for full-screen-exit, to undo the hidden-state carryover.
+    /// macOS reuses the toolbar view across the transition and brings its
+    /// `alpha`/`isHidden` back with it, so on returning to the titlebar we
+    /// re-assert whatever visibility we last intended (`lastIntentHidden`):
+    /// - hero closed while full-screen → intent is "shown" → restore the
+    ///   toolbar the stranded no-op couldn't reach.
+    /// - hero still open across the transition → intent is "hidden" → keep it
+    ///   hidden (the later close's show() fades it back in).
+    private static func installFullScreenGuard() {
+        guard !fullScreenGuardInstalled else { return }
+        fullScreenGuardInstalled = true
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didExitFullScreenNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            MainActor.assumeIsolated {
+                // The view is back in the titlebar now; re-assert intent with no
+                // animation (the transition itself already animated). Cancel any
+                // in-flight fade so it can't fight this final state.
+                guard let view = toolbarView() else { return }
+                view.layer?.removeAnimation(forKey: "tbfade")
+                view.alphaValue = lastIntentHidden ? 0 : 1
+                view.isHidden = lastIntentHidden
+            }
+        }
+    }
+
     // MARK: - Lookup
 
     /// The single AppKit view that renders the whole toolbar strip (items,
     /// glass platters, search field). Found by walking up from a standard
     /// window button to the titlebar container, then down to the first
     /// "toolbar"-named view — same shape on Sonoma through Tahoe.
+    ///
+    /// Returns nil while the toolbar's window is full-screen: macOS moves the
+    /// NSToolbarView into a separate auto-hiding window it manages itself, and
+    /// we must not touch it there (see the file header). Bailing here keeps
+    /// hide()/show() as clean no-ops in full-screen.
     private static func toolbarView() -> NSView? {
         guard let window = NSApp.windows.first(where: { $0.isVisible && $0.toolbar != nil }),
+              !window.styleMask.contains(.fullScreen),
               let anchor = window.standardWindowButton(.closeButton) else { return nil }
         var candidate: NSView? = anchor
         while let view = candidate,
