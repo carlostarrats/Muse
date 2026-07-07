@@ -5548,8 +5548,14 @@ Flight-handoff correctness (all owner-reported over the review rounds):
   coords), so the tileFrames write is now suppressed for transformed neighbors
   (only the never-transformed source tile reports live) — else an arrow-flip
   close would fly to a warped rect. Self-heals on close.
-- **Stale hover flash:** the invisible hero tile's `hovering` is reset on both
-  edges of the session, killing a dark-veil flash on reveal.
+- **Stale hover flash:** the invisible hero tile's `hovering` is reset when the
+  hero session begins, so a pre-open hover doesn't paint the dark veil through
+  the parting ripple. (Superseded 2026-07-07: the reset originally fired on BOTH
+  edges, which also killed a *legitimate* hover on close — if the mouse was still
+  over the source tile as it returned, the veil showed during the reveal then got
+  yanked away a frame later, reading as a glitch. Now cleared on the OPEN edge
+  only; on close `hovering` is left accurate so a genuine hover simply stays,
+  like normal. See `GridView` tile `onChange`.)
 
 Process note: the "nav returns late" complaint mid-session was NOT a
 regression — A/B'd it by rebuilding the untouched branch base and timing the
