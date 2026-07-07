@@ -257,6 +257,42 @@ final class TagStore: ObservableObject {
         AnalyzePipeline.shared.exportSidecarsAfterTagEdit(for: urls)
     }
 
+    /// Read the note for a file IN ITS FOLDER ("" if none / not indexed).
+    func note(for url: URL) async -> String {
+        guard let queue = Database.shared.dbQueue else { return "" }
+        let absPath = url.standardizedFileURL.path
+        let dir = TagScope.parentDir(ofPath: absPath)
+        return ((try? await queue.read { db -> String? in
+            guard let path = try PathRow
+                    .filter(PathRow.Columns.absolute_path == absPath)
+                    .filter(PathRow.Columns.is_alive == 1)
+                    .fetchOne(db),
+                  let fileID = path.file_id else { return nil }
+            return try NoteStore.read(fileID: fileID, parentDir: dir, db: db)
+        }) ?? nil) ?? ""
+    }
+
+    /// Set (or clear, when blank) the note for a file IN ITS FOLDER. Scoped to
+    /// (file_id, parent_dir) like tags. Like every TagStore mutation it re-exports
+    /// the iCloud sidecar. DELIBERATELY does NOT bump `AppState.tagsVersion` — a
+    /// note has no grid surface, so re-evaluating grid chips/counts is wasted work.
+    func setNote(_ body: String, forURL url: URL) async {
+        guard let queue = Database.shared.dbQueue else { return }
+        let absPath = url.standardizedFileURL.path
+        let now = Int64(Date().timeIntervalSince1970)
+        do {
+            try await queue.write { db in
+                for scope in try tagScopes(forPaths: [absPath], db: db) {
+                    try NoteStore.write(body, fileID: scope.fileID,
+                                        parentDir: scope.dir, updatedAt: now, db: db)
+                }
+            }
+        } catch {
+            print("[TagStore] setNote failed: \(error)")
+        }
+        AnalyzePipeline.shared.exportSidecarsAfterTagEdit(for: [url])
+    }
+
     func removeTag(_ tag: TagRow, for url: URL) async -> [TagRow] {
         guard let queue = Database.shared.dbQueue else { return [] }
         let tagID = tag.id
