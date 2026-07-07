@@ -53,11 +53,15 @@ enum SearchService {
                 .fetchAll(db)
                 .map { $0.file_id }
 
+            // 2b) Note substring matches (per (file_id, parent_dir), LIKE — notes
+            //     are not in FTS). Uses the raw trimmed query, same as basename/OCR.
+            let noteIDs = try NoteStore.searchIDs(term: trimmed, db: db)
+
             // Exact hits, ordered: FTS5 result order first, then tag matches
             // not already included, in their query order.
             var exactSeen = Set<String>()
             var exactIDs: [String] = []
-            for id in ftsIDs + tagIDs where !exactSeen.contains(id) {
+            for id in ftsIDs + tagIDs + noteIDs where !exactSeen.contains(id) {
                 exactIDs.append(id); exactSeen.insert(id)
             }
 
