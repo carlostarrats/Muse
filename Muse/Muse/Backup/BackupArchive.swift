@@ -20,6 +20,9 @@ nonisolated struct BackupOccurrence: Codable, Equatable, Sendable {
     var root_path: String?
     var parent_dir: String?
     var tags: [SidecarTag]
+    /// User-authored note for this occurrence's (file_id, parent_dir). Optional
+    /// so pre-note archives decode. Notes ride the occurrence, NOT meta (per-location).
+    var note: String? = nil
 }
 
 nonisolated struct BackupFile: Codable, Equatable, Sendable {

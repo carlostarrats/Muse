@@ -10,6 +10,8 @@ struct ViewerFileDetails {
     var palette: [String]
     var tags: [TagRow]
     var collections: [CollectionRow]
+    /// User-authored note for this file IN THIS FOLDER ("" if none).
+    var note: String
 
     static func load(queue: DatabaseQueue, path: String) async throws -> ViewerFileDetails? {
         try await queue.read { db -> ViewerFileDetails? in
@@ -34,11 +36,12 @@ struct ViewerFileDetails {
                 JOIN collection_members m ON m.collection_id = c.id
                 WHERE m.file_id = ? AND c.is_hidden = 0
                 """, arguments: [fid])
+            let note = try NoteStore.read(fileID: fid, parentDir: dir, db: db) ?? ""
             var size: CGSize? = nil
             if let w = f.width, let h = f.height { size = CGSize(width: w, height: h) }
             return ViewerFileDetails(fileID: fid, pixelSize: size, sizeBytes: f.size_bytes,
                                      dominantColor: f.dominant_color, palette: palette,
-                                     tags: tags, collections: cols)
+                                     tags: tags, collections: cols, note: note)
         }
     }
 }

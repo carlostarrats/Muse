@@ -292,34 +292,34 @@ final class AnalyzePipeline: ObservableObject {
     /// with manual-beats-vision). Manual tag EDITS pass false — there the
     /// local DB is authoritative (including deletions) and merging would
     /// resurrect a just-deleted tag from the old sidecar.
-    private func writeSidecarIfICloud(fileID: String, url: URL, mergeExisting: Bool) async {
+    private func writeSidecarIfICloud(fileID: String, url: URL, mergeExisting: Bool, noteAuthoritative: Bool = false) async {
         guard ICloudZone.contains(url, folder: iCloudFolder) else { return }
         guard let queue = Database.shared.dbQueue else { return }
         let now = Int64(Date().timeIntervalSince1970)
         let dir = TagScope.parentDir(of: url)
-        let bundle: (FileRow, [TagRow])? = try? await queue.read { db -> (FileRow, [TagRow])? in
+        let bundle: (FileRow, [TagRow], String?)? = try? await queue.read { db -> (FileRow, [TagRow], String?)? in
             guard let file = try FileRow.filter(FileRow.Columns.id == fileID).fetchOne(db)
             else { return nil }
-            // Sidecar lives in this file's folder → carry only this folder's tags.
+            // Sidecar lives in this file's folder → carry only this folder's tags + note.
             let tags = try TagRow
                 .filter(TagRow.Columns.file_id == fileID)
                 .filter(TagRow.Columns.parent_dir == dir)
                 .fetchAll(db)
-            return (file, tags)
+            let note = try NoteStore.read(fileID: fileID, parentDir: dir, db: db)
+            return (file, tags, note)
         }
-        guard let (file, tags) = bundle,
-              let sidecar = Sidecar.build(from: file, tags: tags, updatedAt: now) else { return }
+        guard let (file, tags, note) = bundle,
+              let sidecar = Sidecar.build(from: file, tags: tags, updatedAt: now, note: note) else { return }
         let hash = sidecar.content_hash
         // Sidecar + URL are Sendable; write off-main so the (tiny) coordinated
         // disk write never blocks the main actor. Log on failure — a silent
         // write failure would silently defeat the "no re-Vision on sync" promise.
         await Task.detached {
             do {
-                var out = sidecar
-                if mergeExisting,
-                   let existing = SidecarStore.read(forAsset: url, contentHash: hash) {
-                    out = Sidecar.merge(existing, sidecar)
-                }
+                let existing = SidecarStore.read(forAsset: url, contentHash: hash)
+                let out = Sidecar.resolveForWrite(fresh: sidecar, existing: existing,
+                                                  mergeExisting: mergeExisting,
+                                                  noteAuthoritative: noteAuthoritative)
                 try SidecarStore.write(out, forAsset: url)
             }
             catch { print("[AnalyzePipeline] sidecar write failed for \(url.lastPathComponent): \(error)") }
@@ -331,7 +331,7 @@ final class AnalyzePipeline: ObservableObject {
     /// re-run on tag edits (analyzed_hash untouched), so without this a
     /// hydrate-only device keeps the pre-edit tag set forever. Fire-and-forget;
     /// non-iCloud URLs are filtered out cheaply first.
-    func exportSidecarsAfterTagEdit(for urls: [URL]) {
+    func exportSidecarsAfterTagEdit(for urls: [URL], noteAuthoritative: Bool = false) {
         let zone = iCloudFolder
         let inZone = urls.filter { ICloudZone.contains($0, folder: zone) }
         guard !inZone.isEmpty, let queue = Database.shared.dbQueue else { return }
@@ -340,7 +340,8 @@ final class AnalyzePipeline: ObservableObject {
                                                    absPaths: inZone.map { $0.standardizedFileURL.path })
             for url in inZone {
                 guard let fid = idByPath[url.standardizedFileURL.path] else { continue }
-                await writeSidecarIfICloud(fileID: fid, url: url, mergeExisting: false)
+                await writeSidecarIfICloud(fileID: fid, url: url, mergeExisting: false,
+                                          noteAuthoritative: noteAuthoritative)
             }
         }
     }

@@ -82,6 +82,24 @@ struct TagRow: Codable, FetchableRecord, MutablePersistableRecord {
     }
 }
 
+struct NoteRow: Codable, FetchableRecord, MutablePersistableRecord {
+    static let databaseTableName = "notes"
+
+    /// File this note belongs to, scoped to its folder — notes are per-location
+    /// like tags (a duplicate in another folder has its own note).
+    var file_id: String
+    var parent_dir: String
+    var body: String
+    /// Epoch seconds of the last write; feeds the sidecar's last-writer-wins.
+    var updated_at: Int64
+
+    enum Columns {
+        static let file_id = Column("file_id")
+        static let parent_dir = Column("parent_dir")
+        static let body = Column("body")
+    }
+}
+
 struct StarredFolderRow: Codable, FetchableRecord, MutablePersistableRecord {
     static let databaseTableName = "starred_folders"
 

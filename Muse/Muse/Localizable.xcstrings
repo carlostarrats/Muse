@@ -5563,6 +5563,66 @@
           }
         }
       }
+    },
+    "NOTE" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "REMARQUE"
+          }
+        }
+      }
+    },
+    "Add a note…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter une note…"
+          }
+        }
+      }
+    },
+    "Copy note" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copier la note"
+          }
+        }
+      }
+    },
+    "Note copied" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Note copiée"
+          }
+        }
+      }
+    },
+    "Show note" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher la note"
+          }
+        }
+      }
+    },
+    "Hide note" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masquer la note"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
