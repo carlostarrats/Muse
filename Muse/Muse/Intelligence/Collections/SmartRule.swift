@@ -11,7 +11,7 @@
 import Foundation
 
 /// AND (`all`) / OR (`any`) over a list of rules. A smart collection stores one.
-struct SmartRuleSet: Codable, Equatable {
+nonisolated struct SmartRuleSet: Codable, Equatable {
     enum Match: String, Codable { case all, any }
     var match: Match
     var rules: [SmartRule]
@@ -31,24 +31,24 @@ struct SmartRuleSet: Codable, Equatable {
 }
 
 /// `≥ / = / ≤` — shared by rating and size.
-enum Comparison: String, Codable { case atLeast, equal, atMost }
-enum HasOp: String, Codable { case has, hasNot }
-enum DateField: String, Codable { case created, modified }
+nonisolated enum Comparison: String, Codable { case atLeast, equal, atMost }
+nonisolated enum HasOp: String, Codable { case has, hasNot }
+nonisolated enum DateField: String, Codable { case created, modified }
 
 /// A color rule term: a palette color name or a hex string.
-enum ColorTerm: Codable, Equatable {
+nonisolated enum ColorTerm: Codable, Equatable {
     case name(String)
     case hex(String)
 }
 
 /// Relative or absolute date bound. Dates are epoch seconds (files.created_at).
-enum DateOp: Codable, Equatable {
+nonisolated enum DateOp: Codable, Equatable {
     case withinDays(Int)
     case before(Int64)
     case after(Int64)
 }
 
-enum SmartRule: Codable, Equatable {
+nonisolated enum SmartRule: Codable, Equatable {
     case rating(op: Comparison, stars: Int)
     case color(ColorTerm)
     case tag(op: HasOp, label: String)
