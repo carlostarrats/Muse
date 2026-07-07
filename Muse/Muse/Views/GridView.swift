@@ -320,8 +320,14 @@ struct GridView: View {
         // flips at that moment). Keyed off selectedFile, matching the tile
         // image's handoff opacity gate. Pure per-mounted-tile offsets on top
         // of the static masonry frames: no relayout, virtualization untouched.
+        // Gated to the hero-image kinds (image/raw/psd) that actually FLY from
+        // the tile — every other kind opens via ViewerChrome (a centered
+        // fade-in, nothing growing out of the tile), so parting there would
+        // imply a flight that isn't happening.
         let partingClicked: CGRect? = {
-            guard let hero = appState.selectedFile, !appState.viewerDismissing,
+            guard let hero = appState.selectedFile,
+                  hero.kind == .image || hero.kind == .raw || hero.kind == .psd,
+                  !appState.viewerDismissing,
                   let i = files.firstIndex(where: { $0.url == hero.url }),
                   i < frames.count else { return nil }
             return frames[i]
