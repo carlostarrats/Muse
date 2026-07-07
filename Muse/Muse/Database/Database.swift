@@ -326,6 +326,17 @@ final class Database {
             try Database.backfillBasenameFTS(db)
         }
 
+        migrator.registerMigration("v10_collection_appearance") { db in
+            // Optional per-collection sidebar appearance: an SF Symbol name and
+            // a canonical color token ("red", never hex — tokens resolve to
+            // system colors that adapt to light/dark). Both nil = the default
+            // look (square.stack.3d.up, primary / accent-when-selected).
+            try db.alter(table: "collections") { t in
+                t.add(column: "icon", .text)
+                t.add(column: "color", .text)
+            }
+        }
+
         return migrator
     }
 

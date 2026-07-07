@@ -124,6 +124,8 @@ struct CollectionRow: Codable, FetchableRecord, MutablePersistableRecord {
     var updated_at: Int64
     var cover_file_id: String?      // user-chosen cover; nil = auto (first member)
     var sort_order: Int = 0         // sidebar-only manual order (v8)
+    var icon: String?               // sidebar SF Symbol name; nil = default (v10)
+    var color: String?              // sidebar icon color token; nil = default (v10)
 }
 
 struct CollectionMemberRow: Codable, FetchableRecord, MutablePersistableRecord {

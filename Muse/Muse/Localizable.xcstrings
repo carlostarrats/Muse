@@ -604,12 +604,32 @@
         }
       }
     },
+    "Airplane" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avion"
+          }
+        }
+      }
+    },
     "All" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tout"
+          }
+        }
+      }
+    },
+    "Amber" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ambre"
           }
         }
       }
@@ -846,6 +866,66 @@
         }
       }
     },
+    "Blue" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bleu"
+          }
+        }
+      }
+    },
+    "Bolt" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Éclair"
+          }
+        }
+      }
+    },
+    "Book" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Livre"
+          }
+        }
+      }
+    },
+    "Bookmark" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signet"
+          }
+        }
+      }
+    },
+    "Briefcase" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Porte-documents"
+          }
+        }
+      }
+    },
+    "Buildings" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Immeubles"
+          }
+        }
+      }
+    },
     "Byte-exact" : {
       "localizations" : {
         "fr" : {
@@ -857,7 +937,6 @@
       }
     },
     "Camera" : {
-      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -873,6 +952,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Annuler"
+          }
+        }
+      }
+    },
+    "Car" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voiture"
+          }
+        }
+      }
+    },
+    "Cart" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Panier"
+          }
+        }
+      }
+    },
+    "Change Symbol & Color" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifier le symbole et la couleur"
+          }
+        }
+      }
+    },
+    "Change Symbol & Color…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifier le symbole et la couleur…"
           }
         }
       }
@@ -1389,12 +1508,42 @@
         }
       }
     },
+    "Crown" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couronne"
+          }
+        }
+      }
+    },
+    "Cup" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tasse"
+          }
+        }
+      }
+    },
     "Custom" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Personnalisé"
+          }
+        }
+      }
+    },
+    "Cyan" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cyan"
           }
         }
       }
@@ -1446,6 +1595,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Date de modification"
+          }
+        }
+      }
+    },
+    "Default color" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couleur par défaut"
           }
         }
       }
@@ -1715,6 +1874,16 @@
         }
       }
     },
+    "Emerald" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Émeraude"
+          }
+        }
+      }
+    },
     "Events" : {
       "localizations" : {
         "fr" : {
@@ -1796,6 +1965,16 @@
         }
       }
     },
+    "Film" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Film"
+          }
+        }
+      }
+    },
     "Filter" : {
       "localizations" : {
         "fr" : {
@@ -1866,6 +2045,26 @@
         }
       }
     },
+    "Flag" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drapeau"
+          }
+        }
+      }
+    },
+    "Flame" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flamme"
+          }
+        }
+      }
+    },
     "Folder" : {
       "localizations" : {
         "fr" : {
@@ -1906,6 +2105,26 @@
         }
       }
     },
+    "Forest" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vert forêt"
+          }
+        }
+      }
+    },
+    "Fork and Knife" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fourchette et couteau"
+          }
+        }
+      }
+    },
     "Frame Rate" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1913,6 +2132,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cadence"
+          }
+        }
+      }
+    },
+    "Fuchsia" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fuchsia"
+          }
+        }
+      }
+    },
+    "Game Controller" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manette de jeu"
           }
         }
       }
@@ -1947,6 +2186,36 @@
         }
       }
     },
+    "Gift" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cadeau"
+          }
+        }
+      }
+    },
+    "Globe" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Globe"
+          }
+        }
+      }
+    },
+    "Gold" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doré"
+          }
+        }
+      }
+    },
     "Google Drive" : {
       "localizations" : {
         "fr" : {
@@ -1977,6 +2246,26 @@
         }
       }
     },
+    "Grape" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Raisin"
+          }
+        }
+      }
+    },
+    "Green" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vert"
+          }
+        }
+      }
+    },
     "Grid" : {
       "localizations" : {
         "fr" : {
@@ -2003,6 +2292,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Des regroupements qui couvrent toute votre bibliothèque, suggérés automatiquement à partir de ce que Vision détecte, ainsi que ceux que vous créez à la main dans le visualiseur. Les captures d'écran obtiennent leurs propres collections intelligentes selon leur contenu — recettes, reçus, lieux, articles, et plus encore. Ouvrez la page Collections depuis la barre d'outils pour les parcourir. Elles suivent vos fichiers : supprimez des images ou retirez un dossier et les collections rétrécissent en conséquence — les collections vides disparaissent. Ouvrez-en une pour la renommer ou la supprimer depuis son en-tête."
+          }
+        }
+      }
+    },
+    "Heart" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cœur"
           }
         }
       }
@@ -2067,6 +2366,16 @@
         }
       }
     },
+    "House" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maison"
+          }
+        }
+      }
+    },
     "iCloud isn't set up, so the folder isn't in the sidebar. It'll appear here when iCloud is available." : {
       "localizations" : {
         "fr" : {
@@ -2083,6 +2392,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Synchronisation iCloud"
+          }
+        }
+      }
+    },
+    "Icon" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Icône"
           }
         }
       }
@@ -2153,6 +2472,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mots-clés ou notes importés pour %lld fichiers."
+          }
+        }
+      }
+    },
+    "Indigo" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indigo"
           }
         }
       }
@@ -2297,6 +2626,16 @@
         }
       }
     },
+    "Leaf" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Feuille"
+          }
+        }
+      }
+    },
     "Legal (8.5 × 14 in)" : {
       "localizations" : {
         "fr" : {
@@ -2348,12 +2687,42 @@
         }
       }
     },
+    "Lightbulb" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ampoule"
+          }
+        }
+      }
+    },
+    "Lime" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Citron vert"
+          }
+        }
+      }
+    },
     "Limit" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Limite"
+          }
+        }
+      }
+    },
+    "Live Preview" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aperçu en direct"
           }
         }
       }
@@ -2449,12 +2818,32 @@
         }
       }
     },
+    "Map Pin" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Repère"
+          }
+        }
+      }
+    },
     "Marked for delete" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Marqué pour suppression"
+          }
+        }
+      }
+    },
+    "Maroon" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bordeaux"
           }
         }
       }
@@ -2496,6 +2885,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Modifié"
+          }
+        }
+      }
+    },
+    "Moon and Stars" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lune et étoiles"
           }
         }
       }
@@ -2696,6 +3095,16 @@
         }
       }
     },
+    "Music Note" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Note de musique"
+          }
+        }
+      }
+    },
     "Name" : {
       "localizations" : {
         "fr" : {
@@ -2712,6 +3121,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nommer la collection"
+          }
+        }
+      }
+    },
+    "Navy" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bleu marine"
           }
         }
       }
@@ -2906,6 +3325,16 @@
         }
       }
     },
+    "Ocean" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bleu océan"
+          }
+        }
+      }
+    },
     "Off" : {
       "localizations" : {
         "fr" : {
@@ -2932,6 +3361,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Plus ancien d'abord"
+          }
+        }
+      }
+    },
+    "Olive" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olive"
           }
         }
       }
@@ -3076,6 +3515,16 @@
         }
       }
     },
+    "Orange" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Orange"
+          }
+        }
+      }
+    },
     "Other" : {
       "localizations" : {
         "fr" : {
@@ -3138,6 +3587,26 @@
         }
       }
     },
+    "Paintbrush" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pinceau"
+          }
+        }
+      }
+    },
+    "Palette" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Palette"
+          }
+        }
+      }
+    },
     "Paper Size" : {
       "localizations" : {
         "fr" : {
@@ -3168,12 +3637,42 @@
         }
       }
     },
+    "Paw Print" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empreinte de patte"
+          }
+        }
+      }
+    },
     "PDFs" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "PDF"
+          }
+        }
+      }
+    },
+    "Person" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Personne"
+          }
+        }
+      }
+    },
+    "Photo" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Photo"
           }
         }
       }
@@ -3208,6 +3707,26 @@
         }
       }
     },
+    "Pine" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vert pin"
+          }
+        }
+      }
+    },
+    "Pink" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rose"
+          }
+        }
+      }
+    },
     "Places" : {
       "localizations" : {
         "fr" : {
@@ -3238,6 +3757,16 @@
         }
       }
     },
+    "Plum" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prune"
+          }
+        }
+      }
+    },
     "PNG" : {
       "localizations" : {
         "fr" : {
@@ -3254,6 +3783,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Préparation…"
+          }
+        }
+      }
+    },
+    "Preview: %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aperçu : %@"
           }
         }
       }
@@ -3294,6 +3833,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Publier"
+          }
+        }
+      }
+    },
+    "Purple" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pourpre"
           }
         }
       }
@@ -3441,6 +3990,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Enregistré"
+          }
+        }
+      }
+    },
+    "Red" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rouge"
           }
         }
       }
@@ -3757,6 +4316,16 @@
         }
       }
     },
+    "Reset to Default" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rétablir par défaut"
+          }
+        }
+      }
+    },
     "Restore from Backup" : {
       "localizations" : {
         "fr" : {
@@ -3787,6 +4356,16 @@
         }
       }
     },
+    "Rose" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rose vif"
+          }
+        }
+      }
+    },
     "Run Muse's duplicate scan on a folder." : {
       "localizations" : {
         "fr" : {
@@ -3803,6 +4382,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Exécute l'étiquetage par Vision, la reconnaissance de texte et l'extraction des couleurs sur toutes les images d'un dossier."
+          }
+        }
+      }
+    },
+    "Rust" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rouille"
           }
         }
       }
@@ -4227,6 +4816,16 @@
         }
       }
     },
+    "Sky" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bleu ciel"
+          }
+        }
+      }
+    },
     "Smallest first" : {
       "localizations" : {
         "fr" : {
@@ -4327,12 +4926,42 @@
         }
       }
     },
+    "Sparkles" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Étincelles"
+          }
+        }
+      }
+    },
     "Square medium format" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Carré, moyen format"
+          }
+        }
+      }
+    },
+    "Stack (default)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pile (par défaut)"
+          }
+        }
+      }
+    },
+    "Star" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Étoile"
           }
         }
       }
@@ -4347,6 +4976,16 @@
         }
       }
     },
+    "Sun" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soleil"
+          }
+        }
+      }
+    },
     "SVG" : {
       "localizations" : {
         "fr" : {
@@ -4357,12 +4996,32 @@
         }
       }
     },
+    "Symbol & Color" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Symbole et couleur"
+          }
+        }
+      }
+    },
     "Tabloid (11 × 17 in)" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tabloïd (11 × 17 po)"
+          }
+        }
+      }
+    },
+    "Tag" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Étiquette"
           }
         }
       }
@@ -4444,6 +5103,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Haut → large"
+          }
+        }
+      }
+    },
+    "Teal" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bleu canard"
           }
         }
       }
@@ -4689,6 +5358,16 @@
         }
       }
     },
+    "Update" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mettre à jour"
+          }
+        }
+      }
+    },
     "Updates" : {
       "localizations" : {
         "fr" : {
@@ -4765,6 +5444,16 @@
         }
       }
     },
+    "Violet" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Violet"
+          }
+        }
+      }
+    },
     "Visually similar" : {
       "localizations" : {
         "fr" : {
@@ -4811,6 +5500,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fichiers XMP annexes"
+          }
+        }
+      }
+    },
+    "Yellow" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jaune"
           }
         }
       }

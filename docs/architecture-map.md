@@ -231,8 +231,11 @@ Muse/Muse/
   Views/
     Sidebar/                       sidebar row + support views split out of SidebarView:
                                    FolderTreeNode (folder row), CollectionSidebarRow (collection
-                                   row), SidebarRows (StarRow/AddFolderPillButton/SectionHeader/
-                                   AddPillButton), SidebarReorderSupport (frame prefs + reorder env)
+                                   row — right-click "Change Symbol & Color…" opens the modal below),
+                                   CustomizeCollectionSheet (icon+color picker: live preview, 27-color
+                                   grid + Default, curated symbol grid; persists via CollectionStore.
+                                   setAppearance, reloads the engine), SidebarRows (StarRow/
+                                   AddFolderPillButton/SectionHeader/AddPillButton), SidebarReorderSupport
     SidebarView.swift              multi-root OutlineGroup tree + starred section; file-URL drop
                                    on folder rows MOVES the selection there (folders filtered out).
                                    Row isSelected matches by standardized URL; no folder shows
@@ -329,6 +332,10 @@ Muse/Muse/
   Components/
     (search field: now native SwiftUI `.searchable` in ContentView — All/This Folder
      via `.searchScopes`, 250ms debounce; the old NativeSearchField was removed 2026-07-02)
+    CollectionAppearance.swift     pure tables + resolution for the sidebar collection icon/color
+                                   customization: 27 color tokens (→ Color), 36 curated SF Symbols,
+                                   token→Color / name-fallback / localized display names. Storage is
+                                   the token/symbol-NAME; nil = default look. Unit-tested
     GridSelection.swift            pure selection math (single / Cmd-toggle / Shift-range → set +
                                    anchor), unit-tested
     PageScroll.swift               pure Page Up/Down math (newOriginY: overlap + clamp), unit-tested

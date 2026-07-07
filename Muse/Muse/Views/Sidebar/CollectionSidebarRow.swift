@@ -34,6 +34,7 @@ struct CollectionSidebarRow: View {
     @State private var confirmDelete = false
     @State private var preparingExport = false
     @State private var showingDriveShare = false
+    @State private var showingCustomize = false
     @State private var driveShareURLs: [URL] = []
     @State private var exportFailed = false
 
@@ -57,10 +58,14 @@ struct CollectionSidebarRow: View {
                 .accessibilityHidden(true)
 
             HStack(spacing: 8) {
-                Image(systemName: "square.stack.3d.up")
+                // Custom appearance (feat/next-128): stored symbol + color
+                // token, both nil = the classic stack icon. A custom color
+                // paints the ICON ONLY — name + selection stay standard —
+                // and holds even while selected, so the row keeps its
+                // identity color.
+                Image(systemName: CollectionAppearance.resolvedIcon(loaded.collection.icon))
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor)
-                                                : AnyShapeStyle(.primary))
+                    .foregroundStyle(iconStyle)
                     .frame(width: 18)
 
                 Text(loaded.collection.name)
@@ -126,6 +131,7 @@ struct CollectionSidebarRow: View {
                 appState.collectionRenameAlertRequest = CollectionRenameAlertRequest(
                     id: id, currentName: loaded.collection.name)
             }
+            Button("Change Symbol & Color…") { showingCustomize = true }
             Button("Delete…") { confirmDelete = true }
             if manual {
                 Divider()
@@ -149,6 +155,7 @@ struct CollectionSidebarRow: View {
                 appState.collectionRenameAlertRequest = CollectionRenameAlertRequest(
                     id: id, currentName: loaded.collection.name)
             }
+            Button("Change Symbol & Color") { showingCustomize = true }
             Button("Delete Collection") { confirmDelete = true }
             // Move actions only when Manual sort permits reordering, and only in
             // the non-boundary direction(s) — mirrors the context menu's disabled
@@ -177,6 +184,9 @@ struct CollectionSidebarRow: View {
         } message: {
             Text("The collection is removed everywhere. Your images stay on disk.")
         }
+        .sheet(isPresented: $showingCustomize) {
+            CustomizeCollectionSheet(loaded: loaded) { showingCustomize = false }
+        }
         .sheet(isPresented: $showingDriveShare) {
             DriveShareSheet(auth: googleAuth, title: loaded.collection.name, urls: driveShareURLs) {
                 showingDriveShare = false
@@ -187,6 +197,16 @@ struct CollectionSidebarRow: View {
         } message: {
             Text("The PDF couldn’t be prepared — some images may be unreadable — or the location couldn’t be written. Check the images and that the location is writable with enough free space.")
         }
+    }
+
+    /// Icon color: the stored custom token wins (even while selected — it's
+    /// the collection's identity color); no token = the classic
+    /// primary / accent-when-selected.
+    private var iconStyle: AnyShapeStyle {
+        if let custom = CollectionAppearance.color(for: loaded.collection.color) {
+            return AnyShapeStyle(custom)
+        }
+        return isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.primary)
     }
 
     private var rowFill: Color {

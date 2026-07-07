@@ -42,6 +42,9 @@ nonisolated struct BackupCollection: Codable, Equatable, Sendable {
     var cover_hash: String?
     var members: [BackupMember]
     var excluded_hashes: [String]
+    // Sidebar appearance (v10). Optional so pre-appearance archives decode.
+    var icon: String? = nil
+    var color: String? = nil
 }
 
 nonisolated struct BackupStar: Codable, Equatable, Sendable {

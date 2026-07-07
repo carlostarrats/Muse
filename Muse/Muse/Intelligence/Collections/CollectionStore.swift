@@ -206,6 +206,18 @@ enum CollectionStore {
         }
     }
 
+    /// Set (or clear) a collection's sidebar appearance. `icon` is an SF
+    /// Symbol name, `color` a CollectionAppearance token; nil/nil restores
+    /// the default look. Same shape as setCover.
+    static func setAppearance(queue: DatabaseQueue, id: String,
+                              icon: String?, color: String?) async throws {
+        let now = Int64(Date().timeIntervalSince1970)
+        try await queue.write { db in
+            try db.execute(sql: "UPDATE collections SET icon = ?, color = ?, updated_at = ? WHERE id = ?",
+                           arguments: [icon, color, now, id])
+        }
+    }
+
     /// Resolve an alive file's absolute path to its file id (nil if not indexed
     /// / not alive). Mirrors the lookup TagStore uses.
     static func fileID(queue: DatabaseQueue, path: String) async throws -> String? {
