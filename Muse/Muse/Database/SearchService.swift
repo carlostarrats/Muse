@@ -24,12 +24,59 @@ enum SearchService {
 
         guard let queue = Database.shared.dbQueue else { return [] }
 
-        let escaped = ftsEscape(trimmed)
+        // Pull any hex color tokens out of the query. Non-hex tokens (incl.
+        // color *names* like "red", which are already tags) stay as text and
+        // flow through the pipeline unchanged. A query with no hex is inert
+        // on the color path — identical to today's behavior.
+        let cq = ColorQuery.parse(trimmed)
+        let colorQuery: [LabColor] = cq.hexes.map { LabColor(rgb: $0) }
+        let textQuery = colorQuery.isEmpty ? trimmed : cq.textRemainder
+        let hasText = !textQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+
+        let escaped = ftsEscape(textQuery)
         // Embed the query here on the main actor (the registry is @MainActor);
         // the off-main DB scan below only does cosine scoring on this vector.
-        let queryVector = IntelligenceRegistry.shared.embedder?.embed(trimmed)
+        let queryVector = hasText ? IntelligenceRegistry.shared.embedder?.embed(textQuery) : nil
 
         let absPaths: [String] = (try? await queue.read { db -> [String] in
+            // Color filter: IDs whose palette matches EVERY query color (AND),
+            // plus a closeness score for color-only ranking. Only when the
+            // query actually carries a hex token.
+            var colorIDs: Set<String>? = nil
+            var colorScore: [String: Double] = [:]
+            if !colorQuery.isEmpty {
+                var ids = Set<String>()
+                let rows = try Row.fetchAll(
+                    db, sql: "SELECT id, palette FROM files WHERE palette IS NOT NULL")
+                for row in rows {
+                    guard let id = row["id"] as String?,
+                          let json = row["palette"] as String?,
+                          let data = json.data(using: .utf8),
+                          let hexes = try? JSONDecoder().decode([String].self, from: data)
+                    else { continue }
+                    let palette: [LabColor] = hexes.compactMap { hex in
+                        NamedColor.parse(hex).map { LabColor(rgb: RGB(r: $0.0, g: $0.1, b: $0.2)) }
+                    }
+                    guard !palette.isEmpty else { continue }
+                    if PaletteMatch.matches(query: colorQuery, palette: palette,
+                                            threshold: ColorDistance.nearThreshold) {
+                        ids.insert(id)
+                        colorScore[id] = PaletteMatch.score(query: colorQuery, palette: palette)
+                    }
+                }
+                colorIDs = ids
+            }
+
+            // Color-only query (no text remainder) → rank by palette closeness
+            // (closest first), resolve, return.
+            if !colorQuery.isEmpty && !hasText {
+                let ranked = (colorIDs ?? []).sorted {
+                    (colorScore[$0] ?? .infinity) < (colorScore[$1] ?? .infinity)
+                }
+                return try aliveePaths(for: ranked, db: db)
+            }
+
+            // --- Existing text pipeline, now driven by textQuery ---
             // 1) FTS5 hits
             let ftsRows = try Row.fetchAll(
                 db,
@@ -42,7 +89,7 @@ enum SearchService {
             //    query to its canonical vision term so e.g. "plage" finds files
             //    tagged canonical "beach"; the raw query is always included so
             //    French filenames/OCR/manual tags still match.
-            let tagTerms = SearchBridge.tagSearchTerms(for: trimmed) {
+            let tagTerms = SearchBridge.tagSearchTerms(for: textQuery) {
                 VocabularyLocalizer.shared.canonicalize($0)
             }
             let tagFilter = tagTerms
@@ -54,8 +101,8 @@ enum SearchService {
                 .map { $0.file_id }
 
             // 2b) Note substring matches (per (file_id, parent_dir), LIKE — notes
-            //     are not in FTS). Uses the raw trimmed query, same as basename/OCR.
-            let noteIDs = try NoteStore.searchIDs(term: trimmed, db: db)
+            //     are not in FTS). Uses the raw text query, same as basename/OCR.
+            let noteIDs = try NoteStore.searchIDs(term: textQuery, db: db)
 
             // Exact hits, ordered: FTS5 result order first, then tag matches
             // not already included, in their query order.
@@ -70,23 +117,17 @@ enum SearchService {
             let semantic = (queryVector.flatMap {
                 try? SemanticSearch.semanticIDs(queryVector: $0, db: db)
             }) ?? []
-            let orderedIDs = SemanticSearch.merge(
+            var orderedIDs = SemanticSearch.merge(
                 exactIDs: exactIDs, semantic: semantic, threshold: 0.45)
+
+            // Color, when present alongside text, is an additional AND filter
+            // over the text results (text ranking preserved).
+            if let colorIDs {
+                orderedIDs = orderedIDs.filter { colorIDs.contains($0) }
+            }
             guard !orderedIDs.isEmpty else { return [] }
 
-            // Resolve to alive paths, preserving rank order.
-            let placeholders = orderedIDs.map { _ in "?" }.joined(separator: ",")
-            let pathRows = try PathRow.fetchAll(
-                db,
-                sql: "SELECT * FROM paths WHERE file_id IN (\(placeholders)) AND is_alive = 1",
-                arguments: StatementArguments(orderedIDs)
-            )
-            var pathsByID: [String: [String]] = [:]
-            for row in pathRows {
-                guard let fid = row.file_id else { continue }
-                pathsByID[fid, default: []].append(row.absolute_path)
-            }
-            return orderedIDs.flatMap { pathsByID[$0] ?? [] }
+            return try aliveePaths(for: orderedIDs, db: db)
         }) ?? []
 
         // Filter by scope
@@ -102,7 +143,7 @@ enum SearchService {
             scopedPaths = absPaths
         }
 
-        // Ranked results (exact-then-semantic) keep their rank order.
+        // Ranked results (exact-then-semantic, or color-closeness) keep order.
         let ranked: [FileNode] = scopedPaths.map { FileNode(url: URL(fileURLWithPath: $0)) }
 
         // Also do a basename substring match on enumerated files (so search
@@ -111,8 +152,11 @@ enum SearchService {
         // The enumeration is a full stat sweep of the folder — run it OFF the
         // main actor (this method is @MainActor; on a multi-thousand-file
         // folder it janked every debounced keystroke).
+        // Skipped for color queries: an unindexed file has no palette, so it
+        // can never satisfy a color filter — color search only surfaces
+        // analyzed images.
         var extras: [FileNode] = []
-        if case .currentFolder(let url) = scope {
+        if case .currentFolder(let url) = scope, colorQuery.isEmpty {
             let lower = trimmed.lowercased()
             let rankedPaths = Set(ranked.map { $0.url.standardizedFileURL })
             extras = await Task.detached(priority: .userInitiated) { () -> [FileNode] in
@@ -131,6 +175,24 @@ enum SearchService {
         }
 
         return ranked + extras.sorted { ($0.modifiedAt ?? .distantPast) > ($1.modifiedAt ?? .distantPast) }
+    }
+
+    /// Resolve ranked file IDs to their alive absolute paths, preserving the
+    /// input order. Shared by the color-only and text search branches.
+    nonisolated private static func aliveePaths(for orderedIDs: [String], db: GRDB.Database) throws -> [String] {
+        guard !orderedIDs.isEmpty else { return [] }
+        let placeholders = orderedIDs.map { _ in "?" }.joined(separator: ",")
+        let pathRows = try PathRow.fetchAll(
+            db,
+            sql: "SELECT * FROM paths WHERE file_id IN (\(placeholders)) AND is_alive = 1",
+            arguments: StatementArguments(orderedIDs)
+        )
+        var pathsByID: [String: [String]] = [:]
+        for row in pathRows {
+            guard let fid = row.file_id else { continue }
+            pathsByID[fid, default: []].append(row.absolute_path)
+        }
+        return orderedIDs.flatMap { pathsByID[$0] ?? [] }
     }
 
     /// Escape a user query for FTS5: split into tokens, prefix-match each,
