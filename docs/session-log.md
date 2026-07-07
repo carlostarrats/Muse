@@ -5610,3 +5610,73 @@ badges update without a re-switch.
 Social-bookmark import (Instagram/X) rejected: exports contain links, never
 other people's media. French localized; `MuseTests` green (613 unit +
 integration).
+
+### Per-file Note (hero viewer) — 2026-07-07 (`feat/next-129`)
+
+New **Note card** in the hero image viewer's info column, sitting between
+Rating and Colors — one free-text note per image, typed by the user, with a
+copy button. Spec `docs/superpowers/specs/2026-07-07-hero-note-section-design.md`,
+plan `docs/superpowers/plans/2026-07-07-hero-note-section.md`.
+
+- **Per `(file_id, parent_dir)`, exactly like tags/ratings — not a `files`
+  column.** `files.content_hash` is UNIQUE, so `files.id ↔ content_hash` is
+  1:1; a per-location note can't live on `files` (the same image copied into
+  two folders needs two independent notes). New table `notes` (migration
+  `v11_file_note`), `PRIMARY KEY (file_id, parent_dir)`, `ON DELETE CASCADE`.
+  Empty/whitespace body deletes the row — "no note" is the absence of a row,
+  never an empty string. Pure `NoteStore` (`Database/NoteStore.swift`) is the
+  tested read/write/search seam; `TagStore.setNote` is the `@MainActor` write
+  path used by the UI, and deliberately does **not** bump `tagsVersion` (a note
+  has no grid surface — re-evaluating chips/badges for it would be wasted
+  work). The card defaults collapsed when the note is empty, expanded when it
+  has text, re-evaluated per file open; the draft lives in local `@State`
+  (never bound straight to `AppState`) and commits on blur / collapse /
+  file-switch / viewer-close — never per keystroke.
+- **Searched via `LIKE`, not FTS.** `files_fts` is keyed by the immutable
+  `files.id` (one row per content hash), which structurally can't hold a
+  per-`(file_id, parent_dir)` value. `SearchService` adds a `notes` `LIKE ...
+  ESCAPE '\'` query parallel to the existing tag match, scoped by the same
+  This-folder/All-folders rule, merged into the same `exactIDs` set. No FTS
+  table rebuild, no new population site.
+- **Sidecar merge is non-nil-beats-nil, not plain last-writer-wins.** A note
+  rides the same iCloud sidecar as tags. Plain LWW-by-`updated_at` would let a
+  newer analyze-export from a device that never hydrated the note clobber a
+  real note with `nil` (the fresh, DB-derived side of a merge is `nil` on a
+  device that hasn't seen the note yet — it isn't "older", it's "doesn't know
+  about it"). Fix: `Sidecar.merge`'s note rule is
+  `winner.note = b.note ?? a.note` (b = fresh) — a non-nil note is never
+  overwritten by nil; between two non-nil, fresh wins. This only covers the
+  automatic analyze path (`mergeExisting: true`); it doesn't by itself let a
+  genuine deletion (clearing a note on this device) survive a merge.
+- **The cross-device fix that came after the plan: `Sidecar.resolveForWrite`
+  with a `noteAuthoritative` split.** Every manual per-location edit (tag add,
+  rating, keyword import) re-pushes the sidecar with `mergeExisting: false` —
+  it rewrites the WHOLE sidecar from this device's current DB state, bypassing
+  `merge` entirely. That's correct for tags/ratings (this device's DB is
+  ground truth for them) but wrong for a note the user ISN'T editing: an
+  unrelated tag edit on a device that hasn't hydrated a note another device
+  wrote would blank it via the non-merge overwrite path. `Sidecar.resolveForWrite
+  (fresh:existing:mergeExisting:noteAuthoritative:)` is the fix — on the
+  non-merge path it preserves the on-disk note (`out.note = existing.note ??
+  fresh.note`) UNLESS the write is itself the note edit, in which case
+  `noteAuthoritative: true` lets the fresh value (including a clear) win.
+  Only `TagStore.setNote` passes `noteAuthoritative: true`, threaded through
+  `AnalyzePipeline.exportSidecarsAfterTagEdit(for:noteAuthoritative:)`; every
+  other caller (tag/rating/import edits) defaults to `false`. Recorded as a
+  durable constraint — don't collapse this back to writing `fresh` wholesale
+  on the manual-edit path, or an unrelated tag edit will silently erase a
+  synced note.
+- **Backup/restore** carries the note on `BackupOccurrence` (per
+  `parent_dir`), never on `BackupFile.meta` — the same rule tags/ratings
+  already follow, since a note is per-location, not per-content.
+- **French label: "REMARQUE", not "NOTE".** The existing Rating card's header
+  is `String(localized: "RATING")`, whose French value is already `"NOTE"` —
+  so the new Note card's French string had to be a different word to avoid two
+  cards both reading "NOTE" in the French UI. Chose "REMARQUE" (a natural
+  French word for a written note/remark). `"Add a note…"` → "Ajouter une
+  note…", `"Copy note"` → "Copier la note".
+
+Pure units: `NoteStore` (read/write/search + scope isolation), `Sidecar`
+merge + `resolveForWrite` (clobber-guard + authoritative-write split),
+`BackupOccurrence.note` round-trip, `ReconnectApplier` restore. No grid
+badge, no Collections-page surface — notes are hero-viewer + search only.
