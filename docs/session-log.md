@@ -5425,3 +5425,81 @@ the gate reads the LIVE count, never the bare persisted bool.
 4 new strings localized (FR). `MuseTests` 577 (+3) green; build green. Spec +
 plan under `docs/superpowers/`. Runtime toggle behavior against a real iCloud folder
 is owner-QA (can't be automated here).
+
+### Hero-close toolbar flicker actually fixed — 2026-07-06 (`feat/next-122`)
+
+The long-accepted hero-close "flash" (2026-06-18: "inherent, accepted") is gone,
+and the nav no longer arrives late. Two independent bugs had been read as one:
+
+1. **The toolbar was being torn down and re-materialized.** `.toolbar(.hidden,
+   for: .windowToolbar)` while the viewer is open destroys the native NSToolbar;
+   on close it re-materializes a beat AFTER the flight — glass capsules +
+   search-field shadows popping in over the fading backdrop. Replaced with
+   **`ToolbarFade`** (`Views/ToolbarFade.swift`): the toolbar stays MOUNTED
+   permanently and its single AppKit view (`NSToolbarView`, found by walking the
+   titlebar container — verified by hierarchy dump on macOS 26) is alpha-faded —
+   out 0.2s on viewer open (`isHidden` set in the completion so the invisible
+   strip can't eat clicks, generation-guarded against a racing show), in 0.12s
+   at close start. Fade-in is an explicit `CABasicAnimation` with a fast-start
+   ease-out because `NSAnimationContext`'s eased fade measured back-loaded
+   (<15% opacity for its first ~0.2s — read as "empty nav" until after the
+   image landed). Triggers live in ContentView: `selectedFile != nil` →
+   hide/show (covers non-hero viewers too), `viewerDismissing == true` → show
+   (the hero close, nav returns WITH the flight). The close funnel is untouched
+   (Escape still fires only `viewerClosing`; `startClose()` owns the rest).
+2. **The real "flash" was the backdrop unmount, not the toolbar.** The hero
+   backdrop (ultraThinMaterial + tint wash, whole window) faded out over 0.4s
+   but the viewer unmounts at 0.36s — every close cut the fade off at ~1–2%
+   opacity, an app-wide layer vanishing in one frame. A near-instant toolbar
+   return made it conspicuous and it was misattributed to the toolbar, which is
+   why the 2026-06-18 pass concluded "inherent." Fix: asymmetric backdrop
+   animation (0.4s in, **0.3s out** — must stay under the 0.36s unmount).
+
+Owner-verified live through five build/test rounds (spike proved the AppKit
+fade first; presentation-layer logging measured the curves): no flash, nav
+present with the return flight. `MuseTests` green; no new user-facing strings.
+ToolbarFade is view-hierarchy-shape-dependent (Sonoma→Tahoe verified shape,
+degrades to visible-toolbar if it shifts).
+
+**Follow-up same session — full-screen investigated + hardened.** A hierarchy
+probe (self-driving `toggleFullScreen` + view-tree dump) confirmed macOS
+relocates the `NSToolbarView` out of the main `AppKitWindow` (which reports
+`fullScreen=1`) into a separate auto-hiding `NSToolbarFullScreenWindow`. The
+lookup was already no-op'ing there by accident (it only searches the main
+window); made it EXPLICIT — `toolbarView()` bails on a `.fullScreen` window —
+so a future lookup change can't start fading the OS-managed view. A second probe
+(drive the real `ToolbarFade` API through the bug sequence) found a genuine bug:
+the hidden `alpha`/`isHidden` CARRIES BACK to the windowed toolbar across a
+full-screen round-trip, so a hero hidden windowed → entered full-screen → closed
+there (show() no-ops in full-screen) → exited would strand the toolbar invisible
+(verified `alpha=0 isHidden=1` after exit). Fix: ToolbarFade records
+`lastIntentHidden` (even when a call no-ops) and re-asserts it on
+`didExitFullScreenNotification` (install-once observer) — verified the guard
+restores `alpha=1 isHidden=0`. All probes were temporary and removed. Full-screen
+hero open/close itself is un-automatable (needs a double-click) → owner-QA; the
+toolbar is OS-auto-hidden there so there's no flash to prevent.
+
+**Follow-up 2 — full-screen toolbar-over-hero fixed (owner wanted it hidden in
+full-screen too).** The "bail/no-op in full-screen" above left the toolbar able
+to appear over the hero in full-screen, which the owner rejected. Resolving it
+was a long, painful iteration because the two modes have irreconcilable needs:
+- WINDOWED must have NO SwiftUI `.toolbar(visibility)` modifier at all — even a
+  constant `.automatic` makes SwiftUI manage the toolbar and re-materialize it on
+  close (the windowed "delay"). Pure AppKit fade only.
+- FULL-SCREEN can only be hidden without a content-shift via SwiftUI
+  `.toolbar(.hidden)` (the OS toolbar is relocated + auto-hiding).
+Approaches tried and REJECTED by owner QA: `NSToolbar.isVisible` in full-screen
+(hides cleanly + instant return, but reclaims layout → the hero image/tags SHIFT
+up on open / down on close); a conditional if/else `.toolbar(.hidden)` applied
+full-screen-only (no windowed modifier — but `_ConditionalContent` FLICKERS the
+grid, and on the sidebar flickers the sidebar); leaving the toolbar alone
+(toolbar over hero). **There is no version that is both perfect-windowed AND
+full-screen-hidden.** Final (owner-accepted): the ternary
+`.toolbar(selectedFile != nil && isFullScreen ? .hidden : .automatic, for:
+.windowToolbar)` on the detail — full-screen hidden (small rebuild delay on
+return), windowed carries the dormant `.automatic` and its slight delay as the
+accepted cost. `isFullScreen` tracked via didEnter/ExitFullScreen. ToolbarFade
+unchanged (still owns windowed, no-ops in full-screen). Lesson recorded in
+CLAUDE.md so this isn't re-litigated. Process note: I thrashed through many
+build/test rounds chasing a nonexistent perfect solution instead of delivering
+the owner's stated fallback and naming the tradeoff up front.
