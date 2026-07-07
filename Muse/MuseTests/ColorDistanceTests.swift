@@ -46,4 +46,24 @@ final class ColorDistanceTests: XCTestCase {
     func testNearThresholdIsPositive() {
         XCTAssertGreaterThan(ColorDistance.nearThreshold, 0)
     }
+
+    // CIEDE2000 reference pairs from Sharma et al. (2005), the canonical
+    // implementation-validation dataset. Locks the ΔE2000 math.
+    func testCIEDE2000ReferencePair1() {
+        let a = LabColor(L: 50, a: 2.6772, b: -79.7751)
+        let b = LabColor(L: 50, a: 0, b: -82.7485)
+        XCTAssertEqual(ColorDistance.deltaE(a, b), 2.0425, accuracy: 0.001)
+    }
+
+    func testCIEDE2000ReferencePair2() {
+        let a = LabColor(L: 50, a: -1.3802, b: -84.2814)
+        let b = LabColor(L: 50, a: 0, b: -82.7485)
+        XCTAssertEqual(ColorDistance.deltaE(a, b), 1.0000, accuracy: 0.001)
+    }
+
+    func testCIEDE2000ReferencePair3() {
+        let a = LabColor(L: 50, a: 2.5, b: 0)
+        let b = LabColor(L: 73, a: 25, b: -18)
+        XCTAssertEqual(ColorDistance.deltaE(a, b), 27.1492, accuracy: 0.001)
+    }
 }

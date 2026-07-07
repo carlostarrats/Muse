@@ -57,16 +57,74 @@ struct LabColor: Equatable {
 }
 
 enum ColorDistance {
-    /// CIE76 — plain Euclidean distance in LAB. Correct-enough for v1;
-    /// CIEDE2000 is a drop-in upgrade behind this same signature later.
+    /// CIEDE2000 — the perceptually-accurate ΔE. Plain Euclidean LAB (CIE76)
+    /// was tried first but is too non-uniform, especially in blues and light
+    /// neutrals: against a real 2200-image library it couldn't separate a
+    /// genuine blue-family match from noise without also matching greens/reds
+    /// (a light-grey query color matched ~90% of images at any threshold that
+    /// still caught real blues). CIEDE2000 gives a clean precision curve; the
+    /// spec named it as the drop-in upgrade behind this same signature.
     static func deltaE(_ x: LabColor, _ y: LabColor) -> Double {
-        let dL = x.L - y.L, da = x.a - y.a, db = x.b - y.b
-        return (dL * dL + da * da + db * db).squareRoot()
+        let kL = 1.0, kC = 1.0, kH = 1.0
+        let c1 = (x.a * x.a + x.b * x.b).squareRoot()
+        let c2 = (y.a * y.a + y.b * y.b).squareRoot()
+        let cBar = (c1 + c2) / 2
+        let cBar7 = pow(cBar, 7)
+        let g = cBar > 0 ? 0.5 * (1 - (cBar7 / (cBar7 + pow(25.0, 7))).squareRoot()) : 0.5
+
+        let a1p = (1 + g) * x.a
+        let a2p = (1 + g) * y.a
+        let c1p = (a1p * a1p + x.b * x.b).squareRoot()
+        let c2p = (a2p * a2p + y.b * y.b).squareRoot()
+
+        func hp(_ ap: Double, _ b: Double) -> Double {
+            if ap == 0 && b == 0 { return 0 }
+            let h = atan2(b, ap) * 180 / .pi
+            return h < 0 ? h + 360 : h
+        }
+        let h1p = hp(a1p, x.b)
+        let h2p = hp(a2p, y.b)
+
+        let dLp = y.L - x.L
+        let dCp = c2p - c1p
+        var dhp: Double
+        if c1p * c2p == 0 { dhp = 0 }
+        else if abs(h2p - h1p) <= 180 { dhp = h2p - h1p }
+        else if h2p - h1p > 180 { dhp = h2p - h1p - 360 }
+        else { dhp = h2p - h1p + 360 }
+        let dHp = 2 * (c1p * c2p).squareRoot() * sin(dhp * .pi / 180 / 2)
+
+        let lBarP = (x.L + y.L) / 2
+        let cBarP = (c1p + c2p) / 2
+        var hBarP: Double
+        if c1p * c2p == 0 { hBarP = h1p + h2p }
+        else if abs(h1p - h2p) <= 180 { hBarP = (h1p + h2p) / 2 }
+        else if h1p + h2p < 360 { hBarP = (h1p + h2p + 360) / 2 }
+        else { hBarP = (h1p + h2p - 360) / 2 }
+
+        func deg(_ d: Double) -> Double { d * .pi / 180 }
+        let t = 1 - 0.17 * cos(deg(hBarP - 30)) + 0.24 * cos(deg(2 * hBarP))
+                + 0.32 * cos(deg(3 * hBarP + 6)) - 0.20 * cos(deg(4 * hBarP - 63))
+        let dRo = 30 * exp(-pow((hBarP - 275) / 25, 2))
+        let cBarP7 = pow(cBarP, 7)
+        let rc = cBarP > 0 ? 2 * (cBarP7 / (cBarP7 + pow(25.0, 7))).squareRoot() : 0
+        let sL = 1 + (0.015 * pow(lBarP - 50, 2)) / (20 + pow(lBarP - 50, 2)).squareRoot()
+        let sC = 1 + 0.045 * cBarP
+        let sH = 1 + 0.015 * cBarP * t
+        let rt = -sin(deg(2 * dRo)) * rc
+
+        let termL = dLp / (kL * sL)
+        let termC = dCp / (kC * sC)
+        let termH = dHp / (kH * sH)
+        return (termL * termL + termC * termC + termH * termH + rt * termC * termH).squareRoot()
     }
 
-    /// "Near" cutoff (ΔE76). A single internal constant, NOT a user setting.
-    /// ≈25 is a first guess, tuned against real images during implementation.
-    static let nearThreshold: Double = 25
+    /// "Near" cutoff (ΔE2000). A single internal constant, NOT a user setting.
+    /// 15 = "same color family" — tuned against a real library so a pasted
+    /// palette matches visibly-similar images without dragging in unrelated
+    /// hues. (At 15, obviously-wrong palettes — pure green/red/pink — are
+    /// correctly excluded; ~20+ starts to over-match.)
+    static let nearThreshold: Double = 15
 }
 
 /// Classifies a raw search string into color tokens + a text remainder.
