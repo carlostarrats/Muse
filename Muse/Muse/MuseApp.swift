@@ -223,6 +223,10 @@ struct MuseApp: App {
                 // other folder-scoped commands.
                 .disabled(appState.isSearchActive)
 
+                Button("Import Keywords & Ratings…") {
+                    appState.importKeywordsAndRatings()
+                }
+
                 Divider()
 
                 Button("Open") {

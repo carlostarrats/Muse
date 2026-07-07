@@ -288,6 +288,10 @@ struct ContentView: View {
         .sheet(isPresented: $appState.driveSharesShown) {
             ManageDriveSharesView()
         }
+        .sheet(item: $appState.metadataImportRequest) { request in
+            MetadataImportSheet(request: request)
+                .environmentObject(appState)
+        }
         .sheet(isPresented: $appState.reconnectShown) {
             if let model = appState.reconnectModel {
                 ReconnectWizard(model: model, isPresented: $appState.reconnectShown,
