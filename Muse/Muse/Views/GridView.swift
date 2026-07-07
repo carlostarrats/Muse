@@ -783,13 +783,15 @@ private struct TileView: View {
         }
         .onHover { hovering = $0 }
         // Tracking areas ignore z-occlusion, so while the hero overlay is up
-        // the invisible tile still collects hover state — and a stale
-        // `hovering` would flash the dark veil the instant the tile reveals
-        // on close (a hover flicker with the mouse nowhere near it, visually).
-        // Reset on both edges of the hero session (hover accrues DURING it
-        // too); a genuine hover re-arms on the next mouse move.
-        .onChange(of: appState.selectedFile?.url == file.url) { _, _ in
-            hovering = false
+        // the invisible tile still collects hover state. Clear it when the hero
+        // OPENS (isHero true) so a pre-open hover doesn't paint the dark veil
+        // through the parting ripple. Do NOT clear on CLOSE: if the mouse is
+        // genuinely over the source tile as it returns, `hovering` is accurate
+        // and the veil should simply stay — the veil is the correct hover state,
+        // not a flash. Clearing it on close instead SHOWED the veil (during the
+        // reveal) then yanked it away a frame later, which read as the glitch.
+        .onChange(of: appState.selectedFile?.url == file.url) { _, isHero in
+            if isHero { hovering = false }
         }
         // Prototype's hidden-cell: the tile vanishes while its image is
         // flying/open so no ghost copy sits behind the hero stage (see
