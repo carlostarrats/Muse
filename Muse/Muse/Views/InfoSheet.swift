@@ -92,7 +92,12 @@ struct InfoSheet: View {
                         chips that you can clear one at a time or all at once. \
                         Right-click a chip to rename or delete the tag \
                         everywhere; add tags from an image's right-click menu \
-                        or inside the viewer.
+                        or inside the viewer. Coming from Lightroom, Bridge, \
+                        or Capture One? File > Import Keywords & Ratings \
+                        reads the keywords and stars already written into \
+                        your files and turns them into Muse tags and ratings \
+                        — files are only read, never modified, and a rating \
+                        you set in Muse is never overwritten.
                         """)
                     rowDivider
                     section("Search & sort", """
