@@ -297,18 +297,19 @@ final class AnalyzePipeline: ObservableObject {
         guard let queue = Database.shared.dbQueue else { return }
         let now = Int64(Date().timeIntervalSince1970)
         let dir = TagScope.parentDir(of: url)
-        let bundle: (FileRow, [TagRow])? = try? await queue.read { db -> (FileRow, [TagRow])? in
+        let bundle: (FileRow, [TagRow], String?)? = try? await queue.read { db -> (FileRow, [TagRow], String?)? in
             guard let file = try FileRow.filter(FileRow.Columns.id == fileID).fetchOne(db)
             else { return nil }
-            // Sidecar lives in this file's folder → carry only this folder's tags.
+            // Sidecar lives in this file's folder → carry only this folder's tags + note.
             let tags = try TagRow
                 .filter(TagRow.Columns.file_id == fileID)
                 .filter(TagRow.Columns.parent_dir == dir)
                 .fetchAll(db)
-            return (file, tags)
+            let note = try NoteStore.read(fileID: fileID, parentDir: dir, db: db)
+            return (file, tags, note)
         }
-        guard let (file, tags) = bundle,
-              let sidecar = Sidecar.build(from: file, tags: tags, updatedAt: now) else { return }
+        guard let (file, tags, note) = bundle,
+              let sidecar = Sidecar.build(from: file, tags: tags, updatedAt: now, note: note) else { return }
         let hash = sidecar.content_hash
         // Sidecar + URL are Sendable; write off-main so the (tiny) coordinated
         // disk write never blocks the main actor. Log on failure — a silent

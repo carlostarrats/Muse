@@ -146,3 +146,54 @@ extension SidecarTests {
         XCTAssertEqual(Set(Sidecar.merge(a, b).tags.map(\.label)), ["dog", "beach"])
     }
 }
+
+extension SidecarTests {
+    func testNoteSurvivesJSONRoundTrip() throws {
+        let s = Sidecar(schema: 1, updated_at: 1, content_hash: "h", kind: "image",
+                        width: nil, height: nil, duration_seconds: nil, created_at: nil,
+                        modified_at: nil, caption: nil, dominant_color: nil, palette: nil,
+                        feature_print: nil, analyzed_hash: nil, intent: nil,
+                        intent_model_version: nil, tags: [], note: "remember this")
+        let data = try JSONEncoder().encode(s)
+        let back = try JSONDecoder().decode(Sidecar.self, from: data)
+        XCTAssertEqual(back.note, "remember this")
+    }
+
+    func testOldSidecarWithoutNoteDecodesAsNil() throws {
+        // JSON from before the note field existed (no "note" key).
+        let json = """
+        {"schema":1,"updated_at":1,"content_hash":"h","kind":"image","tags":[]}
+        """.data(using: .utf8)!
+        let s = try JSONDecoder().decode(Sidecar.self, from: json)
+        XCTAssertNil(s.note)
+    }
+
+    func testMergeNonNilNoteNeverClobberedByNil() {
+        // a = on-disk (has a note); b = fresh from a device that never hydrated it (nil).
+        let a = Sidecar(schema: 1, updated_at: 5, content_hash: "h", kind: "image",
+                        width: nil, height: nil, duration_seconds: nil, created_at: nil,
+                        modified_at: nil, caption: nil, dominant_color: nil, palette: nil,
+                        feature_print: nil, analyzed_hash: nil, intent: nil,
+                        intent_model_version: nil, tags: [], note: "keep me")
+        let b = Sidecar(schema: 1, updated_at: 9, content_hash: "h", kind: "image",
+                        width: nil, height: nil, duration_seconds: nil, created_at: nil,
+                        modified_at: nil, caption: nil, dominant_color: nil, palette: nil,
+                        feature_print: nil, analyzed_hash: nil, intent: nil,
+                        intent_model_version: nil, tags: [], note: nil)
+        XCTAssertEqual(Sidecar.merge(a, b).note, "keep me")
+    }
+
+    func testMergeFreshNoteWinsBetweenTwoNonNil() {
+        let a = Sidecar(schema: 1, updated_at: 5, content_hash: "h", kind: "image",
+                        width: nil, height: nil, duration_seconds: nil, created_at: nil,
+                        modified_at: nil, caption: nil, dominant_color: nil, palette: nil,
+                        feature_print: nil, analyzed_hash: nil, intent: nil,
+                        intent_model_version: nil, tags: [], note: "old")
+        let b = Sidecar(schema: 1, updated_at: 9, content_hash: "h", kind: "image",
+                        width: nil, height: nil, duration_seconds: nil, created_at: nil,
+                        modified_at: nil, caption: nil, dominant_color: nil, palette: nil,
+                        feature_print: nil, analyzed_hash: nil, intent: nil,
+                        intent_model_version: nil, tags: [], note: "new")
+        XCTAssertEqual(Sidecar.merge(a, b).note, "new")
+    }
+}

@@ -40,6 +40,9 @@ nonisolated struct Sidecar: Codable, Equatable, Sendable {
     var intent: String?
     var intent_model_version: String?
     var tags: [SidecarTag]
+    /// User-authored note, per (file_id, parent_dir). Optional so pre-note
+    /// sidecars decode to nil. NOT a FileRow column (`apply` never touches it).
+    var note: String? = nil
 
     static let currentSchema = 1
 }
@@ -47,7 +50,8 @@ nonisolated struct Sidecar: Codable, Equatable, Sendable {
 extension Sidecar {
     /// Build a sidecar from a fully-analyzed file row + its tags. Returns
     /// nil if the file has no content hash (its identity isn't established).
-    static func build(from file: FileRow, tags: [TagRow], updatedAt: Int64) -> Sidecar? {
+    static func build(from file: FileRow, tags: [TagRow], updatedAt: Int64,
+                      note: String? = nil) -> Sidecar? {
         guard let hash = file.content_hash else { return nil }
         return Sidecar(
             schema: Sidecar.currentSchema,
@@ -69,7 +73,8 @@ extension Sidecar {
             tags: tags.map {
                 SidecarTag(label: $0.label, source: $0.source,
                            confidence: $0.confidence, model_version: $0.model_version)
-            }
+            },
+            note: note
         )
     }
 
@@ -112,6 +117,13 @@ extension Sidecar {
         var winner = (b.updated_at > a.updated_at) ? b : a
         winner.updated_at = max(a.updated_at, b.updated_at)
         winner.tags = mergeTags(a.tags, b.tags)
+        // A note is a scalar with no union; plain LWW would let a newer
+        // analyze-export from a device that never hydrated the note clobber it
+        // with nil. b is the fresh (DB-derived) side at the call site
+        // `merge(existing, sidecar)`: a non-nil note is never overwritten by nil,
+        // and between two non-nil the fresh side wins. Genuine deletions travel
+        // the manual-edit path (mergeExisting: false), which bypasses merge.
+        winner.note = b.note ?? a.note
         return winner
     }
 
