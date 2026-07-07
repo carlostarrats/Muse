@@ -806,6 +806,15 @@ private struct TileView: View {
                            alignment: .topTrailing)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
+                    // The tile's image reveals instantly on hero close (seamless
+                    // handoff from the flying image — see the opacity gate below),
+                    // but the badge has no hero counterpart, so it would snap in.
+                    // Fade JUST the badge: 0 while this tile is the open hero,
+                    // easing to 1 when it closes. Other tiles never toggle this,
+                    // so their badges stay constant (no fade during browsing).
+                    .opacity(appState.selectedFile?.url == file.url ? 0 : 1)
+                    .animation(.easeIn(duration: 0.16),
+                               value: appState.selectedFile?.url == file.url)
             }
 
             // Hover veil — unselected tiles only; a calm dark wash, no resize.
