@@ -5503,3 +5503,61 @@ unchanged (still owns windowed, no-ops in full-screen). Lesson recorded in
 CLAUDE.md so this isn't re-litigated. Process note: I thrashed through many
 build/test rounds chasing a nonexistent perfect solution instead of delivering
 the owner's stated fallback and naming the tradeoff up front.
+
+### Hero-open grid "parting" ripple + flight-handoff fixes — 2026-07-07 (`feat/next-123`)
+
+Clicking an image now flies it to the hero viewer while every OTHER visible
+tile shrinks and eases radially away from the click — a size ripple, nearest
+tiles most, dying out with distance — then converges back on close. The look
+was matched to a reference video by measuring it frame-by-frame (multi-scale
+template-matching the tiles across the open transition), NOT eyeballed: the
+first two attempts (uniform push, then a scale-as-derivative model) were
+rejected by owner QA as "drifting / arbitrary spacing" before the measured
+model landed. Numbers: push maxPush 150 / decay 300 (tight — local to the
+hero), a gentle ~14% graded shrink (own long falloff), per-tile `openDelay`
+staggering the ripple outward, a fast fade to 0.15 opacity that carries the
+late motion. Pure `PartingField.displacement(for:clicked:strength:)`
+(unit-tested); GridView applies scale/offset/fade per MOUNTED tile only
+(virtualization untouched, no relayout), value-scoped so scroll never
+animates. Fixed-aspect (grid) layouts run the identical motion at 0.7
+amplitude — a uniform lattice makes the same displacement read exaggerated
+where masonry's jigsaw absorbs it (owner-reported). Gated to hero-image kinds
+(image/raw/psd) — everything else opens via ViewerChrome (centered fade-in, no
+flight), so parting there would imply a flight that isn't happening. Close
+converge is `easeOut` NOT `easeInOut`: the latter's dead-slow start under the
+opacity fade-in read as stop-start jitter.
+
+Flight-handoff correctness (all owner-reported over the review rounds):
+- **Grid-mode landing glitch:** the flight now starts AND lands on the tile's
+  DRAWN-image rect (`ViewerGeometry.fitWithin`), not the raw tile rect. Fixed-
+  aspect tiles letterbox the image, so flying to the tile rect landed as a
+  center-crop that visibly re-fit the instant the real tile revealed. Masonry
+  unchanged (tile aspect already == image aspect, so fitWithin returns the
+  tile rect). See the CLAUDE.md durable note.
+- **Grid-mode letterbox bars drawn late:** the tile's card/caption now return
+  at close-flight start (`viewerDismissing`) in both layouts (new `heroHidden`
+  gate), so the frame is in place when the image lands. The IMAGE keeps its own
+  gate to unmount for the seamless handoff.
+- **Star badge inconsistency between layouts:** reverted to the original
+  `selectedFile`-keyed fade-in (fires at unmount/landing). A badge over the
+  image area is covered by the landing flight regardless; one over letterbox
+  bars sat untouched — so revealing at flight-start read differently per
+  layout/aspect. One rule (fade in AT landing) is uniform.
+- **Warped-frame corruption:** parted neighbors' `proxy.frame(in: .global)`
+  includes the transient scale/offset (render transforms flow into global
+  coords), so the tileFrames write is now suppressed for transformed neighbors
+  (only the never-transformed source tile reports live) — else an arrow-flip
+  close would fly to a warped rect. Self-heals on close.
+- **Stale hover flash:** the invisible hero tile's `hovering` is reset on both
+  edges of the session, killing a dark-veil flash on reveal.
+
+Process note: the "nav returns late" complaint mid-session was NOT a
+regression — A/B'd it by rebuilding the untouched branch base and timing the
+toolbar return with presentation-layer logging + timestamped frame captures.
+Identical delay with all session changes stripped; on an idle machine the nav
+returns with the flight (icons back by +0.44s). The slippage was MACHINE LOAD
+from my own concurrent builds/screen-recording starving the frame where the
+fade starts. Lesson: measure before theorizing, and don't hammer the machine
+you're asking the owner to judge smoothness on. New pure units:
+`PartingFieldTests`, `ViewerGeometry.fitWithin` tests. `MuseTests` green (589
+unit + integration). No new user-facing strings.

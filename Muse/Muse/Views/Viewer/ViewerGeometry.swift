@@ -28,6 +28,23 @@ enum ViewerGeometry {
                       width: w, height: h)
     }
 
+    /// Aspect-fit `imageSize` centered inside `frame` — where a grid tile
+    /// actually DRAWS its image (tiles letterbox with .fit). The hero flight
+    /// must start and land here, not on the raw tile rect: fixed-aspect grid
+    /// layouts give the tile a different aspect than the image, so a flight
+    /// to the tile rect lands as a center-crop that visibly re-fits the
+    /// moment the real tile reveals (the grid-mode close glitch). In masonry
+    /// the tile frame already matches the image aspect, so this returns the
+    /// tile rect itself (within rounding) and nothing changes.
+    static func fitWithin(imageSize: CGSize, frame: CGRect) -> CGRect {
+        guard imageSize.width > 0, imageSize.height > 0,
+              frame.width > 0, frame.height > 0 else { return frame }
+        let s = min(frame.width / imageSize.width, frame.height / imageSize.height)
+        let w = imageSize.width * s, h = imageSize.height * s
+        return CGRect(x: frame.midX - w / 2, y: frame.midY - h / 2,
+                      width: w, height: h)
+    }
+
     static func clampZoom(_ z: CGFloat) -> CGFloat { min(maxZoom, max(minZoom, z)) }
 
     static func clampPan(_ offset: CGSize, fittedSize: CGSize, zoom: CGFloat) -> CGSize {

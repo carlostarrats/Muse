@@ -314,6 +314,24 @@ struct GridView: View {
         let lo = visibleTop - overscan
         let hi = visibleTop + viewportHeight + overscan
         let files = appState.visibleFiles
+        // Hero parting: while a clicked tile's image is flying up to the hero
+        // viewer, every OTHER tile slides radially away from the clicked spot
+        // (and converges back when the return flight starts — viewerDismissing
+        // flips at that moment). Keyed off selectedFile, matching the tile
+        // image's handoff opacity gate. Pure per-mounted-tile offsets on top
+        // of the static masonry frames: no relayout, virtualization untouched.
+        // Gated to the hero-image kinds (image/raw/psd) that actually FLY from
+        // the tile — every other kind opens via ViewerChrome (a centered
+        // fade-in, nothing growing out of the tile), so parting there would
+        // imply a flight that isn't happening.
+        let partingClicked: CGRect? = {
+            guard let hero = appState.selectedFile,
+                  hero.kind == .image || hero.kind == .raw || hero.kind == .psd,
+                  !appState.viewerDismissing,
+                  let i = files.firstIndex(where: { $0.url == hero.url }),
+                  i < frames.count else { return nil }
+            return frames[i]
+        }()
 
         ZStack(alignment: .topLeading) {
             // Click empty space to deselect. Sits behind the tiles, so a tap on
@@ -325,6 +343,15 @@ struct GridView: View {
             ForEach(visibleIndices(lo: lo, hi: hi, count: files.count), id: \.self) { i in
                 let rect = frames[i]
                 let file = files[i]
+                let parting = partingClicked.map {
+                    PartingField.displacement(
+                        for: rect, clicked: $0,
+                        // The same amplitude that reads organic in masonry's
+                        // jigsaw reads exaggerated across a uniform lattice —
+                        // fixed-aspect layouts run the motion damped.
+                        strength: appState.imageLayout.aspect == nil
+                            ? 1 : PartingField.gridModeStrength)
+                } ?? .identity
                 TileView(file: file, order: i, deletion: appState.deletion,
                          showFileNames: showFileNames,
                          captionHeight: effectiveCaptionHeight,
@@ -349,7 +376,31 @@ struct GridView: View {
                         }
                         return NSItemProvider(object: file.url as NSURL)
                     }
-                    .offset(x: rect.minX, y: rect.minY)
+                    // Shrink about the tile's own center, ease outward, and
+                    // fade — the fade carries the effect (the reference's
+                    // neighbors are mostly gone by 0.15s; the motion is felt,
+                    // not watched). The source tile keeps identity + full
+                    // opacity: its image handoff has its own gate above.
+                    .scaleEffect(parting.scale)
+                    .opacity(parting == .identity ? 1 : PartingField.partedOpacity)
+                    .offset(x: rect.minX + parting.offset.width,
+                            y: rect.minY + parting.offset.height)
+                    // Value-scoped so ONLY hero open/close animates the
+                    // scale/offset/fade — the placement component must stay
+                    // instant on scroll and relayout. Open: ~0.25s with a
+                    // per-tile distance delay so the shrink ripples outward
+                    // from the click. Close: one un-staggered easeOut
+                    // converge — NOT easeInOut: its dead-slow start under the
+                    // simultaneous opacity fade-in read as stop-start jitter
+                    // (motion happening while barely visible, popping into
+                    // view mid-move). easeOut moves immediately and settles
+                    // before the 0.34s landing.
+                    .animation(partingClicked == nil
+                                   ? .easeOut(duration: 0.3)
+                                   : .easeOut(duration: 0.25)
+                                       .delay(PartingField.openDelay(
+                                           distance: parting.distance)),
+                               value: partingClicked)
                     .accessibilityElement(children: .ignore)
                     // Folder cards have only an icon on screen — name the kind so
                     // VoiceOver disambiguates a folder from a file.
@@ -686,6 +737,19 @@ private struct TileView: View {
         appState.selectedFiles.contains(file.url.standardizedFileURL.path)
     }
 
+    /// Whole-tile hero gate. Hidden while this tile's image is flying/open;
+    /// comes back at close-flight start (viewerDismissing) in BOTH layouts,
+    /// so the tile's card, star badge and caption are already in place when
+    /// the image lands — anything appearing only at unmount read as
+    /// drawn-after (owner bug reports, twice: first the grid-mode letterbox
+    /// bars, then the masonry badge appearing late while grid's sat ready).
+    /// The image itself stays gated separately for the instant landing
+    /// handoff; masonry's early card reads as a placeholder plate the image
+    /// lands onto, matching grid.
+    private var heroHidden: Bool {
+        appState.selectedFile?.url == file.url && !appState.viewerDismissing
+    }
+
     /// Ring + tint color, decided once from the app background mood.
     private var ringColor: Color {
         switch SelectionStyle.accent(forBackground: appState.moodPalette.backgroundRGB) {
@@ -718,12 +782,26 @@ private struct TileView: View {
             }
         }
         .onHover { hovering = $0 }
+        // Tracking areas ignore z-occlusion, so while the hero overlay is up
+        // the invisible tile still collects hover state — and a stale
+        // `hovering` would flash the dark veil the instant the tile reveals
+        // on close (a hover flicker with the mouse nowhere near it, visually).
+        // Reset on both edges of the hero session (hover accrues DURING it
+        // too); a genuine hover re-arms on the next mouse move.
+        .onChange(of: appState.selectedFile?.url == file.url) { _, _ in
+            hovering = false
+        }
         // Prototype's hidden-cell: the tile vanishes while its image is
-        // flying/open so no ghost copy sits behind the hero stage.
-        .opacity(appState.selectedFile?.url == file.url ? 0 : 1)
-        // Never animated: the restore must land in the same frame the hero
-        // unmounts (see the close-flight note in the original code).
-        .animation(nil, value: appState.selectedFile?.url)
+        // flying/open so no ghost copy sits behind the hero stage (see
+        // heroHidden for the grid-mode dismiss-start reveal).
+        .opacity(heroHidden ? 0 : 1)
+        // Hide is always instant. The grid-mode dismiss-start reveal eases
+        // in under the returning flight; the unmount reveal stays instant
+        // (viewerDismissing is already false in that frame) so the restore
+        // lands in the same frame the hero unmounts.
+        .animation(!heroHidden && appState.viewerDismissing
+                       ? .easeIn(duration: 0.15) : nil,
+                   value: heroHidden)
         // Delete = a quiet fade-out.
         .opacity(deletion.burningPaths.contains(file.url.path) ? 0 : 1)
         .animation(.easeOut(duration: 0.3),
@@ -809,9 +887,15 @@ private struct TileView: View {
                     // The tile's image reveals instantly on hero close (seamless
                     // handoff from the flying image — see the opacity gate below),
                     // but the badge has no hero counterpart, so it would snap in.
-                    // Fade JUST the badge: 0 while this tile is the open hero,
-                    // easing to 1 when it closes. Other tiles never toggle this,
-                    // so their badges stay constant (no fade during browsing).
+                    // Fade it in AT UNMOUNT (selectedFile clearing), NOT at the
+                    // dismiss-start tile reveal: a badge over the image area gets
+                    // covered by the landing flight in its final beat regardless
+                    // (the flying image is in the overlay, above the grid), while
+                    // one over letterbox bars would sit untouched — revealing at
+                    // dismiss made the two read differently per layout/aspect
+                    // (owner report). One uniform rule instead: every badge fades
+                    // in right as the image lands. Other tiles never toggle this,
+                    // so their badges stay constant.
                     .opacity(appState.selectedFile?.url == file.url ? 0 : 1)
                     .animation(.easeIn(duration: 0.16),
                                value: appState.selectedFile?.url == file.url)
@@ -841,6 +925,15 @@ private struct TileView: View {
                         appState.tileFrames[file.url.path] = proxy.frame(in: .global)
                     }
                     .onChange(of: proxy.frame(in: .global)) { _, f in
+                        // Neighbors are transform-warped while parting for a
+                        // hero (and mid-converge on close): don't overwrite
+                        // their rest frames with transient warped geometry —
+                        // an arrow-flip close would fly to a warped rect, and
+                        // the per-frame writes are churn. The SOURCE tile is
+                        // never transformed and keeps reporting live, so the
+                        // window-resize retarget stays exact.
+                        guard appState.selectedFile == nil
+                            || appState.selectedFile?.url == file.url else { return }
                         appState.tileFrames[file.url.path] = f
                     }
             }
@@ -871,6 +964,13 @@ private struct TileView: View {
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .transition(.opacity)
+                        // While this tile is the open hero, the IMAGE stays
+                        // hidden even when the card is revealed for the grid
+                        // close flight (heroHidden) — it must appear only in
+                        // the unmount frame, as the seamless handoff from the
+                        // flying image that lands exactly on its rect.
+                        .opacity(appState.selectedFile?.url == file.url ? 0 : 1)
+                        .animation(nil, value: appState.selectedFile?.url == file.url)
                 }
             }
             .animation(.easeOut(duration: 0.28), value: thumbnail != nil)
