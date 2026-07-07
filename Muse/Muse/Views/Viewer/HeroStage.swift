@@ -69,6 +69,16 @@ struct HeroStage: View {
                                viewport: viewport)
     }
 
+    /// Where the tile actually draws the image inside its frame (tiles
+    /// letterbox with .fit). Flying to/from THIS rect keeps the handoff
+    /// pixel-exact in fixed-aspect grid layouts, where the raw tile rect
+    /// would land as a center-crop that re-fits on reveal. Falls back to
+    /// the tile rect until the image is known.
+    private var sourceRect: CGRect {
+        ViewerGeometry.fitWithin(imageSize: image?.size ?? sourceFrame.size,
+                                 frame: sourceFrame)
+    }
+
 
     var body: some View {
         // ZStack, not Group: with `if let image` empty, a Group has no child
@@ -111,10 +121,12 @@ struct HeroStage: View {
         .onChange(of: zoom) { _, _ in syncHoverCursor() }
         .onChange(of: sourceFrame) { _, newFrame in
             // The toolbar returns as the close flight starts, shifting the
-            // grid — retarget mid-flight so we land on the tile's real spot.
+            // grid — retarget mid-flight so we land on the tile's real spot
+            // (its drawn-image rect, same fit rule as sourceRect).
             guard isClosing else { return }
             withAnimation(.timingCurve(0.3, 1.08, 0.35, 1, duration: 0.22)) {
-                displayRect = newFrame
+                displayRect = ViewerGeometry.fitWithin(
+                    imageSize: image?.size ?? newFrame.size, frame: newFrame)
             }
         }
         .onChange(of: url) { _, _ in flipTo() }
@@ -142,8 +154,12 @@ struct HeroStage: View {
         // The grid tile's thumbnail is already in memory — start the flight
         // with it immediately. Awaiting QLThumbnailGenerator here added
         // 100–400ms of dead time before the open animation even began.
+        // Once the image (and so its aspect) is known, the flight departs
+        // from sourceRect — the letterboxed spot the tile draws — so the
+        // takeoff is pixel-exact in fixed-aspect layouts too.
         if let quick = Self.quickThumbnail(for: url) {
             image = quick
+            displayRect = sourceRect
             withAnimation(.timingCurve(0.25, 0.8, 0.25, 1, duration: 0.4)) {
                 displayRect = fitRect
             }
@@ -151,6 +167,7 @@ struct HeroStage: View {
             Task {
                 image = await ThumbnailCache.shared.thumbnail(
                     for: url, size: CGSize(width: 320, height: 320))
+                displayRect = sourceRect
                 withAnimation(.timingCurve(0.25, 0.8, 0.25, 1, duration: 0.4)) {
                     displayRect = fitRect
                 }
@@ -168,7 +185,7 @@ struct HeroStage: View {
         resetCursorState()
         withAnimation(.timingCurve(0.3, 1.08, 0.35, 1, duration: 0.34)) {
             zoom = 1; pan = .zero
-            displayRect = sourceFrame
+            displayRect = sourceRect
             shadowVisible = false
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.36) { onCloseFinished() }

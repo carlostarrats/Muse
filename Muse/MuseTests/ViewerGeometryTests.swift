@@ -34,4 +34,32 @@ final class ViewerGeometryTests: XCTestCase {
         let r = ViewerGeometry.fitRect(imageSize: .zero, viewport: CGSize(width: 100, height: 100))
         XCTAssertFalse(r.width.isNaN); XCTAssertFalse(r.height.isNaN)
     }
+
+    // fitWithin — the hero flight's grid-tile endpoint (the drawn-image rect).
+    // Portrait image in a fixed-aspect square tile: letterboxed pillars,
+    // centered, full height — the exact rect the tile draws with .fit.
+    func testFitWithinLetterboxesInSquareTile() {
+        let tile = CGRect(x: 100, y: 200, width: 160, height: 160)
+        let r = ViewerGeometry.fitWithin(imageSize: CGSize(width: 600, height: 1200),
+                                         frame: tile)
+        XCTAssertEqual(r.height, 160, accuracy: 0.001)
+        XCTAssertEqual(r.width, 80, accuracy: 0.001)
+        XCTAssertEqual(r.midX, tile.midX, accuracy: 0.001)
+        XCTAssertEqual(r.midY, tile.midY, accuracy: 0.001)
+    }
+    // Masonry: the tile frame already has the image's aspect, so the drawn
+    // rect IS the tile rect — the fix changes nothing there.
+    func testFitWithinMatchingAspectReturnsTileRect() {
+        let tile = CGRect(x: 10, y: 20, width: 300, height: 200)
+        let r = ViewerGeometry.fitWithin(imageSize: CGSize(width: 1500, height: 1000),
+                                         frame: tile)
+        XCTAssertEqual(r.minX, tile.minX, accuracy: 0.001)
+        XCTAssertEqual(r.minY, tile.minY, accuracy: 0.001)
+        XCTAssertEqual(r.width, tile.width, accuracy: 0.001)
+        XCTAssertEqual(r.height, tile.height, accuracy: 0.001)
+    }
+    func testFitWithinDegenerateFallsBackToFrame() {
+        let tile = CGRect(x: 0, y: 0, width: 160, height: 120)
+        XCTAssertEqual(ViewerGeometry.fitWithin(imageSize: .zero, frame: tile), tile)
+    }
 }
