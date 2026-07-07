@@ -136,6 +136,7 @@ if (typeof document !== 'undefined') {
       btn.className = 'tile';
       const img = document.createElement('img');
       img.loading = 'lazy'; img.alt = '';
+      img.draggable = false;   // casual-download deterrent (see installImageDownloadDeterrents)
       // Each tile shows a shimmering skeleton (CSS `.tile::before`) until its
       // Drive thumbnail paints; `.loaded` drops the skeleton and fades the image
       // in. Handlers are attached BEFORE `src` so a cached image that completes
@@ -161,7 +162,30 @@ if (typeof document !== 'undefined') {
     setupBackdropSwitcher();
     setupGridSizer();
     setupLightbox();
+    installImageDownloadDeterrents();
   }
+}
+
+// Image-download deterrents. Raises the bar against the most casual grab — the
+// right-click "Save Image As…" menu and drag-to-desktop — for people who wouldn't
+// know any other way. Delegated at the document so ONE pair of listeners covers
+// the grid thumbnails AND the lightbox image (cost independent of image count),
+// including any image added later. Paired with `-webkit-user-drag/user-select:
+// none` in CSS and `img.draggable = false`.
+//
+// This is DELIBERATELY SHALLOW and cannot be otherwise: the Drive thumbnail URL
+// is reachable directly (it's in the Network tab, and the file ids ride the share
+// link's #fragment), and the original file is anyone-readable on Drive by design
+// (see the Drive-share security notes — that's exactly why uploads are EXIF/GPS
+// stripped). So nothing here stops a determined recipient; it only deters the
+// least technical viewer, which is the whole intent.
+function installImageDownloadDeterrents() {
+  document.addEventListener('contextmenu', (e) => {
+    if (e.target instanceof HTMLImageElement) e.preventDefault();
+  });
+  document.addEventListener('dragstart', (e) => {
+    if (e.target instanceof HTMLImageElement) e.preventDefault();
+  });
 }
 
 // Click-to-enlarge: a viewport-blur overlay showing the clicked image, reusing

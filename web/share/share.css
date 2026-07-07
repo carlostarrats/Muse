@@ -122,6 +122,14 @@ html, body {
      so the thumbnail dissolves over its skeleton instead of popping in. */
   opacity: 0;
   transition: opacity 0.3s ease, filter 0.18s ease;
+  /* Casual-download deterrents (see the "Image-download deterrents" note in
+     share.js): block drag-to-desktop and text/image selection. This raises the
+     bar for people who'd only ever right-click-save or drag; it CANNOT stop a
+     determined recipient — the Drive thumbnail URL is reachable directly and the
+     original is anyone-readable on Drive by design. */
+  -webkit-user-drag: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .tile.loaded img { opacity: 1; }
 /* Hover state — a subtle darkening tint over the image signals it's clickable
@@ -346,6 +354,10 @@ html.sizer-dragging, html.sizer-dragging * {
   object-fit: contain;
   border-radius: 4px;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45);
+  /* Same casual-download deterrents as the grid thumbnails (see share.js). */
+  -webkit-user-drag: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .lightbox-name {
   max-width: 100%;
