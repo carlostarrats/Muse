@@ -352,6 +352,16 @@ final class Database {
             }
         }
 
+        migrator.registerMigration("v12_smart_collections") { db in
+            // A smart collection stores ONLY its rule set (JSON) and holds no
+            // collection_members — its membership is resolved live from the DB
+            // every time it's shown. smart_rules IS NOT NULL ⇒ smart collection;
+            // existing manual/auto collections keep smart_rules = NULL, untouched.
+            try db.alter(table: "collections") { t in
+                t.add(column: "smart_rules", .text)
+            }
+        }
+
         return migrator
     }
 
