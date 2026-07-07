@@ -28,6 +28,10 @@ struct ContentView: View {
     @State private var imageLayoutShown = false
     @State private var filterPopoverShown = false
 
+    /// True while the window is in macOS full-screen — drives the full-screen-only
+    /// SwiftUI toolbar hide.
+    @State private var isFullScreen = false
+
     // Native `.searchable` state (replaced the custom centered NSSearchField).
     // `searchText` is the field's live text; it's kept LOCAL so per-keystroke
     // typing re-evaluates only what the binding touches, and the query is pushed
@@ -161,6 +165,26 @@ struct ContentView: View {
             .onChange(of: appState.viewerDismissing) { _, dismissing in
                 // Hero close: bring the nav back WITH the return flight.
                 if dismissing { ToolbarFade.show() }
+            }
+            // Full-screen hides the toolbar via SwiftUI (ToolbarFade's AppKit
+            // fade can't reach the OS-relocated full-screen toolbar). Constant
+            // `.automatic` in windowed mode (never toggles there); flips to
+            // `.hidden` only when a viewer is open in full-screen. The full-screen
+            // return has a small rebuild delay — accepted tradeoff.
+            .toolbar(appState.selectedFile != nil && isFullScreen ? .hidden : .automatic,
+                     for: .windowToolbar)
+            .onReceive(NotificationCenter.default.publisher(
+                for: NSWindow.didEnterFullScreenNotification)) { _ in
+                isFullScreen = true
+            }
+            .onReceive(NotificationCenter.default.publisher(
+                for: NSWindow.didExitFullScreenNotification)) { _ in
+                isFullScreen = false
+            }
+            .onAppear {
+                if let win = NSApp.windows.first(where: { $0.isVisible && $0.toolbar != nil }) {
+                    isFullScreen = win.styleMask.contains(.fullScreen)
+                }
             }
         }
 

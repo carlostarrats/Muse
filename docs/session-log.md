@@ -5478,3 +5478,28 @@ there (show() no-ops in full-screen) → exited would strand the toolbar invisib
 restores `alpha=1 isHidden=0`. All probes were temporary and removed. Full-screen
 hero open/close itself is un-automatable (needs a double-click) → owner-QA; the
 toolbar is OS-auto-hidden there so there's no flash to prevent.
+
+**Follow-up 2 — full-screen toolbar-over-hero fixed (owner wanted it hidden in
+full-screen too).** The "bail/no-op in full-screen" above left the toolbar able
+to appear over the hero in full-screen, which the owner rejected. Resolving it
+was a long, painful iteration because the two modes have irreconcilable needs:
+- WINDOWED must have NO SwiftUI `.toolbar(visibility)` modifier at all — even a
+  constant `.automatic` makes SwiftUI manage the toolbar and re-materialize it on
+  close (the windowed "delay"). Pure AppKit fade only.
+- FULL-SCREEN can only be hidden without a content-shift via SwiftUI
+  `.toolbar(.hidden)` (the OS toolbar is relocated + auto-hiding).
+Approaches tried and REJECTED by owner QA: `NSToolbar.isVisible` in full-screen
+(hides cleanly + instant return, but reclaims layout → the hero image/tags SHIFT
+up on open / down on close); a conditional if/else `.toolbar(.hidden)` applied
+full-screen-only (no windowed modifier — but `_ConditionalContent` FLICKERS the
+grid, and on the sidebar flickers the sidebar); leaving the toolbar alone
+(toolbar over hero). **There is no version that is both perfect-windowed AND
+full-screen-hidden.** Final (owner-accepted): the ternary
+`.toolbar(selectedFile != nil && isFullScreen ? .hidden : .automatic, for:
+.windowToolbar)` on the detail — full-screen hidden (small rebuild delay on
+return), windowed carries the dormant `.automatic` and its slight delay as the
+accepted cost. `isFullScreen` tracked via didEnter/ExitFullScreen. ToolbarFade
+unchanged (still owns windowed, no-ops in full-screen). Lesson recorded in
+CLAUDE.md so this isn't re-litigated. Process note: I thrashed through many
+build/test rounds chasing a nonexistent perfect solution instead of delivering
+the owner's stated fallback and naming the tradeoff up front.
