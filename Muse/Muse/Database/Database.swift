@@ -337,6 +337,21 @@ final class Database {
             }
         }
 
+        migrator.registerMigration("v11_file_note") { db in
+            // A user-authored free-text note, per file-LOCATION (file_id, parent_dir)
+            // like tags — never a files/content-hash column (files.content_hash is
+            // UNIQUE, so one file in two folders could carry two different notes).
+            // Absence of a row = "no note"; an emptied note deletes its row.
+            try db.create(table: "notes") { t in
+                t.column("file_id", .text).notNull()
+                t.column("parent_dir", .text).notNull()
+                t.column("body", .text).notNull()
+                t.column("updated_at", .integer).notNull()
+                t.primaryKey(["file_id", "parent_dir"])
+                t.foreignKey(["file_id"], references: "files", columns: ["id"], onDelete: .cascade)
+            }
+        }
+
         return migrator
     }
 
