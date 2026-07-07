@@ -197,3 +197,53 @@ extension SidecarTests {
         XCTAssertEqual(Sidecar.merge(a, b).note, "new")
     }
 }
+
+extension SidecarTests {
+    private static func sc(updated: Int64, note: String?) -> Sidecar {
+        Sidecar(schema: 1, updated_at: updated, content_hash: "h", kind: "image",
+                width: nil, height: nil, duration_seconds: nil, created_at: nil,
+                modified_at: nil, caption: nil, dominant_color: nil, palette: nil,
+                feature_print: nil, analyzed_hash: nil, intent: nil,
+                intent_model_version: nil, tags: [], note: note)
+    }
+
+    func testResolveNoExistingReturnsFresh() {
+        let fresh = Self.sc(updated: 3, note: "n")
+        XCTAssertEqual(Sidecar.resolveForWrite(fresh: fresh, existing: nil,
+            mergeExisting: false, noteAuthoritative: false).note, "n")
+    }
+
+    func testResolveTagEditPreservesOnDiskNote() {
+        // Tag edit (noteAuthoritative:false): on-disk note kept even though fresh is nil.
+        let existing = Self.sc(updated: 1, note: "keep me")
+        let fresh = Self.sc(updated: 2, note: nil)
+        let out = Sidecar.resolveForWrite(fresh: fresh, existing: existing,
+            mergeExisting: false, noteAuthoritative: false)
+        XCTAssertEqual(out.note, "keep me")
+    }
+
+    func testResolveTagEditKeepsLocalWhenDiskHasNoNote() {
+        let existing = Self.sc(updated: 1, note: nil)
+        let fresh = Self.sc(updated: 2, note: "local")
+        let out = Sidecar.resolveForWrite(fresh: fresh, existing: existing,
+            mergeExisting: false, noteAuthoritative: false)
+        XCTAssertEqual(out.note, "local")
+    }
+
+    func testResolveNoteEditIsAuthoritative() {
+        let existing = Self.sc(updated: 1, note: "old")
+        let fresh = Self.sc(updated: 2, note: "new")
+        let out = Sidecar.resolveForWrite(fresh: fresh, existing: existing,
+            mergeExisting: false, noteAuthoritative: true)
+        XCTAssertEqual(out.note, "new")
+    }
+
+    func testResolveNoteEditClearPropagates() {
+        // Note deletion must win even if on-disk still has a note.
+        let existing = Self.sc(updated: 1, note: "old")
+        let fresh = Self.sc(updated: 2, note: nil)
+        let out = Sidecar.resolveForWrite(fresh: fresh, existing: existing,
+            mergeExisting: false, noteAuthoritative: true)
+        XCTAssertNil(out.note)
+    }
+}

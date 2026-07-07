@@ -292,7 +292,7 @@ final class AnalyzePipeline: ObservableObject {
     /// with manual-beats-vision). Manual tag EDITS pass false — there the
     /// local DB is authoritative (including deletions) and merging would
     /// resurrect a just-deleted tag from the old sidecar.
-    private func writeSidecarIfICloud(fileID: String, url: URL, mergeExisting: Bool) async {
+    private func writeSidecarIfICloud(fileID: String, url: URL, mergeExisting: Bool, noteAuthoritative: Bool = false) async {
         guard ICloudZone.contains(url, folder: iCloudFolder) else { return }
         guard let queue = Database.shared.dbQueue else { return }
         let now = Int64(Date().timeIntervalSince1970)
@@ -316,11 +316,10 @@ final class AnalyzePipeline: ObservableObject {
         // write failure would silently defeat the "no re-Vision on sync" promise.
         await Task.detached {
             do {
-                var out = sidecar
-                if mergeExisting,
-                   let existing = SidecarStore.read(forAsset: url, contentHash: hash) {
-                    out = Sidecar.merge(existing, sidecar)
-                }
+                let existing = SidecarStore.read(forAsset: url, contentHash: hash)
+                let out = Sidecar.resolveForWrite(fresh: sidecar, existing: existing,
+                                                  mergeExisting: mergeExisting,
+                                                  noteAuthoritative: noteAuthoritative)
                 try SidecarStore.write(out, forAsset: url)
             }
             catch { print("[AnalyzePipeline] sidecar write failed for \(url.lastPathComponent): \(error)") }
@@ -332,7 +331,7 @@ final class AnalyzePipeline: ObservableObject {
     /// re-run on tag edits (analyzed_hash untouched), so without this a
     /// hydrate-only device keeps the pre-edit tag set forever. Fire-and-forget;
     /// non-iCloud URLs are filtered out cheaply first.
-    func exportSidecarsAfterTagEdit(for urls: [URL]) {
+    func exportSidecarsAfterTagEdit(for urls: [URL], noteAuthoritative: Bool = false) {
         let zone = iCloudFolder
         let inZone = urls.filter { ICloudZone.contains($0, folder: zone) }
         guard !inZone.isEmpty, let queue = Database.shared.dbQueue else { return }
@@ -341,7 +340,8 @@ final class AnalyzePipeline: ObservableObject {
                                                    absPaths: inZone.map { $0.standardizedFileURL.path })
             for url in inZone {
                 guard let fid = idByPath[url.standardizedFileURL.path] else { continue }
-                await writeSidecarIfICloud(fileID: fid, url: url, mergeExisting: false)
+                await writeSidecarIfICloud(fileID: fid, url: url, mergeExisting: false,
+                                          noteAuthoritative: noteAuthoritative)
             }
         }
     }

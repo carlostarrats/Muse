@@ -290,7 +290,7 @@ final class TagStore: ObservableObject {
         } catch {
             print("[TagStore] setNote failed: \(error)")
         }
-        AnalyzePipeline.shared.exportSidecarsAfterTagEdit(for: [url])
+        AnalyzePipeline.shared.exportSidecarsAfterTagEdit(for: [url], noteAuthoritative: true)
     }
 
     func removeTag(_ tag: TagRow, for url: URL) async -> [TagRow] {

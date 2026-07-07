@@ -127,6 +127,27 @@ extension Sidecar {
         return winner
     }
 
+    /// Decide the sidecar to actually persist, given the freshly-built one
+    /// (`fresh`, from this device's DB) and any sidecar already on disk
+    /// (`existing`). `mergeExisting` = the analyze path (full LWW/union merge).
+    /// `noteAuthoritative` = this write OWNS the note field (a note edit): the
+    /// fresh note wins, including a clear (nil). When it's NOT authoritative (a
+    /// tag/rating/import edit that merely rewrites the sidecar), the note field
+    /// must be left as the on-disk value so an unrelated edit can't wipe a note
+    /// this device hasn't hydrated yet.
+    static func resolveForWrite(fresh: Sidecar, existing: Sidecar?,
+                                mergeExisting: Bool, noteAuthoritative: Bool) -> Sidecar {
+        guard let existing else { return fresh }
+        if mergeExisting { return merge(existing, fresh) }
+        var out = fresh
+        if !noteAuthoritative {
+            // Non-note edit: never change the synced note (preserve on-disk;
+            // fall back to the fresh value only when the disk has none).
+            out.note = existing.note ?? fresh.note
+        }
+        return out
+    }
+
     private static func mergeTags(_ a: [SidecarTag], _ b: [SidecarTag]) -> [SidecarTag] {
         var byLabel: [String: SidecarTag] = [:]
         for tag in a + b {
