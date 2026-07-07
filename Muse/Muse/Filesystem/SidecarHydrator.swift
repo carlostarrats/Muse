@@ -62,9 +62,11 @@ enum SidecarHydrator {
                     var row = t; try row.insert(db)
                 }
             }
-            // Note: upsert the incoming note for this folder (nil/empty deletes).
-            try NoteStore.write(sidecar.note ?? "", fileID: fileID,
-                                parentDir: parentDir, updatedAt: sidecar.updated_at, db: db)
+            // Note: last-writer-wins upsert for this folder (nil/empty deletes,
+            // but only when the sidecar is newer than any local note — see
+            // NoteStore.applyHydrated).
+            try NoteStore.applyHydrated(sidecar.note, fileID: fileID, parentDir: parentDir,
+                                        incomingUpdatedAt: sidecar.updated_at, db: db)
             // FTS5 — mirror AnalyzePipeline's keying.
             try db.execute(sql: "DELETE FROM files_fts WHERE file_id = ?", arguments: [fileID])
             try db.execute(sql: """

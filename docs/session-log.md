@@ -5666,6 +5666,15 @@ plan `docs/superpowers/plans/2026-07-07-hero-note-section.md`.
   durable constraint — don't collapse this back to writing `fresh` wholesale
   on the manual-edit path, or an unrelated tag edit will silently erase a
   synced note.
+- **The hydrate (import) side needed the same fix, one layer down.**
+  `SidecarHydrator.apply` — the folder-load path that reads an iCloud sidecar
+  INTO the local DB — originally applied the incoming note unconditionally, so
+  an OLDER sidecar with no note could silently delete a NEWER local note that
+  just hadn't synced yet. `NoteStore.applyHydrated(_:fileID:parentDir:
+  incomingUpdatedAt:db:)` is now the hydrate write seam: it keeps the local
+  note when its `updated_at` is strictly newer than the incoming sidecar's,
+  otherwise applies the incoming value (so a genuinely newer sidecar's
+  deletion still propagates).
 - **Backup/restore** carries the note on `BackupOccurrence` (per
   `parent_dir`), never on `BackupFile.meta` — the same rule tags/ratings
   already follow, since a note is per-location, not per-content.

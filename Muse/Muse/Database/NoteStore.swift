@@ -38,6 +38,21 @@ nonisolated enum NoteStore {
             """, arguments: [fileID, parentDir, trimmed, updatedAt])
     }
 
+    /// Apply a note arriving from a synced sidecar / archive, last-writer-wins at
+    /// the row level: if a STRICTLY-newer local note exists (its `updated_at` >
+    /// `incomingUpdatedAt`), keep it — an older sidecar's absence-of-note (or
+    /// stale value) must never clobber a note the user just wrote on this device.
+    /// Otherwise the incoming value wins (nil/empty deletes, mirroring `write`).
+    static func applyHydrated(_ body: String?, fileID: String, parentDir: String,
+                              incomingUpdatedAt: Int64, db: GRDB.Database) throws {
+        let localUpdated = try Int64.fetchOne(db, sql:
+            "SELECT updated_at FROM notes WHERE file_id = ? AND parent_dir = ?",
+            arguments: [fileID, parentDir])
+        if let localUpdated, localUpdated > incomingUpdatedAt { return }
+        try write(body ?? "", fileID: fileID, parentDir: parentDir,
+                  updatedAt: incomingUpdatedAt, db: db)
+    }
+
     /// Distinct file_ids whose note body contains `term` (case-insensitive
     /// substring). Empty term → no matches. Mirrors the tag LIKE search path;
     /// notes are NOT in FTS (files_fts is keyed by the immutable files.id, which

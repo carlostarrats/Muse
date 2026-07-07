@@ -102,4 +102,45 @@ final class NoteStoreTests: XCTestCase {
         let ids = try q.read { db in try NoteStore.searchIDs(term: "%", db: db) }
         XCTAssertTrue(ids.isEmpty)
     }
+
+    func testHydrateNewerLocalNoteSurvivesOlderEmptySidecar() throws {
+        let q = try makeQueue()
+        try q.write { db in
+            try NoteStore.write("my note", fileID: "f1", parentDir: "/A", updatedAt: 100, db: db)
+            // Older sidecar with NO note must NOT delete the newer local note.
+            try NoteStore.applyHydrated(nil, fileID: "f1", parentDir: "/A", incomingUpdatedAt: 50, db: db)
+        }
+        let body = try q.read { db in try NoteStore.read(fileID: "f1", parentDir: "/A", db: db) }
+        XCTAssertEqual(body, "my note")
+    }
+
+    func testHydrateNewerSidecarDeletePropagates() throws {
+        let q = try makeQueue()
+        try q.write { db in
+            try NoteStore.write("old note", fileID: "f1", parentDir: "/A", updatedAt: 50, db: db)
+            // Newer sidecar clearing the note DOES delete it.
+            try NoteStore.applyHydrated(nil, fileID: "f1", parentDir: "/A", incomingUpdatedAt: 100, db: db)
+        }
+        let body = try q.read { db in try NoteStore.read(fileID: "f1", parentDir: "/A", db: db) }
+        XCTAssertNil(body)
+    }
+
+    func testHydrateNewerSidecarNoteOverwritesOlderLocal() throws {
+        let q = try makeQueue()
+        try q.write { db in
+            try NoteStore.write("old", fileID: "f1", parentDir: "/A", updatedAt: 50, db: db)
+            try NoteStore.applyHydrated("new", fileID: "f1", parentDir: "/A", incomingUpdatedAt: 100, db: db)
+        }
+        let body = try q.read { db in try NoteStore.read(fileID: "f1", parentDir: "/A", db: db) }
+        XCTAssertEqual(body, "new")
+    }
+
+    func testHydrateIntoEmptyWritesNote() throws {
+        let q = try makeQueue()
+        try q.write { db in
+            try NoteStore.applyHydrated("fresh", fileID: "f1", parentDir: "/A", incomingUpdatedAt: 10, db: db)
+        }
+        let body = try q.read { db in try NoteStore.read(fileID: "f1", parentDir: "/A", db: db) }
+        XCTAssertEqual(body, "fresh")
+    }
 }
