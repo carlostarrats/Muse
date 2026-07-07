@@ -5425,3 +5425,40 @@ the gate reads the LIVE count, never the bare persisted bool.
 4 new strings localized (FR). `MuseTests` 577 (+3) green; build green. Spec +
 plan under `docs/superpowers/`. Runtime toggle behavior against a real iCloud folder
 is owner-QA (can't be automated here).
+
+### Hero-close toolbar flicker actually fixed — 2026-07-06 (`feat/next-122`)
+
+The long-accepted hero-close "flash" (2026-06-18: "inherent, accepted") is gone,
+and the nav no longer arrives late. Two independent bugs had been read as one:
+
+1. **The toolbar was being torn down and re-materialized.** `.toolbar(.hidden,
+   for: .windowToolbar)` while the viewer is open destroys the native NSToolbar;
+   on close it re-materializes a beat AFTER the flight — glass capsules +
+   search-field shadows popping in over the fading backdrop. Replaced with
+   **`ToolbarFade`** (`Views/ToolbarFade.swift`): the toolbar stays MOUNTED
+   permanently and its single AppKit view (`NSToolbarView`, found by walking the
+   titlebar container — verified by hierarchy dump on macOS 26) is alpha-faded —
+   out 0.2s on viewer open (`isHidden` set in the completion so the invisible
+   strip can't eat clicks, generation-guarded against a racing show), in 0.12s
+   at close start. Fade-in is an explicit `CABasicAnimation` with a fast-start
+   ease-out because `NSAnimationContext`'s eased fade measured back-loaded
+   (<15% opacity for its first ~0.2s — read as "empty nav" until after the
+   image landed). Triggers live in ContentView: `selectedFile != nil` →
+   hide/show (covers non-hero viewers too), `viewerDismissing == true` → show
+   (the hero close, nav returns WITH the flight). The close funnel is untouched
+   (Escape still fires only `viewerClosing`; `startClose()` owns the rest).
+2. **The real "flash" was the backdrop unmount, not the toolbar.** The hero
+   backdrop (ultraThinMaterial + tint wash, whole window) faded out over 0.4s
+   but the viewer unmounts at 0.36s — every close cut the fade off at ~1–2%
+   opacity, an app-wide layer vanishing in one frame. A near-instant toolbar
+   return made it conspicuous and it was misattributed to the toolbar, which is
+   why the 2026-06-18 pass concluded "inherent." Fix: asymmetric backdrop
+   animation (0.4s in, **0.3s out** — must stay under the 0.36s unmount).
+
+Owner-verified live through five build/test rounds (spike proved the AppKit
+fade first; presentation-layer logging measured the curves): no flash, nav
+present with the return flight. Known edges (accepted): full-screen moves the
+toolbar out of the titlebar so the lookup no-ops fail-open (toolbar just stays
+visible); ToolbarFade is view-hierarchy-shape-dependent (Sonoma→Tahoe verified
+shape, degrades to visible-toolbar if it shifts). `MuseTests` green; no new
+user-facing strings.

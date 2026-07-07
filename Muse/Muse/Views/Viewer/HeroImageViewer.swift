@@ -63,7 +63,14 @@ struct HeroImageViewer: View {
                 if !lingering {
                     ViewerBackdrop(hexColor: details?.dominantColor ?? computedPalette.first)
                         .opacity(backdropVisible ? 1 : 0)
-                        .animation(.easeOut(duration: 0.4), value: backdropVisible)
+                        // Asymmetric on purpose: the fade-OUT must finish before
+                        // the viewer unmounts (0.36s after close starts) — a 0.4s
+                        // fade left the material/wash at ~1–2% opacity when the
+                        // subtree was removed, and that near-invisible app-wide
+                        // layer vanishing in one frame read as a subtle whole-
+                        // window flicker on every close.
+                        .animation(.easeOut(duration: backdropVisible ? 0.4 : 0.3),
+                                   value: backdropVisible)
                         .contentShape(Rectangle())
                         .onTapGesture { startClose() }
 

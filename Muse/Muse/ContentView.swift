@@ -133,19 +133,35 @@ struct ContentView: View {
             // No window title — the toolbar is a bare control strip.
             .navigationTitle("")
             // The viewer covers everything (prototype) — no toolbar above it.
-            // Must hide in the same transaction the viewer mounts: the stage
-            // computes its fit center from the overlay size, and a later hide
-            // moves that center mid-flight (the image visibly arcs).
-            // It returns when the close *starts* (viewerDismissing) so the nav is
-            // there with the flight rather than popping in after. viewerDismissing
-            // is set in ONE place — startClose() — which both close paths funnel
-            // through: the X button calls it directly, Escape via the viewerClosing
-            // onChange. The Escape handler must NOT set viewerDismissing itself; a
-            // second, separate write there toggled the toolbar mid-transaction and
+            // The toolbar stays MOUNTED the whole time and is cross-faded at the
+            // AppKit layer (ToolbarFade): SwiftUI's `.toolbar(.hidden)` tears the
+            // native NSToolbar down and re-materializes it on close, which is
+            // what caused BOTH the search-bar shadow "flash" (2026-06-18,
+            // then accepted as inherent) and the late, all-at-once pop-in of the
+            // nav icons after the close flight. An alpha fade re-materializes
+            // nothing, so neither artifact can occur — and since the toolbar
+            // never leaves the layout, the overlay size is stable for the whole
+            // flight (the old same-transaction-hide constraint is moot).
+            // Fade-in is driven by viewerDismissing, which is set in ONE place —
+            // startClose() — that both close paths funnel through: the X button
+            // calls it directly, Escape via the viewerClosing onChange. The
+            // Escape handler must NOT set viewerDismissing itself; a second,
+            // separate write there toggled the toolbar mid-transaction and
             // regressed Escape into needing two presses (see the 2026-06-18 fix).
-            .toolbar(appState.selectedFile == nil || appState.viewerDismissing
-                     ? .automatic : .hidden,
-                     for: .windowToolbar)
+            .onChange(of: appState.selectedFile != nil) { _, viewerOpen in
+                if viewerOpen {
+                    ToolbarFade.hide()
+                } else {
+                    // Non-hero viewers (video/PDF/text…) close by clearing
+                    // selectedFile directly, without a dismiss flight. Also a
+                    // no-op safety net after hero closes (already shown).
+                    ToolbarFade.show()
+                }
+            }
+            .onChange(of: appState.viewerDismissing) { _, dismissing in
+                // Hero close: bring the nav back WITH the return flight.
+                if dismissing { ToolbarFade.show() }
+            }
         }
 
         // Window-level overlays: the hero viewer spans the whole window —
