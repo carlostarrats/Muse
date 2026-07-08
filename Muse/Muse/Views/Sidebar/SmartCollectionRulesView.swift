@@ -6,7 +6,7 @@
 //  Match All/Any toggle, and a list of rule rows (type ▾ · operator ▾ · value).
 //  Draft state is local @State — it commits to CollectionStore only on Save
 //  (never per keystroke to AppState). Save is gated on a non-empty name and a
-//  valid rule set. Presented via .windowFittedSheetHeight (its body scrolls).
+//  valid rule set. The header + footer are fixed; only the rule list scrolls.
 //
 
 import SwiftUI
@@ -23,6 +23,7 @@ struct SmartCollectionRulesView: View {
     @State private var match: SmartRuleSet.Match
     @State private var rules: [SmartRule]
     @State private var showConvertConfirm = false
+    @State private var addHover = false
 
     init(collectionID: String?, initialName: String, initialSet: SmartRuleSet,
          confirmConversion: Bool = false, onClose: @escaping () -> Void) {
@@ -39,6 +40,7 @@ struct SmartCollectionRulesView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // ── Fixed header ────────────────────────────────────────────────
             HStack {
                 Text("Smart Collection")
                     .font(.system(size: 24, weight: .semibold))
@@ -50,9 +52,10 @@ struct SmartCollectionRulesView: View {
 
             TextField(String(localized: "Name"), text: $name)
                 .textFieldStyle(.roundedBorder)
-                .padding(.bottom, 14)
+                .controlSize(.large)
+                .padding(.bottom, 16)
 
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Text("Match")
                 Picker("", selection: $match) {
                     Text("All").tag(SmartRuleSet.Match.all)
@@ -67,24 +70,46 @@ struct SmartCollectionRulesView: View {
             }
             .padding(.bottom, 14)
 
+            Divider()
+
+            // ── Scrolling rule list (the only scroll region) ────────────────
             ScrollView {
-                VStack(spacing: 8) {
+                VStack(spacing: 14) {
                     ForEach(rules.indices, id: \.self) { i in
-                        SmartRuleRow(rule: $rules[i]) {
-                            if rules.count > 1 { rules.remove(at: i) }
+                        SmartRuleRow(rule: $rules[i], canRemove: rules.count > 1) {
+                            rules.remove(at: i)
                         }
                     }
                 }
+                .padding(.top, 16)
+                .padding(.bottom, 4)
+                // Trailing gutter so the scroll indicator never overlaps the
+                // per-row remove buttons.
+                .padding(.trailing, 20)
             }
-            .frame(minHeight: 120)
+            .frame(minHeight: 150, maxHeight: 360)
 
+            // ── Add rule (a real button, hover tint) ────────────────────────
             Button {
-                rules.append(.tag(op: .has, label: ""))
+                withAnimation(.easeOut(duration: 0.12)) {
+                    rules.append(.tag(op: .has, label: ""))
+                }
             } label: {
                 Label("Add Rule", systemImage: "plus.circle")
+                    .font(.system(size: 13, weight: .medium))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(Color.primary.opacity(addHover ? 0.12 : 0.06)))
             }
             .buttonStyle(.plain)
-            .padding(.top, 8)
+            .onHover { addHover = $0 }
+            .padding(.top, 14)
+
+            // ── Fixed footer ────────────────────────────────────────────────
+            Divider()
+                .padding(.top, 16)
 
             HStack {
                 Spacer()
@@ -96,10 +121,10 @@ struct SmartCollectionRulesView: View {
                 .keyboardShortcut(.defaultAction)
                 .disabled(!canSave)
             }
-            .padding(.top, 20)
+            .padding(.top, 14)
         }
         .padding(28)
-        .windowFittedSheetHeight(width: 520, ideal: 560)
+        .windowFittedSheetHeight(width: 560, ideal: 620)
         .alert("Replace this collection’s items with rules?", isPresented: $showConvertConfirm) {
             Button("Replace", role: .destructive) { save() }
             Button("Cancel", role: .cancel) { }
@@ -109,17 +134,7 @@ struct SmartCollectionRulesView: View {
     }
 
     private func save() {
-        // Freeze relative "within N days" to an absolute .after bound at save
-        // time, so the persisted rule is deterministic (the resolver's tested
-        // path). Tradeoff: the bound is fixed at save, not re-evaluated daily.
-        let now = Int64(Date().timeIntervalSince1970)
-        let resolvedRules = rules.map { rule -> SmartRule in
-            if case let .date(field, .withinDays(d)) = rule {
-                return .date(field: field, op: .after(now - Int64(d) * 86_400))
-            }
-            return rule
-        }
-        let set = SmartRuleSet(match: match, rules: resolvedRules)
+        let set = SmartRuleSet(match: match, rules: rules)
         let finalName = name.trimmingCharacters(in: .whitespaces)
         let id = collectionID
         let convert = confirmConversion
@@ -141,13 +156,17 @@ struct SmartCollectionRulesView: View {
     }
 }
 
+// MARK: - Rule row
+
 /// One editable rule: a type picker, a type-specific operator + value control,
-/// and a remove button. All edits mutate the bound `SmartRule` in place.
+/// and a remove button (own hover state). All edits mutate the bound `SmartRule`.
 private struct SmartRuleRow: View {
     @Binding var rule: SmartRule
+    let canRemove: Bool
     let onRemove: () -> Void
 
-    // A stable "kind" discriminator for the type picker.
+    @State private var removeHover = false
+
     private enum Kind: String, CaseIterable, Identifiable {
         case rating, color, tag, kind, date, filename, size
         var id: String { rawValue }
@@ -177,31 +196,39 @@ private struct SmartRuleRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             Picker("", selection: Binding(
                 get: { currentKind },
                 set: { rule = SmartRuleRow.defaultRule(for: $0) })) {
                 ForEach(Kind.allCases) { k in Text(k.label).tag(k) }
             }
             .labelsHidden()
-            .frame(width: 120)
+            .frame(width: 112)
 
             valueControls
 
-            Spacer(minLength: 4)
-            Button(action: onRemove) {
+            Spacer(minLength: 8)
+
+            Button(action: { if canRemove { onRemove() } }) {
                 Image(systemName: "minus.circle")
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(removeHover && canRemove ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
+                    .frame(width: 24, height: 24)
+                    .background(Circle().fill(Color.primary.opacity(removeHover && canRemove ? 0.10 : 0)))
             }
             .buttonStyle(.plain)
+            .disabled(!canRemove)
+            .opacity(canRemove ? 1 : 0.35)
+            .onHover { removeHover = $0 }
+            .help(String(localized: "Remove rule"))
             .accessibilityLabel(String(localized: "Remove rule"))
         }
     }
 
-    /// A sensible default rule when the type changes.
     private static func defaultRule(for kind: Kind) -> SmartRule {
         switch kind {
         case .rating:   return .rating(op: .atLeast, stars: 4)
-        case .color:    return .color(.hex(""))
+        case .color:    return .color(.name("blue"))
         case .tag:      return .tag(op: .has, label: "")
         case .kind:     return .kind(.image)
         case .date:     return .date(field: .modified, op: .withinDays(30))
@@ -222,26 +249,18 @@ private struct SmartRuleRow: View {
             .fixedSize()
 
         case let .color(term):
-            // v1 is hex-only: NamedColor.parse decodes hex, not color names, so a
-            // bare name would silently match nothing. The COLORS card copies hex,
-            // which is the intended input. (.name stays in the model for a future
-            // named-color table.)
-            TextField(String(localized: "#hex"),
-                      text: Binding(get: { colorString(term) },
-                                    set: { rule = .color(.hex($0)) }))
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 160)
+            colorMenu(term)
 
         case let .tag(op, label):
             Picker("", selection: Binding(get: { op },
                                           set: { rule = .tag(op: $0, label: label) })) {
-                Text("has").tag(HasOp.has)
-                Text("has no").tag(HasOp.hasNot)
-            }.labelsHidden().frame(width: 90)
+                Text("with").tag(HasOp.has)
+                Text("without").tag(HasOp.hasNot)
+            }.labelsHidden().frame(width: 104)
             TextField(String(localized: "tag"),
                       text: Binding(get: { label }, set: { rule = .tag(op: op, label: $0) }))
                 .textFieldStyle(.roundedBorder)
-                .frame(width: 140)
+                .frame(width: 150)
 
         case let .kind(group):
             Picker("", selection: Binding(get: { group },
@@ -249,21 +268,21 @@ private struct SmartRuleRow: View {
                 ForEach(SmartRule.KindGroup.allCases, id: \.self) { g in
                     Text(kindLabel(g)).tag(g)
                 }
-            }.labelsHidden().frame(width: 140)
+            }.labelsHidden().frame(width: 150)
 
         case let .date(field, op):
             Picker("", selection: Binding(get: { field },
                                           set: { rule = .date(field: $0, op: op) })) {
                 Text("created").tag(DateField.created)
                 Text("modified").tag(DateField.modified)
-            }.labelsHidden().frame(width: 110)
-            dateOpControls(field: field, op: op)
+            }.labelsHidden().frame(width: 118)
+            datePresetMenu(field: field, op: op)
 
         case let .filename(contains):
             TextField(String(localized: "contains"),
                       text: Binding(get: { contains }, set: { rule = .filename(contains: $0) }))
                 .textFieldStyle(.roundedBorder)
-                .frame(width: 200)
+                .frame(width: 210)
 
         case let .size(op, bytes):
             comparisonPicker(op) { rule = .size(op: $0, bytes: bytes) }
@@ -271,12 +290,12 @@ private struct SmartRuleRow: View {
                              set: { rule = .size(op: op, bytes: Int64(max(0, $0) * 1_000_000)) })
             TextField("MB", value: mb, format: .number.precision(.fractionLength(0...1)))
                 .textFieldStyle(.roundedBorder)
-                .frame(width: 70)
+                .frame(width: 72)
             Text("MB").foregroundStyle(.secondary)
         }
     }
 
-    // MARK: - small helpers
+    // MARK: - control helpers
 
     @ViewBuilder private func comparisonPicker(_ op: Comparison,
                                                _ set: @escaping (Comparison) -> Void) -> some View {
@@ -284,19 +303,62 @@ private struct SmartRuleRow: View {
             Text("≥").tag(Comparison.atLeast)
             Text("=").tag(Comparison.equal)
             Text("≤").tag(Comparison.atMost)
-        }.labelsHidden().frame(width: 70)
+        }.labelsHidden().frame(width: 72)
     }
 
-    @ViewBuilder private func dateOpControls(field: DateField, op: DateOp) -> some View {
-        // v1: "within N days" only (before/after are stored but the builder
-        // exposes the common relative case; N is converted to an absolute
-        // .after bound at Save time by the parent). Keep the UI to a stepper.
-        let days = Binding<Int>(
-            get: { if case let .withinDays(d) = op { return d } else { return 30 } },
-            set: { rule = .date(field: field, op: .withinDays(max(1, $0))) })
-        Stepper(value: days, in: 1...3650) {
-            Text("within \(days.wrappedValue) days")
-        }.fixedSize()
+    /// A named-color chooser: a swatch + name that opens the spectrum menu.
+    @ViewBuilder private func colorMenu(_ term: ColorTerm) -> some View {
+        let currentToken: String = { if case let .name(t) = term { return t } else { return "blue" } }()
+        Menu {
+            ForEach(SmartColor.tokens, id: \.self) { token in
+                Button {
+                    rule = .color(.name(token))
+                } label: {
+                    Label {
+                        Text(SmartRuleRow.colorName(token))
+                    } icon: {
+                        Image(systemName: "circle.fill").foregroundStyle(SmartRuleRow.swatch(token))
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 7) {
+                Circle().fill(SmartRuleRow.swatch(currentToken))
+                    .frame(width: 13, height: 13)
+                    .overlay(Circle().strokeBorder(.quaternary, lineWidth: 0.5))
+                Text(SmartRuleRow.colorName(currentToken))
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
+    private static let datePresets: [(days: Int, label: String)] = [
+        (1,   String(localized: "Last 24 hours")),
+        (3,   String(localized: "Last 3 days")),
+        (7,   String(localized: "Last week")),
+        (14,  String(localized: "Last 2 weeks")),
+        (30,  String(localized: "Last month")),
+        (90,  String(localized: "Last 3 months")),
+        (180, String(localized: "Last 6 months")),
+        (365, String(localized: "Last year")),
+    ]
+
+    /// A preset picker for "within N days" — no day math, no click-spamming a
+    /// stepper. Absolute .before/.after bounds aren't offered here (v1).
+    @ViewBuilder private func datePresetMenu(field: DateField, op: DateOp) -> some View {
+        let currentDays: Int = { if case let .withinDays(d) = op { return d } else { return 30 } }()
+        let currentLabel = SmartRuleRow.datePresets.first { $0.days == currentDays }?.label
+            ?? String(localized: "Last \(currentDays) days")
+        Menu {
+            ForEach(SmartRuleRow.datePresets, id: \.days) { preset in
+                Button(preset.label) { rule = .date(field: field, op: .withinDays(preset.days)) }
+            }
+        } label: {
+            Text(currentLabel)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
     }
 
     private func kindLabel(_ g: SmartRule.KindGroup) -> String {
@@ -310,7 +372,30 @@ private struct SmartRuleRow: View {
         }
     }
 
-    private func colorString(_ term: ColorTerm) -> String {
-        switch term { case let .name(n): return n; case let .hex(h): return h }
+    // MARK: - named-color display
+
+    static func swatch(_ token: String) -> Color {
+        guard let rgb = SmartColor.rgb(for: token) else { return .gray }
+        return Color(red: rgb.r, green: rgb.g, blue: rgb.b)
+    }
+
+    static func colorName(_ token: String) -> String {
+        switch token {
+        case "red":    return String(localized: "Red")
+        case "orange": return String(localized: "Orange")
+        case "yellow": return String(localized: "Yellow")
+        case "green":  return String(localized: "Green")
+        case "teal":   return String(localized: "Teal")
+        case "cyan":   return String(localized: "Cyan")
+        case "blue":   return String(localized: "Blue")
+        case "navy":   return String(localized: "Navy")
+        case "purple": return String(localized: "Purple")
+        case "pink":   return String(localized: "Pink")
+        case "brown":  return String(localized: "Brown")
+        case "black":  return String(localized: "Black")
+        case "gray":   return String(localized: "Gray")
+        case "white":  return String(localized: "White")
+        default:       return token.capitalized
+        }
     }
 }

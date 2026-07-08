@@ -5883,6 +5883,146 @@
           }
         }
       }
+    },
+    "with" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "avec"
+          }
+        }
+      }
+    },
+    "without" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sans"
+          }
+        }
+      }
+    },
+    "Last 24 hours" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dernières 24 heures"
+          }
+        }
+      }
+    },
+    "Last 3 days" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "3 derniers jours"
+          }
+        }
+      }
+    },
+    "Last week" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dernière semaine"
+          }
+        }
+      }
+    },
+    "Last 2 weeks" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2 dernières semaines"
+          }
+        }
+      }
+    },
+    "Last month" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dernier mois"
+          }
+        }
+      }
+    },
+    "Last 3 months" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "3 derniers mois"
+          }
+        }
+      }
+    },
+    "Last 6 months" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "6 derniers mois"
+          }
+        }
+      }
+    },
+    "Last year" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dernière année"
+          }
+        }
+      }
+    },
+    "Last %lld days" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld derniers jours"
+          }
+        }
+      }
+    },
+    "Brown" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marron"
+          }
+        }
+      }
+    },
+    "Gray" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gris"
+          }
+        }
+      }
+    },
+    "White" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blanc"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

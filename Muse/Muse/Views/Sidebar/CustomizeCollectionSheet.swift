@@ -27,15 +27,26 @@ struct CustomizeCollectionSheet: View {
     @State private var hoveredSymbol: String?
     private static let defaultColorHoverID = "__default__"
 
+    /// This collection's "default" glyph — the smart funnel for a smart
+    /// collection, the classic stack otherwise — so the preview and Reset match
+    /// what the sidebar shows for it.
+    private let defaultIcon: String
+
     init(loaded: CollectionStore.Loaded, onClose: @escaping () -> Void) {
         self.loaded = loaded
         self.onClose = onClose
-        _draftIcon = State(initialValue: CollectionAppearance.resolvedIcon(loaded.collection.icon))
+        let isSmart = loaded.collection.smart_rules != nil
+        let def = isSmart ? CollectionAppearance.smartDefaultIcon : CollectionAppearance.defaultIcon
+        self.defaultIcon = def
+        // nil stored icon → show the kind-appropriate default (funnel vs stack).
+        _draftIcon = State(initialValue: loaded.collection.icon.flatMap {
+            CollectionAppearance.isValidSymbol($0) ? $0 : nil
+        } ?? def)
         _draftColor = State(initialValue: loaded.collection.color)
     }
 
     private var isDefault: Bool {
-        draftIcon == CollectionAppearance.defaultIcon && draftColor == nil
+        draftIcon == defaultIcon && draftColor == nil
     }
 
     var body: some View {
@@ -68,7 +79,7 @@ struct CustomizeCollectionSheet: View {
             HStack {
                 Button("Reset to Default") {
                     withAnimation(.easeOut(duration: 0.15)) {
-                        draftIcon = CollectionAppearance.defaultIcon
+                        draftIcon = defaultIcon
                         draftColor = nil
                     }
                 }
@@ -255,7 +266,7 @@ struct CustomizeCollectionSheet: View {
     /// Persist the draft (default look stores nil/nil, keeping the DB clean)
     /// and reload the engine so the sidebar row repaints immediately.
     private func save() {
-        let icon = draftIcon == CollectionAppearance.defaultIcon ? nil : draftIcon
+        let icon = draftIcon == defaultIcon ? nil : draftIcon
         let color = draftColor
         let id = loaded.collection.id
         onClose()

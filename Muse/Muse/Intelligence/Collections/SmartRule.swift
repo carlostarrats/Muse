@@ -79,7 +79,7 @@ nonisolated enum SmartRule: Codable, Equatable {
         case let .rating(_, stars):        return (1...5).contains(stars)
         case let .color(term):
             switch term {
-            case let .name(n): return !n.trimmingCharacters(in: .whitespaces).isEmpty
+            case let .name(n): return SmartColor.rgb(for: n) != nil   // a known named swatch
             case let .hex(h):  return SmartRule.parsedHex(h) != nil
             }
         case let .tag(_, label):           return !label.trimmingCharacters(in: .whitespaces).isEmpty

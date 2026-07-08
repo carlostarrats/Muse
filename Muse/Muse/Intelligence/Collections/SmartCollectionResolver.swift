@@ -15,9 +15,13 @@ import GRDB
 enum SmartCollectionResolver {
 
     /// Combined matching file_ids (content rows). NOT reachability-filtered.
-    static func memberIDs(_ set: SmartRuleSet, db: GRDB.Database) throws -> Set<String> {
+    /// `now` (epoch seconds) anchors relative date rules ("within N days"); it
+    /// defaults to the current time so a smart collection re-evaluates live, and
+    /// is injectable for deterministic tests.
+    static func memberIDs(_ set: SmartRuleSet, db: GRDB.Database,
+                          now: Int64 = Int64(Date().timeIntervalSince1970)) throws -> Set<String> {
         guard !set.rules.isEmpty else { return [] }
-        let perRule = try set.rules.map { try evaluate($0, db: db) }
+        let perRule = try set.rules.map { try evaluate($0, db: db, now: now) }
         switch set.match {
         case .all:
             return perRule.dropFirst().reduce(perRule[0]) { $0.intersection($1) }
@@ -28,8 +32,9 @@ enum SmartCollectionResolver {
 
     /// Distinct alive absolute paths for the matching members (what the grid
     /// renders, one tile per alive path). Empty when nothing matches.
-    static func alivePaths(_ set: SmartRuleSet, db: GRDB.Database) throws -> [String] {
-        let ids = try memberIDs(set, db: db)
+    static func alivePaths(_ set: SmartRuleSet, db: GRDB.Database,
+                           now: Int64 = Int64(Date().timeIntervalSince1970)) throws -> [String] {
+        let ids = try memberIDs(set, db: db, now: now)
         guard !ids.isEmpty else { return [] }
         let placeholders = ids.map { _ in "?" }.joined(separator: ",")
         return try String.fetchAll(db, sql: """
@@ -40,7 +45,7 @@ enum SmartCollectionResolver {
 
     // MARK: - Per-rule evaluation
 
-    private static func evaluate(_ rule: SmartRule, db: GRDB.Database) throws -> Set<String> {
+    private static func evaluate(_ rule: SmartRule, db: GRDB.Database, now: Int64) throws -> Set<String> {
         switch rule {
         case let .kind(group):
             return try idSet(db, sql: "SELECT id FROM files WHERE kind IN (\(qmarks(group.kinds.count)))",
@@ -58,12 +63,13 @@ enum SmartCollectionResolver {
                 return try idSet(db, sql: "SELECT id FROM files WHERE \(col) IS NOT NULL AND \(col) < ?", args: [t])
             case let .after(t):
                 return try idSet(db, sql: "SELECT id FROM files WHERE \(col) IS NOT NULL AND \(col) > ?", args: [t])
-            case .withinDays:
-                // A persisted `.withinDays` is converted to an absolute `.after`
-                // bound at rule-BUILD time (SmartCollectionRulesView.save). If one
-                // ever reaches here, degrade to "has a value" rather than silently
-                // emptying the collection.
-                return try idSet(db, sql: "SELECT id FROM files WHERE \(col) IS NOT NULL", args: [])
+            case let .withinDays(days):
+                // Relative bound resolved against `now` every call — so a smart
+                // collection stays current ("Last month" always means the last
+                // month, re-evaluated live, never frozen at save time).
+                let cutoff = now - Int64(days) * 86_400
+                return try idSet(db, sql: "SELECT id FROM files WHERE \(col) IS NOT NULL AND \(col) > ?",
+                                 args: [cutoff])
             }
 
         case let .filename(contains):
@@ -148,9 +154,9 @@ enum SmartCollectionResolver {
         case let .hex(h):
             return SmartRule.parsedHex(h).map { LabColor(rgb: $0) }
         case let .name(n):
-            // Reuse NamedColor's table (v1 decodes hex only; a bare name yields
-            // nil → matches nothing — the builder emits .hex, not .name).
-            return NamedColor.parse(n).map { LabColor(rgb: RGB(r: $0.0, g: $0.1, b: $0.2)) }
+            // A named swatch maps to one representative sRGB point (SmartColor),
+            // matched perceptually against palettes like the hex path.
+            return SmartColor.rgb(for: n).map { LabColor(rgb: $0) }
         }
     }
 }

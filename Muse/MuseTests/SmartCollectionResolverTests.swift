@@ -77,6 +77,22 @@ final class SmartCollectionResolverTests: XCTestCase {
         XCTAssertEqual(try resolve(q, SmartRuleSet(match: .all, rules: [.date(field: .created, op: .before(1_500))])), ["old"])
     }
 
+    func testDateWithinDaysResolvesAgainstInjectedNow() throws {
+        let q = try makeQueue()
+        let day: Int64 = 86_400
+        try q.write { db in
+            try insert(db, id: "recent", path: "/x/r.jpg", modified: 100 * day)   // 5 days before now
+            try insert(db, id: "stale",  path: "/x/s.jpg", modified: 50 * day)    // 55 days before now
+        }
+        let now: Int64 = 105 * day
+        let ids = try q.read { db in
+            try SmartCollectionResolver.memberIDs(
+                SmartRuleSet(match: .all, rules: [.date(field: .modified, op: .withinDays(7))]),
+                db: db, now: now)
+        }
+        XCTAssertEqual(ids, ["recent"], "only files modified within the last 7 days match")
+    }
+
     func testFilenameMatchesBasenameNotFullPath() throws {
         let q = try makeQueue()
         try q.write { db in
@@ -120,6 +136,17 @@ final class SmartCollectionResolverTests: XCTestCase {
         }
         let ids = try resolve(q, SmartRuleSet(match: .all, rules: [.color(.hex("#3a7bd5"))]))
         XCTAssertEqual(ids, ["blue"])
+    }
+
+    func testColorRuleByNamedSwatch() throws {
+        let q = try makeQueue()
+        try q.write { db in
+            try insert(db, id: "blue", path: "/x/blue.jpg", palette: ["#3a7bd5", "#204080"])
+            try insert(db, id: "red", path: "/x/red.jpg", palette: ["#d53a3a", "#802020"])
+        }
+        // "blue" named swatch maps to a representative blue and matches the blue file.
+        XCTAssertEqual(try resolve(q, SmartRuleSet(match: .all, rules: [.color(.name("blue"))])), ["blue"])
+        XCTAssertEqual(try resolve(q, SmartRuleSet(match: .all, rules: [.color(.name("red"))])), ["red"])
     }
 
     // MARK: - Composition
