@@ -138,6 +138,7 @@ private struct EditPill: View {
 /// glyph a turn on tap as a light "recomputing" cue.
 private struct RefreshCollectionButton: View {
     var action: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
     @State private var spins = 0
 
@@ -149,8 +150,11 @@ private struct RefreshCollectionButton: View {
             Image(systemName: "arrow.clockwise")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(hovering ? .primary : .secondary)
-                .rotationEffect(.degrees(Double(spins) * 360))
-                .animation(.easeInOut(duration: 0.5), value: spins)
+                // The spin is a decorative "recomputing" cue — the whole app
+                // honors Reduce Motion for such flourishes, so hold the glyph
+                // still there (the action still fires either way).
+                .rotationEffect(.degrees(reduceMotion ? 0 : Double(spins) * 360))
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.5), value: spins)
                 .frame(width: 40, height: 40)
                 .background(Circle().fill(.primary.opacity(hovering ? 0.16 : 0.08)))
         }
