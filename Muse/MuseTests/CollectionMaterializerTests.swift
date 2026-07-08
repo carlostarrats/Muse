@@ -49,4 +49,17 @@ final class CollectionMaterializerTests: XCTestCase {
         XCTAssertEqual(result[0].memberFileIDs.map(\.fileID).sorted(), ["f1", "f3"])
         XCTAssertNil(result[0].coverFileID)
     }
+
+    func testSmartRulesCarryThroughMaterialize() {
+        // A smart collection is model_version="manual" with no members — kept even
+        // empty — and its rules must survive the round-trip so the restored library
+        // re-resolves membership from its own files.
+        let smart = BackupCollection(
+            id: "s1", name: "PDFs", sort_order: 0, model_version: "manual", is_hidden: 0,
+            cover_hash: nil, members: [], excluded_hashes: [],
+            icon: nil, color: nil, smart_rules: "{\"match\":\"all\",\"rules\":[]}")
+        let out = CollectionMaterializer.materialize([smart], fileIDForHash: [:])
+        XCTAssertEqual(out.count, 1, "an empty smart (manual) collection is kept")
+        XCTAssertEqual(out[0].smartRules, "{\"match\":\"all\",\"rules\":[]}")
+    }
 }

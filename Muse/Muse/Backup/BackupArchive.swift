@@ -48,6 +48,8 @@ nonisolated struct BackupCollection: Codable, Equatable, Sendable {
     // Sidebar appearance (v10). Optional so pre-appearance archives decode.
     var icon: String? = nil
     var color: String? = nil
+    // Smart-collection rules (v12). Optional so pre-smart archives decode.
+    var smart_rules: String? = nil
 }
 
 nonisolated struct BackupStar: Codable, Equatable, Sendable {

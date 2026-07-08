@@ -1,7 +1,7 @@
 # Smart collections — rule-driven collection membership
 
 **Date:** 2026-07-07
-**Status:** Design approved, pending spec review
+**Status:** Shipped (built on `feat/next-134`; plan `docs/superpowers/plans/2026-07-07-smart-collections.md`)
 **Scope:** A collection whose membership is defined by **rules** (mail-style) instead of hand-picked files, resolved **live** from the database every time it's shown. Rules over the axes Muse already stores: rating, color, tags, kind, date, filename, size.
 
 ## Summary

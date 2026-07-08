@@ -35,10 +35,19 @@ struct CollectionSidebarRow: View {
     @State private var preparingExport = false
     @State private var showingDriveShare = false
     @State private var showingCustomize = false
+    @State private var showingRules = false
     @State private var driveShareURLs: [URL] = []
     @State private var exportFailed = false
 
     private var id: String { loaded.collection.id }
+    private var isSmart: Bool { loaded.collection.smart_rules != nil }
+
+    /// A user-chosen icon (v10) always wins; otherwise a smart collection shows
+    /// the rule/funnel glyph and everything else shows the classic stack.
+    private var rowIcon: String {
+        if let icon = loaded.collection.icon { return CollectionAppearance.resolvedIcon(icon) }
+        return isSmart ? CollectionAppearance.smartDefaultIcon : CollectionAppearance.defaultIcon
+    }
 
     private var isSelected: Bool {
         // Highlight whenever this collection is the active one — no matter how you
@@ -63,7 +72,7 @@ struct CollectionSidebarRow: View {
                 // paints the ICON ONLY — name + selection stay standard —
                 // and holds even while selected, so the row keeps its
                 // identity color.
-                Image(systemName: CollectionAppearance.resolvedIcon(loaded.collection.icon))
+                Image(systemName: rowIcon)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(iconStyle)
                     .frame(width: 18)
@@ -132,6 +141,11 @@ struct CollectionSidebarRow: View {
                     id: id, currentName: loaded.collection.name)
             }
             Button("Change Symbol & Color…") { showingCustomize = true }
+            if isSmart {
+                Button("Edit Rules…") { showingRules = true }
+            } else {
+                Button("Make Smart…") { showingRules = true }
+            }
             Button("Delete…") { confirmDelete = true }
             if manual {
                 Divider()
@@ -156,6 +170,7 @@ struct CollectionSidebarRow: View {
                     id: id, currentName: loaded.collection.name)
             }
             Button("Change Symbol & Color") { showingCustomize = true }
+            Button(isSmart ? String(localized: "Edit Rules") : String(localized: "Make Smart")) { showingRules = true }
             Button("Delete Collection") { confirmDelete = true }
             // Move actions only when Manual sort permits reordering, and only in
             // the non-boundary direction(s) — mirrors the context menu's disabled
@@ -186,6 +201,17 @@ struct CollectionSidebarRow: View {
         }
         .sheet(isPresented: $showingCustomize) {
             CustomizeCollectionSheet(loaded: loaded) { showingCustomize = false }
+        }
+        .sheet(isPresented: $showingRules) {
+            SmartCollectionRulesView(
+                collectionID: id,
+                initialName: loaded.collection.name,
+                initialSet: loaded.collection.smart_rules.flatMap(SmartRuleSet.decode)
+                    ?? SmartRuleSet(match: .all, rules: []),
+                isConversion: !isSmart,
+                memberCount: loaded.aliveCount) {
+                showingRules = false
+            }
         }
         .sheet(isPresented: $showingDriveShare) {
             DriveShareSheet(auth: googleAuth, title: loaded.collection.name, urls: driveShareURLs) {

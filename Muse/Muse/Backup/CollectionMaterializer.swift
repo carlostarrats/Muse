@@ -25,6 +25,7 @@ nonisolated struct MaterializedCollection: Equatable, Sendable {
     var excludedFileIDs: [String]
     var icon: String? = nil
     var color: String? = nil
+    var smartRules: String? = nil
 }
 
 nonisolated enum CollectionMaterializer {
@@ -49,7 +50,7 @@ nonisolated enum CollectionMaterializer {
                 coverFileID: c.cover_hash.flatMap { fileIDForHash[$0] },
                 memberFileIDs: members,
                 excludedFileIDs: c.excluded_hashes.compactMap { fileIDForHash[$0] },
-                icon: c.icon, color: c.color))
+                icon: c.icon, color: c.color, smartRules: c.smart_rules))
         }
         return out
     }

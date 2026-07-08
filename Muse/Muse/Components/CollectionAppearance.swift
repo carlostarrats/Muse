@@ -20,6 +20,10 @@ enum CollectionAppearance {
     /// The default sidebar collection symbol (pre-customization look).
     static let defaultIcon = "square.stack.3d.up"
 
+    /// The default sidebar glyph for a SMART collection when the user hasn't
+    /// chosen one (v10). Reads as "rule-driven" vs. the classic stack.
+    static let smartDefaultIcon = "line.3.horizontal.decrease.circle"
+
     /// The 27 preset swatches, in picker order — with the Default cell they
     /// fill a 7-row × 4 grid alongside the 6×6 symbol grid. SPECTRUM order
     /// (owner call, 2026-07-07): reds → oranges → yellows → greens → teals →

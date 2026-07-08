@@ -144,6 +144,7 @@ struct CollectionRow: Codable, FetchableRecord, MutablePersistableRecord {
     var sort_order: Int = 0         // sidebar-only manual order (v8)
     var icon: String?               // sidebar SF Symbol name; nil = default (v10)
     var color: String?              // sidebar icon color token; nil = default (v10)
+    var smart_rules: String?        // JSON SmartRuleSet; nil = not a smart collection (v12)
 }
 
 struct CollectionMemberRow: Codable, FetchableRecord, MutablePersistableRecord {

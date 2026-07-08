@@ -192,6 +192,80 @@ enum CollectionStore {
         return id
     }
 
+    /// Create a smart collection: a manual-marked row (so the reclusterer never
+    /// prunes it and it stays visible even when its rules match nothing) whose
+    /// membership is defined by `ruleSet`, held as JSON in smart_rules. No member
+    /// rows — membership resolves live.
+    @discardableResult
+    static func createSmart(queue: DatabaseQueue, name: String, ruleSet: SmartRuleSet) async throws -> String {
+        let id = UUID().uuidString
+        let now = Int64(Date().timeIntervalSince1970)
+        let json = ruleSet.encodedJSON()
+        try await queue.write { db in
+            let order = try nextSortOrder(db)
+            try db.execute(sql: """
+                INSERT INTO collections (id, name, is_hidden, model_version, created_at, updated_at, sort_order, smart_rules)
+                VALUES (?, ?, 0, 'manual', ?, ?, ?, ?)
+                """, arguments: [id, name, now, now, order, json])
+        }
+        return id
+    }
+
+    /// Replace a smart collection's rules (and optionally its name).
+    static func setSmartRules(queue: DatabaseQueue, id: String, name: String?,
+                              ruleSet: SmartRuleSet) async throws {
+        let now = Int64(Date().timeIntervalSince1970)
+        let json = ruleSet.encodedJSON()
+        try await queue.write { db in
+            if let name {
+                try db.execute(sql: "UPDATE collections SET name = ?, smart_rules = ?, updated_at = ? WHERE id = ?",
+                               arguments: [name, json, now, id])
+            } else {
+                try db.execute(sql: "UPDATE collections SET smart_rules = ?, updated_at = ? WHERE id = ?",
+                               arguments: [json, now, id])
+            }
+        }
+    }
+
+    /// Convert an existing (manual/auto) collection into a smart one: set its
+    /// rules, force model_version = 'manual' (protection + empty-visibility), and
+    /// drop its hand-picked members (they're replaced by rule-based membership).
+    static func makeSmart(queue: DatabaseQueue, id: String, ruleSet: SmartRuleSet) async throws {
+        let now = Int64(Date().timeIntervalSince1970)
+        let json = ruleSet.encodedJSON()
+        try await queue.write { db in
+            try db.execute(sql: """
+                UPDATE collections SET smart_rules = ?, model_version = 'manual', updated_at = ? WHERE id = ?
+                """, arguments: [json, now, id])
+            try db.execute(sql: "DELETE FROM collection_members WHERE collection_id = ?", arguments: [id])
+        }
+    }
+
+    /// Decoded rule set for a smart collection, or nil if the row isn't smart.
+    static func smartRuleSet(queue: DatabaseQueue, id: String) async throws -> SmartRuleSet? {
+        try await queue.read { db in
+            guard let json = try String.fetchOne(db, sql: "SELECT smart_rules FROM collections WHERE id = ?",
+                                                 arguments: [id]) else { return nil }
+            return SmartRuleSet.decode(json)
+        }
+    }
+
+    /// Alive absolute paths for ANY collection — resolving smart collections via
+    /// their rules and reading member rows for the rest. The single seam so
+    /// setActiveCollection / exportableURLs / cover mosaics stay collection-kind
+    /// agnostic. `limit` caps the returned paths (cover thumbnails).
+    static func alivePathsResolving(queue: DatabaseQueue, collectionID: String,
+                                    limit: Int? = nil) async throws -> [String] {
+        if let set = try await smartRuleSet(queue: queue, id: collectionID) {
+            let paths = try await queue.read { db in
+                try SmartCollectionResolver.alivePaths(set, db: db)
+            }
+            if let limit { return Array(paths.prefix(limit)) }
+            return paths
+        }
+        return try await alivePaths(queue: queue, collectionID: collectionID, limit: limit)
+    }
+
     // NOTE: there is intentionally no hard-delete. Collections are auto-
     // generated, so a row-delete silently regenerates on the next analyze.
     // Deletion goes through setHidden(true) (the durable "don't rebuild"
@@ -272,16 +346,29 @@ enum CollectionStore {
                 .filter(Column("is_hidden") == 0)
                 .fetchAll(db)
             return try rows.map { row in
-                let members = try String.fetchAll(db, sql:
-                    "SELECT file_id FROM collection_members WHERE collection_id = ?",
-                    arguments: [row.id])
-                // Count alive member PATHS (what the grid renders per-path), then
-                // narrow to those under an active root when the roots are known.
-                let alivePaths = try String.fetchAll(db, sql: """
-                    SELECT DISTINCT p.absolute_path FROM paths p
-                    JOIN collection_members m ON m.file_id = p.file_id
-                    WHERE m.collection_id = ? AND p.is_alive = 1
-                    """, arguments: [row.id])
+                // Smart collections hold no member rows — resolve alive paths from
+                // their rules. Everything else reads collection_members as before.
+                let members: [String]
+                let alivePaths: [String]
+                if let json = row.smart_rules, let set = SmartRuleSet.decode(json) {
+                    // Resolve the rules ONCE: reuse the id set for both the member
+                    // list and the alive-path count (evaluating twice would re-run
+                    // a color rule's palette scan per collection per reload).
+                    let ids = try SmartCollectionResolver.memberIDs(set, db: db)
+                    alivePaths = try SmartCollectionResolver.alivePaths(forMemberIDs: ids, db: db)
+                    members = Array(ids)
+                } else {
+                    members = try String.fetchAll(db, sql:
+                        "SELECT file_id FROM collection_members WHERE collection_id = ?",
+                        arguments: [row.id])
+                    // Count alive member PATHS (what the grid renders per-path), then
+                    // narrow to those under an active root when the roots are known.
+                    alivePaths = try String.fetchAll(db, sql: """
+                        SELECT DISTINCT p.absolute_path FROM paths p
+                        JOIN collection_members m ON m.file_id = p.file_id
+                        WHERE m.collection_id = ? AND p.is_alive = 1
+                        """, arguments: [row.id])
+                }
                 let alive = rootPaths.isEmpty
                     ? alivePaths.count
                     : alivePaths.filter { isUnderAnyRoot($0, roots: rootPaths) }.count

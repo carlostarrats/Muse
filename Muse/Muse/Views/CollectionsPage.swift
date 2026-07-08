@@ -22,6 +22,8 @@ struct CollectionsPage: View {
     private let vGap: CGFloat = 52
     private let hInset: CGFloat = 14
 
+    @State private var showingNewSmart = false
+
     /// Collections ordered by the Collections-page sort (Name / Date Created /
     /// Date Modified + direction). Reactive: changing the toolbar sort or arrow
     /// updates `appState.collectionSort*`, which re-runs this computed property.
@@ -135,11 +137,27 @@ struct CollectionsPage: View {
                 .font(.system(size: 42, weight: .semibold))
             Spacer()
             // Far right, same size/position as the in-collection trash button.
-            AddCollectionButton { createCollection() }
+            AddCollectionButton(
+                onNewCollection: { createCollection() },
+                onNewSmartCollection: { showingNewSmart = true })
         }
         .padding(.horizontal, 14)
         .padding(.top, 14)
         .padding(.bottom, 48)
+        .sheet(isPresented: $showingNewSmart) {
+            SmartCollectionRulesView(collectionID: nil,
+                                     initialName: defaultSmartName(),
+                                     initialSet: SmartRuleSet(match: .all, rules: [])) {
+                showingNewSmart = false
+            }
+        }
+    }
+
+    /// Default auto-name for a new smart collection ("Collection N"), reusing the
+    /// same numbering as hand-made collections so names never collide.
+    private func defaultSmartName() -> String {
+        let names = appState.sidebarCollections.map { $0.collection.name }
+        return ManualCollectionName.next(existing: names)
     }
 
     /// Open the shared "Name Collection" modal (empty selection → empty named
@@ -164,22 +182,28 @@ struct CollectionsPage: View {
     }
 }
 
-/// "+" header button — same size/shape as the in-collection trash button
+/// "+" header menu — same size/shape as the in-collection trash button
 /// (40×40, 16pt glyph), but additive, so it leans on the accent/primary on
-/// hover rather than red.
+/// hover rather than red. Offers a plain hand-made collection or a smart one.
 private struct AddCollectionButton: View {
-    var action: () -> Void
+    var onNewCollection: () -> Void
+    var onNewSmartCollection: () -> Void
     @State private var hovering = false
 
     var body: some View {
-        Button(action: action) {
+        Menu {
+            Button("New Collection") { onNewCollection() }
+            Button("New Smart Collection…") { onNewSmartCollection() }
+        } label: {
             Image(systemName: "plus")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(hovering ? .primary : .secondary)
                 .frame(width: 40, height: 40)
                 .background(Circle().fill(.primary.opacity(hovering ? 0.16 : 0.08)))
         }
-        .buttonStyle(.plain)
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
         .onHover { hovering = $0 }
         .help("New Collection")
         .accessibilityLabel("New Collection")
