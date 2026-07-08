@@ -84,39 +84,42 @@ are the load-bearing reference artifacts.
 | 6 — App Intents (Shortcuts/Siri/Spotlight) | ✅ shipped | `feat/file-viewer-rewrite` |
 | 7 — chat panel (Foundation Models, gated) | ✅ shipped | `feat/file-viewer-rewrite` |
 | 8 — Globe rework + water shader on grid tiles | ✅ shipped | `feat/file-viewer-rewrite` |
-| Polish 1 — AI brain (protocols, semantic search, living collections) | ✅ shipped | `feat/ai-brain` (merged) |
-| Polish 2 — hero viewer (adaptive wash, info cards, zoom/pan, delete+undo) | ✅ shipped | `feat/hero-viewer` (merged) |
-| Polish 3 — spatial views (cloud + graph, globe retired) | ✅ shipped | `feat/spatial-views` (merged) |
-| Polish 4 — delights (burn-up delete, background moods) | ✅ shipped | `feat/delights` (merged) |
-| Polish 5 — cloud rework (3D orbit ball) + galaxy view (similarity cloud, replaces graph) | ✅ shipped | `main` |
-| Polish 6 — screenshot intent collections + Galaxy taste-map (color by intent) | ✅ shipped | `main` |
-| Polish 7 — grid virtualization (perf) + thumbnail prewarm; cloud/galaxy views removed | ✅ shipped | `main` |
-| Polish 8 — iCloud sync folder (portable `.muse` sidecars, no re-Vision) + macOS share (Share button + "Send to Muse" extension) | ✅ shipped | `feat/icloud-sync-share` |
-| Polish 9 — Page Up/Down grid scrolling (Fn+Arrow on Mac) | ✅ built, unmerged | `feat/page-scroll` |
-| Polish 10 — share a collection as a paginated 11×14 PDF (Save to… / Share menu) | ✅ built, unmerged | `feat/collection-pdf-share` |
-| Polish 11 — grid multi-select + actions (collection/tag/share/move), drag-to-move, Reveal in Finder, native search field | ✅ built, unmerged | `feat/multi-select` |
-| Polish 12 — folder ops (new subfolder + rename w/ DB migration) + hero Share/Open-With dropdown + Info modal refresh | ✅ built, unmerged | `feat/folder-ops-and-share` |
-| Polish 13 — tile background (global grid backdrop None/Auto/Light/Dark Grey/Black) + collection PDF export reflects the grid (ratio + per-image backdrop; paper stays white) + file cards now export | ✅ built, unmerged | `feat/next-22` |
-| Polish 14 — Duplicates modal redesign: grid-style tile selection (blue inset ring, no tint, image fits), KEEP badge follows survivors, suggested deletes pre-selected + overridable, reveal-in-Finder per tile, "never delete a whole group" protection (2-copy swap / 3+ lock) | ✅ built, unmerged | `feat/next-23` |
-| Polish 15 — synchronized toolbar-icon recolor on mood change (all nav icons flip white↔black together, in lockstep with the background fade; `MoodPalette.iconColor` + `View.moodToolbarIcon`) | ✅ built, unmerged | `feat/next-24` |
-| Polish 16 — accessibility pass on features added since `feat/next-17` (next-18→24): VoiceOver labels/traits, a menu-bar "New Collection from Selection…" command, an icon-only-button label sweep across the whole app, and a `CollectionCard` rework (one activatable element w/ name+count label, selected trait, primary + named-Delete actions) | ✅ shipped | `feat/next-25` |
-| Polish 17 — iCloud collection share (backend #1 of a two-backend "share a collection") | ❌ **REMOVED 2026-06-25** | `feat/icloud-collection-share` (merged, then ripped out) |
-| → *Why removed:* the whole design rested on the false assumption that `NSSharingServicePicker(items:[folder])` would offer a "Copy Link" service for a folder in the app's iCloud container. **It never does** — the iCloud Drive public-link affordance is Finder-only, not a programmatic `NSSharingService`. So the share sheet only offered file-transfer services; emailing the raw images got bounced by Gmail. Apple exposes no API to mint a public iCloud gallery link. **The Drive backend (Polish 18) is the real link path** — keep that; do NOT re-add an in-app iCloud "Share Link". | | |
-| Polish 18 — Google Drive collection share (backend #2, the "magic" path): "Share Drive Link" → OAuth `drive.file`/PKCE sign-in → upload images into a tidy `My Drive/Muse/<collection> — <date>/` → link-share → branded Cloudflare page (`muse-share.pages.dev`; manifest in the URL fragment, images from Drive thumbnails, backdrop switcher light/grey/dark). **PDF = the recipient prints the page** (`window.print()` + print stylesheet, they pick the paper size) — NO app-side PDF generated/uploaded. View-menu "Manage Drive Shares…" (open link / unpublish). Muse-local expiry sweep deletes the folder past its date. **First sanctioned network egress beyond Sparkle** — opt-in, user-initiated. The Drive UI is **NOT** `#if DEBUG`-gated — "Share Drive Link" (`ShareCollectionButton`), the Settings sign-in row, and "Manage Drive Shares…" ship in **release** builds. **OAuth consent screen must be flipped to "In production" in Google Cloud Console** for non-test users to publish — while it's in "Testing" status, only manually-added test users can sign in (everyone else hits Google's "app is being tested" wall) and refresh tokens expire after 7 days. `drive.file` is non-sensitive → production needs NO verification review / CASA audit, only a complete consent screen (homepage + **published privacy policy URL**, served from `web/share/privacy.html`). Privacy + Terms live at `web/share/{privacy,terms}.html` (Cloudflare clean URLs `/privacy` `/terms`), linked from the share-page footer. Pure units (PKCE/manifest/store/expiry/multipart) + JS tests. | ✅ merged | `feat/drive-collection-share` |
-| Polish 19 — **Import Keywords & Ratings** (File menu): read-only import of IPTC/XMP keywords + star ratings written by Lightroom/Bridge/Capture One into existing files (embedded, or `.xmp` sidecar) → Muse **manual** tags + ratings. Per-field priority sidecar→XMP→IPTC (`MetadataKeywordReader`, count-based readability so RAW isn't wrongly skipped, dataless-guarded, no pixel decode). **Index-first then apply** so tags land on `(file_id, parent_dir)` rows; attaches to an already-added folder in place, else adds it as a root first. **Idempotent** — tags merge (insert-or-promote-to-manual, rating-glyph labels dropped), ratings **fill gaps only** (a Muse-set rating is never overwritten). Content-sized progress/summary sheet, cancel-safe. Also: a new **"XMP Sidecars"** row in the grid kind filter so RAW-workflow folders can hide sidecar cards (visual only, nothing removed). Pure units (rules/reader/apply/filter). Eagle-library import designed but **deferred** (`docs/future-features/eagle-library-import.md`). | ✅ built, unmerged | `feat/next-125` |
-| Polish 20 — **Collection icon + color** (sidebar): right-click a collection → "Change Symbol & Color…" → a modal with a live preview, a 27-color swatch grid (+ Default = the light/dark Auto split) and a curated 36-symbol grid (outline variants to match the app's iconography), with Cancel / Reset to Default / Update. Two nullable `collections` columns (`icon` = SF Symbol name, `color` = canonical token like `"red"`, never hex) via `v10_collection_appearance`; **nil/nil = the classic stack icon** so existing collections are untouched. A custom color **paints the icon ONLY** (name + selection stay standard, and the color holds even while selected); an unknown token/symbol falls back to the default (never a blank). Pure `CollectionAppearance` (tables + resolution, unit-tested); rides library backup/restore. Sidebar-only (Collections page + hero pills unchanged). French localized. | ✅ built, unmerged | `feat/next-128` |
-| Polish 21 — **Per-file Note** (hero viewer): a new Note card in the info column, between Rating and Colors — free-text, collapsed by default when empty and expanded when it has text, with a copy button. Per `(file_id, parent_dir)` like tags, in a new `notes` table (`v11_file_note`); pure `NoteStore` is the tested read/write/search seam, `TagStore.setNote` the `@MainActor` write path (deliberately does NOT bump `tagsVersion` — no grid surface). Searched via `LIKE` merged into `exactIDs`, NOT FTS. Rides the iCloud sidecar (non-nil-beats-nil merge) and backup/restore (`BackupOccurrence.note`) — see the durable-constraints entry for the cross-device authoritative-write split. No grid badge, no Collections-page surface. French localized (card label "REMARQUE", since "RATING" already took French "NOTE"). Pure units (`NoteStore`, sidecar merge/resolve, backup round-trip, search). | ✅ built, unmerged | `feat/next-129` |
-| Polish 22 — **Collapsible Colors card** (hero viewer): the COLORS card is now collapsible (open by default) with the same `doc.on.doc` copy icon + `PlusCircleButton` +/− toggle as the Note card (shared `CopyIconButton`, whose hover shows only a circular tint — the glyph opacity is constant). Unlike the note's PER-FILE expansion, the Colors expand/collapse is a **GLOBAL** last-choice (`AppSettings.colorsCardExpanded`, default open): collapse once and every file opens collapsed until re-expanded. Backed by plain `@State` seeded from UserDefaults + `.onChange` write-back (NOT `@AppStorage`) so the toggle runs inside `withAnimation` and glides the whole column like Note/Info — an `@AppStorage` publish lands outside the transaction and jumps (the exact bug caught in review). French localized (`Hide colors`/`Show colors`). No DB/schema change — pure UI + one UserDefaults key. | ✅ built, unmerged | `feat/next-130` |
-| Polish 23 — **Color search** (search bar): a hex token in the existing search field (`#3a7bd5`, or a whole palette pasted from the hero COLORS card's "Copy all colors" → `#3a7bd5, #f0e0c0, #202020`) matches **perceptually** against each analyzed file's stored `palette`. Zero new UI. Three pure units in `Intelligence/Core/ColorSearch.swift`: `ColorQuery` (splits on whitespace+commas, pulls out `#?`+3/6-hex tokens — 3-digit expands, bare tokens need exactly 3/6 digits so `bad`/`c0ffee`-type words read as color, accepted; decoded via `NamedColor.parse`), `LabColor`/`ColorDistance` (sRGB→LAB D65 + **CIEDE2000** ΔE — CIE76 was tried first and was too imprecise on real data: a light-grey query color matched ~90% of a 2200-image library, dragging greens/reds into a blue query; `nearThreshold = 15` = "same color family", tuned against the library + locked with Sharma reference pairs), `PaletteMatch` (AND — a file matches iff EACH query color has a palette color within threshold; `score` = Σ nearest-ΔE for color-only ranking). Integrated in `SearchService.search`: hex tokens pulled out, matching IDs flow through the SAME path-resolution + scope filter as text (color-only → ranked by closeness; color+text → intersect color with text results; basename extras skipped for color queries since unindexed files have no palette). Non-hex queries are byte-for-byte unchanged; color *names* still match as tags (`ColorTagger`, untouched). No schema change (`palette` already populated), nothing new to localize. Pure units tested (27 tests). | ✅ built, unmerged | `feat/next-133` |
-| Polish 24 — **Smart collections** (rule-driven membership): a collection whose members are defined by **rules** (mail-style) instead of hand-picked, resolved **live** from the DB every time it's shown — always current, never stale. Right-click a collection → **"Make Smart…"** / **"Edit Rules…"**, or **"New Smart Collection…"** from the Collections-page **+**. Seven rule types over axes Muse already stores: **rating** (≥/=/≤ N★ via the `StarRating` glyph tags), **color** (named swatch → representative sRGB → `PaletteMatch` from Polish 23, reused), **tag** (with/without, any location), **kind** (image/raw/pdf/video/audio/document), **date** (created/modified, within-N-days preset — resolved LIVE against *now* each time so it re-evaluates and round-trips on edit, never frozen at save), **filename** (basename contains), **size** (>/< MB), combined by a **Match All (∩) / Any (∪)** toggle. Storage = one nullable `collections.smart_rules` JSON column (`v12_smart_collections`); **no member rows** — `smart_rules IS NOT NULL` ⇒ smart. Pure `SmartRuleSet`/`SmartRule` (Codable/validity/kind-map) + pure `SmartCollectionResolver` (per-rule `Set<file_id>` algebra, tag/rating "any location satisfies" grain, alive-path resolution). Smart collections are `model_version = 'manual'` → inherit protection from the recluster stale-sweep + empty-state visibility for free (no recluster change). Counts resolve live inside `CollectionStore.fetchAll` (the off-render-path aggregation seam re-run on index/tag changes — the design's cache-invalidate model, no separate cache object); opening routes through the single `alivePathsResolving` seam (also used by export). Distinct default sidebar icon (`line.3.horizontal.decrease.circle`); a v10 user-chosen icon still wins. Make-Smart on a hand-made collection with members shows a data-loss confirm then drops `collection_members`. Rides backup/restore (`smart_rules` carried through archive→materializer→applier; an empty smart collection is kept because it's manual). Color rule uses a **named-swatch picker** (`SmartColor` spectrum, e.g. Blue/Navy/Teal) mapped to a representative sRGB — people think "blue", not hex; `.hex` stays in the model (search still uses it). French localized. Pure/fixture units (migration, `SmartRuleSet` 10, resolver+store 15, materializer round-trip). | ✅ built, unmerged | `feat/next-134` |
+| Polish 1 — AI brain (protocols, semantic search, living collections) | ✅ shipped | `feat/ai-brain` |
+| Polish 2 — hero viewer (adaptive wash, info cards, zoom/pan, delete+undo) | ✅ shipped | `feat/hero-viewer` |
+| Polish 3 — spatial views (cloud + graph; globe retired) | ✅ shipped | `feat/spatial-views` |
+| Polish 4 — delights (burn-up delete, background moods) | ✅ shipped | `feat/delights` |
+| Polish 5 — cloud 3D orbit ball + galaxy view | ✅ shipped | `main` |
+| Polish 6 — screenshot intent collections + Galaxy taste-map | ✅ shipped | `main` |
+| Polish 7 — grid virtualization + thumbnail prewarm; cloud/galaxy removed | ✅ shipped | `main` |
+| Polish 8 — iCloud sync folder (`.muse` sidecars) + macOS share + "Send to Muse" extension | ✅ shipped | `feat/icloud-sync-share` |
+| Polish 9 — Page Up/Down grid scrolling (Fn+Arrow) | ✅ shipped | `feat/page-scroll` |
+| Polish 10 — collection → paginated 11×14 PDF share | ✅ shipped | `feat/collection-pdf-share` |
+| Polish 11 — grid multi-select + actions, drag-to-move, Reveal in Finder, native search field | ✅ shipped | `feat/multi-select` |
+| Polish 12 — folder ops (new subfolder + rename w/ migration) + hero Share/Open-With dropdown + Info modal | ✅ shipped | `feat/folder-ops-and-share` |
+| Polish 13 — tile background (global grid backdrop) + PDF export reflects the grid | ✅ shipped | `feat/next-22` |
+| Polish 14 — Duplicates modal redesign (tile selection, KEEP badge, never-delete-a-whole-group) | ✅ shipped | `feat/next-23` |
+| Polish 15 — synchronized toolbar-icon recolor on mood change | ✅ shipped | `feat/next-24` |
+| Polish 16 — accessibility pass (VoiceOver, icon-button labels, `CollectionCard` rework) | ✅ shipped | `feat/next-25` |
+| Polish 17 — iCloud collection share | ❌ **REMOVED 2026-06-25** — no API to mint a public iCloud link; Drive (P18) is the real path, do NOT re-add | `feat/icloud-collection-share` |
+| Polish 18 — **Google Drive collection share** (OAuth `drive.file`/PKCE → upload to user's Drive → branded share page; metadata-stripped, fail-closed). See Drive security invariants in Durable constraints. | ✅ shipped | `feat/drive-collection-share` |
+| Polish 19 — **Import Keywords & Ratings** (read IPTC/XMP from Lightroom/Bridge → manual tags + ratings) + "XMP Sidecars" filter row | ✅ shipped | `feat/next-125` |
+| Polish 20 — **Collection icon + color** (sidebar; `v10_collection_appearance`) | ✅ shipped | `feat/next-128` |
+| Polish 21 — **Per-file Note** (hero viewer; `notes` table, `v11_file_note`) | ✅ shipped | `feat/next-129` |
+| Polish 22 — **Collapsible Colors card** (hero viewer; global last-choice) | ✅ shipped | `feat/next-130` |
+| Polish 23 — **Color search** (hex/palette token → perceptual CIEDE2000 match on `palette`) | ✅ shipped | `feat/next-133` |
+| Polish 24 — **Smart collections** (rule-driven live membership; `v12_smart_collections`) | ✅ shipped | `feat/next-134` |
 
-> **2026-06-16 session — three feature branches off `main`, not yet merged.**
-> Each has its own spec + plan in `docs/superpowers/`. Merge order is
-> independent; reconcile `docs/session-log.md` + this file's architecture map on merge.
+> All rows above are merged to `main`. "Shipped" here = on `main`; the last
+> *released* build is tagged `v1.3.9`, and `main` runs ahead of it (features
+> merged after that tag ship in the next release). Polish-row detail (the full
+> "why/how" per feature) lives in the **Durable constraints** section below and,
+> in full, in `docs/session-log.md` under each cited branch. Keep new rows to one
+> line here; put the narrative there.
 
-`feat/file-viewer-rewrite` was merged to `main` after Phase 8
-finished — see the merge commit. The branch was kept around as an
-audit trail of the per-phase progression.
+Each feature has its own spec + plan in `docs/superpowers/`; all are merged to
+`main`. `feat/file-viewer-rewrite` was merged after Phase 8 and kept as an audit
+trail of the per-phase progression. The current release tag is `v1.3.9`; `main`
+runs ahead of it.
 
 ## Session history
 
@@ -350,28 +353,15 @@ before implementation.
 1. Open `Muse/Muse.xcodeproj` in Xcode 16+.
 2. Build & run (Cmd+R). The app starts on a clean shell — click
    "Add Folder" in the sidebar to point Muse at any folder on disk.
-3. Toolbar — controls left-aligned, **search alone at the far right** (no
-   centered `.principal` search anymore; centering collided with the controls
-   as the window narrowed). Order (left → right): sidebar toggle ·
-   **[sort · sort-direction arrow · filter]** (one grouped capsule on Tahoe —
-   sort-direction flips newest↔oldest / A↔Z; filter is
-   line.3.horizontal.decrease.circle, a kind/date/size funnel popover,
-   engaged-blue when active, live during search) · tag-sort · show-subfolders ·
-   **[Collections (square.stack.3d.up) · Image Layout (square.grid.2x2) ·
-   background mood (paintpalette — popover also holds the Tile Background
-   picker)]** (a second grouped capsule) · ⓘ About · … · search. The two
-   bracketed clusters are grouped (adjacent items with NO ToolbarSpacer between
-   them merge into one macOS-26 glass capsule); tag-sort, subfolders, and About
-   stay individual pills. NOTE: a toolbar `Menu` shows its chevron only if it's
-   a standalone pill — to let **sort** join its group its `.menuIndicator` is
-   `.hidden` (a chevron Menu refuses to merge). See the ToolbarSpacer durable
-   constraint for the two-variant (Tahoe/Sequoia) plumbing in `ContentView`. Search is native `.searchable`:
-   it sits at the far right and COLLAPSES to a magnifier icon on a narrow
-   window (buttons roll into the » overflow), Notes-style. (The grid/cloud/galaxy view
-   picker and the water effect were removed 2026-06-13; the clear-collection ✕
-   was removed in favor of back arrows.) Find Duplicates and Import Keywords &
-   Ratings… live in the File menu; Pin/Unpin Folder and
-   Remove Folder live in the Edit menu; analysis runs automatically.
+3. Toolbar — controls left-aligned, **search alone at the far right** (native
+   `.searchable`, collapses to a magnifier on a narrow window). Order (left →
+   right): sidebar toggle · **[sort · sort-direction · filter]** · tag-sort ·
+   show-subfolders · **[Collections · Image Layout · background mood]** · About ·
+   … · search. The two bracketed clusters are grouped glass capsules on macOS 26.
+   Full plumbing (two-variant Tahoe/Sequoia builder, why sort's `.menuIndicator`
+   is `.hidden`) is in the ToolbarSpacer durable constraint. Find Duplicates and
+   Import Keywords & Ratings… are in the File menu; Pin/Unpin + Remove Folder in
+   the Edit menu; analysis runs automatically.
 4. Sandboxed container path:
    `~/Library/Containers/com.tarrats.Muse/Data/Library/Application Support/Muse/`.
    `muse.sqlite` there; wipe it to rebuild the schema on next launch.

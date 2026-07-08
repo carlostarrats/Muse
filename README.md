@@ -23,13 +23,21 @@ More builds and release notes are on the [Releases page](https://github.com/carl
 ## Privacy first
 
 Everything happens on your Mac. **Muse collects nothing** — no analytics, no
-telemetry, nothing about you or your files is ever uploaded or shared. The
-*only* network access it makes is to check for and download its own updates
-(see [Staying up to date](#staying-up-to-date)), and you choose whether
-automatic checks are on. The app is sandboxed; its single outgoing-network
-entitlement exists solely so the updater can reach its release feed — there
-is no other code path that touches the network. Optional iCloud Drive sync,
-if you turn it on, is handled entirely by the system.
+telemetry, nothing about you or your files is ever sent to the developer. The
+app is sandboxed and touches the network in only two places, both of which you
+control:
+
+1. **Updates** — checking for and downloading its own updates (see
+   [Staying up to date](#staying-up-to-date)); you choose whether automatic
+   checks are on.
+2. **Sharing a collection to your own Google Drive** — only when *you* sign in
+   and press Publish. The images and text go from your Mac straight to *your*
+   Drive (least-privilege `drive.file` access, so Muse can only touch files it
+   created); the developer still receives nothing. Uploaded images are stripped
+   of EXIF/GPS/camera metadata first.
+
+There is no other code path that touches the network. Optional iCloud Drive
+sync, if you turn it on, is handled entirely by the system.
 
 ## What you can do
 
@@ -57,27 +65,55 @@ if you turn it on, is handled entirely by the system.
   never redone.
 - **Collections** form automatically from what analysis finds, span your
   whole library, and stay alive — delete images or remove a folder and they
-  shrink to match. Build your own by hand, too.
+  shrink to match. Build your own by hand, too, and give each a custom icon
+  and color.
+- **Smart collections.** Define a collection by rules — rating, color, tag,
+  kind, date, filename, or size, matched with All or Any — and it fills and
+  updates itself live from your library, always current.
 - **Smart screenshot collections.** Screenshots are grouped by what they're
   of — recipes, receipts, places, articles, quotes, code, and more.
 - **Tags** you can filter by, rename, or delete globally. Your tag edits
   always win over the machine's.
-- **Search** names, tags, captions, and text found inside images.
+- **Ratings and notes.** Star-rate any image and jot a free-text note on it,
+  both filterable and searchable.
+- **Search** names, tags, captions, and text found inside images — and search
+  **by color**, pasting a hex value or a whole palette to find perceptually
+  matching images.
+- **Import keywords & ratings** (File menu) reads IPTC/XMP keywords and star
+  ratings written by Lightroom, Bridge, or Capture One into your files.
 - **Find Duplicates** (File menu) surfaces byte-identical files, visually
-  similar images, and matching filenames to review and clear out.
+  similar images, and matching filenames to review and clear out — always
+  keeping at least one copy of every group.
+
+### Select, arrange, and manage
+- **Multi-select** tiles and act in bulk — add to a collection, tag, share,
+  or move — plus drag-to-move and Reveal in Finder.
+- **Folder operations:** create a subfolder or rename one in place, right from
+  the sidebar.
+- Keyboard-navigate the grid (arrows, Page Up/Down, Space to open) and set the
+  masonry column count to taste.
+- **Back up and restore** your whole library — tags, ratings, notes,
+  collections, and analysis — keyed by content so it survives moves.
 
 ### Share and sync
 - Share an image straight from the viewer — AirDrop, Mail, Messages, or
   Save to Files.
+- **Share a collection as a link.** Sign in to your own Google Drive and Muse
+  uploads the collection into a tidy folder in *your* Drive, then hands you a
+  link to a clean, branded gallery page. Images are stripped of EXIF/GPS/camera
+  metadata first, the recipient can print the page to PDF, and you can unpublish
+  any time from **Manage Drive Shares…**.
+- **Share a collection as a PDF** — a paginated 11×14 layout that mirrors your
+  grid, via Save to… or the Share menu.
 - From Finder, right-click any file → **Share → Muse** to send it into your
   library.
 - Optional **iCloud sync** keeps one folder synced across your Macs. Each
-  image carries a tiny sidecar of its tags, colors, and analysis, so a
-  second Mac restores everything without re-analyzing.
+  image carries a tiny sidecar of its tags, colors, ratings, notes, and
+  analysis, so a second Mac restores everything without re-analyzing.
 
 ### Make it yours
 - Background moods: Light, Dark, Auto (light by day, dark at night), or a
-  custom color.
+  custom color — with a global tile backdrop to sit images on.
 - Drive it from anywhere via Shortcuts, Siri, and Spotlight (App Intents) —
   and any Shortcut you build is reachable from launchers like Raycast or Alfred.
 
@@ -120,7 +156,10 @@ appcast to GitHub Releases) is documented step by step in
 
 ## License
 
-Muse is open source under the [MIT License](LICENSE).
+Muse is **source-available** under the [PolyForm Shield License 1.0.0](LICENSE).
+You're free to read, run, and modify the code — the one restriction is that you
+may not use it to build a product that competes with Muse. The source is public
+so the privacy claims above can be verified, not so a clone can be shipped.
 
 ## Acknowledgements
 
