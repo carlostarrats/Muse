@@ -298,6 +298,10 @@ struct ViewerInfoColumn<Chrome: View>: View {
                         .accessibilityLabel(Text(String(format: NSLocalizedString(
                             "%lld-star rating",
                             comment: "VoiceOver: star rating of a photo"), n)))
+                        // Convey the CURRENT rating: filled stars read as
+                        // "selected" so a VoiceOver user perceives the value
+                        // (and knows tapping the current star clears it).
+                        .accessibilityAddTraits(filled ? [.isSelected] : [])
                     }
                 }
             }

@@ -813,7 +813,7 @@ struct ContentView: View {
     /// One shared pill for every phase — same glass as the grid's column
     /// slider: ultra-thin material capsule, hairline outline, same height,
     /// same 16pt bottom seat.
-    private func statusPill(label: String, progress: Double) -> some View {
+    private func statusPill(label: LocalizedStringKey, progress: Double) -> some View {
         HStack(spacing: 10) {
             ProgressView(value: min(max(progress, 0), 1))
                 .progressViewStyle(.linear)
