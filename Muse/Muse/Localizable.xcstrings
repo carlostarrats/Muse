@@ -6023,16 +6023,6 @@
           }
         }
       }
-    },
-    "Original icon" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Icône d’origine"
-          }
-        }
-      }
     }
   },
   "version" : "1.0"

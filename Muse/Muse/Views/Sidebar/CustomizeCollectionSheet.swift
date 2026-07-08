@@ -26,7 +26,6 @@ struct CustomizeCollectionSheet: View {
     @State private var hoveredColor: String?
     @State private var hoveredSymbol: String?
     private static let defaultColorHoverID = "__default__"
-    private static let defaultSymbolHoverID = "__default_symbol__"
 
     /// This collection's "default" glyph — the smart funnel for a smart
     /// collection, the classic stack otherwise — so the preview and Reset match
@@ -224,12 +223,11 @@ struct CustomizeCollectionSheet: View {
 
             LazyVGrid(columns: Array(repeating: GridItem(.fixed(30), spacing: 8), count: 6),
                       spacing: 8) {
-                // The "original icon" cell (first), mirroring the color column's
-                // Default swatch: it restores this collection's NATIVE glyph —
-                // the funnel for a smart collection, the stack for a normal one —
-                // without touching the chosen color. The native default is shown
-                // here (not as a plain symbol) so there's always a clear way back.
-                defaultSymbolCell
+                // First cell = this collection's NATIVE glyph (the funnel for a
+                // smart collection, the stack for a normal one), shown as an
+                // ordinary symbol so there's always a plain way back to the
+                // original. Excluded from the rest so it's never duplicated.
+                symbolCell(defaultIcon)
                 ForEach(CollectionAppearance.symbols.filter {
                     $0 != CollectionAppearance.defaultIcon && $0 != defaultIcon
                 }, id: \.self) { name in
@@ -237,42 +235,6 @@ struct CustomizeCollectionSheet: View {
                 }
             }
         }
-    }
-
-    /// The native-default glyph on the light/dark split used by the color
-    /// Default swatch, so it reads as "the original icon." Selecting it reverts
-    /// only the icon (draftColor is left as the user set it).
-    private var defaultSymbolCell: some View {
-        let selected = draftIcon == defaultIcon
-        let hovered = hoveredSymbol == Self.defaultSymbolHoverID
-        return Button {
-            draftIcon = defaultIcon
-        } label: {
-            Image(systemName: defaultIcon)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.primary)
-                .frame(width: 30, height: 30)
-                .background {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(LinearGradient(
-                            stops: [
-                                .init(color: Mood.paperPalette.background, location: 0.5),
-                                .init(color: Mood.fallbackPalette.background, location: 0.5),
-                            ],
-                            startPoint: .topLeading, endPoint: .bottomTrailing))
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(selected ? Color.accentColor
-                                               : Color.primary.opacity(hovered ? 0.35 : 0.15),
-                                      lineWidth: selected ? 2 : 1)
-                }
-        }
-        .buttonStyle(.plain)
-        .onHover { hoveredSymbol = $0 ? Self.defaultSymbolHoverID : nil }
-        .help(String(localized: "Original icon"))
-        .accessibilityLabel(String(localized: "Original icon"))
-        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 
     private func symbolCell(_ name: String) -> some View {
