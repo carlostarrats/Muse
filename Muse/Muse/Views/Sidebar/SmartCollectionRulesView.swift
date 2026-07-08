@@ -10,6 +10,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct SmartCollectionRulesView: View {
     /// nil id = creating a new smart collection; non-nil = editing / converting.
@@ -113,13 +114,12 @@ struct SmartCollectionRulesView: View {
 
             HStack {
                 Spacer()
-                Button("Cancel") { onClose() }
+                FooterButton(title: "Cancel", prominent: false, disabled: false) { onClose() }
                     .keyboardShortcut(.cancelAction)
-                Button("Save") {
+                FooterButton(title: "Save", prominent: true, disabled: !canSave) {
                     if confirmConversion { showConvertConfirm = true } else { save() }
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(!canSave)
             }
             .padding(.top, 14)
         }
@@ -314,10 +314,13 @@ private struct SmartRuleRow: View {
                 Button {
                     rule = .color(.name(token))
                 } label: {
+                    // A menu templates SF Symbols to the text color, so a
+                    // "circle.fill" would render black — use a rendered, non-
+                    // template swatch image to show the actual color.
                     Label {
                         Text(SmartRuleRow.colorName(token))
                     } icon: {
-                        Image(systemName: "circle.fill").foregroundStyle(SmartRuleRow.swatch(token))
+                        SmartRuleRow.swatchImage(token)
                     }
                 }
             }
@@ -329,7 +332,6 @@ private struct SmartRuleRow: View {
                 Text(SmartRuleRow.colorName(currentToken))
             }
         }
-        .menuStyle(.borderlessButton)
         .fixedSize()
     }
 
@@ -357,7 +359,6 @@ private struct SmartRuleRow: View {
         } label: {
             Text(currentLabel)
         }
-        .menuStyle(.borderlessButton)
         .fixedSize()
     }
 
@@ -379,6 +380,24 @@ private struct SmartRuleRow: View {
         return Color(red: rgb.r, green: rgb.g, blue: rgb.b)
     }
 
+    /// A rendered (non-template) filled-circle image so menu items show the
+    /// ACTUAL color — SwiftUI menus tint SF Symbols to the label color.
+    static func swatchImage(_ token: String) -> Image {
+        let rgb = SmartColor.rgb(for: token) ?? RGB(r: 0.5, g: 0.5, b: 0.5)
+        let d: CGFloat = 12
+        let img = NSImage(size: NSSize(width: d, height: d))
+        img.lockFocus()
+        NSColor(srgbRed: rgb.r, green: rgb.g, blue: rgb.b, alpha: 1).setFill()
+        NSBezierPath(ovalIn: NSRect(x: 0, y: 0, width: d, height: d)).fill()
+        NSColor(white: 0.5, alpha: 0.35).setStroke()
+        let ring = NSBezierPath(ovalIn: NSRect(x: 0.5, y: 0.5, width: d - 1, height: d - 1))
+        ring.lineWidth = 0.5
+        ring.stroke()
+        img.unlockFocus()
+        img.isTemplate = false
+        return Image(nsImage: img).renderingMode(.original)
+    }
+
     static func colorName(_ token: String) -> String {
         switch token {
         case "red":    return String(localized: "Red")
@@ -396,6 +415,44 @@ private struct SmartRuleRow: View {
         case "gray":   return String(localized: "Gray")
         case "white":  return String(localized: "White")
         default:       return token.capitalized
+        }
+    }
+}
+
+// MARK: - Footer button (hover state)
+
+/// Cancel / Save with an explicit hover tint, matching the rest of the sheet's
+/// custom hover feedback. `prominent` = the accent-filled default action.
+private struct FooterButton: View {
+    let title: LocalizedStringKey
+    let prominent: Bool
+    let disabled: Bool
+    let action: () -> Void
+    @State private var hover = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 13, weight: prominent ? .semibold : .regular))
+                .foregroundStyle(prominent ? Color.white : Color.primary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(background))
+                .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? 0.5 : 1)
+        .onHover { hover = $0 && !disabled }
+    }
+
+    private var background: Color {
+        if prominent {
+            return Color.accentColor.opacity(hover ? 1.0 : 0.9)
+        } else {
+            return Color.primary.opacity(hover ? 0.14 : 0.07)
         }
     }
 }
