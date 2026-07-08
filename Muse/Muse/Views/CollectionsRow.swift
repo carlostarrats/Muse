@@ -49,6 +49,19 @@ private struct ActiveCollectionHeader: View {
                 .foregroundStyle(.secondary)
             EditPill { requestRename() }
             Spacer()
+            // A smart collection's membership resolves live, but only when it's
+            // (re)opened — so an edit made WHILE viewing it (e.g. rating a photo
+            // below the rule's threshold) isn't reflected until you refresh. This
+            // button forces that re-resolve in place, without a tile vanishing
+            // under your cursor mid-edit. It appears ONLY once the shown grid has
+            // actually drifted from the live membership (appState.activeSmartStale),
+            // so it's a "there's an update — tap to apply" cue, never an always-
+            // present button that does nothing. (Smart collections only; hand-
+            // picked ones can't go stale by rule.)
+            if loaded.collection.smart_rules != nil && appState.activeSmartStale {
+                RefreshCollectionButton { refreshMembership() }
+                    .transition(.opacity.combined(with: .scale(scale: 0.7)))
+            }
             ShareCollectionButton(title: loaded.collection.name, count: loaded.aliveCount)
             TrashButton { confirmDelete = true }
         }
@@ -65,6 +78,22 @@ private struct ActiveCollectionHeader: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("The collection is removed everywhere. Your images stay on disk.")
+        }
+    }
+
+    /// Re-resolve a smart collection's membership against the current DB and
+    /// refresh the header count — the "update this view now" action. `reload()`
+    /// re-runs fetchAll (so the count reflects the live rules), and re-calling
+    /// `setActiveCollection` re-resolves the grid's tiles live (same seam a fresh
+    /// open uses). No-op-safe: an unchanged membership re-resolves to itself.
+    private func refreshMembership() {
+        let id = loaded.collection.id
+        // Dismiss the cue immediately on tap (setActiveCollection also clears it,
+        // but that trails the async reload) so the button doesn't linger.
+        withAnimation(.easeInOut(duration: 0.2)) { appState.activeSmartStale = false }
+        Task { @MainActor in
+            await CollectionsEngine.shared.reload()
+            appState.setActiveCollection(id)
         }
     }
 
@@ -108,6 +137,37 @@ private struct EditPill: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help("Rename collection")
+    }
+}
+
+/// Circular hover refresh button for the smart-collection header. Spins its
+/// glyph a turn on tap as a light "recomputing" cue.
+private struct RefreshCollectionButton: View {
+    var action: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hovering = false
+    @State private var spins = 0
+
+    var body: some View {
+        Button {
+            spins += 1
+            action()
+        } label: {
+            Image(systemName: "arrow.clockwise")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(hovering ? .primary : .secondary)
+                // The spin is a decorative "recomputing" cue — the whole app
+                // honors Reduce Motion for such flourishes, so hold the glyph
+                // still there (the action still fires either way).
+                .rotationEffect(.degrees(reduceMotion ? 0 : Double(spins) * 360))
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.5), value: spins)
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(.primary.opacity(hovering ? 0.16 : 0.08)))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Refresh collection")
+        .accessibilityLabel("Refresh collection")
     }
 }
 

@@ -176,3 +176,33 @@ deferred for lack of Eagle-user demand. **Design doc:
 it also lists what the shipped Lightroom/Bridge metadata import already provides
 (the ingestion seams to reuse) and what was explicitly rejected (social bookmark
 import, disk-duplicating folder mirroring).
+
+## Deferred: cross-device metadata resync (notes/tags/ratings) + per-field sidecar clock
+
+**Why it matters (surfaced 2026-07-07):** synced metadata (tags, ratings, per-file
+notes) rides the iCloud `.muse/<hash>.json` sidecars, but `SidecarHydrator.hydrate`
+only APPLIES a sidecar to a file NOT already analyzed at its current content hash
+(`file.analyzed_hash == hash → skip`). Since the Vision pass is automatic, in steady
+state every device has already analyzed a given file, so a note/tag written on one
+device is never imported by another. Effectively metadata sync is inert between two
+settled devices (same limitation tags always had). Today it's Mac-to-Mac only and
+low-stakes; it becomes a real problem the moment an **iOS app** shares the same iCloud
+library (edit on iPhone → never shows on Mac).
+
+**Owner-approved direction (do NOT auto-change the sync model):** add an explicit,
+user-pushed **"Sync metadata from iCloud"** button (Settings, or the backup/restore
+neighborhood) that re-reads every sidecar in the iCloud zone and merges it in,
+bypassing the analyzed-hash gate. Fits Muse's explicit/user-initiated personality;
+leaves the automatic path untouched.
+
+**Must be paired with a correctness fix (the reason it's not a one-liner):** the note
+LWW clock is currently the whole-sidecar `updated_at`, which is bumped on ANY edit — so
+a preserved-but-stale note can carry a fresh timestamp and, under a forced resync, win
+over a genuinely newer note elsewhere (`NoteStore.applyHydrated` / `Sidecar.resolveForWrite`
+review, 2026-07-07 finding #4, currently near-unreachable ONLY because of the gate above).
+A forced-resync button exercises this harder, so it needs a **per-field `note_updated_at`
+(and ideally per-scalar) clock in the sidecar** so merges resolve field-by-field. Getting
+that field into the platform-neutral sidecar format is best done NOW, before an iOS app
+ships against the format. Scope: `Sidecar` (new optional field, back-compat nil),
+`SidecarHydrator` (forced full re-hydrate path), `NoteStore.applyHydrated`/`Sidecar.merge`
+(compare the per-field clock), a Settings button, and unit tests. Not started.

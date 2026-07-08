@@ -305,6 +305,16 @@ final class AppState: ObservableObject {
         didSet { _visibleFilesValid = false }
     }
 
+    /// True when the OPEN collection is smart AND its live-resolved membership
+    /// has drifted from what's currently on screen (e.g. an in-view rating/tag
+    /// edit pushed a photo past a rule). Drives the header's refresh button so it
+    /// appears ONLY when a refresh would actually change something — never a
+    /// confusing always-there no-op. Recomputed on tag/rating edits
+    /// (`recheckActiveSmartStale`); reset when a collection opens/closes.
+    @Published var activeSmartStale = false
+    /// Guards the async staleness recheck against a newer edit landing first.
+    var smartStaleToken = 0
+
     /// True when the dedicated Collections page (grid of all collection
     /// cards) is showing. Toggled by the toolbar's collections icon. When a
     /// collection is then opened from the page, `activeCollectionID` becomes
@@ -613,7 +623,13 @@ final class AppState: ObservableObject {
         // before a folder is even selected.
         tagsVersionCancellable = $tagsVersion
             .dropFirst()
-            .sink { [weak self] _ in self?.reloadTagChips() }
+            .sink { [weak self] _ in
+                self?.reloadTagChips()
+                // A tag/rating edit can change an open smart collection's
+                // rule-driven membership — re-check whether the shown grid is
+                // now out of date so the header's refresh button can reveal.
+                self?.recheckActiveSmartStale()
+            }
 
         // Tag-sort-mode change → persist + re-order the chip row in place.
         tagSortModeCancellable = $tagSortMode

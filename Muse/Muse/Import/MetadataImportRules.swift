@@ -31,10 +31,15 @@ enum MetadataImportRules {
     /// clamps to 5); 0 (unrated), negative (Lightroom's −1 "rejected"), or
     /// absent → nil.
     static func normalizeRating(_ raw: Double?) -> Int? {
-        guard let raw else { return nil }
-        let rounded = Int(raw.rounded())
+        guard let raw, raw.isFinite else { return nil }
+        // Clamp to [0, maxStars] BEFORE `Int(...)` — a corrupt/hand-edited
+        // xmp:Rating text can parse to NaN/inf/1e20, and `Int()` on a non-finite
+        // or out-of-Int64-range Double is a fatal trap (it fires inside the
+        // import's detached read, uncatchable). Anything ≥1 then rounds and caps.
+        let clamped = min(max(raw.rounded(), 0), Double(StarRating.maxStars))
+        let rounded = Int(clamped)
         guard rounded >= 1 else { return nil }
-        return min(rounded, StarRating.maxStars)
+        return rounded
     }
 
     /// Import fills rating gaps only: returns the stars to write, or nil when

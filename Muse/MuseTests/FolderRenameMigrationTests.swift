@@ -158,6 +158,48 @@ final class FolderRenameMigrationSQLTests: XCTestCase {
         }
     }
 
+    func testApplyMigratesNotesAndLeavesSiblingsUntouched() throws {
+        // notes is keyed (file_id, parent_dir) like tags — a rename must carry
+        // the note to the new folder key, or it's orphaned (silent data loss).
+        let q = try freshQueue()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at) VALUES ('f1','h1','image',0)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('p1','f1','/a/Old/x.png',1)")
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at) VALUES ('f2','h2','image',0)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('p2','f2','/a/OldStuff/y.png',1)")
+            try db.execute(sql: "INSERT INTO notes (file_id, parent_dir, body, updated_at) VALUES ('f1','/a/Old','keep me',100)")
+            try db.execute(sql: "INSERT INTO notes (file_id, parent_dir, body, updated_at) VALUES ('f2','/a/OldStuff','sibling',100)")
+
+            try FolderRenameMigration.apply(db, old: "/a/Old", new: "/a/New", newName: "New")
+        }
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT body FROM notes WHERE file_id='f1' AND parent_dir='/a/New'"), "keep me")
+            XCTAssertNil(try String.fetchOne(db, sql: "SELECT body FROM notes WHERE file_id='f1' AND parent_dir='/a/Old'"))
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT body FROM notes WHERE file_id='f2' AND parent_dir='/a/OldStuff'"), "sibling")  // sibling untouched
+        }
+    }
+
+    func testApplyClearsStaleTargetNoteAndStillMigrates() throws {
+        // A stale note row already at the rename TARGET (PK = (file_id, parent_dir))
+        // would collide on the notes rewrite and roll back the whole rename. The
+        // destination pre-clear must drop it so the rename completes.
+        let q = try freshQueue()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at) VALUES ('f1','h1','image',0)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('p1','f1','/a/Old/x.png',1)")
+            try db.execute(sql: "INSERT INTO notes (file_id, parent_dir, body, updated_at) VALUES ('f1','/a/Old','fresh',200)")
+            // stale leftover note for the same file_id already at /a/New
+            try db.execute(sql: "INSERT INTO notes (file_id, parent_dir, body, updated_at) VALUES ('f1','/a/New','stale',50)")
+
+            try FolderRenameMigration.apply(db, old: "/a/Old", new: "/a/New", newName: "New")  // must not throw
+        }
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT absolute_path FROM paths WHERE id='p1'"), "/a/New/x.png")
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM notes WHERE file_id='f1' AND parent_dir='/a/New'"), 1)
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT body FROM notes WHERE file_id='f1' AND parent_dir='/a/New'"), "fresh")
+        }
+    }
+
     func testApplyHandlesSqlWildcardsInPath() throws {
         let q = try freshQueue()
         try q.write { db in

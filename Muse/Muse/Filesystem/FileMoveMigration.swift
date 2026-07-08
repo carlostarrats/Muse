@@ -60,6 +60,13 @@ enum FileMoveMigration {
                 .contains { TagScope.parentDir(ofPath: $0.absolute_path) == oldDir }
             try migrateTags(db, fileID: fid, from: oldDir, to: newDir,
                             deleteOriginals: !keepsSiblingInOldDir)
+            // The per-(file_id, parent_dir) note follows the same copy-vs-move
+            // rule — same file_id, re-scoped oldDir → newDir. Without this an
+            // in-app move silently drops the file's note (tags survived, note
+            // didn't). Never clobbers a note already at the destination.
+            try NoteStore.carry(fromFileID: fid, fromDir: oldDir,
+                                toFileID: fid, toDir: newDir,
+                                deleteOriginal: !keepsSiblingInOldDir, db: db)
         }
     }
 

@@ -54,12 +54,19 @@ extension AppState {
     /// menu). Files only (folders can't be tagged). Bumps tagsVersion so chips +
     /// the rating map refresh.
     func setRating(_ stars: Int?, forSelectionFallback fallback: String) {
-        let urls = effectiveSelectionURLs(fallback: fallback).filter {
-            (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory != true
-        }
+        let urls = effectiveSelectionURLs(fallback: fallback)
         guard !urls.isEmpty else { return }
         Task { @MainActor in
-            await TagStore.shared.setRating(stars, forURLs: urls)
+            // Exclude folders (they can't carry a rating; a co-selected folder
+            // from one-level browse would otherwise ride along). The check is a
+            // per-file stat, so run it OFF the main actor — a bulk selection
+            // (Select-All → Rate) would otherwise stat O(n) files on the main
+            // thread, the only such site the rating feature introduced.
+            let fileURLs = await Task.detached {
+                urls.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory != true }
+            }.value
+            guard !fileURLs.isEmpty else { return }
+            await TagStore.shared.setRating(stars, forURLs: fileURLs)
             tagsVersion &+= 1
         }
     }

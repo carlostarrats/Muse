@@ -43,6 +43,15 @@ final class MetadataImportRulesTests: XCTestCase {
         XCTAssertNil(MetadataImportRules.normalizeRating(nil))
     }
 
+    func testRatingNonFiniteOrOversizedIsNilNotCrash() {
+        // A corrupt/hand-edited xmp:Rating parses to NaN/inf/huge; Int() on those
+        // is a fatal trap, so normalizeRating must reject them, not crash.
+        XCTAssertNil(MetadataImportRules.normalizeRating(.nan))
+        XCTAssertNil(MetadataImportRules.normalizeRating(.infinity))
+        XCTAssertNil(MetadataImportRules.normalizeRating(-.infinity))
+        XCTAssertEqual(MetadataImportRules.normalizeRating(1e20), 5)   // clamps, no trap
+    }
+
     // MARK: ratingToApply
 
     func testImportedRatingFillsGapOnly() {

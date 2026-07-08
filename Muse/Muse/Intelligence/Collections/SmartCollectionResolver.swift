@@ -74,7 +74,12 @@ enum SmartCollectionResolver {
                 // Relative bound resolved against `now` every call — so a smart
                 // collection stays current ("Last month" always means the last
                 // month, re-evaluated live, never frozen at save time).
-                let cutoff = now - Int64(days) * 86_400
+                // Saturating math: a wild `days` from corrupt JSON would overflow
+                // `Int64(days) * 86_400` and trap during fetchAll — on overflow the
+                // window is effectively unbounded, so the cutoff floors to Int64.min
+                // ("within a huge window" = every file), never a crash.
+                let (secs, overflow) = Int64(max(0, days)).multipliedReportingOverflow(by: 86_400)
+                let cutoff = overflow ? Int64.min : now - secs
                 return try idSet(db, sql: "SELECT id FROM files WHERE \(col) IS NOT NULL AND \(col) > ?",
                                  args: [cutoff])
             }
@@ -146,6 +151,12 @@ enum SmartCollectionResolver {
 
     /// The star-glyph labels a rating rule matches, e.g. atLeast 4 → ["★★★★","★★★★★"].
     private static func qualifyingRatingLabels(op: Comparison, stars: Int) -> [String] {
+        // Guard the range construction: a `stars` outside 1...maxStars (a corrupt
+        // or newer-build `smart_rules` JSON — resolve() does NOT re-validate
+        // decoded rules, and fetchAll evaluates every smart collection on load, so
+        // a reversed `Array(7...5)`/`Array(1...0)` here would crash-loop the app).
+        // An out-of-range rating simply matches nothing.
+        guard (1...StarRating.maxStars).contains(stars) else { return [] }
         let range: [Int]
         switch op {
         case .atLeast: range = Array(stars...StarRating.maxStars)
