@@ -25,8 +25,8 @@ enum FolderRenameMigration {
     }
 
     /// Apply the rename prefix-rewrite to EVERY path-keyed table in one
-    /// transaction: `paths.absolute_path`, `tags.parent_dir`, and
-    /// `starred_folders` (its path + the renamed folder's own display name).
+    /// transaction: `paths.absolute_path`, `tags.parent_dir`, `notes.parent_dir`,
+    /// and `starred_folders` (its path + the renamed folder's own display name).
     /// file_id-keyed data (files, collections, FTS, embeddings) is unaffected —
     /// it resolves through `paths`, so rewriting `paths` is enough. Must be
     /// called inside a `queue.write { db in ... }` block. `newName` is the new
@@ -72,6 +72,14 @@ enum FolderRenameMigration {
             WHERE parent_dir = ?
                OR SUBSTR(parent_dir, 1, LENGTH(?) + 1) = ? || '/'
             """, arguments: [new, new, new])
+        // notes is keyed (file_id, parent_dir) like tags (UNIQUE via its PK), so
+        // it needs the identical stale-row pre-clear + prefix rewrite or every
+        // note under a renamed folder is orphaned at the old parent_dir.
+        try db.execute(sql: """
+            DELETE FROM notes
+            WHERE parent_dir = ?
+               OR SUBSTR(parent_dir, 1, LENGTH(?) + 1) = ? || '/'
+            """, arguments: [new, new, new])
 
         try db.execute(sql: """
             UPDATE paths
@@ -81,6 +89,12 @@ enum FolderRenameMigration {
             """, arguments: [new, old, old, old, old])
         try db.execute(sql: """
             UPDATE tags
+            SET parent_dir = ? || SUBSTR(parent_dir, LENGTH(?) + 1)
+            WHERE parent_dir = ?
+               OR SUBSTR(parent_dir, 1, LENGTH(?) + 1) = ? || '/'
+            """, arguments: [new, old, old, old, old])
+        try db.execute(sql: """
+            UPDATE notes
             SET parent_dir = ? || SUBSTR(parent_dir, LENGTH(?) + 1)
             WHERE parent_dir = ?
                OR SUBSTR(parent_dir, 1, LENGTH(?) + 1) = ? || '/'

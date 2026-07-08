@@ -66,6 +66,41 @@ nonisolated enum NoteStore {
             """, arguments: [pattern])
     }
 
+    /// Carry a note from one (file_id, parent_dir) identity/scope to another,
+    /// mirroring how tags follow a relocation. Used by the three paths that
+    /// rewrite a file's identity or folder key: the Indexer shared-row
+    /// split/collision (fromFileID → toFileID, same dir) and an in-app move
+    /// (same file_id, fromDir → toDir). COPY when `deleteOriginal` is false (a
+    /// byte-identical sibling still surfaces the source note), MOVE when true.
+    /// Never clobbers a note already at the destination — INSERT OR IGNORE, so a
+    /// copy already living at the target keeps its own note.
+    static func carry(fromFileID: String, fromDir: String,
+                      toFileID: String, toDir: String,
+                      deleteOriginal: Bool, db: GRDB.Database) throws {
+        try db.execute(sql: """
+            INSERT OR IGNORE INTO notes (file_id, parent_dir, body, updated_at)
+            SELECT ?, ?, body, updated_at FROM notes
+            WHERE file_id = ? AND parent_dir = ?
+            """, arguments: [toFileID, toDir, fromFileID, fromDir])
+        if deleteOriginal {
+            try db.execute(sql: "DELETE FROM notes WHERE file_id = ? AND parent_dir = ?",
+                           arguments: [fromFileID, fromDir])
+        }
+    }
+
+    /// MOVE every note of one identity onto another (all parent_dirs), for the
+    /// sole-alive-path collision where the old identity is done. Mirrors the
+    /// unscoped `Indexer.unionTags` carry (which deletes its source rows), so the
+    /// source notes don't linger orphaned after the union. Never clobbers a
+    /// destination note (INSERT OR IGNORE), then drops the source rows.
+    static func carryAll(fromFileID: String, toFileID: String, db: GRDB.Database) throws {
+        try db.execute(sql: """
+            INSERT OR IGNORE INTO notes (file_id, parent_dir, body, updated_at)
+            SELECT ?, parent_dir, body, updated_at FROM notes WHERE file_id = ?
+            """, arguments: [toFileID, fromFileID])
+        try db.execute(sql: "DELETE FROM notes WHERE file_id = ?", arguments: [fromFileID])
+    }
+
     /// Escape LIKE metacharacters so a user query is matched literally.
     private static func likeEscape(_ s: String) -> String {
         s.replacingOccurrences(of: "\\", with: "\\\\")

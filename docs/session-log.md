@@ -5825,3 +5825,71 @@ collection would lose recluster protection; not reachable today (auto collection
 with no members are hidden) but fragile, so conversions now ALWAYS route through
 `makeSmart` (the `SmartCollectionRulesView` `isConversion`/`memberCount` split).
 +2 fixture tests.
+
+### Pre-release health/security audit — 2026-07-07 (on `feat/next-136`)
+
+A deep review pass over everything landed since **v1.3.9** (Polish 18–24:
+Drive share hardening carryover, metadata keywords/ratings import, per-file
+notes, collapsible colors card, collection icon/color, color search, smart
+collections, plus the hero-viewer parting-ripple/flight rework and the
+scattered-stack Collections page). Two review rounds (subsystem fan-out +
+state-management/hero-viewer), each finding verified against the actual code
+before any fix. Build + 741 unit tests green throughout.
+
+**Data-loss bugs fixed (the important ones).** The `notes` table (`v11`,
+`(file_id, parent_dir)`-keyed like tags) was never taught about the three paths
+that rewrite a file's identity or folder key, so it silently orphaned notes:
+- **Folder rename** dropped EVERY note under the renamed folder —
+  `FolderRenameMigration.apply` rewrote `paths`/`tags`/`starred_folders` but not
+  `notes`. Added the same stale-target pre-clear + prefix rewrite.
+- **In-app move** lost the moved file's note — `FileMoveMigration` migrated tags
+  but not the note.
+- **Shared-row split/collision** dropped the edited copy's note — the Indexer
+  carried tags + manual memberships to the new/target identity but not the note.
+  Added `NoteStore.carry` (cross-identity/scope, copy-vs-move by the same
+  same-dir-sibling rule as tags) + `NoteStore.carryAll` (sole-path union), wired
+  into all three sites, `INSERT OR IGNORE` so a destination note is never
+  clobbered. +8 regression tests (rename/move/split, copy-vs-move, no-clobber).
+  Recorded as a durable constraint in `CLAUDE.md`.
+
+**Crash-robustness fixes.** All reachable via corrupt/hand-edited external data,
+each of which would trap (fatal) rather than fail soft:
+- `MetadataImportRules.normalizeRating` — `Int(raw.rounded())` on a NaN/inf/1e20
+  `xmp:Rating` traps mid-import; now `isFinite`-guarded + clamped.
+- `SmartCollectionResolver.qualifyingRatingLabels` — `Array(stars...max)` with
+  out-of-range stars from a corrupt `smart_rules` JSON is a reversed-range trap,
+  and `fetchAll` evaluates every smart collection on load → crash-loop; now
+  guarded to stars ∈ 1…5 (matches nothing otherwise).
+- `SmartCollectionResolver` `withinDays` — `Int64(days) * 86_400` overflow trap
+  on wild JSON; saturating math (unbounded window, never a crash).
+- `SmartCollectionRulesView` size field — `Int64(Double)` overflow on a huge
+  typed MB value; clamped below `Int64.max`.
+
+**Perf/consistency fix.** `AppState.setRating` did an O(n) main-thread directory
+stat on the effective selection (Select-All → Rate) — moved off the main actor,
+matching the codebase's no-main-thread-IO pattern.
+
+**Verified clean (no change):** color math (CIEDE2000 traced line-by-line vs
+Sharma), vDSP cosine, `ThumbnailCache` PNG encode + decode budget, Indexer
+chunked IN() reads, all resolver/note/search SQL parameterized (no injection),
+web-share XSS/CSP (download-deterrent diff is benign), note-sidecar
+merge/resolve rules, hero-viewer flight geometry + parting field + StackScatter
+(all div-by-zero/index guarded, deterministic seed), and every hard AppState
+invariant (selection pruning on narrowing incl. the new `xmp` filter + smart
+collections + color search; guarded rating resort; `tagsVersion` bump on rating
+but not note; smart live-count off the render path).
+
+**Surfaced for an owner decision (NOT silently changed):**
+- **Cross-device note sync is largely inert between two settled devices.**
+  `SidecarHydrator` only applies a sidecar to a file NOT already analyzed at the
+  current hash; since analysis is automatic, a note written on one established
+  device is never imported by another (same limitation tags have). A related
+  latent note-LWW timestamp gap (`sidecar.updated_at` is bumped by any edit, so
+  a preserved-but-stale note can carry a fresh clock) is nearly unreachable
+  because of this gate. Fixing either is a sidecar-format / sync-model change
+  (`note_updated_at`), a product call — left as-is.
+- **An open smart collection doesn't re-resolve membership mid-view.** Rate a
+  visible photo below a `≥4★` rule's threshold and its tile stays until the
+  collection is re-opened ("resolved live every time it's *shown*"). Making
+  tiles vanish as you edit is a UX tradeoff (Mail-mailbox behavior vs. jarring
+  disappearance) — not changed without owner sign-off.

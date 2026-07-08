@@ -115,6 +115,59 @@ final class FileMoveMigrationTests: XCTestCase {
         }
     }
 
+    func testMoveCarriesNoteToDestination() throws {
+        // The per-(file_id, parent_dir) note must follow the move like tags do —
+        // same file_id, re-scoped /a → /b. Skipping it silently dropped the note.
+        let q = try freshQueue()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at) VALUES ('f1','h1','image',0)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('p1','f1','/a/x.png',1)")
+            try db.execute(sql: "INSERT INTO notes (file_id, parent_dir, body, updated_at) VALUES ('f1','/a','remember',100)")
+
+            try FileMoveMigration.apply(db, moves: [(from: "/a/x.png", to: "/b/x.png")])
+        }
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT body FROM notes WHERE file_id='f1' AND parent_dir='/b'"), "remember")
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM notes WHERE parent_dir='/a'"), 0, "moved, not copied")
+        }
+    }
+
+    func testMoveCopiesNoteWhenSiblingStaysInSourceFolder() throws {
+        // A byte-identical sibling stays in /a — the (f1, /a) note is shared with
+        // it, so the move COPIES (both keep the note).
+        let q = try freshQueue()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at) VALUES ('f1','h1','image',0)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('p1','f1','/a/x.png',1)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('p2','f1','/a/y.png',1)")
+            try db.execute(sql: "INSERT INTO notes (file_id, parent_dir, body, updated_at) VALUES ('f1','/a','shared',100)")
+
+            try FileMoveMigration.apply(db, moves: [(from: "/a/x.png", to: "/b/x.png")])
+        }
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT body FROM notes WHERE file_id='f1' AND parent_dir='/b'"), "shared")
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT body FROM notes WHERE file_id='f1' AND parent_dir='/a'"), "shared", "staying sibling keeps its note")
+        }
+    }
+
+    func testMoveDoesNotClobberExistingDestinationNote() throws {
+        // A copy already living in /b has its own note — the move must not
+        // overwrite it (INSERT OR IGNORE keeps the destination's).
+        let q = try freshQueue()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at) VALUES ('f1','h1','image',0)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('p1','f1','/a/x.png',1)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('p2','f1','/b/x2.png',1)")
+            try db.execute(sql: "INSERT INTO notes (file_id, parent_dir, body, updated_at) VALUES ('f1','/a','source note',100)")
+            try db.execute(sql: "INSERT INTO notes (file_id, parent_dir, body, updated_at) VALUES ('f1','/b','dest note',100)")
+
+            try FileMoveMigration.apply(db, moves: [(from: "/a/x.png", to: "/b/x.png")])
+        }
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT body FROM notes WHERE file_id='f1' AND parent_dir='/b'"), "dest note")
+        }
+    }
+
     func testUnindexedFileIsSkipped() throws {
         let q = try freshQueue()
         try q.write { db in

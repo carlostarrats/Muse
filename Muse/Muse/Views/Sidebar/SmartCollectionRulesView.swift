@@ -298,7 +298,15 @@ private struct SmartRuleRow: View {
         case let .size(op, bytes):
             comparisonPicker(op) { rule = .size(op: $0, bytes: bytes) }
             let mb = Binding(get: { Double(bytes) / 1_000_000 },
-                             set: { rule = .size(op: op, bytes: Int64(max(0, $0) * 1_000_000)) })
+                             // Clamp the byte product before Int64(): a huge typed/
+                             // pasted MB value (e.g. 1e13) would overflow Int64 and
+                             // trap the conversion. Cap well under Int64.max (which
+                             // itself rounds up past Int64.max as a Double).
+                             set: {
+                                 let product = max(0, $0) * 1_000_000
+                                 let capped = min(product, 9_000_000_000_000_000_000)
+                                 rule = .size(op: op, bytes: Int64(capped))
+                             })
             TextField("MB", value: mb, format: .number.precision(.fractionLength(0...1)))
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 72)

@@ -166,11 +166,17 @@ actor Indexer {
                     // Sole alive path — the old identity is done for; union
                     // everything as before.
                     try unionTags(db: db, fromFileID: file.id, toFileID: target.id)
+                    // Notes follow tags: copy every note onto the target; the old
+                    // row's remaining note rows cascade-delete when it's pruned.
+                    try NoteStore.carryAll(fromFileID: file.id, toFileID: target.id, db: db)
                 } else {
                     let keepsSiblingInDir = otherAlive
                         .contains { TagScope.parentDir(ofPath: $0.absolute_path) == dir }
                     try unionTags(db: db, fromFileID: file.id, toFileID: target.id,
                                   parentDir: dir, deleteOriginals: !keepsSiblingInDir)
+                    try NoteStore.carry(fromFileID: file.id, fromDir: dir,
+                                        toFileID: target.id, toDir: dir,
+                                        deleteOriginal: !keepsSiblingInDir, db: db)
                 }
                 // Manual collection membership is precious user data keyed on
                 // the old identity — copy it to the new one, mirroring the
@@ -238,6 +244,13 @@ actor Indexer {
                             "UPDATE tags SET file_id = ? WHERE file_id = ? AND parent_dir = ?",
                             arguments: [newFile.id, file.id, dir])
                     }
+                    // The (file_id, dir) note follows its tags onto the new
+                    // identity — COPY when a same-folder sibling still surfaces
+                    // it, MOVE otherwise. Skipping this dropped the edited copy's
+                    // note when a shared row split.
+                    try NoteStore.carry(fromFileID: file.id, fromDir: dir,
+                                        toFileID: newFile.id, toDir: dir,
+                                        deleteOriginal: !keepsSiblingInDir, db: db)
                     // Manual collection membership is content-identity (file_id)
                     // keyed and is precious user data — carry it to the edited
                     // copy's new identity so an edit doesn't silently eject the

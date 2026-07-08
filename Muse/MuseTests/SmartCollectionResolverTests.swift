@@ -127,6 +127,35 @@ final class SmartCollectionResolverTests: XCTestCase {
         XCTAssertEqual(try resolve(q, SmartRuleSet(match: .all, rules: [.rating(op: .atMost, stars: 3)])), ["a"])
     }
 
+    func testOutOfRangeRatingRuleMatchesNothingWithoutCrashing() throws {
+        // A corrupt/newer-build smart_rules JSON can carry stars outside 1...5;
+        // the resolver does NOT re-validate, and fetchAll evaluates it on load, so
+        // the star-range construction must not trap (reversed Array bounds).
+        let q = try makeQueue()
+        try q.write { db in
+            try insert(db, id: "a", path: "/x/a.jpg")
+            try tag(db, fileID: "a", dir: "/x", label: StarRating.label(for: 5)!)
+        }
+        XCTAssertEqual(try resolve(q, SmartRuleSet(match: .all, rules: [.rating(op: .atLeast, stars: 7)])), [])
+        XCTAssertEqual(try resolve(q, SmartRuleSet(match: .all, rules: [.rating(op: .atMost, stars: 0)])), [])
+        XCTAssertEqual(try resolve(q, SmartRuleSet(match: .all, rules: [.rating(op: .equal, stars: 99)])), [])
+    }
+
+    func testHugeWithinDaysDoesNotOverflowCrash() throws {
+        // A wild `days` from corrupt JSON must not overflow Int64(days) * 86_400;
+        // saturating math treats it as an unbounded window (every dated file).
+        let q = try makeQueue()
+        try q.write { db in
+            try insert(db, id: "a", path: "/x/a.jpg", created: 1_000, modified: 1_000)
+        }
+        let ids = try q.read { db in
+            try SmartCollectionResolver.memberIDs(
+                SmartRuleSet(match: .all, rules: [.date(field: .modified, op: .withinDays(Int.max))]),
+                db: db, now: 2_000)
+        }
+        XCTAssertEqual(ids, ["a"])
+    }
+
     func testColorRuleUsesPaletteMatch() throws {
         let q = try makeQueue()
         try q.write { db in

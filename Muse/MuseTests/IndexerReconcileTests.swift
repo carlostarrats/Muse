@@ -108,6 +108,75 @@ final class IndexerReconcileTests: XCTestCase {
         }
     }
 
+    // MARK: Note carry on split / collision (per (file_id, parent_dir), like tags)
+
+    func testSplitMovesNoteToEditedIdentity() throws {
+        // Editing one of two byte-identical copies in DIFFERENT folders splits the
+        // row; the /a note must follow the edited copy to its new identity (MOVE —
+        // no same-folder sibling), leaving the /b sibling's note intact.
+        let q = try freshQueue()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at, analyzed_hash) VALUES ('f1','h1','image',0,'h1')")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('pA','f1','/a/x.png',1)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('pB','f1','/b/x.png',1)")
+            try db.execute(sql: "INSERT INTO notes (file_id, parent_dir, body, updated_at) VALUES ('f1','/a','a note',100)")
+            try db.execute(sql: "INSERT INTO notes (file_id, parent_dir, body, updated_at) VALUES ('f1','/b','b note',100)")
+
+            _ = try Indexer.reconcile(db: db, absPath: "/a/x.png", hash: "h2",
+                                      kind: .image, sizeBytes: 1, createdAt: 0, modifiedAt: 1, now: 2)
+        }
+        try q.read { db in
+            let aFileID = try String.fetchOne(db, sql: "SELECT file_id FROM paths WHERE id='pA'")!
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT body FROM notes WHERE file_id=? AND parent_dir='/a'", arguments: [aFileID]), "a note")
+            XCTAssertNil(try String.fetchOne(db, sql: "SELECT body FROM notes WHERE file_id='f1' AND parent_dir='/a'"), "moved off the old identity")
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT body FROM notes WHERE file_id='f1' AND parent_dir='/b'"), "b note", "sibling note intact")
+        }
+    }
+
+    func testSplitCopiesNoteWhenSameFolderSiblingShares() throws {
+        // Two byte-identical copies in the SAME folder share the (file_id, /a) note
+        // key. Editing one must COPY the note to the edited copy's new identity —
+        // the unedited same-folder sibling still resolves via the old row.
+        let q = try freshQueue()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at, analyzed_hash) VALUES ('f1','h1','image',0,'h1')")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('pA','f1','/a/x.png',1)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('pB','f1','/a/y.png',1)")
+            try db.execute(sql: "INSERT INTO notes (file_id, parent_dir, body, updated_at) VALUES ('f1','/a','shared',100)")
+
+            _ = try Indexer.reconcile(db: db, absPath: "/a/x.png", hash: "h2",
+                                      kind: .image, sizeBytes: 1, createdAt: 0, modifiedAt: 1, now: 2)
+        }
+        try q.read { db in
+            let aFileID = try String.fetchOne(db, sql: "SELECT file_id FROM paths WHERE id='pA'")!
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT body FROM notes WHERE file_id=? AND parent_dir='/a'", arguments: [aFileID]), "shared")
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT body FROM notes WHERE file_id='f1' AND parent_dir='/a'"), "shared", "same-folder sibling keeps its note")
+        }
+    }
+
+    func testCollisionSoleCopyCarriesNoteToTarget() throws {
+        // The edited path's new bytes match a DIFFERENT existing row (h2/f2) and
+        // this is f1's sole alive path: the note carries onto the target identity.
+        let q = try freshQueue()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at, analyzed_hash) VALUES ('f1','h1','image',0,'h1')")
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at, analyzed_hash) VALUES ('f2','h2','image',0,'h2')")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('pA','f1','/a/x.png',1)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('pC','f2','/c/z.png',1)")
+            try db.execute(sql: "INSERT INTO notes (file_id, parent_dir, body, updated_at) VALUES ('f1','/a','carry me',100)")
+
+            _ = try Indexer.reconcile(db: db, absPath: "/a/x.png", hash: "h2",
+                                      kind: .image, sizeBytes: 1, createdAt: 0, modifiedAt: 1, now: 2)
+        }
+        try q.read { db in
+            // pA now points at f2; the note carried to (f2, /a) and the old
+            // identity's note row is gone (mirrors unionTags deleting its source).
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT file_id FROM paths WHERE id='pA'"), "f2")
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT body FROM notes WHERE file_id='f2' AND parent_dir='/a'"), "carry me")
+            XCTAssertNil(try String.fetchOne(db, sql: "SELECT body FROM notes WHERE file_id='f1' AND parent_dir='/a'"))
+        }
+    }
+
     // MARK: FTS basename coverage (every kind, not just analyzed images)
 
     func testNewNonImageFileGetsBasenameFTSRow() throws {
