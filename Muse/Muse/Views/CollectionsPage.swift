@@ -130,7 +130,7 @@ struct CollectionsPage: View {
     // 14 leading / 14 top, and the same 48pt gap before the cards below.
     private var header: some View {
         HStack(spacing: 18) {
-            BackArrowButton(help: "Back") {
+            BackArrowButton(help: String(localized: "Back")) {
                 appState.toggleCollectionsPage()
             }
             Text("Collections")

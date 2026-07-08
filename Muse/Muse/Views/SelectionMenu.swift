@@ -58,7 +58,9 @@ struct SelectionActionsMenu: View {
                     Button("No tags") {}.disabled(true)
                 } else {
                     ForEach(appState.allTagLabels, id: \.self) { label in
-                        Button(label) { addTag(label) }
+                        // Display the localized vision term (e.g. "chien"); the
+                        // canonical English `label` is still what gets written.
+                        Button(VocabularyLocalizer.shared.display(label)) { addTag(label) }
                     }
                 }
             }

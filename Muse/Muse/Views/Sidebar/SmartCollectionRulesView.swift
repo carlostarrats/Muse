@@ -257,6 +257,7 @@ private struct SmartRuleRow: View {
             }
             .labelsHidden()
             .fixedSize()
+            .accessibilityLabel(String(localized: "Star count"))
 
         case let .color(term):
             colorMenu(term)
@@ -313,7 +314,12 @@ private struct SmartRuleRow: View {
             Text("≥").tag(Comparison.atLeast)
             Text("=").tag(Comparison.equal)
             Text("≤").tag(Comparison.atMost)
-        }.labelsHidden().fixedSize()
+        }
+        .labelsHidden()
+        .fixedSize()
+        // The ≥/=/≤ glyphs alone give VoiceOver no sense of what axis they
+        // compare, so name the control's purpose.
+        .accessibilityLabel(String(localized: "Comparison"))
     }
 
     /// A named-color chooser: a swatch + name that opens the spectrum menu.
