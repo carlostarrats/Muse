@@ -34,7 +34,14 @@ enum SmartCollectionResolver {
     /// renders, one tile per alive path). Empty when nothing matches.
     static func alivePaths(_ set: SmartRuleSet, db: GRDB.Database,
                            now: Int64 = Int64(Date().timeIntervalSince1970)) throws -> [String] {
-        let ids = try memberIDs(set, db: db, now: now)
+        try alivePaths(forMemberIDs: memberIDs(set, db: db, now: now), db: db)
+    }
+
+    /// Distinct alive absolute paths for an ALREADY-resolved member-id set — so
+    /// a caller that also needs the ids (e.g. fetchAll, which reports both the
+    /// count and the member ids) evaluates the rules only once instead of twice
+    /// (a color rule's palette scan is not free).
+    static func alivePaths(forMemberIDs ids: Set<String>, db: GRDB.Database) throws -> [String] {
         guard !ids.isEmpty else { return [] }
         let placeholders = ids.map { _ in "?" }.joined(separator: ",")
         return try String.fetchAll(db, sql: """

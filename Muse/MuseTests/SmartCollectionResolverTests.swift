@@ -221,22 +221,43 @@ final class SmartCollectionResolverTests: XCTestCase {
         XCTAssertEqual(all[0].aliveCount, 2, "two PDFs match, resolved live")
     }
 
-    func testMakeSmartDropsMembers() async throws {
+    func testMakeSmartDropsMembersAndForcesManual() async throws {
         let q = try makeQueue()
         try await q.write { db in
             try self.insert(db, id: "a", kind: "pdf", path: "/root/a.pdf")
+            // A non-manual (auto) collection, to prove conversion forces 'manual'.
+            try db.execute(sql: """
+                INSERT INTO collections (id, name, is_hidden, model_version, created_at, updated_at, sort_order)
+                VALUES ('c1', 'Auto', 0, 'intent-v1', 0, 0, 0)
+                """)
+            try db.execute(sql: """
+                INSERT INTO collection_members (collection_id, file_id, added_by) VALUES ('c1', 'a', 'manual')
+                """)
         }
-        let cid = try await CollectionStore.createManual(queue: q)  // empty manual
-        try await CollectionStore.addFile(queue: q, fileID: "a", collectionID: cid)
-        try await CollectionStore.makeSmart(queue: q, id: cid,
+        try await CollectionStore.makeSmart(queue: q, id: "c1",
                                             ruleSet: SmartRuleSet(match: .all, rules: [.kind(.image)]))
-        let members = try await q.read { db in
-            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM collection_members WHERE collection_id = ?",
-                             arguments: [cid]) ?? -1
+        let (members, model) = try await q.read { db -> (Int, String?) in
+            let m = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM collection_members WHERE collection_id = 'c1'") ?? -1
+            let mv = try String.fetchOne(db, sql: "SELECT model_version FROM collections WHERE id = 'c1'")
+            return (m, mv)
         }
         XCTAssertEqual(members, 0, "hand-picked members are removed on conversion")
-        let stillSmart = try await CollectionStore.smartRuleSet(queue: q, id: cid)
+        XCTAssertEqual(model, "manual", "conversion forces model_version=manual (recluster protection)")
+        let stillSmart = try await CollectionStore.smartRuleSet(queue: q, id: "c1")
         XCTAssertNotNil(stillSmart)
+    }
+
+    func testAlivePathsForMemberIDsReturnsAlivePaths() throws {
+        let q = try makeQueue()
+        try q.write { db in
+            try insert(db, id: "a", path: "/x/a.jpg")
+            try insert(db, id: "b", path: "/x/b.jpg")
+            try db.execute(sql: "UPDATE paths SET is_alive = 0 WHERE file_id = 'b'")  // dead
+        }
+        let paths = try q.read { db in
+            try SmartCollectionResolver.alivePaths(forMemberIDs: ["a", "b"], db: db)
+        }
+        XCTAssertEqual(paths, ["/x/a.jpg"], "only alive paths for the given ids; dead 'b' excluded")
     }
 
     // MARK: - Recluster protection (Task 6)

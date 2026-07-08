@@ -5783,12 +5783,22 @@ re-evaluation trigger to build). Spec:
   collection **with members** shows a data-loss confirm, then `makeSmart` sets
   the rules + `DELETE FROM collection_members`. Distinct default sidebar icon
   (`line.3.horizontal.decrease.circle`); a v10 user-chosen icon still wins.
-- **v1 tradeoffs (documented, not bugs).** "within N days" is **frozen to an
-  absolute `.after` bound at save time** (deterministic, matches the tested
-  resolver path) rather than re-evaluated daily. The color rule is **hex-only**
-  in the UI (`NamedColor.parse` decodes hex, not names — a bare name would
-  silently match nothing); `.name` stays in the model for a future named-color
-  table. Color *names* remain searchable as tags (`ColorTagger`, untouched).
+- **Date rule resolves LIVE (post-review UX pass).** "Within N days" is a preset
+  menu (Last 24 hours … Last year), stored as `.withinDays(N)` and resolved
+  against *now* (`SmartCollectionResolver.memberIDs(_:db:now:)`, `now` injectable
+  for deterministic tests) each time the collection is shown — so "Last month"
+  always means the last month, re-evaluates daily, and round-trips on edit. (An
+  earlier cut froze it to an absolute `.after` at save; that couldn't round-trip a
+  preset and never re-evaluated — replaced.) `.before`/`.after` stay in the model,
+  unused by the builder.
+- **Color rule is a named-swatch picker (post-review UX pass).** People think
+  "blue", not `#3a7bd5` — so the rule picks from `SmartColor` (a small spectrum
+  of named swatches: Red…Blue/Navy…Brown/Black/Gray/White), each mapped to one
+  representative sRGB point matched via the existing `PaletteMatch` path. The menu
+  items show the ACTUAL colors (rendered non-template swatch images — a macOS menu
+  tints SF Symbols to the label color, so "circle.fill" would render black).
+  `.hex` stays in the model (the hex color-SEARCH still uses it); `.name` now
+  resolves. Color *names* also remain searchable as tags (`ColorTagger`, untouched).
 - **Backup/restore.** `smart_rules` carried through
   `BackupCollection` → `MaterializedCollection` → `ReconnectApplier` INSERT (and
   its ON CONFLICT update). An empty smart collection survives materialize because
@@ -5798,9 +5808,20 @@ re-evaluation trigger to build). Spec:
   value lines, reverted).
 
 Runtime-verified beyond tests: the `v12` migration applied cleanly to the real
-2256-file library DB (no corruption), the app boots, and resolver-equivalent SQL
-over the live library returns sane counts (2235 images, 1 pdf, 8 rated ≥4★, 2240
-palettes). Build + 727 unit tests green (migration 2, `SmartRuleSet` 10,
-resolver+store 15, materializer round-trip 1). Interactive UI flow (create /
-open / make-smart) awaits a folder in the sidebar — handed to the owner. Recorded
-as Polish 24 in CLAUDE.md's implementation table.
+2256-file library DB (no corruption), the app boots (incl. after the fetchAll
+single-eval refactor below), and resolver-equivalent SQL over the live library
+returns sane counts (2235 images, 1 pdf, 8 rated ≥4★, 2240 palettes). The whole
+rule builder was then driven live by the owner across several UI-polish rounds
+(wording, spacing/alignment, hover states, named colors, the "original icon"
+cell). Build + 730 unit tests green. Recorded as Polish 24 in CLAUDE.md's table.
+
+**Post-build review pass (same session).** Two findings fixed: (1) `fetchAll`
+was evaluating a smart collection's rules TWICE per reload (once via `alivePaths`,
+once via `memberIDs`) — a color rule's palette scan is not free; added
+`SmartCollectionResolver.alivePaths(forMemberIDs:db:)` so the id set is resolved
+once and reused. (2) Converting a non-smart collection with ZERO members took the
+`setSmartRules` path, which doesn't force `model_version = 'manual'` — a non-manual
+collection would lose recluster protection; not reachable today (auto collections
+with no members are hidden) but fragile, so conversions now ALWAYS route through
+`makeSmart` (the `SmartCollectionRulesView` `isConversion`/`memberCount` split).
++2 fixture tests.

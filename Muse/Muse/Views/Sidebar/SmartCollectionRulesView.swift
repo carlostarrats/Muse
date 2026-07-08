@@ -15,9 +15,12 @@ import AppKit
 struct SmartCollectionRulesView: View {
     /// nil id = creating a new smart collection; non-nil = editing / converting.
     let collectionID: String?
-    /// When true (converting a manual collection with members), Save shows a
-    /// data-loss confirm before writing.
-    let confirmConversion: Bool
+    /// True when this is an EXISTING non-smart collection being turned smart
+    /// (drops its hand-picked members + forces model_version = manual via
+    /// makeSmart). False = creating (nil id) or editing an existing smart one.
+    let isConversion: Bool
+    /// Members that would be dropped by a conversion — drives the confirm dialog.
+    let memberCount: Int
     let onClose: () -> Void
 
     @State private var name: String
@@ -27,9 +30,10 @@ struct SmartCollectionRulesView: View {
     @State private var addHover = false
 
     init(collectionID: String?, initialName: String, initialSet: SmartRuleSet,
-         confirmConversion: Bool = false, onClose: @escaping () -> Void) {
+         isConversion: Bool = false, memberCount: Int = 0, onClose: @escaping () -> Void) {
         self.collectionID = collectionID
-        self.confirmConversion = confirmConversion
+        self.isConversion = isConversion
+        self.memberCount = memberCount
         self.onClose = onClose
         _name = State(initialValue: initialName)
         _match = State(initialValue: initialSet.match)
@@ -117,7 +121,7 @@ struct SmartCollectionRulesView: View {
                 FooterButton(title: "Cancel", prominent: false, disabled: false) { onClose() }
                     .keyboardShortcut(.cancelAction)
                 FooterButton(title: "Save", prominent: true, disabled: !canSave) {
-                    if confirmConversion { showConvertConfirm = true } else { save() }
+                    if isConversion && memberCount > 0 { showConvertConfirm = true } else { save() }
                 }
                 .keyboardShortcut(.defaultAction)
             }
@@ -137,12 +141,16 @@ struct SmartCollectionRulesView: View {
         let set = SmartRuleSet(match: match, rules: rules)
         let finalName = name.trimmingCharacters(in: .whitespaces)
         let id = collectionID
-        let convert = confirmConversion
+        let convert = isConversion
         onClose()
         Task { @MainActor in
             guard let q = Database.shared.dbQueue else { return }
             if let id {
                 if convert {
+                    // Always go through makeSmart when converting — even with zero
+                    // members — so model_version is forced to 'manual' (recluster
+                    // protection + empty-visibility). setSmartRules alone would
+                    // leave a non-manual collection unprotected.
                     try? await CollectionStore.makeSmart(queue: q, id: id, ruleSet: set)
                     try? await CollectionStore.rename(queue: q, id: id, name: finalName)
                 } else {

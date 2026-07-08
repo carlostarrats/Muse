@@ -208,7 +208,8 @@ struct CollectionSidebarRow: View {
                 initialName: loaded.collection.name,
                 initialSet: loaded.collection.smart_rules.flatMap(SmartRuleSet.decode)
                     ?? SmartRuleSet(match: .all, rules: []),
-                confirmConversion: !isSmart && loaded.aliveCount > 0) {
+                isConversion: !isSmart,
+                memberCount: loaded.aliveCount) {
                 showingRules = false
             }
         }

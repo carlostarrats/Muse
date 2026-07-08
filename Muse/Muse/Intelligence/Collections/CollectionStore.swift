@@ -351,8 +351,12 @@ enum CollectionStore {
                 let members: [String]
                 let alivePaths: [String]
                 if let json = row.smart_rules, let set = SmartRuleSet.decode(json) {
-                    alivePaths = try SmartCollectionResolver.alivePaths(set, db: db)
-                    members = Array(try SmartCollectionResolver.memberIDs(set, db: db))
+                    // Resolve the rules ONCE: reuse the id set for both the member
+                    // list and the alive-path count (evaluating twice would re-run
+                    // a color rule's palette scan per collection per reload).
+                    let ids = try SmartCollectionResolver.memberIDs(set, db: db)
+                    alivePaths = try SmartCollectionResolver.alivePaths(forMemberIDs: ids, db: db)
+                    members = Array(ids)
                 } else {
                     members = try String.fetchAll(db, sql:
                         "SELECT file_id FROM collection_members WHERE collection_id = ?",
