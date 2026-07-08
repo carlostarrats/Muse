@@ -5893,3 +5893,34 @@ but not note; smart live-count off the render path).
   collection is re-opened ("resolved live every time it's *shown*"). Making
   tiles vanish as you edit is a UX tradeoff (Mail-mailbox behavior vs. jarring
   disappearance) — not changed without owner sign-off.
+
+### Relicense + release 1.4 — 2026-07-07 (on `feat/next-137`)
+
+Cut the **1.4** release and relicensed. Concretely:
+
+- **Relicense MIT → PolyForm Shield 1.0.0** (`LICENSE`). Source-available,
+  non-compete, no expiry — code is public so the privacy/no-network claims are
+  auditable, but it can't be used to ship a competing product. The developer
+  keeps full copyright and the option to charge/gate/close later; PolyForm Shield
+  was chosen over Polyform Noncommercial (too strict — bans all commercial use)
+  and over FSL/BSL (they auto-convert to open source after a change date, which
+  the owner didn't want). Owner is mulling eventual monetization; nothing decided,
+  pricing still "free" today.
+- **Doc refresh.** Collapsed the CLAUDE.md Implementation-status table (the
+  Polish 13–24 essays → one-line index entries), corrected stale
+  "built, unmerged" labels to shipped (verified against `git branch --merged
+  main` — every Polish branch is on main; the labels, not the repo, were wrong),
+  and tightened the "How to run" toolbar section. Durable-constraints section
+  left intact. README rewritten to cover the full feature set (smart collections,
+  color search, import keywords, notes, ratings, multi-select, folder ops, backup,
+  Drive/PDF share, collection appearance) with the privacy section corrected to
+  disclose the opt-in Drive network path.
+- **Released `v1.4`.** `scripts/release.sh 1.4` (build 872): archive (Developer
+  ID, hardened runtime) → notarize+staple app → DMG → notarize+staple DMG →
+  EdDSA-sign → appcast; both notarizations Accepted. Published to GitHub Releases
+  (DMG + `appcast.xml`), verified as GitHub's "latest" and the live Sparkle feed
+  at `latest/download/appcast.xml` serving `1.4`. Polish 19–24 (import keywords,
+  collection appearance, notes, collapsible colors, color search, smart
+  collections) shipped in this build — they'd merged to `main` after the `v1.3.9`
+  tag. Release notes: `docs/release-notes-1.4.md`. README download links bumped to
+  `Muse-1.4.dmg`.

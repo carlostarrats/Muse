@@ -109,17 +109,16 @@ are the load-bearing reference artifacts.
 | Polish 23 — **Color search** (hex/palette token → perceptual CIEDE2000 match on `palette`) | ✅ shipped | `feat/next-133` |
 | Polish 24 — **Smart collections** (rule-driven live membership; `v12_smart_collections`) | ✅ shipped | `feat/next-134` |
 
-> All rows above are merged to `main`. "Shipped" here = on `main`; the last
-> *released* build is tagged `v1.3.9`, and `main` runs ahead of it (features
-> merged after that tag ship in the next release). Polish-row detail (the full
+> All rows above are merged to `main` and shipped in release **`v1.4`** (the
+> current released build; Polish 19–24 landed here after `v1.3.9`). Polish-row
+> detail (the full
 > "why/how" per feature) lives in the **Durable constraints** section below and,
 > in full, in `docs/session-log.md` under each cited branch. Keep new rows to one
 > line here; put the narrative there.
 
 Each feature has its own spec + plan in `docs/superpowers/`; all are merged to
 `main`. `feat/file-viewer-rewrite` was merged after Phase 8 and kept as an audit
-trail of the per-phase progression. The current release tag is `v1.3.9`; `main`
-runs ahead of it.
+trail of the per-phase progression. The current release tag is `v1.4`.
 
 ## Session history
 
