@@ -241,11 +241,13 @@ private struct SmartRuleRow: View {
         switch rule {
         case let .rating(op, stars):
             comparisonPicker(op) { rule = .rating(op: $0, stars: stars) }
-            Stepper(value: Binding(get: { stars },
-                                   set: { rule = .rating(op: op, stars: min(5, max(1, $0))) }),
-                    in: 1...5) {
-                Text("\(stars) ★")
+            Picker("", selection: Binding(get: { stars },
+                                          set: { rule = .rating(op: op, stars: $0) })) {
+                ForEach(1...5, id: \.self) { n in
+                    Text("\(n) ★").tag(n)
+                }
             }
+            .labelsHidden()
             .fixedSize()
 
         case let .color(term):
