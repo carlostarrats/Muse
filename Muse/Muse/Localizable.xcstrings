@@ -4094,6 +4094,16 @@
         }
       }
     },
+    "Refresh collection" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actualiser la collection"
+          }
+        }
+      }
+    },
     "Regenerate" : {
       "localizations" : {
         "fr" : {
