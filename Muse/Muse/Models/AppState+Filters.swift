@@ -99,6 +99,11 @@ extension AppState {
     /// rather than setting `activeCollectionID` directly.
     func setActiveCollection(_ id: String?, animated: Bool = true) {
         clearSelection()
+        // Opening/closing (re)resolves membership fresh, so the grid is current
+        // by definition — clear any pending "needs refresh" flag. A later edit
+        // re-arms it via recheckActiveSmartStale.
+        activeSmartStale = false
+        smartStaleToken &+= 1
         // ID and member paths land in ONE animated transaction, so the grid
         // cross-fades once to the filtered set — no intermediate frame where
         // the header swapped but the grid hasn't (the old "flash").
@@ -172,6 +177,44 @@ extension AppState {
                 }
                 // Re-scope the chips to the collection's members (library-wide).
                 reloadTagChips()
+            }
+        }
+    }
+
+    /// Re-evaluate whether the OPEN smart collection's live membership has
+    /// drifted from what's on screen, and publish `activeSmartStale`. Called
+    /// after a tag/rating edit (the interactive case that moves a photo across a
+    /// rule). Only smart collections can drift by rule, so non-smart collections
+    /// and the folder view always resolve to "not stale". Off-main + token-
+    /// guarded so a burst of edits can't publish a stale verdict. (Membership can
+    /// also drift from a date rule crossing midnight or an external index change;
+    /// those aren't event-driven here and still resolve on the next open — the
+    /// button covers the in-view edit the user just made.)
+    func recheckActiveSmartStale() {
+        guard let id = activeCollectionID,
+              CollectionsEngine.shared.collections
+                  .first(where: { $0.collection.id == id })?.collection.smart_rules != nil,
+              let q = Database.shared.dbQueue else {
+            if activeSmartStale { activeSmartStale = false }
+            return
+        }
+        smartStaleToken &+= 1
+        let token = smartStaleToken
+        let rootPaths = rootNodes.map { $0.url.standardizedFileURL.path }
+        Task { @MainActor in
+            let fresh = (try? await CollectionStore.alivePathsResolving(
+                queue: q, collectionID: id)) ?? []
+            // A newer edit (or a navigation away) supersedes this verdict.
+            guard token == smartStaleToken, activeCollectionID == id else { return }
+            // Compare like-for-like: the shown set (activeCollectionPaths) is the
+            // reachable-filtered membership, so filter the fresh resolve the same
+            // way (same rule as setActiveCollection / the badge count).
+            let reachable: Set<String> = rootPaths.isEmpty
+                ? Set(fresh)
+                : Set(fresh.filter { CollectionStore.isUnderAnyRoot($0, roots: rootPaths) })
+            let stale = reachable != (activeCollectionPaths ?? [])
+            if activeSmartStale != stale {
+                withAnimation(.easeInOut(duration: 0.2)) { activeSmartStale = stale }
             }
         }
     }

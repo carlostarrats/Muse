@@ -51,13 +51,16 @@ private struct ActiveCollectionHeader: View {
             Spacer()
             // A smart collection's membership resolves live, but only when it's
             // (re)opened — so an edit made WHILE viewing it (e.g. rating a photo
-            // below the rule's threshold) isn't reflected until you leave and come
-            // back. This button forces that re-resolve in place, so you can update
-            // the view on demand without a tile vanishing under your cursor mid-
-            // edit. Shown only for smart collections (hand-picked ones can't go
-            // stale by rule).
-            if loaded.collection.smart_rules != nil {
+            // below the rule's threshold) isn't reflected until you refresh. This
+            // button forces that re-resolve in place, without a tile vanishing
+            // under your cursor mid-edit. It appears ONLY once the shown grid has
+            // actually drifted from the live membership (appState.activeSmartStale),
+            // so it's a "there's an update — tap to apply" cue, never an always-
+            // present button that does nothing. (Smart collections only; hand-
+            // picked ones can't go stale by rule.)
+            if loaded.collection.smart_rules != nil && appState.activeSmartStale {
                 RefreshCollectionButton { refreshMembership() }
+                    .transition(.opacity.combined(with: .scale(scale: 0.7)))
             }
             ShareCollectionButton(title: loaded.collection.name, count: loaded.aliveCount)
             TrashButton { confirmDelete = true }
@@ -85,6 +88,9 @@ private struct ActiveCollectionHeader: View {
     /// open uses). No-op-safe: an unchanged membership re-resolves to itself.
     private func refreshMembership() {
         let id = loaded.collection.id
+        // Dismiss the cue immediately on tap (setActiveCollection also clears it,
+        // but that trails the async reload) so the button doesn't linger.
+        withAnimation(.easeInOut(duration: 0.2)) { appState.activeSmartStale = false }
         Task { @MainActor in
             await CollectionsEngine.shared.reload()
             appState.setActiveCollection(id)
