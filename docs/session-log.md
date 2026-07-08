@@ -5730,3 +5730,77 @@ collapsible (open by default), matching the Note card's chrome exactly:
 
 No DB/schema change — pure UI plus one UserDefaults key. Build + 672 unit +
 6 UI tests green. Recorded as Polish 22 in CLAUDE.md's implementation table.
+
+### Smart collections (rule-driven membership) — 2026-07-07 (`feat/next-134`)
+
+A collection whose membership is defined by **rules** (mail-style) instead of
+hand-picked files, resolved **live** from the DB every time it's shown — so it's
+always current by construction and can never go stale (there's no
+re-evaluation trigger to build). Spec:
+`docs/superpowers/specs/2026-07-07-smart-collections-design.md`; plan:
+`docs/superpowers/plans/2026-07-07-smart-collections.md`.
+
+- **Storage (`v12_smart_collections`).** One nullable `collections.smart_rules`
+  TEXT column holding a JSON `SmartRuleSet`. `smart_rules IS NOT NULL` ⇒ smart;
+  **no `collection_members` rows**. Existing collections keep it NULL, untouched.
+- **Model.** Pure `SmartRuleSet` (`Match .all/.any` + `[SmartRule]`, `isValid`,
+  JSON round-trip) and `SmartRule` (rating/color/tag/kind/date/filename/size),
+  all `nonisolated Codable` in `Intelligence/Collections/SmartRule.swift`.
+  `KindGroup` maps to `files.kind` rawValues (image→image/psd/svg, document→
+  text/markdown/code/office, etc.).
+- **Resolver.** `SmartCollectionResolver` evaluates **each rule to a
+  `Set<file_id>`** over the `files` table, then combines by `.all` (∩) / `.any`
+  (∪). This is correct for both match modes AND for mixing the in-memory color
+  rule with SQL rules (no candidate-then-filter asymmetry). Grain: a `file_id`
+  satisfies a tag/rating rule if **any** of its `(file_id, parent_dir)` rows does
+  (`EXISTS`), matching how collections already hold content rows. Rating reuses
+  `StarRating` glyph labels (`≥4` → `label IN ('★★★★','★★★★★')`); color reuses
+  Polish 23's `PaletteMatch`/`ColorDistance` (in-memory palette scan). Filename
+  matches the **basename** (LIKE pre-narrow, then `lastPathComponent` check —
+  LIKE alone would match a directory component). `alivePaths` resolves surviving
+  ids → distinct `is_alive = 1` paths; reachability (under-root) is applied
+  downstream by the same `isUnderAnyRoot` rule as manual collections.
+- **`model_version = 'manual'` is load-bearing reuse.** Smart collections are
+  manual-marked so they inherit BOTH (a) protection from the recluster
+  stale-sweep (`protectedCollectionIDs` already returns manual) and (b)
+  empty-state visibility in `fetchAll` (`… || model_version == "manual"`) — a
+  zero-match smart collection stays visible so you can edit its rules. No
+  recluster code change was needed; a test locks the protection.
+- **Counts resolve live inside `CollectionStore.fetchAll`.** That's the
+  off-render-path aggregation seam already re-run by `CollectionsEngine.recluster`
+  on index/tag changes — i.e. the spec's "cache + invalidate on
+  tagsVersion/index/rule-edit" WITHOUT a separate cache object (`collections` is
+  the cache, recluster the invalidation). Opening a collection routes through the
+  single new `alivePathsResolving` seam (smart → resolver, else the member-row
+  SQL), also used by `exportableURLs` so a sidebar-menu export of a smart
+  collection lays out identically to opening it.
+- **UI.** `SmartCollectionRulesView` — a mail-style builder (Name, Match All/Any,
+  add/remove rule rows with type-specific value controls), local `@State` draft,
+  committed to `CollectionStore` only on Save (never per-keystroke to AppState),
+  presented via `.windowFittedSheetHeight`. Entry points: Collections-page **+**
+  is now a menu (New Collection / **New Smart Collection…**); the sidebar row
+  context menu gains **Make Smart… / Edit Rules…**. Converting a hand-made
+  collection **with members** shows a data-loss confirm, then `makeSmart` sets
+  the rules + `DELETE FROM collection_members`. Distinct default sidebar icon
+  (`line.3.horizontal.decrease.circle`); a v10 user-chosen icon still wins.
+- **v1 tradeoffs (documented, not bugs).** "within N days" is **frozen to an
+  absolute `.after` bound at save time** (deterministic, matches the tested
+  resolver path) rather than re-evaluated daily. The color rule is **hex-only**
+  in the UI (`NamedColor.parse` decodes hex, not names — a bare name would
+  silently match nothing); `.name` stays in the model for a future named-color
+  table. Color *names* remain searchable as tags (`ColorTagger`, untouched).
+- **Backup/restore.** `smart_rules` carried through
+  `BackupCollection` → `MaterializedCollection` → `ReconnectApplier` INSERT (and
+  its ON CONFLICT update). An empty smart collection survives materialize because
+  it's manual; the restored library re-resolves membership from its own files.
+- **French localized** (24 new keys; the `.xcstrings` was patched surgically to
+  match Xcode's `" : "` formatting — a naïve `json.dump` reformatted all ~3500
+  value lines, reverted).
+
+Runtime-verified beyond tests: the `v12` migration applied cleanly to the real
+2256-file library DB (no corruption), the app boots, and resolver-equivalent SQL
+over the live library returns sane counts (2235 images, 1 pdf, 8 rated ≥4★, 2240
+palettes). Build + 727 unit tests green (migration 2, `SmartRuleSet` 10,
+resolver+store 15, materializer round-trip 1). Interactive UI flow (create /
+open / make-smart) awaits a folder in the sidebar — handed to the owner. Recorded
+as Polish 24 in CLAUDE.md's implementation table.

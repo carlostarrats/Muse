@@ -5643,6 +5643,246 @@
           }
         }
       }
+    },
+    "Smart Collection" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collection intelligente"
+          }
+        }
+      }
+    },
+    "New Smart Collection…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nouvelle collection intelligente…"
+          }
+        }
+      }
+    },
+    "Make Smart…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rendre intelligente…"
+          }
+        }
+      }
+    },
+    "Make Smart" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rendre intelligente"
+          }
+        }
+      }
+    },
+    "Edit Rules…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifier les règles…"
+          }
+        }
+      }
+    },
+    "Edit Rules" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifier les règles"
+          }
+        }
+      }
+    },
+    "Match" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Correspondance"
+          }
+        }
+      }
+    },
+    "Any" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "N’importe"
+          }
+        }
+      }
+    },
+    "of the following rules" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "des règles suivantes"
+          }
+        }
+      }
+    },
+    "Add Rule" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter une règle"
+          }
+        }
+      }
+    },
+    "Remove rule" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer la règle"
+          }
+        }
+      }
+    },
+    "Filename" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nom de fichier"
+          }
+        }
+      }
+    },
+    "has" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "a"
+          }
+        }
+      }
+    },
+    "has no" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "n’a pas"
+          }
+        }
+      }
+    },
+    "tag" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "étiquette"
+          }
+        }
+      }
+    },
+    "#hex" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "#hex"
+          }
+        }
+      }
+    },
+    "contains" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "contient"
+          }
+        }
+      }
+    },
+    "created" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "créé"
+          }
+        }
+      }
+    },
+    "modified" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "modifié"
+          }
+        }
+      }
+    },
+    "Replace this collection’s items with rules?" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remplacer les éléments de cette collection par des règles ?"
+          }
+        }
+      }
+    },
+    "Replace" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remplacer"
+          }
+        }
+      }
+    },
+    "The images you added by hand are removed from this collection and replaced by rule-based membership. Your files stay on disk." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les images que vous avez ajoutées à la main sont retirées de cette collection et remplacées par une appartenance basée sur des règles. Vos fichiers restent sur le disque."
+          }
+        }
+      }
+    },
+    "%lld ★" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld ★"
+          }
+        }
+      }
+    },
+    "within %lld days" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "depuis %lld jours"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
