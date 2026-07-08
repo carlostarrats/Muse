@@ -256,11 +256,11 @@ private struct SmartRuleRow: View {
                                           set: { rule = .tag(op: $0, label: label) })) {
                 Text("with").tag(HasOp.has)
                 Text("without").tag(HasOp.hasNot)
-            }.labelsHidden().frame(width: 104)
+            }.labelsHidden().frame(width: 104, alignment: .leading)
             TextField(String(localized: "tag"),
                       text: Binding(get: { label }, set: { rule = .tag(op: op, label: $0) }))
                 .textFieldStyle(.roundedBorder)
-                .frame(width: 150)
+                .frame(width: 150, alignment: .leading)
 
         case let .kind(group):
             Picker("", selection: Binding(get: { group },
@@ -268,21 +268,21 @@ private struct SmartRuleRow: View {
                 ForEach(SmartRule.KindGroup.allCases, id: \.self) { g in
                     Text(kindLabel(g)).tag(g)
                 }
-            }.labelsHidden().frame(width: 150)
+            }.labelsHidden().frame(width: 150, alignment: .leading)
 
         case let .date(field, op):
             Picker("", selection: Binding(get: { field },
                                           set: { rule = .date(field: $0, op: op) })) {
                 Text("created").tag(DateField.created)
                 Text("modified").tag(DateField.modified)
-            }.labelsHidden().frame(width: 118)
+            }.labelsHidden().frame(width: 118, alignment: .leading)
             datePresetMenu(field: field, op: op)
 
         case let .filename(contains):
             TextField(String(localized: "contains"),
                       text: Binding(get: { contains }, set: { rule = .filename(contains: $0) }))
                 .textFieldStyle(.roundedBorder)
-                .frame(width: 210)
+                .frame(width: 210, alignment: .leading)
 
         case let .size(op, bytes):
             comparisonPicker(op) { rule = .size(op: $0, bytes: bytes) }
@@ -303,7 +303,7 @@ private struct SmartRuleRow: View {
             Text("≥").tag(Comparison.atLeast)
             Text("=").tag(Comparison.equal)
             Text("≤").tag(Comparison.atMost)
-        }.labelsHidden().frame(width: 72)
+        }.labelsHidden().frame(width: 72, alignment: .leading)
     }
 
     /// A named-color chooser: a swatch + name that opens the spectrum menu.
