@@ -6243,3 +6243,34 @@ reached through interpolation (`"Analyzing %lld of %lld"`) or through
 `NSLocalizedString(variable)`, so only plain literals this change actually
 orphaned were deleted, and shared labels like `None` / `Auto` / `Light` (still
 used by the mood swatches) were left alone.
+
+### 2026-07-28 (same branch) — owner feedback round 1
+
+Five changes after the owner tried the build:
+
+- **Spacing moved out of the floating capsule into Settings → Grid**, joined by a
+  new **Corner Radius** slider. Both are set-once settings, not things you fiddle
+  with while browsing; zoom stays the only floating control.
+- **Rounded corners carry into the hero viewer** (`HeroStage`'s clip shape), so a
+  photo keeps its shape when opened. The layout radius is the value the
+  FULL-SCREEN image shows; the flight scales the whole rendered layer, so the
+  rounding scales with it mid-flight.
+- **Spacing can no longer reach 0.** The floor is 4pt: flush-packed images read
+  as one continuous picture rather than a grid. (Shipped as 0–28 earlier the same
+  day; the owner asked for a floor after seeing it.)
+- **The Image Layout sheet is content-sized** (`.frame(width:)` +
+  `fixedSize`), not `windowFittedSheetHeight(ideal: 720)`. Three tiles and a
+  subtitle left most of that sheet empty. It has no ScrollView now, so it doesn't
+  need the window-fitted cap.
+
+**"Spacing only affects columns, not rows" — investigated, not a bug.** Confirmed
+the app was in Grid mode. Every Grid slot is the same square; a wide photo fills
+the slot's width but not its height, so it sits centred with air above and below.
+Between columns most photos touch the slot edges, so the gutter IS the spacing;
+between rows it's spacing plus the air under the top photo plus the air over the
+bottom one, which dwarfs the slider's contribution. That air is inherent to
+square slots — the price of "same slot size, nothing cropped".
+
+Owner's call: **leave Grid as-is and use Rows for the uniform-gap look** (Rows is
+what his Atlas reference actually shows). Cropping-to-fill in Grid was rejected —
+it's the opposite of the no-cropping requirement Grid was designed around.

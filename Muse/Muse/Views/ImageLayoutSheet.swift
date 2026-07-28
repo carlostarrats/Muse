@@ -31,21 +31,22 @@ struct ImageLayoutSheet: View {
                 .padding(.top, 4)
                 .padding(.bottom, 20)
 
-            ScrollView(showsIndicators: false) {
-                LazyVGrid(columns: columns, spacing: 14) {
-                    ForEach(ImageLayout.allCases) { layout in
-                        LayoutTile(
-                            layout: layout,
-                            isSelected: appState.imageLayout == layout,
-                            palette: appState.moodPalette
-                        ) { appState.imageLayout = layout }
-                    }
+            LazyVGrid(columns: columns, spacing: 14) {
+                ForEach(ImageLayout.allCases) { layout in
+                    LayoutTile(
+                        layout: layout,
+                        isSelected: appState.imageLayout == layout,
+                        palette: appState.moodPalette
+                    ) { appState.imageLayout = layout }
                 }
-                .padding(.bottom, 4)
             }
         }
         .padding(28)
-        .windowFittedSheetHeight(width: 600, ideal: 720)
+        // Three tiles and a subtitle don't fill a reading sheet, so this sizes
+        // to its content (like Settings) rather than reserving a tall, mostly
+        // empty frame. No ScrollView, so it never needs the window-fitted cap.
+        .frame(width: 600)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
 }

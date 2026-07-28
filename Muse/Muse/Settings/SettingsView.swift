@@ -21,7 +21,31 @@ struct SettingsView: View {
     @AppStorage(AppSettings.showStarsOnGridKey) private var showStarsOnGrid = true
     @AppStorage(AppSettings.showCollectionsInSidebarKey) private var showCollectionsInSidebar = true
     @AppStorage(AppSettings.showICloudFolderInSidebarKey) private var showICloudFolder = true
+    @AppStorage(AppSettings.gridSpacingKey) private var gridSpacing =
+        AppSettings.defaultGridSpacing
+    @AppStorage(AppSettings.gridCornerRadiusKey) private var gridCornerRadius =
+        AppSettings.defaultGridCornerRadius
     @State private var authBusy = false
+
+    /// A labelled slider with its current value in points on the right — the
+    /// shape the grid's two continuous settings share.
+    private func measuredSlider(title: String,
+                                value: Binding<Double>,
+                                range: ClosedRange<Double>,
+                                clamp: @escaping (Double) -> Double) -> some View {
+        HStack(spacing: 12) {
+            Text(title)
+            Slider(value: Binding(get: { clamp(value.wrappedValue) },
+                                  set: { value.wrappedValue = clamp($0.rounded()) }),
+                   in: range, step: 1)
+            Text("\(Int(clamp(value.wrappedValue))) pt")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .frame(width: 44, alignment: .trailing)
+        }
+        .accessibilityElement(children: .combine)
+    }
 
     /// Live iCloud folder state, driving the Show-iCloud toggle's enabled state
     /// and footer note.
@@ -81,10 +105,20 @@ struct SettingsView: View {
             Section {
                 Toggle("Show file names", isOn: $showFileNames)
                 Toggle("Show star ratings", isOn: $showStarsOnGrid)
+                measuredSlider(
+                    title: String(localized: "Spacing"),
+                    value: $gridSpacing,
+                    range: AppSettings.gridSpacingRange,
+                    clamp: AppSettings.clampGridSpacing)
+                measuredSlider(
+                    title: String(localized: "Corner Radius"),
+                    value: $gridCornerRadius,
+                    range: AppSettings.gridCornerRadiusRange,
+                    clamp: AppSettings.clampGridCornerRadius)
             } header: {
                 Text("Grid")
             } footer: {
-                Text("Show each file's name beneath its thumbnail in the grid. Star ratings still show inside a collection and in the viewer.")
+                Text("Show each file's name beneath its thumbnail in the grid. Star ratings still show inside a collection and in the viewer. Rounded corners carry into the viewer, so a photo keeps its shape when you open it.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }

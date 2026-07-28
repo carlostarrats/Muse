@@ -256,14 +256,12 @@ struct GridView: View {
             .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
             .overlay(alignment: .bottomTrailing) {
                 if !appState.visibleFiles.isEmpty {
-                    // Gutter left, zoom right — the zoom control keeps its
-                    // established far-right position.
-                    HStack(spacing: 10) {
-                        spacingSlider
-                        columnSlider
-                    }
-                    .padding(.trailing, 16)
-                    .padding(.bottom, 16)
+                    // Zoom is the only floating control — spacing and corner
+                    // radius live in Settings (they're set once, not fiddled
+                    // with while browsing).
+                    columnSlider
+                        .padding(.trailing, 16)
+                        .padding(.bottom, 16)
                 }
             }
             .alert("Add Tag", isPresented: Binding(
@@ -669,20 +667,7 @@ struct GridView: View {
             step: 1)
     }
 
-    /// Floating gutter control: flush on the left, airy on the right.
-    private var spacingSlider: some View {
-        sliderCapsule(
-            minIcon: "rectangle.compress.vertical",
-            maxIcon: "rectangle.expand.vertical",
-            label: String(localized: "Spacing between images"),
-            binding: Binding(
-                get: { AppSettings.clampGridSpacing(gridSpacingSetting) },
-                set: { gridSpacingSetting = AppSettings.clampGridSpacing($0.rounded()) }),
-            range: AppSettings.gridSpacingRange,
-            step: 1)
-    }
-
-    /// Shared chrome for the bottom-right sliders: same 20pt content height and
+    /// Shared chrome for the bottom-right slider: same 20pt content height and
     /// 9pt vertical padding as the status pills, so every bottom capsule
     /// matches.
     private func sliderCapsule(minIcon: String, maxIcon: String, label: String,
@@ -800,6 +785,22 @@ private struct TileView: View {
     private static let ringCornerRadius: CGFloat = 8
     /// Tint laid over the selected (shrunken) image, in the ring's color.
     private static let selectionTintOpacity = 0.18
+
+    /// User-set image corner radius, shared with the hero viewer so a photo
+    /// keeps its shape when opened.
+    @AppStorage(AppSettings.gridCornerRadiusKey) private var cornerRadiusSetting =
+        AppSettings.defaultGridCornerRadius
+    private var cornerRadius: CGFloat {
+        CGFloat(AppSettings.clampGridCornerRadius(cornerRadiusSetting))
+    }
+    /// The shape everything in the tile clips to.
+    private var tileShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+    }
+    /// The selection ring's radius. Square images keep the shipped 8pt rounded
+    /// ring; once the images themselves round further, the ring follows so it
+    /// doesn't cut across their corners.
+    private var ringRadius: CGFloat { max(Self.ringCornerRadius, cornerRadius) }
 
     /// True when this tile is multi-selected. (We deliberately do NOT treat the
     /// open file as selected: while a viewer is up its tile is hidden via the
@@ -966,16 +967,17 @@ private struct TileView: View {
             // shows the app background (same color as the grid gutter), so the
             // image reads as lifted into the ring.
             if isSelected {
-                Rectangle().fill(appState.moodPalette.background)
+                tileShape.fill(appState.moodPalette.background)
             }
 
-            // The image. Square-cornered, natural aspect; shrinks inward when
+            // The image at its natural aspect, clipped to the user's corner
+            // radius (0 = square, the shipped look); shrinks inward when
             // selected to reveal the gap. The selection tint rides on top of it.
             tile
-                .clipShape(Rectangle())
+                .clipShape(tileShape)
                 .overlay {
                     if isSelected {
-                        Rectangle().fill(ringColor.opacity(Self.selectionTintOpacity))
+                        tileShape.fill(ringColor.opacity(Self.selectionTintOpacity))
                     }
                 }
                 .padding(isSelected ? Self.selectionInset : 0)
@@ -1020,15 +1022,16 @@ private struct TileView: View {
             }
 
             // Hover veil — unselected tiles only; a calm dark wash, no resize.
-            // Sits ABOVE the image AND the badge so both darken on hover.
-            Rectangle()
+            // Sits ABOVE the image AND the badge so both darken on hover, and
+            // follows the image's corners so it never squares off a rounded one.
+            tileShape
                 .fill(Color.black)
                 .opacity((hovering && !isSelected) ? Self.hoverVeilOpacity : 0)
                 .allowsHitTesting(false)
 
             // The padded ring, just inside the tile's outer edge.
             if isSelected {
-                RoundedRectangle(cornerRadius: Self.ringCornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: ringRadius, style: .continuous)
                     .strokeBorder(ringColor, lineWidth: Self.ringWidth)
                     .padding(Self.ringInset)
             }

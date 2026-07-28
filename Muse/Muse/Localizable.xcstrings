@@ -187,6 +187,16 @@
         }
       }
     },
+    "%lld pt": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld pt"
+          }
+        }
+      }
+    },
     "%lld selected for delete": {
       "localizations": {
         "fr": {
@@ -1246,6 +1256,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Copier la note"
+          }
+        }
+      }
+    },
+    "Corner Radius": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rayon des coins"
           }
         }
       }
@@ -4771,12 +4791,12 @@
         }
       }
     },
-    "Show each file's name beneath its thumbnail in the grid. Star ratings still show inside a collection and in the viewer.": {
+    "Show each file's name beneath its thumbnail in the grid. Star ratings still show inside a collection and in the viewer. Rounded corners carry into the viewer, so a photo keeps its shape when you open it.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Afficher le nom de chaque fichier sous sa vignette dans la grille. Les notes restent visibles dans une collection et dans la visionneuse."
+            "value": "Affiche le nom de chaque fichier sous sa vignette dans la grille. Les notes en étoiles restent visibles dans une collection et dans la visionneuse. Les coins arrondis sont repris dans la visionneuse : une photo garde sa forme à l'ouverture."
           }
         }
       }
@@ -5051,12 +5071,12 @@
         }
       }
     },
-    "Spacing between images": {
+    "Spacing": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Espacement entre les images"
+            "value": "Espacement"
           }
         }
       }

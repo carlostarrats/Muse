@@ -47,6 +47,16 @@ struct HeroStage: View {
     @Binding var pan: CGSize
     @Binding var isClosing: Bool     // set true by parent to run the return flight
 
+    /// Same corner radius the grid tile uses, so a photo keeps its shape when
+    /// it opens. The layout radius is the point value the FULL-SCREEN image
+    /// shows; the flight scales the whole rendered layer, so mid-flight the
+    /// rounding scales with it.
+    @AppStorage(AppSettings.gridCornerRadiusKey) private var cornerRadiusSetting =
+        AppSettings.defaultGridCornerRadius
+    private var cornerRadius: CGFloat {
+        CGFloat(AppSettings.clampGridCornerRadius(cornerRadiusSetting))
+    }
+
     @State private var displayRect: CGRect = .zero
     /// One mid-flight retarget per close — see the sourceFrame onChange.
     @State private var didRetarget = false
@@ -160,7 +170,8 @@ struct HeroStage: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(width: base.width, height: base.height)
-                    .clipShape(Rectangle())
+                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius,
+                                                style: .continuous))
                     // Delete: the image fades out first (front ~60%).
                     .modifier(FadeOutModifier(progress: burnProgress,
                                               fadeStart: 0.0, fadeLength: 0.6))
