@@ -75,8 +75,39 @@ struct HeroStage: View {
     /// would land as a center-crop that re-fits on reveal. Falls back to
     /// the tile rect until the image is known.
     private var sourceRect: CGRect {
-        ViewerGeometry.fitWithin(imageSize: image?.size ?? sourceFrame.size,
+        // The image's TRUE pixel aspect, from the file header — never the
+        // decoded image, which is nil at flight start.
+        //
+        // This used to be `image?.size ?? sourceFrame.size`. At the moment the
+        // flight begins the image hasn't decoded, so it fell through to
+        // `sourceFrame.size`, and fitWithin(frame.size, frame) returns the FRAME
+        // ITSELF — i.e. the flight started from the raw tile rect, exactly what
+        // the drawn-image-rect rule exists to prevent. A landscape image
+        // letterboxes heavily inside a squarer tile, so its real drawn rect is
+        // far shorter than the tile: starting from the tile rect made the flight
+        // much too short, which read as "almost instant" with a wrong curve.
+        // Portrait letterboxes less, so it looked nearer correct — that
+        // asymmetry is aspect geometry, not file size.
+        //
+        // The header read is cheap (no decode) and memoized per URL, so this is
+        // correct from the FIRST frame and identical on open and close.
+        ViewerGeometry.fitWithin(imageSize: Self.pixelSize(of: url) ?? image?.size ?? sourceFrame.size,
                                  frame: sourceFrame)
+    }
+
+    /// Header-only pixel dimensions, memoized. Never decodes.
+    private static let pixelSizeCache = NSCache<NSString, NSValue>()
+    nonisolated static func pixelSize(of url: URL) -> CGSize? {
+        let key = url.standardizedFileURL.path as NSString
+        if let hit = pixelSizeCache.object(forKey: key) { return hit.sizeValue }
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
+              let w = (props[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue,
+              let h = (props[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue,
+              w > 0, h > 0 else { return nil }
+        let size = CGSize(width: w, height: h)
+        pixelSizeCache.setObject(NSValue(size: size), forKey: key)
+        return size
     }
 
 

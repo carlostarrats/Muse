@@ -461,10 +461,23 @@ struct HeroImageViewer: View {
         // The DB read is local SQLite (sub-millisecond), so deferring the decode
         // behind it costs an unanalyzed file nothing measurable and saves an
         // analyzed one the entire decode.
-        var loaded: ViewerFileDetails? = nil
-        if let queue = Database.shared.dbQueue {
-            loaded = try? await ViewerFileDetails.load(queue: queue, path: url.path)
-        }
+        // Everything the info column needs, fetched CONCURRENTLY.
+        //
+        // These used to run in sequence — DB read, then EXIF/metadata, then
+        // pixel size — so the column filled in visibly staggered steps and the
+        // whole thing took the SUM of three independent I/O waits. They share
+        // no data; there is no reason to serialise them.
+        let kind = AssetKind.detect(at: url)
+        async let detailsTask: ViewerFileDetails? = {
+            guard let queue = Database.shared.dbQueue else { return nil }
+            return try? await ViewerFileDetails.load(queue: queue, path: url.path)
+        }()
+        async let metaTask = FileMetadata.load(url: url, kind: kind)
+        async let headerSizeTask = Task.detached(priority: .userInitiated) {
+            Self.imagePixelSize(at: url)
+        }.value
+
+        let loaded = await detailsTask
         guard url == currentURL else { return }
         details = loaded
         // Extra metadata for the INFO card (off-main, no DB). Derive the kind
@@ -472,17 +485,12 @@ struct HeroImageViewer: View {
         // `details`/palette above, we deliberately DON'T clear `metadata` first:
         // letting the prior card linger until the new load resolves avoids a
         // disappear/reappear flash on fast navigation.
-        let kind = AssetKind.detect(at: url)
-        let meta = await FileMetadata.load(url: url, kind: kind)
+        // Pixel size first: it drives layout, so settling it before the text
+        // arrives stops the column resizing under content that's already shown.
+        let headerSize = await headerSizeTask
+        naturalSize = loaded?.pixelSize ?? headerSize
+        let meta = await metaTask
         if url == currentURL { metadata = meta }
-        if let px = loaded?.pixelSize {
-            naturalSize = px
-        } else {
-            let s = await Task.detached(priority: .userInitiated) {
-                Self.imagePixelSize(at: url)
-            }.value
-            if url == currentURL { naturalSize = s }
-        }
         // No analysis data yet → derive backdrop tint + swatches right now.
         if let palette = loaded?.palette, !palette.isEmpty {
             paletteResolved = true
