@@ -54,18 +54,41 @@ enum VisionServices {
 
     // MARK: - CGImage loader
 
+    /// Longest edge, in pixels, of the raster handed to the Vision requests.
+    ///
+    /// Measured (2026-07-28 analysis-performance spec): every request's output is
+    /// unchanged between 2048 and full resolution, while full resolution costs
+    /// **111 seconds and ~1 GB of peak memory** on a 115 MP scanner TIFF vs well
+    /// under a second at 4096. Only feature print downsamples internally —
+    /// classify, faces, OCR and CIAreaAverage all scale with input pixels.
+    ///
+    /// 4096 rather than 2048 because the extra decode is only ~200 ms and it
+    /// leaves headroom for documents with dense text: a 5100×6600 document scan
+    /// lost 25% of its OCR characters at 1024, but matched full resolution
+    /// exactly (918/918) at both 2048 and 4096.
+    static let analysisMaxPixel = 4096
+
+    /// Decode `url` downsampled so its longest edge is at most `maxPixel`.
+    ///
+    /// The decompression-bomb guard runs FIRST and must stay: Vision analysis
+    /// runs AUTOMATICALLY on index of a freshly-added file (no click), and for
+    /// formats ImageIO can't stream-downsample (PNG/TIFF/BMP) even a thumbnail
+    /// request first materializes the FULL raster — so a planted image declaring
+    /// an absurd pixel count would OOM the process before the bound applies.
+    static func boundedDecode(url: URL, maxPixel: Int) -> CGImage? {
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+              ThumbnailCache.withinDecodeBudget(src) else { return nil }
+        return CGImageSourceCreateThumbnailAtIndex(src, 0, [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+        ] as CFDictionary)
+    }
+
     private static func loadCGImage(url: URL) async -> CGImage? {
         await Task.detached(priority: .userInitiated) {
-            // Decompression-bomb guard: Vision analysis runs AUTOMATICALLY on
-            // index of a freshly-added file (no click), and NSImage(contentsOf:)
-            // → cgImage forces a full-raster decode with no downsample — so a
-            // planted image declaring an absurd pixel count would OOM the process.
-            // Read the header dims first (cheap) and refuse past the budget.
-            guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
-                  ThumbnailCache.withinDecodeBudget(src) else { return nil }
-            guard let img = NSImage(contentsOf: url) else { return nil }
-            var rect = CGRect(origin: .zero, size: img.size)
-            return img.cgImage(forProposedRect: &rect, context: nil, hints: nil)
+            boundedDecode(url: url, maxPixel: analysisMaxPixel)
         }.value
     }
 
