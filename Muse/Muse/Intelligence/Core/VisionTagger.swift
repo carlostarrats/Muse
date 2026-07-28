@@ -18,7 +18,13 @@ final class VisionTagger: Tagger {
         // Weighted palette: only colors that actually dominate become tags, so
         // a tiny accent (or a portrait's skin sliver) no longer tags the whole
         // image. The stored palette keeps the full sorted list (backdrop/wash).
-        let weighted = PaletteExtractor.weightedPalette(for: url)
+        // Reuse the raster VisionServices already decoded — decoding the same
+        // file a second time cost 851 ms on a 115 MP scan for an identical
+        // answer. The URL fallback can't trigger in practice (the `v.width`
+        // guard above already proves the decode succeeded); it's there so a
+        // future change to VisionResult can't silently drop the palette.
+        let weighted = v.decodedImage.map { PaletteExtractor.weightedPalette(image: $0) }
+            ?? PaletteExtractor.weightedPalette(for: url)
         let palette = weighted.map { $0.0 }
         let colorNames = ColorTagger.tags(fromWeighted: weighted)
         tags += colorNames.map { IntelTag(label: $0, confidence: nil, source: "vision-color") }

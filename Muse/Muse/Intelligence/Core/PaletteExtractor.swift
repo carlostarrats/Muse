@@ -61,8 +61,19 @@ enum PaletteExtractor {
         return kmeansWeighted(pixels: pixels, k: k, seed: 7)
     }
 
+    /// As `weightedPalette(for:)`, but from an ALREADY-DECODED image.
+    ///
+    /// The analyze pass decodes the file once for Vision and reuses that raster
+    /// here — decoding a second time cost 851 ms on a 115 MP scan and produced
+    /// an identical answer. Pinned against the URL overload by
+    /// `PaletteFromImageTests.testImageOverloadMatchesURLOverload`.
+    static func weightedPalette(image: CGImage, k: Int = 5) -> [(String, Double)] {
+        guard let pixels = downsampledRGB(image: image) else { return [] }
+        return kmeansWeighted(pixels: pixels, k: k, seed: 7)
+    }
+
     /// Decode an image, downsample to ~32x32, and return its RGB pixels in a
-    /// known layout. Backs `weightedPalette`.
+    /// known layout. Backs `weightedPalette(for:)`.
     private static func downsampledRGB(for url: URL) -> [(Double, Double, Double)]? {
         // Decompression-bomb guard: palette extraction runs AUTOMATICALLY on
         // index of a freshly-added file (the same no-click trigger the grid
@@ -75,16 +86,36 @@ enum PaletteExtractor {
                   kCGImageSourceCreateThumbnailFromImageAlways: true,
                   kCGImageSourceThumbnailMaxPixelSize: 32,
               ] as CFDictionary) else { return nil }
-        // Redraw into a known RGBA layout. Reading the thumbnail's raw
-        // dataProvider assumed R,G,B at bytes 0,1,2 — ImageIO thumbnails
-        // are typically BGRA, which swapped red and blue in every palette.
-        //
-        // sRGB (not DeviceRGB) so the palette matches
-        // `VisionServices.dominantColorHex` and doesn't vary with whatever space
-        // the decoder tagged the source with. DeviceRGB is unspecified by
-        // definition, so two files could yield different hexes for the same
-        // visual colour — and RAW decodes as ITU-R 2100 PQ. Don't revert.
-        let w = thumb.width, h = thumb.height
+        return downsampledRGB(image: thumb)
+    }
+
+    /// Longest edge of the sample k-means runs over. ~32x32 worth of pixels is
+    /// enough to characterise a palette and keeps the clustering trivial.
+    static let sampleMaxEdge = 32
+
+    /// Redraw an image into a known, small, sRGB RGBA layout and read its pixels.
+    ///
+    /// Two things this must keep doing:
+    ///
+    /// 1. **Redraw, don't read the provider.** Reading a thumbnail's raw
+    ///    dataProvider assumed R,G,B at bytes 0,1,2 — ImageIO thumbnails are
+    ///    typically BGRA, which swapped red and blue in every palette.
+    /// 2. **sRGB, not DeviceRGB.** So the palette matches
+    ///    `VisionServices.dominantColorHex` and doesn't vary with whatever space
+    ///    the decoder tagged the source with. DeviceRGB is unspecified by
+    ///    definition, so two files could yield different hexes for the same
+    ///    visual colour — and RAW decodes as ITU-R 2100 PQ. Don't revert.
+    ///
+    /// Caps its own working size, because the analyze pass now hands in the
+    /// FULL bounded raster (up to 4096px) rather than a pre-shrunk thumbnail —
+    /// without the cap, k-means would run over millions of pixels.
+    static func downsampledRGB(image: CGImage) -> [(Double, Double, Double)]? {
+        let longest = max(image.width, image.height)
+        guard longest > 0 else { return nil }
+        let scale = longest > sampleMaxEdge ? Double(sampleMaxEdge) / Double(longest) : 1.0
+        let w = max(1, Int((Double(image.width) * scale).rounded()))
+        let h = max(1, Int((Double(image.height) * scale).rounded()))
+
         var data = [UInt8](repeating: 0, count: w * h * 4)
         let drew = data.withUnsafeMutableBytes { buf -> Bool in
             guard let srgb = CGColorSpace(name: CGColorSpace.sRGB),
@@ -93,11 +124,20 @@ enum PaletteExtractor {
                                       space: srgb,
                                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
             else { return false }
-            ctx.draw(thumb, in: CGRect(x: 0, y: 0, width: w, height: h))
+            // `.high` is load-bearing, not a nicety. The analyze pass hands in a
+            // 4096px raster, so this is up to a 128x reduction; `.medium`
+            // point-samples at that ratio and aliases badly. Measured mean
+            // per-pixel error against ImageIO's own 32px thumbnail across the
+            // RAW + scan fixtures: `.medium` 26-43, `.high` 2.6-12.6 (progressive
+            // halving scored the same as `.high`, so it isn't worth the extra
+            // passes). Don't lower this.
+            ctx.interpolationQuality = .high
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
             return true
         }
         guard drew else { return nil }
         var px: [(Double, Double, Double)] = []
+        px.reserveCapacity(w * h)
         for o in stride(from: 0, to: data.count, by: 4) {
             px.append((Double(data[o]) / 255, Double(data[o + 1]) / 255, Double(data[o + 2]) / 255))
         }

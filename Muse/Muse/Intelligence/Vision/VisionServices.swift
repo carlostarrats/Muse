@@ -22,6 +22,11 @@ struct VisionResult {
     var featurePrint: Data?                      // VNFeaturePrintObservation.data
     var width: Int?
     var height: Int?
+    /// The (bounded) raster the pipeline decoded. Callers reuse it instead of
+    /// decoding the same file a second time — the palette pass used to, at a
+    /// measured 851 ms on a 115 MP scan for an identical answer. nil when the
+    /// image couldn't be loaded.
+    var decodedImage: CGImage?
     var didSucceedFeaturePrint: Bool { featurePrint != nil }
 }
 
@@ -34,6 +39,7 @@ enum VisionServices {
 
         result.width = cgImage.width
         result.height = cgImage.height
+        result.decodedImage = cgImage
 
         async let classify = classify(cgImage: cgImage)
         async let ocr = ocr(cgImage: cgImage)
