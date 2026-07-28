@@ -76,12 +76,39 @@ private struct MuseModalPresenter<ModalContent: View>: ViewModifier {
     }
 
     private func card(in available: CGSize) -> some View {
-        modal()
-            .frame(width: ModalChrome.cardWidth(ideal: width,
-                                                available: available.width))
-            // A CAP, not a height: the card is content-sized up to this and
-            // then its own ScrollView takes over.
-            .frame(maxHeight: ModalChrome.cardMaxHeight(available: available.height))
+        let cardWidth = ModalChrome.cardWidth(ideal: width,
+                                              available: available.width)
+        let cap = ModalChrome.cardMaxHeight(available: available.height)
+        // The scrolling decision lives HERE because this is the only place that
+        // knows the window's height: the enclosing ZStack proposes it, so
+        // ViewThatFits can actually judge "does this fit?". Candidate 1 is the
+        // card at its natural height — a three-row modal is three rows tall.
+        // Candidate 2 only wins once the content genuinely outgrows the window.
+        //
+        // Attempts inside the card all failed against the running app: a
+        // ScrollView there is greedy, ViewThatFits there is asked for an ideal
+        // height and resolves greedy, and a GeometryReader measurement never
+        // settled. See ModalScroll.
+        return ViewThatFits(in: .vertical) {
+            chrome(modal().frame(width: cardWidth))
+            chrome(
+                ScrollView {
+                    modal()
+                        .frame(width: cardWidth)
+                        // Keeps text clear of the overlay scrollbar macOS draws
+                        // at the ScrollView's trailing edge.
+                        .padding(.trailing, ModalChrome.scrollBarChannel)
+                }
+                .frame(width: cardWidth + ModalChrome.scrollBarChannel)
+            )
+        }
+        .frame(maxHeight: cap)
+    }
+
+    /// The card's surface: fill, corner, hairline, shadow and the click-eating
+    /// shape that stops a tap on the card reaching the scrim's dismiss.
+    private func chrome(_ body: some View) -> some View {
+        body
             .background(ModalChrome.cardFill(for: palette))
             .clipShape(RoundedRectangle(cornerRadius: ModalChrome.cornerRadius,
                                         style: .continuous))

@@ -78,7 +78,7 @@ struct SmartCollectionRulesView: View {
             Divider()
 
             // ── Scrolling rule list (the only scroll region) ────────────────
-            ScrollView {
+            ModalScroll {
                 VStack(spacing: 14) {
                     ForEach(rules.indices, id: \.self) { i in
                         SmartRuleRow(rule: $rules[i], canRemove: rules.count > 1) {

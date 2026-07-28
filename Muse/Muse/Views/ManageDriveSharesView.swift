@@ -61,14 +61,13 @@ struct ManageDriveSharesView: View {
             } else {
                 sortControls
                     .padding(.bottom, 16)
-                ScrollView {
+                ModalScroll {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(sortedRecords.enumerated()), id: \.element.id) { index, record in
                             if index > 0 { Divider().padding(.vertical, 16) }
                             row(record)
                         }
                     }
-                    .padding(.trailing, ModalChrome.scrollBarChannel)
                 }
             }
         }

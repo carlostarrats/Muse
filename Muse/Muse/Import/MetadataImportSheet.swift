@@ -16,7 +16,7 @@ struct MetadataImportSheet: View {
     @StateObject private var model = MetadataImportModel()
 
     var body: some View {
-        ScrollView {
+        ModalScroll {
         VStack(alignment: .leading, spacing: 14) {
             Text("Import Keywords & Ratings")
                 .font(.title3.weight(.semibold))

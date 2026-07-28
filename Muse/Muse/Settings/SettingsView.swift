@@ -91,7 +91,12 @@ struct SettingsView: View {
             .padding(.top, 28)
             .padding(.bottom, 4)
 
+            // A Form is greedy vertically — it filled the card's whole height
+            // cap regardless of how many rows it had. Pinned to its natural
+            // height; the modal presenter adds a scroller if the card outgrows
+            // the window.
             settingsForm
+                .fixedSize(horizontal: false, vertical: true)
         }
         // Width and the height cap come from the modal presenter.
     }

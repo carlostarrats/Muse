@@ -39,7 +39,7 @@ struct DriveShareSheet: View {
             }
             .padding(.bottom, 20)
 
-            ScrollView {
+            ModalScroll {
             switch service.phase {
             case .idle:
                 form
@@ -60,7 +60,6 @@ struct DriveShareSheet: View {
             }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.trailing, ModalChrome.scrollBarChannel)
         }
         .padding(28)
         // Width and the height cap come from the modal presenter.

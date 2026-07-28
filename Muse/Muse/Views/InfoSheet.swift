@@ -24,7 +24,7 @@ struct InfoSheet: View {
             }
             .padding(.bottom, 20)
 
-            ScrollView {
+            ModalScroll {
                 VStack(alignment: .leading, spacing: 0) {
                     section("What Muse is", """
                         A local-first viewer and organizer for the folders \
@@ -209,7 +209,6 @@ struct InfoSheet: View {
                         automatically.
                         """)
                 }
-                .padding(.trailing, ModalChrome.scrollBarChannel)
             }
         }
         .padding(28)
