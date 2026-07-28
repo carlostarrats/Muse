@@ -50,14 +50,16 @@ final class ThumbProgress: ObservableObject {
 /// (nonisolated), so the limit really is `limit`, not 1.
 private actor ThumbnailGate {
     private var available: Int
+    private let limit: Int
     private struct Waiter {
         let order: Int
         let id: UInt64
+        let cost: Int
         let cont: CheckedContinuation<Void, Error>
     }
     private var waiters: [Waiter] = []
     private var nextID: UInt64 = 0
-    init(limit: Int) { available = limit }
+    init(limit: Int) { available = limit; self.limit = limit }
 
     /// Acquire a permit, honoring cancellation. Throws `CancellationError` if
     /// the task is cancelled while queued — which is exactly what happens when
@@ -65,12 +67,15 @@ private actor ThumbnailGate {
     /// That waiter is then removed instead of being served, so the gate spends
     /// its slots on tiles that are STILL visible, not on the hundreds the user
     /// already scrolled past.
-    private func acquire(order: Int) async throws {
-        if available > 0 { available -= 1; return }
+    private func acquire(order: Int, cost: Int) async throws {
+        // Clamp: a request larger than the gate could ever grant would wait
+        // forever.
+        let need = min(max(1, cost), limit)
+        if available >= need { available -= need; return }
         let id = nextID; nextID += 1
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { cont in
-                waiters.append(Waiter(order: order, id: id, cont: cont))
+                waiters.append(Waiter(order: order, id: id, cost: need, cont: cont))
             }
         } onCancel: {
             Task { await self.dropWaiter(id) }
@@ -84,28 +89,38 @@ private actor ThumbnailGate {
         waiters.remove(at: idx).cont.resume(throwing: CancellationError())
     }
 
-    private func releaseNow() {
-        guard let next = waiters.indices.min(by: { waiters[$0].order < waiters[$1].order })
-        else { available += 1; return }
-        waiters.remove(at: next).cont.resume()
+    /// Return `cost` permits, then serve as many lowest-order waiters as now fit.
+    ///
+    /// The loop is load-bearing: returning a multi-permit release can unblock
+    /// SEVERAL single-permit waiters, and serving only one would leak
+    /// concurrency on every large-image release until the gate starved.
+    private func releaseNow(cost: Int) {
+        available = min(limit, available + max(1, cost))
+        while let next = waiters.indices
+            .filter({ waiters[$0].cost <= available })
+            .min(by: { waiters[$0].order < waiters[$1].order }) {
+            let w = waiters.remove(at: next)
+            available -= w.cost
+            w.cont.resume()
+        }
     }
 
     /// Returns `nil` if cancelled while queued (or before the body ran) — the
     /// caller treats that as "no thumbnail needed anymore" and moves on.
-    nonisolated func withSlot<T: Sendable>(order: Int,
+    nonisolated func withSlot<T: Sendable>(order: Int, cost: Int = 1,
                                            _ body: @Sendable () async -> T?) async -> T? {
         // Already cancelled before we even queue? Don't enqueue a waiter — it
         // avoids the already-cancelled-at-entry window in the cancellation
         // handler entirely.
         if Task.isCancelled { return nil }
         do {
-            try await acquire(order: order)
+            try await acquire(order: order, cost: cost)
         } catch {
             return nil   // cancelled while waiting → drop the work entirely
         }
-        if Task.isCancelled { await releaseNow(); return nil }
+        if Task.isCancelled { await releaseNow(cost: cost); return nil }
         let result = await body()
-        await releaseNow()
+        await releaseNow(cost: cost)
         return result
     }
 }
@@ -119,7 +134,8 @@ final class ThumbnailCache: ObservableObject {
     // ImageIO image decodes are light and thread-safe (an isolated test ran
     // 8-wide over 300 files in 1.7s), so the viewport keeps up with fast deep
     // scrolling instead of draining 4-at-a-time behind the prewarm front.
-    private static let gate = ThumbnailGate(limit: 8)
+    private static let gateLimit = 8
+    private static let gate = ThumbnailGate(limit: gateLimit)
 
     /// Background prewarm work is enqueued at `prewarmOrderBase + index`, which
     /// is strictly higher than any live request's order (grid tiles pass their
@@ -259,7 +275,11 @@ final class ThumbnailCache: ObservableObject {
     private nonisolated static func loadOrGenerate(
         url: URL, diskURL: URL, size: CGSize, scale: CGFloat, order: Int
     ) async -> NSImage? {
-        await gate.withSlot(order: order) {
+        // Header-only read (no decode) so a huge image takes a bigger share of
+        // the gate than a snapshot does. Cheap enough to do before queueing.
+        let cost = DecodePermit.cost(forDeclaredPixels: declaredPixelCount(url: url),
+                                     limit: gateLimit)
+        return await gate.withSlot(order: order, cost: cost) {
             if FileManager.default.fileExists(atPath: diskURL.path),
                let img = NSImage(contentsOf: diskURL) {
                 return img
@@ -275,6 +295,18 @@ final class ThumbnailCache: ObservableObject {
             }
             return generated
         }
+    }
+
+    /// Declared pixel count from the image header, or nil if unreadable / not an
+    /// image. Header-only — never decodes.
+    private nonisolated static func declaredPixelCount(url: URL) -> Int? {
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
+              let w = (props[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue,
+              let h = (props[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue
+        else { return nil }
+        let (product, overflow) = w.multipliedReportingOverflow(by: h)
+        return overflow ? nil : product
     }
 
     private nonisolated static func cacheKey(url: URL, size: CGSize, scale: CGFloat) -> String {

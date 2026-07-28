@@ -55,7 +55,9 @@ final class CollectionsEngine: ObservableObject {
         hasReachableContent = reachable != 0
     }
 
-    func recluster() async {
+    /// `force` is for manual/menu callers that must rebuild on demand; the
+    /// automatic analyze paths gate on ReclusterGate instead.
+    func recluster(force: Bool = false) async {
         // Auto-collections is opt-out (Preferences). Off → no new clustering;
         // existing collections remain, and the user can still build their own.
         guard AppSettings.autoCollections else { return }

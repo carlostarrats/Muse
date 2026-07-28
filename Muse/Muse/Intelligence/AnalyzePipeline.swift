@@ -37,6 +37,11 @@ final class AnalyzePipeline: ObservableObject {
     /// pass, so a later pass over a still-valid folder runs normally.
     private var cancelRequested = false
 
+    /// Embedding rows written by the pass in flight. Drives the recluster gate:
+    /// a pass that embedded nothing cannot change the clustering, and clustering
+    /// costs scale with LIBRARY size rather than pass size.
+    private(set) var embeddingsWritten = 0
+
     /// How many files analyze at once. Vision already parallelizes its five
     /// requests WITHIN one image, so this is deliberately modest — it fills the
     /// gaps between those requests rather than trying to saturate the machine,
@@ -116,12 +121,16 @@ final class AnalyzePipeline: ObservableObject {
         }) ?? nil
         guard let id = fileID else { return }
         cancelRequested = false
+        embeddingsWritten = 0
         isRunning = true
         current = url.lastPathComponent
         defer { isRunning = false; current = ""; progress = 0 }
         await analyzeOne(fileID: id, url: url)
         if shouldStop { return }
-        await CollectionsEngine.shared.recluster()
+        // This path used to rebuild the WHOLE library after every single file.
+        if ReclusterGate.shouldRecluster(embeddingsWritten: embeddingsWritten, force: false) {
+            await CollectionsEngine.shared.recluster()
+        }
     }
 
     /// The automatic pass: of `urls`, analyze only those whose stored
@@ -251,6 +260,7 @@ final class AnalyzePipeline: ObservableObject {
         guard !urls.isEmpty else { return }
         guard let queue = Database.shared.dbQueue else { return }
         cancelRequested = false
+        embeddingsWritten = 0
         isRunning = true
         progress = 0
         completed = 0
@@ -304,7 +314,11 @@ final class AnalyzePipeline: ObservableObject {
         // Skip the (non-trivial) recluster if the pass was cancelled — e.g. the
         // folder was removed out from under us; there's nothing new to cluster.
         if shouldStop { return }
-        await CollectionsEngine.shared.recluster()
+        // Likewise if nothing was embedded: the clustering provably cannot have
+        // changed, and the rebuild's cost scales with the whole library.
+        if ReclusterGate.shouldRecluster(embeddingsWritten: embeddingsWritten, force: false) {
+            await CollectionsEngine.shared.recluster()
+        }
     }
 
     // MARK: - Per-file
@@ -516,6 +530,7 @@ final class AnalyzePipeline: ObservableObject {
                                            updated_at: Int64(Date().timeIntervalSince1970))
                     try row.save(db)
                 }
+                embeddingsWritten += 1
             }
         }
 
