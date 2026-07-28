@@ -36,6 +36,42 @@ private struct FlightEffect: GeometryEffect {
     }
 }
 
+/// A rounded rect whose corner radius is pre-divided by the flight's current
+/// scale, so the radius the VIEWER sees stays constant while the image flies.
+///
+/// The clip is applied in the image's own (unscaled) coordinate space and then
+/// scaled by `FlightEffect`, so a plain `RoundedRectangle` renders its radius
+/// times the flight scale: on close the corners flatten toward square as the
+/// image shrinks, and only snap back when the real tile takes over — the
+/// owner-reported "closes to 0 radius, then pops to rounded".
+///
+/// Dividing by the scale cancels that exactly. `scale` is the animatable datum
+/// and comes from the SAME `displayRect` that drives `FlightEffect`, so both
+/// interpolate on one curve: rendered radius = (radius / scale(t)) × scale(t),
+/// constant for every frame. Compensating with a plain animated radius would
+/// NOT work — two independently-interpolated values multiply out to a mid-flight
+/// bulge (~2× at the halfway point), not a constant.
+private struct FlightRoundedRect: Shape {
+    /// The radius as it should APPEAR on screen, in points.
+    var radius: CGFloat
+    /// Current flight scale (rendered size ÷ laid-out size).
+    var scale: CGFloat
+
+    var animatableData: CGFloat {
+        get { scale }
+        set { scale = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        guard radius > 0 else { return Rectangle().path(in: rect) }
+        // A tiny scale would blow the compensated radius past a capsule; the
+        // cap keeps the shape a rounded rect no matter how small the target.
+        let r = min(radius / max(0.0001, scale),
+                    min(rect.width, rect.height) / 2)
+        return RoundedRectangle(cornerRadius: r, style: .continuous).path(in: rect)
+    }
+}
+
 struct HeroStage: View {
     let url: URL
     let sourceFrame: CGRect          // tile frame, global coords
@@ -55,6 +91,14 @@ struct HeroStage: View {
         AppSettings.defaultGridCornerRadius
     private var cornerRadius: CGFloat {
         CGFloat(AppSettings.clampGridCornerRadius(cornerRadiusSetting))
+    }
+
+    /// The flight's current scale — exactly what `FlightEffect` derives from the
+    /// same two rects. Feeds `FlightRoundedRect` so the corner radius the viewer
+    /// sees doesn't shrink with the image.
+    private func flightScale(home: CGRect) -> CGFloat {
+        guard home.width > 0, displayRect.width > 0 else { return 1 }
+        return displayRect.width / home.width
     }
 
     @State private var displayRect: CGRect = .zero
@@ -170,8 +214,8 @@ struct HeroStage: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(width: base.width, height: base.height)
-                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius,
-                                                style: .continuous))
+                    .clipShape(FlightRoundedRect(radius: cornerRadius,
+                                                 scale: flightScale(home: base)))
                     // Delete: the image fades out first (front ~60%).
                     .modifier(FadeOutModifier(progress: burnProgress,
                                               fadeStart: 0.0, fadeLength: 0.6))
