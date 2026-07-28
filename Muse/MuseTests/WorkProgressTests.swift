@@ -55,11 +55,16 @@ final class WorkProgressTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(p.fraction, high, "must not rewind mid-run")
     }
 
+    /// Going idle now FILLS the bar and holds it (see the finish-hold tests);
+    /// the clear happens on `reset()`. A fresh run must then start from its own
+    /// value, never inheriting the previous run's high-water mark.
     func testResetsOnlyWhenEverythingGoesIdle() {
         var p = WorkProgress()
         p.update(.init(analyzeFraction: 0.9, analyzeActive: true))
         XCTAssertGreaterThan(p.fraction, 0)
-        p.update(.init())                       // all idle
+        p.update(.init())                       // all idle -> fills and holds
+        XCTAssertEqual(p.fraction, 1.0, accuracy: 1e-9)
+        p.reset()                               // hold elapses
         XCTAssertEqual(p.fraction, 0, accuracy: 1e-9)
         XCTAssertFalse(p.isActive)
         p.update(.init(indexFraction: 0.1, indexActive: true))   // fresh run
@@ -88,5 +93,70 @@ final class WorkProgressTests: XCTestCase {
         p.update(.init(thumbFraction: 0.5, thumbActive: true))
         XCTAssertTrue(p.isActive)
         XCTAssertGreaterThan(p.fraction, 0)
+    }
+}
+
+// MARK: - Finish hold
+
+extension WorkProgressTests {
+
+    /// A run must visibly reach 100% rather than vanishing partway.
+    func testGoingIdleFillsTheBarAndHolds() {
+        var p = WorkProgress()
+        p.update(.init(analyzeFraction: 1, analyzeActive: true))
+        XCTAssertLessThan(p.fraction, 1.0, "mid-run it hasn't earned 100% yet")
+        p.update(.init())                       // everything idle
+        XCTAssertTrue(p.isActive, "pill stays up during the finish hold")
+        XCTAssertTrue(p.isFinishing)
+        XCTAssertEqual(p.fraction, 1.0, accuracy: 1e-9, "bar completes")
+    }
+
+    func testResetClearsAfterTheHold() {
+        var p = WorkProgress()
+        p.update(.init(indexFraction: 0.5, indexActive: true))
+        p.update(.init())
+        p.reset()
+        XCTAssertFalse(p.isActive)
+        XCTAssertFalse(p.isFinishing)
+        XCTAssertEqual(p.fraction, 0, accuracy: 1e-9)
+    }
+
+    /// Repeated idle publishes must not re-arm the hold over and over.
+    func testRepeatedIdleUpdatesDoNotRetriggerTheFinish() {
+        var p = WorkProgress()
+        p.update(.init(indexFraction: 0.5, indexActive: true))
+        p.update(.init())
+        p.reset()
+        p.update(.init())                       // still idle, already reset
+        XCTAssertFalse(p.isActive, "an idle publish must not resurrect the pill")
+        XCTAssertFalse(p.isFinishing)
+    }
+
+    /// Work resuming during the hold must cancel the finish, not leave the bar
+    /// pinned at 100% for the new batch.
+    func testWorkResumingDuringHoldCancelsTheFinish() {
+        var p = WorkProgress()
+        p.update(.init(analyzeFraction: 0.9, analyzeActive: true))
+        p.update(.init())                       // finishing
+        XCTAssertTrue(p.isFinishing)
+        p.update(.init(indexFraction: 0.1, indexActive: true))   // new batch
+        XCTAssertFalse(p.isFinishing, "a new run cancels the pending finish")
+        XCTAssertTrue(p.isActive)
+        // The bug this pins: without ending the held run first, the monotonic
+        // max kept the bar at the 1.0 the finish hold set, so a brand-new batch
+        // rendered as permanently complete.
+        XCTAssertEqual(p.fraction, WorkProgress.indexShare * 0.1, accuracy: 1e-9,
+                       "a batch starting during the hold must restart the bar")
+        p.reset()                               // stale hold callback fires late
+        XCTAssertTrue(p.isActive, "a late reset must not kill an active run")
+    }
+
+    func testResetIsANoOpWhenNotFinishing() {
+        var p = WorkProgress()
+        p.update(.init(indexFraction: 0.4, indexActive: true))
+        let before = p.fraction
+        p.reset()
+        XCTAssertTrue(p.isActive)
+        XCTAssertEqual(p.fraction, before, accuracy: 1e-9)
     }
 }

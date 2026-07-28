@@ -369,6 +369,15 @@ struct ContentView: View {
         }
         .onChange(of: workInput) { _, new in
             withAnimation(.easeOut(duration: 0.2)) { workProgress.update(new) }
+            // Let the bar visibly REACH 100% before the pill goes away. Without
+            // the hold it vanished at whatever the last active phase reached
+            // (typically the low 90s), which reads as a stall rather than
+            // completion.
+            guard workProgress.isFinishing else { return }
+            Task {
+                try? await Task.sleep(nanoseconds: 450_000_000)
+                withAnimation(.easeOut(duration: 0.25)) { workProgress.reset() }
+            }
         }
         .preferredColorScheme(appState.moodPalette.scheme)
     }

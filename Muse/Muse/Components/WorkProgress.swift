@@ -67,21 +67,53 @@ struct WorkProgress: Equatable {
         return clamp(total)
     }
 
-    /// Monotonic state. `fraction` never decreases while work is ongoing; it
-    /// resets only once EVERYTHING goes idle, so the next run starts clean.
+    /// Monotonic state. `fraction` never decreases while work is ongoing.
     private(set) var fraction: Double = 0
     private(set) var isActive: Bool = false
 
+    /// True once the work is done but the bar is still shown, filled, so the run
+    /// visibly COMPLETES instead of vanishing partway.
+    ///
+    /// Without this the pill disappeared at whatever fraction the last active
+    /// phase happened to reach — organizing contributes half its share and
+    /// thumbnails may never run at all, so a finished run typically vanished
+    /// somewhere in the 90s. Owner-reported as "a delay with a bit of a gap in
+    /// the progression that visually looks weird". Reaching 100% and holding
+    /// briefly reads as completion; stopping at 93% reads as a stall.
+    private(set) var isFinishing: Bool = false
+
     mutating func update(_ i: Input) {
         guard i.anyActive else {
-            // Everything idle → the run is over; reset for the next one.
-            fraction = 0
-            isActive = false
+            // Everything idle. If we were mid-run, fill the bar and hold — the
+            // view calls `reset()` after a beat. If we were already idle, stay
+            // idle (this must not re-trigger the finish hold on every publish).
+            if isActive && !isFinishing {
+                fraction = 1
+                isFinishing = true
+            }
             return
+        }
+        // Work resumed while the completed bar was still held. That is a NEW
+        // run, not a continuation, so end the old one first — otherwise the
+        // monotonic `max` below would keep the bar pinned at the 1.0 the finish
+        // hold set, and the new batch would show a permanently full bar.
+        if isFinishing {
+            isFinishing = false
+            isActive = false
+            fraction = 0
         }
         let raw = Self.rawFraction(i)
         // Only ever move forward within a run.
         fraction = isActive ? max(fraction, raw) : raw
         isActive = true
+    }
+
+    /// Clear after the finish hold, so the next run starts from zero.
+    /// No-op if work restarted in the meantime.
+    mutating func reset() {
+        guard isFinishing else { return }
+        fraction = 0
+        isActive = false
+        isFinishing = false
     }
 }

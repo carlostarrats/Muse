@@ -71,6 +71,18 @@ struct HeroImageViewer: View {
                         // window flicker on every close.
                         .animation(.easeOut(duration: backdropVisible ? 0.4 : 0.3),
                                    value: backdropVisible)
+                        // The wash colour resolves a beat AFTER the backdrop
+                        // mounts (nil until the DB read lands), and the only
+                        // animation here was scoped to `backdropVisible` — so
+                        // the colour HARD-CUT from neutral to the real tint
+                        // partway through the opacity fade. On a large file that
+                        // is very visible, because the image itself takes ~0.5s
+                        // to decode and you are looking straight at the backdrop
+                        // while it happens. Value-scoped so it animates the
+                        // colour change only, without reopening the container-
+                        // wide transaction.
+                        .animation(.easeOut(duration: 0.35),
+                                   value: details?.dominantColor ?? computedPalette.first)
                         .contentShape(Rectangle())
                         .onTapGesture { startClose() }
 
