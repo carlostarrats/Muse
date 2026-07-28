@@ -1,26 +1,27 @@
 import SwiftUI
 
-/// Opaque wash behind the hero viewers, tinted by the image's dominant color.
+/// Frosted blur of the app content + a translucent wash of the image's dominant
+/// colour, darkened.
 ///
-/// **Deliberately NOT a material.** This was `.ultraThinMaterial` + a translucent
-/// tint, and it flickered on every hero open of a large image. Six attempts and
-/// two A/B tests pinned the cause: animating opacity on a macOS material
-/// re-composites its blur every frame, and the stepping is visible. Proven by
-/// substitution — a flat colour with the identical animation never flickered,
-/// while disabling the grid content behind the blur changed nothing. Owner
-/// decision (2026-07-28): drop the blur for a static colour. It can't flicker by
-/// construction, costs nothing to composite, and removes a whole class of
-/// fragile material/animation interactions.
+/// The hero-open flicker on large images had TWO independent causes, found by
+/// A/B substitution after five wrong guesses. Both fixes are load-bearing:
 ///
-/// Two rules keep it artefact-free — don't break either:
+/// 1. **Never animate opacity on the material.** `.ultraThinMaterial`
+///    re-composites its blur every frame while its opacity animates, and the
+///    stepping is visible. Proven by substitution: a flat colour with the
+///    identical animation never flickered, while disabling the grid content
+///    behind the blur changed nothing. `compositingGroup()` did not help. So the
+///    wash does NOT fade in — it is at full strength from the first frame.
 ///
-/// 1. **Opacity is constant while open.** It does NOT fade in. Only the tint
-///    CHANGES, and a plain colour cross-fades cleanly. The original faded
-///    opacity and morphed colour simultaneously, which read as a flicker even
-///    without the material.
-/// 2. **It still fades OUT on close.** The close flight depends on the backdrop
-///    being gone before the subtree unmounts at 0.36s; a layer ripped away
-///    mid-opacity reads as a whole-window flash.
+/// 2. **The tint's opacity must be CONSTANT.** It used to be
+///    `hexColor == nil ? 0.45 : 0.78`, so when the tint resolved (~50ms in) the
+///    layer changed colour AND opacity at once. That double jump reads as a
+///    flicker on its own — it survived removing the material entirely. Only the
+///    COLOUR changes now, and a plain colour cross-fades cleanly.
+///
+/// It still fades OUT on close: the close flight depends on the backdrop being
+/// gone before the subtree unmounts at 0.36s, or a layer ripped away
+/// mid-opacity reads as a whole-window flash.
 struct ViewerBackdrop: View {
     var hexColor: String?    // dominant color; nil → neutral dark
     /// The REAL close state — never merely "not yet visible". Conflating them
@@ -29,25 +30,24 @@ struct ViewerBackdrop: View {
 
     private var tint: Color {
         guard let hex = hexColor, let (r, g, b) = NamedColor.parse(hex) else {
-            return Color(red: 0.13, green: 0.13, blue: 0.145)
+            // Neutral start. Deliberately close in weight to a typical tint, so
+            // the cross-fade to the real colour is a hue shift rather than a
+            // brightness jump.
+            return Color(red: 0.17, green: 0.17, blue: 0.19)
         }
-        // Darken, matching the prototype's tintColor().
-        let k = 0.42
+        let k = 0.55   // darken, matching the prototype's tintColor()
         return Color(red: r * k, green: g * k, blue: b * k)
     }
 
     var body: some View {
         ZStack {
-            tint
-            // A soft vignette so the wash reads as a lit surface rather than a
-            // flat fill — the depth the blur used to provide, at no compositing
-            // cost and with nothing to animate.
-            RadialGradient(
-                colors: [Color.black.opacity(0), Color.black.opacity(0.35)],
-                center: .center, startRadius: 120, endRadius: 900)
+            Rectangle().fill(.ultraThinMaterial)
+            // CONSTANT opacity — see rule 2 above. Do not make this depend on
+            // whether the tint has resolved.
+            tint.opacity(0.78)
         }
         .opacity(closing ? 0 : 1)
-        // Colour cross-fade only. NO opacity animation on the way in.
+        // Colour cross-fade only; no opacity animation on the way in.
         .animation(.easeInOut(duration: 0.5), value: hexColor)
         .animation(.easeOut(duration: 0.3), value: closing)
         .ignoresSafeArea()
