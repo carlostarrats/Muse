@@ -6110,3 +6110,136 @@ reordering only — 0 keys lost, 0 changed, and the one new key ("Preparing your
 files…") is translated.
 
 804 tests green.
+
+---
+
+## 2026-07-28 — `feat/grid-layout-modes` (Polish 26)
+
+**Grid layout modes: Columns / Rows / Grid, and the death of the tile card.**
+
+### What started it
+
+Two complaints, one root cause.
+
+The owner's first was that making a user pick a fixed aspect ratio just to view
+their images is overcomplicated — Cosmos, Atlas for Mac, Savee, Eagle, Gatheros
+and Mattoboard all manage without a ratio picker. The second arrived as a
+screenshot: an image sitting inside a grey slab, with the hover darkening
+applied to the slab as well as the photo. "I don't like seeing, or even on hover
+seeing, the tile background."
+
+Those turn out to be the same problem. Every tile drew
+`Rectangle().fill(appState.tileFill)` at the full cell frame with the image
+`.fit` inside (`GridView.swift:952-967`). The image already fitted its natural
+shape and already scaled as large as it could — the visible opaque slab around
+it is what made a fixed ratio look *imposed*. The ratio picked a **card** shape,
+not an image shape. Delete the card and the ratios lose their reason to exist:
+the middle eight were visually indistinguishable anyway (at 4 columns / ~290pt
+tiles, 6:7 / 4:5 / 3:4 render 338 / 362 / 387pt tall — ~7% steps).
+
+### The Atlas detour
+
+Midway through the design the owner sent three Atlas screenshots. Read as a
+spacing demo at first — two shots of the same library at different gutters,
+plus Atlas's General settings with its Spacing slider. But the layout in them
+was not the square-slot Grid that had just been agreed: Atlas justifies **rows**
+(one height per row, natural widths, each row stretched to fill the window), so
+there is no empty air anywhere.
+
+Raising that turned two modes into three. Muse's masonry is vertical columns
+with a ragged bottom; Atlas's is horizontal justified rows; a square-slot grid
+aligns both axes. All three are distinct and all three are worth having.
+
+### Decisions on record
+
+Asked and answered during design, so a later session doesn't relitigate them:
+
+- **Card behind photos:** gone everywhere, in every mode — not just in a new
+  Grid mode, and not a hover-only fix.
+- **Tile Background setting:** deleted outright, not retitled to "File Card
+  Colour". Non-photo tiles (PDF/zip/video/folder) are icons and still need a
+  card; theirs is the mood's tile colour unconditionally, which is what `.auto`
+  did and what masonry already forced.
+- **Ratios:** replaced, not kept alongside.
+- **Modes:** three (Columns / Rows / Grid).
+- **Ring and hover:** hug the photo, not the slot. The click target stays the
+  slot so nothing gets harder to hit.
+- **Transparent images:** fully transparent, no auto-backdrop and no toggle
+  (Atlas has a "Backdrop Behind Transparent Images" switch; we deliberately
+  don't). A dark logo on a dark mood is hard to see — so is it in Finder and
+  Preview, and the mood is the user's choice.
+- **Rotation:** fixed as part of this work, not deferred (below).
+
+### The orientation bug this uncovered
+
+While checking the layout engine: Muse resolved an image's shape from three
+places that disagreed about EXIF-rotated photos. `AspectRatioCache.imageIOAspect`
+swapped width/height for orientations 5–8; `ImageHeaderSizeCache` did not; and
+`files.width`/`height` inherit the header cache. So an **analyzed** rotated photo
+packed at the wrong shape (DB dimensions path) while an **unanalyzed** one packed
+correctly (ImageIO fallback) — two files side by side in one folder, laid out
+differently — and the hero flight took off from a slightly wrong rect.
+
+It was mostly hidden: a wrong shape showed up as extra grey card and
+self-corrected once the thumbnail decoded and `report(aspect:)` fired. Deleting
+the card removes the grey that hid it, and in Rows a wrong aspect breaks row
+alignment outright. So `ImageHeaderSizeCache` became the single orientation
+truth and now stores **display** dimensions. Consequence, accepted rather than
+migrated: `files.width`/`height` are display dims going forward (matching what
+Preview reports), and already-analyzed rows keep their old values until
+re-analyzed.
+
+### How it was built
+
+Eight commits, each leaving the build green:
+
+1. `JustifiedRowsGeometry` — pure justified-rows packing, sibling of
+   `MasonryGeometry`. The trailing partial row is deliberately **not** justified
+   (stretching it blows a lone leftover image up to a full-width panorama), and
+   per-item aspects clamp to `[0.1, 10]` for packing only so a pathological
+   panorama can't force a sub-pixel row.
+2. One orientation truth (above).
+3. Three modes + migration. `resolve` maps `"masonry"` → `.columns` and any
+   `r*` → `.grid`; falling through to the default would have silently dropped a
+   ratio user into Columns. `ImageLayout.aspect` was kept (`nil` / `nil` / `1`)
+   because the parting-ripple damping and the PDF exporter both read it as "is
+   this a uniform lattice?".
+4. `TileBackground` deleted — model, tests, setting, `AppState` properties, the
+   mood popover's section and its `TileSwatch`, and the PDF's per-image backdrop.
+5. Photos draw on the page. The tile's whole content stack — shimmer, image,
+   star badge, hover veil, selection ring — is fitted to the photo via
+   `.aspectRatio(_, contentMode: .fit)`, the same min-scale fit as
+   `ViewerGeometry.fitWithin`. `tileFrames` now reports that **fitted** rect:
+   `HeroStage` runs `fitWithin` on it and fitting an already-fitted rect is the
+   identity, so the flight endpoint became exact instead of depending on two
+   caches agreeing. An explicit `.contentShape(Rectangle())` keeps the slot
+   clickable now that the empty part paints nothing.
+6. Spacing slider — the hardcoded 14pt gutter, promoted to a persisted 0–28pt
+   control beside the images-per-row slider. Both share one capsule builder.
+7. Rows in the PDF export — `paginateRows` consumes the same
+   `JustifiedRowsGeometry.rows(...)` output and only decides page breaks, so
+   print matches screen and the packing isn't forked.
+8. French strings + docs.
+
+### Verification
+
+824 unit tests green (26 new: 11 rows-geometry, 4 orientation, 8 layout/migration,
+6 spacing, 4 PDF rows — minus the 5 deleted `TileBackgroundTests`).
+
+Verified in the running app: Grid mode renders square slots with aligned rows
+and columns, no slab, star badges pinned to each photo's own corner; spacing at
+0 packs flush with no overlap; the French build renders. UI scripting was not
+authorized in that session, so the interactive checks — hero open/close on wide
+/ tall / EXIF-rotated photos, and clicking the empty air beside a photo in Grid
+— were handed to the owner. Anything that looks wrong in the hero flight must be
+diagnosed by instrumenting the running app, never by reading the source: see
+`docs/hero-viewer-open-close-handoff.md`.
+
+### Localization
+
+4 new keys (Columns / Rows / Spacing between images / the layout-sheet subtitle),
+26 orphaned keys removed. Pruning was done conservatively: `grep` cannot see keys
+reached through interpolation (`"Analyzing %lld of %lld"`) or through
+`NSLocalizedString(variable)`, so only plain literals this change actually
+orphaned were deleted, and shared labels like `None` / `Auto` / `Light` (still
+used by the mood swatches) were left alone.

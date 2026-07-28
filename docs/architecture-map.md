@@ -26,8 +26,8 @@ Muse/Muse/
                                    move to an extension, so they all stay here).
                                    Memoized visibleFiles; owns tag-chip data
                                    (tagChipRows), folderStats, folderSortMode,
-                                   collectionSortMode/Reversed, tileBackground (+
-                                   effectiveTileBackground/tileFill), gridFilter.
+                                   collectionSortMode/Reversed, tileFill (the mood card
+                                   behind NON-photo tiles only), gridFilter.
                                    openSubfolder/resolveFolderNode navigate folder cards
     AppState+Selection.swift       grid MULTI-selection (selectedFiles: Set<String> +
                                    anchor): applyClick / clearSelection /
@@ -71,12 +71,11 @@ Muse/Muse/
                                    whose label is a run of ★ (U+2605) 1…5. label↔count,
                                    isRating, front-sort, mutual-exclusion resolution.
                                    Unit-tested (StarRatingTests)
-    ImageLayout.swift              global grid layout: .masonry (default) + 11 fixed
-                                   aspect-ratio cases; exposes aspect/iconKind/resolve.
-                                   Unit-tested
-    TileBackground.swift           global grid tile BACKDROP: None/Auto(default)/Light/
-                                   Dark Grey/Black. backdropRGB/fill resolvers; masonry
-                                   forces Auto via AppState.effectiveTileBackground. Unit-tested
+    ImageLayout.swift              global grid layout: .columns (default, masonry) /
+                                   .rows (justified) / .grid (square slots). aspect is nil
+                                   for columns+rows, 1 for grid (also read as "uniform
+                                   lattice?"). resolve() migrates legacy masonry→columns
+                                   and any r* ratio→grid. Unit-tested
     GridFilter.swift               global grid faceted filter (pure, unit-tested).
                                    KindFacet is a flat set of LEAF facets — image FORMATS
                                    (jpeg/png/heic/tiff/gif/webp/raw/psd/svg + imageOther
@@ -243,9 +242,13 @@ Muse/Muse/
                                    DragGesture off a trailing grip (NOT .onDrag). "Sort:" header
                                    orders top-level folders; Manual is draggable + has live counts.
                                    Right-click / Edit-menu Move Up/Down is the keyboard parallel
-    GridView.swift                 VIRTUALIZED masonry grid — precomputes tile frames
-                                   (MasonryGeometry from AspectRatioCache), renders only viewport
-                                   tiles (+overscan); column slider; tiles fade in as thumbs land.
+    GridView.swift                 VIRTUALIZED grid — precomputes tile frames (MasonryGeometry
+                                   for Columns/Grid, JustifiedRowsGeometry for Rows, both from
+                                   AspectRatioCache), renders only viewport tiles (+overscan);
+                                   column + spacing sliders; tiles fade in as thumbs land.
+                                   Photos draw with NO card, fitted to their own rect (ring,
+                                   hover veil and star badge hug the photo; the slot stays the
+                                   click target via contentShape).
                                    The ONLY grid view. Click = select (Cmd toggles, Shift ranges),
                                    double-click opens (timed from the event's hardware timestamp);
                                    .onDrag carries the URL; selection-aware contextMenu. A `.folder`
@@ -270,8 +273,8 @@ Muse/Muse/
                                    via PageScroll math; everything else forwards down the chain
     ShareCollectionButton.swift    in-collection header menu — Save to… / Share / Share Drive Link;
                                    builds an 11×14 paginated PDF. exportURLs = visibleFiles minus folders
-                                   (the on-screen filtered grid). Passes imageLayout.aspect +
-                                   effectiveTileBackground + activeTagLabels so the PDF mirrors the grid.
+                                   (the on-screen filtered grid). Passes imageLayout +
+                                   activeTagLabels so the PDF mirrors the grid.
                                    Drive → DriveShareSheet. (iCloud "Share Link" backend removed 2026-06-25
                                    — NSSharingServicePicker can't mint an iCloud Copy Link for app-container
                                    files; see CLAUDE.md. Drive is the only link path.)
@@ -290,8 +293,8 @@ Muse/Muse/
     TagChipsRow.swift              tag chips; filter + management. A pure RENDERER of
                                    AppState.tagChipRows; hover-count layout (ChipFlow) +
                                    rename/delete dialogs. Scope decided by AppState.tagSourceFiles
-    MoodPickerView.swift           background popover (Light/Dark/Auto/Custom) + a "Tile Background"
-                                   section (→ AppState.tileBackground; disabled→Auto in masonry)
+    MoodPickerView.swift           background popover (Light/Dark/Auto/Custom). The "Tile
+                                   Background" section was deleted with the setting (2026-07-28)
     GridFilterPopover.swift        the funnel-button popover (mood-picker chrome, fixed 180 wide):
                                    one KIND section — an "Images" tri-state checkbox (native NSButton
                                    allowsMixedState, driven from imageParentState) over the always-
@@ -347,8 +350,13 @@ Muse/Muse/
                                    ContentView's hidden Escape button maps the result onto AppState calls;
                                    viewer always wins. Unit-tested
     MasonryGeometry.swift          pure masonry packing (frames + height) from aspect ratios — feeds
-                                   GridView's virtualization. captionHeight param reserves a per-tile
-                                   caption strip
+                                   GridView's virtualization for Columns, and for Grid via a uniform
+                                   aspect. captionHeight param reserves a per-tile caption strip
+    JustifiedRowsGeometry.swift    pure justified-ROWS packing (the Rows layout): one height per row,
+                                   natural widths, each closed row spanning the width exactly. The
+                                   trailing partial row is left unstretched; aspects clamp to
+                                   [0.1, 10] for packing only. Also drives the PDF's paginateRows.
+                                   Unit-tested
     GridKeyboardNav.swift          pure arrow-move index math over the masonry frames: ←/→ = ±1 in
                                    reading order (wrap+clamp), ↑/↓ = nearest row-band then closest
                                    horizontal centre. Feeds PageScrollCatcher's onArrow. Unit-tested
@@ -392,11 +400,15 @@ Muse/Muse/
                                    root, index, read disk files back, match, applyMeta/Collections/Stars,
                                    CollectionsEngine.reload(), then analyzePending reconciles new files
   Export/
-    CollectionPDFLayout.swift      pure paginated masonry pack for the collection PDF (no image split
-                                   across pages); each tile reserves a captionHeight strip. Unit-tested
+    CollectionPDFLayout.swift      pure pagination for the collection PDF, two packs mirroring the
+                                   screen: paginate (masonry — Columns, and Grid via a uniform aspect)
+                                   and paginateRows (justified Rows, consuming JustifiedRowsGeometry
+                                   and only deciding page breaks). Nothing splits across a page;
+                                   each tile reserves a captionHeight strip. Unit-tested
     CollectionPDFExporter.swift    ImageIO downsample (off-main) → CGPDFContext; CoreText 11×14 header +
                                    ellipsis-truncated filename caption per image. makePDF mirrors the grid
-                                   (fixed ratio → uniform aspect array; per-image backdrop; non-image →
+                                   (Grid → uniform aspect array, Rows → paginateRows, no photo
+                                   backdrop — white paper shows through; non-image →
                                    QuickLook; decode 8-wide, order preserved) and draws active tagLabels as
                                    header pills on page 1 (width-clamped + truncated)
   Sharing/                         (iCloud backend #1 REMOVED 2026-06-25 — NSSharingServicePicker can't
@@ -465,5 +477,8 @@ MuseShareExtension/                (separate app-extension target) "Send to Muse
 - `Components/ImageHeaderSizeCache.swift` — an image's true pixel dimensions, read from
   the header once and remembered in a table that never evicts. Warmed off-main by the
   thumbnail pass; read synchronously (no I/O) by the hero flight, which needs the file's
-  real aspect on its first frame, and by `VisionServices.analyze` so `files.width/height`
-  record the file rather than the bounded analysis raster.
+  real aspect on its first frame, by the grid tile (which fits its ring/hover/badge to the
+  same rect the flight uses), and by `VisionServices.analyze` so `files.width/height`
+  record the file rather than the bounded analysis raster. Stores DISPLAY dimensions —
+  EXIF orientation applied, via `displaySize(width:height:orientation:)` — so every
+  consumer agrees about rotated photos.

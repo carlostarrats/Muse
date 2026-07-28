@@ -22,6 +22,7 @@
       }
     },
     "#hex": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -284,116 +285,7 @@
         }
       }
     },
-    "16:9": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "16:9"
-          }
-        }
-      }
-    },
-    "1:1": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1:1"
-          }
-        }
-      }
-    },
-    "2:3": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "2:3"
-          }
-        }
-      }
-    },
-    "3:2": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "3:2"
-          }
-        }
-      }
-    },
-    "3:4": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "3:4"
-          }
-        }
-      }
-    },
-    "4:3": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "4:3"
-          }
-        }
-      }
-    },
-    "4:5": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "4:5"
-          }
-        }
-      }
-    },
-    "5:4": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "5:4"
-          }
-        }
-      }
-    },
-    "6:7": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "6:7"
-          }
-        }
-      }
-    },
-    "7:6": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "7:6"
-          }
-        }
-      }
-    },
-    "9:16": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "9:16"
-          }
-        }
-      }
-    },
+    "=": {},
     "A file name can’t contain “/” or “:”.": {
       "localizations": {
         "fr": {
@@ -695,6 +587,7 @@
       }
     },
     "Analyzing %lld of %lld": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -705,6 +598,7 @@
       }
     },
     "Analyzing…": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -791,16 +685,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Auto"
-          }
-        }
-      }
-    },
-    "Automatic": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Automatique"
           }
         }
       }
@@ -1115,12 +999,12 @@
         }
       }
     },
-    "Choose how images are arranged. Applies to every grid.": {
+    "Choose how images are arranged. Every mode draws each image at its own shape — nothing is cropped. Applies to every grid.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choisissez la disposition des images. S'applique à toutes les grilles."
+            "value": "Choisissez la disposition des images. Chaque mode affiche l'image à sa forme naturelle — rien n'est rogné. S'applique à toutes les grilles."
           }
         }
       }
@@ -1276,12 +1160,12 @@
         }
       }
     },
-    "Common Sizes": {
+    "Columns": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tailles courantes"
+            "value": "Colonnes"
           }
         }
       }
@@ -1607,18 +1491,7 @@
         }
       }
     },
-    "Dark Grey": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gris foncé"
-          }
-        }
-      }
-    },
     "Date": {
-      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -2534,6 +2407,7 @@
       }
     },
     "Indexing %lld of %lld": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -2549,16 +2423,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Indigo"
-          }
-        }
-      }
-    },
-    "Instagram, large format film": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Instagram, film grand format"
           }
         }
       }
@@ -2845,6 +2709,7 @@
       }
     },
     "Loading images %lld of %lld": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -2915,6 +2780,7 @@
         }
       }
     },
+    "MB": {},
     "Make Smart": {
       "localizations": {
         "fr": {
@@ -2995,42 +2861,12 @@
         }
       }
     },
-    "Masonry": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mosaïque"
-          }
-        }
-      }
-    },
-    "Masonry always uses Auto. Pick a fixed ratio to choose a backdrop.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La mosaïque utilise toujours Auto. Choisissez un ratio fixe pour sélectionner un arrière-plan."
-          }
-        }
-      }
-    },
     "Match": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Correspondance"
-          }
-        }
-      }
-    },
-    "Medium format": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Moyen format"
           }
         }
       }
@@ -3453,6 +3289,7 @@
       }
     },
     "None": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -3713,6 +3550,7 @@
       }
     },
     "Organizing…": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -4603,6 +4441,16 @@
         }
       }
     },
+    "Rows": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rangées"
+          }
+        }
+      }
+    },
     "Run Muse's duplicate scan on a folder.": {
       "localizations": {
         "fr": {
@@ -5133,16 +4981,6 @@
         }
       }
     },
-    "Sony, Canon, Nikon, 35mm film": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sony, Canon, Nikon, film 35 mm"
-          }
-        }
-      }
-    },
     "Sort": {
       "localizations": {
         "fr": {
@@ -5213,22 +5051,22 @@
         }
       }
     },
+    "Spacing between images": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Espacement entre les images"
+          }
+        }
+      }
+    },
     "Sparkles": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Étincelles"
-          }
-        }
-      }
-    },
-    "Square medium format": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Carré, moyen format"
           }
         }
       }
@@ -5259,16 +5097,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nombre d’étoiles"
-          }
-        }
-      }
-    },
-    "Static": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Statique"
           }
         }
       }
@@ -5309,16 +5137,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "TIFF"
-          }
-        }
-      }
-    },
-    "TILE BACKGROUND": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ARRIÈRE-PLAN DES VIGNETTES"
           }
         }
       }
@@ -5574,16 +5392,6 @@
         }
       }
     },
-    "Tile background: %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Arrière-plan des vignettes : %@"
-          }
-        }
-      }
-    },
     "Title": {
       "extractionState": "stale",
       "localizations": {
@@ -5687,16 +5495,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Téléversement de %lld sur %lld…"
-          }
-        }
-      }
-    },
-    "Vertical video on most phones": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vidéo verticale sur la plupart des téléphones"
           }
         }
       }
@@ -5893,6 +5691,7 @@
       }
     },
     "copy all": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -5985,6 +5784,7 @@
       }
     },
     "has": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -5995,6 +5795,7 @@
       }
     },
     "has no": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -6020,16 +5821,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Synchronisation iCloud"
-          }
-        }
-      }
-    },
-    "iPhone, Google Pixel, Samsung Galaxy, OnePlus": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "iPhone, Google Pixel, Samsung Galaxy, OnePlus"
           }
         }
       }
@@ -6105,6 +5896,7 @@
       }
     },
     "within %lld days": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -6133,7 +5925,9 @@
           }
         }
       }
-    }
+    },
+    "≤": {},
+    "≥": {}
   },
   "version": "1.0"
 }
