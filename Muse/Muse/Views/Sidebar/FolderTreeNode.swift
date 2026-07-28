@@ -72,25 +72,33 @@ struct FolderTreeNode: View {
     }
 
     private var row: some View {
-        HStack(spacing: 8) {
+        // spacing 0 with explicit per-element leading padding: that's what lets
+        // the chevron sit right-aligned in a slot WIDER than its glyph (close to
+        // the icon it discloses) without moving the icon column. Slot + gap
+        // still sums to 18 — see the invariant on SidebarView.chevronSlotWidth.
+        HStack(spacing: 0) {
             // Disclosure: a real button so it captures its own taps,
             // independent of the row's selection tap. Leaves keep an
             // invisible placeholder so labels stay aligned.
             if hasChildren {
                 Button(action: toggleExpand) {
                     Image(systemName: node.isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: SidebarView.chevronGlyphSize, weight: .semibold))
                         .foregroundStyle(.secondary)
-                        .frame(width: 10)
+                        // The hit target is the full slot at row height — it must
+                        // NOT shrink with the (deliberately small) glyph, or the
+                        // chevron becomes fiddly to click.
+                        .frame(width: SidebarView.chevronSlotWidth, height: 22,
+                               alignment: .trailing)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(node.isExpanded ? String(localized: "Collapse") : String(localized: "Expand"))
             } else {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: SidebarView.chevronGlyphSize, weight: .semibold))
                     .opacity(0)
-                    .frame(width: 10)
+                    .frame(width: SidebarView.chevronSlotWidth, alignment: .trailing)
                     .accessibilityHidden(true)
             }
 
@@ -100,6 +108,7 @@ struct FolderTreeNode: View {
                     .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor)
                                                 : AnyShapeStyle(.primary))
                     .frame(width: 18)
+                    .padding(.leading, SidebarView.chevronToIconGap)
 
                 Text(node.displayName)
                     .font(.system(size: 13, weight: node.isRoot ? .medium : .regular))
@@ -168,9 +177,13 @@ struct FolderTreeNode: View {
             // an empty iCloud root (nothing to show).
             .onTapGesture { if !isEmptyICloudRoot { appState.select(folder: node) } }
         }
-        .padding(.leading, CGFloat(depth) * 14)
+        // A root's DIRECT children sit at the root's own x — only grandchildren
+        // and deeper step in. The chevron + icon column already carry one level
+        // of hierarchy, so indenting the first level too reads as a double
+        // indent (see SidebarView.treeIndentStep).
+        .padding(.leading, CGFloat(max(0, depth - 1)) * SidebarView.treeIndentStep)
         .padding(.horizontal, 6)
-        .frame(height: 28)
+        .frame(height: node.isRoot ? SidebarView.rowHeight : SidebarView.childRowHeight)
         .background {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(dropTargeted ? Color.accentColor.opacity(0.22) : rowFill)

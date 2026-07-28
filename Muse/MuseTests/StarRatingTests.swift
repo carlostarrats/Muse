@@ -67,4 +67,83 @@ final class StarRatingTests: XCTestCase {
         XCTAssertEqual(r.remove, ["\u{2605}\u{2605}\u{2605}"])
         XCTAssertEqual(r.add, [])
     }
+
+    // MARK: - Grid badge sizing
+
+    /// Width of the full ★-run at `n` stars, capsule padding included — the
+    /// same expression `badgeLabel` compares against.
+    private func fullRunWidth(_ n: Int) -> CGFloat {
+        CGFloat(n) * StarRating.badgeStarGlyphWidth + StarRating.badgeHorizontalPadding * 2
+    }
+
+    func testCompactLabelShape() {
+        XCTAssertEqual(StarRating.compactLabel(for: 1), "1\u{2605}")
+        XCTAssertEqual(StarRating.compactLabel(for: 5), "5\u{2605}")
+    }
+
+    func testCompactLabelOutOfRangeIsNil() {
+        XCTAssertNil(StarRating.compactLabel(for: 0))
+        XCTAssertNil(StarRating.compactLabel(for: 6))
+        XCTAssertNil(StarRating.compactLabel(for: -1))
+    }
+
+    func testBadgeLabelOutOfRangeIsNil() {
+        XCTAssertNil(StarRating.badgeLabel(for: 0, availableWidth: 999))
+        XCTAssertNil(StarRating.badgeLabel(for: 6, availableWidth: 999))
+    }
+
+    /// With room to spare, every rating draws its full run.
+    func testBadgeLabelUsesFullRunWhenItFits() {
+        for n in 1...5 {
+            XCTAssertEqual(StarRating.badgeLabel(for: n, availableWidth: 500),
+                           StarRating.label(for: n),
+                           "\(n) stars should draw the full run at a generous width")
+        }
+    }
+
+    /// The boundary is exact: at precisely the run's own width it still fits;
+    /// a hair under and it doesn't.
+    func testBadgeLabelBoundaryIsExact() {
+        for n in 2...5 {
+            let w = fullRunWidth(n)
+            XCTAssertEqual(StarRating.badgeLabel(for: n, availableWidth: w),
+                           StarRating.label(for: n),
+                           "\(n) stars should still fit at exactly its own width")
+            XCTAssertEqual(StarRating.badgeLabel(for: n, availableWidth: w - 0.01),
+                           StarRating.compactLabel(for: n),
+                           "\(n) stars should collapse just below its own width")
+        }
+    }
+
+    /// One star never collapses: the compact form ("1★") is WIDER than the run
+    /// itself ("★"), so collapsing would make the overflow worse.
+    func testOneStarNeverCollapses() {
+        XCTAssertEqual(StarRating.badgeLabel(for: 1, availableWidth: 0),
+                       StarRating.label(for: 1))
+        XCTAssertEqual(StarRating.badgeLabel(for: 1, availableWidth: 1),
+                       StarRating.label(for: 1))
+    }
+
+    /// Whenever the compact form IS chosen, it is genuinely narrower than the
+    /// run it replaced — the property that makes the swap worth doing.
+    func testCompactIsNarrowerWheneverChosen() {
+        let compactWidth = StarRating.badgeCompactWidth + StarRating.badgeHorizontalPadding * 2
+        for n in 1...5 {
+            let chosen = StarRating.badgeLabel(for: n, availableWidth: 0)
+            if chosen == StarRating.compactLabel(for: n) {
+                XCTAssertLessThan(compactWidth, fullRunWidth(n),
+                                  "\(n) stars collapsed to a form that isn't narrower")
+            }
+        }
+    }
+
+    /// A zero/negative budget (a tile whose slot hasn't been measured yet) must
+    /// still return SOMETHING drawable rather than nil — the badge should never
+    /// silently vanish because geometry arrived late.
+    func testDegenerateWidthStillDrawsABadge() {
+        for n in 1...5 {
+            XCTAssertNotNil(StarRating.badgeLabel(for: n, availableWidth: 0))
+            XCTAssertNotNil(StarRating.badgeLabel(for: n, availableWidth: -50))
+        }
+    }
 }

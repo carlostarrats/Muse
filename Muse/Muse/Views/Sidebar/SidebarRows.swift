@@ -22,27 +22,33 @@ struct StarRow: View {
     @State private var isHovered = false
 
     var body: some View {
-        HStack(spacing: 8) {
+        // spacing 0 + explicit leading padding, matching the folder tree's row
+        // geometry so the pin icon lands on the shared icon column (see the
+        // invariant on SidebarView.chevronSlotWidth). A pinned folder is never
+        // expandable, so the chevron slot is always an invisible placeholder.
+        HStack(spacing: 0) {
             Image(systemName: "chevron.right")
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: SidebarView.chevronGlyphSize, weight: .semibold))
                 .opacity(0)
-                .frame(width: 10)
+                .frame(width: SidebarView.chevronSlotWidth, alignment: .trailing)
                 .accessibilityHidden(true)
 
             Image(systemName: "pin.fill")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .frame(width: 18)
+                .padding(.leading, SidebarView.chevronToIconGap)
                 .accessibilityHidden(true)
 
             Text(star.displayName)
                 .font(.system(size: 13))
                 .lineLimit(1)
+                .padding(.leading, 8)
 
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 6)
-        .frame(height: 28)
+        .frame(height: SidebarView.rowHeight)
         .background {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(Color.primary.opacity(isHovered && !isReordering ? SidebarView.rowHoverFillOpacity : 0))

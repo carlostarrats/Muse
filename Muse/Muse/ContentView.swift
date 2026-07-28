@@ -102,7 +102,8 @@ struct ContentView: View {
                     .toolbar(removing: .title)
                 } else {
                     detailCore.toolbar {
-                        plainLeading
+                        plainLeadingA
+                        plainLeadingB
                     }
                 }
             }
@@ -549,25 +550,38 @@ struct ContentView: View {
         ToolbarSpacer(.fixed)
         moodItem(.automatic)
         ToolbarSpacer(.fixed)
+        // About + Settings share ONE capsule (no spacer between them): they're
+        // the two "about this app" controls and read as a pair. Settings is here
+        // as well as under ⌘, so it doesn't live only in the Apple menu.
         infoItem(.automatic)
+        settingsItem(.automatic)
         ToolbarSpacer(.flexible)
     }
 
     // Sonoma/Sequoia don't merge items into a shared capsule, so these render
     // individually regardless — but keep the sort · direction · filter ORDER
     // consistent with the Tahoe grouping above.
+    //
+    // Split in two only because `@ToolbarContentBuilder.buildBlock` tops out at
+    // 10 elements and the list is now 11. The two halves are applied adjacently
+    // at the call site, so the rendered order is identical to one flat list.
     @ToolbarContentBuilder
-    private var plainLeading: some ToolbarContent {
+    private var plainLeadingA: some ToolbarContent {
         sortItem(.navigation)
         directionItem(.navigation)
         filterItem(.navigation)
         tagItem(.navigation)
         subfoldersItem(.navigation)
         collectionsItem(.navigation)
+    }
+
+    @ToolbarContentBuilder
+    private var plainLeadingB: some ToolbarContent {
         layoutItem(.navigation)
         manageDriveLinksItem(.navigation)
         moodItem(.navigation)
         infoItem(.navigation)
+        settingsItem(.navigation)
     }
 
     // Individual items — each renders as its own pill.
@@ -590,7 +604,7 @@ struct ContentView: View {
     private func directionItem(_ placement: ToolbarItemPlacement) -> some ToolbarContent {
         // Flip the active sort mode's direction (newest↔oldest, A↔Z, …).
         ToolbarItem(placement: placement) {
-            sortDirectionButton.disabled(appState.isSearchActive)
+            sortDirectionMenu.disabled(appState.isSearchActive)
         }
     }
 
@@ -702,6 +716,23 @@ struct ContentView: View {
         }
     }
 
+    /// Opens the in-app Settings card. Deliberately the SAME action as the ⌘,
+    /// menu command (`AppState.settingsShown`), so there's one presentation path
+    /// — this is a second door to it, not a second implementation.
+    @ToolbarContentBuilder
+    private func settingsItem(_ placement: ToolbarItemPlacement) -> some ToolbarContent {
+        ToolbarItem(placement: placement) {
+            Button {
+                appState.settingsShown = true
+            } label: {
+                Image(systemName: "gearshape")
+                    .moodToolbarIcon(appState.moodPalette)
+            }
+            .help("Settings")
+            .accessibilityLabel("Settings")
+        }
+    }
+
     // MARK: - Search wiring (native `.searchable`)
 
     /// Field text changed. Debounce a run (250ms) or clear on empty. The text
@@ -751,7 +782,7 @@ struct ContentView: View {
     private var sortMenu: some View {
         // On the Collections page the menu sorts the cards (collection modes
         // only); elsewhere it sorts the grid (all modes). Mirrors the
-        // `isCollectionsPage` ternary in sortDirectionButton + the help below.
+        // `isCollectionsPage` ternary in sortDirectionMenu + the help below.
         let cases = isCollectionsPage ? SortMode.collectionCases : SortMode.allCases
         let selection = Binding(
             get: { isCollectionsPage ? appState.collectionSortMode : appState.sortMode },
@@ -809,20 +840,45 @@ struct ContentView: View {
         .accessibilityLabel("Tag order")
     }
 
-    /// Flips the active sort mode's direction. On the Collections page it flips
-    /// the collections sort; elsewhere it flips the grid sort. The arrow points
-    /// up for ascending, down for descending; the tooltip spells out what that
-    /// means for the active mode (e.g. "Newest first" vs "Oldest first").
-    private var sortDirectionButton: some View {
+    /// Sort direction. A bare toggle button gave no clue what a click would do,
+    /// so this is a Menu listing the two directions SPELLED OUT for the active
+    /// mode ("Newest first" / "Oldest first", "Largest first" / "Smallest
+    /// first", …) via `SortMode.directionLabel`. The toolbar glyph still shows
+    /// the current state at a glance: up for ascending, down for descending.
+    ///
+    /// On the Collections page it drives the collections sort; elsewhere the
+    /// grid sort. Both write through their `toggle…` method rather than setting
+    /// `sortReversed` directly — the grid's setter also runs `resort()`, so a
+    /// direct write would change the arrow without reordering anything.
+    private var sortDirectionMenu: some View {
         let ascending = isCollectionsPage ? appState.collectionSortAscending : appState.sortAscending
         let mode = isCollectionsPage ? appState.collectionSortMode : appState.sortMode
-        return Button {
-            if isCollectionsPage { appState.toggleCollectionSortDirection() }
-            else { appState.toggleSortDirection() }
+        return Menu {
+            Picker("Sort direction", selection: Binding(
+                get: { ascending },
+                set: { wanted in
+                    // Re-picking the active direction is a no-op; only a real
+                    // change flips (and re-sorts).
+                    guard wanted != ascending else { return }
+                    if isCollectionsPage { appState.toggleCollectionSortDirection() }
+                    else { appState.toggleSortDirection() }
+                }
+            )) {
+                Label(mode.directionLabel(ascending: false), systemImage: "arrow.down")
+                    .tag(false)
+                Label(mode.directionLabel(ascending: true), systemImage: "arrow.up")
+                    .tag(true)
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
         } label: {
             Image(systemName: ascending ? "arrow.up" : "arrow.down")
                 .moodToolbarIcon(appState.moodPalette)
         }
+        // Same reason as the sort menu beside it: with the dropdown chevron
+        // visible, macOS 26 renders this as its OWN isolated glass pill and it
+        // stops merging with sort + filter into the one "sorting" capsule.
+        .menuIndicator(.hidden)
         .help(mode.directionLabel(ascending: ascending))
         .accessibilityLabel(String(localized: "Sort direction: \(mode.directionLabel(ascending: ascending))"))
     }

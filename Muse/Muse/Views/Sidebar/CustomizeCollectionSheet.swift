@@ -110,22 +110,27 @@ struct CustomizeCollectionSheet: View {
     /// icon slot, name, and count metrics as CollectionSidebarRow — rendered
     /// with the DRAFT appearance on a sidebar-like backdrop.
     private var preview: some View {
-        HStack(spacing: 8) {
+        // Must mirror CollectionSidebarRow's geometry EXACTLY (spacing 0 +
+        // explicit leading padding, SidebarView's shared metrics) — if it
+        // drifts, the "Live Preview" stops previewing the row it claims to.
+        HStack(spacing: 0) {
             Image(systemName: "chevron.right")
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: SidebarView.chevronGlyphSize, weight: .semibold))
                 .opacity(0)
-                .frame(width: 10)
+                .frame(width: SidebarView.chevronSlotWidth, alignment: .trailing)
 
             Image(systemName: draftIcon)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(CollectionAppearance.color(for: draftColor)
                                     .map(AnyShapeStyle.init) ?? AnyShapeStyle(.primary))
                 .frame(width: 18)
+                .padding(.leading, SidebarView.chevronToIconGap)
 
             Text(loaded.collection.name)
                 .font(.system(size: 13))
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .padding(.leading, 8)
 
             Spacer(minLength: 6)
 
@@ -135,7 +140,7 @@ struct CustomizeCollectionSheet: View {
                 .monospacedDigit()
         }
         .padding(.horizontal, 6)
-        .frame(height: 28)
+        .frame(height: SidebarView.rowHeight)
         .background {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(Color.primary.opacity(SidebarView.rowHoverFillOpacity))

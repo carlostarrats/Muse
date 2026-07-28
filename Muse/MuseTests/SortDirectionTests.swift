@@ -45,4 +45,18 @@ final class SortDirectionTests: XCTestCase {
         XCTAssertEqual(SortMode.rating.directionLabel(ascending: false), "Highest first")
         XCTAssertEqual(SortMode.rating.directionLabel(ascending: true), "Lowest first")
     }
+
+    /// The toolbar's direction control is a MENU listing both directions for the
+    /// active mode, so every mode must supply two distinct, non-empty labels. A
+    /// mode added without its own `directionLabel` branch would otherwise show
+    /// two identical menu items (or two blanks) and be unusable.
+    func testEveryModeHasTwoDistinctDirectionLabels() {
+        for mode in SortMode.allCases {
+            let down = mode.directionLabel(ascending: false)
+            let up = mode.directionLabel(ascending: true)
+            XCTAssertFalse(down.isEmpty, "\(mode) has an empty descending label")
+            XCTAssertFalse(up.isEmpty, "\(mode) has an empty ascending label")
+            XCTAssertNotEqual(down, up, "\(mode) uses the same label for both directions")
+        }
+    }
 }

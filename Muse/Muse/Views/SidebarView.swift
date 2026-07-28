@@ -61,8 +61,9 @@ struct SidebarView: View {
     @State private var collectionFrames: [String: CGRect] = [:]
     @State private var collectionDragStartFrames: [String: CGRect] = [:]
 
-    /// Height of a single collapsed folder row.
-    fileprivate static let rowHeight: CGFloat = 28
+    /// Height of a ROOT folder row (and of every flat row: collections, pins).
+    /// Internal, not fileprivate: the row types in Views/Sidebar/ read it.
+    static let rowHeight: CGFloat = 28
     /// Named coordinate space shared by the reorder drag gesture and the row
     /// frame measurements, so the two are always compared in the same space.
     /// Internal (not fileprivate): the row/support types in Views/Sidebar/ read it.
@@ -70,6 +71,42 @@ struct SidebarView: View {
 
     /// Low-opacity fill used behind a hovered row, matching Lineform.
     static let rowHoverFillOpacity = 0.08
+
+    // MARK: - Row geometry (mirrors Lineform's source list)
+    //
+    // These five constants define the shared leading geometry of EVERY sidebar
+    // row — folder tree, collection, pinned folder, and the live preview inside
+    // the Symbol & Color modal. They're here, not inlined per row, so the four
+    // surfaces can't drift out of alignment.
+    //
+    // INVARIANT: `chevronSlotWidth + chevronToIconGap == 18`. That sum is the
+    // icon column's offset from the row's content edge, so the icons stay on
+    // one vertical line whether or not a chevron is actually drawn. Change one
+    // of the two and you must change the other to compensate, or every icon in
+    // the sidebar shifts.
+    //
+    // The chevron is deliberately RIGHT-aligned in a slot wider than its glyph:
+    // that nudges it toward the icon it discloses instead of stranding it in
+    // dead space, which is the visual difference between this and a centered
+    // glyph in a tight slot.
+
+    /// Width of the disclosure slot. The glyph is right-aligned inside it.
+    static let chevronSlotWidth: CGFloat = 12
+    /// Gap between the disclosure slot and the row's icon. See the invariant above.
+    static let chevronToIconGap: CGFloat = 6
+    /// Point size of the disclosure glyph — smaller than the row icon on purpose.
+    static let chevronGlyphSize: CGFloat = 9
+
+    /// Per-level indent in the folder tree. A root's DIRECT children sit at the
+    /// root's own x (step 0); only grandchildren and deeper step in. That's the
+    /// native macOS source-list convention (Finder, Notes, Mail) — the chevron
+    /// plus the icon column already carry one level of hierarchy, so indenting
+    /// the first level too reads as a double indent.
+    static let treeIndentStep: CGFloat = 14
+
+    /// Height of a nested (non-root) folder row. Roots keep `rowHeight` (28) so
+    /// they read as section anchors above their slightly tighter children.
+    static let childRowHeight: CGFloat = 26
 
     /// Opaque card surface (Lineform's near-white / dark values) so the
     /// sidebar reads as one continuous card rather than a translucent panel.
