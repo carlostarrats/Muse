@@ -157,13 +157,23 @@ struct HeroImageViewer: View {
         }
         .onChange(of: appState.viewerClosing) { _, closing in
             guard closing else { return }
+            // Consume the trigger IMMEDIATELY.
+            //
+            // `viewerClosing` is a one-shot request ("please run the close"),
+            // not durable state — but it was only cleared later, partway through
+            // the flight, in three different places. A `true` that outlived its
+            // close could then re-fire against a freshly-mounted viewer, which
+            // showed up as Escape closing, reopening, and closing again.
+            // Clearing it here makes the trigger edge-only and the close
+            // idempotent; `isClosing` remains the real state.
+            appState.viewerClosing = false
+            guard !isClosing else { return }
             if lingering || burnProgress > 0 {
                 // Mid-burn or lingering after a delete: never run the return
                 // flight on a burned image; Esc just dismisses the toast.
                 if lingering {
                     withAnimation(.easeOut(duration: 0.18)) { toast = nil }
                 }
-                appState.viewerClosing = false
             } else {
                 startClose()
             }
