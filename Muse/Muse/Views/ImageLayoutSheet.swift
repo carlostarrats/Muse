@@ -45,11 +45,7 @@ struct ImageLayoutSheet: View {
             }
         }
         .padding(28)
-        // `ideal` is just above the natural height of three tiles and a
-        // subtitle, so a normal window shows the whole thing with no dead
-        // space — and a short window caps it and the tiles scroll rather than
-        // spilling past the window's bottom edge.
-        .windowFittedSheetHeight(width: 600, ideal: 300)
+        // Width and the height cap come from the modal presenter.
     }
 
 }

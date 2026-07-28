@@ -93,14 +93,7 @@ struct SettingsView: View {
 
             settingsForm
         }
-        // Match the Info modal's width. The height was content-sized, which
-        // worked while the form was short — but four sections plus the two grid
-        // sliders is ~740pt, and a content-sized sheet has no cap, so on a
-        // shorter window it spilled past the bottom edge (a macOS sheet extends
-        // rather than clips). `ideal` is set just above the natural height, so a
-        // tall window still shows the whole form with no dead space, and a short
-        // one caps it and the Form scrolls. Raise `ideal` if a section is added.
-        .windowFittedSheetHeight(width: 600, ideal: 760)
+        // Width and the height cap come from the modal presenter.
     }
 
     private var settingsForm: some View {

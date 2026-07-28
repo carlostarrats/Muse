@@ -97,7 +97,7 @@ struct DuplicatesView: View {
             }
             .padding(16)
         }
-        .frame(minWidth: 720, minHeight: 480)
+        // Width and the height cap come from the modal presenter.
         .background(Color(NSColor.windowBackgroundColor))
         .onAppear { seedDefaults() }
         .onChange(of: finder.groups) { _, _ in seedDefaults() }

@@ -66,7 +66,7 @@ struct ManageDriveSharesView: View {
             }
         }
         .padding(28)
-        .windowFittedSheetHeight(width: 600, ideal: 400)
+        // Width and the height cap come from the modal presenter.
         .alert("Couldn’t Unpublish", isPresented: $unpublishFailed) {
             Button("OK", role: .cancel) {}
         } message: {

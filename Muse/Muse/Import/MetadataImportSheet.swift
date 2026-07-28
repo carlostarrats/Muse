@@ -59,9 +59,7 @@ struct MetadataImportSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(24)
-        // Short by nature (a progress line and a button), but capped like every
-        // other modal so a very short window scrolls instead of spilling.
-        .windowFittedSheetHeight(width: 360, ideal: 220)
+        // Width and the height cap come from the modal presenter.
         .onAppear { model.start(folder: request.folder, appState: appState) }
         .onDisappear { model.cancel() }
     }

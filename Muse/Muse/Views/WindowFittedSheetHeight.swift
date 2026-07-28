@@ -2,16 +2,22 @@
 //  WindowFittedSheetHeight.swift
 //  Muse
 //
-//  Sizes a fixed-width reading/layout sheet (About, Image Layout) to an
-//  ideal height, but NEVER taller than the window it's presented over —
-//  so on a short window the sheet shrinks to fit instead of spilling past
-//  the window's bottom edge. Both target sheets wrap their content in a
-//  ScrollView, so the capped height just scrolls; nothing is clipped away.
+//  Sizes a fixed-width card sheet to an ideal height, but NEVER taller than
+//  the window it's presented over (nor than the screen's visible area) — so on
+//  a short window the sheet shrinks to fit instead of spilling past the bottom
+//  edge. Every sheet using this wraps its growable content in a ScrollView or
+//  Form, so the capped height just scrolls; nothing is clipped away.
 //
 //  A macOS `.sheet` sizes itself to its content's fitting size, which is
 //  why a bare `.frame(height: 720)` overflows a 600-tall window. This reads
 //  the PARENT window height (the sheet's own window is content-sized, so we
 //  climb to `sheetParent`) and updates live as the user resizes.
+//
+//  The cap must be right on the FIRST layout, not one runloop later: the
+//  AppKit reader can't find the parent window until it's in a hierarchy, and
+//  falling back to the ideal height for that frame made the sheet visibly open
+//  oversized and then snap in. `availableHeight` resolves a synchronous value
+//  up front and the reader refines it.
 //
 
 import SwiftUI
@@ -41,13 +47,45 @@ private struct WindowFittedSheetHeight: ViewModifier {
     @State private var windowHeight: CGFloat?
 
     func body(content: Content) -> some View {
+        // The AppKit reader below can't find the parent window until it has been
+        // inserted into a hierarchy — a runloop AFTER this first layout. Falling
+        // back to `ideal` for that frame drew the sheet at full height, spilling
+        // past a short window's bottom edge, and the measurement then snapped it
+        // back: the owner-reported "extends out, then clips to be inside".
+        //
+        // So resolve a height SYNCHRONOUSLY for the first layout instead. A sheet
+        // is key but never main, so `NSApp.mainWindow` is still the window it's
+        // being presented over. The live reader refines this and tracks resizes.
+        let available = Self.availableHeight(measured: windowHeight)
         let height = SheetFit.height(ideal: ideal,
-                                     windowHeight: windowHeight,
+                                     windowHeight: available,
                                      minHeight: minHeight,
                                      margin: margin)
         content
             .frame(width: width, height: height)
             .background(SheetParentHeightReader(height: $windowHeight))
+    }
+
+    /// The height the sheet has to live inside: the presenting window, further
+    /// bounded by the screen's visible area (a window can be taller than the
+    /// screen or hang off its bottom, and the sheet has to stay on screen —
+    /// being inside the window isn't enough if the window isn't).
+    private static func availableHeight(measured: CGFloat?) -> CGFloat? {
+        let window = measured ?? presentingWindowHeight()
+        let screen = NSScreen.main?.visibleFrame.height
+        return [window, screen].compactMap { $0 }.min()
+    }
+
+    /// Best-effort synchronous read of the presenting window, for the first
+    /// layout only. `mainWindow` first (a sheet never becomes main), then any
+    /// visible non-sheet window as a fallback.
+    private static func presentingWindowHeight() -> CGFloat? {
+        if let main = NSApp.mainWindow {
+            return main.contentLayoutRect.height
+        }
+        return NSApp.windows
+            .first { $0.isVisible && $0.sheetParent == nil && !$0.isSheet }?
+            .contentLayoutRect.height
     }
 }
 

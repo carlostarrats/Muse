@@ -30,6 +30,29 @@ struct ContentView: View {
     @State private var imageLayoutShown = false
     @State private var filterPopoverShown = false
 
+    /// Whether any in-window modal card is up. Escape peels it first, and the
+    /// grid's own key handling stands down while it's open — a card doesn't take
+    /// key focus away from the window the way a sheet's own window did, so
+    /// without this the arrow keys would still drive the grid behind it.
+    private var anyModalPresented: Bool {
+        infoShown || imageLayoutShown
+            || appState.settingsShown || appState.driveSharesShown
+            || appState.duplicatesSheetVisible || appState.reconnectShown
+            || appState.metadataImportRequest != nil
+    }
+
+    /// Close whichever modal is up. Only one is ever presented at a time, so
+    /// this is a deterministic sweep rather than a real stack.
+    private func dismissTopModal() {
+        if appState.metadataImportRequest != nil { appState.metadataImportRequest = nil; return }
+        if appState.reconnectShown { appState.reconnectShown = false; return }
+        if appState.duplicatesSheetVisible { appState.duplicatesSheetVisible = false; return }
+        if appState.driveSharesShown { appState.driveSharesShown = false; return }
+        if appState.settingsShown { appState.settingsShown = false; return }
+        if imageLayoutShown { imageLayoutShown = false; return }
+        if infoShown { infoShown = false; return }
+    }
+
     /// True while the window is in macOS full-screen — drives the full-screen-only
     /// SwiftUI toolbar hide.
     @State private var isFullScreen = false
@@ -223,6 +246,7 @@ struct ContentView: View {
                     isSearchActive: appState.isSearchActive,
                     queryIsEmpty: appState.searchQuery.isEmpty && searchText.isEmpty)
                 switch EscapeResolver.action(
+                    modalPresented: anyModalPresented,
                     hasSelectedFile: selected != nil,
                     selectedFileIsHero: isHero,
                     searchActive: searchPresent,
@@ -266,6 +290,8 @@ struct ContentView: View {
                 case .exitCollectionsPage:
                     // Same as the Collections-page back arrow.
                     appState.toggleCollectionsPage()
+                case .dismissModal:
+                    dismissTopModal()
                 case .none:
                     break
                 }
@@ -273,28 +299,43 @@ struct ContentView: View {
                 .keyboardShortcut(.escape, modifiers: [])
                 .hidden()
         )
-        .sheet(isPresented: $appState.duplicatesSheetVisible) {
+        // Modals are in-window cards, not sheets — see Views/Modal/ModalChrome.
+        // Every one is presented HERE, at the shell, because the card is sized
+        // from the geometry of whatever it's attached to: presented from a
+        // sidebar row it would be laid out against the sidebar's width.
+        .museModal(isPresented: $appState.duplicatesSheetVisible,
+                   width: 1100, palette: appState.moodPalette) {
             DuplicatesView(isPresented: $appState.duplicatesSheetVisible)
         }
-        .sheet(isPresented: $infoShown) {
+        .museModal(isPresented: $infoShown,
+                   width: 600, palette: appState.moodPalette) {
             InfoSheet(isPresented: $infoShown)
         }
-        .sheet(isPresented: $imageLayoutShown) {
+        .museModal(isPresented: $imageLayoutShown,
+                   width: 600, palette: appState.moodPalette) {
             ImageLayoutSheet(isPresented: $imageLayoutShown)
                 .environmentObject(appState)
         }
-        .sheet(isPresented: $appState.settingsShown) {
+        .museModal(isPresented: $appState.settingsShown,
+                   width: 600, palette: appState.moodPalette) {
             SettingsView(isPresented: $appState.settingsShown)
                 .environmentObject(appState)
         }
-        .sheet(isPresented: $appState.driveSharesShown) {
+        .museModal(isPresented: $appState.driveSharesShown,
+                   width: 600, palette: appState.moodPalette) {
             ManageDriveSharesView()
         }
-        .sheet(item: $appState.metadataImportRequest) { request in
-            MetadataImportSheet(request: request)
-                .environmentObject(appState)
+        .museModal(isPresented: Binding(
+            get: { appState.metadataImportRequest != nil },
+            set: { if !$0 { appState.metadataImportRequest = nil } }),
+                   width: 360, palette: appState.moodPalette) {
+            if let request = appState.metadataImportRequest {
+                MetadataImportSheet(request: request)
+                    .environmentObject(appState)
+            }
         }
-        .sheet(isPresented: $appState.reconnectShown) {
+        .museModal(isPresented: $appState.reconnectShown,
+                   width: 600, palette: appState.moodPalette) {
             if let model = appState.reconnectModel {
                 ReconnectWizard(model: model, isPresented: $appState.reconnectShown,
                                 bookmarks: appState.bookmarks)

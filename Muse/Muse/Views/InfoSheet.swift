@@ -212,7 +212,7 @@ struct InfoSheet: View {
             }
         }
         .padding(28)
-        .windowFittedSheetHeight(width: 600, ideal: 720)
+        // Width and the height cap come from the modal presenter.
     }
 
     /// Hairline between section rows.

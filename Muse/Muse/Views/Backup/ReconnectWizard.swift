@@ -39,7 +39,7 @@ struct ReconnectWizard: View {
             footer
         }
         .padding(28)
-        .windowFittedSheetHeight(width: 600, ideal: 720)
+        // Width and the height cap come from the modal presenter.
     }
 
     private var folderSection: some View {
