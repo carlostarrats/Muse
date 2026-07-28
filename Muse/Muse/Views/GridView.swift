@@ -781,8 +781,6 @@ private struct TileView: View {
     private static let ringInset: CGFloat = 0
     /// Ring stroke thickness.
     private static let ringWidth: CGFloat = 2.5
-    /// Ring corner radius. Set to 0 for a square ring.
-    private static let ringCornerRadius: CGFloat = 8
     /// Tint laid over the selected (shrunken) image, in the ring's color.
     private static let selectionTintOpacity = 0.18
 
@@ -797,10 +795,10 @@ private struct TileView: View {
     private var tileShape: RoundedRectangle {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
     }
-    /// The selection ring's radius. Square images keep the shipped 8pt rounded
-    /// ring; once the images themselves round further, the ring follows so it
-    /// doesn't cut across their corners.
-    private var ringRadius: CGFloat { max(Self.ringCornerRadius, cornerRadius) }
+    /// The selection ring takes the user's corner radius too, so the ring and
+    /// the image it wraps always have the same corners — square at 0, rounding
+    /// together as the setting goes up.
+    private var ringRadius: CGFloat { cornerRadius }
 
     /// True when this tile is multi-selected. (We deliberately do NOT treat the
     /// open file as selected: while a viewer is up its tile is hidden via the
