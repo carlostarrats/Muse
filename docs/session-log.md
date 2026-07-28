@@ -6431,3 +6431,107 @@ instead.
 scroll — it only marks the growable region. Its name is misleading; unwrapping
 it across nine call sites was judged riskier than the confusion, and its doc
 comment states plainly what it is and isn't.
+
+## 2026-07-28 — `feat/next-142` — UI polish batch (Polish 27)
+
+Seven independent improvements, batched because each is small and they touch
+disjoint files. Spec: `docs/superpowers/specs/2026-07-28-ui-polish-batch-design.md`.
+Plan: `docs/superpowers/plans/2026-07-28-ui-polish-batch-plan.md`.
+
+### Sidebar geometry → Lineform
+
+Read the target metrics straight out of `Lineform/Outline/OutlineSidebarView.swift`
+rather than eyeballing them. Two real differences from what Muse had: the
+disclosure glyph is 9pt and **right-aligned in a 12pt slot** (so it hugs the icon
+it discloses instead of sitting centered in dead space), and a root's **direct
+children sit at the root's own x** — only grandchildren step in by 14. The step
+itself was already 14 in both apps; the double-indent feel came entirely from
+starting at depth 0.
+
+The five metrics moved onto `SidebarView` as shared constants with the
+`slot + gap == 18` invariant documented, because four surfaces draw this row
+shape and nothing stopped them drifting. Rows went `spacing: 8` → `spacing: 0`
+with explicit per-element leading padding — that's what allows a slot wider than
+its glyph without moving the icon column. The chevron button keeps a 12×22 hit
+rect: shrinking the target along with the glyph would have made it fiddly.
+
+### Sort-direction menu
+
+The bare ↓ toggle gave no clue what a click would do. Now a Menu spelling out
+both directions for the active mode — and the strings already existed
+(`SortMode.directionLabel`), already localized, already in the platform-standard
+phrasing ("Newest first" / "Largest first" / "A → Z"). `.menuIndicator(.hidden)`
+is mandatory: with the chevron visible macOS 26 breaks the control out of the
+sort · direction · filter capsule into its own glass pill. The binding routes
+through `toggleSortDirection()` so `resort()` can't be skipped.
+
+### Menu icons + shortcuts
+
+Icons on every custom command via `Label(_:systemImage:)` (still a text-literal
+position, so extraction is unaffected). Eleven new shortcuts on frequent actions,
+collision-checked against every existing `keyboardShortcut` and the standard
+AppKit set. Every delete/regenerate/remove and the Move Up/Down commands were
+deliberately left unbound — destructive or rare.
+
+### Settings in the toolbar
+
+`gearshape` fused into one capsule with About. Same action as ⌘, — one
+presentation path, two doors. `plainLeading` had to split in two: it was already
+at `@ToolbarContentBuilder.buildBlock`'s 10-element ceiling and this made 11.
+
+### Compact star badge
+
+The five-star run wrapped on a narrow tile. `StarRating.badgeLabel` collapses it
+to "5★" — but only when compact is genuinely narrower, which at one star it
+isn't (17.3pt vs 10.5pt), so a one-star badge never collapses. Widths measured
+with `NSAttributedString.size`, not guessed, and hard-coded to keep the helpers
+pure. The budget is the tile's DRAWN width, not the slot: the badge lives inside
+the aspect-fitted stack, so a letterboxed Grid-mode tile would be over-budgeted.
+`TileView` gained `slotSize` purely to derive that.
+
+### Emoji collection symbols
+
+Same `collections.icon` column, `emoji:` prefix, no migration. An older build
+falls back cleanly (the prefixed value fails `isValidSymbol`). `isValidEmoji`
+counts grapheme clusters — a scalar count would reject ZWJ families, skin-tone
+modifiers and flags, all of which are one user-perceived character.
+`CollectionIconView` is the single render seam. The picker gained a
+Symbols | Emoji segmented tab: a 48-entry curated grid mirroring the symbol
+catalog's subjects, plus a one-character field and a button to the system picker.
+The color column goes inert with a reason while Emoji shows; all three drafts
+(symbol, emoji, color) are held at once so flipping tabs and back restores what
+you had.
+
+### Tag / collection autocomplete
+
+`TagSuggest` is the shared pure ranker. Star ratings are excluded **inside the
+ranker**, not per caller — a rating is a manual tag and `addManualTag` has no
+mutual exclusion, so an offered `★★★` gives a file two ratings.
+
+Two things surfaced while building it:
+
+1. **`GridView`'s `addTagFile` alert was dead code** — nothing ever set it
+   non-nil. So the grid had no way to CREATE a tag at all; only the hero viewer
+   did, and the tile menu listed existing labels only. Removed the dead alert and
+   added a real "New Tag…" that opens the shell card.
+2. **Committing an existing collection name now adds to it** rather than minting
+   a same-named twin. Showing the list of taken names and then duplicating one
+   anyway would be the surprising outcome. Case-insensitive; smart collections
+   excluded (rule-driven membership wouldn't keep a hand-added file).
+
+The hero viewer's `CardExpander` showed a static top-24 that ignored typing; it
+filters live now, and the pool query went 24 → 500. Capping the query at the
+display count would leave everything outside the most-used dozen unfindable —
+exactly the near-duplicate the feature exists to prevent.
+
+The grid's two prompts became `SuggestingNameCard` in a `museModal`: a SwiftUI
+`.alert` can host only TextFields and Buttons, so a suggestion list is
+structurally impossible inside one. The card is naturally sized (capped list +
+"+N more", no inner ScrollView) as the presenter's measurement requires, and both
+new modals joined `modalPresented` / `dismissTopModal`.
+
+### Verification
+
+Full unit suite green (`xcodebuild -scheme Muse test`), 13 new French keys filled
+(the 5 remaining untranslated keys — "", "=", "≤", "≥", "MB" — are pre-existing
+operator glyphs and a unit).

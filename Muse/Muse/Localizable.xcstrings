@@ -11,12 +11,53 @@
         }
       }
     },
+    ",": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ","
+          }
+        }
+      }
+    },
+    "…or create a new one": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "…ou en créer une nouvelle"
+          }
+        }
+      }
+    },
     "\"%@\" couldn't be prepared for sharing. Remove it from the collection and try again.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "« %@ » n'a pas pu être préparé pour le partage. Retirez-le de la collection et réessayez."
+          }
+        }
+      }
+    },
+    "(%lld groups)": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(%lld groupes)"
+          }
+        }
+      }
+    },
+    "(click date to customize)": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(cliquez sur la date pour modifier)"
           }
         }
       }
@@ -100,6 +141,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$lld / %2$lld rétablis · %3$lld%%"
+          }
+        }
+      }
+    },
+    "%lld ★": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld ★"
           }
         }
       }
@@ -217,16 +268,6 @@
         }
       }
     },
-    "%lld ★": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld ★"
-          }
-        }
-      }
-    },
     "%lld-star rating": {
       "comment": "VoiceOver: star rating of a photo",
       "localizations": {
@@ -254,37 +295,19 @@
         }
       }
     },
-    "(%lld groups)": {
+    "+%lld more — keep typing to narrow": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "(%lld groupes)"
+            "value": "+%lld autres — continuez à taper pour affiner"
           }
         }
       }
     },
-    "(click date to customize)": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "(cliquez sur la date pour modifier)"
-          }
-        }
-      }
-    },
-    ",": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": ","
-          }
-        }
-      }
-    },
+    "=": {},
+    "≤": {},
+    "≥": {},
     "11 × 14 in": {
       "localizations": {
         "fr": {
@@ -295,7 +318,16 @@
         }
       }
     },
-    "=": {},
+    "A → Z": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A → Z"
+          }
+        }
+      }
+    },
     "A file name can’t contain “/” or “:”.": {
       "localizations": {
         "fr": {
@@ -342,16 +374,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Un visualiseur et organiseur local d'abord pour les dossiers que vous possédez déjà. Indiquez-lui un dossier — Téléchargements, Documents, un tas de captures d'écran — et parcourez tout au même endroit. Rien n'est importé ni copié : Muse lit vos fichiers là où ils se trouvent et ne les déplace ni ne les modifie jamais."
-          }
-        }
-      }
-    },
-    "A → Z": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A → Z"
           }
         }
       }
@@ -426,6 +448,16 @@
         }
       }
     },
+    "Add a note…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter une note…"
+          }
+        }
+      }
+    },
     "Add Collection": {
       "localizations": {
         "fr": {
@@ -446,6 +478,16 @@
         }
       }
     },
+    "Add folders from the sidebar with the Add Folder button — Muse indexes them automatically (the status pills at the bottom show progress). Drag folders up or down to reorder them. Right-click a folder to make a New Subfolder, Rename it, Reveal it in Finder, or — for a buried subfolder — Pin it to the top. Right-click a top-level folder to Remove it from Muse. Your files are never modified; deleting means moving to the Trash, and it's undoable.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajoutez des dossiers depuis la barre latérale avec le bouton Ajouter un dossier — Muse les indexe automatiquement (les pastilles d'état en bas indiquent la progression). Faites glisser les dossiers vers le haut ou le bas pour les réordonner. Cliquez avec le bouton droit sur un dossier pour créer un Nouveau sous-dossier, le Renommer, l'Afficher dans le Finder ou — pour un sous-dossier enfoui — l'Épingler en haut. Cliquez avec le bouton droit sur un dossier de premier niveau pour le Retirer de Muse. Vos fichiers ne sont jamais modifiés ; supprimer revient à déplacer vers la corbeille, et l'opération est réversible."
+          }
+        }
+      }
+    },
     "Add Rule": {
       "localizations": {
         "fr": {
@@ -462,26 +504,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ajouter une étiquette"
-          }
-        }
-      }
-    },
-    "Add a note…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajouter une note…"
-          }
-        }
-      }
-    },
-    "Add folders from the sidebar with the Add Folder button — Muse indexes them automatically (the status pills at the bottom show progress). Drag folders up or down to reorder them. Right-click a folder to make a New Subfolder, Rename it, Reveal it in Finder, or — for a buried subfolder — Pin it to the top. Right-click a top-level folder to Remove it from Muse. Your files are never modified; deleting means moving to the Trash, and it's undoable.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajoutez des dossiers depuis la barre latérale avec le bouton Ajouter un dossier — Muse les indexe automatiquement (les pastilles d'état en bas indiquent la progression). Faites glisser les dossiers vers le haut ou le bas pour les réordonner. Cliquez avec le bouton droit sur un dossier pour créer un Nouveau sous-dossier, le Renommer, l'Afficher dans le Finder ou — pour un sous-dossier enfoui — l'Épingler en haut. Cliquez avec le bouton droit sur un dossier de premier niveau pour le Retirer de Muse. Vos fichiers ne sont jamais modifiés ; supprimer revient à déplacer vers la corbeille, et l'opération est réversible."
           }
         }
       }
@@ -556,6 +578,16 @@
         }
       }
     },
+    "Already in use": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déjà utilisées"
+          }
+        }
+      }
+    },
     "Amber": {
       "localizations": {
         "fr": {
@@ -618,12 +650,33 @@
         }
       }
     },
+    "and": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "et"
+          }
+        }
+      }
+    },
     "Any": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "N’importe"
+          }
+        }
+      }
+    },
+    "Any emoji": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autre emoji"
           }
         }
       }
@@ -739,6 +792,26 @@
         }
       }
     },
+    "Back to all collections": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retour à toutes les collections"
+          }
+        }
+      }
+    },
+    "Back to Library": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retour à la bibliothèque"
+          }
+        }
+      }
+    },
     "Back Up & Restore": {
       "localizations": {
         "fr": {
@@ -755,26 +828,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sauvegarder Muse…"
-          }
-        }
-      }
-    },
-    "Back to Library": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retour à la bibliothèque"
-          }
-        }
-      }
-    },
-    "Back to all collections": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retour à toutes les collections"
           }
         }
       }
@@ -899,36 +952,6 @@
         }
       }
     },
-    "COLLECTION": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "COLLECTION"
-          }
-        }
-      }
-    },
-    "COLLECTIONS": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "COLLECTIONS"
-          }
-        }
-      }
-    },
-    "COLORS": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "COULEURS"
-          }
-        }
-      }
-    },
     "Camera": {
       "localizations": {
         "fr": {
@@ -1029,7 +1052,7 @@
         }
       }
     },
-    "Clear All": {
+    "Clear all": {
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -1039,17 +1062,7 @@
         }
       }
     },
-    "Clear Tag Filter": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Effacer le filtre d'étiquettes"
-          }
-        }
-      }
-    },
-    "Clear all": {
+    "Clear All": {
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -1070,6 +1083,16 @@
       }
     },
     "Clear tag filter": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effacer le filtre d'étiquettes"
+          }
+        }
+      }
+    },
+    "Clear Tag Filter": {
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -1129,6 +1152,16 @@
         }
       }
     },
+    "COLLECTION": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "COLLECTION"
+          }
+        }
+      }
+    },
     "Collection name": {
       "localizations": {
         "fr": {
@@ -1145,6 +1178,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Collections"
+          }
+        }
+      }
+    },
+    "COLLECTIONS": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "COLLECTIONS"
           }
         }
       }
@@ -1170,6 +1213,16 @@
         }
       }
     },
+    "COLORS": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "COULEURS"
+          }
+        }
+      }
+    },
     "Columns": {
       "localizations": {
         "fr": {
@@ -1186,6 +1239,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Comparaison"
+          }
+        }
+      }
+    },
+    "contains": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "contient"
           }
         }
       }
@@ -1220,12 +1283,13 @@
         }
       }
     },
-    "Copy Link": {
+    "copy all": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Copier le lien"
+            "value": "tout copier"
           }
         }
       }
@@ -1246,6 +1310,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Copier la couleur %@"
+          }
+        }
+      }
+    },
+    "Copy Link": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copier le lien"
           }
         }
       }
@@ -1280,46 +1354,6 @@
         }
       }
     },
-    "Couldn't move to Trash": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible de mettre à la corbeille"
-          }
-        }
-      }
-    },
-    "Couldn't publish to Google Drive. Check your connection and try again.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible de publier sur Google Drive. Vérifiez votre connexion et réessayez."
-          }
-        }
-      }
-    },
-    "Couldn't restore — file is in the Trash": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Restauration impossible — le fichier est dans la corbeille"
-          }
-        }
-      }
-    },
-    "Couldn't sign in to Google. Please try again.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible de se connecter à Google. Veuillez réessayer."
-          }
-        }
-      }
-    },
     "Couldn’t %@ the folder — Muse needs access to the folder that contains it.": {
       "localizations": {
         "fr": {
@@ -1350,16 +1384,6 @@
         }
       }
     },
-    "Couldn’t Unpublish": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible de dépublier"
-          }
-        }
-      }
-    },
     "Couldn’t finish renaming the folder.": {
       "localizations": {
         "fr": {
@@ -1380,12 +1404,52 @@
         }
       }
     },
+    "Couldn't move to Trash": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de mettre à la corbeille"
+          }
+        }
+      }
+    },
+    "Couldn't publish to Google Drive. Check your connection and try again.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de publier sur Google Drive. Vérifiez votre connexion et réessayez."
+          }
+        }
+      }
+    },
     "Couldn’t rename the file.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Impossible de renommer le fichier."
+          }
+        }
+      }
+    },
+    "Couldn't restore — file is in the Trash": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restauration impossible — le fichier est dans la corbeille"
+          }
+        }
+      }
+    },
+    "couldn't save": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "échec de l'enregistrement"
           }
         }
       }
@@ -1400,6 +1464,36 @@
         }
       }
     },
+    "Couldn't sign in to Google. Please try again.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de se connecter à Google. Veuillez réessayer."
+          }
+        }
+      }
+    },
+    "Couldn’t Unpublish": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de dépublier"
+          }
+        }
+      }
+    },
+    "create": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "créer"
+          }
+        }
+      }
+    },
     "Create": {
       "localizations": {
         "fr": {
@@ -1410,12 +1504,32 @@
         }
       }
     },
+    "created": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "créé"
+          }
+        }
+      }
+    },
     "Created": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Créé"
+          }
+        }
+      }
+    },
+    "created %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "créé le %@"
           }
         }
       }
@@ -1561,6 +1675,16 @@
         }
       }
     },
+    "Delete “%@”?": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer « %@ » ?"
+          }
+        }
+      }
+    },
     "Delete All": {
       "localizations": {
         "fr": {
@@ -1571,12 +1695,32 @@
         }
       }
     },
+    "Delete all tags in this view?": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer toutes les étiquettes de cette vue ?"
+          }
+        }
+      }
+    },
     "Delete All Tags…": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Supprimer toutes les étiquettes…"
+          }
+        }
+      }
+    },
+    "Delete collection": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer la collection"
           }
         }
       }
@@ -1617,36 +1761,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Supprimer l'étiquette…"
-          }
-        }
-      }
-    },
-    "Delete all tags in this view?": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer toutes les étiquettes de cette vue ?"
-          }
-        }
-      }
-    },
-    "Delete collection": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer la collection"
-          }
-        }
-      }
-    },
-    "Delete “%@”?": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer « %@ » ?"
           }
         }
       }
@@ -1764,6 +1878,38 @@
         }
       }
     },
+    "e.g. Leslie-Ann Thomson ALDO MUAH 2025": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "p. ex. Leslie-Ann Thomson ALDO MUAH 2025"
+          }
+        }
+      }
+    },
+    "e.g. Sent by": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "p. ex. Envoyé par"
+          }
+        }
+      }
+    },
+    "e.g. The Project": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "p. ex. The Project"
+          }
+        }
+      }
+    },
     "Earliest": {
       "localizations": {
         "fr": {
@@ -1810,6 +1956,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Émeraude"
+          }
+        }
+      }
+    },
+    "Emoji": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Emoji"
+          }
+        }
+      }
+    },
+    "Emoji %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Emoji %@"
+          }
+        }
+      }
+    },
+    "Emoji use their own colors.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les emoji utilisent leurs propres couleurs."
           }
         }
       }
@@ -1864,6 +2040,16 @@
         }
       }
     },
+    "expires %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "expire le %@"
+          }
+        }
+      }
+    },
     "Exposure": {
       "extractionState": "stale",
       "localizations": {
@@ -1871,16 +2057,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Exposition"
-          }
-        }
-      }
-    },
-    "FOLDERS": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "DOSSIERS"
           }
         }
       }
@@ -2035,6 +2211,16 @@
         }
       }
     },
+    "FOLDERS": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DOSSIERS"
+          }
+        }
+      }
+    },
     "Forest": {
       "localizations": {
         "fr": {
@@ -2076,22 +2262,22 @@
         }
       }
     },
-    "GIF": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GIF"
-          }
-        }
-      }
-    },
     "Game Controller": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Manette de jeu"
+          }
+        }
+      }
+    },
+    "Get started by adding a folder": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commencez par ajouter un dossier"
           }
         }
       }
@@ -2106,12 +2292,12 @@
         }
       }
     },
-    "Get started by adding a folder": {
+    "GIF": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Commencez par ajouter un dossier"
+            "value": "GIF"
           }
         }
       }
@@ -2236,12 +2422,24 @@
         }
       }
     },
-    "HEIC": {
+    "has": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "HEIC"
+            "value": "a"
+          }
+        }
+      }
+    },
+    "has no": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "n’a pas"
           }
         }
       }
@@ -2252,6 +2450,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cœur"
+          }
+        }
+      }
+    },
+    "HEIC": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HEIC"
           }
         }
       }
@@ -2336,12 +2544,22 @@
         }
       }
     },
-    "INFO": {
+    "iCloud isn't set up, so the folder isn't in the sidebar. It'll appear here when iCloud is available.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "INFOS"
+            "value": "iCloud n'est pas configuré, le dossier n'apparaît donc pas dans la barre latérale. Il s'affichera ici lorsque iCloud sera disponible."
+          }
+        }
+      }
+    },
+    "iCloud sync": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Synchronisation iCloud"
           }
         }
       }
@@ -2352,6 +2570,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Icône"
+          }
+        }
+      }
+    },
+    "Icon kind": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type d’icône"
           }
         }
       }
@@ -2443,6 +2671,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Indigo"
+          }
+        }
+      }
+    },
+    "INFO": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "INFOS"
+          }
+        }
+      }
+    },
+    "item": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "élément"
+          }
+        }
+      }
+    },
+    "items": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "éléments"
           }
         }
       }
@@ -2547,16 +2805,6 @@
         }
       }
     },
-    "Last 24 hours": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dernières 24 heures"
-          }
-        }
-      }
-    },
     "Last 3 days": {
       "localizations": {
         "fr": {
@@ -2583,6 +2831,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "6 derniers mois"
+          }
+        }
+      }
+    },
+    "Last 24 hours": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dernières 24 heures"
           }
         }
       }
@@ -2800,7 +3058,6 @@
         }
       }
     },
-    "MB": {},
     "Make Smart": {
       "localizations": {
         "fr": {
@@ -2887,6 +3144,27 @@
           "stringUnit": {
             "state": "translated",
             "value": "Correspondance"
+          }
+        }
+      }
+    },
+    "Matches": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Correspondances"
+          }
+        }
+      }
+    },
+    "MB": {},
+    "modified": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "modifié"
           }
         }
       }
@@ -2988,16 +3266,6 @@
         }
       }
     },
-    "Move Up": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Déplacer vers le haut"
-          }
-        }
-      }
-    },
     "Move to Folder": {
       "localizations": {
         "fr": {
@@ -3018,22 +3286,22 @@
         }
       }
     },
+    "Move Up": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déplacer vers le haut"
+          }
+        }
+      }
+    },
     "Moved to Trash": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Mis à la corbeille"
-          }
-        }
-      }
-    },
-    "Muse File": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fichier Muse"
           }
         }
       }
@@ -3054,6 +3322,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Muse n’a pas pu ajouter ce partage à votre liste — copiez le lien maintenant, sinon vous ne pourrez plus le gérer ni le dépublier depuis Muse."
+          }
+        }
+      }
+    },
+    "Muse File": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fichier Muse"
           }
         }
       }
@@ -3114,16 +3392,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Note de musique"
-          }
-        }
-      }
-    },
-    "NOTE": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "REMARQUE"
           }
         }
       }
@@ -3218,32 +3486,22 @@
         }
       }
     },
+    "New Tag…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nouvelle étiquette…"
+          }
+        }
+      }
+    },
     "Newest first": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Plus récent d'abord"
-          }
-        }
-      }
-    },
-    "No Drive shares yet.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucun partage Drive pour l’instant."
-          }
-        }
-      }
-    },
-    "No Rating": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucune note"
           }
         }
       }
@@ -3264,6 +3522,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Aucune collection pour l'instant"
+          }
+        }
+      }
+    },
+    "No Drive shares yet.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun partage Drive pour l’instant."
           }
         }
       }
@@ -3298,7 +3566,18 @@
         }
       }
     },
+    "No Rating": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune note"
+          }
+        }
+      }
+    },
     "No tags": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -3359,22 +3638,22 @@
         }
       }
     },
+    "NOTE": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "REMARQUE"
+          }
+        }
+      }
+    },
     "Note copied": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Note copiée"
-          }
-        }
-      }
-    },
-    "OK": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "OK"
           }
         }
       }
@@ -3389,12 +3668,32 @@
         }
       }
     },
+    "of the following rules": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "des règles suivantes"
+          }
+        }
+      }
+    },
     "Off": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Désactivé"
+          }
+        }
+      }
+    },
+    "OK": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
           }
         }
       }
@@ -3429,46 +3728,6 @@
         }
       }
     },
-    "Open Folder": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrir le dossier"
-          }
-        }
-      }
-    },
-    "Open Folder in Muse": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrir le dossier dans Muse"
-          }
-        }
-      }
-    },
-    "Open Link": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrir le lien"
-          }
-        }
-      }
-    },
-    "Open With": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrir avec"
-          }
-        }
-      }
-    },
     "Open a collection and use the share button in its header. Save to… lays the images out as a PDF at the paper size you pick, and Share sends that PDF on by AirDrop, Mail, or Messages. Share Drive Link signs you into your own Google Drive, uploads the images there, and creates a clean web page anyone can open in a browser — they can switch the background and print it to a PDF at any size. Muse asks Google for the narrowest permission, so it can only ever touch the files it creates in your Drive — never the rest of it — and the captions you type ride inside the link itself, not on any server. Nothing reaches Muse's makers: the Drive copy goes to your own Drive. Take a link down later from the View menu — Manage Drive Shares…. [Read exactly how a share link works.](https://muse-share.pages.dev/privacy#how-it-works)": {
       "localizations": {
         "fr": {
@@ -3489,6 +3748,26 @@
         }
       }
     },
+    "Open Folder": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir le dossier"
+          }
+        }
+      }
+    },
+    "Open Folder in Muse": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir le dossier dans Muse"
+          }
+        }
+      }
+    },
     "Open in Finder": {
       "localizations": {
         "fr": {
@@ -3505,6 +3784,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ouvrir dans Plans"
+          }
+        }
+      }
+    },
+    "Open Link": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir le lien"
           }
         }
       }
@@ -3535,6 +3824,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ouvrir le lien de %@"
+          }
+        }
+      }
+    },
+    "Open the system emoji picker": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir le sélecteur d’emoji du système"
+          }
+        }
+      }
+    },
+    "Open With": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir avec"
           }
         }
       }
@@ -3610,32 +3919,13 @@
         }
       }
     },
-    "PDFs": {
+    "Page intro": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "PDF"
-          }
-        }
-      }
-    },
-    "PNG": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "PNG"
-          }
-        }
-      }
-    },
-    "PSD": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "PSD"
+            "value": "Intro de la page"
           }
         }
       }
@@ -3646,17 +3936,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Titre de la page"
-          }
-        }
-      }
-    },
-    "Page intro": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Intro de la page"
           }
         }
       }
@@ -3728,6 +4007,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Empreinte de patte"
+          }
+        }
+      }
+    },
+    "PDFs": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PDF"
           }
         }
       }
@@ -3842,6 +4131,16 @@
         }
       }
     },
+    "PNG": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PNG"
+          }
+        }
+      }
+    },
     "Preparing your files…": {
       "localizations": {
         "fr": {
@@ -3892,6 +4191,16 @@
         }
       }
     },
+    "PSD": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PSD"
+          }
+        }
+      }
+    },
     "Publish": {
       "localizations": {
         "fr": {
@@ -3932,26 +4241,6 @@
         }
       }
     },
-    "RATING": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "NOTE"
-          }
-        }
-      }
-    },
-    "RAW": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "RAW"
-          }
-        }
-      }
-    },
     "Rated %lld stars": {
       "localizations": {
         "fr": {
@@ -3972,12 +4261,32 @@
         }
       }
     },
+    "RATING": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOTE"
+          }
+        }
+      }
+    },
     "Rating removed": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Note supprimée"
+          }
+        }
+      }
+    },
+    "RAW": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RAW"
           }
         }
       }
@@ -4089,22 +4398,22 @@
         }
       }
     },
-    "Regenerate Tags…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Régénérer les étiquettes…"
-          }
-        }
-      }
-    },
     "Regenerate tags in this view?": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Régénérer les étiquettes de cette vue ?"
+          }
+        }
+      }
+    },
+    "Regenerate Tags…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Régénérer les étiquettes…"
           }
         }
       }
@@ -4160,36 +4469,6 @@
         }
       }
     },
-    "Remove Selection from Collection": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retirer la sélection de la collection"
-          }
-        }
-      }
-    },
-    "Remove Tag from Selection": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retirer l'étiquette de la sélection"
-          }
-        }
-      }
-    },
-    "Remove Tag “%@”": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retirer l'étiquette « %@ »"
-          }
-        }
-      }
-    },
     "Remove from Collection “%@”": {
       "localizations": {
         "fr": {
@@ -4216,6 +4495,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Supprimer la règle"
+          }
+        }
+      }
+    },
+    "Remove Selection from Collection": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retirer la sélection de la collection"
+          }
+        }
+      }
+    },
+    "Remove Tag “%@”": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retirer l'étiquette « %@ »"
+          }
+        }
+      }
+    },
+    "Remove Tag from Selection": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retirer l'étiquette de la sélection"
           }
         }
       }
@@ -4250,12 +4559,32 @@
         }
       }
     },
+    "rename": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "renommer"
+          }
+        }
+      }
+    },
     "Rename": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Renommer"
+          }
+        }
+      }
+    },
+    "Rename collection": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renommer la collection"
           }
         }
       }
@@ -4330,12 +4659,22 @@
         }
       }
     },
-    "Rename collection": {
+    "Rename…": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Renommer la collection"
+            "value": "Renommer…"
+          }
+        }
+      }
+    },
+    "Renames “%@” on every image in the library.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renomme « %@ » sur toutes les images de la bibliothèque."
           }
         }
       }
@@ -4367,26 +4706,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Renomme le dossier sur le disque. Les étiquettes et collections sont conservées."
-          }
-        }
-      }
-    },
-    "Renames “%@” on every image in the library.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Renomme « %@ » sur toutes les images de la bibliothèque."
-          }
-        }
-      }
-    },
-    "Rename…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Renommer…"
           }
         }
       }
@@ -4501,16 +4820,6 @@
         }
       }
     },
-    "SVG": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "SVG"
-          }
-        }
-      }
-    },
     "Same filename": {
       "localizations": {
         "fr": {
@@ -4561,26 +4870,6 @@
         }
       }
     },
-    "Search Library": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rechercher dans la bibliothèque"
-          }
-        }
-      }
-    },
-    "Search Muse Library": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rechercher dans la bibliothèque Muse"
-          }
-        }
-      }
-    },
     "Search by name, tags, captions, and text found inside images. The magnifier menu scopes the search to the current folder or your whole library. Sort by date, name, size, color, or shape, and use the arrow beside the sort menu to flip the direction.": {
       "localizations": {
         "fr": {
@@ -4607,6 +4896,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rechercher fichiers, étiquettes, légendes…"
+          }
+        }
+      }
+    },
+    "Search Library": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechercher dans la bibliothèque"
+          }
+        }
+      }
+    },
+    "Search Muse Library": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechercher dans la bibliothèque Muse"
           }
         }
       }
@@ -4701,16 +5010,6 @@
         }
       }
     },
-    "Share Drive Link": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Partager le lien Drive"
-          }
-        }
-      }
-    },
     "Share an image from the viewer — AirDrop, Mail, Messages, or Save to Files. From Finder, right-click any file and choose Share → Muse to send it into your iCloud folder.": {
       "localizations": {
         "fr": {
@@ -4727,6 +5026,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Partager la collection"
+          }
+        }
+      }
+    },
+    "Share Drive Link": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partager le lien Drive"
           }
         }
       }
@@ -4911,22 +5220,22 @@
         }
       }
     },
-    "Sign Out": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Se déconnecter"
-          }
-        }
-      }
-    },
     "Sign in to publish a collection as a shareable Drive web page. Sign out to switch to a different Google account.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Connectez-vous pour publier une collection sous forme de page web Drive partageable. Déconnectez-vous pour changer de compte Google."
+          }
+        }
+      }
+    },
+    "Sign Out": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se déconnecter"
           }
         }
       }
@@ -5031,6 +5340,16 @@
         }
       }
     },
+    "Sort direction": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sens du tri"
+          }
+        }
+      }
+    },
     "Sort direction: %@": {
       "localizations": {
         "fr": {
@@ -5131,6 +5450,16 @@
         }
       }
     },
+    "SVG": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SVG"
+          }
+        }
+      }
+    },
     "Symbol & Color": {
       "localizations": {
         "fr": {
@@ -5141,22 +5470,12 @@
         }
       }
     },
-    "TAGS": {
+    "Symbols": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "ÉTIQUETTES"
-          }
-        }
-      }
-    },
-    "TIFF": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "TIFF"
+            "value": "Symboles"
           }
         }
       }
@@ -5167,6 +5486,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tabloïd (11 × 17 po)"
+          }
+        }
+      }
+    },
+    "tag": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "étiquette"
           }
         }
       }
@@ -5221,12 +5550,33 @@
         }
       }
     },
+    "TAGS": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ÉTIQUETTES"
+          }
+        }
+      }
+    },
     "Tags “%@”.": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Étiquette « %@ »."
+          }
+        }
+      }
+    },
+    "Tags %@.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajoute une étiquette à %@."
           }
         }
       }
@@ -5282,22 +5632,12 @@
         }
       }
     },
-    "The Drive folder couldn’t be deleted — you may be offline or signed out. The share is still live; try again, or remove it from Google Drive directly.": {
+    "The “%@” extension is kept.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le dossier Drive n’a pas pu être supprimé — vous êtes peut-être hors ligne ou déconnecté. Le partage est toujours actif ; réessayez, ou supprimez-le directement depuis Google Drive."
-          }
-        }
-      }
-    },
-    "The PDF couldn’t be prepared — some images may be unreadable — or the location couldn’t be written. Check the images and that the location is writable with enough free space.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le PDF n’a pas pu être préparé — certaines images sont peut-être illisibles — ou l’emplacement n’a pas pu être écrit. Vérifiez les images et que l’emplacement est accessible en écriture avec suffisamment d’espace libre."
+            "value": "L’extension « %@ » est conservée."
           }
         }
       }
@@ -5332,6 +5672,16 @@
         }
       }
     },
+    "The Drive folder couldn’t be deleted — you may be offline or signed out. The share is still live; try again, or remove it from Google Drive directly.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le dossier Drive n’a pas pu être supprimé — vous êtes peut-être hors ligne ou déconnecté. Le partage est toujours actif ; réessayez, ou supprimez-le directement depuis Google Drive."
+          }
+        }
+      }
+    },
     "The folder was renamed, but updating its tags failed.": {
       "localizations": {
         "fr": {
@@ -5362,32 +5712,22 @@
         }
       }
     },
+    "The PDF couldn’t be prepared — some images may be unreadable — or the location couldn’t be written. Check the images and that the location is writable with enough free space.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le PDF n’a pas pu être préparé — certaines images sont peut-être illisibles — ou l’emplacement n’a pas pu être écrit. Vérifiez les images et que l’emplacement est accessible en écriture avec suffisamment d’espace libre."
+          }
+        }
+      }
+    },
     "The quick brown fox jumps over the lazy dog.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Portez ce vieux whisky au juge blond qui fume."
-          }
-        }
-      }
-    },
-    "The “%@” extension is kept.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L’extension « %@ » est conservée."
-          }
-        }
-      }
-    },
-    "This Folder": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ce dossier"
           }
         }
       }
@@ -5402,12 +5742,32 @@
         }
       }
     },
+    "This Folder": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce dossier"
+          }
+        }
+      }
+    },
     "This removes every tag on the images in this view — both automatic tags and ones you've added yourself. Tags you added by hand can't be recovered. Your images stay on disk.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Cela retire toutes les étiquettes des images de cette vue — à la fois les étiquettes automatiques et celles que vous avez ajoutées vous-même. Les étiquettes ajoutées à la main ne peuvent pas être récupérées. Vos images restent sur le disque."
+          }
+        }
+      }
+    },
+    "TIFF": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TIFF"
           }
         }
       }
@@ -5463,22 +5823,22 @@
         }
       }
     },
-    "Unpublish the Drive share for %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dépublier le partage Drive de %@"
-          }
-        }
-      }
-    },
     "Unpublish — delete this share's Drive folder now": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Dépublier — supprimer maintenant le dossier Drive de ce partage"
+          }
+        }
+      }
+    },
+    "Unpublish the Drive share for %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dépublier le partage Drive de %@"
           }
         }
       }
@@ -5619,6 +5979,37 @@
         }
       }
     },
+    "with": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "avec"
+          }
+        }
+      }
+    },
+    "within %lld days": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "depuis %lld jours"
+          }
+        }
+      }
+    },
+    "without": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sans"
+          }
+        }
+      }
+    },
     "XMP Sidecars": {
       "localizations": {
         "fr": {
@@ -5688,266 +6079,7 @@
           }
         }
       }
-    },
-    "and": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "et"
-          }
-        }
-      }
-    },
-    "contains": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "contient"
-          }
-        }
-      }
-    },
-    "copy all": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "tout copier"
-          }
-        }
-      }
-    },
-    "couldn't save": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "échec de l'enregistrement"
-          }
-        }
-      }
-    },
-    "create": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "créer"
-          }
-        }
-      }
-    },
-    "created": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "créé"
-          }
-        }
-      }
-    },
-    "created %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "créé le %@"
-          }
-        }
-      }
-    },
-    "e.g. Leslie-Ann Thomson ALDO MUAH 2025": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "p. ex. Leslie-Ann Thomson ALDO MUAH 2025"
-          }
-        }
-      }
-    },
-    "e.g. Sent by": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "p. ex. Envoyé par"
-          }
-        }
-      }
-    },
-    "e.g. The Project": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "p. ex. The Project"
-          }
-        }
-      }
-    },
-    "expires %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "expire le %@"
-          }
-        }
-      }
-    },
-    "has": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "a"
-          }
-        }
-      }
-    },
-    "has no": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "n’a pas"
-          }
-        }
-      }
-    },
-    "iCloud isn't set up, so the folder isn't in the sidebar. It'll appear here when iCloud is available.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "iCloud n'est pas configuré, le dossier n'apparaît donc pas dans la barre latérale. Il s'affichera ici lorsque iCloud sera disponible."
-          }
-        }
-      }
-    },
-    "iCloud sync": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Synchronisation iCloud"
-          }
-        }
-      }
-    },
-    "item": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "élément"
-          }
-        }
-      }
-    },
-    "items": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "éléments"
-          }
-        }
-      }
-    },
-    "modified": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "modifié"
-          }
-        }
-      }
-    },
-    "of the following rules": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "des règles suivantes"
-          }
-        }
-      }
-    },
-    "rename": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "renommer"
-          }
-        }
-      }
-    },
-    "tag": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "étiquette"
-          }
-        }
-      }
-    },
-    "with": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "avec"
-          }
-        }
-      }
-    },
-    "within %lld days": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "depuis %lld jours"
-          }
-        }
-      }
-    },
-    "without": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "sans"
-          }
-        }
-      }
-    },
-    "…or create a new one": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "…ou en créer une nouvelle"
-          }
-        }
-      }
-    },
-    "≤": {},
-    "≥": {}
+    }
   },
   "version": "1.0"
 }
