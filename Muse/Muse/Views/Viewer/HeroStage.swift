@@ -36,6 +36,42 @@ private struct FlightEffect: GeometryEffect {
     }
 }
 
+/// A rounded rect whose corner radius is pre-divided by the flight's current
+/// scale, so the radius the VIEWER sees stays constant while the image flies.
+///
+/// The clip is applied in the image's own (unscaled) coordinate space and then
+/// scaled by `FlightEffect`, so a plain `RoundedRectangle` renders its radius
+/// times the flight scale: on close the corners flatten toward square as the
+/// image shrinks, and only snap back when the real tile takes over — the
+/// owner-reported "closes to 0 radius, then pops to rounded".
+///
+/// Dividing by the scale cancels that exactly. `scale` is the animatable datum
+/// and comes from the SAME `displayRect` that drives `FlightEffect`, so both
+/// interpolate on one curve: rendered radius = (radius / scale(t)) × scale(t),
+/// constant for every frame. Compensating with a plain animated radius would
+/// NOT work — two independently-interpolated values multiply out to a mid-flight
+/// bulge (~2× at the halfway point), not a constant.
+private struct FlightRoundedRect: Shape {
+    /// The radius as it should APPEAR on screen, in points.
+    var radius: CGFloat
+    /// Current flight scale (rendered size ÷ laid-out size).
+    var scale: CGFloat
+
+    var animatableData: CGFloat {
+        get { scale }
+        set { scale = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        guard radius > 0 else { return Rectangle().path(in: rect) }
+        // A tiny scale would blow the compensated radius past a capsule; the
+        // cap keeps the shape a rounded rect no matter how small the target.
+        let r = min(radius / max(0.0001, scale),
+                    min(rect.width, rect.height) / 2)
+        return RoundedRectangle(cornerRadius: r, style: .continuous).path(in: rect)
+    }
+}
+
 struct HeroStage: View {
     let url: URL
     let sourceFrame: CGRect          // tile frame, global coords
@@ -47,7 +83,30 @@ struct HeroStage: View {
     @Binding var pan: CGSize
     @Binding var isClosing: Bool     // set true by parent to run the return flight
 
+    /// Same corner radius the grid tile uses, so a photo keeps its shape when
+    /// it opens. The layout radius is the point value the FULL-SCREEN image
+    /// shows; the flight scales the whole rendered layer, so mid-flight the
+    /// rounding scales with it.
+    @AppStorage(AppSettings.gridCornerRadiusKey) private var cornerRadiusSetting =
+        AppSettings.defaultGridCornerRadius
+    private var cornerRadius: CGFloat {
+        CGFloat(AppSettings.clampGridCornerRadius(cornerRadiusSetting))
+    }
+
+    /// Every render scale applied to the clipped image: the flight's own scale
+    /// (what `FlightEffect` derives from the same two rects) times the user's
+    /// zoom, since `.scaleEffect(zoom)` sits outside the clip too. Feeds
+    /// `FlightRoundedRect` so the corner radius the viewer sees stays put —
+    /// through the flight, and when the image is pulled back below Fit.
+    private func renderScale(home: CGRect) -> CGFloat {
+        let flight = (home.width > 0 && displayRect.width > 0)
+            ? displayRect.width / home.width : 1
+        return flight * max(0.0001, zoom)
+    }
+
     @State private var displayRect: CGRect = .zero
+    /// One mid-flight retarget per close — see the sourceFrame onChange.
+    @State private var didRetarget = false
     @State private var image: NSImage?
     @State private var dragStartPan: CGSize? = nil
     @State private var isDraggingPan = false
@@ -75,8 +134,69 @@ struct HeroStage: View {
     /// would land as a center-crop that re-fits on reveal. Falls back to
     /// the tile rect until the image is known.
     private var sourceRect: CGRect {
-        ViewerGeometry.fitWithin(imageSize: image?.size ?? sourceFrame.size,
+        // The image's TRUE pixel aspect, from the file header — never the
+        // decoded image, which is nil at flight start.
+        //
+        // This used to be `image?.size ?? sourceFrame.size`. At the moment the
+        // flight begins the image hasn't decoded, so it fell through to
+        // `sourceFrame.size`, and fitWithin(frame.size, frame) returns the FRAME
+        // ITSELF — i.e. the flight started from the raw tile rect, exactly what
+        // the drawn-image-rect rule exists to prevent. A landscape image
+        // letterboxes heavily inside a squarer tile, so its real drawn rect is
+        // far shorter than the tile: starting from the tile rect made the flight
+        // much too short, which read as "almost instant" with a wrong curve.
+        // Portrait letterboxes less, so it looked nearer correct — that
+        // asymmetry is aspect geometry, not file size.
+        //
+        // Reads only in-memory state — NEVER the filesystem. See `headerSize`.
+        ViewerGeometry.fitWithin(imageSize: headerSize ?? image?.size ?? sourceFrame.size,
                                  frame: sourceFrame)
+    }
+
+    /// The file's true pixel size, resolved ONCE per open and held in state.
+    ///
+    /// This is deliberately not read on demand from `sourceRect`. `sourceRect`
+    /// is a computed property, so SwiftUI re-evaluates it on every body pass —
+    /// i.e. on every frame of the open and close flights. The header read
+    /// underneath it costs ~18 ms on a 659 MB scanner TIFF (measured), and it
+    /// was memoized in an `NSCache`, which EVICTS under memory pressure — the
+    /// exact state a giant image open puts the app in. An evicted entry during
+    /// an animating body meant a fresh 18 ms file open per frame on the main
+    /// thread: dropped frames, a mid-flight stall with the backdrop still up,
+    /// and on the very largest file the close flight skipping outright. All
+    /// three were owner-reported.
+    ///
+    /// Now: seeded from the never-evicting `ImageHeaderSizeCache` (which the
+    /// thumbnail pass has already warmed off-main for every file in the folder,
+    /// so the common case is a dictionary hit at open with no I/O at all), and
+    /// read only as state from there on.
+    @State private var headerSize: CGSize?
+
+    /// Which URL `headerSize` belongs to. A `@State` box, deliberately: an
+    /// escaping closure captures a FROZEN copy of this struct, so `self.url`
+    /// inside it still reads the file that was open when the read started —
+    /// checking it would be vacuous. `@State` reads through a shared box, so
+    /// this one reflects the CURRENT file and can actually reject a stale
+    /// result (arrow-key flip A→B while A's header read is still in flight
+    /// would otherwise give B the aspect of A, and the close flight would land
+    /// on the wrong rect).
+    @State private var headerSizeURL: URL?
+
+    /// Seed `headerSize`. Takes the warm value synchronously when there is one;
+    /// otherwise reads the header off-main and lands it a moment later — the
+    /// flight starts from the decoded/tile aspect in that rare case rather than
+    /// blocking on I/O.
+    private func resolveHeaderSize() {
+        let u = url
+        headerSizeURL = u
+        if let warm = ImageHeaderSizeCache.cached(u) { headerSize = warm; return }
+        Task.detached(priority: .userInitiated) {
+            guard let size = ImageHeaderSizeCache.resolve(u) else { return }
+            await MainActor.run {
+                guard headerSizeURL == u else { return }
+                headerSize = size
+            }
+        }
     }
 
 
@@ -97,7 +217,8 @@ struct HeroStage: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(width: base.width, height: base.height)
-                    .clipShape(Rectangle())
+                    .clipShape(FlightRoundedRect(radius: cornerRadius,
+                                                 scale: renderScale(home: base)))
                     // Delete: the image fades out first (front ~60%).
                     .modifier(FadeOutModifier(progress: burnProgress,
                                               fadeStart: 0.0, fadeLength: 0.6))
@@ -124,9 +245,43 @@ struct HeroStage: View {
             // grid — retarget mid-flight so we land on the tile's real spot
             // (its drawn-image rect, same fit rule as sourceRect).
             guard isClosing else { return }
+            // Only retarget for a REAL move, and only once.
+            //
+            // The grid relayouts more than once during a close (the toolbar
+            // returns, the selection clears), so this fired repeatedly and each
+            // fire started a fresh 0.22s animation. A transient frame that
+            // computed larger made the image grow BACK mid-close — which reads
+            // as the viewer closing, reopening, then closing again.
+            //
+            // Ignores degenerate frames, ignores sub-pixel churn, and runs at
+            // most once per close. Uses the same header-derived aspect as
+            // `sourceRect` so the retarget can't disagree with the takeoff.
+            guard !didRetarget, newFrame.width > 1, newFrame.height > 1 else { return }
+            let retarget = ViewerGeometry.fitWithin(
+                imageSize: headerSize ?? image?.size ?? newFrame.size,
+                frame: newFrame)
+            guard abs(retarget.midX - displayRect.midX) > 1
+                    || abs(retarget.midY - displayRect.midY) > 1
+                    || abs(retarget.width - displayRect.width) > 1 else { return }
+            // A close only ever SHRINKS. `didRetarget` caps this at one fire,
+            // but one is enough: if the grid's transient relayout reports a
+            // frame larger than where the flight is already heading, animating
+            // to it makes the image grow back out — which reads exactly as the
+            // viewer closing, reopening, then closing again (owner-reported).
+            // A slightly-wrong landing spot is invisible under the tile reveal;
+            // a reversal is not. So take the correction only when it keeps the
+            // flight moving inward.
+            //
+            // The one exception is the degenerate target: when the tile had no
+            // frame at close start, close() aims at a zero-size point in the
+            // viewport centre. There is no inward progress to protect there, and
+            // landing on the tile that has since appeared beats vanishing into
+            // the middle of the screen — which is what this retarget is for.
+            guard displayRect.width <= 1 || retarget.width <= displayRect.width + 1
+            else { return }
+            didRetarget = true
             withAnimation(.timingCurve(0.3, 1.08, 0.35, 1, duration: 0.22)) {
-                displayRect = ViewerGeometry.fitWithin(
-                    imageSize: image?.size ?? newFrame.size, frame: newFrame)
+                displayRect = retarget
             }
         }
         .onChange(of: url) { _, _ in flipTo() }
@@ -150,7 +305,16 @@ struct HeroStage: View {
 
     private func open() {
         openedAt = Date()
-        displayRect = sourceFrame
+        // Must come first: the takeoff rect below is derived from it.
+        resolveHeaderSize()
+        // Take off from the SAME rect the close lands on. This was
+        // `sourceFrame` (the raw tile rect) while close() flies to `sourceRect`
+        // (the letterboxed rect the tile actually draws into) — so open and
+        // close were not symmetric, and the mismatch is bigger the more the
+        // image letterboxes inside its tile. Now that sourceRect is derived
+        // from the header aspect it is valid from the first frame, so there is
+        // no reason to use anything else.
+        displayRect = sourceRect
         // The grid tile's thumbnail is already in memory — start the flight
         // with it immediately. Awaiting QLThumbnailGenerator here added
         // 100–400ms of dead time before the open animation even began.
@@ -183,16 +347,30 @@ struct HeroStage: View {
 
     private func close() {
         resetCursorState()
+        didRetarget = false
+        // If the tile has no usable frame (virtualized away, or never measured),
+        // flying to it collapses the animation into an instant jump. Shrink
+        // toward the viewport centre instead so the close still reads as a
+        // close.
+        let target: CGRect = (sourceRect.width > 1 && sourceRect.height > 1)
+            ? sourceRect
+            : CGRect(x: viewport.width / 2, y: viewport.height / 2, width: 0, height: 0)
         withAnimation(.timingCurve(0.3, 1.08, 0.35, 1, duration: 0.34)) {
             zoom = 1; pan = .zero
-            displayRect = sourceRect
+            displayRect = target
             shadowVisible = false
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.36) { onCloseFinished() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.36) {
+            onCloseFinished()
+        }
     }
 
     private func flipTo() {
         resetCursorState()
+        // Arrow-key flip to a different file: the old file's aspect must not
+        // survive into the new one's close flight.
+        headerSize = nil
+        resolveHeaderSize()
         zoom = 1; pan = .zero
         // thumbnail swaps in fast; .task(id: url) handles the full-res load
         if let quick = Self.quickThumbnail(for: url) {
@@ -214,6 +392,40 @@ struct HeroStage: View {
         // a visible hitch mid-flight on large files.
         let maxDim = Int(max(viewport.width, viewport.height) * 2.5)
         let target = min(max(maxDim, 1600), 4096)
+        // Progressive: land a mid-res decode FIRST, then upgrade.
+        //
+        // Measured: the flight runs 340ms, but a 659MB TIFF needs ~590ms to
+        // decode at full target — so it landed soft and visibly sharpened ~250ms
+        // later. A 1600px pass costs a fraction of that and is already sharper
+        // than the 320px grid thumbnail the flight starts with, so the image
+        // looks right as it lands and the final swap is imperceptible. Small
+        // files decode inside the flight anyway, so this changes nothing for
+        // them beyond one extra cheap decode.
+        // Cache-only: `.task` runs on the main actor, so this must not do I/O.
+        // An unknown size just skips the extra mid-res pass.
+        if (headerSize ?? ImageHeaderSizeCache.cached(u))
+            .map({ $0.width * $0.height > 40_000_000 }) == true {
+            let mid = await Task.detached(priority: .userInitiated) { () -> NSImage? in
+                guard let src = CGImageSourceCreateWithURL(u as CFURL, nil),
+                      ThumbnailCache.withinDecodeBudget(src),
+                      let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, [
+                          kCGImageSourceCreateThumbnailFromImageAlways: true,
+                          kCGImageSourceCreateThumbnailWithTransform: true,
+                          kCGImageSourceShouldCacheImmediately: true,
+                          kCGImageSourceThumbnailMaxPixelSize: 1600,
+                      ] as CFDictionary) else { return nil }
+                return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+            }.value
+            // `!isClosing`: swapping the image mid-close changes `fitRect`,
+            // which is the flight's layout `home` — the transform re-bases
+            // under the animation and the image jumps. Nothing is gained by
+            // sharpening a picture that is shrinking off screen.
+            if let mid, u == url, !isClosing,
+               image == nil || (image?.size.width ?? 0) < mid.size.width {
+                image = mid
+            }
+        }
+
         let img = await Task.detached(priority: .userInitiated) { () -> NSImage? in
             // Same decompression-bomb guard as the grid thumbnail path — refuse
             // to decode a header that declares an absurd pixel count (falls
@@ -230,11 +442,27 @@ struct HeroStage: View {
             else { return nil }
             return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
         }.value
-        if let img, u == url {
+        // The `!isClosing` guard is load-bearing, not defensive.
+        //
+        // This assignment flies the image back out to the fitted (full-screen)
+        // rect. It exists for the normal case, where the decode lands while the
+        // viewer is open. But a 115 MP TIFF takes ~600 ms to decode, and a user
+        // who opens and immediately presses Escape closes at ~450–600 ms — so on
+        // big files the decode routinely landed INSIDE the close flight and
+        // animated the shrinking image back to full size, after which the
+        // unmount snapped it away. That is the owner-reported "it closes, then
+        // reopens, then closes again", and it only ever showed on large files
+        // because only those decode slowly enough to land mid-close.
+        //
+        // Traced in the running app: the state sequence is a clean single
+        // close, so the reopen was purely this geometry write. Don't drop the
+        // guard from either of the two exits below.
+        if let img, u == url, !isClosing {
             image = img
             withAnimation(.easeOut(duration: 0.2)) { displayRect = fitRect }
             return
         }
+        if isClosing { return }
         // ImageIO returned nil — the source isn't decodable by it (e.g. a RAW
         // format Apple's camera codec doesn't support). Fall back to the shared
         // thumbnail path, which tries QuickLook's best representation (some
@@ -243,7 +471,7 @@ struct HeroStage: View {
         guard u == url,
               let fallback = await ThumbnailCache.shared.thumbnail(
                   for: u, size: CGSize(width: target, height: target), scale: 1.0),
-              u == url
+              u == url, !isClosing
         else { return }
         image = fallback
         withAnimation(.easeOut(duration: 0.2)) { displayRect = fitRect }

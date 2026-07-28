@@ -19,14 +19,28 @@ private enum SearchFolderScope: Hashable {
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject private var googleAuth: GoogleOAuth
     @ObservedObject private var indexProgress = IndexProgress.shared
     @ObservedObject private var thumbProgress = ThumbProgress.shared
     @ObservedObject private var analyzePipeline = AnalyzePipeline.shared
+    /// Unified background-progress state driving the single status pill.
+    @State private var workProgress = WorkProgress()
     @ObservedObject private var collectionsEngine = CollectionsEngine.shared
     @State private var moodPickerShown = false
-    @State private var infoShown = false
-    @State private var imageLayoutShown = false
     @State private var filterPopoverShown = false
+
+    /// Close whichever modal is up. Only one is ever presented at a time, so
+    /// this is a deterministic sweep rather than a real stack.
+    private func dismissTopModal() {
+        if appState.collectionModal != nil { appState.collectionModal = nil; return }
+        if appState.metadataImportRequest != nil { appState.metadataImportRequest = nil; return }
+        if appState.reconnectShown { appState.reconnectShown = false; return }
+        if appState.duplicatesSheetVisible { appState.duplicatesSheetVisible = false; return }
+        if appState.driveSharesShown { appState.driveSharesShown = false; return }
+        if appState.settingsShown { appState.settingsShown = false; return }
+        if appState.imageLayoutShown { appState.imageLayoutShown = false; return }
+        if appState.infoShown { appState.infoShown = false; return }
+    }
 
     /// True while the window is in macOS full-screen — drives the full-screen-only
     /// SwiftUI toolbar hide.
@@ -131,6 +145,81 @@ struct ContentView: View {
             .onSubmit(of: .search) {
                 runSearchNow(searchText)
             }
+            // Modals are in-window cards, not sheets — see Views/Modal/ModalChrome.
+            // Every one is presented HERE, at the shell, because the card is sized
+            // from the geometry of whatever it's attached to: presented from a
+            // sidebar row it would be laid out against the sidebar's width.
+            // Rows of image tiles — the one card that genuinely wants room.
+            .museModal(isPresented: $appState.duplicatesSheetVisible,
+                       width: 1100, palette: appState.moodPalette) {
+                DuplicatesView(isPresented: $appState.duplicatesSheetVisible)
+            }
+            .museModal(isPresented: $appState.infoShown,
+                       width: 600, palette: appState.moodPalette) {
+                InfoSheet(isPresented: $appState.infoShown)
+            }
+            // Three 120pt tiles and a subtitle — a 600pt card left it swimming.
+            .museModal(isPresented: $appState.imageLayoutShown,
+                       width: 460, palette: appState.moodPalette) {
+                ImageLayoutSheet(isPresented: $appState.imageLayoutShown)
+                    .environmentObject(appState)
+            }
+            // Form rows with long explanatory footers.
+            .museModal(isPresented: $appState.settingsShown,
+                       width: 560, palette: appState.moodPalette) {
+                SettingsView(isPresented: $appState.settingsShown)
+                    .environmentObject(appState)
+            }
+            // A list of share rows: name, date, two buttons.
+            .museModal(isPresented: $appState.driveSharesShown,
+                       width: 520, palette: appState.moodPalette) {
+                ManageDriveSharesView()
+            }
+            .museModal(isPresented: Binding(
+                get: { appState.metadataImportRequest != nil },
+                set: { if !$0 { appState.metadataImportRequest = nil } }),
+                       width: 360, palette: appState.moodPalette) {
+                if let request = appState.metadataImportRequest {
+                    MetadataImportSheet(request: request)
+                        .environmentObject(appState)
+                }
+            }
+            .museModal(isPresented: $appState.reconnectShown,
+                       width: 600, palette: appState.moodPalette) {
+                if let model = appState.reconnectModel {
+                    ReconnectWizard(model: model, isPresented: $appState.reconnectShown,
+                                    bookmarks: appState.bookmarks)
+                }
+            }
+            // Collection-scoped modals, raised here from the sidebar row / the
+            // Collections page / the share button — see CollectionModal.
+            .museModal(isPresented: Binding(
+                get: { appState.collectionModal != nil },
+                set: { if !$0 { appState.collectionModal = nil } }),
+                       width: appState.collectionModal?.width ?? 480,
+                       palette: appState.moodPalette) {
+                switch appState.collectionModal {
+                case .customize(let loaded):
+                    CustomizeCollectionSheet(loaded: loaded) {
+                        appState.collectionModal = nil
+                    }
+                case .rules(let request):
+                    SmartCollectionRulesView(
+                        collectionID: request.collectionID,
+                        initialName: request.initialName,
+                        initialSet: request.initialSet,
+                        isConversion: request.isConversion,
+                        memberCount: request.memberCount) {
+                            appState.collectionModal = nil
+                        }
+                case .driveShare(let title, let urls):
+                    DriveShareSheet(auth: googleAuth, title: title, urls: urls) {
+                        appState.collectionModal = nil
+                    }
+                case .none:
+                    EmptyView()
+                }
+            }
             // Transparent title bar so the sidebar card flows continuously up
             // to the top and curves with the window corner (Lineform-style).
             .toolbarBackground(.hidden, for: .windowToolbar)
@@ -221,6 +310,7 @@ struct ContentView: View {
                     isSearchActive: appState.isSearchActive,
                     queryIsEmpty: appState.searchQuery.isEmpty && searchText.isEmpty)
                 switch EscapeResolver.action(
+                    modalPresented: appState.modalPresented,
                     hasSelectedFile: selected != nil,
                     selectedFileIsHero: isHero,
                     searchActive: searchPresent,
@@ -264,6 +354,8 @@ struct ContentView: View {
                 case .exitCollectionsPage:
                     // Same as the Collections-page back arrow.
                     appState.toggleCollectionsPage()
+                case .dismissModal:
+                    dismissTopModal()
                 case .none:
                     break
                 }
@@ -271,33 +363,6 @@ struct ContentView: View {
                 .keyboardShortcut(.escape, modifiers: [])
                 .hidden()
         )
-        .sheet(isPresented: $appState.duplicatesSheetVisible) {
-            DuplicatesView(isPresented: $appState.duplicatesSheetVisible)
-        }
-        .sheet(isPresented: $infoShown) {
-            InfoSheet(isPresented: $infoShown)
-        }
-        .sheet(isPresented: $imageLayoutShown) {
-            ImageLayoutSheet(isPresented: $imageLayoutShown)
-                .environmentObject(appState)
-        }
-        .sheet(isPresented: $appState.settingsShown) {
-            SettingsView(isPresented: $appState.settingsShown)
-                .environmentObject(appState)
-        }
-        .sheet(isPresented: $appState.driveSharesShown) {
-            ManageDriveSharesView()
-        }
-        .sheet(item: $appState.metadataImportRequest) { request in
-            MetadataImportSheet(request: request)
-                .environmentObject(appState)
-        }
-        .sheet(isPresented: $appState.reconnectShown) {
-            if let model = appState.reconnectModel {
-                ReconnectWizard(model: model, isPresented: $appState.reconnectShown,
-                                bookmarks: appState.bookmarks)
-            }
-        }
         .alert("Couldn’t move some files",
                isPresented: Binding(get: { !appState.moveFailureNames.isEmpty },
                                     set: { if !$0 { appState.moveFailureNames = [] } })) {
@@ -355,14 +420,26 @@ struct ContentView: View {
                 ])
         }
         .overlay(alignment: .bottom) {
-            if analyzePipeline.isRunning {
-                analyzeStatusBanner
-            } else if collectionsEngine.isClustering {
-                organizingBanner
-            } else if indexProgress.isActive {
-                indexingBanner
-            } else if thumbProgress.isActive {
-                thumbsBanner
+            // ONE pill for every background phase. This used to be a four-way
+            // chain (Analyzing / Organizing / Indexing / Loading images), each
+            // with its own counter — after the 2026-07-28 perf work the phases
+            // got fast enough that it switched labels faster than a human can
+            // read AND restarted the count at zero on each switch. A user only
+            // needs to know progress is happening.
+            if workProgress.isActive {
+                statusPill(label: "Preparing your files…", progress: workProgress.fraction)
+            }
+        }
+        .onChange(of: workInput) { _, new in
+            withAnimation(.easeOut(duration: 0.2)) { workProgress.update(new) }
+            // Let the bar visibly REACH 100% before the pill goes away. Without
+            // the hold it vanished at whatever the last active phase reached
+            // (typically the low 90s), which reads as a stall rather than
+            // completion.
+            guard workProgress.isFinishing else { return }
+            Task {
+                try? await Task.sleep(nanoseconds: 450_000_000)
+                withAnimation(.easeOut(duration: 0.25)) { workProgress.reset() }
             }
         }
         .preferredColorScheme(appState.moodPalette.scheme)
@@ -572,7 +649,7 @@ struct ContentView: View {
     private func layoutItem(_ placement: ToolbarItemPlacement) -> some ToolbarContent {
         ToolbarItem(placement: placement) {
             Button {
-                imageLayoutShown = true
+                appState.imageLayoutShown = true
             } label: {
                 Image(systemName: "square.grid.2x2")
                     .moodToolbarIcon(appState.moodPalette)
@@ -615,7 +692,7 @@ struct ContentView: View {
     private func infoItem(_ placement: ToolbarItemPlacement) -> some ToolbarContent {
         ToolbarItem(placement: placement) {
             Button {
-                infoShown = true
+                appState.infoShown = true
             } label: {
                 Image(systemName: "info.circle")
                     .moodToolbarIcon(appState.moodPalette)
@@ -798,16 +875,17 @@ struct ContentView: View {
         }
     }
 
-    /// Bottom-center pill while tile thumbnails stream in for a big folder.
-    private var thumbsBanner: some View {
-        statusPill(label: "Loading images \(thumbProgress.completed) of \(thumbProgress.total)",
-                   progress: Double(thumbProgress.completed) / Double(max(thumbProgress.total, 1)))
-    }
-
-    /// Bottom-center pill while the indexer works through a folder.
-    private var indexingBanner: some View {
-        statusPill(label: "Indexing \(indexProgress.completed) of \(indexProgress.total)",
-                   progress: Double(indexProgress.completed) / Double(max(indexProgress.total, 1)))
+    /// Live snapshot of every background phase, fed to the unified pill.
+    /// Equatable, so `.onChange` only fires on a real change.
+    private var workInput: WorkProgress.Input {
+        WorkProgress.Input(
+            indexFraction: Double(indexProgress.completed) / Double(max(indexProgress.total, 1)),
+            indexActive: indexProgress.isActive,
+            analyzeFraction: analyzePipeline.progress,
+            analyzeActive: analyzePipeline.isRunning,
+            organizing: collectionsEngine.isClustering,
+            thumbFraction: Double(thumbProgress.completed) / Double(max(thumbProgress.total, 1)),
+            thumbActive: thumbProgress.isActive)
     }
 
     /// One shared pill for every phase — same glass as the grid's column
@@ -838,20 +916,6 @@ struct ContentView: View {
         .transition(.opacity)
     }
 
-    private var analyzeStatusBanner: some View {
-        statusPill(label: analyzePipeline.total > 0
-                        ? "Analyzing \(analyzePipeline.completed) of \(analyzePipeline.total)"
-                        : "Analyzing…",
-                   progress: analyzePipeline.progress)
-    }
-
-    /// Bottom-center pill while collections recluster after an analyze batch —
-    /// closes the otherwise-invisible gap between the Analyzing pill vanishing
-    /// and results appearing. Indeterminate phase, so the bar reads as
-    /// "finishing up". Same capsule as every other pill.
-    private var organizingBanner: some View {
-        statusPill(label: "Organizing…", progress: 1)
-    }
 
 }
 

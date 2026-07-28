@@ -5924,3 +5924,510 @@ Cut the **1.4** release and relicensed. Concretely:
   collections) shipped in this build — they'd merged to `main` after the `v1.3.9`
   tag. Release notes: `docs/release-notes-1.4.md`. README download links bumped to
   `Muse-1.4.dmg`.
+
+---
+
+## 2026-07-28 — `feat/next-140`: analysis performance
+
+**Trigger.** A user reported Muse hanging while analyzing TIFFs from LaserSoft
+SilverFast (scanner output), noting the files "are not that huge" and that Muse
+had handled TIFFs fine before. Asked whether anything was slowing large
+file / TIFF / RAW analysis, and whether it could be made much faster.
+
+**The finding.** Not TIFF-specific, and not a regression from 1.4 — nothing in
+that release touched decoding or analysis. `VisionServices.loadCGImage` had
+always decoded at FULL resolution (`NSImage(contentsOf:)`) and handed that raster
+to five concurrent Vision requests, against a strictly serial analyze loop. Large
+scans were simply the first case big enough to make it obvious.
+
+Baseline, measured with a standalone harness that transcribes the real code path
+(`scratchpad/perf/Bench.swift`) over synthetic 16-bit uncompressed scan TIFFs
+generated from a real 24 MP photo, plus the seven RAW files in `~/Desktop/Raw Files`:
+
+| Fixture | Before | After | Peak memory |
+|---|---|---|---|
+| `scan_115mp.tif` (9600×12000, 659 MB) | **111,147 ms** | 620 ms | +1,077 MB → +105 MB |
+| `scan_65mp.tif` | 36,790 ms | 408 ms | |
+| `scan_20mp.tif` | 3,901 ms | 201 ms | |
+| `scan_document.tif` | 7,975 ms | 601 ms | 918/918 OCR chars |
+
+111 seconds for ONE file, times a serial loop, is the reported hang exactly.
+
+**The initial diagnosis was wrong, and measuring corrected it.** The hypothesis
+was "OCR dominates; the other four requests downsample internally so full
+resolution is merely wasted." Per-request timings on the 115 MP fixture:
+classify 21,436 ms, `CIAreaAverage` 20,132 ms, OCR 19,827 ms, faces 11,878 ms,
+feature print **55 ms**. Only feature print downsamples internally. So bounding
+the decode was the dominant fix and OCR handling was secondary — the reverse of
+the original ranking.
+
+**Two designs were rejected, one of them after being built.**
+
+*OCR probe (built, then disproved).* Plan was `.fast` OCR on a ~1024px raster,
+escalating to `.accurate` on a hit. A document-scan fixture was built to test it
+and **it failed**: 0 characters found on a 5100×6600 document the current path
+reads 918 from, because at 1024px the body text is ~9px tall. A resolution sweep
+then showed `.accurate` at 2048 already matches full resolution exactly
+(918/918) at 95 ms vs 1,699 ms, and at 4096 costs only 35 ms on a 115 MP photo.
+So the probe was deleted before shipping: bounding the decode makes OCR cheap
+enough that no special-casing is warranted. A format blacklist was rejected
+earlier for a different reason — SilverFast is scanner software, and scanning
+documents produces byte-identical TIFFs to scanning photos.
+
+*Incremental clustering (rejected on design).* Centroid assignment is a different
+algorithm — no retroactive merge/split, order-dependent — and its failure mode is
+silent quality drift on a user-visible feature. Kept the exact algorithm and made
+it fast instead.
+
+**Bugs found along the way.**
+
+- **RAW `dominant_color` was wrong.** `dominantColor` rendered with colour
+  management disabled, and RAW decodes as ITU-R 2100 PQ. Verified against an
+  independent CoreGraphics-only reference: the CR2 read `#4a3c44` against a
+  `#6a545a` reference (off-by-78). Most of that was fixed by the bounded decode
+  itself (P3/sRGB instead of PQ); pinning sRGB removed the remainder (off-by-1)
+  and made correctness structural rather than dependent on which space ImageIO
+  picks per format.
+- **`.medium` interpolation aliased the palette.** Reusing the 4096px raster is
+  up to a 128x reduction; `.medium` point-samples. Mean per-pixel error vs
+  ImageIO's 32px thumbnail: `.medium` 26–43, `.high` 2.6–12.6.
+- **`DecodePermit.cost` crashed on overflow.** The usual ceiling-division idiom
+  traps near `Int.max`, and the value comes from an image header. Caught by its
+  own guard test — but the trap killed the test HOST, so the run reported
+  "0 failures" while silently executing 7 of 9 tests. The count mismatch is what
+  exposed it. Rewritten as divide-then-adjust.
+
+**Known limitations, documented not fixed** (pre-existing, unrelated to
+performance): `RAW_FUJI_E900.RAF` cannot be decoded by ImageIO at all (header
+reports −1×−1) so it is silently never analyzed; `RAW_MAMIYA_ZD.MEF` opens as
+`public.tiff` at 144×192 because macOS has no Mamiya codec, so Muse analyzes the
+embedded preview rather than the photo. Both are layer 2 of the three-layer RAW
+model (decode = Apple's codec) and not fixable in Muse.
+
+**Also checked and found NOT to be a problem:** the concern that
+`withinDecodeBudget` reads properties at index 0 and might be measuring an
+embedded preview for RAW. Probed every container directly — all report one image
+at index 0 with true full dimensions and `GetPrimaryImageIndex == 0`. The guard
+is sound.
+
+**Deliberately cut:** the spec's C7 analyze-side write batching. After the decode
+fixes, per-file cost is dominated by decode + Vision, against which two small
+transactions are noise; batching would complicate the mid-pass content-hash guard
+for no measurable gain.
+
+Spec: `docs/superpowers/specs/2026-07-28-analysis-performance-design.md`
+Plan: `docs/superpowers/plans/2026-07-28-analysis-performance.md`
+
+---
+
+## 2026-07-28 (later) — `feat/next-140`: the hero viewer open/close bugs
+
+The performance work made analysis ~100x faster, which left the hero viewer's
+open and close flights exposed long enough to actually look at. Five owner-
+reported issues came out of that. All five are fixed; the full record, including
+the method, is `docs/hero-viewer-open-close-handoff.md`.
+
+**The method is the takeaway.** Every fix arrived at by reading code and
+reasoning was wrong — six attempts on the open flicker, three on the close
+stall, three on the reopen. Every fix found by instrumenting the running app was
+right, usually within one or two builds. `sample <pid>` for main-thread stalls,
+a `NSTemporaryDirectory()` timeline trace for state ordering, env-var A/B
+substitution for compositing questions. Muse is sandboxed, so a `/tmp` trace path
+is silently denied; NSLog output never reached `log stream` here at all.
+
+**1. Open flicker — two independent causes.** Animating opacity on
+`.ultraThinMaterial` re-composites the blur every frame; and the tint's opacity
+changed (0.45 → 0.78) at the same moment as its colour. The material now never
+fades in, and tint opacity is constant. Six earlier attempts — including removing
+a genuinely wasteful duplicate palette decode, and replacing the blur with a flat
+colour (which fixed the flicker but degraded the look and was reverted) — all
+missed it.
+
+**2. The flight departed from the raw tile rect.** `sourceRect` fell back to
+`sourceFrame.size` while `image` was still nil, and `fitWithin(frame.size, frame)`
+returns the frame itself. A landscape image letterboxes hard inside a squarer
+tile, so starting from the tile rect made its flight much too short — same
+duration, less distance — reading as "almost instant" with a wrong curve, while
+portrait looked nearer correct. **That asymmetry is aspect geometry, not file
+size.** An earlier diagnosis blamed the 115 MP fixture's size; that fixture was
+also the only portrait one, a real confound, and the owner was right to push back.
+The endpoint now comes from the file header, so it is correct from frame one and
+identical on open and close.
+
+**3. Filesystem I/O from a SwiftUI computed property — a bug I introduced.** The
+header read for (2) was called from `sourceRect`, which SwiftUI re-evaluates on
+every body pass, and memoized in an `NSCache` — which evicts under exactly the
+memory pressure a 659 MB image open creates. Measured 17.7 ms per read on the
+115 MP fixture, i.e. potentially per frame. Now resolved once into `@State` from
+`ImageHeaderSizeCache`, a table that never evicts and which the thumbnail pass
+warms off-main.
+
+**4. A 282 ms main-thread stall mid-close.** `appState.viewerDismissing = true`
+was wrapped in `withAnimation`. It's `@Published` on the monolithic `AppState`,
+so the write re-evaluates the whole shell, and the animation transaction makes
+SwiftUI build animated transitions for all of it synchronously. `sample` on the
+running app put 282 ms inside that single setter — the image froze part-shrunk
+with the backdrop still up, then jumped, and on the biggest files the block
+swallowed the entire flight ("closes instantly with no animation"). Nothing
+needed the transaction; both consumers animate on their own.
+
+**5. Close → reopen → close.** `loadFullRes()` ends with
+`withAnimation { displayRect = fitRect }` and had no `isClosing` guard. A 115 MP
+TIFF decodes in ~600 ms and an open-then-Escape closes at ~450–600 ms, so on big
+scans the decode landed inside the close flight, flew the shrinking image back
+out to full screen, and the unmount then snapped it away. Only large files could
+show it. Two wrong theories preceded this; the state trace killed both by showing
+the close sequence was clean.
+
+### Review pass — five further issues found and fixed
+
+Reviewing the branch afterwards turned up five real defects, four of them mine:
+
+- **`files.width`/`height` recorded the bounded raster, not the file.** Once the
+  analyze decode became bounded at 4096px, `cgImage.width` stopped being the
+  image's size — a 9600×12000 scan would have reported 4096×5120 in the Info
+  card. Now read from the header.
+- **`HybridClusterer` took its matrix dimension from `usable[0]`.** Vectors of a
+  different length are packed as zero rows and never union — correct, and the old
+  scalar `cosine` behaved the same — but taking the dimension from an arbitrary
+  element made that safety net catastrophic: one stale embedding at index 0 (say,
+  written before a macOS feature-print revision) would zero every other vector and
+  silently collapse the whole library's clustering. Now the majority length.
+  Pinned by a test verified to fail on the old code.
+- **A vacuous staleness guard.** `resolveHeaderSize`'s escaping closure checked
+  `self.url`, but a closure captures a frozen copy of the View struct, so that
+  always compared equal. An arrow-key flip could land file A's aspect on file B.
+  Now keyed on a `@State` URL, which reads through the shared box.
+- **`ThumbnailGate` clamped asymmetrically** — `acquire` to `limit`, `releaseNow`
+  not at all — so a cost above the limit would credit back more than it took.
+  Unreachable today (`DecodePermit` caps at 2 against a limit of 8), but now
+  unreachable by construction.
+- **`ImageHeaderSizeCache` had no bound**, and `backdropVisible` had become
+  write-only dead state.
+
+Localization was re-verified: the large `Localizable.xcstrings` diff is
+reordering only — 0 keys lost, 0 changed, and the one new key ("Preparing your
+files…") is translated.
+
+804 tests green.
+
+---
+
+## 2026-07-28 — `feat/grid-layout-modes` (Polish 26)
+
+**Grid layout modes: Columns / Rows / Grid, and the death of the tile card.**
+
+### What started it
+
+Two complaints, one root cause.
+
+The owner's first was that making a user pick a fixed aspect ratio just to view
+their images is overcomplicated — Cosmos, Atlas for Mac, Savee, Eagle, Gatheros
+and Mattoboard all manage without a ratio picker. The second arrived as a
+screenshot: an image sitting inside a grey slab, with the hover darkening
+applied to the slab as well as the photo. "I don't like seeing, or even on hover
+seeing, the tile background."
+
+Those turn out to be the same problem. Every tile drew
+`Rectangle().fill(appState.tileFill)` at the full cell frame with the image
+`.fit` inside (`GridView.swift:952-967`). The image already fitted its natural
+shape and already scaled as large as it could — the visible opaque slab around
+it is what made a fixed ratio look *imposed*. The ratio picked a **card** shape,
+not an image shape. Delete the card and the ratios lose their reason to exist:
+the middle eight were visually indistinguishable anyway (at 4 columns / ~290pt
+tiles, 6:7 / 4:5 / 3:4 render 338 / 362 / 387pt tall — ~7% steps).
+
+### The Atlas detour
+
+Midway through the design the owner sent three Atlas screenshots. Read as a
+spacing demo at first — two shots of the same library at different gutters,
+plus Atlas's General settings with its Spacing slider. But the layout in them
+was not the square-slot Grid that had just been agreed: Atlas justifies **rows**
+(one height per row, natural widths, each row stretched to fill the window), so
+there is no empty air anywhere.
+
+Raising that turned two modes into three. Muse's masonry is vertical columns
+with a ragged bottom; Atlas's is horizontal justified rows; a square-slot grid
+aligns both axes. All three are distinct and all three are worth having.
+
+### Decisions on record
+
+Asked and answered during design, so a later session doesn't relitigate them:
+
+- **Card behind photos:** gone everywhere, in every mode — not just in a new
+  Grid mode, and not a hover-only fix.
+- **Tile Background setting:** deleted outright, not retitled to "File Card
+  Colour". Non-photo tiles (PDF/zip/video/folder) are icons and still need a
+  card; theirs is the mood's tile colour unconditionally, which is what `.auto`
+  did and what masonry already forced.
+- **Ratios:** replaced, not kept alongside.
+- **Modes:** three (Columns / Rows / Grid).
+- **Ring and hover:** hug the photo, not the slot. The click target stays the
+  slot so nothing gets harder to hit.
+- **Transparent images:** fully transparent, no auto-backdrop and no toggle
+  (Atlas has a "Backdrop Behind Transparent Images" switch; we deliberately
+  don't). A dark logo on a dark mood is hard to see — so is it in Finder and
+  Preview, and the mood is the user's choice.
+- **Rotation:** fixed as part of this work, not deferred (below).
+
+### The orientation bug this uncovered
+
+While checking the layout engine: Muse resolved an image's shape from three
+places that disagreed about EXIF-rotated photos. `AspectRatioCache.imageIOAspect`
+swapped width/height for orientations 5–8; `ImageHeaderSizeCache` did not; and
+`files.width`/`height` inherit the header cache. So an **analyzed** rotated photo
+packed at the wrong shape (DB dimensions path) while an **unanalyzed** one packed
+correctly (ImageIO fallback) — two files side by side in one folder, laid out
+differently — and the hero flight took off from a slightly wrong rect.
+
+It was mostly hidden: a wrong shape showed up as extra grey card and
+self-corrected once the thumbnail decoded and `report(aspect:)` fired. Deleting
+the card removes the grey that hid it, and in Rows a wrong aspect breaks row
+alignment outright. So `ImageHeaderSizeCache` became the single orientation
+truth and now stores **display** dimensions. Consequence, accepted rather than
+migrated: `files.width`/`height` are display dims going forward (matching what
+Preview reports), and already-analyzed rows keep their old values until
+re-analyzed.
+
+### How it was built
+
+Eight commits, each leaving the build green:
+
+1. `JustifiedRowsGeometry` — pure justified-rows packing, sibling of
+   `MasonryGeometry`. The trailing partial row is deliberately **not** justified
+   (stretching it blows a lone leftover image up to a full-width panorama), and
+   per-item aspects clamp to `[0.1, 10]` for packing only so a pathological
+   panorama can't force a sub-pixel row.
+2. One orientation truth (above).
+3. Three modes + migration. `resolve` maps `"masonry"` → `.columns` and any
+   `r*` → `.grid`; falling through to the default would have silently dropped a
+   ratio user into Columns. `ImageLayout.aspect` was kept (`nil` / `nil` / `1`)
+   because the parting-ripple damping and the PDF exporter both read it as "is
+   this a uniform lattice?".
+4. `TileBackground` deleted — model, tests, setting, `AppState` properties, the
+   mood popover's section and its `TileSwatch`, and the PDF's per-image backdrop.
+5. Photos draw on the page. The tile's whole content stack — shimmer, image,
+   star badge, hover veil, selection ring — is fitted to the photo via
+   `.aspectRatio(_, contentMode: .fit)`, the same min-scale fit as
+   `ViewerGeometry.fitWithin`. `tileFrames` now reports that **fitted** rect:
+   `HeroStage` runs `fitWithin` on it and fitting an already-fitted rect is the
+   identity, so the flight endpoint became exact instead of depending on two
+   caches agreeing. An explicit `.contentShape(Rectangle())` keeps the slot
+   clickable now that the empty part paints nothing.
+6. Spacing slider — the hardcoded 14pt gutter, promoted to a persisted 0–28pt
+   control beside the images-per-row slider. Both share one capsule builder.
+7. Rows in the PDF export — `paginateRows` consumes the same
+   `JustifiedRowsGeometry.rows(...)` output and only decides page breaks, so
+   print matches screen and the packing isn't forked.
+8. French strings + docs.
+
+### Verification
+
+824 unit tests green (26 new: 11 rows-geometry, 4 orientation, 8 layout/migration,
+6 spacing, 4 PDF rows — minus the 5 deleted `TileBackgroundTests`).
+
+Verified in the running app: Grid mode renders square slots with aligned rows
+and columns, no slab, star badges pinned to each photo's own corner; spacing at
+0 packs flush with no overlap; the French build renders. UI scripting was not
+authorized in that session, so the interactive checks — hero open/close on wide
+/ tall / EXIF-rotated photos, and clicking the empty air beside a photo in Grid
+— were handed to the owner. Anything that looks wrong in the hero flight must be
+diagnosed by instrumenting the running app, never by reading the source: see
+`docs/hero-viewer-open-close-handoff.md`.
+
+### Localization
+
+4 new keys (Columns / Rows / Spacing between images / the layout-sheet subtitle),
+26 orphaned keys removed. Pruning was done conservatively: `grep` cannot see keys
+reached through interpolation (`"Analyzing %lld of %lld"`) or through
+`NSLocalizedString(variable)`, so only plain literals this change actually
+orphaned were deleted, and shared labels like `None` / `Auto` / `Light` (still
+used by the mood swatches) were left alone.
+
+### 2026-07-28 (same branch) — owner feedback round 1
+
+Five changes after the owner tried the build:
+
+- **Spacing moved out of the floating capsule into Settings → Grid**, joined by a
+  new **Corner Radius** slider. Both are set-once settings, not things you fiddle
+  with while browsing; zoom stays the only floating control.
+- **Rounded corners carry into the hero viewer** (`HeroStage`'s clip shape), so a
+  photo keeps its shape when opened. The layout radius is the value the
+  FULL-SCREEN image shows; the flight scales the whole rendered layer, so the
+  rounding scales with it mid-flight.
+- **Spacing can no longer reach 0.** The floor is 4pt: flush-packed images read
+  as one continuous picture rather than a grid. (Shipped as 0–28 earlier the same
+  day; the owner asked for a floor after seeing it.)
+- **The Image Layout sheet is content-sized** (`.frame(width:)` +
+  `fixedSize`), not `windowFittedSheetHeight(ideal: 720)`. Three tiles and a
+  subtitle left most of that sheet empty. It has no ScrollView now, so it doesn't
+  need the window-fitted cap.
+
+**"Spacing only affects columns, not rows" — investigated, not a bug.** Confirmed
+the app was in Grid mode. Every Grid slot is the same square; a wide photo fills
+the slot's width but not its height, so it sits centred with air above and below.
+Between columns most photos touch the slot edges, so the gutter IS the spacing;
+between rows it's spacing plus the air under the top photo plus the air over the
+bottom one, which dwarfs the slider's contribution. That air is inherent to
+square slots — the price of "same slot size, nothing cropped".
+
+Owner's call: **leave Grid as-is and use Rows for the uniform-gap look** (Rows is
+what his Atlas reference actually shows). Cropping-to-fill in Grid was rejected —
+it's the opposite of the no-cropping requirement Grid was designed around.
+
+### 2026-07-28 (same branch) — review + QA pass
+
+Reviewed the whole session's diff and fixed six things. Three were real defects,
+three were documentation drift.
+
+**Defects.**
+
+1. **Rows could collapse a row to a 1pt sliver.** Very tall images add almost no
+   width per item, so in a narrow window at maximum spacing a row accumulated
+   until the GUTTERS ALONE exceeded the row width — justification then divided by
+   a negative usable width and `max(1, …)` floored the whole row at one point.
+   Reproduced exactly (12 items, 308pt of gutters in a 300pt width) before
+   fixing. `JustifiedRowsGeometry.rows` now closes the row before that can
+   happen; `testRowClosesBeforeGuttersSwallowTheWidth` pins it.
+2. **A UserDefaults observer per grid tile.** The corner radius was read with
+   `@AppStorage` inside `TileView` — but the grid is virtualized, so tiles mount
+   and unmount constantly, and the file's own convention is to pass such values
+   down from `GridView`'s single `@AppStorage` (as `showFileNames` already does).
+   Now a plain `cornerRadius` parameter.
+3. **The Settings sliders were not VoiceOver-adjustable.** They were wrapped in
+   `.accessibilityElement(children: .combine)`, which merges the row into a plain
+   group and strips the slider's adjustable trait — readable but not changeable.
+   The label and readout now fold into the slider's own
+   `accessibilityLabel`/`accessibilityValue` and are hidden as separate elements.
+
+**Also changed:** the hero viewer's corner-radius compensation now divides by the
+user's zoom as well as the flight scale (`.scaleEffect(zoom)` sits outside the
+clip too), so the radius holds when the image is pulled back below Fit.
+
+**Settings sheet sizing.** Adding the two sliders pushed the form to ~740pt.
+It was content-sized with no cap, so on a shorter window it spilled past the
+bottom edge — the exact trap the sheet-sizing durable constraint describes. It
+now uses `windowFittedSheetHeight(width: 600, ideal: 760)`: a tall window shows
+the whole form with no dead space, a short one caps it and the Form scrolls.
+
+**Doc drift fixed:** the architecture map still said GridView had a spacing
+slider; CLAUDE.md still listed Image Layout among the ScrollView sheets needing
+the window-fitted cap (it's content-sized now) and still implied Settings was
+safely content-sized.
+
+### 2026-07-28 (same branch) — every modal fits the window
+
+Owner: "settings and all modals should fit in window and just scroll."
+
+Audited every `.sheet` in the app. Five already capped their height to the
+presenting window via `windowFittedSheetHeight` (About, Settings, Manage Drive
+Shares, Smart Collection Rules, ReconnectWizard) and DuplicatesView is
+user-resizable. Four were content-sized with no cap at all — a macOS sheet
+EXTENDS past the window rather than clipping, so each would spill on a short
+window:
+
+- **Image Layout** — got its `ScrollView` back plus `ideal: 300`.
+- **Customize Collection** (Symbol & Color) — the tallest of the small sheets
+  (two palettes). The preview and palettes now scroll; Cancel/Update stay pinned
+  outside the scroll so they're reachable however short the window is.
+  `ideal: 560`.
+- **Drive Share Form** — the idle form (three fields, expiry picker, Publish) is
+  ~385pt. Scrollable, `ideal: 420`.
+- **Metadata Import** — short by nature, but capped for the same rule at
+  `ideal: 220`.
+
+The durable constraint now states the blanket rule rather than listing which
+sheets are exempt: every card sheet is window-fitted, every one wraps growable
+content in a `ScrollView`/`Form`, and action rows stay outside the scroll.
+Content-sizing is explicitly NOT an alternative — "it's short enough" stops
+being true the moment a row is added, which is exactly what happened to Settings
+earlier the same day.
+
+### 2026-07-28 (same branch) — modals became in-window cards
+
+Owner, on the Info modal: "it extends out then clips to be inside. this should
+not happen." He pointed at Lineform as proof it's solvable.
+
+**Diagnosis.** A `.sheet` gets its OWN window. `windowFittedSheetHeight` capped
+its height by reading the parent window — but the AppKit view doing that reading
+can't find its parent until it's inserted into a hierarchy, which is one runloop
+AFTER the first layout. So frame one drew at the ideal height (720 for Info),
+spilled past a short window's bottom edge, and the measurement then snapped it
+back.
+
+**What Lineform actually does** (looked at properly the second time, after
+first grepping only its first-launch overlay): its Settings is not a sheet at
+all. It's a ZStack layer inside the editor — `museModalLayer` in
+`EditorContainerView.swift` — handed `availableWidth: geometry.size.width` from
+a `GeometryReader`, with the card centred by `maxWidth/maxHeight: .infinity`.
+The geometry is known during the first layout, so there is nothing to measure
+and nothing to snap.
+
+**What Muse does now.** `.museModal(isPresented:width:palette:)`
+(`Views/Modal/`) renders a scrim plus a centred card inside a `GeometryReader`.
+The card's height is a `maxHeight` CAP rather than a measured frame: it takes
+its natural height up to the cap and its own ScrollView scrolls past that. All
+eleven modals converted; `WindowFittedSheetHeight`, `SheetFit` and
+`SheetFitTests` deleted.
+
+**Four things this had to preserve, all load-bearing:**
+
+1. **The Drive publish's cancel-on-dismiss.** The card is built ONLY while
+   presented, so dismissal genuinely unmounts it and `.onDisappear` fires. An
+   always-mounted card hidden with opacity would leave an upload running
+   headless and the share would go public unseen.
+2. **The hero close.** `EscapeAction.dismissModal` resolves ABOVE the viewer and
+   returns early, so a modal press can never interleave with the return flight.
+   Nothing else swallows Escape for a card the way a sheet's window did.
+3. **Keyboard capture.** The window keeps key focus behind a card, so
+   `AppState.modalPresented` now gates the grid's `PageScrollCatcher` — without
+   it the arrow keys still drove the grid underneath.
+4. **Where modals are presented.** A card is sized from the geometry of whatever
+   it's attached to, so presented from a 240pt sidebar row it would be laid out
+   against 240pt. Every modal is presented at the shell; the four
+   collection-scoped ones hand their payload up through
+   `AppState.collectionModal`.
+
+**Accepted loss:** Duplicates was a user-resizable sheet window and is now a
+card at the window's size minus a margin.
+
+Verified by measurement rather than by eye: with the Info card open, the sidebar
+samples at 167 grey — exactly 0.34 black over white, the same scrim as the grid
+(135,138,148 over the mood background) — confirming the scrim covers the whole
+window and clicks can't reach the sidebar behind it.
+
+### 2026-07-28 (same branch) — review pass over the modal work
+
+**Cards filled the window.** A `ScrollView` is greedy — it takes every point
+offered — so each card grew to its full height cap with the content floating in
+the middle, however little content there was; a `Form` (Settings) does the same.
+Two fixes INSIDE the card were tried and both failed against the running app,
+and are recorded so they aren't rediscovered: `ViewThatFits` there is asked for
+an IDEAL height (exactly what a content-hugging card asks for) and resolves to
+its greedy candidate; a `GeometryReader` measurement inside `ModalScroll` never
+settled. The scrolling decision now lives in the presenter, which measures the
+content's natural height from inside its scroller, gives the scroller that
+height clamped to the window, and disables scrolling while it fits.
+
+**`ViewThatFits` in the presenter was also wrong, for a different reason.** It
+worked visually — the card hugged — but it builds EVERY candidate in order to
+measure them, and these cards have side effects on appear: Metadata Import
+starts a folder import, Manage Drive Shares loads from Drive, the share form
+creates an upload service. Doubling those to make a layout decision isn't a risk
+worth taking, so the presenter builds the modal exactly once and measures
+instead.
+
+**Also fixed in this pass:**
+
+- **Duplicates had a ScrollView inside the presenter's ScrollView.** It was the
+  one modal not converted when the others' scrollers were removed.
+- **The scrolling card was 16pt wider than the non-scrolling one**, because the
+  scrollbar channel was added to the card's width rather than taken out of the
+  content's. The channel is now reserved in both states, so a card can't change
+  width when its content crosses the scroll threshold — and the measurement
+  can't feed back into the width that produced it.
+
+**Known wart, not fixed:** `ModalScroll` is now a pass-through that does not
+scroll — it only marks the growable region. Its name is misleading; unwrapping
+it across nine call sites was judged riskier than the confusion, and its doc
+comment states plainly what it is and isn't.

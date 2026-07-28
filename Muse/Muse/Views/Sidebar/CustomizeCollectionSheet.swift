@@ -60,19 +60,28 @@ struct CustomizeCollectionSheet: View {
             }
             .padding(.bottom, 20)
 
-            // A visible caption so the row replica reads as a PREVIEW, not a
-            // stray second copy of the sidebar row (owner feedback).
-            Text("Live Preview")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .padding(.bottom, 6)
-            preview
-                .padding(.bottom, 20)
+            // The preview and the two palettes scroll; the action row below
+            // stays pinned so Cancel/Update are reachable however short the
+            // window is.
+            ModalScroll {
+                VStack(alignment: .leading, spacing: 0) {
+                    // A visible caption so the row replica reads as a PREVIEW,
+                    // not a stray second copy of the sidebar row (owner
+                    // feedback).
+                    Text("Live Preview")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.bottom, 6)
+                    preview
+                        .padding(.bottom, 20)
 
-            HStack(alignment: .top, spacing: 24) {
-                colorColumn
-                Divider()
-                symbolColumn
+                    HStack(alignment: .top, spacing: 24) {
+                        colorColumn
+                        Divider()
+                        symbolColumn
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.bottom, 36)
 
@@ -92,7 +101,7 @@ struct CustomizeCollectionSheet: View {
             }
         }
         .padding(28)
-        .frame(width: 480)
+        // Width and the height cap come from the modal presenter.
     }
 
     // MARK: - Preview

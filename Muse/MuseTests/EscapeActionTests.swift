@@ -165,3 +165,45 @@ final class EscapeActionTests: XCTestCase {
         XCTAssertFalse(EscapeResolver.searchPresent(isSearchActive: false, queryIsEmpty: true))
     }
 }
+
+// MARK: - Modal layer
+
+/// Modals became in-window cards rather than sheets, so nothing else swallows
+/// Escape for them — the resolver has to peel them, and first.
+extension EscapeActionTests {
+
+    func testModalWinsOverEverything() {
+        XCTAssertEqual(
+            EscapeResolver.action(modalPresented: true,
+                                  hasSelectedFile: true, selectedFileIsHero: true,
+                                  searchActive: true, tagsActive: true,
+                                  insideCollection: true, showingCollectionsPage: true),
+            .dismissModal)
+    }
+
+    /// The hero close is delicate — a modal press must resolve to the modal and
+    /// nothing else, never interleaving with the viewer's return flight.
+    func testModalOverAnOpenHeroDoesNotCloseTheHero() {
+        XCTAssertEqual(
+            EscapeResolver.action(modalPresented: true,
+                                  hasSelectedFile: true, selectedFileIsHero: true,
+                                  searchActive: false, tagsActive: false,
+                                  insideCollection: false, showingCollectionsPage: false),
+            .dismissModal)
+    }
+
+    func testNoModalLeavesTheChainUnchanged() {
+        XCTAssertEqual(
+            EscapeResolver.action(modalPresented: false,
+                                  hasSelectedFile: true, selectedFileIsHero: true,
+                                  searchActive: false, tagsActive: false,
+                                  insideCollection: false, showingCollectionsPage: false),
+            .closeHero)
+        XCTAssertEqual(
+            EscapeResolver.action(modalPresented: false,
+                                  hasSelectedFile: false, selectedFileIsHero: false,
+                                  searchActive: false, tagsActive: true,
+                                  insideCollection: true, showingCollectionsPage: true),
+            .clearTags)
+    }
+}

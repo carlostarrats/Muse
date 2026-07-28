@@ -59,7 +59,7 @@ struct DuplicatesView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(40)
             } else {
-                ScrollView {
+                ModalScroll {
                     VStack(spacing: 0) {
                         ForEach(Array(finder.groups.enumerated()),
                                 id: \.element.id) { index, group in
@@ -97,7 +97,7 @@ struct DuplicatesView: View {
             }
             .padding(16)
         }
-        .frame(minWidth: 720, minHeight: 480)
+        // Width and the height cap come from the modal presenter.
         .background(Color(NSColor.windowBackgroundColor))
         .onAppear { seedDefaults() }
         .onChange(of: finder.groups) { _, _ in seedDefaults() }
@@ -117,7 +117,7 @@ struct DuplicatesView: View {
 
     @ViewBuilder
     private func groupRow(_ group: DuplicateGroup) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal) {
             HStack(spacing: 12) {
                 ForEach(group.members, id: \.url) { member in
                     memberCard(

@@ -16,6 +16,11 @@
 //
 
 enum EscapeAction: Equatable {
+    /// A modal card is open — dismiss it. Wins outright, including over an open
+    /// viewer: modals are in-window cards now, not sheets, so nothing else
+    /// swallows Escape for them, and a modal opened over a viewer is the
+    /// innermost layer.
+    case dismissModal
     /// Image/raw/psd hero viewer open — run its return flight (viewerClosing).
     case closeHero
     /// A non-hero viewer (PDF, video, …) open — clear the selected file.
@@ -48,12 +53,18 @@ enum EscapeResolver {
     /// clears the whole set first (one press), then a further press exits the
     /// collection. It's peeled after search to mirror the chain (a search runs
     /// over whatever the tags left showing).
-    static func action(hasSelectedFile: Bool,
+    static func action(modalPresented: Bool = false,
+                       hasSelectedFile: Bool,
                        selectedFileIsHero: Bool,
                        searchActive: Bool,
                        tagsActive: Bool,
                        insideCollection: Bool,
                        showingCollectionsPage: Bool) -> EscapeAction {
+        // Above the viewer: a modal card sits on top of everything, and since
+        // modals became in-window cards (not sheets) nothing else consumes
+        // Escape for them. Returning early also keeps the modal press from
+        // touching the hero close sequence.
+        if modalPresented { return .dismissModal }
         if hasSelectedFile {
             return selectedFileIsHero ? .closeHero : .closeViewer
         }

@@ -16,6 +16,7 @@ struct MetadataImportSheet: View {
     @StateObject private var model = MetadataImportModel()
 
     var body: some View {
+        ModalScroll {
         VStack(alignment: .leading, spacing: 14) {
             Text("Import Keywords & Ratings")
                 .font(.title3.weight(.semibold))
@@ -55,8 +56,10 @@ struct MetadataImportSheet: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        }
         .padding(24)
-        .frame(width: 360)
+        // Width and the height cap come from the modal presenter.
         .onAppear { model.start(folder: request.folder, appState: appState) }
         .onDisappear { model.cancel() }
     }

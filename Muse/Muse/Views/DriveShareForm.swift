@@ -39,6 +39,7 @@ struct DriveShareSheet: View {
             }
             .padding(.bottom, 20)
 
+            ModalScroll {
             switch service.phase {
             case .idle:
                 form
@@ -57,9 +58,11 @@ struct DriveShareSheet: View {
             case .failed(let message):
                 failedView(message)
             }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(28)
-        .frame(width: 460)
+        // Width and the height cap come from the modal presenter.
         // Closing the sheet by ANY path must abort an in-flight publish —
         // otherwise the upload continues headless, setAnyoneReader fires, and
         // the collection goes public with the link rendered into a dismissed

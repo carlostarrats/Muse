@@ -19,7 +19,21 @@ struct GridView: View {
     // "add a folder" guidance, even while the always-present iCloud root remains).
     @ObservedObject private var collectionsEngine = CollectionsEngine.shared
 
-    private let spacing: CGFloat = 14
+    /// User-set gutter between tiles, persisted; the Settings → Grid slider
+    /// drives it. Its floor is a real gap, never 0 — flush-packed images read
+    /// as one continuous picture rather than a grid.
+    @AppStorage(AppSettings.gridSpacingKey) private var gridSpacingSetting =
+        AppSettings.defaultGridSpacing
+    private var spacing: CGFloat {
+        CGFloat(AppSettings.clampGridSpacing(gridSpacingSetting))
+    }
+    /// User-set image corner radius, persisted; the Settings → Grid slider
+    /// drives it. Read once here and passed into every tile.
+    @AppStorage(AppSettings.gridCornerRadiusKey) private var gridCornerRadiusSetting =
+        AppSettings.defaultGridCornerRadius
+    private var cornerRadius: CGFloat {
+        CGFloat(AppSettings.clampGridCornerRadius(gridCornerRadiusSetting))
+    }
     private let contentInset: CGFloat = 20
     @State private var addTagFile: FileNode? = nil
     @State private var newTagText = ""
@@ -130,7 +144,7 @@ struct GridView: View {
                     // valid frame with no full-set materialization — virtualization
                     // is untouched.
                     PageScrollCatcher(
-                        isActive: { appState.selectedFile == nil },
+                        isActive: { appState.selectedFile == nil && !appState.modalPresented },
                         onArrow: { direction in
                             let files = appState.visibleFiles
                             guard !files.isEmpty, !frames.isEmpty else { return nil }
@@ -249,6 +263,9 @@ struct GridView: View {
             .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
             .overlay(alignment: .bottomTrailing) {
                 if !appState.visibleFiles.isEmpty {
+                    // Zoom is the only floating control — spacing and corner
+                    // radius live in Settings (they're set once, not fiddled
+                    // with while browsing).
                     columnSlider
                         .padding(.trailing, 16)
                         .padding(.bottom, 16)
@@ -283,15 +300,21 @@ struct GridView: View {
                     recompute(width: contentWidth)
                 }
             }
+            .onChange(of: gridSpacingSetting) { _, _ in
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    recompute(width: contentWidth)
+                }
+            }
             .onChange(of: showFileNames) { _, _ in
                 withAnimation(.easeInOut(duration: 0.25)) {
                     recompute(width: contentWidth)
                 }
             }
             .onChange(of: aspects.version) { _, _ in
-                // Fixed-ratio layouts ignore per-image aspects, so a decoded
+                // Grid's slots are square regardless of the image, so a decoded
                 // thumbnail reporting its real ratio must NOT trigger a relayout
-                // (it would churn the whole grid for no visual change).
+                // there (it would churn the whole grid for no change in the
+                // packing). Columns and Rows do depend on it.
                 guard appState.imageLayout.aspect == nil else { return }
                 recompute(width: contentWidth)
             }
@@ -360,8 +383,16 @@ struct GridView: View {
                          reportAspect: { [weak aspects] ratio in
                              aspects?.report(aspect: ratio,
                                               forStandardizedPath: file.url.standardizedFileURL.path)
-                         })
+                         },
+                         imageAspect: aspects.aspect(for: file),
+                         cornerRadius: cornerRadius)
                     .frame(width: rect.width, height: rect.height)
+                    // The photo no longer paints the whole slot, so without an
+                    // explicit shape the empty part of a Grid slot isn't
+                    // hit-testable and a click beside the image would fall
+                    // through to the background (clearing the selection).
+                    // Ring and hover hug the photo; the TARGET stays the slot.
+                    .contentShape(Rectangle())
                     // Instant single-click select (Cmd toggles, Shift ranges);
                     // a second quick tap opens. Selection border lives inside
                     // TileView so it scales with the hover zoom.
@@ -556,8 +587,8 @@ struct GridView: View {
         return out
     }
 
-    /// Recompute the full masonry packing. Called only on set/column/width/
-    /// aspect changes — not on scroll.
+    /// Recompute the full packing. Called only on set/column/width/aspect/
+    /// spacing changes — not on scroll.
     private func recompute(width: CGFloat) {
         let files = appState.visibleFiles
         guard width > 0, !files.isEmpty else {
@@ -566,20 +597,36 @@ struct GridView: View {
             layoutWidth = width
             return
         }
-        // Fixed-ratio layouts give every tile one aspect (uniform aspects make
-        // MasonryGeometry pack a row-major grid); masonry uses each image's
-        // natural ratio from the cache.
-        let ratios: [CGFloat]
-        if let fixed = appState.imageLayout.aspect {
-            ratios = Array(repeating: fixed, count: files.count)
-        } else {
-            ratios = files.map { aspects.aspect(for: $0) }
+        let natural = files.map { aspects.aspect(for: $0) }
+        let result: (frames: [CGRect], totalHeight: CGFloat)
+
+        switch appState.imageLayout {
+        case .rows:
+            // One control drives every mode: the images-per-row slider's column
+            // width IS the target row height, so dragging it grows and shrinks
+            // images in Rows exactly as it does in Columns and Grid.
+            let target = max(1, (width - spacing * CGFloat(max(0, gridColumns - 1)))
+                                / CGFloat(max(1, gridColumns)))
+            let r = JustifiedRowsGeometry.compute(aspects: natural,
+                                                  targetHeight: target,
+                                                  width: width,
+                                                  spacing: spacing,
+                                                  captionHeight: effectiveCaptionHeight)
+            result = (r.frames, r.totalHeight)
+        case .columns, .grid:
+            // Grid gives every tile one aspect — uniform aspects make
+            // MasonryGeometry pack an exact row-major lattice. Columns uses
+            // each image's natural ratio from the cache.
+            let ratios = appState.imageLayout.aspect
+                .map { Array(repeating: $0, count: files.count) } ?? natural
+            let r = MasonryGeometry.compute(aspects: ratios,
+                                            columns: gridColumns,
+                                            width: width,
+                                            spacing: spacing,
+                                            captionHeight: effectiveCaptionHeight)
+            result = (r.frames, r.totalHeight)
         }
-        let result = MasonryGeometry.compute(aspects: ratios,
-                                             columns: gridColumns,
-                                             width: width,
-                                             spacing: spacing,
-                                             captionHeight: effectiveCaptionHeight)
+
         frames = result.frames
         totalHeight = result.totalHeight
         layoutWidth = width
@@ -617,32 +664,45 @@ struct GridView: View {
     /// Floating zoom control: fewer columns (bigger images) on the left,
     /// more (smaller) on the right.
     private var columnSlider: some View {
+        sliderCapsule(
+            minIcon: "square.grid.2x2",
+            maxIcon: "square.grid.4x3.fill",
+            label: String(localized: "Images per row"),
+            binding: Binding(
+                get: { Double(gridColumns) },
+                set: { gridColumns = Int($0.rounded()) }),
+            range: 2...8,
+            step: 1)
+    }
+
+    /// Shared chrome for the bottom-right slider: same 20pt content height and
+    /// 9pt vertical padding as the status pills, so every bottom capsule
+    /// matches.
+    private func sliderCapsule(minIcon: String, maxIcon: String, label: String,
+                               binding: Binding<Double>,
+                               range: ClosedRange<Double>,
+                               step: Double) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: "square.grid.2x2")
+            Image(systemName: minIcon)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
                 // Decorative min/max hint — the slider itself carries the label.
                 .accessibilityHidden(true)
-            Slider(value: Binding(
-                get: { Double(gridColumns) },
-                set: { gridColumns = Int($0.rounded()) }
-            ), in: 2...8, step: 1)
-            .frame(width: 130)
-            .controlSize(.small)
-            .accessibilityLabel("Images per row")
-            Image(systemName: "square.grid.4x3.fill")
+            Slider(value: binding, in: range, step: step)
+                .frame(width: 130)
+                .controlSize(.small)
+                .accessibilityLabel(label)
+            Image(systemName: maxIcon)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
         }
-        // Match the status pills exactly: same 20pt content height + 9pt
-        // vertical padding so every bottom capsule is the same height.
         .frame(height: 20)
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
         .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
         .overlay(Capsule(style: .continuous).strokeBorder(.primary.opacity(0.08)))
-        .help("Images per row")
+        .help(label)
     }
 
     /// Takes the viewport height explicitly (mirrors `masonryCanvas(viewportHeight:)`
@@ -709,6 +769,19 @@ private struct TileView: View {
     /// Reports the decoded thumbnail's exact aspect back to the layout so the
     /// tile frame matches the image (no grey letterbox).
     var reportAspect: (CGFloat) -> Void = { _ in }
+    /// The IMAGE's own shape (height ÷ width) — which is not the slot's shape
+    /// in Grid mode, where every slot is square. Drives where the photo
+    /// actually draws, and therefore where the ring, hover veil and star badge
+    /// sit. Fallback only: `ImageHeaderSizeCache` wins when it's warm, because
+    /// the hero flight reads that same table and the two rects must not
+    /// disagree (they'd make the photo jump at flight start).
+    var imageAspect: CGFloat = 1
+    /// User-set image corner radius, shared with the hero viewer so a photo
+    /// keeps its shape when opened. Passed DOWN from `GridView`'s single
+    /// `@AppStorage` (like `showFileNames`), not read per tile — a virtualized
+    /// grid mounts and unmounts tiles constantly, and one UserDefaults observer
+    /// per live tile is churn for a value that's the same for all of them.
+    var cornerRadius: CGFloat = 0
 
     @State private var thumbnail: NSImage?
     @State private var hovering = false
@@ -722,10 +795,17 @@ private struct TileView: View {
     private static let ringInset: CGFloat = 0
     /// Ring stroke thickness.
     private static let ringWidth: CGFloat = 2.5
-    /// Ring corner radius. Set to 0 for a square ring.
-    private static let ringCornerRadius: CGFloat = 8
     /// Tint laid over the selected (shrunken) image, in the ring's color.
     private static let selectionTintOpacity = 0.18
+
+    /// The shape everything in the tile clips to.
+    private var tileShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+    }
+    /// The selection ring takes the user's corner radius too, so the ring and
+    /// the image it wraps always have the same corners — square at 0, rounding
+    /// together as the setting goes up.
+    private var ringRadius: CGFloat { cornerRadius }
 
     /// True when this tile is multi-selected. (We deliberately do NOT treat the
     /// open file as selected: while a viewer is up its tile is hidden via the
@@ -761,6 +841,23 @@ private struct TileView: View {
 
     private var isImageKind: Bool {
         file.kind == .image || file.kind == .raw || file.kind == .psd || file.kind == .svg
+    }
+
+    /// Where the photo draws inside its slot, as a width ÷ height ratio for
+    /// `.aspectRatio(_:contentMode:)`.
+    ///
+    /// Prefers `ImageHeaderSizeCache` — the same never-evicting table the hero
+    /// flight resolves its take-off rect from, warmed off-main by the thumbnail
+    /// pass long before any click. Using it here means the ring and the flight
+    /// are computing the same rect from the same number. `imageAspect` (from
+    /// AspectRatioCache, which may still hold a placeholder or a stale DB
+    /// value) is the cold-start fallback.
+    private var drawnAspectRatio: CGFloat {
+        if let size = ImageHeaderSizeCache.cached(file.url),
+           size.width > 0, size.height > 0 {
+            return size.width / size.height
+        }
+        return imageAspect > 0 ? 1 / imageAspect : 1
     }
 
     var body: some View {
@@ -844,22 +941,48 @@ private struct TileView: View {
     /// The image area: the thumbnail/preview/card, clipped, with the selection
     /// overlay and the global-frame reporter for the hero open/close flight.
     /// The caption strip (if any) sits below this, OUTSIDE the selection border.
+    ///
+    /// For an image kind the whole stack is fitted to the photo's own shape, so
+    /// the ring, the hover veil and the star badge hug the visible image and
+    /// never box in empty slot space. In Columns and Rows the slot already has
+    /// the image's shape, so the fit is a no-op; only Grid (square slots) shows
+    /// a difference. Non-photo cards keep the full slot — their card IS the
+    /// tile.
+    @ViewBuilder
     private var imageContent: some View {
+        if isImageKind {
+            contentStack
+                .aspectRatio(drawnAspectRatio, contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            contentStack
+        }
+    }
+
+    /// The stacked tile content. For an image kind this is sized to the drawn
+    /// photo by `imageContent` above, which is why `tileFrames` (reported from
+    /// its background) carries the DRAWN rect rather than the slot rect:
+    /// `HeroStage` runs `ViewerGeometry.fitWithin` on it, and fitting an
+    /// already-fitted rect is the identity — so the flight endpoint is exact
+    /// instead of depending on two caches agreeing. Don't "restore" this to
+    /// report the slot.
+    private var contentStack: some View {
         ZStack {
             // When selected, the gap between the shrunken image and the ring
             // shows the app background (same color as the grid gutter), so the
             // image reads as lifted into the ring.
             if isSelected {
-                Rectangle().fill(appState.moodPalette.background)
+                tileShape.fill(appState.moodPalette.background)
             }
 
-            // The image. Square-cornered, natural aspect; shrinks inward when
+            // The image at its natural aspect, clipped to the user's corner
+            // radius (0 = square, the shipped look); shrinks inward when
             // selected to reveal the gap. The selection tint rides on top of it.
             tile
-                .clipShape(Rectangle())
+                .clipShape(tileShape)
                 .overlay {
                     if isSelected {
-                        Rectangle().fill(ringColor.opacity(Self.selectionTintOpacity))
+                        tileShape.fill(ringColor.opacity(Self.selectionTintOpacity))
                     }
                 }
                 .padding(isSelected ? Self.selectionInset : 0)
@@ -904,15 +1027,16 @@ private struct TileView: View {
             }
 
             // Hover veil — unselected tiles only; a calm dark wash, no resize.
-            // Sits ABOVE the image AND the badge so both darken on hover.
-            Rectangle()
+            // Sits ABOVE the image AND the badge so both darken on hover, and
+            // follows the image's corners so it never squares off a rounded one.
+            tileShape
                 .fill(Color.black)
                 .opacity((hovering && !isSelected) ? Self.hoverVeilOpacity : 0)
                 .allowsHitTesting(false)
 
             // The padded ring, just inside the tile's outer edge.
             if isSelected {
-                RoundedRectangle(cornerRadius: Self.ringCornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: ringRadius, style: .continuous)
                     .strokeBorder(ringColor, lineWidth: Self.ringWidth)
                     .padding(Self.ringInset)
             }
@@ -947,11 +1071,14 @@ private struct TileView: View {
     @ViewBuilder
     private var tile: some View {
         if isImageKind {
-            // Placeholder stays put; the decoded image fades IN over it when it
-            // lands, so a cold grid resolves as a soft fade.
+            // No backdrop: a photo draws on the page itself. The opaque slab a
+            // fitted image used to sit on is exactly what made a layout read as
+            // imposed, and a transparent PNG is meant to show the page through.
+            // The placeholder stays put and the decoded image fades IN over it,
+            // so a cold grid resolves as a soft fade. Both are already inside
+            // the photo-fitted container, so the shimmer occupies the rect the
+            // image will land in — nothing resizes when it arrives.
             ZStack {
-                Rectangle()
-                    .fill(appState.tileFill)
                 if thumbnail == nil {
                     let tuning = shimmerTuning(
                         isCustom: appState.mood == .custom,
@@ -1010,12 +1137,10 @@ private struct TileView: View {
         }
     }
 
-    /// Readable color for the card's internal filename, adapting to the effective
-    /// tile backdrop (light text on a dark backdrop, dark on light). None has no
-    /// backdrop, so it follows the page (mood) background instead.
+    /// Readable colour for the card's internal filename against the card's
+    /// mood-derived backdrop (light text on a dark card, dark on light).
     private var cardNameColor: Color {
-        let rgb = appState.effectiveTileBackground.backdropRGB(for: appState.moodPalette)
-            ?? appState.moodPalette.backgroundRGB
+        let rgb = appState.moodPalette.tileRGB
         return SelectionStyle.relativeLuminance(rgb) < 0.5
             ? Color.white.opacity(0.9)
             : Color.black.opacity(0.55)

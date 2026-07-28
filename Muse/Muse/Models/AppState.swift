@@ -484,13 +484,26 @@ final class AppState: ObservableObject {
         didSet { AppSettings.imageLayout = imageLayout }
     }
 
-    // MARK: - Tile background
+    /// The About/Info card.
+    @Published var infoShown = false
+    /// The Image Layout card.
+    @Published var imageLayoutShown = false
 
-    /// Global backdrop behind grid content (None / Auto / Light / Dark Grey /
-    /// Black). Persisted; GridView reads `tileFill`.
-    @Published var tileBackground: TileBackground = AppSettings.tileBackground {
-        didSet { AppSettings.tileBackground = tileBackground }
+    /// Whether ANY in-window modal card is up. Modals stopped being `.sheet`s,
+    /// so the window keeps key focus while one is open — without this the grid's
+    /// key catcher would still take arrow/page keys behind the card, and Escape
+    /// wouldn't know to peel the modal first.
+    var modalPresented: Bool {
+        infoShown || imageLayoutShown || settingsShown || driveSharesShown
+            || duplicatesSheetVisible || reconnectShown
+            || metadataImportRequest != nil || collectionModal != nil
     }
+
+    /// A collection-scoped modal awaiting presentation by the shell. Set from a
+    /// sidebar row / the Collections page / the share button; `ContentView`
+    /// renders it, because an in-window card is sized from its host's geometry
+    /// and a sidebar row is only ~240pt wide. See `CollectionModal`.
+    @Published var collectionModal: CollectionModal?
 
     // MARK: - Grid filter
 
@@ -517,15 +530,12 @@ final class AppState: ObservableObject {
         didSet { AppSettings.sidebarCollectionSortMode = sidebarCollectionSortMode }
     }
 
-    /// Masonry has no letterbox, so it always uses Auto; only fixed ratios honor
-    /// the user's pick. The stored `tileBackground` is preserved while in masonry
-    /// so switching back to a ratio restores the choice.
-    var effectiveTileBackground: TileBackground {
-        imageLayout == .masonry ? .auto : tileBackground
-    }
-
-    /// The resolved tile backdrop for the current mood + layout + selection.
-    var tileFill: Color { effectiveTileBackground.fill(for: moodPalette) }
+    /// Backdrop for a NON-PHOTO tile — the card behind a PDF / zip / video /
+    /// folder icon, which needs something to sit on. Photos never draw a card:
+    /// the slab around a fitted image is what made a layout read as imposed.
+    /// Always the mood's tile colour (the old TileBackground setting's `.auto`,
+    /// which Columns and Rows already forced).
+    var tileFill: Color { moodPalette.tileFill }
 
     // MARK: - Watcher
 

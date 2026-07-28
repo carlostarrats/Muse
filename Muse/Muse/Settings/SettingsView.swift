@@ -21,7 +21,41 @@ struct SettingsView: View {
     @AppStorage(AppSettings.showStarsOnGridKey) private var showStarsOnGrid = true
     @AppStorage(AppSettings.showCollectionsInSidebarKey) private var showCollectionsInSidebar = true
     @AppStorage(AppSettings.showICloudFolderInSidebarKey) private var showICloudFolder = true
+    @AppStorage(AppSettings.gridSpacingKey) private var gridSpacing =
+        AppSettings.defaultGridSpacing
+    @AppStorage(AppSettings.gridCornerRadiusKey) private var gridCornerRadius =
+        AppSettings.defaultGridCornerRadius
     @State private var authBusy = false
+
+    /// A labelled slider with its current value in points on the right — the
+    /// shape the grid's two continuous settings share.
+    ///
+    /// The label and the readout are folded INTO the slider's own accessibility
+    /// (label + value) and hidden as separate elements. Combining the HStack
+    /// instead would merge the slider into a plain group and strip its
+    /// adjustable trait, leaving VoiceOver able to read the setting but not
+    /// change it.
+    private func measuredSlider(title: String,
+                                value: Binding<Double>,
+                                range: ClosedRange<Double>,
+                                clamp: @escaping (Double) -> Double) -> some View {
+        let points = Int(clamp(value.wrappedValue))
+        return HStack(spacing: 12) {
+            Text(title)
+                .accessibilityHidden(true)
+            Slider(value: Binding(get: { clamp(value.wrappedValue) },
+                                  set: { value.wrappedValue = clamp($0.rounded()) }),
+                   in: range, step: 1)
+                .accessibilityLabel(title)
+                .accessibilityValue(Text("\(points) pt"))
+            Text("\(points) pt")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .frame(width: 44, alignment: .trailing)
+                .accessibilityHidden(true)
+        }
+    }
 
     /// Live iCloud folder state, driving the Show-iCloud toggle's enabled state
     /// and footer note.
@@ -57,12 +91,14 @@ struct SettingsView: View {
             .padding(.top, 28)
             .padding(.bottom, 4)
 
+            // A Form is greedy vertically — it filled the card's whole height
+            // cap regardless of how many rows it had. Pinned to its natural
+            // height; the modal presenter adds a scroller if the card outgrows
+            // the window.
             settingsForm
+                .fixedSize(horizontal: false, vertical: true)
         }
-        // Match the Info modal's width, but size the height to the content so
-        // every section is visible without a tall, mostly-empty sheet.
-        .frame(width: 600)
-        .fixedSize(horizontal: false, vertical: true)
+        // Width and the height cap come from the modal presenter.
     }
 
     private var settingsForm: some View {
@@ -81,10 +117,20 @@ struct SettingsView: View {
             Section {
                 Toggle("Show file names", isOn: $showFileNames)
                 Toggle("Show star ratings", isOn: $showStarsOnGrid)
+                measuredSlider(
+                    title: String(localized: "Spacing"),
+                    value: $gridSpacing,
+                    range: AppSettings.gridSpacingRange,
+                    clamp: AppSettings.clampGridSpacing)
+                measuredSlider(
+                    title: String(localized: "Corner Radius"),
+                    value: $gridCornerRadius,
+                    range: AppSettings.gridCornerRadiusRange,
+                    clamp: AppSettings.clampGridCornerRadius)
             } header: {
                 Text("Grid")
             } footer: {
-                Text("Show each file's name beneath its thumbnail in the grid. Star ratings still show inside a collection and in the viewer.")
+                Text("Show each file's name beneath its thumbnail in the grid. Star ratings still show inside a collection and in the viewer. Rounded corners carry into the viewer, so a photo keeps its shape when you open it.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }

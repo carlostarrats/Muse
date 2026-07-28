@@ -16,7 +16,13 @@ enum DriveShareSortKey: String { case expires, created }
 enum DriveShareSortOrder: String { case soonest, latest }
 
 struct ManageDriveSharesView: View {
-    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var appState: AppState
+
+    /// Closes the CARD. Never `@Environment(\.dismiss)`: modals stopped being
+    /// sheets, so there is no presentation for it to dismiss — it walked up and
+    /// closed the WINDOW instead, which quit the app (owner-reported: "pressing
+    /// x on the modals is closing the whole app").
+    private func dismiss() { appState.driveSharesShown = false }
     @EnvironmentObject private var googleAuth: GoogleOAuth
     private let store = DriveShareStore.default
     @State private var records: [DriveShareRecord] = []
@@ -55,7 +61,7 @@ struct ManageDriveSharesView: View {
             } else {
                 sortControls
                     .padding(.bottom, 16)
-                ScrollView(showsIndicators: false) {
+                ModalScroll {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(sortedRecords.enumerated()), id: \.element.id) { index, record in
                             if index > 0 { Divider().padding(.vertical, 16) }
@@ -66,7 +72,7 @@ struct ManageDriveSharesView: View {
             }
         }
         .padding(28)
-        .windowFittedSheetHeight(width: 600, ideal: 400)
+        // Width and the height cap come from the modal presenter.
         .alert("Couldn’t Unpublish", isPresented: $unpublishFailed) {
             Button("OK", role: .cancel) {}
         } message: {

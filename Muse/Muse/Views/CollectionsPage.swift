@@ -22,7 +22,6 @@ struct CollectionsPage: View {
     private let vGap: CGFloat = 52
     private let hInset: CGFloat = 14
 
-    @State private var showingNewSmart = false
 
     /// Collections ordered by the Collections-page sort (Name / Date Created /
     /// Date Modified + direction). Reactive: changing the toolbar sort or arrow
@@ -88,7 +87,7 @@ struct CollectionsPage: View {
                     ZStack(alignment: .topLeading) {
                         VStack(alignment: .leading, spacing: 0) {
                             // Page Up / Page Down scrolls the cards a screenful at a time.
-                            PageScrollCatcher(isActive: { appState.selectedFile == nil })
+                            PageScrollCatcher(isActive: { appState.selectedFile == nil && !appState.modalPresented })
                                 .frame(width: 0, height: 0)
                             header
                             if !sorted.isEmpty {
@@ -139,18 +138,17 @@ struct CollectionsPage: View {
             // Far right, same size/position as the in-collection trash button.
             AddCollectionButton(
                 onNewCollection: { createCollection() },
-                onNewSmartCollection: { showingNewSmart = true })
+                onNewSmartCollection: {
+                    appState.collectionModal = .rules(.init(
+                        collectionID: nil,
+                        initialName: defaultSmartName(),
+                        initialSet: SmartRuleSet(match: .all, rules: [])))
+                })
         }
         .padding(.horizontal, 14)
         .padding(.top, 14)
         .padding(.bottom, 48)
-        .sheet(isPresented: $showingNewSmart) {
-            SmartCollectionRulesView(collectionID: nil,
-                                     initialName: defaultSmartName(),
-                                     initialSet: SmartRuleSet(match: .all, rules: [])) {
-                showingNewSmart = false
-            }
-        }
+        // The rule editor is presented by the SHELL — see CollectionModal.
     }
 
     /// Default auto-name for a new smart collection ("Collection N"), reusing the

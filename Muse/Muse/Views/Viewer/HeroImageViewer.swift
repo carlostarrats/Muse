@@ -36,9 +36,6 @@ struct HeroImageViewer: View {
     /// once the toast dismisses.
     @State private var lingering = false
     @State private var scrollMonitor: Any?
-    /// Starts false and flips on appear: the backdrop fades in over the grid
-    /// (prototype: 0.45s ease) while the already-opaque stage flies.
-    @State private var backdropVisible = false
     /// Palette computed on open when the DB has none (file not yet analyzed).
     /// The prototype always tints the backdrop and shows color swatches —
     /// that can't wait for an explicit Analyze run.
@@ -61,16 +58,14 @@ struct HeroImageViewer: View {
             let overlayGlobal = geo.frame(in: .global)
             ZStack {
                 if !lingering {
-                    ViewerBackdrop(hexColor: details?.dominantColor ?? computedPalette.first)
-                        .opacity(backdropVisible ? 1 : 0)
+                    ViewerBackdrop(hexColor: details?.dominantColor ?? computedPalette.first,
+                                   closing: isClosing)
                         // Asymmetric on purpose: the fade-OUT must finish before
                         // the viewer unmounts (0.36s after close starts) — a 0.4s
                         // fade left the material/wash at ~1–2% opacity when the
                         // subtree was removed, and that near-invisible app-wide
                         // layer vanishing in one frame read as a subtle whole-
                         // window flicker on every close.
-                        .animation(.easeOut(duration: backdropVisible ? 0.4 : 0.3),
-                                   value: backdropVisible)
                         .contentShape(Rectangle())
                         .onTapGesture { startClose() }
 
@@ -113,7 +108,18 @@ struct HeroImageViewer: View {
         }
         .onAppear {
             installScrollMonitor()
-            backdropVisible = true   // animated by the .animation on the backdrop
+            // The wash is at full strength from frame one — there is no
+            // fade-in state to set here any more.
+            //
+            // Opening used to wait (up to 0.2s) for the tint to resolve, on the
+            // theory that fading in neutral and then morphing was the reported
+            // open flicker. Instrumentation disproved that — the backdrop's
+            // first render already carries the final tint — and A/B testing
+            // showed the real cause was animating opacity on `.ultraThinMaterial`,
+            // which re-composites the blur every frame. So the wait bought
+            // nothing and only delayed the open, and the opacity fade-in was
+            // removed outright (ViewerBackdrop now animates only its tint, and
+            // its `closing` flag drives the one fade that remains).
             withAnimation(.easeOut(duration: 0.4).delay(0.15)) { chromeVisible = true }
         }
         .onDisappear {
@@ -149,13 +155,23 @@ struct HeroImageViewer: View {
         }
         .onChange(of: appState.viewerClosing) { _, closing in
             guard closing else { return }
+            // Consume the trigger IMMEDIATELY.
+            //
+            // `viewerClosing` is a one-shot request ("please run the close"),
+            // not durable state — but it was only cleared later, partway through
+            // the flight, in three different places. A `true` that outlived its
+            // close could then re-fire against a freshly-mounted viewer, which
+            // showed up as Escape closing, reopening, and closing again.
+            // Clearing it here makes the trigger edge-only and the close
+            // idempotent; `isClosing` remains the real state.
+            appState.viewerClosing = false
+            guard !isClosing else { return }
             if lingering || burnProgress > 0 {
                 // Mid-burn or lingering after a delete: never run the return
                 // flight on a burned image; Esc just dismisses the toast.
                 if lingering {
                     withAnimation(.easeOut(duration: 0.18)) { toast = nil }
                 }
-                appState.viewerClosing = false
             } else {
                 startClose()
             }
@@ -349,13 +365,28 @@ struct HeroImageViewer: View {
         // satisfies "closing with Esc leaves nothing selected."
         appState.clearSelection()
         withAnimation(.easeOut(duration: 0.12)) { chromeVisible = false }
-        backdropVisible = false   // fades out during the close flight
         // Bring the toolbar back now so it returns with the flight (the "never
         // gone" feel) rather than popping in after. The Escape path sets the
         // same flag up front (in ContentView) so both close paths return the nav
         // identically. (Accepts the slight search-bar shadow flash as the trade
         // for a consistent, instant return — see the 2026-06-18 session.)
-        withAnimation(.easeInOut(duration: 0.35)) { appState.viewerDismissing = true }
+        // NOT inside `withAnimation`. `viewerDismissing` is @Published on the
+        // monolithic AppState, so writing it re-evaluates the whole shell —
+        // sidebar rows, every mounted grid tile, the tag chips. Doing that
+        // inside a global animation transaction makes SwiftUI build animated
+        // transitions for all of it in one synchronous block: profiling the
+        // running app measured **282 ms of blocked main thread inside this one
+        // setter**, right in the middle of the return flight. That is the
+        // owner-reported close stall — the image freezes part-shrunk with the
+        // backdrop still up, then jumps the rest of the way. On the largest
+        // files the block swallowed the whole flight, which read as "it closes
+        // instantly with no animation".
+        //
+        // Nothing needed the transaction. Both consumers animate on their own:
+        // the toolbar returns via ToolbarFade (an AppKit alpha fade driven by
+        // an .onChange in ContentView), and the grid tile's reveal is a
+        // value-scoped `.animation(_:value:)` in GridView. Don't re-wrap it.
+        appState.viewerDismissing = true
         isClosing = true
     }
 
@@ -415,7 +446,6 @@ struct HeroImageViewer: View {
             }
             appState.viewerClosing = false
             appState.viewerDismissing = false
-            backdropVisible = false
             appState.selectedFile = nil
             // Drop the grid selection too: it pointed at the just-trashed file.
             // Without this the stale path survives in `selectedFiles`, so an
@@ -437,14 +467,39 @@ struct HeroImageViewer: View {
 
     private func loadDetails() async {
         let url = currentURL
-        // Kick off the quick palette now (48px decode) rather than after the
-        // DB read: swatches should land before the chrome fade-in finishes,
-        // so the actions row never visibly shifts.
-        async let quick = HeroPalette.quickPalette(at: url)
-        var loaded: ViewerFileDetails? = nil
-        if let queue = Database.shared.dbQueue {
-            loaded = try? await ViewerFileDetails.load(queue: queue, path: url.path)
-        }
+        // The quick-palette fallback is started LAZILY, only if the DB turns out
+        // to have no analyzed palette.
+        //
+        // It used to be kicked off here, concurrently with the DB read, so
+        // swatches would land before the chrome fade-in finished. That is the
+        // right instinct for an unanalyzed file, but it made every ANALYZED file
+        // pay a decode whose result is thrown away — and `quickPalette` asks for
+        // a 48px thumbnail, which for formats ImageIO can't stream-downsample
+        // still materializes the FULL raster. On a 659 MB scan that is 266 ms and
+        // ~1 GB, running concurrently with the hero image's own 532 ms full
+        // decode of the same file: two giant rasters at once, for a tint that
+        // gets discarded.
+        //
+        // The DB read is local SQLite (sub-millisecond), so deferring the decode
+        // behind it costs an unanalyzed file nothing measurable and saves an
+        // analyzed one the entire decode.
+        // Everything the info column needs, fetched CONCURRENTLY.
+        //
+        // These used to run in sequence — DB read, then EXIF/metadata, then
+        // pixel size — so the column filled in visibly staggered steps and the
+        // whole thing took the SUM of three independent I/O waits. They share
+        // no data; there is no reason to serialise them.
+        let kind = AssetKind.detect(at: url)
+        async let detailsTask: ViewerFileDetails? = {
+            guard let queue = Database.shared.dbQueue else { return nil }
+            return try? await ViewerFileDetails.load(queue: queue, path: url.path)
+        }()
+        async let metaTask = FileMetadata.load(url: url, kind: kind)
+        async let headerSizeTask = Task.detached(priority: .userInitiated) {
+            Self.imagePixelSize(at: url)
+        }.value
+
+        let loaded = await detailsTask
         guard url == currentURL else { return }
         details = loaded
         // Extra metadata for the INFO card (off-main, no DB). Derive the kind
@@ -452,22 +507,17 @@ struct HeroImageViewer: View {
         // `details`/palette above, we deliberately DON'T clear `metadata` first:
         // letting the prior card linger until the new load resolves avoids a
         // disappear/reappear flash on fast navigation.
-        let kind = AssetKind.detect(at: url)
-        let meta = await FileMetadata.load(url: url, kind: kind)
+        // Pixel size first: it drives layout, so settling it before the text
+        // arrives stops the column resizing under content that's already shown.
+        let headerSize = await headerSizeTask
+        naturalSize = loaded?.pixelSize ?? headerSize
+        let meta = await metaTask
         if url == currentURL { metadata = meta }
-        if let px = loaded?.pixelSize {
-            naturalSize = px
-        } else {
-            let s = await Task.detached(priority: .userInitiated) {
-                Self.imagePixelSize(at: url)
-            }.value
-            if url == currentURL { naturalSize = s }
-        }
         // No analysis data yet → derive backdrop tint + swatches right now.
         if let palette = loaded?.palette, !palette.isEmpty {
             paletteResolved = true
         } else {
-            let pal = await quick
+            let pal = await HeroPalette.quickPalette(at: url)
             if url == currentURL {
                 withAnimation(.easeOut(duration: 0.25)) {
                     computedPalette = pal

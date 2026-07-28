@@ -112,18 +112,39 @@ enum AppSettings {
 
     static let imageLayoutKey = "imageLayout"
 
-    /// Global image layout for every grid. Default `.masonry`. Unset → masonry.
+    /// Global image layout for every grid. Default `.columns`. Unset → columns;
+    /// legacy `masonry` → columns, legacy `r*` ratios → grid (see
+    /// `ImageLayout.resolve`).
     static var imageLayout: ImageLayout {
         get { ImageLayout.resolve(UserDefaults.standard.string(forKey: imageLayoutKey)) }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: imageLayoutKey) }
     }
 
-    static let tileBackgroundKey = "tileBackground"
+    static let gridSpacingKey = "gridSpacing"
 
-    /// Global grid tile backdrop. Default `.auto` (follows the mood). Unset → auto.
-    static var tileBackground: TileBackground {
-        get { TileBackground.resolve(UserDefaults.standard.string(forKey: tileBackgroundKey)) }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: tileBackgroundKey) }
+    /// Gap between grid tiles, in points. Default 14 (the value that was
+    /// hardcoded before this became a control). The floor is a real gap, NOT
+    /// zero: flush-packed images read as one continuous picture rather than a
+    /// grid, so the tightest setting still separates them.
+    static let defaultGridSpacing: Double = 14
+    static let gridSpacingRange: ClosedRange<Double> = 4...28
+
+    /// Bound a stored or slider-supplied gutter to the usable range. A value
+    /// outside it doesn't just look wrong — a negative gutter overlaps tiles.
+    static func clampGridSpacing(_ raw: Double) -> Double {
+        min(gridSpacingRange.upperBound, max(gridSpacingRange.lowerBound, raw))
+    }
+
+    static let gridCornerRadiusKey = "gridCornerRadius"
+
+    /// Corner radius for images, in points. Default 0 (square — the shipped
+    /// look). Applies to grid tiles AND the hero viewer, so a photo keeps its
+    /// shape when you open it.
+    static let defaultGridCornerRadius: Double = 0
+    static let gridCornerRadiusRange: ClosedRange<Double> = 0...20
+
+    static func clampGridCornerRadius(_ raw: Double) -> Double {
+        min(gridCornerRadiusRange.upperBound, max(gridCornerRadiusRange.lowerBound, raw))
     }
 
     static let gridFilterKey = "muse.gridFilter"

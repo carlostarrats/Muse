@@ -28,7 +28,7 @@ struct ReconnectWizard: View {
                 .padding(.top, 6)
                 .padding(.bottom, 20)
 
-            ScrollView(showsIndicators: false) {
+            ModalScroll {
                 VStack(alignment: .leading, spacing: 24) {
                     folderSection
                     collectionCard
@@ -39,7 +39,7 @@ struct ReconnectWizard: View {
             footer
         }
         .padding(28)
-        .windowFittedSheetHeight(width: 600, ideal: 720)
+        // Width and the height cap come from the modal presenter.
     }
 
     private var folderSection: some View {

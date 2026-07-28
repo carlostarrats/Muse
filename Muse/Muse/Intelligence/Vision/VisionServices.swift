@@ -22,6 +22,11 @@ struct VisionResult {
     var featurePrint: Data?                      // VNFeaturePrintObservation.data
     var width: Int?
     var height: Int?
+    /// The (bounded) raster the pipeline decoded. Callers reuse it instead of
+    /// decoding the same file a second time — the palette pass used to, at a
+    /// measured 851 ms on a 115 MP scan for an identical answer. nil when the
+    /// image couldn't be loaded.
+    var decodedImage: CGImage?
     var didSucceedFeaturePrint: Bool { featurePrint != nil }
 }
 
@@ -32,8 +37,17 @@ enum VisionServices {
         var result = VisionResult()
         guard let cgImage = await loadCGImage(url: url) else { return result }
 
-        result.width = cgImage.width
-        result.height = cgImage.height
+        // The image's TRUE pixel dimensions, from the header — NOT the decoded
+        // raster's. Since the analyze decode became bounded (4096px long edge),
+        // `cgImage.width/height` is the downsampled size, and these values are
+        // persisted to `files.width/height` and shown in the viewer's Info card.
+        // Reading them off the raster made a 9600x12000 scan report 4096x5120.
+        // Falls back to the raster only if the header can't be read, which is
+        // the pre-existing behaviour for an undecodable header.
+        let declared = ImageHeaderSizeCache.resolve(url)
+        result.width = declared.map { Int($0.width) } ?? cgImage.width
+        result.height = declared.map { Int($0.height) } ?? cgImage.height
+        result.decodedImage = cgImage
 
         async let classify = classify(cgImage: cgImage)
         async let ocr = ocr(cgImage: cgImage)
@@ -54,18 +68,41 @@ enum VisionServices {
 
     // MARK: - CGImage loader
 
+    /// Longest edge, in pixels, of the raster handed to the Vision requests.
+    ///
+    /// Measured (2026-07-28 analysis-performance spec): every request's output is
+    /// unchanged between 2048 and full resolution, while full resolution costs
+    /// **111 seconds and ~1 GB of peak memory** on a 115 MP scanner TIFF vs well
+    /// under a second at 4096. Only feature print downsamples internally —
+    /// classify, faces, OCR and CIAreaAverage all scale with input pixels.
+    ///
+    /// 4096 rather than 2048 because the extra decode is only ~200 ms and it
+    /// leaves headroom for documents with dense text: a 5100×6600 document scan
+    /// lost 25% of its OCR characters at 1024, but matched full resolution
+    /// exactly (918/918) at both 2048 and 4096.
+    static let analysisMaxPixel = 4096
+
+    /// Decode `url` downsampled so its longest edge is at most `maxPixel`.
+    ///
+    /// The decompression-bomb guard runs FIRST and must stay: Vision analysis
+    /// runs AUTOMATICALLY on index of a freshly-added file (no click), and for
+    /// formats ImageIO can't stream-downsample (PNG/TIFF/BMP) even a thumbnail
+    /// request first materializes the FULL raster — so a planted image declaring
+    /// an absurd pixel count would OOM the process before the bound applies.
+    static func boundedDecode(url: URL, maxPixel: Int) -> CGImage? {
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+              ThumbnailCache.withinDecodeBudget(src) else { return nil }
+        return CGImageSourceCreateThumbnailAtIndex(src, 0, [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+        ] as CFDictionary)
+    }
+
     private static func loadCGImage(url: URL) async -> CGImage? {
         await Task.detached(priority: .userInitiated) {
-            // Decompression-bomb guard: Vision analysis runs AUTOMATICALLY on
-            // index of a freshly-added file (no click), and NSImage(contentsOf:)
-            // → cgImage forces a full-raster decode with no downsample — so a
-            // planted image declaring an absurd pixel count would OOM the process.
-            // Read the header dims first (cheap) and refuse past the budget.
-            guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
-                  ThumbnailCache.withinDecodeBudget(src) else { return nil }
-            guard let img = NSImage(contentsOf: url) else { return nil }
-            var rect = CGRect(origin: .zero, size: img.size)
-            return img.cgImage(forProposedRect: &rect, context: nil, hints: nil)
+            boundedDecode(url: url, maxPixel: analysisMaxPixel)
         }.value
     }
 
@@ -164,22 +201,36 @@ enum VisionServices {
 
     // MARK: - Dominant color
 
+    /// Average colour as `#rrggbb`, computed **in sRGB**.
+    ///
+    /// This used to render with `workingColorSpace: NSNull()` and
+    /// `colorSpace: nil` — i.e. no colour management at all — so it read raw
+    /// component values in whatever space the decoder happened to return. RAW
+    /// files decode as ITU-R 2100 PQ (an HDR space), so every RAW file's stored
+    /// `dominant_color` was wrong, and that feeds colour tags and colour search.
+    /// Pinning both ends of the render to sRGB makes the result correct AND
+    /// consistent across formats. Don't set either back to nil/NSNull.
+    static func dominantColorHex(cgImage: CGImage) -> String? {
+        guard let srgb = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        let ci = CIImage(cgImage: cgImage)
+        guard let filter = CIFilter(name: "CIAreaAverage") else { return nil }
+        filter.setValue(ci, forKey: kCIInputImageKey)
+        filter.setValue(CIVector(cgRect: ci.extent), forKey: kCIInputExtentKey)
+        guard let out = filter.outputImage else { return nil }
+        var bitmap = [UInt8](repeating: 0, count: 4)
+        let context = CIContext(options: [.workingColorSpace: srgb])
+        context.render(out,
+                       toBitmap: &bitmap,
+                       rowBytes: 4,
+                       bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                       format: .RGBA8,
+                       colorSpace: srgb)
+        return String(format: "#%02x%02x%02x", bitmap[0], bitmap[1], bitmap[2])
+    }
+
     private static func dominantColor(cgImage: CGImage) async -> String? {
         await Task.detached(priority: .userInitiated) {
-            let ci = CIImage(cgImage: cgImage)
-            guard let filter = CIFilter(name: "CIAreaAverage") else { return nil }
-            filter.setValue(ci, forKey: kCIInputImageKey)
-            filter.setValue(CIVector(cgRect: ci.extent), forKey: kCIInputExtentKey)
-            guard let out = filter.outputImage else { return nil }
-            var bitmap = [UInt8](repeating: 0, count: 4)
-            let context = CIContext(options: [.workingColorSpace: NSNull()])
-            context.render(out,
-                           toBitmap: &bitmap,
-                           rowBytes: 4,
-                           bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
-                           format: .RGBA8,
-                           colorSpace: nil)
-            return String(format: "#%02x%02x%02x", bitmap[0], bitmap[1], bitmap[2])
+            dominantColorHex(cgImage: cgImage)
         }.value
     }
 }

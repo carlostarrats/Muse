@@ -37,6 +37,17 @@ final class AnalyzePipeline: ObservableObject {
     /// pass, so a later pass over a still-valid folder runs normally.
     private var cancelRequested = false
 
+    /// Embedding rows written by the pass in flight. Drives the recluster gate:
+    /// a pass that embedded nothing cannot change the clustering, and clustering
+    /// costs scale with LIBRARY size rather than pass size.
+    private(set) var embeddingsWritten = 0
+
+    /// How many files analyze at once. Vision already parallelizes its five
+    /// requests WITHIN one image, so this is deliberately modest — it fills the
+    /// gaps between those requests rather than trying to saturate the machine,
+    /// and keeps peak memory to a few bounded rasters rather than many.
+    static let analyzeConcurrency = 3
+
     /// True when the active pass should stop — either its owning task was
     /// cancelled or `cancelActivePass()` was called.
     private var shouldStop: Bool { cancelRequested || Task.isCancelled }
@@ -110,12 +121,16 @@ final class AnalyzePipeline: ObservableObject {
         }) ?? nil
         guard let id = fileID else { return }
         cancelRequested = false
+        embeddingsWritten = 0
         isRunning = true
         current = url.lastPathComponent
         defer { isRunning = false; current = ""; progress = 0 }
         await analyzeOne(fileID: id, url: url)
         if shouldStop { return }
-        await CollectionsEngine.shared.recluster()
+        // This path used to rebuild the WHOLE library after every single file.
+        if ReclusterGate.shouldRecluster(embeddingsWritten: embeddingsWritten, force: false) {
+            await CollectionsEngine.shared.recluster()
+        }
     }
 
     /// The automatic pass: of `urls`, analyze only those whose stored
@@ -245,6 +260,7 @@ final class AnalyzePipeline: ObservableObject {
         guard !urls.isEmpty else { return }
         guard let queue = Database.shared.dbQueue else { return }
         cancelRequested = false
+        embeddingsWritten = 0
         isRunning = true
         progress = 0
         completed = 0
@@ -262,20 +278,47 @@ final class AnalyzePipeline: ObservableObject {
         total = pairs.count
         guard !pairs.isEmpty else { return }
 
-        for (idx, pair) in pairs.enumerated() {
-            // Folder removed (or the pass otherwise cancelled) → stop now
-            // rather than analyzing files that are no longer reachable.
-            if shouldStop { break }
-            current = pair.url.lastPathComponent
-            await analyzeOne(fileID: pair.id, url: pair.url)
-            completed = idx + 1
-            progress = Double(idx + 1) / Double(pairs.count)
+        // Bounded-concurrency pass. `analyzeOne` is @MainActor and its DB writes
+        // serialize on the GRDB queue regardless, so the win is overlapping the
+        // off-main Vision + decode work — which is where essentially all the
+        // time goes. Indexing runs 2-wide and thumbnails 8-wide; this ran 1-wide.
+        var tally = AnalyzeProgress(total: pairs.count)
+        var iterator = pairs.makeIterator()
+        await withTaskGroup(of: Void.self) { group in
+            // Prime the window. `shouldStop` (folder removed / pass cancelled)
+            // stops us STARTING new work; files already in flight finish, which
+            // matches the old serial loop's `break`.
+            var running = 0
+            while running < Self.analyzeConcurrency, !shouldStop,
+                  let pair = iterator.next() {
+                current = pair.url.lastPathComponent
+                group.addTask { @MainActor in
+                    await self.analyzeOne(fileID: pair.id, url: pair.url)
+                }
+                running += 1
+            }
+            // One replacement per completion keeps the window full.
+            while await group.next() != nil {
+                let step = tally.complete()
+                completed = step.completed
+                progress = step.fraction
+                if !shouldStop, let pair = iterator.next() {
+                    current = pair.url.lastPathComponent
+                    group.addTask { @MainActor in
+                        await self.analyzeOne(fileID: pair.id, url: pair.url)
+                    }
+                }
+            }
         }
         isRunning = false; current = ""; progress = 0; completed = 0; total = 0
         // Skip the (non-trivial) recluster if the pass was cancelled — e.g. the
         // folder was removed out from under us; there's nothing new to cluster.
         if shouldStop { return }
-        await CollectionsEngine.shared.recluster()
+        // Likewise if nothing was embedded: the clustering provably cannot have
+        // changed, and the rebuild's cost scales with the whole library.
+        if ReclusterGate.shouldRecluster(embeddingsWritten: embeddingsWritten, force: false) {
+            await CollectionsEngine.shared.recluster()
+        }
     }
 
     // MARK: - Per-file
@@ -487,6 +530,7 @@ final class AnalyzePipeline: ObservableObject {
                                            updated_at: Int64(Date().timeIntervalSince1970))
                     try row.save(db)
                 }
+                embeddingsWritten += 1
             }
         }
 

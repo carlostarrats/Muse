@@ -731,7 +731,9 @@ actor Indexer {
                 }
                 return true
             }
-            while inFlight < 2, enqueueNext() { inFlight += 1 }
+            // `inFlight` only primes the initial window; the drain loop below
+            // maintains it by enqueueing one replacement per completion.
+            while inFlight < Self.hashConcurrency, enqueueNext() { inFlight += 1 }
             while let result = await group.next() {
                 if let u = result { changed.append(u) }
                 _ = enqueueNext()
@@ -741,4 +743,10 @@ actor Indexer {
     }
 
     enum Priority { case high, background }
+
+    /// Files hashed at once. SHA-256 here is I/O bound, so a slightly wider
+    /// window helps import throughput for large files on an SSD. Deliberately
+    /// still small: an unbounded fan-out of userInitiated hashing tasks was the
+    /// original large-library UI-stutter bug.
+    static let hashConcurrency = 4
 }

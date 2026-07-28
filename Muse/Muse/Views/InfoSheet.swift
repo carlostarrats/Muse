@@ -24,7 +24,7 @@ struct InfoSheet: View {
             }
             .padding(.bottom, 20)
 
-            ScrollView(showsIndicators: false) {
+            ModalScroll {
                 VStack(alignment: .leading, spacing: 0) {
                     section("What Muse is", """
                         A local-first viewer and organizer for the folders \
@@ -212,7 +212,7 @@ struct InfoSheet: View {
             }
         }
         .padding(28)
-        .windowFittedSheetHeight(width: 600, ideal: 720)
+        // Width and the height cap come from the modal presenter.
     }
 
     /// Hairline between section rows.

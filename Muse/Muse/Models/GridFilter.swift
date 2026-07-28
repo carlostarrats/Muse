@@ -7,7 +7,7 @@
 //  kind stays a single leaf. The stored model is one flat `Set<KindFacet>` of
 //  LEAF facets with an "empty == all" sentinel — the "Images" parent is purely a
 //  UI grouping (see GridFilterPopover), not a stored facet. Mirrors the shape of
-//  ImageLayout / TileBackground — a value type + matcher persisted via
+//  ImageLayout — a value type + matcher persisted via
 //  AppSettings and mirrored on AppState. `matches` takes raw inputs (kind + file
 //  extension); the source of those values (FileNode) is an implementation detail
 //  of the caller. NOT a sort — it removes non-matching files from whichever set
