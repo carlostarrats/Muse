@@ -61,16 +61,14 @@ struct HeroImageViewer: View {
             let overlayGlobal = geo.frame(in: .global)
             ZStack {
                 if !lingering {
-                    ViewerBackdrop(hexColor: details?.dominantColor ?? computedPalette.first)
-                        .opacity(backdropVisible ? 1 : 0)
+                    ViewerBackdrop(hexColor: details?.dominantColor ?? computedPalette.first,
+                                   closing: isClosing)
                         // Asymmetric on purpose: the fade-OUT must finish before
                         // the viewer unmounts (0.36s after close starts) — a 0.4s
                         // fade left the material/wash at ~1–2% opacity when the
                         // subtree was removed, and that near-invisible app-wide
                         // layer vanishing in one frame read as a subtle whole-
                         // window flicker on every close.
-                        .animation(.easeOut(duration: backdropVisible ? 0.4 : 0.3),
-                                   value: backdropVisible)
                         .contentShape(Rectangle())
                         .onTapGesture { startClose() }
 
@@ -113,29 +111,17 @@ struct HeroImageViewer: View {
         }
         .onAppear {
             installScrollMonitor()
-            // Fade the wash in only once its TINT is known, so it appears at its
-            // final colour instead of appearing neutral and morphing.
+            // Show the wash immediately.
             //
-            // ViewerBackdrop starts at a neutral grey (hexColor nil) and both its
-            // colour AND its opacity change when the tint resolves — while the
-            // 0.4s fade-in is still running. Two overlapping animations on the
-            // same layer read as a flicker. It's normally masked because the
-            // image lands fast and covers the wash; on a 115 MP scan the image
-            // takes ~0.5s to decode, so the shift is fully exposed. That is the
-            // owner-reported "flicker in the background colour" on large files.
-            //
-            // The tint comes from a local SQLite read, so this virtually always
-            // resolves within a frame or two. The deadline is the safety net for
-            // a file with no stored palette (the fallback decode can take
-            // ~266ms on a 659MB TIFF) — never wait longer than the fade itself.
-            Task {
-                let deadline = Date().addingTimeInterval(0.2)
-                while (details?.dominantColor ?? computedPalette.first) == nil,
-                      Date() < deadline, !isClosing {
-                    try? await Task.sleep(nanoseconds: 8_000_000)
-                }
-                backdropVisible = true   // animated by the .animation on the backdrop
-            }
+            // This used to wait (up to 0.2s) for the tint to resolve, on the
+            // theory that fading in neutral and then morphing was the reported
+            // open flicker. Instrumentation later disproved that — the backdrop's
+            // first render already carries the final tint — and A/B testing
+            // showed the real cause was animating opacity on `.ultraThinMaterial`.
+            // So the wait bought nothing and only delayed the open. The tint
+            // still arrives within ~50ms (a local SQLite read) and fades in on
+            // its own; the material is now at full strength from frame one.
+            backdropVisible = true
             withAnimation(.easeOut(duration: 0.4).delay(0.15)) { chromeVisible = true }
         }
         .onDisappear {
