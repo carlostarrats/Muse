@@ -78,12 +78,19 @@ enum PaletteExtractor {
         // Redraw into a known RGBA layout. Reading the thumbnail's raw
         // dataProvider assumed R,G,B at bytes 0,1,2 — ImageIO thumbnails
         // are typically BGRA, which swapped red and blue in every palette.
+        //
+        // sRGB (not DeviceRGB) so the palette matches
+        // `VisionServices.dominantColorHex` and doesn't vary with whatever space
+        // the decoder tagged the source with. DeviceRGB is unspecified by
+        // definition, so two files could yield different hexes for the same
+        // visual colour — and RAW decodes as ITU-R 2100 PQ. Don't revert.
         let w = thumb.width, h = thumb.height
         var data = [UInt8](repeating: 0, count: w * h * 4)
         let drew = data.withUnsafeMutableBytes { buf -> Bool in
-            guard let ctx = CGContext(data: buf.baseAddress, width: w, height: h,
+            guard let srgb = CGColorSpace(name: CGColorSpace.sRGB),
+                  let ctx = CGContext(data: buf.baseAddress, width: w, height: h,
                                       bitsPerComponent: 8, bytesPerRow: w * 4,
-                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      space: srgb,
                                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
             else { return false }
             ctx.draw(thumb, in: CGRect(x: 0, y: 0, width: w, height: h))

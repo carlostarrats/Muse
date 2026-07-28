@@ -187,22 +187,36 @@ enum VisionServices {
 
     // MARK: - Dominant color
 
+    /// Average colour as `#rrggbb`, computed **in sRGB**.
+    ///
+    /// This used to render with `workingColorSpace: NSNull()` and
+    /// `colorSpace: nil` — i.e. no colour management at all — so it read raw
+    /// component values in whatever space the decoder happened to return. RAW
+    /// files decode as ITU-R 2100 PQ (an HDR space), so every RAW file's stored
+    /// `dominant_color` was wrong, and that feeds colour tags and colour search.
+    /// Pinning both ends of the render to sRGB makes the result correct AND
+    /// consistent across formats. Don't set either back to nil/NSNull.
+    static func dominantColorHex(cgImage: CGImage) -> String? {
+        guard let srgb = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        let ci = CIImage(cgImage: cgImage)
+        guard let filter = CIFilter(name: "CIAreaAverage") else { return nil }
+        filter.setValue(ci, forKey: kCIInputImageKey)
+        filter.setValue(CIVector(cgRect: ci.extent), forKey: kCIInputExtentKey)
+        guard let out = filter.outputImage else { return nil }
+        var bitmap = [UInt8](repeating: 0, count: 4)
+        let context = CIContext(options: [.workingColorSpace: srgb])
+        context.render(out,
+                       toBitmap: &bitmap,
+                       rowBytes: 4,
+                       bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                       format: .RGBA8,
+                       colorSpace: srgb)
+        return String(format: "#%02x%02x%02x", bitmap[0], bitmap[1], bitmap[2])
+    }
+
     private static func dominantColor(cgImage: CGImage) async -> String? {
         await Task.detached(priority: .userInitiated) {
-            let ci = CIImage(cgImage: cgImage)
-            guard let filter = CIFilter(name: "CIAreaAverage") else { return nil }
-            filter.setValue(ci, forKey: kCIInputImageKey)
-            filter.setValue(CIVector(cgRect: ci.extent), forKey: kCIInputExtentKey)
-            guard let out = filter.outputImage else { return nil }
-            var bitmap = [UInt8](repeating: 0, count: 4)
-            let context = CIContext(options: [.workingColorSpace: NSNull()])
-            context.render(out,
-                           toBitmap: &bitmap,
-                           rowBytes: 4,
-                           bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
-                           format: .RGBA8,
-                           colorSpace: nil)
-            return String(format: "#%02x%02x%02x", bitmap[0], bitmap[1], bitmap[2])
+            dominantColorHex(cgImage: cgImage)
         }.value
     }
 }
