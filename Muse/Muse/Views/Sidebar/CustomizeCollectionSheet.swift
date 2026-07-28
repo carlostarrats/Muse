@@ -60,19 +60,28 @@ struct CustomizeCollectionSheet: View {
             }
             .padding(.bottom, 20)
 
-            // A visible caption so the row replica reads as a PREVIEW, not a
-            // stray second copy of the sidebar row (owner feedback).
-            Text("Live Preview")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .padding(.bottom, 6)
-            preview
-                .padding(.bottom, 20)
+            // The preview and the two palettes scroll; the action row below
+            // stays pinned so Cancel/Update are reachable however short the
+            // window is.
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    // A visible caption so the row replica reads as a PREVIEW,
+                    // not a stray second copy of the sidebar row (owner
+                    // feedback).
+                    Text("Live Preview")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.bottom, 6)
+                    preview
+                        .padding(.bottom, 20)
 
-            HStack(alignment: .top, spacing: 24) {
-                colorColumn
-                Divider()
-                symbolColumn
+                    HStack(alignment: .top, spacing: 24) {
+                        colorColumn
+                        Divider()
+                        symbolColumn
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.bottom, 36)
 
@@ -92,7 +101,10 @@ struct CustomizeCollectionSheet: View {
             }
         }
         .padding(28)
-        .frame(width: 480)
+        // Capped to the window: the two palettes make this the tallest of the
+        // small sheets, and a content-sized frame would spill past the bottom
+        // edge on a short window instead of scrolling.
+        .windowFittedSheetHeight(width: 480, ideal: 560)
     }
 
     // MARK: - Preview

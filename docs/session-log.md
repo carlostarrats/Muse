@@ -6314,3 +6314,31 @@ the whole form with no dead space, a short one caps it and the Form scrolls.
 slider; CLAUDE.md still listed Image Layout among the ScrollView sheets needing
 the window-fitted cap (it's content-sized now) and still implied Settings was
 safely content-sized.
+
+### 2026-07-28 (same branch) — every modal fits the window
+
+Owner: "settings and all modals should fit in window and just scroll."
+
+Audited every `.sheet` in the app. Five already capped their height to the
+presenting window via `windowFittedSheetHeight` (About, Settings, Manage Drive
+Shares, Smart Collection Rules, ReconnectWizard) and DuplicatesView is
+user-resizable. Four were content-sized with no cap at all — a macOS sheet
+EXTENDS past the window rather than clipping, so each would spill on a short
+window:
+
+- **Image Layout** — got its `ScrollView` back plus `ideal: 300`.
+- **Customize Collection** (Symbol & Color) — the tallest of the small sheets
+  (two palettes). The preview and palettes now scroll; Cancel/Update stay pinned
+  outside the scroll so they're reachable however short the window is.
+  `ideal: 560`.
+- **Drive Share Form** — the idle form (three fields, expiry picker, Publish) is
+  ~385pt. Scrollable, `ideal: 420`.
+- **Metadata Import** — short by nature, but capped for the same rule at
+  `ideal: 220`.
+
+The durable constraint now states the blanket rule rather than listing which
+sheets are exempt: every card sheet is window-fitted, every one wraps growable
+content in a `ScrollView`/`Form`, and action rows stay outside the scroll.
+Content-sizing is explicitly NOT an alternative — "it's short enough" stops
+being true the moment a row is added, which is exactly what happened to Settings
+earlier the same day.

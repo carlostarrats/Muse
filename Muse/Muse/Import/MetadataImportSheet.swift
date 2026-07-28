@@ -16,6 +16,7 @@ struct MetadataImportSheet: View {
     @StateObject private var model = MetadataImportModel()
 
     var body: some View {
+        ScrollView(showsIndicators: false) {
         VStack(alignment: .leading, spacing: 14) {
             Text("Import Keywords & Ratings")
                 .font(.title3.weight(.semibold))
@@ -55,8 +56,12 @@ struct MetadataImportSheet: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        }
         .padding(24)
-        .frame(width: 360)
+        // Short by nature (a progress line and a button), but capped like every
+        // other modal so a very short window scrolls instead of spilling.
+        .windowFittedSheetHeight(width: 360, ideal: 220)
         .onAppear { model.start(folder: request.folder, appState: appState) }
         .onDisappear { model.cancel() }
     }
