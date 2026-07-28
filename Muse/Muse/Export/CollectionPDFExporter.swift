@@ -50,7 +50,7 @@ enum CollectionPDFExporter {
     /// pagination) derives from it. Returns a temp-file URL, or nil if nothing
     /// rendered.
     static func makePDF(urls: [URL], title: String, count: Int, columns: Int,
-                        layoutAspect: CGFloat?, tileBackdrop: CGColor?,
+                        layoutAspect: CGFloat?,
                         tagLabels: [String] = [],
                         pageSize: CGSize = PaperSize.default.size) async -> URL? {
         await Task.detached(priority: .userInitiated) { () -> URL? in
@@ -157,15 +157,9 @@ enum CollectionPDFExporter {
                         width: imageRect.width, height: imageRect.height)
                     let fit = aspectFit(imageW: CGFloat(img.width),
                                         imageH: CGFloat(img.height), in: flipped)
-                    // Per-image backdrop (mirrors the grid tile fill). nil = no
-                    // fill, so the white paper shows through (transparent). The
-                    // image is drawn on top; for a fixed ratio it letterboxes
-                    // over this fill, for masonry the image covers it (the fill
-                    // shows only through transparent images).
-                    if let tileBackdrop {
-                        ctx.setFillColor(tileBackdrop)
-                        ctx.fill(flipped)
-                    }
+                    // No backdrop behind a photo — the white paper shows
+                    // through, which is what a printed contact sheet should do.
+                    // (Mirrors the grid, where photos draw on the page itself.)
                     ctx.draw(img, in: fit)
 
                     // Filename caption, centered under the image, truncated with

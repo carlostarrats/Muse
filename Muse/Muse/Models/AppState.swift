@@ -484,14 +484,6 @@ final class AppState: ObservableObject {
         didSet { AppSettings.imageLayout = imageLayout }
     }
 
-    // MARK: - Tile background
-
-    /// Global backdrop behind grid content (None / Auto / Light / Dark Grey /
-    /// Black). Persisted; GridView reads `tileFill`.
-    @Published var tileBackground: TileBackground = AppSettings.tileBackground {
-        didSet { AppSettings.tileBackground = tileBackground }
-    }
-
     // MARK: - Grid filter
 
     /// The grid faceted filter (kind / date / size). Persisted to AppSettings;
@@ -517,16 +509,12 @@ final class AppState: ObservableObject {
         didSet { AppSettings.sidebarCollectionSortMode = sidebarCollectionSortMode }
     }
 
-    /// Columns and Rows give a tile the image's own shape, so there's no
-    /// letterbox to colour and they always use Auto; only Grid (square slots)
-    /// honors the user's pick. The stored `tileBackground` is preserved
-    /// meanwhile so switching back to Grid restores the choice.
-    var effectiveTileBackground: TileBackground {
-        imageLayout == .grid ? tileBackground : .auto
-    }
-
-    /// The resolved tile backdrop for the current mood + layout + selection.
-    var tileFill: Color { effectiveTileBackground.fill(for: moodPalette) }
+    /// Backdrop for a NON-PHOTO tile — the card behind a PDF / zip / video /
+    /// folder icon, which needs something to sit on. Photos never draw a card:
+    /// the slab around a fitted image is what made a layout read as imposed.
+    /// Always the mood's tile colour (the old TileBackground setting's `.auto`,
+    /// which Columns and Rows already forced).
+    var tileFill: Color { moodPalette.tileFill }
 
     // MARK: - Watcher
 

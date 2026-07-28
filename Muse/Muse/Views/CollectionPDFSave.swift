@@ -36,11 +36,9 @@ enum CollectionPDFSave {
         // the population, so the index can't drift); fall back to the default.
         let paper = PaperSize.allCases[safe: popup.indexOfSelectedItem] ?? .default
         let layoutAspect = appState.imageLayout.aspect
-        let backdrop = appState.effectiveTileBackground
-            .backdropRGB(for: appState.moodPalette)?.cgColor
         guard let pdf = await CollectionPDFExporter.makePDF(
             urls: urls, title: title, count: urls.count, columns: gridColumns,
-            layoutAspect: layoutAspect, tileBackdrop: backdrop,
+            layoutAspect: layoutAspect,
             tagLabels: tagLabels, pageSize: paper.size
         ) else { return .failed }
         // The exporter wrote the PDF to a title-derived path in NSTemporaryDirectory;

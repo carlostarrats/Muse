@@ -1026,12 +1026,10 @@ private struct TileView: View {
         }
     }
 
-    /// Readable color for the card's internal filename, adapting to the effective
-    /// tile backdrop (light text on a dark backdrop, dark on light). None has no
-    /// backdrop, so it follows the page (mood) background instead.
+    /// Readable colour for the card's internal filename against the card's
+    /// mood-derived backdrop (light text on a dark card, dark on light).
     private var cardNameColor: Color {
-        let rgb = appState.effectiveTileBackground.backdropRGB(for: appState.moodPalette)
-            ?? appState.moodPalette.backgroundRGB
+        let rgb = appState.moodPalette.tileRGB
         return SelectionStyle.relativeLuminance(rgb) < 0.5
             ? Color.white.opacity(0.9)
             : Color.black.opacity(0.55)

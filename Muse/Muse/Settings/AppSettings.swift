@@ -120,14 +120,6 @@ enum AppSettings {
         set { UserDefaults.standard.set(newValue.rawValue, forKey: imageLayoutKey) }
     }
 
-    static let tileBackgroundKey = "tileBackground"
-
-    /// Global grid tile backdrop. Default `.auto` (follows the mood). Unset → auto.
-    static var tileBackground: TileBackground {
-        get { TileBackground.resolve(UserDefaults.standard.string(forKey: tileBackgroundKey)) }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: tileBackgroundKey) }
-    }
-
     static let gridFilterKey = "muse.gridFilter"
 
     /// Global grid faceted filter (kind / date / size). Default `.none` (off).

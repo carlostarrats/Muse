@@ -70,49 +70,9 @@ struct MoodPickerView: View {
             .opacity(appState.mood == .custom ? 1 : 0.3)
             .saturation(appState.mood == .custom ? 1 : 0.4)
             .animation(.easeOut(duration: 0.2), value: appState.mood)
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("TILE BACKGROUND")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
-
-                HStack(alignment: .top, spacing: 14) {
-                    tileGroup(String(localized: "Automatic"), options: [.none, .auto])
-                    Divider().frame(height: 52)
-                    tileGroup(String(localized: "Static"), options: [.light, .darkGrey, .black])
-                }
-                .opacity(appState.imageLayout == .grid ? 1 : 0.4)
-                .disabled(appState.imageLayout != .grid)
-
-                if appState.imageLayout != .grid {
-                    Text("Columns and Rows always use Auto. Pick Grid to choose a backdrop.")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
         }
         .padding(16)
         .frame(width: 270)
-    }
-
-    @ViewBuilder
-    private func tileGroup(_ caption: String, options: [TileBackground]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(caption)
-                .font(.system(size: 9, weight: .medium))
-                .foregroundStyle(.tertiary)
-            HStack(spacing: 10) {
-                ForEach(options) { option in
-                    TileSwatch(option: option,
-                               isSelected: appState.effectiveTileBackground == option,
-                               moodFill: appState.moodPalette.tileFill,
-                               action: { appState.tileBackground = option })
-                }
-            }
-        }
     }
 
     private static let rainbow: [Color] =
@@ -165,63 +125,6 @@ private struct MoodSwatch<Fill: View>: View {
         .onHover { hovering = $0 }
         // Selection is conveyed only by the ring color — surface it to VoiceOver.
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-}
-
-// MARK: - Tile background swatch
-
-private struct TileSwatch: View {
-    let option: TileBackground
-    let isSelected: Bool
-    let moodFill: Color           // live mood tile color, shown for .auto
-    let action: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                swatchFill
-                    .frame(width: 28, height: 28)
-                    .overlay(Circle().strokeBorder(
-                        isSelected ? Color.accentColor : .primary.opacity(hovering ? 0.35 : 0.15),
-                        lineWidth: isSelected ? 2 : 1))
-                Text(option.displayName)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(isSelected ? .primary : .secondary)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        // Disambiguate from the mood swatches above ("Auto"/"Light" collide) and
-        // expose the selected state, which is otherwise ring-color-only. The
-        // label override alone replaces the Text-derived name on a Button while
-        // keeping its activation — no children:.ignore (which would drop it).
-        .accessibilityLabel("Tile background: \(option.displayName)")
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-
-    @ViewBuilder
-    private var swatchFill: some View {
-        switch option {
-        case .none:
-            // "No color" glyph: empty circle with a diagonal slash.
-            ZStack {
-                Circle().fill(.clear)
-                Circle().strokeBorder(.primary.opacity(0.25), lineWidth: 1)
-                Path { p in
-                    p.move(to: CGPoint(x: 5, y: 23))
-                    p.addLine(to: CGPoint(x: 23, y: 5))
-                }
-                .stroke(.primary.opacity(0.4), lineWidth: 1.5)
-                .frame(width: 28, height: 28)
-            }
-        case .auto:
-            // Live mood tile color — visibly changes when the mood changes.
-            Circle().fill(moodFill)
-        default:
-            Circle().fill(option.backdropRGB(for: Mood.paperPalette)?.color ?? .clear)
-        }
     }
 }
 
