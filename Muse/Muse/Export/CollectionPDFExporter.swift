@@ -50,7 +50,7 @@ enum CollectionPDFExporter {
     /// pagination) derives from it. Returns a temp-file URL, or nil if nothing
     /// rendered.
     static func makePDF(urls: [URL], title: String, count: Int, columns: Int,
-                        layoutAspect: CGFloat?,
+                        layout: ImageLayout,
                         tagLabels: [String] = [],
                         pageSize: CGSize = PaperSize.default.size) async -> URL? {
         await Task.detached(priority: .userInitiated) { () -> URL? in
@@ -116,12 +116,19 @@ enum CollectionPDFExporter {
                 pageSize: pageSize, margin: margin, columns: cols,
                 gutter: gutter, firstPageHeaderHeight: headerHeight,
                 captionHeight: captionHeight)
-            // Mirror the on-screen grid: a fixed ratio gives every tile a
-            // uniform aspect (even row-major grid); masonry uses each image's
-            // own aspect.
-            let aspects: [CGFloat] = layoutAspect.map { Array(repeating: $0, count: images.count) }
-                ?? images.map(\.aspect)
-            let pages = CollectionPDFLayout.paginate(aspects: aspects, geometry: geo)
+            // Mirror the on-screen grid: Grid gives every tile a uniform aspect
+            // (an even row-major lattice), Rows justifies each row to the
+            // content width, Columns packs each image's own aspect.
+            let pages: [CollectionPDFLayout.Page]
+            if layout == .rows {
+                pages = CollectionPDFLayout.paginateRows(
+                    aspects: images.map(\.aspect), geometry: geo)
+            } else {
+                let aspects: [CGFloat] = layout.aspect
+                    .map { Array(repeating: $0, count: images.count) }
+                    ?? images.map(\.aspect)
+                pages = CollectionPDFLayout.paginate(aspects: aspects, geometry: geo)
+            }
             let captionFont = CTFontCreateUIFontForLanguage(.system, captionFontSize, nil)
                 ?? CTFontCreateWithName("Helvetica" as CFString, captionFontSize, nil)
 

@@ -2,10 +2,12 @@
 //  CollectionPDFLayout.swift
 //  Muse
 //
-//  Pure pagination of a collection's images into fixed-size PDF pages using
-//  a masonry (shortest-column) pack. No I/O — deterministic and unit-tested.
-//  Coordinates use a TOP-LEFT origin (y grows downward); the exporter flips
-//  to PDF's bottom-left origin when drawing.
+//  Pure pagination of a collection's images into fixed-size PDF pages. Two
+//  packs, mirroring the on-screen layouts: `paginate` is the masonry
+//  (shortest-column) pack used by Columns and — fed a uniform aspect — Grid;
+//  `paginateRows` is the justified-rows pack used by Rows. No I/O —
+//  deterministic and unit-tested. Coordinates use a TOP-LEFT origin (y grows
+//  downward); the exporter flips to PDF's bottom-left origin when drawing.
 //
 
 import CoreGraphics
@@ -89,6 +91,70 @@ enum CollectionPDFLayout {
             current.placements.append(
                 Placement(index: i, rect: CGRect(x: x, y: y, width: columnWidth, height: tileH)))
             colHeights[col] += tileH + g.gutter
+        }
+
+        if !current.placements.isEmpty { pages.append(current) }
+        return pages
+    }
+
+    /// Pack `aspects` into pages as justified ROWS — the paper counterpart of
+    /// the Rows image layout. Rows are produced by the same pure unit the grid
+    /// uses (`JustifiedRowsGeometry`) so screen and print agree; this function
+    /// only decides where the page breaks go.
+    ///
+    /// A row is never split across a break. A row taller than a page's content
+    /// area is capped to fit one page (the same rule `paginate` applies to an
+    /// over-tall tile).
+    static func paginateRows(aspects: [CGFloat], geometry g: Geometry) -> [Page] {
+        guard !aspects.isEmpty else { return [] }
+        let cols = max(1, g.columns)
+        let contentWidth = max(1, g.pageSize.width - g.margin * 2)
+        let contentBottom = g.pageSize.height - g.margin
+        // The column width the density control would produce IS the target row
+        // height — the same derivation GridView uses, so the printed page has
+        // the on-screen rhythm.
+        let target = max(1, (contentWidth - g.gutter * CGFloat(cols - 1)) / CGFloat(cols))
+
+        let rows = JustifiedRowsGeometry.rows(aspects: aspects,
+                                              targetHeight: target,
+                                              width: contentWidth,
+                                              spacing: g.gutter)
+
+        func contentTop(firstPage: Bool) -> CGFloat {
+            g.margin + (firstPage ? g.firstPageHeaderHeight : 0)
+        }
+        func available(firstPage: Bool) -> CGFloat {
+            max(1, contentBottom - contentTop(firstPage: firstPage))
+        }
+
+        var pages: [Page] = []
+        var current = Page(placements: [])
+        var used: CGFloat = 0
+        var firstPage = true
+
+        for row in rows {
+            var avail = available(firstPage: firstPage)
+            var rowHeight = min(row.height + g.captionHeight, avail)
+
+            if !current.placements.isEmpty, used + rowHeight > avail {
+                pages.append(current)
+                current = Page(placements: [])
+                used = 0
+                firstPage = false
+                avail = available(firstPage: firstPage)
+                rowHeight = min(row.height + g.captionHeight, avail)
+            }
+
+            var x = g.margin
+            let y = contentTop(firstPage: firstPage) + used
+            for item in row.items {
+                current.placements.append(
+                    Placement(index: item.index,
+                              rect: CGRect(x: x, y: y,
+                                           width: item.width, height: rowHeight)))
+                x += item.width + g.gutter
+            }
+            used += rowHeight + g.gutter
         }
 
         if !current.placements.isEmpty { pages.append(current) }
