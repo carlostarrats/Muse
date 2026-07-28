@@ -145,6 +145,81 @@ struct ContentView: View {
             .onSubmit(of: .search) {
                 runSearchNow(searchText)
             }
+            // Modals are in-window cards, not sheets — see Views/Modal/ModalChrome.
+            // Every one is presented HERE, at the shell, because the card is sized
+            // from the geometry of whatever it's attached to: presented from a
+            // sidebar row it would be laid out against the sidebar's width.
+            // Rows of image tiles — the one card that genuinely wants room.
+            .museModal(isPresented: $appState.duplicatesSheetVisible,
+                       width: 1100, palette: appState.moodPalette) {
+                DuplicatesView(isPresented: $appState.duplicatesSheetVisible)
+            }
+            .museModal(isPresented: $appState.infoShown,
+                       width: 600, palette: appState.moodPalette) {
+                InfoSheet(isPresented: $appState.infoShown)
+            }
+            // Three 120pt tiles and a subtitle — a 600pt card left it swimming.
+            .museModal(isPresented: $appState.imageLayoutShown,
+                       width: 460, palette: appState.moodPalette) {
+                ImageLayoutSheet(isPresented: $appState.imageLayoutShown)
+                    .environmentObject(appState)
+            }
+            // Form rows with long explanatory footers.
+            .museModal(isPresented: $appState.settingsShown,
+                       width: 560, palette: appState.moodPalette) {
+                SettingsView(isPresented: $appState.settingsShown)
+                    .environmentObject(appState)
+            }
+            // A list of share rows: name, date, two buttons.
+            .museModal(isPresented: $appState.driveSharesShown,
+                       width: 520, palette: appState.moodPalette) {
+                ManageDriveSharesView()
+            }
+            .museModal(isPresented: Binding(
+                get: { appState.metadataImportRequest != nil },
+                set: { if !$0 { appState.metadataImportRequest = nil } }),
+                       width: 360, palette: appState.moodPalette) {
+                if let request = appState.metadataImportRequest {
+                    MetadataImportSheet(request: request)
+                        .environmentObject(appState)
+                }
+            }
+            .museModal(isPresented: $appState.reconnectShown,
+                       width: 600, palette: appState.moodPalette) {
+                if let model = appState.reconnectModel {
+                    ReconnectWizard(model: model, isPresented: $appState.reconnectShown,
+                                    bookmarks: appState.bookmarks)
+                }
+            }
+            // Collection-scoped modals, raised here from the sidebar row / the
+            // Collections page / the share button — see CollectionModal.
+            .museModal(isPresented: Binding(
+                get: { appState.collectionModal != nil },
+                set: { if !$0 { appState.collectionModal = nil } }),
+                       width: appState.collectionModal?.width ?? 480,
+                       palette: appState.moodPalette) {
+                switch appState.collectionModal {
+                case .customize(let loaded):
+                    CustomizeCollectionSheet(loaded: loaded) {
+                        appState.collectionModal = nil
+                    }
+                case .rules(let request):
+                    SmartCollectionRulesView(
+                        collectionID: request.collectionID,
+                        initialName: request.initialName,
+                        initialSet: request.initialSet,
+                        isConversion: request.isConversion,
+                        memberCount: request.memberCount) {
+                            appState.collectionModal = nil
+                        }
+                case .driveShare(let title, let urls):
+                    DriveShareSheet(auth: googleAuth, title: title, urls: urls) {
+                        appState.collectionModal = nil
+                    }
+                case .none:
+                    EmptyView()
+                }
+            }
             // Transparent title bar so the sidebar card flows continuously up
             // to the top and curves with the window corner (Lineform-style).
             .toolbarBackground(.hidden, for: .windowToolbar)
@@ -288,77 +363,6 @@ struct ContentView: View {
                 .keyboardShortcut(.escape, modifiers: [])
                 .hidden()
         )
-        // Modals are in-window cards, not sheets — see Views/Modal/ModalChrome.
-        // Every one is presented HERE, at the shell, because the card is sized
-        // from the geometry of whatever it's attached to: presented from a
-        // sidebar row it would be laid out against the sidebar's width.
-        .museModal(isPresented: $appState.duplicatesSheetVisible,
-                   width: 1100, palette: appState.moodPalette) {
-            DuplicatesView(isPresented: $appState.duplicatesSheetVisible)
-        }
-        .museModal(isPresented: $appState.infoShown,
-                   width: 600, palette: appState.moodPalette) {
-            InfoSheet(isPresented: $appState.infoShown)
-        }
-        .museModal(isPresented: $appState.imageLayoutShown,
-                   width: 600, palette: appState.moodPalette) {
-            ImageLayoutSheet(isPresented: $appState.imageLayoutShown)
-                .environmentObject(appState)
-        }
-        .museModal(isPresented: $appState.settingsShown,
-                   width: 600, palette: appState.moodPalette) {
-            SettingsView(isPresented: $appState.settingsShown)
-                .environmentObject(appState)
-        }
-        .museModal(isPresented: $appState.driveSharesShown,
-                   width: 600, palette: appState.moodPalette) {
-            ManageDriveSharesView()
-        }
-        .museModal(isPresented: Binding(
-            get: { appState.metadataImportRequest != nil },
-            set: { if !$0 { appState.metadataImportRequest = nil } }),
-                   width: 360, palette: appState.moodPalette) {
-            if let request = appState.metadataImportRequest {
-                MetadataImportSheet(request: request)
-                    .environmentObject(appState)
-            }
-        }
-        .museModal(isPresented: $appState.reconnectShown,
-                   width: 600, palette: appState.moodPalette) {
-            if let model = appState.reconnectModel {
-                ReconnectWizard(model: model, isPresented: $appState.reconnectShown,
-                                bookmarks: appState.bookmarks)
-            }
-        }
-        // Collection-scoped modals, raised here from the sidebar row / the
-        // Collections page / the share button — see CollectionModal.
-        .museModal(isPresented: Binding(
-            get: { appState.collectionModal != nil },
-            set: { if !$0 { appState.collectionModal = nil } }),
-                   width: appState.collectionModal?.width ?? 480,
-                   palette: appState.moodPalette) {
-            switch appState.collectionModal {
-            case .customize(let loaded):
-                CustomizeCollectionSheet(loaded: loaded) {
-                    appState.collectionModal = nil
-                }
-            case .rules(let request):
-                SmartCollectionRulesView(
-                    collectionID: request.collectionID,
-                    initialName: request.initialName,
-                    initialSet: request.initialSet,
-                    isConversion: request.isConversion,
-                    memberCount: request.memberCount) {
-                        appState.collectionModal = nil
-                    }
-            case .driveShare(let title, let urls):
-                DriveShareSheet(auth: googleAuth, title: title, urls: urls) {
-                    appState.collectionModal = nil
-                }
-            case .none:
-                EmptyView()
-            }
-        }
         .alert("Couldn’t move some files",
                isPresented: Binding(get: { !appState.moveFailureNames.isEmpty },
                                     set: { if !$0 { appState.moveFailureNames = [] } })) {

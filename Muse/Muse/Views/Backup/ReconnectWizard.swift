@@ -28,11 +28,12 @@ struct ReconnectWizard: View {
                 .padding(.top, 6)
                 .padding(.bottom, 20)
 
-            ScrollView(showsIndicators: false) {
+            ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     folderSection
                     collectionCard
                 }
+                .padding(.trailing, ModalChrome.scrollBarChannel)
             }
 
             Spacer(minLength: 16)

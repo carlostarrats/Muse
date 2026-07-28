@@ -70,7 +70,7 @@ struct ViewerInfoColumn<Chrome: View>: View {
     @State private var colorsExpanded = AppSettings.colorsCardExpanded
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
+        ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 chrome()
                     .padding(.bottom, 12)   // 14 + 12 = 26 down to the name

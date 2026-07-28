@@ -63,7 +63,7 @@ struct CustomizeCollectionSheet: View {
             // The preview and the two palettes scroll; the action row below
             // stays pinned so Cancel/Update are reachable however short the
             // window is.
-            ScrollView(showsIndicators: false) {
+            ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     // A visible caption so the row replica reads as a PREVIEW,
                     // not a stray second copy of the sidebar row (owner
@@ -82,6 +82,7 @@ struct CustomizeCollectionSheet: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.trailing, ModalChrome.scrollBarChannel)
             }
             .padding(.bottom, 36)
 

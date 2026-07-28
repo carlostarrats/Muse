@@ -117,7 +117,7 @@ struct DuplicatesView: View {
 
     @ViewBuilder
     private func groupRow(_ group: DuplicateGroup) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal) {
             HStack(spacing: 12) {
                 ForEach(group.members, id: \.url) { member in
                     memberCard(

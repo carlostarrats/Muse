@@ -31,7 +31,7 @@ struct ImageLayoutSheet: View {
                 .padding(.top, 4)
                 .padding(.bottom, 20)
 
-            ScrollView(showsIndicators: false) {
+            ScrollView {
                 LazyVGrid(columns: columns, spacing: 14) {
                     ForEach(ImageLayout.allCases) { layout in
                         LayoutTile(
@@ -42,6 +42,7 @@ struct ImageLayoutSheet: View {
                     }
                 }
                 .padding(.bottom, 4)
+                .padding(.trailing, ModalChrome.scrollBarChannel)
             }
         }
         .padding(28)

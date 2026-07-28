@@ -35,6 +35,14 @@ enum ModalChrome {
     static let minWidth: CGFloat = 280
     static let minHeight: CGFloat = 160
 
+    /// Clear channel reserved on the trailing edge of a modal's SCROLLING
+    /// content. macOS draws an overlay scrollbar at the ScrollView's right edge,
+    /// which is exactly where the text ends — so the bar landed on top of the
+    /// last few characters of every wrapped line. Padding the content (not the
+    /// ScrollView) keeps the bar where the system wants it and moves the text
+    /// out from under it.
+    static let scrollBarChannel: CGFloat = 16
+
     static func scrimColor(for palette: MoodPalette) -> Color {
         // A dark wash under both schemes: on a light mood it reads as shadow,
         // on a dark one it deepens. Tuned so the grid stays legible as depth

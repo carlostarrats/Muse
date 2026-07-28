@@ -6,11 +6,17 @@
 //  for `.sheet` on every card modal. See ModalChrome.swift for why the app
 //  stopped using sheets.
 //
-//  Attach it at the SHELL level (ContentView), never inside a sidebar row or a
-//  toolbar button: the card is sized from the geometry of whatever it's
-//  attached to, so a modal presented from a 240pt sidebar would be laid out
-//  against 240pt. Views deeper in the tree raise a flag on AppState and let the
-//  shell present.
+//  Attach it to the shell's DETAIL pane (ContentView's `detail:` closure), never
+//  inside a sidebar row or a toolbar button: the card is sized and centred
+//  against the geometry of whatever it's attached to, so a modal presented from
+//  a 240pt sidebar row would be laid out against 240pt. Views deeper in the tree
+//  raise a flag on AppState and let the shell present.
+//
+//  The detail pane and not the whole window, deliberately: the card centres in
+//  the CONTENT column, so it stays centred under the user's eye as the sidebar
+//  opens and closes instead of drifting off the page's midline. The sidebar is
+//  left uncovered and interactive — same as Lineform, which anchors its modal
+//  layer inside the page column for exactly this reason.
 //
 
 import SwiftUI
