@@ -360,8 +360,15 @@ struct GridView: View {
                          reportAspect: { [weak aspects] ratio in
                              aspects?.report(aspect: ratio,
                                               forStandardizedPath: file.url.standardizedFileURL.path)
-                         })
+                         },
+                         imageAspect: aspects.aspect(for: file))
                     .frame(width: rect.width, height: rect.height)
+                    // The photo no longer paints the whole slot, so without an
+                    // explicit shape the empty part of a Grid slot isn't
+                    // hit-testable and a click beside the image would fall
+                    // through to the background (clearing the selection).
+                    // Ring and hover hug the photo; the TARGET stays the slot.
+                    .contentShape(Rectangle())
                     // Instant single-click select (Cmd toggles, Shift ranges);
                     // a second quick tap opens. Selection border lives inside
                     // TileView so it scales with the hover zoom.
@@ -725,6 +732,13 @@ private struct TileView: View {
     /// Reports the decoded thumbnail's exact aspect back to the layout so the
     /// tile frame matches the image (no grey letterbox).
     var reportAspect: (CGFloat) -> Void = { _ in }
+    /// The IMAGE's own shape (height ÷ width) — which is not the slot's shape
+    /// in Grid mode, where every slot is square. Drives where the photo
+    /// actually draws, and therefore where the ring, hover veil and star badge
+    /// sit. Fallback only: `ImageHeaderSizeCache` wins when it's warm, because
+    /// the hero flight reads that same table and the two rects must not
+    /// disagree (they'd make the photo jump at flight start).
+    var imageAspect: CGFloat = 1
 
     @State private var thumbnail: NSImage?
     @State private var hovering = false
@@ -777,6 +791,23 @@ private struct TileView: View {
 
     private var isImageKind: Bool {
         file.kind == .image || file.kind == .raw || file.kind == .psd || file.kind == .svg
+    }
+
+    /// Where the photo draws inside its slot, as a width ÷ height ratio for
+    /// `.aspectRatio(_:contentMode:)`.
+    ///
+    /// Prefers `ImageHeaderSizeCache` — the same never-evicting table the hero
+    /// flight resolves its take-off rect from, warmed off-main by the thumbnail
+    /// pass long before any click. Using it here means the ring and the flight
+    /// are computing the same rect from the same number. `imageAspect` (from
+    /// AspectRatioCache, which may still hold a placeholder or a stale DB
+    /// value) is the cold-start fallback.
+    private var drawnAspectRatio: CGFloat {
+        if let size = ImageHeaderSizeCache.cached(file.url),
+           size.width > 0, size.height > 0 {
+            return size.width / size.height
+        }
+        return imageAspect > 0 ? 1 / imageAspect : 1
     }
 
     var body: some View {
@@ -860,7 +891,32 @@ private struct TileView: View {
     /// The image area: the thumbnail/preview/card, clipped, with the selection
     /// overlay and the global-frame reporter for the hero open/close flight.
     /// The caption strip (if any) sits below this, OUTSIDE the selection border.
+    ///
+    /// For an image kind the whole stack is fitted to the photo's own shape, so
+    /// the ring, the hover veil and the star badge hug the visible image and
+    /// never box in empty slot space. In Columns and Rows the slot already has
+    /// the image's shape, so the fit is a no-op; only Grid (square slots) shows
+    /// a difference. Non-photo cards keep the full slot — their card IS the
+    /// tile.
+    @ViewBuilder
     private var imageContent: some View {
+        if isImageKind {
+            contentStack
+                .aspectRatio(drawnAspectRatio, contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            contentStack
+        }
+    }
+
+    /// The stacked tile content. For an image kind this is sized to the drawn
+    /// photo by `imageContent` above, which is why `tileFrames` (reported from
+    /// its background) carries the DRAWN rect rather than the slot rect:
+    /// `HeroStage` runs `ViewerGeometry.fitWithin` on it, and fitting an
+    /// already-fitted rect is the identity — so the flight endpoint is exact
+    /// instead of depending on two caches agreeing. Don't "restore" this to
+    /// report the slot.
+    private var contentStack: some View {
         ZStack {
             // When selected, the gap between the shrunken image and the ring
             // shows the app background (same color as the grid gutter), so the
@@ -963,11 +1019,14 @@ private struct TileView: View {
     @ViewBuilder
     private var tile: some View {
         if isImageKind {
-            // Placeholder stays put; the decoded image fades IN over it when it
-            // lands, so a cold grid resolves as a soft fade.
+            // No backdrop: a photo draws on the page itself. The opaque slab a
+            // fitted image used to sit on is exactly what made a layout read as
+            // imposed, and a transparent PNG is meant to show the page through.
+            // The placeholder stays put and the decoded image fades IN over it,
+            // so a cold grid resolves as a soft fade. Both are already inside
+            // the photo-fitted container, so the shimmer occupies the rect the
+            // image will land in — nothing resizes when it arrives.
             ZStack {
-                Rectangle()
-                    .fill(appState.tileFill)
                 if thumbnail == nil {
                     let tuning = shimmerTuning(
                         isCustom: appState.mood == .custom,
