@@ -72,6 +72,46 @@ enum ModalChrome {
     }
 }
 
+/// A collection-scoped modal, hoisted out of the sidebar row and the
+/// Collections page so the SHELL presents it.
+///
+/// These used to be `.sheet`s attached to a `CollectionSidebarRow` or a toolbar
+/// button. An in-window card is sized from the geometry of whatever it's
+/// attached to, so presented from a 240pt sidebar row it would be laid out
+/// against 240pt — the payload has to travel up to `ContentView` instead.
+enum CollectionModal: Identifiable {
+    case customize(CollectionStore.Loaded)
+    case rules(RulesRequest)
+    case driveShare(title: String, urls: [URL])
+
+    /// Rule-editor payload: nil `collectionID` means "create a new smart
+    /// collection" (the Collections page's + button).
+    struct RulesRequest {
+        var collectionID: String?
+        var initialName: String
+        var initialSet: SmartRuleSet
+        var isConversion: Bool = false
+        var memberCount: Int = 0
+    }
+
+    var id: String {
+        switch self {
+        case .customize(let loaded):   return "customize-\(loaded.collection.id)"
+        case .rules(let request):      return "rules-\(request.collectionID ?? "new")"
+        case .driveShare(let title, _): return "drive-\(title)"
+        }
+    }
+
+    /// Each card keeps the width it had as a sheet.
+    var width: CGFloat {
+        switch self {
+        case .customize:  return 480
+        case .rules:      return 560
+        case .driveShare: return 460
+        }
+    }
+}
+
 /// The dimming, click-to-dismiss layer behind a modal card.
 struct ModalScrim: View {
     let palette: MoodPalette

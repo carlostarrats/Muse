@@ -19,6 +19,7 @@ private enum SearchFolderScope: Hashable {
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject private var googleAuth: GoogleOAuth
     @ObservedObject private var indexProgress = IndexProgress.shared
     @ObservedObject private var thumbProgress = ThumbProgress.shared
     @ObservedObject private var analyzePipeline = AnalyzePipeline.shared
@@ -26,31 +27,19 @@ struct ContentView: View {
     @State private var workProgress = WorkProgress()
     @ObservedObject private var collectionsEngine = CollectionsEngine.shared
     @State private var moodPickerShown = false
-    @State private var infoShown = false
-    @State private var imageLayoutShown = false
     @State private var filterPopoverShown = false
-
-    /// Whether any in-window modal card is up. Escape peels it first, and the
-    /// grid's own key handling stands down while it's open — a card doesn't take
-    /// key focus away from the window the way a sheet's own window did, so
-    /// without this the arrow keys would still drive the grid behind it.
-    private var anyModalPresented: Bool {
-        infoShown || imageLayoutShown
-            || appState.settingsShown || appState.driveSharesShown
-            || appState.duplicatesSheetVisible || appState.reconnectShown
-            || appState.metadataImportRequest != nil
-    }
 
     /// Close whichever modal is up. Only one is ever presented at a time, so
     /// this is a deterministic sweep rather than a real stack.
     private func dismissTopModal() {
+        if appState.collectionModal != nil { appState.collectionModal = nil; return }
         if appState.metadataImportRequest != nil { appState.metadataImportRequest = nil; return }
         if appState.reconnectShown { appState.reconnectShown = false; return }
         if appState.duplicatesSheetVisible { appState.duplicatesSheetVisible = false; return }
         if appState.driveSharesShown { appState.driveSharesShown = false; return }
         if appState.settingsShown { appState.settingsShown = false; return }
-        if imageLayoutShown { imageLayoutShown = false; return }
-        if infoShown { infoShown = false; return }
+        if appState.imageLayoutShown { appState.imageLayoutShown = false; return }
+        if appState.infoShown { appState.infoShown = false; return }
     }
 
     /// True while the window is in macOS full-screen — drives the full-screen-only
@@ -246,7 +235,7 @@ struct ContentView: View {
                     isSearchActive: appState.isSearchActive,
                     queryIsEmpty: appState.searchQuery.isEmpty && searchText.isEmpty)
                 switch EscapeResolver.action(
-                    modalPresented: anyModalPresented,
+                    modalPresented: appState.modalPresented,
                     hasSelectedFile: selected != nil,
                     selectedFileIsHero: isHero,
                     searchActive: searchPresent,
@@ -307,13 +296,13 @@ struct ContentView: View {
                    width: 1100, palette: appState.moodPalette) {
             DuplicatesView(isPresented: $appState.duplicatesSheetVisible)
         }
-        .museModal(isPresented: $infoShown,
+        .museModal(isPresented: $appState.infoShown,
                    width: 600, palette: appState.moodPalette) {
-            InfoSheet(isPresented: $infoShown)
+            InfoSheet(isPresented: $appState.infoShown)
         }
-        .museModal(isPresented: $imageLayoutShown,
+        .museModal(isPresented: $appState.imageLayoutShown,
                    width: 600, palette: appState.moodPalette) {
-            ImageLayoutSheet(isPresented: $imageLayoutShown)
+            ImageLayoutSheet(isPresented: $appState.imageLayoutShown)
                 .environmentObject(appState)
         }
         .museModal(isPresented: $appState.settingsShown,
@@ -339,6 +328,35 @@ struct ContentView: View {
             if let model = appState.reconnectModel {
                 ReconnectWizard(model: model, isPresented: $appState.reconnectShown,
                                 bookmarks: appState.bookmarks)
+            }
+        }
+        // Collection-scoped modals, raised here from the sidebar row / the
+        // Collections page / the share button — see CollectionModal.
+        .museModal(isPresented: Binding(
+            get: { appState.collectionModal != nil },
+            set: { if !$0 { appState.collectionModal = nil } }),
+                   width: appState.collectionModal?.width ?? 480,
+                   palette: appState.moodPalette) {
+            switch appState.collectionModal {
+            case .customize(let loaded):
+                CustomizeCollectionSheet(loaded: loaded) {
+                    appState.collectionModal = nil
+                }
+            case .rules(let request):
+                SmartCollectionRulesView(
+                    collectionID: request.collectionID,
+                    initialName: request.initialName,
+                    initialSet: request.initialSet,
+                    isConversion: request.isConversion,
+                    memberCount: request.memberCount) {
+                        appState.collectionModal = nil
+                    }
+            case .driveShare(let title, let urls):
+                DriveShareSheet(auth: googleAuth, title: title, urls: urls) {
+                    appState.collectionModal = nil
+                }
+            case .none:
+                EmptyView()
             }
         }
         .alert("Couldn’t move some files",
@@ -627,7 +645,7 @@ struct ContentView: View {
     private func layoutItem(_ placement: ToolbarItemPlacement) -> some ToolbarContent {
         ToolbarItem(placement: placement) {
             Button {
-                imageLayoutShown = true
+                appState.imageLayoutShown = true
             } label: {
                 Image(systemName: "square.grid.2x2")
                     .moodToolbarIcon(appState.moodPalette)
@@ -670,7 +688,7 @@ struct ContentView: View {
     private func infoItem(_ placement: ToolbarItemPlacement) -> some ToolbarContent {
         ToolbarItem(placement: placement) {
             Button {
-                infoShown = true
+                appState.infoShown = true
             } label: {
                 Image(systemName: "info.circle")
                     .moodToolbarIcon(appState.moodPalette)

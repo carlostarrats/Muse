@@ -128,7 +128,7 @@ struct SmartCollectionRulesView: View {
             .padding(.top, 14)
         }
         .padding(28)
-        .windowFittedSheetHeight(width: 560, ideal: 620)
+        // Width and the height cap come from the modal presenter.
         .alert("Replace this collection’s items with rules?", isPresented: $showConvertConfirm) {
             Button("Replace", role: .destructive) { save() }
             Button("Cancel", role: .cancel) { }

@@ -6342,3 +6342,56 @@ content in a `ScrollView`/`Form`, and action rows stay outside the scroll.
 Content-sizing is explicitly NOT an alternative — "it's short enough" stops
 being true the moment a row is added, which is exactly what happened to Settings
 earlier the same day.
+
+### 2026-07-28 (same branch) — modals became in-window cards
+
+Owner, on the Info modal: "it extends out then clips to be inside. this should
+not happen." He pointed at Lineform as proof it's solvable.
+
+**Diagnosis.** A `.sheet` gets its OWN window. `windowFittedSheetHeight` capped
+its height by reading the parent window — but the AppKit view doing that reading
+can't find its parent until it's inserted into a hierarchy, which is one runloop
+AFTER the first layout. So frame one drew at the ideal height (720 for Info),
+spilled past a short window's bottom edge, and the measurement then snapped it
+back.
+
+**What Lineform actually does** (looked at properly the second time, after
+first grepping only its first-launch overlay): its Settings is not a sheet at
+all. It's a ZStack layer inside the editor — `museModalLayer` in
+`EditorContainerView.swift` — handed `availableWidth: geometry.size.width` from
+a `GeometryReader`, with the card centred by `maxWidth/maxHeight: .infinity`.
+The geometry is known during the first layout, so there is nothing to measure
+and nothing to snap.
+
+**What Muse does now.** `.museModal(isPresented:width:palette:)`
+(`Views/Modal/`) renders a scrim plus a centred card inside a `GeometryReader`.
+The card's height is a `maxHeight` CAP rather than a measured frame: it takes
+its natural height up to the cap and its own ScrollView scrolls past that. All
+eleven modals converted; `WindowFittedSheetHeight`, `SheetFit` and
+`SheetFitTests` deleted.
+
+**Four things this had to preserve, all load-bearing:**
+
+1. **The Drive publish's cancel-on-dismiss.** The card is built ONLY while
+   presented, so dismissal genuinely unmounts it and `.onDisappear` fires. An
+   always-mounted card hidden with opacity would leave an upload running
+   headless and the share would go public unseen.
+2. **The hero close.** `EscapeAction.dismissModal` resolves ABOVE the viewer and
+   returns early, so a modal press can never interleave with the return flight.
+   Nothing else swallows Escape for a card the way a sheet's window did.
+3. **Keyboard capture.** The window keeps key focus behind a card, so
+   `AppState.modalPresented` now gates the grid's `PageScrollCatcher` — without
+   it the arrow keys still drove the grid underneath.
+4. **Where modals are presented.** A card is sized from the geometry of whatever
+   it's attached to, so presented from a 240pt sidebar row it would be laid out
+   against 240pt. Every modal is presented at the shell; the four
+   collection-scoped ones hand their payload up through
+   `AppState.collectionModal`.
+
+**Accepted loss:** Duplicates was a user-resizable sheet window and is now a
+card at the window's size minus a margin.
+
+Verified by measurement rather than by eye: with the Info card open, the sidebar
+samples at 167 grey — exactly 0.34 black over white, the same scrim as the grid
+(135,138,148 over the mood background) — confirming the scrim covers the whole
+window and clicks can't reach the sidebar behind it.

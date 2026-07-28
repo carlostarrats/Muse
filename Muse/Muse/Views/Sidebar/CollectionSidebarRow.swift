@@ -33,11 +33,20 @@ struct CollectionSidebarRow: View {
     @State private var isHovered = false
     @State private var confirmDelete = false
     @State private var preparingExport = false
-    @State private var showingDriveShare = false
-    @State private var showingCustomize = false
-    @State private var showingRules = false
     @State private var driveShareURLs: [URL] = []
     @State private var exportFailed = false
+
+    /// Hand the rule editor's payload to the shell. Sidebar rows can't present
+    /// an in-window card themselves — it would be sized against the sidebar.
+    private func presentRules() {
+        appState.collectionModal = .rules(.init(
+            collectionID: id,
+            initialName: loaded.collection.name,
+            initialSet: loaded.collection.smart_rules.flatMap(SmartRuleSet.decode)
+                ?? SmartRuleSet(match: .all, rules: []),
+            isConversion: !isSmart,
+            memberCount: loaded.aliveCount))
+    }
 
     private var id: String { loaded.collection.id }
     private var isSmart: Bool { loaded.collection.smart_rules != nil }
@@ -140,11 +149,11 @@ struct CollectionSidebarRow: View {
                 appState.collectionRenameAlertRequest = CollectionRenameAlertRequest(
                     id: id, currentName: loaded.collection.name)
             }
-            Button("Change Symbol & Color…") { showingCustomize = true }
+            Button("Change Symbol & Color…") { appState.collectionModal = .customize(loaded) }
             if isSmart {
-                Button("Edit Rules…") { showingRules = true }
+                Button("Edit Rules…") { presentRules() }
             } else {
-                Button("Make Smart…") { showingRules = true }
+                Button("Make Smart…") { presentRules() }
             }
             Button("Delete…") { confirmDelete = true }
             if manual {
@@ -169,8 +178,8 @@ struct CollectionSidebarRow: View {
                 appState.collectionRenameAlertRequest = CollectionRenameAlertRequest(
                     id: id, currentName: loaded.collection.name)
             }
-            Button("Change Symbol & Color") { showingCustomize = true }
-            Button(isSmart ? String(localized: "Edit Rules") : String(localized: "Make Smart")) { showingRules = true }
+            Button("Change Symbol & Color") { appState.collectionModal = .customize(loaded) }
+            Button(isSmart ? String(localized: "Edit Rules") : String(localized: "Make Smart")) { presentRules() }
             Button("Delete Collection") { confirmDelete = true }
             // Move actions only when Manual sort permits reordering, and only in
             // the non-boundary direction(s) — mirrors the context menu's disabled
@@ -199,25 +208,7 @@ struct CollectionSidebarRow: View {
         } message: {
             Text("The collection is removed everywhere. Your images stay on disk.")
         }
-        .sheet(isPresented: $showingCustomize) {
-            CustomizeCollectionSheet(loaded: loaded) { showingCustomize = false }
-        }
-        .sheet(isPresented: $showingRules) {
-            SmartCollectionRulesView(
-                collectionID: id,
-                initialName: loaded.collection.name,
-                initialSet: loaded.collection.smart_rules.flatMap(SmartRuleSet.decode)
-                    ?? SmartRuleSet(match: .all, rules: []),
-                isConversion: !isSmart,
-                memberCount: loaded.aliveCount) {
-                showingRules = false
-            }
-        }
-        .sheet(isPresented: $showingDriveShare) {
-            DriveShareSheet(auth: googleAuth, title: loaded.collection.name, urls: driveShareURLs) {
-                showingDriveShare = false
-            }
-        }
+        // Customize / Rules / Drive share are presented by the SHELL — see CollectionModal.
         .alert("Couldn’t Export the PDF", isPresented: $exportFailed) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -264,7 +255,7 @@ struct CollectionSidebarRow: View {
         let urls = await exportURLs()
         guard !urls.isEmpty else { exportFailed = true; return }
         driveShareURLs = urls
-        showingDriveShare = true
+        appState.collectionModal = .driveShare(title: loaded.collection.name, urls: driveShareURLs)
     }
 }
 

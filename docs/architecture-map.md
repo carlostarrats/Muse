@@ -260,7 +260,14 @@ Muse/Muse/
     ImageLayoutSheet.swift         grid-button modal setting AppState.imageLayout — a grid of the
                                    12 ImageLayout tiles over a "Common Sizes" reference. LayoutTile
                                    takes the active MoodPalette so the modal flips with the mood
-    SheetCloseButton.swift         shared circular hover-✕ for modal sheets (Esc via cancelAction)
+    Modal/ModalChrome.swift        the in-window modal language: card + scrim constants, ModalScrim,
+                                   and CollectionModal (payloads hoisted out of sidebar rows so the
+                                   SHELL can present them). Replaced .sheet everywhere — see CLAUDE.md
+    Modal/ModalPresenter.swift     `.museModal(isPresented:width:palette:)` — scrim + centred card
+                                   inside a GeometryReader, so the height is a maxHeight CAP resolved
+                                   on the FIRST layout (a sheet could only measure one runloop later,
+                                   which is what made a modal open oversized and snap)
+    SheetCloseButton.swift         shared circular hover-✕ for modal cards
     SelectionMenu.swift            SelectionActionsMenu — Add to Collection / New Collection from
                                    Selection / Add Tag / Share / Move to Folder over the effective
                                    selection. File-only actions consume a folder-filtered fileURLs
@@ -379,7 +386,7 @@ Muse/Muse/
                                    + rating-presence check, per (file_id, parent_dir). Unit-tested
     MetadataImportModel.swift      @MainActor orchestrator: enumerate → index-first → read off-main →
                                    batched writes, progress/cancel/summary, idempotent
-    MetadataImportSheet.swift      content-sized progress + summary sheet
+    MetadataImportSheet.swift      progress + summary modal card
   Backup/                          Library Backup & Restore. Export one self-contained `.muselibrary`
                                    file + reconnect it on another Mac by content hash
     BackupArchive.swift            pure Codable model; reuses Sidecar for per-file metadata.

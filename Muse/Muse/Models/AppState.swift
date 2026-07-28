@@ -484,6 +484,27 @@ final class AppState: ObservableObject {
         didSet { AppSettings.imageLayout = imageLayout }
     }
 
+    /// The About/Info card.
+    @Published var infoShown = false
+    /// The Image Layout card.
+    @Published var imageLayoutShown = false
+
+    /// Whether ANY in-window modal card is up. Modals stopped being `.sheet`s,
+    /// so the window keeps key focus while one is open — without this the grid's
+    /// key catcher would still take arrow/page keys behind the card, and Escape
+    /// wouldn't know to peel the modal first.
+    var modalPresented: Bool {
+        infoShown || imageLayoutShown || settingsShown || driveSharesShown
+            || duplicatesSheetVisible || reconnectShown
+            || metadataImportRequest != nil || collectionModal != nil
+    }
+
+    /// A collection-scoped modal awaiting presentation by the shell. Set from a
+    /// sidebar row / the Collections page / the share button; `ContentView`
+    /// renders it, because an in-window card is sized from its host's geometry
+    /// and a sidebar row is only ~240pt wide. See `CollectionModal`.
+    @Published var collectionModal: CollectionModal?
+
     // MARK: - Grid filter
 
     /// The grid faceted filter (kind / date / size). Persisted to AppSettings;

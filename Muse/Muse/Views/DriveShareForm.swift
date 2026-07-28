@@ -62,10 +62,7 @@ struct DriveShareSheet: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(28)
-        // Capped to the window rather than content-sized: the idle form (three
-        // fields, an expiry picker and Publish) is tall enough to spill past a
-        // short window's bottom edge, and a sheet extends rather than clips.
-        .windowFittedSheetHeight(width: 460, ideal: 420)
+        // Width and the height cap come from the modal presenter.
         // Closing the sheet by ANY path must abort an in-flight publish —
         // otherwise the upload continues headless, setAnyoneReader fires, and
         // the collection goes public with the link rendered into a dismissed

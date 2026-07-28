@@ -144,7 +144,7 @@ struct GridView: View {
                     // valid frame with no full-set materialization — virtualization
                     // is untouched.
                     PageScrollCatcher(
-                        isActive: { appState.selectedFile == nil },
+                        isActive: { appState.selectedFile == nil && !appState.modalPresented },
                         onArrow: { direction in
                             let files = appState.visibleFiles
                             guard !files.isEmpty, !frames.isEmpty else { return nil }

@@ -21,7 +21,6 @@ struct ShareCollectionButton: View {
     @AppStorage("gridColumnCount") private var gridColumns = 4
     @State private var hovering = false
     @State private var preparing = false
-    @State private var showingDriveShare = false
     @State private var exportFailed = false
 
     /// The collection's CURRENTLY VISIBLE members, in grid order — the on-screen
@@ -37,6 +36,12 @@ struct ShareCollectionButton: View {
     /// them; a PDF/video/other file card can't be stripped, so it would abort
     /// the whole publish fail-closed with a misleading error). PDF export
     /// ("Save to…") keeps the full visible set including file cards.
+    /// Hand the Drive form's payload to the shell — a toolbar button can't
+    /// present an in-window card itself (it would be sized against the button).
+    private func presentDriveShare() {
+        appState.collectionModal = .driveShare(title: title, urls: driveShareURLs)
+    }
+
     private var driveShareURLs: [URL] {
         appState.visibleFiles.compactMap { node in
             switch node.kind {
@@ -49,7 +54,7 @@ struct ShareCollectionButton: View {
     var body: some View {
         Menu {
             Button("Save to…") { Task { await save() } }
-            Button("Share Drive Link") { showingDriveShare = true }
+            Button("Share Drive Link") { presentDriveShare() }
                 .disabled(driveShareURLs.isEmpty)
         } label: {
             Group {
@@ -72,11 +77,7 @@ struct ShareCollectionButton: View {
         .disabled(preparing || count == 0 || exportURLs.isEmpty)
         .help("Share collection")
         .accessibilityLabel("Share collection")
-        .sheet(isPresented: $showingDriveShare) {
-            DriveShareSheet(auth: googleAuth, title: title, urls: driveShareURLs) {
-                showingDriveShare = false
-            }
-        }
+        // The Drive form is presented by the SHELL — see CollectionModal.
         .alert("Couldn’t Export the PDF", isPresented: $exportFailed) {
             Button("OK", role: .cancel) {}
         } message: {

@@ -101,10 +101,7 @@ struct CustomizeCollectionSheet: View {
             }
         }
         .padding(28)
-        // Capped to the window: the two palettes make this the tallest of the
-        // small sheets, and a content-sized frame would spill past the bottom
-        // edge on a short window instead of scrolling.
-        .windowFittedSheetHeight(width: 480, ideal: 560)
+        // Width and the height cap come from the modal presenter.
     }
 
     // MARK: - Preview
