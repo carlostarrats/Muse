@@ -437,10 +437,22 @@ struct HeroImageViewer: View {
 
     private func loadDetails() async {
         let url = currentURL
-        // Kick off the quick palette now (48px decode) rather than after the
-        // DB read: swatches should land before the chrome fade-in finishes,
-        // so the actions row never visibly shifts.
-        async let quick = HeroPalette.quickPalette(at: url)
+        // The quick-palette fallback is started LAZILY, only if the DB turns out
+        // to have no analyzed palette.
+        //
+        // It used to be kicked off here, concurrently with the DB read, so
+        // swatches would land before the chrome fade-in finished. That is the
+        // right instinct for an unanalyzed file, but it made every ANALYZED file
+        // pay a decode whose result is thrown away — and `quickPalette` asks for
+        // a 48px thumbnail, which for formats ImageIO can't stream-downsample
+        // still materializes the FULL raster. On a 659 MB scan that is 266 ms and
+        // ~1 GB, running concurrently with the hero image's own 532 ms full
+        // decode of the same file: two giant rasters at once, for a tint that
+        // gets discarded.
+        //
+        // The DB read is local SQLite (sub-millisecond), so deferring the decode
+        // behind it costs an unanalyzed file nothing measurable and saves an
+        // analyzed one the entire decode.
         var loaded: ViewerFileDetails? = nil
         if let queue = Database.shared.dbQueue {
             loaded = try? await ViewerFileDetails.load(queue: queue, path: url.path)
@@ -467,7 +479,7 @@ struct HeroImageViewer: View {
         if let palette = loaded?.palette, !palette.isEmpty {
             paletteResolved = true
         } else {
-            let pal = await quick
+            let pal = await HeroPalette.quickPalette(at: url)
             if url == currentURL {
                 withAnimation(.easeOut(duration: 0.25)) {
                     computedPalette = pal
