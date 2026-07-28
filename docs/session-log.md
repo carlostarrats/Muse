@@ -6274,3 +6274,43 @@ square slots — the price of "same slot size, nothing cropped".
 Owner's call: **leave Grid as-is and use Rows for the uniform-gap look** (Rows is
 what his Atlas reference actually shows). Cropping-to-fill in Grid was rejected —
 it's the opposite of the no-cropping requirement Grid was designed around.
+
+### 2026-07-28 (same branch) — review + QA pass
+
+Reviewed the whole session's diff and fixed six things. Three were real defects,
+three were documentation drift.
+
+**Defects.**
+
+1. **Rows could collapse a row to a 1pt sliver.** Very tall images add almost no
+   width per item, so in a narrow window at maximum spacing a row accumulated
+   until the GUTTERS ALONE exceeded the row width — justification then divided by
+   a negative usable width and `max(1, …)` floored the whole row at one point.
+   Reproduced exactly (12 items, 308pt of gutters in a 300pt width) before
+   fixing. `JustifiedRowsGeometry.rows` now closes the row before that can
+   happen; `testRowClosesBeforeGuttersSwallowTheWidth` pins it.
+2. **A UserDefaults observer per grid tile.** The corner radius was read with
+   `@AppStorage` inside `TileView` — but the grid is virtualized, so tiles mount
+   and unmount constantly, and the file's own convention is to pass such values
+   down from `GridView`'s single `@AppStorage` (as `showFileNames` already does).
+   Now a plain `cornerRadius` parameter.
+3. **The Settings sliders were not VoiceOver-adjustable.** They were wrapped in
+   `.accessibilityElement(children: .combine)`, which merges the row into a plain
+   group and strips the slider's adjustable trait — readable but not changeable.
+   The label and readout now fold into the slider's own
+   `accessibilityLabel`/`accessibilityValue` and are hidden as separate elements.
+
+**Also changed:** the hero viewer's corner-radius compensation now divides by the
+user's zoom as well as the flight scale (`.scaleEffect(zoom)` sits outside the
+clip too), so the radius holds when the image is pulled back below Fit.
+
+**Settings sheet sizing.** Adding the two sliders pushed the form to ~740pt.
+It was content-sized with no cap, so on a shorter window it spilled past the
+bottom edge — the exact trap the sheet-sizing durable constraint describes. It
+now uses `windowFittedSheetHeight(width: 600, ideal: 760)`: a tall window shows
+the whole form with no dead space, a short one caps it and the Form scrolls.
+
+**Doc drift fixed:** the architecture map still said GridView had a spacing
+slider; CLAUDE.md still listed Image Layout among the ScrollView sheets needing
+the window-fitted cap (it's content-sized now) and still implied Settings was
+safely content-sized.

@@ -113,6 +113,27 @@ final class JustifiedRowsGeometryTests: XCTestCase {
         XCTAssertEqual(r.frames[0].width, r.frames[1].width, accuracy: 0.5)
     }
 
+    /// A narrow window at maximum spacing with very tall images: each item adds
+    /// almost no width, so a row can accumulate enough items that the GUTTERS
+    /// alone exceed the row width. Justifying then divides by a negative usable
+    /// width and collapses the whole row to a 1pt sliver. The row must close
+    /// before that instead.
+    func testRowClosesBeforeGuttersSwallowTheWidth() {
+        let aspects = [CGFloat](repeating: 10, count: 20)   // extremely tall
+        let rows = JustifiedRowsGeometry.rows(aspects: aspects, targetHeight: 13,
+                                              width: 300, spacing: 28)
+        XCTAssertFalse(rows.isEmpty)
+        for row in rows {
+            let gaps = CGFloat(row.items.count - 1) * 28
+            XCTAssertLessThan(gaps, 300, "gutters alone must not exceed the row width")
+            XCTAssertGreaterThan(row.height, 1,
+                                 "a row must never collapse to a sliver")
+        }
+        // Everything still gets placed exactly once.
+        let placed = rows.flatMap { $0.items.map(\.index) }.sorted()
+        XCTAssertEqual(placed, Array(0..<20))
+    }
+
     func testTotalHeightHasNoTrailingSpacing() {
         let aspects = [CGFloat](repeating: 1, count: 8)
         let r = JustifiedRowsGeometry.compute(aspects: aspects, targetHeight: 200,

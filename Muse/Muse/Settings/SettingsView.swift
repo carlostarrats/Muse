@@ -29,22 +29,32 @@ struct SettingsView: View {
 
     /// A labelled slider with its current value in points on the right — the
     /// shape the grid's two continuous settings share.
+    ///
+    /// The label and the readout are folded INTO the slider's own accessibility
+    /// (label + value) and hidden as separate elements. Combining the HStack
+    /// instead would merge the slider into a plain group and strip its
+    /// adjustable trait, leaving VoiceOver able to read the setting but not
+    /// change it.
     private func measuredSlider(title: String,
                                 value: Binding<Double>,
                                 range: ClosedRange<Double>,
                                 clamp: @escaping (Double) -> Double) -> some View {
-        HStack(spacing: 12) {
+        let points = Int(clamp(value.wrappedValue))
+        return HStack(spacing: 12) {
             Text(title)
+                .accessibilityHidden(true)
             Slider(value: Binding(get: { clamp(value.wrappedValue) },
                                   set: { value.wrappedValue = clamp($0.rounded()) }),
                    in: range, step: 1)
-            Text("\(Int(clamp(value.wrappedValue))) pt")
+                .accessibilityLabel(title)
+                .accessibilityValue(Text("\(points) pt"))
+            Text("\(points) pt")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
                 .frame(width: 44, alignment: .trailing)
+                .accessibilityHidden(true)
         }
-        .accessibilityElement(children: .combine)
     }
 
     /// Live iCloud folder state, driving the Show-iCloud toggle's enabled state
@@ -83,10 +93,14 @@ struct SettingsView: View {
 
             settingsForm
         }
-        // Match the Info modal's width, but size the height to the content so
-        // every section is visible without a tall, mostly-empty sheet.
-        .frame(width: 600)
-        .fixedSize(horizontal: false, vertical: true)
+        // Match the Info modal's width. The height was content-sized, which
+        // worked while the form was short — but four sections plus the two grid
+        // sliders is ~740pt, and a content-sized sheet has no cap, so on a
+        // shorter window it spilled past the bottom edge (a macOS sheet extends
+        // rather than clips). `ideal` is set just above the natural height, so a
+        // tall window still shows the whole form with no dead space, and a short
+        // one caps it and the Form scrolls. Raise `ideal` if a section is added.
+        .windowFittedSheetHeight(width: 600, ideal: 760)
     }
 
     private var settingsForm: some View {

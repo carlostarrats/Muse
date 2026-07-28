@@ -93,12 +93,15 @@ struct HeroStage: View {
         CGFloat(AppSettings.clampGridCornerRadius(cornerRadiusSetting))
     }
 
-    /// The flight's current scale — exactly what `FlightEffect` derives from the
-    /// same two rects. Feeds `FlightRoundedRect` so the corner radius the viewer
-    /// sees doesn't shrink with the image.
-    private func flightScale(home: CGRect) -> CGFloat {
-        guard home.width > 0, displayRect.width > 0 else { return 1 }
-        return displayRect.width / home.width
+    /// Every render scale applied to the clipped image: the flight's own scale
+    /// (what `FlightEffect` derives from the same two rects) times the user's
+    /// zoom, since `.scaleEffect(zoom)` sits outside the clip too. Feeds
+    /// `FlightRoundedRect` so the corner radius the viewer sees stays put —
+    /// through the flight, and when the image is pulled back below Fit.
+    private func renderScale(home: CGRect) -> CGFloat {
+        let flight = (home.width > 0 && displayRect.width > 0)
+            ? displayRect.width / home.width : 1
+        return flight * max(0.0001, zoom)
     }
 
     @State private var displayRect: CGRect = .zero
@@ -215,7 +218,7 @@ struct HeroStage: View {
                     .aspectRatio(contentMode: .fill)
                     .frame(width: base.width, height: base.height)
                     .clipShape(FlightRoundedRect(radius: cornerRadius,
-                                                 scale: flightScale(home: base)))
+                                                 scale: renderScale(home: base)))
                     // Delete: the image fades out first (front ~60%).
                     .modifier(FadeOutModifier(progress: burnProgress,
                                               fadeStart: 0.0, fadeLength: 0.6))

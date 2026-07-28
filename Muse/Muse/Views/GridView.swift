@@ -19,13 +19,20 @@ struct GridView: View {
     // "add a folder" guidance, even while the always-present iCloud root remains).
     @ObservedObject private var collectionsEngine = CollectionsEngine.shared
 
-    /// User-set gutter between tiles, persisted; the bottom-right slider drives
-    /// it. 0 packs flush — a dense contact sheet, which is most of the point of
-    /// Rows and Grid.
+    /// User-set gutter between tiles, persisted; the Settings → Grid slider
+    /// drives it. Its floor is a real gap, never 0 — flush-packed images read
+    /// as one continuous picture rather than a grid.
     @AppStorage(AppSettings.gridSpacingKey) private var gridSpacingSetting =
         AppSettings.defaultGridSpacing
     private var spacing: CGFloat {
         CGFloat(AppSettings.clampGridSpacing(gridSpacingSetting))
+    }
+    /// User-set image corner radius, persisted; the Settings → Grid slider
+    /// drives it. Read once here and passed into every tile.
+    @AppStorage(AppSettings.gridCornerRadiusKey) private var gridCornerRadiusSetting =
+        AppSettings.defaultGridCornerRadius
+    private var cornerRadius: CGFloat {
+        CGFloat(AppSettings.clampGridCornerRadius(gridCornerRadiusSetting))
     }
     private let contentInset: CGFloat = 20
     @State private var addTagFile: FileNode? = nil
@@ -377,7 +384,8 @@ struct GridView: View {
                              aspects?.report(aspect: ratio,
                                               forStandardizedPath: file.url.standardizedFileURL.path)
                          },
-                         imageAspect: aspects.aspect(for: file))
+                         imageAspect: aspects.aspect(for: file),
+                         cornerRadius: cornerRadius)
                     .frame(width: rect.width, height: rect.height)
                     // The photo no longer paints the whole slot, so without an
                     // explicit shape the empty part of a Grid slot isn't
@@ -768,6 +776,12 @@ private struct TileView: View {
     /// the hero flight reads that same table and the two rects must not
     /// disagree (they'd make the photo jump at flight start).
     var imageAspect: CGFloat = 1
+    /// User-set image corner radius, shared with the hero viewer so a photo
+    /// keeps its shape when opened. Passed DOWN from `GridView`'s single
+    /// `@AppStorage` (like `showFileNames`), not read per tile — a virtualized
+    /// grid mounts and unmounts tiles constantly, and one UserDefaults observer
+    /// per live tile is churn for a value that's the same for all of them.
+    var cornerRadius: CGFloat = 0
 
     @State private var thumbnail: NSImage?
     @State private var hovering = false
@@ -784,13 +798,6 @@ private struct TileView: View {
     /// Tint laid over the selected (shrunken) image, in the ring's color.
     private static let selectionTintOpacity = 0.18
 
-    /// User-set image corner radius, shared with the hero viewer so a photo
-    /// keeps its shape when opened.
-    @AppStorage(AppSettings.gridCornerRadiusKey) private var cornerRadiusSetting =
-        AppSettings.defaultGridCornerRadius
-    private var cornerRadius: CGFloat {
-        CGFloat(AppSettings.clampGridCornerRadius(cornerRadiusSetting))
-    }
     /// The shape everything in the tile clips to.
     private var tileShape: RoundedRectangle {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)

@@ -245,7 +245,7 @@ Muse/Muse/
     GridView.swift                 VIRTUALIZED grid — precomputes tile frames (MasonryGeometry
                                    for Columns/Grid, JustifiedRowsGeometry for Rows, both from
                                    AspectRatioCache), renders only viewport tiles (+overscan);
-                                   column + spacing sliders; tiles fade in as thumbs land.
+                                   column (zoom) slider; tiles fade in as thumbs land.
                                    Photos draw with NO card, fitted to their own rect (ring,
                                    hover veil and star badge hug the photo; the slot stays the
                                    click target via contentShape).

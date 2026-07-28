@@ -64,26 +64,35 @@ enum JustifiedRowsGeometry {
         // Σ (1 / aspect) — the row's total width at a height of 1.
         var inverseSum: CGFloat = 0
 
+        /// Close `current` at `height`, laying its items out left to right.
+        func close(at height: CGFloat) {
+            out.append(Row(items: current.map {
+                Item(index: $0, width: height / clamped(aspects[$0]))
+            }, height: height))
+            current = []
+            inverseSum = 0
+        }
+
         for (i, raw) in aspects.enumerated() {
+            // Very tall images add almost no width, so in a narrow container at
+            // a wide gutter a row can accumulate until the GUTTERS ALONE exceed
+            // the row width — justifying then divides by a negative usable width
+            // and collapses the whole row to a 1pt sliver. Close what we have
+            // before that can happen.
+            if !current.isEmpty, spacing * CGFloat(current.count) >= width {
+                close(at: max(1, (width - spacing * CGFloat(current.count - 1)) / inverseSum))
+            }
+
             current.append(i)
             inverseSum += 1 / clamped(raw)
 
             let gaps = spacing * CGFloat(current.count - 1)
             let fitted = max(1, (width - gaps) / inverseSum)
             guard fitted <= targetHeight else { continue }
-
-            out.append(Row(items: current.map {
-                Item(index: $0, width: fitted / clamped(aspects[$0]))
-            }, height: fitted))
-            current = []
-            inverseSum = 0
+            close(at: fitted)
         }
 
-        if !current.isEmpty {
-            out.append(Row(items: current.map {
-                Item(index: $0, width: targetHeight / clamped(aspects[$0]))
-            }, height: targetHeight))
-        }
+        if !current.isEmpty { close(at: targetHeight) }
         return out
     }
 
