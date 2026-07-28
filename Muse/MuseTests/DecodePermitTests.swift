@@ -4,21 +4,30 @@ import XCTest
 final class DecodePermitTests: XCTestCase {
 
     func testOrdinaryPhotoCostsOnePermit() {
-        XCTAssertEqual(DecodePermit.cost(forDeclaredPixels: 12_000_000, limit: 8), 1)  // 12 MP phone
-        XCTAssertEqual(DecodePermit.cost(forDeclaredPixels: 24_000_000, limit: 8), 1)  // 24 MP RAW
-        XCTAssertEqual(DecodePermit.cost(forDeclaredPixels: 30_000_000, limit: 8), 1)  // at the line
+        XCTAssertEqual(DecodePermit.cost(forDeclaredPixels: 12_000_000, limit: 8), 1)   // 12 MP phone
+        XCTAssertEqual(DecodePermit.cost(forDeclaredPixels: 24_000_000, limit: 8), 1)   // 24 MP RAW
+        XCTAssertEqual(DecodePermit.cost(forDeclaredPixels: 100_000_000, limit: 8), 1)  // at the line
     }
 
-    func testLargeScanCostsMore() {
-        let mid = DecodePermit.cost(forDeclaredPixels: 65_000_000, limit: 8)
-        let big = DecodePermit.cost(forDeclaredPixels: 115_000_000, limit: 8)
-        XCTAssertGreaterThan(mid, 1, "a 65 MP scan must not be treated like a snapshot")
-        XCTAssertGreaterThan(big, mid, "cost must grow with pixel count")
+    /// Regression guard for a measured mistake: weighting a 65 MP scan above 1
+    /// permit serialised folder-open and made it 2.6x SLOWER over big scans.
+    /// Realistic images — including medium-format scans — must stay at full
+    /// 8-wide parallelism.
+    func testRealisticScansStayFullyParallel() {
+        XCTAssertEqual(DecodePermit.cost(forDeclaredPixels: 65_000_000, limit: 8), 1,
+                       "a 65 MP medium-format scan must not be throttled")
+        XCTAssertEqual(DecodePermit.cost(forDeclaredPixels: 99_000_000, limit: 8), 1)
+    }
+
+    func testOnlyExtremeImagesCostMore() {
+        XCTAssertEqual(DecodePermit.cost(forDeclaredPixels: 115_000_000, limit: 8), 2)
+        XCTAssertEqual(DecodePermit.cost(forDeclaredPixels: 250_000_000, limit: 8), 2,
+                       "cost is capped so a giant image can never serialise the gate")
     }
 
     func testCostNeverExceedsLimit() {
-        XCTAssertLessThanOrEqual(DecodePermit.cost(forDeclaredPixels: 299_000_000, limit: 8), 8)
-        XCTAssertLessThanOrEqual(DecodePermit.cost(forDeclaredPixels: Int.max, limit: 8), 8)
+        XCTAssertLessThanOrEqual(DecodePermit.cost(forDeclaredPixels: 299_000_000, limit: 8), DecodePermit.maxCost)
+        XCTAssertLessThanOrEqual(DecodePermit.cost(forDeclaredPixels: Int.max, limit: 8), DecodePermit.maxCost)
         XCTAssertEqual(DecodePermit.cost(forDeclaredPixels: 115_000_000, limit: 1), 1)
     }
 
