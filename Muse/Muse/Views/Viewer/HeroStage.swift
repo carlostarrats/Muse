@@ -259,6 +259,32 @@ struct HeroStage: View {
         // a visible hitch mid-flight on large files.
         let maxDim = Int(max(viewport.width, viewport.height) * 2.5)
         let target = min(max(maxDim, 1600), 4096)
+        // Progressive: land a mid-res decode FIRST, then upgrade.
+        //
+        // Measured: the flight runs 340ms, but a 659MB TIFF needs ~590ms to
+        // decode at full target — so it landed soft and visibly sharpened ~250ms
+        // later. A 1600px pass costs a fraction of that and is already sharper
+        // than the 320px grid thumbnail the flight starts with, so the image
+        // looks right as it lands and the final swap is imperceptible. Small
+        // files decode inside the flight anyway, so this changes nothing for
+        // them beyond one extra cheap decode.
+        if Self.pixelSize(of: u).map({ $0.width * $0.height > 40_000_000 }) == true {
+            let mid = await Task.detached(priority: .userInitiated) { () -> NSImage? in
+                guard let src = CGImageSourceCreateWithURL(u as CFURL, nil),
+                      ThumbnailCache.withinDecodeBudget(src),
+                      let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, [
+                          kCGImageSourceCreateThumbnailFromImageAlways: true,
+                          kCGImageSourceCreateThumbnailWithTransform: true,
+                          kCGImageSourceShouldCacheImmediately: true,
+                          kCGImageSourceThumbnailMaxPixelSize: 1600,
+                      ] as CFDictionary) else { return nil }
+                return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+            }.value
+            if let mid, u == url, image == nil || (image?.size.width ?? 0) < mid.size.width {
+                image = mid
+            }
+        }
+
         let img = await Task.detached(priority: .userInitiated) { () -> NSImage? in
             // Same decompression-bomb guard as the grid thumbnail path — refuse
             // to decode a header that declares an absurd pixel count (falls
