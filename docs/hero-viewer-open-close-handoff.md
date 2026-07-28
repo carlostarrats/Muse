@@ -116,3 +116,59 @@ Performance (the branch's actual job), all measured not assumed:
 `Bench.swift`, `OpenCost.swift`, `PalCompare.swift`, `ClusterBench.swift`.
 Fixture folders live on the Desktop. Files must have UNIQUE pixel content or they
 dedupe onto one content-hash row and won't re-analyze.
+
+---
+
+# FOUND: root cause for issues 1 and 2 (2026-07-28, later)
+
+Both the landscape-open weirdness AND the close "lands ~4px off then shifts"
+come from the SAME place: `HeroStage.sourceRect` is wrong at the moment the
+flight needs it.
+
+```swift
+private var sourceRect: CGRect {
+    ViewerGeometry.fitWithin(imageSize: image?.size ?? sourceFrame.size,
+                             frame: sourceFrame)
+}
+```
+
+**The bug:** when the OPEN flight starts, `image` is still nil — it hasn't
+decoded. So this falls back to `sourceFrame.size`, and
+`fitWithin(imageSize: frame.size, frame: frame)` returns **the frame itself**.
+The flight therefore starts from the RAW TILE RECT — precisely what the
+2026-07-07 durable constraint says it must never do.
+
+Consequences, both owner-reported:
+- **Landscape opens "almost instant" / wrong curve.** A landscape image
+  letterboxes heavily inside a squarer tile, so its true drawn rect is much
+  shorter than the tile. Starting from the tile rect instead means a much
+  shorter flight — same duration, less distance, so it reads as too fast and
+  the curve feels wrong. Portrait letterboxes less in the same tile, so its
+  flight is nearer correct. This is GEOMETRY, not file size — an earlier
+  explanation blaming the 115 MP fixture's size was wrong.
+- **Close lands a few px outside the container, then shifts.** On close `image`
+  IS loaded, so `sourceRect` uses the DOWNSAMPLED hero image's size. Aspect is
+  near-identical but not exact (9600x12000 -> 3277x4096 is 0.80005 vs 0.8), and
+  more importantly the TILE draws its own grid thumbnail, which may not match
+  `fitWithin(heroImage.size, tileFrame)` exactly. A small endpoint mismatch =
+  lands slightly off, then snaps when the real tile reveals.
+
+**Suggested fix:** don't derive the flight endpoint from the decoded hero image
+at all. Use the image's TRUE pixel dimensions, known independently of decode:
+- `ViewerFileDetails.pixelSize` (already loaded from the DB at ~50ms), or
+- a header-only read (`CGImageSourceCopyPropertiesAtIndex`, no decode).
+
+Pass that aspect into `HeroStage` so `sourceRect` is correct from the FIRST
+frame and identical on open and close. That fixes both symptoms with one change
+and removes the nil-fallback entirely.
+
+**Verify with:** a MATCHED fixture pair — same pixel count, one portrait one
+landscape — in a fixed-aspect grid layout. Both flights should look identical,
+and the close should land with no shift. Do not verify by eye on the existing
+round2/round3 fixtures: their only portrait file is also the biggest, which is
+what caused the size-vs-aspect confusion in the first place.
+
+**Note the tile side too:** `TileView` letterboxes with `.fit`. Whatever rect it
+actually draws into is the ground truth the flight must match. Consider having
+the tile publish its drawn-image rect rather than having HeroStage re-derive it —
+that removes the possibility of the two disagreeing at all.
