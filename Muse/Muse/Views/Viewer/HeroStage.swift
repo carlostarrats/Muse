@@ -181,7 +181,14 @@ struct HeroStage: View {
 
     private func open() {
         openedAt = Date()
-        displayRect = sourceFrame
+        // Take off from the SAME rect the close lands on. This was
+        // `sourceFrame` (the raw tile rect) while close() flies to `sourceRect`
+        // (the letterboxed rect the tile actually draws into) — so open and
+        // close were not symmetric, and the mismatch is bigger the more the
+        // image letterboxes inside its tile. Now that sourceRect is derived
+        // from the header aspect it is valid from the first frame, so there is
+        // no reason to use anything else.
+        displayRect = sourceRect
         // The grid tile's thumbnail is already in memory — start the flight
         // with it immediately. Awaiting QLThumbnailGenerator here added
         // 100–400ms of dead time before the open animation even began.
@@ -214,9 +221,16 @@ struct HeroStage: View {
 
     private func close() {
         resetCursorState()
+        // If the tile has no usable frame (virtualized away, or never measured),
+        // flying to it collapses the animation into an instant jump. Shrink
+        // toward the viewport centre instead so the close still reads as a
+        // close.
+        let target: CGRect = (sourceRect.width > 1 && sourceRect.height > 1)
+            ? sourceRect
+            : CGRect(x: viewport.width / 2, y: viewport.height / 2, width: 0, height: 0)
         withAnimation(.timingCurve(0.3, 1.08, 0.35, 1, duration: 0.34)) {
             zoom = 1; pan = .zero
-            displayRect = sourceRect
+            displayRect = target
             shadowVisible = false
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.36) { onCloseFinished() }
