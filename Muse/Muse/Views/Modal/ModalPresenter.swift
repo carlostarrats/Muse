@@ -45,12 +45,23 @@ extension View {
     }
 }
 
+/// The card content's natural height, reported from inside the scroller where
+/// it is laid out unclamped.
+private struct ModalCardHeight: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 private struct MuseModalPresenter<ModalContent: View>: ViewModifier {
     @Binding var isPresented: Bool
     let width: CGFloat
     let palette: MoodPalette
     let onDismiss: () -> Void
     @ViewBuilder let modal: () -> ModalContent
+    /// Natural height of the card's content, measured inside the scroller.
+    @State private var contentHeight: CGFloat?
 
     func body(content: Content) -> some View {
         content.overlay {
@@ -79,30 +90,39 @@ private struct MuseModalPresenter<ModalContent: View>: ViewModifier {
         let cardWidth = ModalChrome.cardWidth(ideal: width,
                                               available: available.width)
         let cap = ModalChrome.cardMaxHeight(available: available.height)
-        // The scrolling decision lives HERE because this is the only place that
-        // knows the window's height: the enclosing ZStack proposes it, so
-        // ViewThatFits can actually judge "does this fit?". Candidate 1 is the
-        // card at its natural height — a three-row modal is three rows tall.
-        // Candidate 2 only wins once the content genuinely outgrows the window.
+        // The modal is built EXACTLY ONCE. `ViewThatFits` was used here first
+        // and is wrong for this job: it builds every candidate to measure them,
+        // and these cards have side effects on appear — Metadata Import kicks
+        // off a folder import, Manage Drive Shares loads from Drive, the share
+        // form creates an upload service. Doubling those is not something to
+        // risk for a layout decision.
         //
-        // Attempts inside the card all failed against the running app: a
-        // ScrollView there is greedy, ViewThatFits there is asked for an ideal
-        // height and resolves greedy, and a GeometryReader measurement never
-        // settled. See ModalScroll.
-        return ViewThatFits(in: .vertical) {
-            chrome(modal().frame(width: cardWidth))
-            chrome(
-                ScrollView {
-                    modal()
-                        .frame(width: cardWidth)
-                        // Keeps text clear of the overlay scrollbar macOS draws
-                        // at the ScrollView's trailing edge.
-                        .padding(.trailing, ModalChrome.scrollBarChannel)
-                }
-                .frame(width: cardWidth + ModalChrome.scrollBarChannel)
-            )
-        }
-        .frame(maxHeight: cap)
+        // Instead: the content inside a ScrollView is laid out at its NATURAL
+        // height, so a GeometryReader in its background reports exactly how tall
+        // the card wants to be. The scroller is given that height, clamped to
+        // the window, and scrolling is switched off entirely while it fits — so
+        // a three-row modal is three rows tall and nothing bounces.
+        return chrome(
+            ScrollView {
+                modal()
+                    .frame(width: cardWidth - ModalChrome.scrollBarChannel)
+                    // Reserved on both states so the measurement can't feed back
+                    // into the width that produced it.
+                    .padding(.trailing, ModalChrome.scrollBarChannel)
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear.preference(key: ModalCardHeight.self,
+                                                   value: proxy.size.height)
+                        }
+                    )
+            }
+            .frame(width: cardWidth, height: min(contentHeight ?? cap, cap))
+            .scrollDisabled((contentHeight ?? .greatestFiniteMagnitude) <= cap)
+            .onPreferenceChange(ModalCardHeight.self) { measured in
+                guard measured > 0, contentHeight != measured else { return }
+                contentHeight = measured
+            }
+        )
     }
 
     /// The card's surface: fill, corner, hairline, shadow and the click-eating

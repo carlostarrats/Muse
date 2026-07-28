@@ -59,7 +59,7 @@ struct DuplicatesView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(40)
             } else {
-                ScrollView {
+                ModalScroll {
                     VStack(spacing: 0) {
                         ForEach(Array(finder.groups.enumerated()),
                                 id: \.element.id) { index, group in

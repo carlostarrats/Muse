@@ -6395,3 +6395,39 @@ Verified by measurement rather than by eye: with the Info card open, the sidebar
 samples at 167 grey — exactly 0.34 black over white, the same scrim as the grid
 (135,138,148 over the mood background) — confirming the scrim covers the whole
 window and clicks can't reach the sidebar behind it.
+
+### 2026-07-28 (same branch) — review pass over the modal work
+
+**Cards filled the window.** A `ScrollView` is greedy — it takes every point
+offered — so each card grew to its full height cap with the content floating in
+the middle, however little content there was; a `Form` (Settings) does the same.
+Two fixes INSIDE the card were tried and both failed against the running app,
+and are recorded so they aren't rediscovered: `ViewThatFits` there is asked for
+an IDEAL height (exactly what a content-hugging card asks for) and resolves to
+its greedy candidate; a `GeometryReader` measurement inside `ModalScroll` never
+settled. The scrolling decision now lives in the presenter, which measures the
+content's natural height from inside its scroller, gives the scroller that
+height clamped to the window, and disables scrolling while it fits.
+
+**`ViewThatFits` in the presenter was also wrong, for a different reason.** It
+worked visually — the card hugged — but it builds EVERY candidate in order to
+measure them, and these cards have side effects on appear: Metadata Import
+starts a folder import, Manage Drive Shares loads from Drive, the share form
+creates an upload service. Doubling those to make a layout decision isn't a risk
+worth taking, so the presenter builds the modal exactly once and measures
+instead.
+
+**Also fixed in this pass:**
+
+- **Duplicates had a ScrollView inside the presenter's ScrollView.** It was the
+  one modal not converted when the others' scrollers were removed.
+- **The scrolling card was 16pt wider than the non-scrolling one**, because the
+  scrollbar channel was added to the card's width rather than taken out of the
+  content's. The channel is now reserved in both states, so a card can't change
+  width when its content crosses the scroll threshold — and the measurement
+  can't feed back into the width that produced it.
+
+**Known wart, not fixed:** `ModalScroll` is now a pass-through that does not
+scroll — it only marks the growable region. Its name is misleading; unwrapping
+it across nine call sites was judged riskier than the confusion, and its doc
+comment states plainly what it is and isn't.
