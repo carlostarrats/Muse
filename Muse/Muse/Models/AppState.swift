@@ -423,6 +423,11 @@ final class AppState: ObservableObject {
     /// confirm. Stored (not @Published) — extensions can't add stored props.
     var pendingNewCollectionPaths: [String] = []
 
+    /// Presentation state for the grid's "Add Tag" card. The URLs are captured
+    /// at right-click time (see requestAddTag in AppState+Filters) so a
+    /// selection change behind the open card can't retarget the write.
+    @Published var addTagRequest: AddTagRequest?
+
     // MARK: - Derived: visibleFiles cache
 
     /// Memoized backing for `visibleFiles` (computed in AppState+Filters.swift).
@@ -497,6 +502,7 @@ final class AppState: ObservableObject {
         infoShown || imageLayoutShown || settingsShown || driveSharesShown
             || duplicatesSheetVisible || reconnectShown
             || metadataImportRequest != nil || collectionModal != nil
+            || addTagRequest != nil || newCollectionRequest
     }
 
     /// A collection-scoped modal awaiting presentation by the shell. Set from a

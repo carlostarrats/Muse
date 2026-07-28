@@ -54,9 +54,14 @@ struct SelectionActionsMenu: View {
             }
             Button("New Collection from Selection") { appState.requestNewCollection(fallback: path) }
             Menu("Add Tag") {
-                if appState.allTagLabels.isEmpty {
-                    Button("No tags") {}.disabled(true)
-                } else {
+                // The grid had no way to create a tag at all — this menu listed
+                // only labels that already existed, so a new one could be made
+                // solely from the hero viewer. This opens the shell's Add Tag
+                // card, which both creates AND autocompletes against what's
+                // already there.
+                Button("New Tag…") { appState.requestAddTag(fallback: path) }
+                if !appState.allTagLabels.isEmpty {
+                    Divider()
                     ForEach(appState.allTagLabels, id: \.self) { label in
                         // Display the localized vision term (e.g. "chien"); the
                         // canonical English `label` is still what gets written.

@@ -433,14 +433,32 @@ extension AppState {
         newCollectionRequest = false
         pendingNewCollectionPaths = []
         guard !name.isEmpty else { return }
+        // Reuse an existing collection of the same name rather than minting a
+        // second one beside it. The prompt now SHOWS the names already in use,
+        // so a name that matches is a deliberate pick (clicked from the list, or
+        // typed) and the user means "put these in that one" — creating a
+        // same-named twin would be the surprising outcome. Case-insensitive: two
+        // collections differing only in case are indistinguishable in the
+        // sidebar. Smart collections are excluded — their membership is
+        // rule-driven, so hand-adding files to one wouldn't stick.
+        let existing = CollectionsEngine.shared.collections.first {
+            $0.collection.smart_rules == nil
+                && $0.collection.name.localizedCaseInsensitiveCompare(name) == .orderedSame
+        }?.collection.id
         Task { @MainActor in
             guard let q = Database.shared.dbQueue else { return }
-            guard let newID = try? await CollectionStore.createManual(queue: q) else { return }
-            try? await CollectionStore.rename(queue: q, id: newID, name: name)
+            let targetID: String
+            if let existing {
+                targetID = existing
+            } else {
+                guard let newID = try? await CollectionStore.createManual(queue: q) else { return }
+                try? await CollectionStore.rename(queue: q, id: newID, name: name)
+                targetID = newID
+            }
             if !paths.isEmpty {
                 let ids = (try? await CollectionStore.fileIDs(queue: q, paths: paths)) ?? []
                 for id in ids {
-                    try? await CollectionStore.addFile(queue: q, fileID: id, collectionID: newID)
+                    try? await CollectionStore.addFile(queue: q, fileID: id, collectionID: targetID)
                 }
             }
             await CollectionsEngine.shared.reload()
@@ -451,6 +469,42 @@ extension AppState {
     func cancelNewCollection() {
         newCollectionRequest = false
         pendingNewCollectionPaths = []
+    }
+
+    // MARK: - Add Tag (grid)
+
+    // (AddTagRequest lives at file scope below.)
+
+    /// Open the grid's "Add Tag" card for the effective selection. Captures the
+    /// target URLs NOW so the right-clicked-but-unselected-tile case survives
+    /// (same reason `requestNewCollection` captures its paths up front), and so
+    /// a selection change behind the card can't retarget the write.
+    ///
+    /// Folders are excluded: a folder has no tag row.
+    func requestAddTag(fallback path: String) {
+        let targets = effectiveSelectionURLs(fallback: path)
+            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory != true }
+        guard !targets.isEmpty else { return }
+        addTagRequest = AddTagRequest(urls: targets)
+    }
+
+    /// Attach `label` to every captured target, then refresh the tag-derived UI.
+    /// A blank label writes nothing.
+    func confirmAddTag(label rawLabel: String) {
+        let targets = addTagRequest?.urls ?? []
+        let label = rawLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+        addTagRequest = nil
+        guard !label.isEmpty, !targets.isEmpty else { return }
+        Task { @MainActor in
+            for url in targets {
+                _ = await TagStore.shared.addManualTag(label: label, for: url)
+            }
+            // Every tag mutation bumps this — it re-derives the chip row, the
+            // counts, and the right-click Add Tag list. Skipping it leaves a
+            // newly-tagged tile invisible to an active filter until an unrelated
+            // edit happens to republish.
+            tagsVersion &+= 1
+        }
     }
 
     /// Per-label alive-path query, scoped per `parent_dir` (tags are
@@ -591,5 +645,19 @@ extension AppState {
             guard let q = Database.shared.dbQueue else { return }
             try? await CollectionStore.persistOrder(queue: q, orderedIDs: orderedIDs)
         }
+    }
+}
+
+/// The grid's pending "Add Tag" prompt: the files it will tag, captured when
+/// the card opens. Identifiable so re-targeting a different selection re-seeds
+/// the card's local draft.
+struct AddTagRequest: Identifiable, Equatable {
+    let id = UUID()
+    let urls: [URL]
+
+    /// What the card's subtitle names — the single file, or "N images".
+    var displayName: String {
+        if urls.count == 1 { return urls[0].lastPathComponent }
+        return String(localized: "\(urls.count) images")
     }
 }

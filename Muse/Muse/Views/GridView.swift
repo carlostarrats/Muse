@@ -35,8 +35,6 @@ struct GridView: View {
         CGFloat(AppSettings.clampGridCornerRadius(gridCornerRadiusSetting))
     }
     private let contentInset: CGFloat = 20
-    @State private var addTagFile: FileNode? = nil
-    @State private var newTagText = ""
     /// User-set images-per-row, persisted; the bottom-right slider drives it.
     @AppStorage("gridColumnCount") private var gridColumns = 4
     /// Off-by-default: show each file's name under its tile.
@@ -270,16 +268,6 @@ struct GridView: View {
                         .padding(.trailing, 16)
                         .padding(.bottom, 16)
                 }
-            }
-            .alert("Add Tag", isPresented: Binding(
-                get: { addTagFile != nil },
-                set: { if !$0 { addTagFile = nil } }
-            )) {
-                TextField("Tag name", text: $newTagText)
-                Button("Add") { commitAddTag() }
-                Button("Cancel", role: .cancel) { addTagFile = nil }
-            } message: {
-                Text("Tags “\(addTagFile?.basename ?? "")”.")
             }
             .onAppear {
                 aspects.load(appState.visibleFiles)
@@ -649,17 +637,6 @@ struct GridView: View {
             files.first?.url.path ?? "",
             files.last?.url.path ?? ""
         ].joined(separator: "|")
-    }
-
-    private func commitAddTag() {
-        guard let file = addTagFile else { return }
-        let label = newTagText.trimmingCharacters(in: .whitespacesAndNewlines)
-        addTagFile = nil
-        guard !label.isEmpty else { return }
-        Task { @MainActor in
-            _ = await TagStore.shared.addManualTag(label: label, for: file.url)
-            appState.tagsVersion += 1
-        }
     }
 
     /// Floating zoom control: fewer columns (bigger images) on the left,

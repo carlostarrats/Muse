@@ -254,18 +254,24 @@ struct ViewerInfoColumn<Chrome: View>: View {
         }
     }
 
-    /// Most-used tag labels across the library that aren't already on this file.
+    /// Tag labels across the library that aren't already on this file, most-used
+    /// first.
+    ///
+    /// The pool is deliberately much larger than the ~12 pills the card shows:
+    /// `CardExpander` filters it as you type, so a tag has to be IN here to be
+    /// autocompletable. Capping the query at the display count would have made
+    /// everything outside the library's dozen most-used tags unfindable — the
+    /// exact near-duplicate this feature exists to prevent.
     private func loadTagSuggestions() async {
         guard let queue = Database.shared.dbQueue else { return }
         let current = Set((details?.tags ?? []).map(\.label))
         let labels: [String] = (try? await queue.read { db in
             try String.fetchAll(db, sql: """
-                SELECT label FROM tags GROUP BY label ORDER BY COUNT(*) DESC LIMIT 24
+                SELECT label FROM tags GROUP BY label ORDER BY COUNT(*) DESC LIMIT 500
                 """)
         }) ?? []
         tagSuggestions = labels
             .filter { !current.contains($0) && !StarRating.isRating($0) }
-            .prefix(12)
             .map { PillItem(id: $0, label: $0) }
     }
 
@@ -656,11 +662,38 @@ private struct CardExpander: View {
     var onCandidateTap: (PillItem) -> Void
     var onCreate: (String) -> Void
 
+    /// Cap on the filtered list. The pills wrap, so an uncapped result set can
+    /// grow tall enough to push the create field off the bottom of the card.
+    private static let maxShown = 12
+
+    /// The candidate pills, narrowed to what's been typed so far. With an empty
+    /// field this is the caller's own list (the most-used tags / the collections
+    /// this file isn't in), which is what these cards always showed; as soon as
+    /// you type it becomes an autocomplete, so you pick the tag you already have
+    /// instead of creating a near-duplicate of it.
+    ///
+    /// `count` is a descending index rather than a real usage count: both
+    /// callers hand their list in already sorted (tags by usage, collections by
+    /// name), and encoding that as the tiebreak preserves their order without
+    /// re-querying. Matching runs on the LOCALIZED display term — a French user
+    /// types "chien" — while the pill still carries the canonical label.
+    private var shown: [PillItem] {
+        let n = candidates.count
+        let pool = candidates.enumerated().map { i, pill in
+            TagSuggest.Candidate(id: pill.id, label: pill.label, count: n - i)
+        }
+        let ranked = TagSuggest.rank(pool, query: text,
+                                     displaying: { VocabularyLocalizer.shared.display($0) },
+                                     limit: Self.maxShown)
+        return ranked.map { PillItem(id: $0.id, label: $0.label) }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if !candidates.isEmpty {
+            let shown = shown
+            if !shown.isEmpty {
                 PillFlow(gap: 6, hovered: nil) {
-                    ForEach(candidates) { candidate in
+                    ForEach(shown) { candidate in
                         // Display the localized vision-tag term; the tap keeps
                         // the canonical `candidate.label` for the DB write. `display`
                         // is identity for non-vocabulary strings (collection names).

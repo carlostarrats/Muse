@@ -33,6 +33,8 @@ struct ContentView: View {
     /// this is a deterministic sweep rather than a real stack.
     private func dismissTopModal() {
         if appState.collectionModal != nil { appState.collectionModal = nil; return }
+        if appState.addTagRequest != nil { appState.addTagRequest = nil; return }
+        if appState.newCollectionRequest { appState.cancelNewCollection(); return }
         if appState.metadataImportRequest != nil { appState.metadataImportRequest = nil; return }
         if appState.reconnectShown { appState.reconnectShown = false; return }
         if appState.duplicatesSheetVisible { appState.duplicatesSheetVisible = false; return }
@@ -184,6 +186,48 @@ struct ContentView: View {
                     MetadataImportSheet(request: request)
                         .environmentObject(appState)
                 }
+            }
+            // Add Tag / New Collection: a field plus a live-filtered list of
+            // what already exists, so you pick "sunset" instead of minting
+            // "Sunsets". These were `.alert`s, which can host only TextFields
+            // and Buttons — a suggestion list can't live inside one.
+            .museModal(isPresented: Binding(
+                get: { appState.addTagRequest != nil },
+                set: { if !$0 { appState.addTagRequest = nil } }),
+                       width: 380, palette: appState.moodPalette) {
+                if let request = appState.addTagRequest {
+                    SuggestingNameCard(
+                        title: String(localized: "Add Tag"),
+                        subtitle: String(localized: "Tags \(request.displayName)."),
+                        placeholder: String(localized: "Tag name"),
+                        candidates: tagSuggestCandidates,
+                        displaying: { VocabularyLocalizer.shared.display($0) },
+                        confirmTitle: String(localized: "Add"),
+                        onCommit: { appState.confirmAddTag(label: $0) },
+                        onCancel: { appState.addTagRequest = nil })
+                    // Keyed on the request so re-opening for a different
+                    // selection rebuilds the card with a fresh empty draft.
+                    .id(request.id)
+                }
+            }
+            .museModal(isPresented: Binding(
+                get: { appState.newCollectionRequest },
+                set: { if !$0 { appState.cancelNewCollection() } }),
+                       width: 380, palette: appState.moodPalette) {
+                SuggestingNameCard(
+                    title: String(localized: "Name Collection"),
+                    subtitle: appState.pendingNewCollectionPaths.isEmpty
+                        ? String(localized: "Creates a new collection.")
+                        : String(localized: "Creates a collection from the selected images."),
+                    placeholder: String(localized: "Collection name"),
+                    candidates: collectionSuggestCandidates,
+                    confirmTitle: String(localized: "Create"),
+                    // Committing a name that already exists ADDS to that
+                    // collection instead of minting a second one with the same
+                    // name — see confirmNewCollection. That's the whole point of
+                    // showing the list.
+                    onCommit: { appState.confirmNewCollection(name: $0) },
+                    onCancel: { appState.cancelNewCollection() })
             }
             .museModal(isPresented: $appState.reconnectShown,
                        width: 600, palette: appState.moodPalette) {
@@ -390,7 +434,6 @@ struct ContentView: View {
         } message: {
             Text(appState.backupError ?? "")
         }
-        .modifier(NameCollectionAlert())
         .modifier(CollectionRenameAlert())
         .modifier(FileRenameAlert())
         .alert("Rename File", isPresented: Binding(
@@ -972,37 +1015,34 @@ struct ContentView: View {
         .transition(.opacity)
     }
 
+    // MARK: - Suggestion sources for the Add Tag / New Collection cards
 
-}
+    /// Every tag label in the library, most-used first, for the Add Tag card's
+    /// autocomplete. Read from the chip cache AppState already maintains (it's
+    /// refreshed on every tagsVersion bump), so opening the card costs no query.
+    ///
+    /// Rating glyphs are dropped by `TagSuggest.rank` itself, so this doesn't
+    /// have to remember to — attaching one here would give a file two ratings.
+    private var tagSuggestCandidates: [TagSuggest.Candidate] {
+        let all = appState.allTagLabels
+        let n = all.count
+        // allTagLabels arrives already ordered; encode that order as the count
+        // so an empty query preserves it (no second query just for counts).
+        return all.enumerated().map { i, label in
+            TagSuggest.Candidate(label: label, count: n - i)
+        }
+    }
 
-/// The "Name Collection" prompt's text field. Bound directly to AppState's
-/// `@Published` draft, every keystroke fired `AppState.objectWillChange`, which
-/// re-evaluated the whole `ContentView` body (sidebar + tag chips + grid) — on a
-/// large library that made typing visibly crawl on slower Macs. Holding the draft
-/// in LOCAL `@State` here confines each keystroke to this modifier's tiny body;
-/// the name reaches AppState only on Create. Reset on each open since the modifier
-/// (and its `@State`) outlives individual presentations.
-private struct NameCollectionAlert: ViewModifier {
-    @EnvironmentObject private var appState: AppState
-    @State private var draft = ""
-
-    func body(content: Content) -> some View {
-        content
-            .alert("Name Collection", isPresented: Binding(
-                get: { appState.newCollectionRequest },
-                set: { if !$0 { appState.cancelNewCollection() } }
-            )) {
-                TextField("Collection name", text: $draft)
-                Button("Create") { appState.confirmNewCollection(name: draft) }
-                Button("Cancel", role: .cancel) { appState.cancelNewCollection() }
-            } message: {
-                Text(appState.pendingNewCollectionPaths.isEmpty
-                     ? "Creates a new collection."
-                     : "Creates a collection from the selected images.")
-            }
-            .onChange(of: appState.newCollectionRequest) { _, open in
-                if open { draft = "" }
-            }
+    /// Existing MANUAL collection names, so "Name Collection" can show what's
+    /// already taken and route a matching name into that collection instead of
+    /// creating a twin. Smart collections are excluded: their membership is
+    /// rule-driven, so hand-adding files to one wouldn't stick.
+    private var collectionSuggestCandidates: [TagSuggest.Candidate] {
+        collectionsEngine.collections
+            .filter { $0.collection.smart_rules == nil }
+            .map { TagSuggest.Candidate(id: $0.collection.id,
+                                        label: $0.collection.name,
+                                        count: $0.aliveCount) }
     }
 }
 
