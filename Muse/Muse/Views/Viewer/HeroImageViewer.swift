@@ -373,7 +373,23 @@ struct HeroImageViewer: View {
         // same flag up front (in ContentView) so both close paths return the nav
         // identically. (Accepts the slight search-bar shadow flash as the trade
         // for a consistent, instant return — see the 2026-06-18 session.)
-        withAnimation(.easeInOut(duration: 0.35)) { appState.viewerDismissing = true }
+        // NOT inside `withAnimation`. `viewerDismissing` is @Published on the
+        // monolithic AppState, so writing it re-evaluates the whole shell —
+        // sidebar rows, every mounted grid tile, the tag chips. Doing that
+        // inside a global animation transaction makes SwiftUI build animated
+        // transitions for all of it in one synchronous block: profiling the
+        // running app measured **282 ms of blocked main thread inside this one
+        // setter**, right in the middle of the return flight. That is the
+        // owner-reported close stall — the image freezes part-shrunk with the
+        // backdrop still up, then jumps the rest of the way. On the largest
+        // files the block swallowed the whole flight, which read as "it closes
+        // instantly with no animation".
+        //
+        // Nothing needed the transaction. Both consumers animate on their own:
+        // the toolbar returns via ToolbarFade (an AppKit alpha fade driven by
+        // an .onChange in ContentView), and the grid tile's reveal is a
+        // value-scoped `.animation(_:value:)` in GridView. Don't re-wrap it.
+        appState.viewerDismissing = true
         isClosing = true
     }
 

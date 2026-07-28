@@ -91,25 +91,44 @@ struct HeroStage: View {
         // Portrait letterboxes less, so it looked nearer correct — that
         // asymmetry is aspect geometry, not file size.
         //
-        // The header read is cheap (no decode) and memoized per URL, so this is
-        // correct from the FIRST frame and identical on open and close.
-        ViewerGeometry.fitWithin(imageSize: Self.pixelSize(of: url) ?? image?.size ?? sourceFrame.size,
+        // Reads only in-memory state — NEVER the filesystem. See `headerSize`.
+        ViewerGeometry.fitWithin(imageSize: headerSize ?? image?.size ?? sourceFrame.size,
                                  frame: sourceFrame)
     }
 
-    /// Header-only pixel dimensions, memoized. Never decodes.
-    private static let pixelSizeCache = NSCache<NSString, NSValue>()
-    nonisolated static func pixelSize(of url: URL) -> CGSize? {
-        let key = url.standardizedFileURL.path as NSString
-        if let hit = pixelSizeCache.object(forKey: key) { return hit.sizeValue }
-        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
-              let w = (props[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue,
-              let h = (props[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue,
-              w > 0, h > 0 else { return nil }
-        let size = CGSize(width: w, height: h)
-        pixelSizeCache.setObject(NSValue(size: size), forKey: key)
-        return size
+    /// The file's true pixel size, resolved ONCE per open and held in state.
+    ///
+    /// This is deliberately not read on demand from `sourceRect`. `sourceRect`
+    /// is a computed property, so SwiftUI re-evaluates it on every body pass —
+    /// i.e. on every frame of the open and close flights. The header read
+    /// underneath it costs ~18 ms on a 659 MB scanner TIFF (measured), and it
+    /// was memoized in an `NSCache`, which EVICTS under memory pressure — the
+    /// exact state a giant image open puts the app in. An evicted entry during
+    /// an animating body meant a fresh 18 ms file open per frame on the main
+    /// thread: dropped frames, a mid-flight stall with the backdrop still up,
+    /// and on the very largest file the close flight skipping outright. All
+    /// three were owner-reported.
+    ///
+    /// Now: seeded from the never-evicting `ImageHeaderSizeCache` (which the
+    /// thumbnail pass has already warmed off-main for every file in the folder,
+    /// so the common case is a dictionary hit at open with no I/O at all), and
+    /// read only as state from there on.
+    @State private var headerSize: CGSize?
+
+    /// Seed `headerSize`. Takes the warm value synchronously when there is one;
+    /// otherwise reads the header off-main and lands it a moment later — the
+    /// flight starts from the decoded/tile aspect in that rare case rather than
+    /// blocking on I/O.
+    private func resolveHeaderSize() {
+        if let warm = ImageHeaderSizeCache.cached(url) { headerSize = warm; return }
+        let u = url
+        Task.detached(priority: .userInitiated) {
+            guard let size = ImageHeaderSizeCache.resolve(u) else { return }
+            await MainActor.run {
+                guard url == u else { return }
+                headerSize = size
+            }
+        }
     }
 
 
@@ -170,11 +189,20 @@ struct HeroStage: View {
             // `sourceRect` so the retarget can't disagree with the takeoff.
             guard !didRetarget, newFrame.width > 1, newFrame.height > 1 else { return }
             let retarget = ViewerGeometry.fitWithin(
-                imageSize: Self.pixelSize(of: url) ?? image?.size ?? newFrame.size,
+                imageSize: headerSize ?? image?.size ?? newFrame.size,
                 frame: newFrame)
             guard abs(retarget.midX - displayRect.midX) > 1
                     || abs(retarget.midY - displayRect.midY) > 1
                     || abs(retarget.width - displayRect.width) > 1 else { return }
+            // A close only ever SHRINKS. `didRetarget` caps this at one fire,
+            // but one is enough: if the grid's transient relayout reports a
+            // frame larger than where the flight is already heading, animating
+            // to it makes the image grow back out — which reads exactly as the
+            // viewer closing, reopening, then closing again (owner-reported).
+            // A slightly-wrong landing spot is invisible under the tile reveal;
+            // a reversal is not. So take the correction only when it keeps the
+            // flight moving inward.
+            guard retarget.width <= displayRect.width + 1 else { return }
             didRetarget = true
             withAnimation(.timingCurve(0.3, 1.08, 0.35, 1, duration: 0.22)) {
                 displayRect = retarget
@@ -201,6 +229,8 @@ struct HeroStage: View {
 
     private func open() {
         openedAt = Date()
+        // Must come first: the takeoff rect below is derived from it.
+        resolveHeaderSize()
         // Take off from the SAME rect the close lands on. This was
         // `sourceFrame` (the raw tile rect) while close() flies to `sourceRect`
         // (the letterboxed rect the tile actually draws into) — so open and
@@ -254,11 +284,17 @@ struct HeroStage: View {
             displayRect = target
             shadowVisible = false
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.36) { onCloseFinished() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.36) {
+            onCloseFinished()
+        }
     }
 
     private func flipTo() {
         resetCursorState()
+        // Arrow-key flip to a different file: the old file's aspect must not
+        // survive into the new one's close flight.
+        headerSize = nil
+        resolveHeaderSize()
         zoom = 1; pan = .zero
         // thumbnail swaps in fast; .task(id: url) handles the full-res load
         if let quick = Self.quickThumbnail(for: url) {
@@ -289,7 +325,10 @@ struct HeroStage: View {
         // looks right as it lands and the final swap is imperceptible. Small
         // files decode inside the flight anyway, so this changes nothing for
         // them beyond one extra cheap decode.
-        if Self.pixelSize(of: u).map({ $0.width * $0.height > 40_000_000 }) == true {
+        // Cache-only: `.task` runs on the main actor, so this must not do I/O.
+        // An unknown size just skips the extra mid-res pass.
+        if (headerSize ?? ImageHeaderSizeCache.cached(u))
+            .map({ $0.width * $0.height > 40_000_000 }) == true {
             let mid = await Task.detached(priority: .userInitiated) { () -> NSImage? in
                 guard let src = CGImageSourceCreateWithURL(u as CFURL, nil),
                       ThumbnailCache.withinDecodeBudget(src),
@@ -301,7 +340,12 @@ struct HeroStage: View {
                       ] as CFDictionary) else { return nil }
                 return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
             }.value
-            if let mid, u == url, image == nil || (image?.size.width ?? 0) < mid.size.width {
+            // `!isClosing`: swapping the image mid-close changes `fitRect`,
+            // which is the flight's layout `home` — the transform re-bases
+            // under the animation and the image jumps. Nothing is gained by
+            // sharpening a picture that is shrinking off screen.
+            if let mid, u == url, !isClosing,
+               image == nil || (image?.size.width ?? 0) < mid.size.width {
                 image = mid
             }
         }
@@ -322,11 +366,27 @@ struct HeroStage: View {
             else { return nil }
             return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
         }.value
-        if let img, u == url {
+        // The `!isClosing` guard is load-bearing, not defensive.
+        //
+        // This assignment flies the image back out to the fitted (full-screen)
+        // rect. It exists for the normal case, where the decode lands while the
+        // viewer is open. But a 115 MP TIFF takes ~600 ms to decode, and a user
+        // who opens and immediately presses Escape closes at ~450–600 ms — so on
+        // big files the decode routinely landed INSIDE the close flight and
+        // animated the shrinking image back to full size, after which the
+        // unmount snapped it away. That is the owner-reported "it closes, then
+        // reopens, then closes again", and it only ever showed on large files
+        // because only those decode slowly enough to land mid-close.
+        //
+        // Traced in the running app: the state sequence is a clean single
+        // close, so the reopen was purely this geometry write. Don't drop the
+        // guard from either of the two exits below.
+        if let img, u == url, !isClosing {
             image = img
             withAnimation(.easeOut(duration: 0.2)) { displayRect = fitRect }
             return
         }
+        if isClosing { return }
         // ImageIO returned nil — the source isn't decodable by it (e.g. a RAW
         // format Apple's camera codec doesn't support). Fall back to the shared
         // thumbnail path, which tries QuickLook's best representation (some
@@ -335,7 +395,7 @@ struct HeroStage: View {
         guard u == url,
               let fallback = await ThumbnailCache.shared.thumbnail(
                   for: u, size: CGSize(width: target, height: target), scale: 1.0),
-              u == url
+              u == url, !isClosing
         else { return }
         image = fallback
         withAnimation(.easeOut(duration: 0.2)) { displayRect = fitRect }

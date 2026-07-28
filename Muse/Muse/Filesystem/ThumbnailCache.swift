@@ -190,6 +190,9 @@ final class ThumbnailCache: ObservableObject {
     /// so an async delete could lose the race and the re-fetch would read the
     /// stale PNG right back. It's only a couple of tiny `unlink`s per file.
     func invalidate(_ url: URL) {
+        // An in-place edit can change the image's dimensions, so the memoized
+        // header size has to go with the thumbnails.
+        ImageHeaderSizeCache.invalidate(url)
         for v in Self.renderedVariants {
             let key = Self.cacheKey(url: url, size: v.size, scale: v.scale)
             memCache.removeObject(forKey: key as NSString)
@@ -305,6 +308,10 @@ final class ThumbnailCache: ObservableObject {
               let w = (props[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue,
               let h = (props[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue
         else { return nil }
+        // Free prewarm: the hero flight needs this exact value from its first
+        // frame, and resolving it here (off-main, before any click) keeps the
+        // main thread out of the filesystem entirely. See ImageHeaderSizeCache.
+        ImageHeaderSizeCache.record(url, width: w, height: h)
         let (product, overflow) = w.multipliedReportingOverflow(by: h)
         return overflow ? nil : product
     }
