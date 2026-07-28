@@ -23,6 +23,11 @@
 //  populated off-main by the thumbnail pass long before any click, and read
 //  synchronously as a dictionary lookup thereafter.
 //
+//  The stored size is the DISPLAY size — EXIF orientation applied. A rotated
+//  photo (orientations 5–8) is stored landscape but shown portrait, and the
+//  grid, the hero flight and `files.width`/`height` all read this table, so the
+//  swap has to happen once, here, or they disagree.
+//
 
 import Foundation
 import ImageIO
@@ -41,6 +46,21 @@ enum ImageHeaderSizeCache {
     private static let maxEntries = 20_000
 
     private static func key(_ url: URL) -> String { url.standardizedFileURL.path }
+
+    /// Display dimensions for a stored pixel buffer under an EXIF orientation.
+    /// Orientations 5–8 are the 90°/270° rotations, where the buffer is stored
+    /// with width and height swapped relative to how the image is shown.
+    ///
+    /// This is the single place the swap happens: the grid's layout aspect, the
+    /// hero flight's take-off rect, and `files.width`/`height` all derive from
+    /// this cache, and they must not disagree (a mismatch between the grid's
+    /// drawn rect and the flight's rect makes the photo visibly jump on open).
+    static func displaySize(width: Int, height: Int, orientation: Int) -> CGSize {
+        let rotated = (5...8).contains(orientation)
+        return rotated
+            ? CGSize(width: CGFloat(height), height: CGFloat(width))
+            : CGSize(width: CGFloat(width), height: CGFloat(height))
+    }
 
     /// In-memory lookup only. Never touches the filesystem — safe from a view
     /// body or any other main-thread hot path.
@@ -61,6 +81,7 @@ enum ImageHeaderSizeCache {
     }
 
     /// Cached value, else a header read. May do file I/O — call off-main.
+    /// Returns DISPLAY dimensions (EXIF orientation applied).
     static func resolve(_ url: URL) -> CGSize? {
         if let hit = cached(url) { return hit }
         guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
@@ -68,8 +89,10 @@ enum ImageHeaderSizeCache {
               let w = (props[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue,
               let h = (props[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue,
               w > 0, h > 0 else { return nil }
-        record(url, width: w, height: h)
-        return CGSize(width: w, height: h)
+        let orientation = (props[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
+        let size = displaySize(width: w, height: h, orientation: orientation)
+        record(url, width: Int(size.width), height: Int(size.height))
+        return size
     }
 
     /// Forget one entry (an in-place edit can change an image's dimensions).

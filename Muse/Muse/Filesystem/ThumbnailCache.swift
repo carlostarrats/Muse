@@ -321,7 +321,15 @@ final class ThumbnailCache: ObservableObject {
         // Free prewarm: the hero flight needs this exact value from its first
         // frame, and resolving it here (off-main, before any click) keeps the
         // main thread out of the filesystem entirely. See ImageHeaderSizeCache.
-        ImageHeaderSizeCache.record(url, width: w, height: h)
+        // DISPLAY dimensions, not the raw buffer's — a rotated photo is stored
+        // landscape and shown portrait, and every consumer of this table wants
+        // the shape the user sees. (The pixel COUNT below is orientation-
+        // invariant, so the decode budget is unaffected either way.)
+        let orientation = (props[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
+        let display = ImageHeaderSizeCache.displaySize(width: w, height: h,
+                                                       orientation: orientation)
+        ImageHeaderSizeCache.record(url, width: Int(display.width),
+                                    height: Int(display.height))
         let (product, overflow) = w.multipliedReportingOverflow(by: h)
         return overflow ? nil : product
     }
