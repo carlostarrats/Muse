@@ -556,8 +556,8 @@ struct GridView: View {
         return out
     }
 
-    /// Recompute the full masonry packing. Called only on set/column/width/
-    /// aspect changes — not on scroll.
+    /// Recompute the full packing. Called only on set/column/width/aspect/
+    /// spacing changes — not on scroll.
     private func recompute(width: CGFloat) {
         let files = appState.visibleFiles
         guard width > 0, !files.isEmpty else {
@@ -566,20 +566,36 @@ struct GridView: View {
             layoutWidth = width
             return
         }
-        // Fixed-ratio layouts give every tile one aspect (uniform aspects make
-        // MasonryGeometry pack a row-major grid); masonry uses each image's
-        // natural ratio from the cache.
-        let ratios: [CGFloat]
-        if let fixed = appState.imageLayout.aspect {
-            ratios = Array(repeating: fixed, count: files.count)
-        } else {
-            ratios = files.map { aspects.aspect(for: $0) }
+        let natural = files.map { aspects.aspect(for: $0) }
+        let result: (frames: [CGRect], totalHeight: CGFloat)
+
+        switch appState.imageLayout {
+        case .rows:
+            // One control drives every mode: the images-per-row slider's column
+            // width IS the target row height, so dragging it grows and shrinks
+            // images in Rows exactly as it does in Columns and Grid.
+            let target = max(1, (width - spacing * CGFloat(max(0, gridColumns - 1)))
+                                / CGFloat(max(1, gridColumns)))
+            let r = JustifiedRowsGeometry.compute(aspects: natural,
+                                                  targetHeight: target,
+                                                  width: width,
+                                                  spacing: spacing,
+                                                  captionHeight: effectiveCaptionHeight)
+            result = (r.frames, r.totalHeight)
+        case .columns, .grid:
+            // Grid gives every tile one aspect — uniform aspects make
+            // MasonryGeometry pack an exact row-major lattice. Columns uses
+            // each image's natural ratio from the cache.
+            let ratios = appState.imageLayout.aspect
+                .map { Array(repeating: $0, count: files.count) } ?? natural
+            let r = MasonryGeometry.compute(aspects: ratios,
+                                            columns: gridColumns,
+                                            width: width,
+                                            spacing: spacing,
+                                            captionHeight: effectiveCaptionHeight)
+            result = (r.frames, r.totalHeight)
         }
-        let result = MasonryGeometry.compute(aspects: ratios,
-                                             columns: gridColumns,
-                                             width: width,
-                                             spacing: spacing,
-                                             captionHeight: effectiveCaptionHeight)
+
         frames = result.frames
         totalHeight = result.totalHeight
         layoutWidth = width

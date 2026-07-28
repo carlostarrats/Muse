@@ -3,49 +3,50 @@ import XCTest
 
 final class ImageLayoutTests: XCTestCase {
 
-    func testAllCasesOrderMatchesWireframe() {
+    func testThreeModesInOrder() {
         XCTAssertEqual(ImageLayout.allCases.map(\.displayName),
-                       ["Masonry", "1:1", "9:16", "16:9",
-                        "4:5", "5:4", "6:7", "7:6",
-                        "2:3", "3:2", "3:4", "4:3"])
+                       ["Columns", "Rows", "Grid"])
     }
 
-    func testMasonryHasNoAspect() {
-        XCTAssertNil(ImageLayout.masonry.aspect)
+    func testColumnsAndRowsHaveNoFixedAspect() {
+        XCTAssertNil(ImageLayout.columns.aspect)
+        XCTAssertNil(ImageLayout.rows.aspect)
     }
 
-    func testSquareAspectIsOne() {
-        XCTAssertEqual(ImageLayout.r1x1.aspect, 1)
+    func testGridIsSquare() {
+        XCTAssertEqual(ImageLayout.grid.aspect, 1)
     }
 
-    func testPortraitRatiosAreTallerThanWide() {
-        // width:height with width < height → aspect (h/w) > 1.
-        for layout in [ImageLayout.r9x16, .r4x5, .r6x7, .r2x3, .r3x4] {
-            XCTAssertGreaterThan(layout.aspect ?? 0, 1, "\(layout) should be tall")
-            XCTAssertEqual(layout.iconKind, .portrait)
+    func testIconKinds() {
+        XCTAssertEqual(ImageLayout.columns.iconKind, .columns)
+        XCTAssertEqual(ImageLayout.rows.iconKind, .rows)
+        XCTAssertEqual(ImageLayout.grid.iconKind, .grid)
+    }
+
+    func testResolveDefaultsToColumns() {
+        XCTAssertEqual(ImageLayout.resolve(nil), .columns)
+        XCTAssertEqual(ImageLayout.resolve("bogus"), .columns)
+    }
+
+    func testResolveRoundTripsTheNewRawValues() {
+        for layout in ImageLayout.allCases {
+            XCTAssertEqual(ImageLayout.resolve(layout.rawValue), layout)
         }
     }
 
-    func testLandscapeRatiosAreWiderThanTall() {
-        for layout in [ImageLayout.r16x9, .r5x4, .r7x6, .r3x2, .r4x3] {
-            XCTAssertLessThan(layout.aspect ?? 99, 1, "\(layout) should be wide")
-            XCTAssertEqual(layout.iconKind, .landscape)
+    /// A user persisted on the old masonry default must land on Columns —
+    /// the same layout under a new name, not a silent change.
+    func testLegacyMasonryMigratesToColumns() {
+        XCTAssertEqual(ImageLayout.resolve("masonry"), .columns)
+    }
+
+    /// A user persisted on any of the ten deleted fixed ratios must land on
+    /// Grid — the mode that kept the aligned-lattice feel. Falling through to
+    /// the unknown-value default would silently drop them into Columns.
+    func testLegacyRatiosMigrateToGrid() {
+        for raw in ["r1x1", "r9x16", "r16x9", "r4x5", "r5x4",
+                    "r6x7", "r7x6", "r2x3", "r3x2", "r3x4", "r4x3"] {
+            XCTAssertEqual(ImageLayout.resolve(raw), .grid, "raw: \(raw)")
         }
-    }
-
-    func testSpecificAspectValues() throws {
-        XCTAssertEqual(try XCTUnwrap(ImageLayout.r9x16.aspect), 16.0 / 9, accuracy: 0.0001)
-        XCTAssertEqual(try XCTUnwrap(ImageLayout.r16x9.aspect), 9.0 / 16, accuracy: 0.0001)
-    }
-
-    func testIconKindForMasonAndSquare() {
-        XCTAssertEqual(ImageLayout.masonry.iconKind, .mason)
-        XCTAssertEqual(ImageLayout.r1x1.iconKind, .square)
-    }
-
-    func testResolveDefaultsToMasonry() {
-        XCTAssertEqual(ImageLayout.resolve(nil), .masonry)
-        XCTAssertEqual(ImageLayout.resolve("bogus"), .masonry)
-        XCTAssertEqual(ImageLayout.resolve("r3x4"), .r3x4)
     }
 }

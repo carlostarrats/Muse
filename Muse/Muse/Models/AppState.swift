@@ -517,11 +517,12 @@ final class AppState: ObservableObject {
         didSet { AppSettings.sidebarCollectionSortMode = sidebarCollectionSortMode }
     }
 
-    /// Masonry has no letterbox, so it always uses Auto; only fixed ratios honor
-    /// the user's pick. The stored `tileBackground` is preserved while in masonry
-    /// so switching back to a ratio restores the choice.
+    /// Columns and Rows give a tile the image's own shape, so there's no
+    /// letterbox to colour and they always use Auto; only Grid (square slots)
+    /// honors the user's pick. The stored `tileBackground` is preserved
+    /// meanwhile so switching back to Grid restores the choice.
     var effectiveTileBackground: TileBackground {
-        imageLayout == .masonry ? .auto : tileBackground
+        imageLayout == .grid ? tileBackground : .auto
     }
 
     /// The resolved tile backdrop for the current mood + layout + selection.

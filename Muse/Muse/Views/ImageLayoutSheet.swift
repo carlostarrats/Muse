@@ -15,7 +15,7 @@ struct ImageLayoutSheet: View {
     @EnvironmentObject var appState: AppState
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 14),
-                                count: 4)
+                                count: 3)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -25,61 +25,27 @@ struct ImageLayoutSheet: View {
                 Spacer()
                 SheetCloseButton { isPresented = false }
             }
-            Text("Choose how images are arranged. Applies to every grid.")
+            Text("Choose how images are arranged. Every mode draws each image at its own shape — nothing is cropped. Applies to every grid.")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .padding(.top, 4)
                 .padding(.bottom, 20)
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 28) {
-                    LazyVGrid(columns: columns, spacing: 14) {
-                        ForEach(ImageLayout.allCases) { layout in
-                            LayoutTile(
-                                layout: layout,
-                                isSelected: appState.imageLayout == layout,
-                                palette: appState.moodPalette
-                            ) { appState.imageLayout = layout }
-                        }
+                LazyVGrid(columns: columns, spacing: 14) {
+                    ForEach(ImageLayout.allCases) { layout in
+                        LayoutTile(
+                            layout: layout,
+                            isSelected: appState.imageLayout == layout,
+                            palette: appState.moodPalette
+                        ) { appState.imageLayout = layout }
                     }
-                    commonSizes
                 }
                 .padding(.bottom, 4)
             }
         }
         .padding(28)
         .windowFittedSheetHeight(width: 600, ideal: 720)
-    }
-
-    // MARK: - Common Sizes
-
-    private let sizes: [(String, String)] = [
-        ("1:1", String(localized: "Square medium format")),
-        ("2:3", String(localized: "Sony, Canon, Nikon, 35mm film")),
-        ("3:4", String(localized: "iPhone, Google Pixel, Samsung Galaxy, OnePlus")),
-        ("4:5", String(localized: "Instagram, large format film")),
-        ("6:7", String(localized: "Medium format")),
-        ("9:16", String(localized: "Vertical video on most phones")),
-    ]
-
-    private var commonSizes: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Common Sizes")
-                .font(.system(size: 15, weight: .semibold))
-                .padding(.bottom, 16)
-            ForEach(Array(sizes.enumerated()), id: \.offset) { idx, row in
-                if idx > 0 { Divider().padding(.vertical, 12) }
-                HStack(alignment: .firstTextBaseline, spacing: 16) {
-                    Text(row.0)
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 44, alignment: .leading)
-                    Text(row.1)
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
     }
 
 }
@@ -188,10 +154,9 @@ private struct LayoutIconView: View {
 
     var body: some View {
         switch kind {
-        case .square:    grid(cols: 3, rows: 3)
-        case .portrait:  grid(cols: 4, rows: 3)
-        case .landscape: grid(cols: 3, rows: 4)
-        case .mason:     mason
+        case .columns: columnsIcon
+        case .rows:    rowsIcon
+        case .grid:    grid(cols: 3, rows: 3)
         }
     }
 
@@ -209,8 +174,9 @@ private struct LayoutIconView: View {
         }
     }
 
-    /// The masonry pattern: 4 columns of staggered bar heights, filling the frame.
-    private var mason: some View {
+    /// Columns: 4 vertical columns of staggered bar heights, filling the frame —
+    /// the ragged-bottom pack.
+    private var columnsIcon: some View {
         GeometryReader { geo in
             let h = geo.size.height
             // Per-column relative bar heights (sum + gap ≈ frame height).
@@ -226,6 +192,31 @@ private struct LayoutIconView: View {
                     }
                 }
             }
+        }
+    }
+
+    /// Rows: three bands of equal height with unequal widths — every row
+    /// justified to the full width, which is the Rows tell.
+    private var rowsIcon: some View {
+        VStack(spacing: gap) {
+            iconRow(weights: [2, 1, 1.4])
+            iconRow(weights: [1, 1.8, 1.2])
+            iconRow(weights: [1.5, 1, 1.6])
+        }
+    }
+
+    private func iconRow(weights: [CGFloat]) -> some View {
+        GeometryReader { geo in
+            let total = weights.reduce(0, +)
+            let usable = max(0, geo.size.width - gap * CGFloat(weights.count - 1))
+            HStack(spacing: gap) {
+                ForEach(Array(weights.enumerated()), id: \.offset) { _, w in
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(color)
+                        .frame(width: usable * (w / total))
+                }
+            }
+            .frame(height: geo.size.height)
         }
     }
 }

@@ -83,11 +83,11 @@ struct MoodPickerView: View {
                     Divider().frame(height: 52)
                     tileGroup(String(localized: "Static"), options: [.light, .darkGrey, .black])
                 }
-                .opacity(appState.imageLayout == .masonry ? 0.4 : 1)
-                .disabled(appState.imageLayout == .masonry)
+                .opacity(appState.imageLayout == .grid ? 1 : 0.4)
+                .disabled(appState.imageLayout != .grid)
 
-                if appState.imageLayout == .masonry {
-                    Text("Masonry always uses Auto. Pick a fixed ratio to choose a backdrop.")
+                if appState.imageLayout != .grid {
+                    Text("Columns and Rows always use Auto. Pick Grid to choose a backdrop.")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

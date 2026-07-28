@@ -112,7 +112,9 @@ enum AppSettings {
 
     static let imageLayoutKey = "imageLayout"
 
-    /// Global image layout for every grid. Default `.masonry`. Unset → masonry.
+    /// Global image layout for every grid. Default `.columns`. Unset → columns;
+    /// legacy `masonry` → columns, legacy `r*` ratios → grid (see
+    /// `ImageLayout.resolve`).
     static var imageLayout: ImageLayout {
         get { ImageLayout.resolve(UserDefaults.standard.string(forKey: imageLayoutKey)) }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: imageLayoutKey) }
