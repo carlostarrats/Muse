@@ -120,6 +120,19 @@ enum AppSettings {
         set { UserDefaults.standard.set(newValue.rawValue, forKey: imageLayoutKey) }
     }
 
+    static let gridSpacingKey = "gridSpacing"
+
+    /// Gap between grid tiles, in points. Default 14 (the value that was
+    /// hardcoded before this became a control), 0 = flush packing.
+    static let defaultGridSpacing: Double = 14
+    static let gridSpacingRange: ClosedRange<Double> = 0...28
+
+    /// Bound a stored or slider-supplied gutter to the usable range. A value
+    /// outside it doesn't just look wrong — a negative gutter overlaps tiles.
+    static func clampGridSpacing(_ raw: Double) -> Double {
+        min(gridSpacingRange.upperBound, max(gridSpacingRange.lowerBound, raw))
+    }
+
     static let gridFilterKey = "muse.gridFilter"
 
     /// Global grid faceted filter (kind / date / size). Default `.none` (off).

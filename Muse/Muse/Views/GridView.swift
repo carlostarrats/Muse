@@ -19,7 +19,14 @@ struct GridView: View {
     // "add a folder" guidance, even while the always-present iCloud root remains).
     @ObservedObject private var collectionsEngine = CollectionsEngine.shared
 
-    private let spacing: CGFloat = 14
+    /// User-set gutter between tiles, persisted; the bottom-right slider drives
+    /// it. 0 packs flush — a dense contact sheet, which is most of the point of
+    /// Rows and Grid.
+    @AppStorage(AppSettings.gridSpacingKey) private var gridSpacingSetting =
+        AppSettings.defaultGridSpacing
+    private var spacing: CGFloat {
+        CGFloat(AppSettings.clampGridSpacing(gridSpacingSetting))
+    }
     private let contentInset: CGFloat = 20
     @State private var addTagFile: FileNode? = nil
     @State private var newTagText = ""
@@ -249,9 +256,14 @@ struct GridView: View {
             .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
             .overlay(alignment: .bottomTrailing) {
                 if !appState.visibleFiles.isEmpty {
-                    columnSlider
-                        .padding(.trailing, 16)
-                        .padding(.bottom, 16)
+                    // Gutter left, zoom right — the zoom control keeps its
+                    // established far-right position.
+                    HStack(spacing: 10) {
+                        spacingSlider
+                        columnSlider
+                    }
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 16)
                 }
             }
             .alert("Add Tag", isPresented: Binding(
@@ -283,15 +295,21 @@ struct GridView: View {
                     recompute(width: contentWidth)
                 }
             }
+            .onChange(of: gridSpacingSetting) { _, _ in
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    recompute(width: contentWidth)
+                }
+            }
             .onChange(of: showFileNames) { _, _ in
                 withAnimation(.easeInOut(duration: 0.25)) {
                     recompute(width: contentWidth)
                 }
             }
             .onChange(of: aspects.version) { _, _ in
-                // Fixed-ratio layouts ignore per-image aspects, so a decoded
+                // Grid's slots are square regardless of the image, so a decoded
                 // thumbnail reporting its real ratio must NOT trigger a relayout
-                // (it would churn the whole grid for no visual change).
+                // there (it would churn the whole grid for no change in the
+                // packing). Columns and Rows do depend on it.
                 guard appState.imageLayout.aspect == nil else { return }
                 recompute(width: contentWidth)
             }
@@ -640,32 +658,58 @@ struct GridView: View {
     /// Floating zoom control: fewer columns (bigger images) on the left,
     /// more (smaller) on the right.
     private var columnSlider: some View {
+        sliderCapsule(
+            minIcon: "square.grid.2x2",
+            maxIcon: "square.grid.4x3.fill",
+            label: String(localized: "Images per row"),
+            binding: Binding(
+                get: { Double(gridColumns) },
+                set: { gridColumns = Int($0.rounded()) }),
+            range: 2...8,
+            step: 1)
+    }
+
+    /// Floating gutter control: flush on the left, airy on the right.
+    private var spacingSlider: some View {
+        sliderCapsule(
+            minIcon: "rectangle.compress.vertical",
+            maxIcon: "rectangle.expand.vertical",
+            label: String(localized: "Spacing between images"),
+            binding: Binding(
+                get: { AppSettings.clampGridSpacing(gridSpacingSetting) },
+                set: { gridSpacingSetting = AppSettings.clampGridSpacing($0.rounded()) }),
+            range: AppSettings.gridSpacingRange,
+            step: 1)
+    }
+
+    /// Shared chrome for the bottom-right sliders: same 20pt content height and
+    /// 9pt vertical padding as the status pills, so every bottom capsule
+    /// matches.
+    private func sliderCapsule(minIcon: String, maxIcon: String, label: String,
+                               binding: Binding<Double>,
+                               range: ClosedRange<Double>,
+                               step: Double) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: "square.grid.2x2")
+            Image(systemName: minIcon)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
                 // Decorative min/max hint — the slider itself carries the label.
                 .accessibilityHidden(true)
-            Slider(value: Binding(
-                get: { Double(gridColumns) },
-                set: { gridColumns = Int($0.rounded()) }
-            ), in: 2...8, step: 1)
-            .frame(width: 130)
-            .controlSize(.small)
-            .accessibilityLabel("Images per row")
-            Image(systemName: "square.grid.4x3.fill")
+            Slider(value: binding, in: range, step: step)
+                .frame(width: 130)
+                .controlSize(.small)
+                .accessibilityLabel(label)
+            Image(systemName: maxIcon)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
         }
-        // Match the status pills exactly: same 20pt content height + 9pt
-        // vertical padding so every bottom capsule is the same height.
         .frame(height: 20)
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
         .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
         .overlay(Capsule(style: .continuous).strokeBorder(.primary.opacity(0.08)))
-        .help("Images per row")
+        .help(label)
     }
 
     /// Takes the viewport height explicitly (mirrors `masonryCanvas(viewportHeight:)`
