@@ -48,6 +48,8 @@ struct HeroStage: View {
     @Binding var isClosing: Bool     // set true by parent to run the return flight
 
     @State private var displayRect: CGRect = .zero
+    /// One mid-flight retarget per close — see the sourceFrame onChange.
+    @State private var didRetarget = false
     @State private var image: NSImage?
     @State private var dragStartPan: CGSize? = nil
     @State private var isDraggingPan = false
@@ -155,9 +157,27 @@ struct HeroStage: View {
             // grid — retarget mid-flight so we land on the tile's real spot
             // (its drawn-image rect, same fit rule as sourceRect).
             guard isClosing else { return }
+            // Only retarget for a REAL move, and only once.
+            //
+            // The grid relayouts more than once during a close (the toolbar
+            // returns, the selection clears), so this fired repeatedly and each
+            // fire started a fresh 0.22s animation. A transient frame that
+            // computed larger made the image grow BACK mid-close — which reads
+            // as the viewer closing, reopening, then closing again.
+            //
+            // Ignores degenerate frames, ignores sub-pixel churn, and runs at
+            // most once per close. Uses the same header-derived aspect as
+            // `sourceRect` so the retarget can't disagree with the takeoff.
+            guard !didRetarget, newFrame.width > 1, newFrame.height > 1 else { return }
+            let retarget = ViewerGeometry.fitWithin(
+                imageSize: Self.pixelSize(of: url) ?? image?.size ?? newFrame.size,
+                frame: newFrame)
+            guard abs(retarget.midX - displayRect.midX) > 1
+                    || abs(retarget.midY - displayRect.midY) > 1
+                    || abs(retarget.width - displayRect.width) > 1 else { return }
+            didRetarget = true
             withAnimation(.timingCurve(0.3, 1.08, 0.35, 1, duration: 0.22)) {
-                displayRect = ViewerGeometry.fitWithin(
-                    imageSize: image?.size ?? newFrame.size, frame: newFrame)
+                displayRect = retarget
             }
         }
         .onChange(of: url) { _, _ in flipTo() }
@@ -221,6 +241,7 @@ struct HeroStage: View {
 
     private func close() {
         resetCursorState()
+        didRetarget = false
         // If the tile has no usable frame (virtualized away, or never measured),
         // flying to it collapses the animation into an instant jump. Shrink
         // toward the viewport centre instead so the close still reads as a
