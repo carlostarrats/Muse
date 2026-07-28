@@ -22,6 +22,8 @@ struct ContentView: View {
     @ObservedObject private var indexProgress = IndexProgress.shared
     @ObservedObject private var thumbProgress = ThumbProgress.shared
     @ObservedObject private var analyzePipeline = AnalyzePipeline.shared
+    /// Unified background-progress state driving the single status pill.
+    @State private var workProgress = WorkProgress()
     @ObservedObject private var collectionsEngine = CollectionsEngine.shared
     @State private var moodPickerShown = false
     @State private var infoShown = false
@@ -355,15 +357,18 @@ struct ContentView: View {
                 ])
         }
         .overlay(alignment: .bottom) {
-            if analyzePipeline.isRunning {
-                analyzeStatusBanner
-            } else if collectionsEngine.isClustering {
-                organizingBanner
-            } else if indexProgress.isActive {
-                indexingBanner
-            } else if thumbProgress.isActive {
-                thumbsBanner
+            // ONE pill for every background phase. This used to be a four-way
+            // chain (Analyzing / Organizing / Indexing / Loading images), each
+            // with its own counter — after the 2026-07-28 perf work the phases
+            // got fast enough that it switched labels faster than a human can
+            // read AND restarted the count at zero on each switch. A user only
+            // needs to know progress is happening.
+            if workProgress.isActive {
+                statusPill(label: "Preparing your files…", progress: workProgress.fraction)
             }
+        }
+        .onChange(of: workInput) { _, new in
+            withAnimation(.easeOut(duration: 0.2)) { workProgress.update(new) }
         }
         .preferredColorScheme(appState.moodPalette.scheme)
     }
@@ -798,16 +803,17 @@ struct ContentView: View {
         }
     }
 
-    /// Bottom-center pill while tile thumbnails stream in for a big folder.
-    private var thumbsBanner: some View {
-        statusPill(label: "Loading images \(thumbProgress.completed) of \(thumbProgress.total)",
-                   progress: Double(thumbProgress.completed) / Double(max(thumbProgress.total, 1)))
-    }
-
-    /// Bottom-center pill while the indexer works through a folder.
-    private var indexingBanner: some View {
-        statusPill(label: "Indexing \(indexProgress.completed) of \(indexProgress.total)",
-                   progress: Double(indexProgress.completed) / Double(max(indexProgress.total, 1)))
+    /// Live snapshot of every background phase, fed to the unified pill.
+    /// Equatable, so `.onChange` only fires on a real change.
+    private var workInput: WorkProgress.Input {
+        WorkProgress.Input(
+            indexFraction: Double(indexProgress.completed) / Double(max(indexProgress.total, 1)),
+            indexActive: indexProgress.isActive,
+            analyzeFraction: analyzePipeline.progress,
+            analyzeActive: analyzePipeline.isRunning,
+            organizing: collectionsEngine.isClustering,
+            thumbFraction: Double(thumbProgress.completed) / Double(max(thumbProgress.total, 1)),
+            thumbActive: thumbProgress.isActive)
     }
 
     /// One shared pill for every phase — same glass as the grid's column
@@ -838,20 +844,6 @@ struct ContentView: View {
         .transition(.opacity)
     }
 
-    private var analyzeStatusBanner: some View {
-        statusPill(label: analyzePipeline.total > 0
-                        ? "Analyzing \(analyzePipeline.completed) of \(analyzePipeline.total)"
-                        : "Analyzing…",
-                   progress: analyzePipeline.progress)
-    }
-
-    /// Bottom-center pill while collections recluster after an analyze batch —
-    /// closes the otherwise-invisible gap between the Analyzing pill vanishing
-    /// and results appearing. Indeterminate phase, so the bar reads as
-    /// "finishing up". Same capsule as every other pill.
-    private var organizingBanner: some View {
-        statusPill(label: "Organizing…", progress: 1)
-    }
 
 }
 
