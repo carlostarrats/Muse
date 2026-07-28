@@ -71,18 +71,6 @@ struct HeroImageViewer: View {
                         // window flicker on every close.
                         .animation(.easeOut(duration: backdropVisible ? 0.4 : 0.3),
                                    value: backdropVisible)
-                        // The wash colour resolves a beat AFTER the backdrop
-                        // mounts (nil until the DB read lands), and the only
-                        // animation here was scoped to `backdropVisible` — so
-                        // the colour HARD-CUT from neutral to the real tint
-                        // partway through the opacity fade. On a large file that
-                        // is very visible, because the image itself takes ~0.5s
-                        // to decode and you are looking straight at the backdrop
-                        // while it happens. Value-scoped so it animates the
-                        // colour change only, without reopening the container-
-                        // wide transaction.
-                        .animation(.easeOut(duration: 0.35),
-                                   value: details?.dominantColor ?? computedPalette.first)
                         .contentShape(Rectangle())
                         .onTapGesture { startClose() }
 
@@ -125,7 +113,29 @@ struct HeroImageViewer: View {
         }
         .onAppear {
             installScrollMonitor()
-            backdropVisible = true   // animated by the .animation on the backdrop
+            // Fade the wash in only once its TINT is known, so it appears at its
+            // final colour instead of appearing neutral and morphing.
+            //
+            // ViewerBackdrop starts at a neutral grey (hexColor nil) and both its
+            // colour AND its opacity change when the tint resolves — while the
+            // 0.4s fade-in is still running. Two overlapping animations on the
+            // same layer read as a flicker. It's normally masked because the
+            // image lands fast and covers the wash; on a 115 MP scan the image
+            // takes ~0.5s to decode, so the shift is fully exposed. That is the
+            // owner-reported "flicker in the background colour" on large files.
+            //
+            // The tint comes from a local SQLite read, so this virtually always
+            // resolves within a frame or two. The deadline is the safety net for
+            // a file with no stored palette (the fallback decode can take
+            // ~266ms on a 659MB TIFF) — never wait longer than the fade itself.
+            Task {
+                let deadline = Date().addingTimeInterval(0.2)
+                while (details?.dominantColor ?? computedPalette.first) == nil,
+                      Date() < deadline, !isClosing {
+                    try? await Task.sleep(nanoseconds: 8_000_000)
+                }
+                backdropVisible = true   // animated by the .animation on the backdrop
+            }
             withAnimation(.easeOut(duration: 0.4).delay(0.15)) { chromeVisible = true }
         }
         .onDisappear {
