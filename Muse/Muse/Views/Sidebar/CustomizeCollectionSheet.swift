@@ -15,9 +15,24 @@ struct CustomizeCollectionSheet: View {
     let loaded: CollectionStore.Loaded
     let onClose: () -> Void
 
-    // Draft state, seeded from the stored appearance. Icon holds the symbol
-    // NAME (default icon = default look); color holds the token or nil.
+    /// Which icon kind the picker is showing. An icon is EITHER an SF Symbol or
+    /// an emoji, so the two grids are tabs rather than one mixed grid: they're
+    /// different visual languages, and the color picker only applies to one.
+    private enum IconTab: Hashable { case symbols, emoji }
+
+    // Draft state, seeded from the stored appearance. Nothing persists until
+    // Update.
+    //
+    // The symbol, emoji and color drafts are all held SIMULTANEOUSLY and
+    // independently of the active tab, so flipping to Emoji and back restores
+    // the symbol and color you had rather than silently discarding them. Only
+    // `save()` collapses them down to what actually gets stored.
+    @State private var iconTab: IconTab
+    /// The symbol draft — always a valid SF Symbol name (default = default look).
     @State private var draftIcon: String
+    /// The emoji draft. Empty when none has been chosen yet.
+    @State private var draftEmoji: String
+    /// The color token draft, or nil for the default look.
     @State private var draftColor: String?
 
     // Hover feedback (one cell at a time, so two shared slots suffice).
@@ -25,6 +40,7 @@ struct CustomizeCollectionSheet: View {
     // with a real token.
     @State private var hoveredColor: String?
     @State private var hoveredSymbol: String?
+    @State private var hoveredEmoji: String?
     private static let defaultColorHoverID = "__default__"
 
     /// This collection's "default" glyph — the smart funnel for a smart
@@ -38,15 +54,50 @@ struct CustomizeCollectionSheet: View {
         let isSmart = loaded.collection.smart_rules != nil
         let def = isSmart ? CollectionAppearance.smartDefaultIcon : CollectionAppearance.defaultIcon
         self.defaultIcon = def
-        // nil stored icon → show the kind-appropriate default (funnel vs stack).
-        _draftIcon = State(initialValue: loaded.collection.icon.flatMap {
-            CollectionAppearance.isValidSymbol($0) ? $0 : nil
-        } ?? def)
+        // Open on whichever tab matches what's stored, and seed only that
+        // tab's draft from it. nil / unrenderable → the kind-appropriate
+        // default symbol (funnel vs stack) on the Symbols tab.
+        switch CollectionAppearance.resolve(loaded.collection.icon, default: def) {
+        case .emoji(let e):
+            _iconTab = State(initialValue: .emoji)
+            _draftIcon = State(initialValue: def)
+            _draftEmoji = State(initialValue: e)
+        case .symbol(let name):
+            _iconTab = State(initialValue: .symbols)
+            _draftIcon = State(initialValue: name)
+            _draftEmoji = State(initialValue: "")
+        }
         _draftColor = State(initialValue: loaded.collection.color)
     }
 
+    /// The emoji draft, only if it's actually renderable.
+    private var validEmoji: String? {
+        CollectionAppearance.isValidEmoji(draftEmoji) ? draftEmoji : nil
+    }
+
+    /// What the preview draws — and, on Update, what gets stored. On the Emoji
+    /// tab an incomplete draft falls back to the symbol side so the preview is
+    /// never blank.
+    private var effectiveIcon: CollectionAppearance.Icon {
+        if iconTab == .emoji, let e = validEmoji { return .emoji(e) }
+        return .symbol(draftIcon)
+    }
+
+    /// An emoji carries its own colors, so the color token doesn't apply to it.
+    private var effectiveColor: String? {
+        if case .emoji = effectiveIcon { return nil }
+        return draftColor
+    }
+
     private var isDefault: Bool {
-        draftIcon == defaultIcon && draftColor == nil
+        if case .emoji = effectiveIcon { return false }
+        return draftIcon == defaultIcon && draftColor == nil
+    }
+
+    /// Update is blocked only when the Emoji tab is showing an unusable draft —
+    /// committing it would store nothing and silently look like a no-op.
+    private var canSave: Bool {
+        iconTab != .emoji || validEmoji != nil
     }
 
     var body: some View {
@@ -88,7 +139,9 @@ struct CustomizeCollectionSheet: View {
             HStack {
                 Button("Reset to Default") {
                     withAnimation(.easeOut(duration: 0.15)) {
+                        iconTab = .symbols
                         draftIcon = defaultIcon
+                        draftEmoji = ""
                         draftColor = nil
                     }
                 }
@@ -98,6 +151,7 @@ struct CustomizeCollectionSheet: View {
                     .keyboardShortcut(.cancelAction)
                 Button("Update") { save() }
                     .keyboardShortcut(.defaultAction)
+                    .disabled(!canSave)
             }
         }
         .padding(28)
@@ -119,11 +173,10 @@ struct CustomizeCollectionSheet: View {
                 .opacity(0)
                 .frame(width: SidebarView.chevronSlotWidth, alignment: .trailing)
 
-            Image(systemName: draftIcon)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(CollectionAppearance.color(for: draftColor)
-                                    .map(AnyShapeStyle.init) ?? AnyShapeStyle(.primary))
-                .frame(width: 18)
+            CollectionIconView(
+                icon: effectiveIcon,
+                tint: CollectionAppearance.color(for: effectiveColor)
+                    .map(AnyShapeStyle.init) ?? AnyShapeStyle(.primary))
                 .padding(.leading, SidebarView.chevronToIconGap)
 
             Text(loaded.collection.name)
@@ -172,8 +225,24 @@ struct CustomizeCollectionSheet: View {
                     swatch(entry.token, entry.color)
                 }
             }
+
+            // An emoji is drawn by the color-glyph font, so a tint either does
+            // nothing or flattens it. Rather than leave a live-looking control
+            // that has no effect, the whole column goes inert with a reason.
+            // The draft color is KEPT — switch back to Symbols and it returns.
+            if colorDisabled {
+                Text("Emoji use their own colors.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+        .disabled(colorDisabled)
+        .opacity(colorDisabled ? 0.4 : 1)
+        .animation(.easeOut(duration: 0.15), value: colorDisabled)
     }
+
+    private var colorDisabled: Bool { iconTab == .emoji }
 
     /// The "no color" cell, first in the grid: the same diagonal light/dark
     /// split as the nav's Auto mood swatch, since "default" here means the
@@ -235,8 +304,25 @@ struct CustomizeCollectionSheet: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
 
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(30), spacing: 8), count: 6),
-                      spacing: 8) {
+            Picker("Icon kind", selection: $iconTab) {
+                Text("Symbols").tag(IconTab.symbols)
+                Text("Emoji").tag(IconTab.emoji)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            if iconTab == .symbols {
+                symbolGrid
+            } else {
+                emojiGrid
+                emojiField
+            }
+        }
+    }
+
+    private var symbolGrid: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.fixed(30), spacing: 8), count: 6),
+                  spacing: 8) {
                 // First cell = this collection's NATIVE glyph (the funnel for a
                 // smart collection, the stack for a normal one), shown as an
                 // ordinary symbol so there's always a plain way back to the
@@ -247,7 +333,6 @@ struct CustomizeCollectionSheet: View {
                 }, id: \.self) { name in
                     symbolCell(name)
                 }
-            }
         }
     }
 
@@ -282,13 +367,93 @@ struct CustomizeCollectionSheet: View {
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 
+    // MARK: - Emoji
+
+    /// Same 6-wide lattice and same cell chrome as the symbol grid, so the two
+    /// tabs feel like one picker rather than two.
+    private var emojiGrid: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.fixed(30), spacing: 8), count: 6),
+                  spacing: 8) {
+            ForEach(CollectionAppearance.emojiCatalog, id: \.self) { emoji in
+                emojiCell(emoji)
+            }
+        }
+    }
+
+    private func emojiCell(_ emoji: String) -> some View {
+        let selected = draftEmoji == emoji
+        let hovered = hoveredEmoji == emoji
+        return Button {
+            draftEmoji = emoji
+        } label: {
+            Text(emoji)
+                .font(.system(size: 15))
+                .frame(width: 30, height: 30)
+                .background {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(selected ? Color.accentColor.opacity(0.16)
+                                       : Color.primary.opacity(hovered ? 0.10 : 0.04))
+                }
+                .overlay {
+                    if selected || hovered {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .strokeBorder(selected ? Color.accentColor
+                                                   : Color.primary.opacity(0.25),
+                                          lineWidth: 1.5)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .onHover { hoveredEmoji = $0 ? emoji : nil }
+        // No English name to translate — VoiceOver speaks the emoji's own
+        // system name from the character itself, which is the useful reading.
+        .accessibilityLabel(String(localized: "Emoji \(emoji)"))
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    /// Escape hatch past the 48-emoji catalog: type or paste any single emoji,
+    /// or open the system picker. Input is trimmed to its LAST grapheme cluster
+    /// so pasting a string leaves one usable character rather than an error.
+    private var emojiField: some View {
+        HStack(spacing: 8) {
+            TextField("Any emoji", text: Binding(
+                get: { draftEmoji },
+                set: { draftEmoji = String($0.suffix(1)) }
+            ))
+            .textFieldStyle(.roundedBorder)
+            .frame(width: 90)
+
+            Button {
+                NSApp.orderFrontCharacterPalette(nil)
+            } label: {
+                Image(systemName: "face.smiling")
+            }
+            .buttonStyle(.borderless)
+            .help("Open the system emoji picker")
+            .accessibilityLabel("Open the system emoji picker")
+
+            Spacer(minLength: 0)
+        }
+    }
+
     // MARK: - Save
 
     /// Persist the draft (default look stores nil/nil, keeping the DB clean)
     /// and reload the engine so the sidebar row repaints immediately.
     private func save() {
-        let icon = draftIcon == defaultIcon ? nil : draftIcon
-        let color = draftColor
+        let icon: String?
+        let color: String?
+        switch effectiveIcon {
+        case .emoji(let e):
+            icon = CollectionAppearance.encodeEmoji(e)
+            // An emoji's color IS the emoji. Persisting a dead token would
+            // resurrect it if the user later switched back to a symbol, which
+            // reads as the app remembering a choice they didn't make.
+            color = nil
+        case .symbol(let name):
+            icon = name == defaultIcon ? nil : name
+            color = draftColor
+        }
         let id = loaded.collection.id
         onClose()
         Task { @MainActor in

@@ -151,4 +151,86 @@ final class CollectionAppearanceTests: XCTestCase {
         XCTAssertEqual(out.first?.icon, "heart.fill")
         XCTAssertEqual(out.first?.color, "pink")
     }
+
+    // MARK: - Emoji icons
+
+    private let stack = CollectionAppearance.defaultIcon
+
+    func testResolveNilGivesTheSuppliedDefault() {
+        XCTAssertEqual(CollectionAppearance.resolve(nil, default: stack), .symbol(stack))
+    }
+
+    func testResolveLegacySymbolNameStillResolvesAsSymbol() {
+        // Every icon stored before emoji existed is a bare symbol name; it must
+        // keep resolving to .symbol, not be mistaken for anything else.
+        XCTAssertEqual(CollectionAppearance.resolve("heart", default: stack), .symbol("heart"))
+    }
+
+    func testResolveUnknownSymbolFallsBackToDefault() {
+        XCTAssertEqual(CollectionAppearance.resolve("not.a.real.symbol.xyz", default: stack),
+                       .symbol(stack))
+    }
+
+    func testEmojiRoundTrip() {
+        for emoji in ["\u{1F3A8}", "\u{2B50}\u{FE0F}", "\u{1F430}"] {
+            let raw = CollectionAppearance.encodeEmoji(emoji)
+            XCTAssertEqual(CollectionAppearance.resolve(raw, default: stack), .emoji(emoji))
+        }
+    }
+
+    func testEveryCatalogEmojiRoundTrips() {
+        for emoji in CollectionAppearance.emojiCatalog {
+            XCTAssertTrue(CollectionAppearance.isValidEmoji(emoji),
+                          "catalog entry \(emoji) is not a single grapheme cluster")
+            XCTAssertEqual(
+                CollectionAppearance.resolve(CollectionAppearance.encodeEmoji(emoji),
+                                             default: stack),
+                .emoji(emoji))
+        }
+    }
+
+    func testEmojiCatalogFillsTheSixWideGrid() {
+        XCTAssertEqual(CollectionAppearance.emojiCatalog.count % 6, 0)
+        XCTAssertEqual(Set(CollectionAppearance.emojiCatalog).count,
+                       CollectionAppearance.emojiCatalog.count,
+                       "the emoji catalog has a duplicate")
+    }
+
+    /// Grapheme CLUSTERS, not scalars: a ZWJ family, a skin-tone modifier and a
+    /// flag are each one user-perceived character even though each is several
+    /// scalars. Counting scalars would reject all three.
+    func testIsValidEmojiAcceptsMultiScalarClusters() {
+        XCTAssertTrue(CollectionAppearance.isValidEmoji("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}"))
+        XCTAssertTrue(CollectionAppearance.isValidEmoji("\u{1F44B}\u{1F3FD}"))
+        XCTAssertTrue(CollectionAppearance.isValidEmoji("\u{1F1EB}\u{1F1F7}"))
+    }
+
+    func testIsValidEmojiRejectsEmptyMultipleAndASCII() {
+        XCTAssertFalse(CollectionAppearance.isValidEmoji(""))
+        XCTAssertFalse(CollectionAppearance.isValidEmoji("\u{1F3A8}\u{1F4F7}"))
+        XCTAssertFalse(CollectionAppearance.isValidEmoji("a"))
+        XCTAssertFalse(CollectionAppearance.isValidEmoji("ab"))
+    }
+
+    func testResolveRejectsAMalformedEmojiPayload() {
+        XCTAssertEqual(CollectionAppearance.resolve("emoji:", default: stack), .symbol(stack))
+        XCTAssertEqual(CollectionAppearance.resolve("emoji:ab", default: stack), .symbol(stack))
+    }
+
+    /// An emoji value must NOT read as a valid SF Symbol name. That's what makes
+    /// an older build (which only knows `resolvedIcon`) fall back to the default
+    /// glyph instead of rendering a blank.
+    func testEncodedEmojiIsNotAValidSymbolName() {
+        let raw = CollectionAppearance.encodeEmoji("\u{1F3A8}")
+        XCTAssertFalse(CollectionAppearance.isValidSymbol(raw))
+        XCTAssertEqual(CollectionAppearance.resolvedIcon(raw), CollectionAppearance.defaultIcon)
+    }
+
+    /// The default passed in is honoured, not hard-coded — a smart collection
+    /// falls back to the funnel, not the stack.
+    func testResolveHonoursTheCallersDefault() {
+        let smart = CollectionAppearance.smartDefaultIcon
+        XCTAssertEqual(CollectionAppearance.resolve(nil, default: smart), .symbol(smart))
+        XCTAssertEqual(CollectionAppearance.resolve("emoji:zz", default: smart), .symbol(smart))
+    }
 }

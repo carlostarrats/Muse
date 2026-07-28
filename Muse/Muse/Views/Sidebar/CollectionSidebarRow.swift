@@ -51,11 +51,14 @@ struct CollectionSidebarRow: View {
     private var id: String { loaded.collection.id }
     private var isSmart: Bool { loaded.collection.smart_rules != nil }
 
-    /// A user-chosen icon (v10) always wins; otherwise a smart collection shows
-    /// the rule/funnel glyph and everything else shows the classic stack.
-    private var rowIcon: String {
-        if let icon = loaded.collection.icon { return CollectionAppearance.resolvedIcon(icon) }
-        return isSmart ? CollectionAppearance.smartDefaultIcon : CollectionAppearance.defaultIcon
+    /// A user-chosen icon (v10) always wins — an SF Symbol OR an emoji;
+    /// otherwise a smart collection shows the rule/funnel glyph and everything
+    /// else shows the classic stack.
+    private var rowIcon: CollectionAppearance.Icon {
+        CollectionAppearance.resolve(
+            loaded.collection.icon,
+            default: isSmart ? CollectionAppearance.smartDefaultIcon
+                             : CollectionAppearance.defaultIcon)
     }
 
     private var isSelected: Bool {
@@ -83,10 +86,7 @@ struct CollectionSidebarRow: View {
                 // paints the ICON ONLY — name + selection stay standard —
                 // and holds even while selected, so the row keeps its
                 // identity color.
-                Image(systemName: rowIcon)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(iconStyle)
-                    .frame(width: 18)
+                CollectionIconView(icon: rowIcon, tint: iconStyle)
                     .padding(.leading, SidebarView.chevronToIconGap)
 
                 Text(loaded.collection.name)
