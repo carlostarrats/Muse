@@ -445,3 +445,16 @@ MuseShareExtension/                (separate app-extension target) "Send to Muse
                                    extension; copies dropped files into the single iCloud folder, picked
                                    up by the existing FolderWatcher
 ```
+
+
+### Components added 2026-07-28 (`feat/next-140`, analysis performance)
+
+- `Components/AnalyzeProgress.swift` — completion-count accounting for the now-concurrent
+  analyze pass (index-derived progress jumps backwards when completion order ≠ index order).
+- `Components/ReclusterGate.swift` — whether a finished pass needs to rebuild collections
+  (clustering scales with library size, not pass size).
+- `Components/DecodePermit.swift` — how much of the thumbnail gate's budget one image
+  consumes, weighted by declared pixel count.
+- `Intelligence/Core/VectorMath.swift` — gains a batch similarity API
+  (`normalizedMatrix` + `forEachPairAbove`, tiled `vDSP_mmul`) backing `HybridClusterer`.
+  `cosine` is unchanged and still used by `SemanticSearch`.

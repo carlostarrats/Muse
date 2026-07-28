@@ -5924,3 +5924,96 @@ Cut the **1.4** release and relicensed. Concretely:
   collections) shipped in this build — they'd merged to `main` after the `v1.3.9`
   tag. Release notes: `docs/release-notes-1.4.md`. README download links bumped to
   `Muse-1.4.dmg`.
+
+---
+
+## 2026-07-28 — `feat/next-140`: analysis performance
+
+**Trigger.** A user reported Muse hanging while analyzing TIFFs from LaserSoft
+SilverFast (scanner output), noting the files "are not that huge" and that Muse
+had handled TIFFs fine before. Asked whether anything was slowing large
+file / TIFF / RAW analysis, and whether it could be made much faster.
+
+**The finding.** Not TIFF-specific, and not a regression from 1.4 — nothing in
+that release touched decoding or analysis. `VisionServices.loadCGImage` had
+always decoded at FULL resolution (`NSImage(contentsOf:)`) and handed that raster
+to five concurrent Vision requests, against a strictly serial analyze loop. Large
+scans were simply the first case big enough to make it obvious.
+
+Baseline, measured with a standalone harness that transcribes the real code path
+(`scratchpad/perf/Bench.swift`) over synthetic 16-bit uncompressed scan TIFFs
+generated from a real 24 MP photo, plus the seven RAW files in `~/Desktop/Raw Files`:
+
+| Fixture | Before | After | Peak memory |
+|---|---|---|---|
+| `scan_115mp.tif` (9600×12000, 659 MB) | **111,147 ms** | 620 ms | +1,077 MB → +105 MB |
+| `scan_65mp.tif` | 36,790 ms | 408 ms | |
+| `scan_20mp.tif` | 3,901 ms | 201 ms | |
+| `scan_document.tif` | 7,975 ms | 601 ms | 918/918 OCR chars |
+
+111 seconds for ONE file, times a serial loop, is the reported hang exactly.
+
+**The initial diagnosis was wrong, and measuring corrected it.** The hypothesis
+was "OCR dominates; the other four requests downsample internally so full
+resolution is merely wasted." Per-request timings on the 115 MP fixture:
+classify 21,436 ms, `CIAreaAverage` 20,132 ms, OCR 19,827 ms, faces 11,878 ms,
+feature print **55 ms**. Only feature print downsamples internally. So bounding
+the decode was the dominant fix and OCR handling was secondary — the reverse of
+the original ranking.
+
+**Two designs were rejected, one of them after being built.**
+
+*OCR probe (built, then disproved).* Plan was `.fast` OCR on a ~1024px raster,
+escalating to `.accurate` on a hit. A document-scan fixture was built to test it
+and **it failed**: 0 characters found on a 5100×6600 document the current path
+reads 918 from, because at 1024px the body text is ~9px tall. A resolution sweep
+then showed `.accurate` at 2048 already matches full resolution exactly
+(918/918) at 95 ms vs 1,699 ms, and at 4096 costs only 35 ms on a 115 MP photo.
+So the probe was deleted before shipping: bounding the decode makes OCR cheap
+enough that no special-casing is warranted. A format blacklist was rejected
+earlier for a different reason — SilverFast is scanner software, and scanning
+documents produces byte-identical TIFFs to scanning photos.
+
+*Incremental clustering (rejected on design).* Centroid assignment is a different
+algorithm — no retroactive merge/split, order-dependent — and its failure mode is
+silent quality drift on a user-visible feature. Kept the exact algorithm and made
+it fast instead.
+
+**Bugs found along the way.**
+
+- **RAW `dominant_color` was wrong.** `dominantColor` rendered with colour
+  management disabled, and RAW decodes as ITU-R 2100 PQ. Verified against an
+  independent CoreGraphics-only reference: the CR2 read `#4a3c44` against a
+  `#6a545a` reference (off-by-78). Most of that was fixed by the bounded decode
+  itself (P3/sRGB instead of PQ); pinning sRGB removed the remainder (off-by-1)
+  and made correctness structural rather than dependent on which space ImageIO
+  picks per format.
+- **`.medium` interpolation aliased the palette.** Reusing the 4096px raster is
+  up to a 128x reduction; `.medium` point-samples. Mean per-pixel error vs
+  ImageIO's 32px thumbnail: `.medium` 26–43, `.high` 2.6–12.6.
+- **`DecodePermit.cost` crashed on overflow.** The usual ceiling-division idiom
+  traps near `Int.max`, and the value comes from an image header. Caught by its
+  own guard test — but the trap killed the test HOST, so the run reported
+  "0 failures" while silently executing 7 of 9 tests. The count mismatch is what
+  exposed it. Rewritten as divide-then-adjust.
+
+**Known limitations, documented not fixed** (pre-existing, unrelated to
+performance): `RAW_FUJI_E900.RAF` cannot be decoded by ImageIO at all (header
+reports −1×−1) so it is silently never analyzed; `RAW_MAMIYA_ZD.MEF` opens as
+`public.tiff` at 144×192 because macOS has no Mamiya codec, so Muse analyzes the
+embedded preview rather than the photo. Both are layer 2 of the three-layer RAW
+model (decode = Apple's codec) and not fixable in Muse.
+
+**Also checked and found NOT to be a problem:** the concern that
+`withinDecodeBudget` reads properties at index 0 and might be measuring an
+embedded preview for RAW. Probed every container directly — all report one image
+at index 0 with true full dimensions and `GetPrimaryImageIndex == 0`. The guard
+is sound.
+
+**Deliberately cut:** the spec's C7 analyze-side write batching. After the decode
+fixes, per-file cost is dominated by decode + Vision, against which two small
+transactions are noise; batching would complicate the mid-pass content-hash guard
+for no measurable gain.
+
+Spec: `docs/superpowers/specs/2026-07-28-analysis-performance-design.md`
+Plan: `docs/superpowers/plans/2026-07-28-analysis-performance.md`
