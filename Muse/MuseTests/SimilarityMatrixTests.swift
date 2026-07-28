@@ -185,3 +185,43 @@ final class SimilarityMatrixTests: XCTestCase {
         XCTAssertEqual(clusters.first?.memberIDs.count, 8)
     }
 }
+
+// MARK: - Mixed embedding dimensions
+
+extension SimilarityMatrixTests {
+
+    /// A library can hold embeddings of two different lengths — a macOS
+    /// feature-print revision changes the element count, and rows written
+    /// before the upgrade keep the old one.
+    ///
+    /// The clusterer packs one matrix at a single dimension, so anything of a
+    /// different length becomes a zero row and never unions. That matches the
+    /// old scalar path (`VectorMath.cosine` returns 0 on a length mismatch), but
+    /// only if the chosen dimension is the MAJORITY one. Taking it from
+    /// `usable[0]` meant a single stale vector at index 0 zeroed everything
+    /// else and silently produced no clusters at all.
+    func testOneOddLengthVectorFirstDoesNotCollapseClustering() {
+        let dim = 64
+        var items: [ClusterItem] = []
+        // The odd one out, deliberately FIRST.
+        items.append(ClusterItem(id: "odd", textVector: [Float](repeating: 0.5, count: dim / 2), featurePrint: nil))
+        // Two well-separated groups at the real dimension, each big enough to
+        // survive minClusterSize.
+        for g in 0..<2 {
+            for k in 0..<6 {
+                var v = [Float](repeating: 0, count: dim)
+                v[g] = 1
+                v[10 + k] = 0.05          // tiny jitter, stays far above 0.62
+                items.append(ClusterItem(id: "g\(g)-\(k)", textVector: v, featurePrint: nil))
+            }
+        }
+        let clusters = HybridClusterer().cluster(items)
+        XCTAssertFalse(clusters.isEmpty,
+                       "a single odd-length vector must not zero out the library")
+        let clustered = Set(clusters.flatMap { $0.memberIDs })
+        XCTAssertFalse(clustered.contains("odd"),
+                       "a vector from a different embedding space must not join a cluster")
+        XCTAssertGreaterThanOrEqual(clustered.count, 12,
+                                    "both majority-dimension groups should cluster")
+    }
+}

@@ -458,3 +458,12 @@ MuseShareExtension/                (separate app-extension target) "Send to Muse
 - `Intelligence/Core/VectorMath.swift` — gains a batch similarity API
   (`normalizedMatrix` + `forEachPairAbove`, tiled `vDSP_mmul`) backing `HybridClusterer`.
   `cosine` is unchanged and still used by `SemanticSearch`.
+- `Components/WorkProgress.swift` — folds every background phase (index / analyze /
+  organize / thumbnails) into ONE monotonic status-pill reading that completes to 100%
+  before dismissing, instead of a four-way label chain that restarted at zero on each
+  handoff.
+- `Components/ImageHeaderSizeCache.swift` — an image's true pixel dimensions, read from
+  the header once and remembered in a table that never evicts. Warmed off-main by the
+  thumbnail pass; read synchronously (no I/O) by the hero flight, which needs the file's
+  real aspect on its first frame, and by `VisionServices.analyze` so `files.width/height`
+  record the file rather than the bounded analysis raster.

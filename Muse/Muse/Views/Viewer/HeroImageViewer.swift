@@ -36,9 +36,6 @@ struct HeroImageViewer: View {
     /// once the toast dismisses.
     @State private var lingering = false
     @State private var scrollMonitor: Any?
-    /// Starts false and flips on appear: the backdrop fades in over the grid
-    /// (prototype: 0.45s ease) while the already-opaque stage flies.
-    @State private var backdropVisible = false
     /// Palette computed on open when the DB has none (file not yet analyzed).
     /// The prototype always tints the backdrop and shows color swatches —
     /// that can't wait for an explicit Analyze run.
@@ -111,17 +108,18 @@ struct HeroImageViewer: View {
         }
         .onAppear {
             installScrollMonitor()
-            // Show the wash immediately.
+            // The wash is at full strength from frame one — there is no
+            // fade-in state to set here any more.
             //
-            // This used to wait (up to 0.2s) for the tint to resolve, on the
+            // Opening used to wait (up to 0.2s) for the tint to resolve, on the
             // theory that fading in neutral and then morphing was the reported
-            // open flicker. Instrumentation later disproved that — the backdrop's
+            // open flicker. Instrumentation disproved that — the backdrop's
             // first render already carries the final tint — and A/B testing
-            // showed the real cause was animating opacity on `.ultraThinMaterial`.
-            // So the wait bought nothing and only delayed the open. The tint
-            // still arrives within ~50ms (a local SQLite read) and fades in on
-            // its own; the material is now at full strength from frame one.
-            backdropVisible = true
+            // showed the real cause was animating opacity on `.ultraThinMaterial`,
+            // which re-composites the blur every frame. So the wait bought
+            // nothing and only delayed the open, and the opacity fade-in was
+            // removed outright (ViewerBackdrop now animates only its tint, and
+            // its `closing` flag drives the one fade that remains).
             withAnimation(.easeOut(duration: 0.4).delay(0.15)) { chromeVisible = true }
         }
         .onDisappear {
@@ -367,7 +365,6 @@ struct HeroImageViewer: View {
         // satisfies "closing with Esc leaves nothing selected."
         appState.clearSelection()
         withAnimation(.easeOut(duration: 0.12)) { chromeVisible = false }
-        backdropVisible = false   // fades out during the close flight
         // Bring the toolbar back now so it returns with the flight (the "never
         // gone" feel) rather than popping in after. The Escape path sets the
         // same flag up front (in ContentView) so both close paths return the nav
@@ -449,7 +446,6 @@ struct HeroImageViewer: View {
             }
             appState.viewerClosing = false
             appState.viewerDismissing = false
-            backdropVisible = false
             appState.selectedFile = nil
             // Drop the grid selection too: it pointed at the just-trashed file.
             // Without this the stale path survives in `selectedFiles`, so an

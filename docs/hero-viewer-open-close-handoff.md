@@ -1,113 +1,121 @@
-# Hero viewer open/close polish — handoff
+# Hero viewer open/close — investigation record
 
 **Date:** 2026-07-28
-**Branch:** `feat/next-140` (analysis performance; all perf work committed + verified)
-**Status:** three OPEN cosmetic issues in the hero viewer, owner-reported, not yet fixed.
+**Branch:** `feat/next-140`
+**Status:** RESOLVED. All five reported issues found and fixed. Kept because the
+*method* is the reusable part, and because four of the five root causes are
+counter-intuitive enough to be re-introduced by a well-meaning edit.
 
-These are **pre-existing** and unrelated to the performance work. They surfaced
-because the analysis fix (111 s → 0.6 s) left the viewer's wash exposed long
-enough to actually look at it.
+The load-bearing rules extracted from this are in CLAUDE.md's durable
+constraints; the narrative is in `docs/session-log.md`.
 
 ---
 
 ## Hard-won method note — read before touching this view
 
-Six attempts were spent on the open-flicker by READING CODE and reasoning. All
-six were wrong. Two A/B substitutions found it in two builds.
+Across the whole investigation, **every fix found by reading code and reasoning
+was wrong, and every fix found by instrumenting the running app was right.**
+
+- Open flicker: six reasoned attempts, all wrong. Two A/B substitutions found it
+  in two builds.
+- Close stall: three reasoned attempts, all wrong. One `sample` profile found it
+  immediately — a single property setter holding the main thread for 282 ms.
+- Close→reopen→close: three more reasoned attempts, all wrong, including two
+  plausible-sounding animation theories. A state trace showed the close sequence
+  was *clean*, which eliminated the entire category and pointed straight at a
+  geometry write instead.
 
 **For anything in this view: instrument or substitute. Do not reason.**
 
-What worked:
-- `BackdropTrace`-style timeline logging (ms-stamped state transitions written to
-  a file). NOTE: Muse is **sandboxed** — a hardcoded `/tmp` path is silently
-  denied. Use `NSTemporaryDirectory()` and read from
-  `~/Library/Containers/com.tarrats.Muse/Data/tmp/`.
-- Env-var A/B switches (`MUSE_NO_MATERIAL`, `MUSE_NO_PARTING`) launched via
-  `open -a <app> --env KEY=1`, to substitute one component at a time.
+What works:
+- **`sample <pid> <seconds> <ms> -file out.txt`** on the running app, then
+  aggregate leaf frames per symbol. This is what surfaced
+  `AppState.viewerDismissing.setter` at 282 ms — a result no amount of reading
+  would have produced.
+- **A timeline trace** — ms-stamped state transitions appended to a file. NOTE:
+  Muse is **sandboxed**, so a hardcoded `/tmp` path is silently denied. Write to
+  `NSTemporaryDirectory()` and read from
+  `~/Library/Containers/com.tarrats.Muse/Data/tmp/`. NSLog is NOT a substitute —
+  its output did not reach `log stream` here at all.
+- **Env-var A/B switches** (`MUSE_NO_MATERIAL`, `MUSE_NO_PARTING`) launched via
+  `open -a <app> --env KEY=1`, substituting one component at a time.
 
-What didn't: reading the code and forming a theory. Five separate plausible
-theories, all wrong.
-
----
-
-## OPEN ISSUE 1 — close pauses just before finishing
-
-**Report:** "it gets small, and then right before it gets fully finished,
-there's a pause." Initially described as random; later as consistently
-just-before-the-end.
-
-**Not yet investigated.** Interacting timings in the close path, all tuned and
-all documented in CLAUDE.md's durable constraints:
-- backdrop fade-OUT is 0.3s, deliberately UNDER the 0.36s subtree unmount
-- the return flight (`HeroStage.close()`), which lands on the tile's DRAWN-IMAGE
-  rect via `ViewerGeometry.fitWithin`, not the raw tile rect
-- `PartingField` converge (easeOut — an easeInOut read as stop-start jitter)
-- `ToolbarFade` re-assert + the toolbar recolour
-- `startClose()` owns the whole close; Escape must ONLY set `viewerClosing`
-
-**Suggested approach:** trace-stamp every close milestone (startClose,
-backdropVisible=false, flight start/end, onCloseFinished, finishClose,
-unmount) and find the gap. A pause "right before fully finished" smells like
-something awaited between flight-end and unmount.
-
-## OPEN ISSUE 2 — open motion curve differs landscape vs portrait
-
-**Report:** "the landscape images in the open, the motion curve is different...
-opens faster... not nearly as nice as the curve for a portrait."
-
-**An earlier explanation that this was purely file SIZE (the only portrait
-fixture is also the 115 MP one) is probably WRONG** — the owner is describing the
-CURVE, not the duration.
-
-**Real candidate mechanism:** the flight starts/lands on the DRAWN-IMAGE rect
-(`ViewerGeometry.fitWithin(image.size, sourceFrame)`), not the tile rect. In a
-fixed-aspect grid layout a landscape image letterboxes differently from a
-portrait one inside the same tile, so flight distance and scale ratio genuinely
-differ by aspect. Same duration + different distance = different apparent curve.
-
-**To verify:** generate a MATCHED pair (same pixel count, one portrait one
-landscape) and compare. If the curves still differ, it's the fitWithin geometry,
-not size.
-
-## OPEN ISSUE 3 — right-hand info column flickers during open
-
-**Report:** "when the image is opening, I see the information on the right hand
-side, there's a kind of flickerish thing happening."
-
-**NEW — appeared/was noticed after the backdrop work.** Not yet investigated.
-
-Candidates (unverified):
-- `ViewerInfoColumn` re-renders as `details` (~50ms), `metadata`, and
-  `naturalSize` each land separately, resizing the column each time.
-- `paletteResolved` gates placeholder swatches specifically so the actions row
-  mounts in its final position — if that's mis-timing now, the row shifts.
-- `chromeVisible` fades at 0.4s with a 0.15s delay, overlapping those state
-  landings.
-
-**Check first whether this predates `feat/next-140`** (stash the branch, open a
-large image on `main`). If it predates it, it's a separate bug; if not, suspect
-the `loadDetails` reordering — quickPalette is now lazy (DB-miss only) rather
-than started concurrently.
+A note on cost: a profile is only useful if the bug happens *during* the capture
+window. Two captures were wasted on windows where the app sat idle.
 
 ---
 
-## What IS done, committed and verified on this branch
+## The five causes
 
-Performance (the branch's actual job), all measured not assumed:
-- Analysis **111,147 ms → 620 ms** on a 115 MP scan; peak memory +1,077 MB → +105 MB.
-  Output identical — same labels, feature print, dominant colour, and 918/918 OCR
-  chars on a document scan.
-- RAW `dominant_color` was WRONG (unmanaged read of ITU-R 2100 PQ). Fixed; RAW
-  colour values shift on re-analysis, which is the fix landing.
-- Clustering: exact same algorithm, tiled `vDSP_mmul`. 10x/62x/96x at n=500/2000/5000.
-  Differs from the scalar reference only for pairs within ~3e-7 of the threshold.
-- Analyze loop 3-wide; recluster gated on embeddings written.
-- **A regression I introduced and reverted:** weighting thumbnail permits by size
-  made folder-open 2.6x SLOWER (592 ms → 1562 ms). The memory pressure it
-  defended against was hypothesised, never measured.
-- Unified progress pill (`WorkProgress`), monotonic, completes to 100% before
-  dismissing. **Finish-to-100% is NOT yet owner-verified** — needs a fresh folder.
-- Hero-open flicker: TWO independent causes, both fixed (see ViewerBackdrop docs).
+### 1. Open flicker — TWO independent causes
+
+- Animating **opacity on `.ultraThinMaterial`** re-composites the blur every
+  frame. Fixed by never fading the material in; only its tint animates.
+- The tint's **opacity changed at the same time as its colour**
+  (`0.45 → 0.78` as the palette resolved). Fixed by holding tint opacity
+  constant.
+
+Both live in `ViewerBackdrop`, which now takes a real `closing` flag rather than
+a "not yet visible" one.
+
+### 2. Flight endpoint was the raw tile rect, not the drawn-image rect
+
+`sourceRect` fell back to `sourceFrame.size` when `image` was still nil — and
+`fitWithin(frame.size, frame)` returns *the frame itself*. So the open flight
+departed from the raw tile rect, violating the 2026-07-07 durable constraint.
+
+A landscape image letterboxes heavily inside a squarer tile, so its true drawn
+rect is far shorter than the tile; starting from the tile rect made the flight
+too short — same duration, less distance, so it read as "almost instant" with a
+wrong curve. Portrait letterboxes less, so it looked nearer correct. **This is
+aspect geometry, not file size** — an earlier explanation blaming the 115 MP
+fixture's size was wrong (that fixture was also the only portrait one, a real
+confound).
+
+Fixed by deriving the endpoint from the file's TRUE pixel dimensions
+(`ImageHeaderSizeCache`), so it is correct from the first frame and identical on
+open and close.
+
+### 3. Filesystem I/O from a SwiftUI computed property
+
+The header read added for (2) was called from `sourceRect` — a computed property
+re-evaluated on every body pass, i.e. every frame of an animating flight — and
+memoized in an `NSCache`, which evicts under exactly the memory pressure a
+659 MB image open creates. Measured 17.7 ms per read on `bigscan_115mp.tif`.
+
+Fixed by resolving once into view state, from a never-evicting table warmed
+off-main by the thumbnail pass.
+
+### 4. A 282 ms main-thread stall mid-close
+
+`appState.viewerDismissing = true` was wrapped in `withAnimation`. The flag is
+`@Published` on the monolithic `AppState`, so the write re-evaluates the whole
+shell — sidebar rows, every mounted tile, the tag chips — and inside a global
+animation transaction SwiftUI builds animated transitions for all of it
+synchronously.
+
+Symptom: the image froze part-shrunk with the backdrop still up, then jumped. On
+the largest files the block swallowed the entire flight, which read as "it closes
+instantly with no animation."
+
+Nothing needed the transaction: the toolbar returns via `ToolbarFade` (an AppKit
+alpha fade driven by an `.onChange`) and the tile reveal is a value-scoped
+`.animation(_:value:)`.
+
+### 5. Close → reopen → close
+
+`loadFullRes()` ends with `withAnimation { displayRect = fitRect }` — the write
+that flies the image out to full screen once the sharp decode lands. It had **no
+`isClosing` guard.** A 115 MP TIFF decodes in ~600 ms and an open-then-Escape
+closes at ~450–600 ms, so on big scans the decode routinely arrived *inside* the
+close flight, animated the shrinking image back out, and then the unmount snapped
+it away. Small files always decoded before a close could start, which is why only
+the scans showed it.
+
+Two wrong theories were tried first (an animation reversal, then the mid-flight
+retarget). The state trace ruled both out by showing a clean single close.
+
+---
 
 ## Fixture generators
 
@@ -117,58 +125,14 @@ Performance (the branch's actual job), all measured not assumed:
 Fixture folders live on the Desktop. Files must have UNIQUE pixel content or they
 dedupe onto one content-hash row and won't re-analyze.
 
----
+**For flight-geometry work specifically:** generate a MATCHED pair — same pixel
+count, one portrait and one landscape — in a fixed-aspect grid layout. The
+round2/round3 fixtures are not suitable: their only portrait file is also the
+biggest, which is what caused the size-vs-aspect confusion in the first place.
 
-# FOUND: root cause for issues 1 and 2 (2026-07-28, later)
+## Still open (cosmetic, low priority)
 
-Both the landscape-open weirdness AND the close "lands ~4px off then shifts"
-come from the SAME place: `HeroStage.sourceRect` is wrong at the moment the
-flight needs it.
-
-```swift
-private var sourceRect: CGRect {
-    ViewerGeometry.fitWithin(imageSize: image?.size ?? sourceFrame.size,
-                             frame: sourceFrame)
-}
-```
-
-**The bug:** when the OPEN flight starts, `image` is still nil — it hasn't
-decoded. So this falls back to `sourceFrame.size`, and
-`fitWithin(imageSize: frame.size, frame: frame)` returns **the frame itself**.
-The flight therefore starts from the RAW TILE RECT — precisely what the
-2026-07-07 durable constraint says it must never do.
-
-Consequences, both owner-reported:
-- **Landscape opens "almost instant" / wrong curve.** A landscape image
-  letterboxes heavily inside a squarer tile, so its true drawn rect is much
-  shorter than the tile. Starting from the tile rect instead means a much
-  shorter flight — same duration, less distance, so it reads as too fast and
-  the curve feels wrong. Portrait letterboxes less in the same tile, so its
-  flight is nearer correct. This is GEOMETRY, not file size — an earlier
-  explanation blaming the 115 MP fixture's size was wrong.
-- **Close lands a few px outside the container, then shifts.** On close `image`
-  IS loaded, so `sourceRect` uses the DOWNSAMPLED hero image's size. Aspect is
-  near-identical but not exact (9600x12000 -> 3277x4096 is 0.80005 vs 0.8), and
-  more importantly the TILE draws its own grid thumbnail, which may not match
-  `fitWithin(heroImage.size, tileFrame)` exactly. A small endpoint mismatch =
-  lands slightly off, then snaps when the real tile reveals.
-
-**Suggested fix:** don't derive the flight endpoint from the decoded hero image
-at all. Use the image's TRUE pixel dimensions, known independently of decode:
-- `ViewerFileDetails.pixelSize` (already loaded from the DB at ~50ms), or
-- a header-only read (`CGImageSourceCopyPropertiesAtIndex`, no decode).
-
-Pass that aspect into `HeroStage` so `sourceRect` is correct from the FIRST
-frame and identical on open and close. That fixes both symptoms with one change
-and removes the nil-fallback entirely.
-
-**Verify with:** a MATCHED fixture pair — same pixel count, one portrait one
-landscape — in a fixed-aspect grid layout. Both flights should look identical,
-and the close should land with no shift. Do not verify by eye on the existing
-round2/round3 fixtures: their only portrait file is also the biggest, which is
-what caused the size-vs-aspect confusion in the first place.
-
-**Note the tile side too:** `TileView` letterboxes with `.fit`. Whatever rect it
-actually draws into is the ground truth the flight must match. Consider having
-the tile publish its drawn-image rect rather than having HeroStage re-derive it —
-that removes the possibility of the two disagreeing at all.
+- The right-hand info column can settle in steps during open, as `details`
+  (~50 ms), `metadata`, and `naturalSize` land separately. `loadDetails()` now
+  runs all three concurrently, which improved it; whether any visible stepping
+  remains has not been re-verified since the stall fixes landed.

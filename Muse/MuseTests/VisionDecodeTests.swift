@@ -64,3 +64,38 @@ final class VisionDecodeTests: XCTestCase {
         XCTAssertEqual(VisionServices.analysisMaxPixel, 4096)
     }
 }
+
+// MARK: - Reported dimensions
+
+extension VisionDecodeTests {
+
+    /// `files.width/height` must be the file's TRUE pixel size, not the size of
+    /// the bounded raster Vision analysed. Those columns feed the viewer's Info
+    /// card, so reading them off the downsampled decode silently mis-reported
+    /// every image above the 4096px analysis bound.
+    func testAnalyzeReportsTrueDimensionsNotTheBoundedRaster() async throws {
+        let w = VisionServices.analysisMaxPixel * 2   // comfortably over the bound
+        let h = VisionServices.analysisMaxPixel / 2   // and under it on the short edge
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("vision-dims-\(w)x\(h).png")
+        try? FileManager.default.removeItem(at: url)
+        let cs = CGColorSpace(name: CGColorSpace.sRGB)!
+        let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8,
+                            bytesPerRow: 0, space: cs,
+                            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        ctx.setFillColor(CGColor(srgbRed: 0.2, green: 0.5, blue: 0.8, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+        let dest = CGImageDestinationCreateWithURL(url as CFURL, "public.png" as CFString, 1, nil)!
+        CGImageDestinationAddImage(dest, ctx.makeImage()!, nil)
+        XCTAssertTrue(CGImageDestinationFinalize(dest))
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let out = await VisionServices.analyze(url: url)
+        XCTAssertEqual(out.width, w, "must report the file's real width")
+        XCTAssertEqual(out.height, h, "must report the file's real height")
+        // And the raster it actually analysed is still bounded.
+        XCTAssertEqual(out.decodedImage.map { max($0.width, $0.height) },
+                       VisionServices.analysisMaxPixel,
+                       "the analysed raster stays bounded regardless")
+    }
+}

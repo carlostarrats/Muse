@@ -115,17 +115,28 @@ struct HeroStage: View {
     /// read only as state from there on.
     @State private var headerSize: CGSize?
 
+    /// Which URL `headerSize` belongs to. A `@State` box, deliberately: an
+    /// escaping closure captures a FROZEN copy of this struct, so `self.url`
+    /// inside it still reads the file that was open when the read started —
+    /// checking it would be vacuous. `@State` reads through a shared box, so
+    /// this one reflects the CURRENT file and can actually reject a stale
+    /// result (arrow-key flip A→B while A's header read is still in flight
+    /// would otherwise give B the aspect of A, and the close flight would land
+    /// on the wrong rect).
+    @State private var headerSizeURL: URL?
+
     /// Seed `headerSize`. Takes the warm value synchronously when there is one;
     /// otherwise reads the header off-main and lands it a moment later — the
     /// flight starts from the decoded/tile aspect in that rare case rather than
     /// blocking on I/O.
     private func resolveHeaderSize() {
-        if let warm = ImageHeaderSizeCache.cached(url) { headerSize = warm; return }
         let u = url
+        headerSizeURL = u
+        if let warm = ImageHeaderSizeCache.cached(u) { headerSize = warm; return }
         Task.detached(priority: .userInitiated) {
             guard let size = ImageHeaderSizeCache.resolve(u) else { return }
             await MainActor.run {
-                guard url == u else { return }
+                guard headerSizeURL == u else { return }
                 headerSize = size
             }
         }
@@ -202,7 +213,14 @@ struct HeroStage: View {
             // A slightly-wrong landing spot is invisible under the tile reveal;
             // a reversal is not. So take the correction only when it keeps the
             // flight moving inward.
-            guard retarget.width <= displayRect.width + 1 else { return }
+            //
+            // The one exception is the degenerate target: when the tile had no
+            // frame at close start, close() aims at a zero-size point in the
+            // viewport centre. There is no inward progress to protect there, and
+            // landing on the tile that has since appeared beats vanishing into
+            // the middle of the screen — which is what this retarget is for.
+            guard displayRect.width <= 1 || retarget.width <= displayRect.width + 1
+            else { return }
             didRetarget = true
             withAnimation(.timingCurve(0.3, 1.08, 0.35, 1, duration: 0.22)) {
                 displayRect = retarget

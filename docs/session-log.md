@@ -6017,3 +6017,96 @@ for no measurable gain.
 
 Spec: `docs/superpowers/specs/2026-07-28-analysis-performance-design.md`
 Plan: `docs/superpowers/plans/2026-07-28-analysis-performance.md`
+
+---
+
+## 2026-07-28 (later) — `feat/next-140`: the hero viewer open/close bugs
+
+The performance work made analysis ~100x faster, which left the hero viewer's
+open and close flights exposed long enough to actually look at. Five owner-
+reported issues came out of that. All five are fixed; the full record, including
+the method, is `docs/hero-viewer-open-close-handoff.md`.
+
+**The method is the takeaway.** Every fix arrived at by reading code and
+reasoning was wrong — six attempts on the open flicker, three on the close
+stall, three on the reopen. Every fix found by instrumenting the running app was
+right, usually within one or two builds. `sample <pid>` for main-thread stalls,
+a `NSTemporaryDirectory()` timeline trace for state ordering, env-var A/B
+substitution for compositing questions. Muse is sandboxed, so a `/tmp` trace path
+is silently denied; NSLog output never reached `log stream` here at all.
+
+**1. Open flicker — two independent causes.** Animating opacity on
+`.ultraThinMaterial` re-composites the blur every frame; and the tint's opacity
+changed (0.45 → 0.78) at the same moment as its colour. The material now never
+fades in, and tint opacity is constant. Six earlier attempts — including removing
+a genuinely wasteful duplicate palette decode, and replacing the blur with a flat
+colour (which fixed the flicker but degraded the look and was reverted) — all
+missed it.
+
+**2. The flight departed from the raw tile rect.** `sourceRect` fell back to
+`sourceFrame.size` while `image` was still nil, and `fitWithin(frame.size, frame)`
+returns the frame itself. A landscape image letterboxes hard inside a squarer
+tile, so starting from the tile rect made its flight much too short — same
+duration, less distance — reading as "almost instant" with a wrong curve, while
+portrait looked nearer correct. **That asymmetry is aspect geometry, not file
+size.** An earlier diagnosis blamed the 115 MP fixture's size; that fixture was
+also the only portrait one, a real confound, and the owner was right to push back.
+The endpoint now comes from the file header, so it is correct from frame one and
+identical on open and close.
+
+**3. Filesystem I/O from a SwiftUI computed property — a bug I introduced.** The
+header read for (2) was called from `sourceRect`, which SwiftUI re-evaluates on
+every body pass, and memoized in an `NSCache` — which evicts under exactly the
+memory pressure a 659 MB image open creates. Measured 17.7 ms per read on the
+115 MP fixture, i.e. potentially per frame. Now resolved once into `@State` from
+`ImageHeaderSizeCache`, a table that never evicts and which the thumbnail pass
+warms off-main.
+
+**4. A 282 ms main-thread stall mid-close.** `appState.viewerDismissing = true`
+was wrapped in `withAnimation`. It's `@Published` on the monolithic `AppState`,
+so the write re-evaluates the whole shell, and the animation transaction makes
+SwiftUI build animated transitions for all of it synchronously. `sample` on the
+running app put 282 ms inside that single setter — the image froze part-shrunk
+with the backdrop still up, then jumped, and on the biggest files the block
+swallowed the entire flight ("closes instantly with no animation"). Nothing
+needed the transaction; both consumers animate on their own.
+
+**5. Close → reopen → close.** `loadFullRes()` ends with
+`withAnimation { displayRect = fitRect }` and had no `isClosing` guard. A 115 MP
+TIFF decodes in ~600 ms and an open-then-Escape closes at ~450–600 ms, so on big
+scans the decode landed inside the close flight, flew the shrinking image back
+out to full screen, and the unmount then snapped it away. Only large files could
+show it. Two wrong theories preceded this; the state trace killed both by showing
+the close sequence was clean.
+
+### Review pass — five further issues found and fixed
+
+Reviewing the branch afterwards turned up five real defects, four of them mine:
+
+- **`files.width`/`height` recorded the bounded raster, not the file.** Once the
+  analyze decode became bounded at 4096px, `cgImage.width` stopped being the
+  image's size — a 9600×12000 scan would have reported 4096×5120 in the Info
+  card. Now read from the header.
+- **`HybridClusterer` took its matrix dimension from `usable[0]`.** Vectors of a
+  different length are packed as zero rows and never union — correct, and the old
+  scalar `cosine` behaved the same — but taking the dimension from an arbitrary
+  element made that safety net catastrophic: one stale embedding at index 0 (say,
+  written before a macOS feature-print revision) would zero every other vector and
+  silently collapse the whole library's clustering. Now the majority length.
+  Pinned by a test verified to fail on the old code.
+- **A vacuous staleness guard.** `resolveHeaderSize`'s escaping closure checked
+  `self.url`, but a closure captures a frozen copy of the View struct, so that
+  always compared equal. An arrow-key flip could land file A's aspect on file B.
+  Now keyed on a `@State` URL, which reads through the shared box.
+- **`ThumbnailGate` clamped asymmetrically** — `acquire` to `limit`, `releaseNow`
+  not at all — so a cost above the limit would credit back more than it took.
+  Unreachable today (`DecodePermit` caps at 2 against a limit of 8), but now
+  unreachable by construction.
+- **`ImageHeaderSizeCache` had no bound**, and `backdropVisible` had become
+  write-only dead state.
+
+Localization was re-verified: the large `Localizable.xcstrings` diff is
+reordering only — 0 keys lost, 0 changed, and the one new key ("Preparing your
+files…") is translated.
+
+804 tests green.

@@ -32,6 +32,14 @@ enum ImageHeaderSizeCache {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var sizes: [String: CGSize] = [:]
 
+    /// Entries are ~a path plus two doubles, so this table is small — but it is
+    /// populated for every file the thumbnail pass touches and never evicts, so
+    /// a very large library browsed across a long session would grow it without
+    /// bound. Past the cap the whole table is dropped rather than trimmed: it
+    /// is a pure cache with no authority, it refills off-main as folders are
+    /// browsed, and a full clear is O(1) with no LRU bookkeeping to get wrong.
+    private static let maxEntries = 20_000
+
     private static func key(_ url: URL) -> String { url.standardizedFileURL.path }
 
     /// In-memory lookup only. Never touches the filesystem — safe from a view
@@ -46,7 +54,10 @@ enum ImageHeaderSizeCache {
     static func record(_ url: URL, width: Int, height: Int) {
         guard width > 0, height > 0 else { return }
         let size = CGSize(width: width, height: height)
-        lock.lock(); sizes[key(url)] = size; lock.unlock()
+        lock.lock()
+        if sizes.count >= maxEntries { sizes.removeAll(keepingCapacity: false) }
+        sizes[key(url)] = size
+        lock.unlock()
     }
 
     /// Cached value, else a header read. May do file I/O — call off-main.

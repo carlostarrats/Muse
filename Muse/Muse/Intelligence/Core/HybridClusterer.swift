@@ -39,7 +39,26 @@ final class HybridClusterer: Clusterer {
         // Do NOT swap this for incremental/centroid clustering: that IS a
         // different algorithm (no retroactive merge/split, order-dependent) and
         // its failure mode is silent quality drift.
-        let dimension = usable[0].textVector!.count
+        // The MOST COMMON length, not `usable[0]`'s.
+        //
+        // Vectors whose length differs from the matrix's are packed as zero rows
+        // and so never clear the threshold — which is right (the old scalar
+        // `VectorMath.cosine` also returned 0 for mismatched lengths, so
+        // cross-dimension pairs never unioned before either). But taking the
+        // dimension from an arbitrary element makes that safety net catastrophic
+        // instead of local: a single stale embedding sitting at index 0 — say
+        // one written before a macOS feature-print revision changed the element
+        // count — would zero EVERY other vector and silently collapse the whole
+        // library's clustering to nothing. Picking the majority length keeps the
+        // bulk of the library clustering normally and strands only the genuine
+        // odd ones out, which re-join once they're re-analyzed.
+        var dimensionCounts: [Int: Int] = [:]
+        for it in usable { dimensionCounts[it.textVector!.count, default: 0] += 1 }
+        // Ties broken by the larger dimension, purely so the choice is
+        // deterministic rather than dictionary-order dependent.
+        let dimension = dimensionCounts
+            .max { ($0.value, $0.key) < ($1.value, $1.key) }?.key ?? 0
+        guard dimension > 0 else { return [] }
         let matrix = VectorMath.normalizedMatrix(usable.map { $0.textVector! },
                                                  dimension: dimension)
         VectorMath.forEachPairAbove(threshold: textThreshold, matrix: matrix,

@@ -37,8 +37,16 @@ enum VisionServices {
         var result = VisionResult()
         guard let cgImage = await loadCGImage(url: url) else { return result }
 
-        result.width = cgImage.width
-        result.height = cgImage.height
+        // The image's TRUE pixel dimensions, from the header — NOT the decoded
+        // raster's. Since the analyze decode became bounded (4096px long edge),
+        // `cgImage.width/height` is the downsampled size, and these values are
+        // persisted to `files.width/height` and shown in the viewer's Info card.
+        // Reading them off the raster made a 9600x12000 scan report 4096x5120.
+        // Falls back to the raster only if the header can't be read, which is
+        // the pre-existing behaviour for an undecodable header.
+        let declared = ImageHeaderSizeCache.resolve(url)
+        result.width = declared.map { Int($0.width) } ?? cgImage.width
+        result.height = declared.map { Int($0.height) } ?? cgImage.height
         result.decodedImage = cgImage
 
         async let classify = classify(cgImage: cgImage)

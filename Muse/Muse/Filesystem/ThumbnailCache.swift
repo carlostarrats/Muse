@@ -61,16 +61,19 @@ private actor ThumbnailGate {
     private var nextID: UInt64 = 0
     init(limit: Int) { available = limit; self.limit = limit }
 
+    /// Permits one request may hold, clamped to `1...limit`. A request that
+    /// asked for more than the gate can ever grant would wait forever.
+    /// `limit` is an immutable `let`, so this needs no actor hop.
+    nonisolated func permits(for cost: Int) -> Int { min(max(1, cost), limit) }
+
     /// Acquire a permit, honoring cancellation. Throws `CancellationError` if
     /// the task is cancelled while queued — which is exactly what happens when
     /// a grid tile scrolls off-screen before it reached the front of the line.
     /// That waiter is then removed instead of being served, so the gate spends
     /// its slots on tiles that are STILL visible, not on the hundreds the user
     /// already scrolled past.
-    private func acquire(order: Int, cost: Int) async throws {
-        // Clamp: a request larger than the gate could ever grant would wait
-        // forever.
-        let need = min(max(1, cost), limit)
+    /// `need` is pre-clamped by `withSlot` via `permits(for:)`.
+    private func acquire(order: Int, need: Int) async throws {
         if available >= need { available -= need; return }
         let id = nextID; nextID += 1
         try await withTaskCancellationHandler {
@@ -94,8 +97,8 @@ private actor ThumbnailGate {
     /// The loop is load-bearing: returning a multi-permit release can unblock
     /// SEVERAL single-permit waiters, and serving only one would leak
     /// concurrency on every large-image release until the gate starved.
-    private func releaseNow(cost: Int) {
-        available = min(limit, available + max(1, cost))
+    private func releaseNow(need: Int) {
+        available = min(limit, available + need)
         while let next = waiters.indices
             .filter({ waiters[$0].cost <= available })
             .min(by: { waiters[$0].order < waiters[$1].order }) {
@@ -113,14 +116,21 @@ private actor ThumbnailGate {
         // avoids the already-cancelled-at-entry window in the cancellation
         // handler entirely.
         if Task.isCancelled { return nil }
+        // Clamp ONCE, here, so acquire and release can never disagree. They
+        // used to clamp independently — acquire to `limit`, release not at all —
+        // so a cost above the limit took `limit` permits and credited back
+        // `cost`, over-subscribing the gate by the difference. `DecodePermit`
+        // caps at 2 against a limit of 8, so it was unreachable in practice;
+        // this makes it unreachable by construction for the next caller too.
+        let need = permits(for: cost)
         do {
-            try await acquire(order: order, cost: cost)
+            try await acquire(order: order, need: need)
         } catch {
             return nil   // cancelled while waiting → drop the work entirely
         }
-        if Task.isCancelled { await releaseNow(cost: cost); return nil }
+        if Task.isCancelled { await releaseNow(need: need); return nil }
         let result = await body()
-        await releaseNow(cost: cost)
+        await releaseNow(need: need)
         return result
     }
 }
