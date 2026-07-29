@@ -19,7 +19,6 @@ import AppKit
 struct TagChipsRow: View {
     @EnvironmentObject var appState: AppState
     @State private var hovered: Int? = nil
-    @State private var renameText = ""
     @State private var clearAllHovered = false
 
     /// Top clearance reserved below the floating toolbar when there are no tag
@@ -179,95 +178,15 @@ struct TagChipsRow: View {
         // showing — the "images slide down, then disappear, then the filtered
         // set appears" jag. Committing instantly lets the bar pop in place and
         // the grid swap (already `.identity`, instant) read as one snap.
-        .onChange(of: appState.tagRenameRequest) { _, label in
-            if let label { renameText = label }
-        }
-        .alert("Rename Tag", isPresented: Binding(
-            get: { appState.tagRenameRequest != nil },
-            set: { if !$0 { appState.tagRenameRequest = nil } }
-        )) {
-            TextField("Tag name", text: $renameText)
-            Button("Rename") { commitRename() }
-            Button("Cancel", role: .cancel) { appState.tagRenameRequest = nil }
-        } message: {
-            Text("Renames “\(appState.tagRenameRequest ?? "")” on every image in the library.")
-        }
-        .alert("Delete “\(appState.tagDeleteRequest ?? "")”?", isPresented: Binding(
-            get: { appState.tagDeleteRequest != nil },
-            set: { if !$0 { appState.tagDeleteRequest = nil } }
-        )) {
-            Button("Delete", role: .destructive) { commitDelete() }
-            Button("Cancel", role: .cancel) { appState.tagDeleteRequest = nil }
-        } message: {
-            Text("Removes “\(appState.tagDeleteRequest ?? "")” from the images in this view. Other folders keep their tags. Your images stay on disk.")
-        }
-        .alert("Delete all tags in this view?", isPresented: $appState.deleteAllTagsRequest) {
-            Button("Delete All", role: .destructive) { commitDeleteAllTags() }
-            Button("Cancel", role: .cancel) { appState.deleteAllTagsRequest = false }
-        } message: {
-            Text("This removes every tag on the images in this view — both automatic tags and ones you've added yourself. Tags you added by hand can't be recovered. Your images stay on disk.")
-        }
-        .alert("Regenerate tags in this view?", isPresented: $appState.regenerateTagsRequest) {
-            Button("Regenerate") { commitRegenerateTags() }
-            Button("Cancel", role: .cancel) { appState.regenerateTagsRequest = false }
-        } message: {
-            Text("Looks for images in this view that have no tags and generates tags for them in the background. Images that already have tags are left alone. Only automatic tags are created — tags you added by hand aren't restored.")
-        }
-    }
-
-    private func commitRename() {
-        guard let old = appState.tagRenameRequest else { return }
-        let new = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
-        appState.tagRenameRequest = nil
-        guard !new.isEmpty, new != old else { return }
-        Task { @MainActor in
-            // Only rewrite the filter if the rename actually happened. A refused
-            // rename (a rating glyph on either side) would otherwise leave the
-            // active filter pointing at a label no file carries — an empty grid
-            // under a chip that looks real.
-            guard await TagStore.shared.renameLabel(from: old, to: new) else { return }
-            if appState.activeTagLabels.contains(old) {
-                appState.setActiveTags(
-                    TagSelection.renaming(appState.activeTagLabels, from: old, to: new))
-            }
-            appState.tagsVersion += 1
-        }
-    }
-
-    private func commitDelete() {
-        guard let label = appState.tagDeleteRequest else { return }
-        appState.tagDeleteRequest = nil
-        // Scope the delete to the current view's files (this folder, or this
-        // collection's members) — NOT the whole library. Tags belong to a file
-        // in its folder; deleting here must never touch other folders.
-        let urls = appState.tagSourceFiles.map { $0.url }
-        appState.removeTag(label, fromURLs: urls)
-    }
-
-    private func commitDeleteAllTags() {
-        appState.deleteAllTagsRequest = false
-        // Scope to the visible set — the current folder, or the active
-        // collection's members when viewing a collection — matching the
-        // single-tag delete (commitDelete) and the chips themselves. Using raw
-        // `currentFiles` would wrongly hit the underlying folder while a
-        // collection is on screen.
-        let urls = appState.tagSourceFiles.map { $0.url }
-        Task { @MainActor in
-            await TagStore.shared.deleteAllTags(forURLs: urls)
-            appState.setActiveTag(nil)
-            appState.tagsVersion += 1
-        }
-    }
-
-    private func commitRegenerateTags() {
-        appState.regenerateTagsRequest = false
-        // Same scoping as commitDeleteAllTags: the visible set (folder or active
-        // collection), not the underlying folder.
-        let urls = appState.tagSourceFiles.map { $0.url }
-        Task { @MainActor in
-            await AnalyzePipeline.shared.regenerateTagless(in: urls)
-            appState.tagsVersion += 1
-        }
+        //
+        // The three confirmations and the rename prompt are shell-presented
+        // cards now, not `.alert`s (see ModalMessageCard). A chip is ~60pt
+        // wide, so it can't present one itself. They are raised from the SHELL
+        // rather than here on purpose: the menu bar can set these request flags
+        // while this row isn't mounted (it's absent on the Collections page),
+        // and a flag with no live consumer would stick — the next request would
+        // be the same value, fire no change, and the command would be dead for
+        // the rest of the session. See TagCommandAlerts in ContentView.
     }
 
     private func hover(_ index: Int, _ inside: Bool) {

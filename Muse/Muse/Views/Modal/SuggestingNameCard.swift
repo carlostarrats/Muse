@@ -115,10 +115,8 @@ struct SuggestingNameCard: View {
 
             HStack {
                 Spacer()
-                Button("Cancel") { onCancel() }
-                    .keyboardShortcut(.cancelAction)
-                Button(confirmTitle) { commit() }
-                    .keyboardShortcut(.defaultAction)
+                ModalButton(title: String(localized: "Cancel"), isCancel: true) { onCancel() }
+                ModalButton(title: confirmTitle, kind: .prominent, isDefault: true) { commit() }
                     .disabled(trimmed.isEmpty && highlighted == nil)
             }
             .padding(.top, 20)

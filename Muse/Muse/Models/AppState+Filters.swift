@@ -311,6 +311,56 @@ extension AppState {
 
     // MARK: - Tag chip filter (main grid)
 
+    /// Remove `label` from the files in VIEW (this folder, or this collection's
+    /// members) — NOT the whole library. Tags belong to a file in its folder;
+    /// deleting here must never touch other folders.
+    func deleteTagInView(_ label: String) {
+        removeTag(label, fromURLs: tagSourceFiles.map { $0.url })
+    }
+
+    /// Delete every tag on the files in view. Scoped to `tagSourceFiles` — the
+    /// current folder, or the active collection's members when viewing a
+    /// collection — matching the single-tag delete and the chips themselves.
+    /// Raw `currentFiles` would wrongly hit the underlying folder while a
+    /// collection is on screen.
+    func deleteAllTagsInView() {
+        let urls = tagSourceFiles.map { $0.url }
+        Task { @MainActor in
+            await TagStore.shared.deleteAllTags(forURLs: urls)
+            setActiveTag(nil)
+            tagsVersion &+= 1
+        }
+    }
+
+    /// Generate tags for the files in view that have none. Same scoping.
+    func regenerateTaglessInView() {
+        let urls = tagSourceFiles.map { $0.url }
+        Task { @MainActor in
+            await AnalyzePipeline.shared.regenerateTagless(in: urls)
+            tagsVersion &+= 1
+        }
+    }
+
+    /// Commit a library-wide tag rename. Lives here rather than in the chip row
+    /// because the prompt is a shell-presented card now (a chip can't size a
+    /// modal), and the shell shouldn't own tag logic.
+    func commitTagRename(from old: String, to new: String) {
+        let trimmed = new.trimmingCharacters(in: .whitespacesAndNewlines)
+        tagRenameRequest = nil
+        guard !trimmed.isEmpty, trimmed != old else { return }
+        Task { @MainActor in
+            // Only rewrite the filter if the rename actually happened. A refused
+            // rename (a rating glyph on either side) would otherwise leave the
+            // active filter pointing at a label no file carries — an empty grid
+            // under a chip that looks real.
+            guard await TagStore.shared.renameLabel(from: old, to: trimmed) else { return }
+            if activeTagLabels.contains(old) {
+                setActiveTags(TagSelection.renaming(activeTagLabels, from: old, to: trimmed))
+            }
+            tagsVersion &+= 1
+        }
+    }
+
     /// Remove `label` from `urls` (the right-clicked tile or the whole
     /// selection). Tags are auto-generated, but this leaves the files marked
     /// analyzed — same as Delete All Tags — so the pipeline never regenerates

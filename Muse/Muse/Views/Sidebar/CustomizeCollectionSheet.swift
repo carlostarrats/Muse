@@ -169,7 +169,7 @@ struct CustomizeCollectionSheet: View {
             .padding(.bottom, 36)
 
             HStack {
-                Button("Reset to Default") {
+                ModalButton(title: String(localized: "Reset to Default")) {
                     withAnimation(.easeOut(duration: 0.15)) {
                         iconTab = .symbols
                         draftIcon = defaultIcon
@@ -179,10 +179,8 @@ struct CustomizeCollectionSheet: View {
                 }
                 .disabled(isDefault)
                 Spacer()
-                Button("Cancel") { onClose() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Update") { save() }
-                    .keyboardShortcut(.defaultAction)
+                ModalButton(title: String(localized: "Cancel"), isCancel: true) { onClose() }
+                ModalButton(title: String(localized: "Update"), kind: .prominent, isDefault: true) { save() }
                     .disabled(!canSave)
             }
         }

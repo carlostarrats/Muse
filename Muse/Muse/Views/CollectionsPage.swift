@@ -20,7 +20,16 @@ struct CollectionsPage: View {
     private let columns = 4
     private let hGap: CGFloat = 24
     private let vGap: CGFloat = 52
+    /// FLOOR for the card grid's horizontal inset — the real inset is solved
+    /// from the hover fan's overhang (CollectionsGridLayout). The header keeps
+    /// this value directly: it matches the in-collection header's 14pt lead,
+    /// and a header has no fan to make room for.
     private let hInset: CGFloat = 14
+    /// Pile cell aspect (height ÷ width).
+    private let coverAspect: CGFloat = 0.9
+    /// Soft-shadow allowance beyond a card's own rect (CollectionStackCard
+    /// draws a 9pt-radius shadow).
+    private let cardShadowBleed: CGFloat = 9
 
 
     /// Collections ordered by the Collections-page sort (Name / Date Created /
@@ -65,15 +74,21 @@ struct CollectionsPage: View {
             // TagChipsRow's constant so the two reserves can never drift apart.
             Color.clear.frame(height: TagChipsRow.noTagsTopClearance)
             GeometryReader { geo in
-                // Width that makes exactly `columns` cards (plus gaps + insets)
-                // fill the viewport. Cards resize with the window.
-                let available = max(0, geo.size.width
-                                    - hInset * 2
-                                    - hGap * CGFloat(columns - 1))
-                let cardWidth = available / CGFloat(columns)
+                // Card width + gutter that make exactly `columns` cards fill
+                // the viewport AND leave the hover fan room to spread without
+                // crossing the page bounds — a fanned pile draws well outside
+                // its own cell, so a bare `hInset` let the leftmost column
+                // spill over the sidebar. See CollectionsGridLayout.
+                let layout = CollectionsGridLayout.solve(width: geo.size.width,
+                                                         columns: columns,
+                                                         gap: hGap,
+                                                         minInset: hInset,
+                                                         coverAspect: coverAspect,
+                                                         shadowBleed: cardShadowBleed)
+                let cardWidth = layout.cardWidth
                 // Square-ish pile cell: the scattered stack needs vertical
                 // room around the cards for the rest-state peek and hover fan.
-                let cover = CGSize(width: cardWidth, height: cardWidth * 0.9)
+                let cover = CGSize(width: cardWidth, height: cardWidth * coverAspect)
 
                 ScrollView {
                     // ZStack, not sequential VStack flow: the empty state
@@ -102,7 +117,7 @@ struct CollectionsPage: View {
                                         CollectionCard(loaded: loaded, coverSize: cover)
                                     }
                                 }
-                                .padding(.horizontal, hInset)
+                                .padding(.horizontal, layout.inset)
                                 // Matches the in-collection grid's top content inset
                                 // (20) so the gap under the title is identical there
                                 // (header's 48 + the grid's 20).

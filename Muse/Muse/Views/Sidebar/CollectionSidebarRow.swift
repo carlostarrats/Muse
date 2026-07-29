@@ -31,10 +31,8 @@ struct CollectionSidebarRow: View {
     // same global setting `ShareCollectionButton` reads for the open collection.
     @AppStorage("gridColumnCount") private var gridColumns = 4
     @State private var isHovered = false
-    @State private var confirmDelete = false
     @State private var preparingExport = false
     @State private var driveShareURLs: [URL] = []
-    @State private var exportFailed = false
 
     /// Hand the rule editor's payload to the shell. Sidebar rows can't present
     /// an in-window card themselves — it would be sized against the sidebar.
@@ -160,7 +158,7 @@ struct CollectionSidebarRow: View {
             } else {
                 Button("Make Smart…") { presentRules() }
             }
-            Button("Delete…") { confirmDelete = true }
+            Button("Delete…") { requestDelete() }
             if manual {
                 Divider()
                 Button("Move Up") { appState.moveSidebarCollection(id: id, by: -1) }
@@ -185,7 +183,7 @@ struct CollectionSidebarRow: View {
             }
             Button("Change Symbol & Color") { appState.collectionModal = .customize(loaded) }
             Button(isSmart ? String(localized: "Edit Rules") : String(localized: "Make Smart")) { presentRules() }
-            Button("Delete Collection") { confirmDelete = true }
+            Button("Delete Collection") { requestDelete() }
             // Move actions only when Manual sort permits reordering, and only in
             // the non-boundary direction(s) — mirrors the context menu's disabled
             // gating so VoiceOver never offers a dead "Move Up/Down" (e.g. on the
@@ -199,26 +197,10 @@ struct CollectionSidebarRow: View {
                 }
             }
         }
-        .alert("Delete “\(loaded.collection.name)”?", isPresented: $confirmDelete) {
-            Button("Delete", role: .destructive) {
-                let cid = id
-                Task { @MainActor in
-                    guard let q = Database.shared.dbQueue else { return }
-                    if appState.activeCollectionID == cid { appState.setActiveCollection(nil) }
-                    try? await CollectionStore.setHidden(queue: q, id: cid, hidden: true)
-                    await CollectionsEngine.shared.reload()
-                }
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("The collection is removed everywhere. Your images stay on disk.")
-        }
-        // Customize / Rules / Drive share are presented by the SHELL — see CollectionModal.
-        .alert("Couldn’t Export the PDF", isPresented: $exportFailed) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("The PDF couldn’t be prepared — some images may be unreadable — or the location couldn’t be written. Check the images and that the location is writable with enough free space.")
-        }
+        // Customize / Rules / Drive share — and now the delete confirmation and
+        // the export-failure message — are presented by the SHELL. A card is
+        // sized from its host's geometry and this row is ~240pt wide. See
+        // CollectionModal / MuseAlert.
     }
 
     /// Icon color: the stored custom token wins (even while selected — it's
@@ -249,17 +231,31 @@ struct CollectionSidebarRow: View {
 
     private func exportSave() async {
         let urls = await exportURLs()
-        guard !urls.isEmpty else { exportFailed = true; return }
+        guard !urls.isEmpty else { appState.alertRequest = .pdfExportFailed; return }
         preparingExport = true
         defer { preparingExport = false }
         let outcome = await CollectionPDFSave.run(
             title: loaded.collection.name, urls: urls, appState: appState, gridColumns: gridColumns)
-        if outcome == .failed { exportFailed = true }
+        if outcome == .failed { appState.alertRequest = .pdfExportFailed }
+    }
+
+    /// Both the confirmation and any failure message are presented by the
+    /// SHELL — this row is ~240pt wide and would size a card to itself.
+    private func requestDelete() {
+        let cid = id
+        appState.alertRequest = .deleteCollection(named: loaded.collection.name) {
+            Task { @MainActor in
+                guard let q = Database.shared.dbQueue else { return }
+                if appState.activeCollectionID == cid { appState.setActiveCollection(nil) }
+                try? await CollectionStore.setHidden(queue: q, id: cid, hidden: true)
+                await CollectionsEngine.shared.reload()
+            }
+        }
     }
 
     private func exportDriveShare() async {
         let urls = await exportURLs()
-        guard !urls.isEmpty else { exportFailed = true; return }
+        guard !urls.isEmpty else { appState.alertRequest = .pdfExportFailed; return }
         driveShareURLs = urls
         appState.collectionModal = .driveShare(title: loaded.collection.name, urls: driveShareURLs)
     }

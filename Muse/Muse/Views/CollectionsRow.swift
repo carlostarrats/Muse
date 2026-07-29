@@ -36,8 +36,6 @@ private struct ActiveCollectionHeader: View {
     @EnvironmentObject var appState: AppState
     let loaded: CollectionStore.Loaded
 
-    @State private var confirmDelete = false
-
     var body: some View {
         HStack(spacing: 18) {
             BackArrowButton { appState.setActiveCollection(nil) }
@@ -63,21 +61,15 @@ private struct ActiveCollectionHeader: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.7)))
             }
             ShareCollectionButton(title: loaded.collection.name, count: loaded.aliveCount)
-            TrashButton { confirmDelete = true }
+            TrashButton { requestDelete() }
         }
         // Menu-bar "Delete Collection…" routes through this flag. (Rename now
         // opens the shared modal via collectionRenameAlertRequest, not inline.)
         .onChange(of: appState.collectionDeleteRequest) { _, requested in
             if requested {
                 appState.collectionDeleteRequest = false
-                confirmDelete = true
+                requestDelete()
             }
-        }
-        .alert("Delete “\(loaded.collection.name)”?", isPresented: $confirmDelete) {
-            Button("Delete", role: .destructive) { deleteCollection() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("The collection is removed everywhere. Your images stay on disk.")
         }
     }
 
@@ -102,6 +94,14 @@ private struct ActiveCollectionHeader: View {
     private func requestRename() {
         appState.collectionRenameAlertRequest = CollectionRenameAlertRequest(
             id: loaded.collection.id, currentName: loaded.collection.name)
+    }
+
+    /// The confirmation is a shell-presented card (see MuseAlert) — this
+    /// header lives inside the detail column and can't size one itself.
+    private func requestDelete() {
+        appState.alertRequest = .deleteCollection(named: loaded.collection.name) {
+            deleteCollection()
+        }
     }
 
     private func deleteCollection() {
@@ -230,7 +230,6 @@ struct CollectionCard: View {
     static let defaultCoverSize = CGSize(width: 240, height: 216)
 
     @State private var hovering = false
-    @State private var confirmDelete = false
     /// Keeps the pile above its neighbors while the settle-back spring is
     /// still in flight (zIndex isn't animatable — dropping it the instant
     /// the cursor leaves would dip retracting cards under the next pile).
@@ -285,15 +284,7 @@ struct CollectionCard: View {
             appState.setActiveCollection(loaded.collection.id)
         }
         .contextMenu {
-            Button("Delete Collection…", role: .destructive) {
-                confirmDelete = true
-            }
-        }
-        .alert("Delete “\(loaded.collection.name)”?", isPresented: $confirmDelete) {
-            Button("Delete", role: .destructive) { deleteCollection() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("The collection is removed everywhere. Your images stay on disk.")
+            Button("Delete Collection…", role: .destructive) { requestDelete() }
         }
         .help(loaded.collection.name)
         // The card is a tap target (not a Button), so VoiceOver saw two loose
@@ -306,7 +297,15 @@ struct CollectionCard: View {
                             + (loaded.aliveCount == 1 ? String(localized: "item") : String(localized: "items")))
         .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction { appState.setActiveCollection(loaded.collection.id) }
-        .accessibilityAction(named: "Delete Collection") { confirmDelete = true }
+        .accessibilityAction(named: "Delete Collection") { requestDelete() }
+    }
+
+    /// Confirmation card, presented by the shell — a card sized from this
+    /// tile's geometry would be as wide as the tile. See MuseAlert.
+    private func requestDelete() {
+        appState.alertRequest = .deleteCollection(named: loaded.collection.name) {
+            deleteCollection()
+        }
     }
 
     private func deleteCollection() {
@@ -351,7 +350,7 @@ private struct CollectionStackCard: View {
     static let depth = 6
 
     var body: some View {
-        let box = min(size.width, size.height) * 0.78
+        let box = min(size.width, size.height) * StackScatter.boxFactor
         let poses = StackScatter.cards(seed: collectionID,
                                        count: cards.count, cell: size)
         ZStack {

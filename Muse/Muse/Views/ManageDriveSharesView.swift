@@ -28,7 +28,6 @@ struct ManageDriveSharesView: View {
     @State private var records: [DriveShareRecord] = []
     @State private var deleting: Set<String> = []
     @State private var didPrune = false
-    @State private var unpublishFailed = false
     // Always open on "Expires · Earliest" so the soonest-to-expire shares are at
     // the top every time (not persisted — resets on each open).
     @State private var sortKey: DriveShareSortKey = .expires
@@ -73,11 +72,9 @@ struct ManageDriveSharesView: View {
         }
         .padding(28)
         // Width and the height cap come from the modal presenter.
-        .alert("Couldn’t Unpublish", isPresented: $unpublishFailed) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("The Drive folder couldn’t be deleted — you may be offline or signed out. The share is still live; try again, or remove it from Google Drive directly.")
-        }
+        // The failure message is raised to the SHELL: this view IS a modal
+        // card, and a card presented from inside another card would be sized
+        // by it. See MuseAlert.
         .onAppear {
             records = store.all()      // show what we have immediately…
             guard didPrune == false else { return }
@@ -180,7 +177,9 @@ struct ManageDriveSharesView: View {
         catch {
             // Keep the record (the public folder may still be live), but tell the
             // user — a silent return looks like the trash button did nothing.
-            unpublishFailed = true
+            appState.alertRequest = .message(
+                title: String(localized: "Couldn’t Unpublish"),
+                message: String(localized: "The Drive folder couldn’t be deleted — you may be offline or signed out. The share is still live; try again, or remove it from Google Drive directly."))
             return
         }
         store.remove(id: record.id)

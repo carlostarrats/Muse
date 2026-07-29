@@ -93,7 +93,7 @@ struct DriveShareSheet: View {
 
             HStack {
                 Spacer()
-                HoverButton(title: String(localized: "Publish"), prominent: true, isDefault: true) {
+                ModalButton(title: String(localized: "Publish"), kind: .prominent, isDefault: true) {
                     // Today's date is automatic (used only in the Drive folder
                     // name, never shown on the page) — one less field for the user.
                     let form = DriveShareForm(intro: intro, label: label, name: name,
@@ -141,13 +141,13 @@ struct DriveShareSheet: View {
             Text(url).font(.system(size: 12)).foregroundStyle(.secondary)
                 .textSelection(.enabled).lineLimit(2).truncationMode(.middle)
             HStack {
-                HoverButton(title: String(localized: "Copy Link")) {
+                ModalButton(title: String(localized: "Copy Link")) {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(url, forType: .string)
                 }
-                HoverButton(title: String(localized: "Share…")) { shareLink(url) }
+                ModalButton(title: String(localized: "Share…")) { shareLink(url) }
                 Spacer()
-                HoverButton(title: String(localized: "Done"), prominent: true, isDefault: true) { onClose() }
+                ModalButton(title: String(localized: "Done"), kind: .prominent, isDefault: true) { onClose() }
             }
         }
     }
@@ -157,7 +157,7 @@ struct DriveShareSheet: View {
             Image(systemName: "exclamationmark.icloud").font(.system(size: 26)).foregroundStyle(.secondary)
                 .accessibilityHidden(true)
             Text(message).multilineTextAlignment(.center)
-            HoverButton(title: String(localized: "Done"), prominent: true, isDefault: true) { onClose() }
+            ModalButton(title: String(localized: "Done"), kind: .prominent, isDefault: true) { onClose() }
         }
         .frame(maxWidth: .infinity).padding(.vertical, 16)
     }
@@ -177,34 +177,3 @@ struct DriveShareSheet: View {
     }
 }
 
-/// A flat button with a clear hover highlight (the default macOS buttons read
-/// as inert here). Prominent = accent fill; isDefault = Return triggers it.
-/// Shared with the Settings → Google Drive sign-in/out row.
-struct HoverButton: View {
-    let title: String
-    var prominent: Bool = false
-    var isDefault: Bool = false
-    let action: () -> Void
-    @State private var hovering = false
-    @Environment(\.isEnabled) private var isEnabled
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 13, weight: prominent ? .semibold : .regular))
-                .foregroundStyle(prominent ? Color.white : Color.primary)
-                .padding(.horizontal, 14).padding(.vertical, 7)
-                .background(RoundedRectangle(cornerRadius: 7).fill(fill))
-                .opacity(isEnabled ? 1 : 0.4)
-                .contentShape(RoundedRectangle(cornerRadius: 7))
-        }
-        .buttonStyle(.plain)
-        .keyboardShortcut(isDefault ? .defaultAction : nil)
-        .onHover { hovering = isEnabled && $0 }
-    }
-
-    private var fill: Color {
-        if prominent { return Color.accentColor.opacity(hovering ? 0.85 : 1) }
-        return Color.primary.opacity(hovering ? 0.18 : 0.08)
-    }
-}

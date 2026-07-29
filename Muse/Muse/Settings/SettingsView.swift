@@ -159,11 +159,11 @@ struct SettingsView: View {
                     if authBusy {
                         ProgressView().controlSize(.small)
                     } else if googleAuth.isSignedIn {
-                        HoverButton(title: String(localized: "Sign Out")) {
+                        ModalButton(title: String(localized: "Sign Out")) {
                             Task { await runAuth { await googleAuth.signOut() } }
                         }
                     } else {
-                        HoverButton(title: String(localized: "Sign In")) {
+                        ModalButton(title: String(localized: "Sign In")) {
                             Task { await runAuth { try? await googleAuth.signIn() } }
                         }
                     }

@@ -6898,3 +6898,71 @@ notes. Verified by extracting the script's real step-6 block with `awk` and
 running it against the actual 1.4 DMG across four notes shapes (real, empty,
 whitespace-only, absent) — not by re-typing the logic into a test, which would
 only have tested the retype.
+
+## 2026-07-28 — collections fan gutter + every alert becomes a card (`feat/next-148`)
+
+**The hover fan touched the sidebar.** A hovered collection pile fans its cards
+outside its own slot — `StackScatter.fanHalfWidthFactor` works out to ~0.68 of
+the cell's short side, against a half-cell of 0.5 — so the leftmost column's fan
+drew over the sidebar with only a 14pt page inset. The inset is now SOLVED from
+that overhang (`CollectionsGridLayout.solve`, pure + tested): cards give back
+exactly the width the fan needs and the row still fills the viewport exactly.
+The fan's max travel/rotation/box size became named constants on `StackScatter`
+so the layout reads the same numbers the poses are drawn from (values unchanged
+— no pile reshuffled). The page header stays at 14pt: it has no fan, and that
+lead matches the in-collection header.
+
+**Every `.alert` / `.confirmationDialog` became an in-window card.** Owner
+report: the delete confirmations "look full app, not centered in the grid like
+modals should be." Correct — a system alert centres over the whole window and
+dims nothing, while `.museModal` centres in the detail column over a scrim. All
+20 moved: `ModalMessageCard` (8 destructive confirms + 7 error messages) and
+`ModalPromptCard` (rename collection / file / folder / tag, new subfolder).
+
+Two entry points, both landing on the same card. `AppState.alertRequest` (a
+`MuseAlert`) carries a payload up from anything that can't present — sidebar
+rows, the Collections-page tile, and notably the content of ANOTHER modal
+(Duplicates' delete confirm, Manage Drive Shares' failure, the smart-collection
+convert confirm). Its presenter is attached last in the detail chain so it draws
+above the card that raised it; `dismissTopModal` peels it first to match. The
+shell's own error flags (`folderOpError`, `backupError`, `fileRenameError`,
+`moveFailureNames`) keep their state and present via `.museAlert(isPresented:)`.
+
+Three things that had to come along: every new state joins `modalPresented`
+(system alerts owned their own window, so the grid couldn't take keys behind
+them — cards must gate `PageScrollCatcher` and Escape explicitly); the prompt
+drafts stay in LOCAL `@State`, now inside the card itself, which seeds on appear
+because the card is built only while presented (the four external draft +
+`.onChange` re-seeding modifiers are deleted); and the tag-rename commit moved
+to `AppState.commitTagRename` since the prompt is no longer owned by the chip
+row. Wording literals were kept verbatim, so the `.xcstrings` keys are
+unchanged and French stayed at 0 untranslated.
+
+The four ContentView error cards had to be grouped into one `ShellErrorModals`
+modifier — applied inline they pushed the detail chain past the type-checker's
+limit.
+
+**Follow-up the same session: one button for every modal footer.** Owner asked
+whether the new cards' buttons hover. They didn't — they were stock SwiftUI
+buttons, which highlight on press only. The app had three answers to that
+question: `FooterButton` (private to the rules card), `HoverButton` (private to
+the Drive form, borrowed by Settings), and stock buttons everywhere else. All
+now go through `ModalButton` (`.normal` / `.prominent` / `.destructive`), and
+both old types are deleted. Adopted by the two new cards plus SuggestingNameCard,
+Customize Collection, the rules card, Duplicates, the Reconnect wizard, the Drive
+share form and Settings. Disabled state reads `@Environment(\.isEnabled)` so
+callers keep using a plain `.disabled(…)`.
+
+**QA pass on the conversion** found one real regression and one gap. The
+regression: the three tag confirmations were raised from `TagChipsRow`'s
+`.onChange`, but that row is absent on the Collections page while the menu bar
+can still set `tagDeleteRequest` / `deleteAllTagsRequest` / `regenerateTagsRequest`
+(Delete Tag is reachable whenever a single tag is active). With no mounted
+consumer the flag stuck at its new value — and because `.onChange` needs a
+transition, the NEXT request set the same value, fired nothing, and the command
+would have been dead for the rest of the session. The old state-bound `.alert`
+recovered on remount; an onChange-raised card can't. Fixed by raising them from
+`TagCommandAlerts` at the always-mounted shell, with the three commits moved onto
+AppState (`deleteTagInView` / `deleteAllTagsInView` / `regenerateTaglessInView`)
+so the shell doesn't own tag logic. The gap: Metadata Import's Cancel/Done were
+the last stock buttons left in a card; they're `ModalButton`s now.

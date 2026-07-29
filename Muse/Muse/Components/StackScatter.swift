@@ -30,6 +30,34 @@ enum StackScatter {
     static let topFanScale = 0.95
     static let underFanScale = 0.85
 
+    /// Card box as a fraction of the cell's short side (the square each
+    /// image is aspect-fitted into).
+    static let boxFactor = 0.78
+    /// Upper bound of the under-card fan travel, as a fraction of the short
+    /// side. Must stay equal to the top of the `fanMag` range below — the
+    /// overhang math reads it to size the page's gutters.
+    static let maxFanMagnitude = 0.34
+    /// Upper bound of the under-card fan rotation. Same contract.
+    static let maxFanRotationDegrees = 18.0
+
+    /// Worst-case half-width, measured from the cell's centre, that a FANNED
+    /// pile can draw — travel + the rotated card's own half-width. Bigger
+    /// than `cell.width / 2`, which is why the Collections page has to
+    /// reserve gutters (see CollectionsGridLayout) or the leftmost column's
+    /// fan spills over the sidebar.
+    static func maxFanHalfWidth(cell: CGSize) -> CGFloat {
+        CGFloat(fanHalfWidthFactor) * min(cell.width, cell.height)
+    }
+
+    /// `maxFanHalfWidth` expressed per point of the cell's SHORT side.
+    /// A square card is the worst case for a rotated bounding box, so the
+    /// rotated half-width is `box * (cos + sin) / 2`.
+    static let fanHalfWidthFactor: Double = {
+        let r = maxFanRotationDegrees * .pi / 180
+        let box = boxFactor * underFanScale
+        return maxFanMagnitude + box * (cos(r) + sin(r)) / 2
+    }()
+
     /// One card's rest + fanned poses. Index 0 of `cards(...)` is the TOP
     /// card (the cover); later indices sit deeper in the pile.
     struct Card: Equatable {
@@ -69,11 +97,11 @@ enum StackScatter {
                 + Double(i - 1) * sectorWidth
                 + rng.range(-0.3...0.3) * sectorWidth
             let restMag = side * rng.range(0.03...0.10)
-            let fanMag = side * rng.range(0.18...0.34)
+            let fanMag = side * rng.range(0.18...maxFanMagnitude)
             let fanAngle = angle + rng.range(-0.15...0.15)
             let spin = rng.sign()
             let restRotation = rng.range(2.0...7.0) * spin
-            let fanRotation = rng.range(8.0...18.0) * spin
+            let fanRotation = rng.range(8.0...maxFanRotationDegrees) * spin
             out.append(Card(
                 rest: Pose(rotationDegrees: restRotation,
                            offset: CGSize(width: cos(angle) * restMag,

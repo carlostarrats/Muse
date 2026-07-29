@@ -35,6 +35,20 @@ struct ContentView: View {
     /// Close whichever modal is up. Only one is ever presented at a time, so
     /// this is a deterministic sweep rather than a real stack.
     private func dismissTopModal() {
+        // Confirms/errors first: they're presented outermost, so one raised
+        // from inside another card (a delete confirm over Duplicates) is the
+        // one on top — Escape has to peel it before its host.
+        if appState.alertRequest != nil { appState.alertRequest = nil; return }
+        if !appState.moveFailureNames.isEmpty { appState.moveFailureNames = []; return }
+        if appState.folderOpError != nil { appState.folderOpError = nil; return }
+        if appState.backupError != nil { appState.backupError = nil; return }
+        if appState.fileRenameError != nil { appState.fileRenameError = nil; return }
+        // Name prompts.
+        if appState.collectionRenameAlertRequest != nil { appState.collectionRenameAlertRequest = nil; return }
+        if appState.fileRenameRequest != nil { appState.fileRenameRequest = nil; return }
+        if appState.newSubfolderRequest != nil { appState.newSubfolderRequest = nil; return }
+        if appState.folderRenameRequest != nil { appState.folderRenameRequest = nil; return }
+        if appState.tagRenameRequest != nil { appState.tagRenameRequest = nil; return }
         if appState.collectionModal != nil { appState.collectionModal = nil; return }
         if appState.addTagRequest != nil { appState.addTagRequest = nil; return }
         if appState.newCollectionRequest { appState.cancelNewCollection(); return }
@@ -273,6 +287,27 @@ struct ContentView: View {
                     EmptyView()
                 }
             }
+            .modifier(ShellErrorModals())
+            .modifier(TagCommandAlerts())
+            // Name prompts (rename collection / file / folder, new subfolder,
+            // rename tag) — cards now, not `.alert`s. Each keeps its draft in
+            // LOCAL @State inside ModalPromptCard.
+            .modifier(NamePromptModals())
+            // Confirms + errors raised from views that can't present (sidebar
+            // rows, tiles, other modals' content). LAST in the chain on
+            // purpose: attached outermost, it draws ABOVE any card that raised
+            // it — a delete confirmation from inside Duplicates has to sit on
+            // top of Duplicates, not behind it.
+            .museModal(isPresented: Binding(
+                get: { appState.alertRequest != nil },
+                set: { if !$0 { appState.alertRequest = nil } }),
+                       width: ModalMessageCardWidth.standard,
+                       palette: appState.moodPalette) {
+                if let alert = appState.alertRequest {
+                    ModalMessageCard(alert: alert) { appState.alertRequest = nil }
+                        .id(alert.id)
+                }
+            }
             // Transparent title bar so the sidebar card flows continuously up
             // to the top and curves with the window corner (Lineform-style).
             .toolbarBackground(.hidden, for: .windowToolbar)
@@ -416,42 +451,6 @@ struct ContentView: View {
                 .keyboardShortcut(.escape, modifiers: [])
                 .hidden()
         )
-        .alert("Couldn’t move some files",
-               isPresented: Binding(get: { !appState.moveFailureNames.isEmpty },
-                                    set: { if !$0 { appState.moveFailureNames = [] } })) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(appState.moveFailureNames.joined(separator: "\n"))
-        }
-        // Folder management dialogs — driven by AppState requests (shared by the
-        // sidebar context menu and the menu-bar Edit menu).
-        .modifier(FolderNameAlerts())
-        .alert("Folder", isPresented: Binding(
-            get: { appState.folderOpError != nil },
-            set: { if !$0 { appState.folderOpError = nil } }
-        )) {
-            Button("OK", role: .cancel) { appState.folderOpError = nil }
-        } message: {
-            Text(appState.folderOpError ?? "")
-        }
-        .alert("Backup", isPresented: Binding(
-            get: { appState.backupError != nil },
-            set: { if !$0 { appState.backupError = nil } }
-        )) {
-            Button("OK", role: .cancel) { appState.backupError = nil }
-        } message: {
-            Text(appState.backupError ?? "")
-        }
-        .modifier(CollectionRenameAlert())
-        .modifier(FileRenameAlert())
-        .alert("Rename File", isPresented: Binding(
-            get: { appState.fileRenameError != nil },
-            set: { if !$0 { appState.fileRenameError = nil } }
-        )) {
-            Button("OK", role: .cancel) { appState.fileRenameError = nil }
-        } message: {
-            Text(appState.fileRenameError ?? "")
-        }
         // Preload the tag-label list for the selection menu, and keep it fresh
         // as tags change.
         .task { appState.refreshTagLabels() }
@@ -1144,129 +1143,201 @@ struct ContentView: View {
     }
 }
 
-/// The sidebar collection-rename prompt — the modal counterpart to folder
-/// rename (`FolderNameAlerts`). Same local-`@State` draft trick as the other
-/// name prompts so typing doesn't re-evaluate the whole ContentView. Seeded
-/// with the collection's current name on open, keyed on the request's `id` so
-/// re-targeting the same collection re-seeds (closing always passes nil first).
-private struct CollectionRenameAlert: ViewModifier {
+/// The tag confirmations — Delete Tag, Delete All Tags, Regenerate Tags.
+///
+/// Raised HERE rather than in `TagChipsRow`, which owns the chips that trigger
+/// two of them: the row is absent on the Collections page, and the menu bar can
+/// set these request flags from there. A flag set with no live consumer would
+/// stick — the next request would be the same value, fire no `.onChange`, and
+/// the command would be dead for the rest of the session. The shell is always
+/// mounted, so the request is always consumed.
+private struct TagCommandAlerts: ViewModifier {
     @EnvironmentObject private var appState: AppState
-    @State private var draft = ""
 
     func body(content: Content) -> some View {
         content
-            .alert("Rename Collection", isPresented: Binding(
+            .onChange(of: appState.tagDeleteRequest) { _, label in
+                guard let label else { return }
+                appState.tagDeleteRequest = nil
+                appState.alertRequest = .confirm(
+                    title: String(localized: "Delete “\(label)”?"),
+                    message: String(localized: "Removes “\(label)” from the images in this view. Other folders keep their tags. Your images stay on disk."),
+                    confirmTitle: String(localized: "Delete"),
+                    onConfirm: { appState.deleteTagInView(label) })
+            }
+            .onChange(of: appState.deleteAllTagsRequest) { _, requested in
+                guard requested else { return }
+                appState.deleteAllTagsRequest = false
+                appState.alertRequest = .confirm(
+                    title: String(localized: "Delete all tags in this view?"),
+                    message: String(localized: "This removes every tag on the images in this view — both automatic tags and ones you've added yourself. Tags you added by hand can't be recovered. Your images stay on disk."),
+                    confirmTitle: String(localized: "Delete All"),
+                    onConfirm: { appState.deleteAllTagsInView() })
+            }
+            .onChange(of: appState.regenerateTagsRequest) { _, requested in
+                guard requested else { return }
+                appState.regenerateTagsRequest = false
+                appState.alertRequest = .confirm(
+                    title: String(localized: "Regenerate tags in this view?"),
+                    message: String(localized: "Looks for images in this view that have no tags and generates tags for them in the background. Images that already have tags are left alone. Only automatic tags are created — tags you added by hand aren't restored."),
+                    confirmTitle: String(localized: "Regenerate"),
+                    destructive: false,
+                    onConfirm: { appState.regenerateTaglessInView() })
+            }
+    }
+}
+
+/// The shell's own failure messages — folder ops, backup, file rename, and a
+/// partial move. Grouped into one modifier because the detail chain hit the
+/// type-checker's limit; they behave exactly as if applied inline.
+private struct ShellErrorModals: ViewModifier {
+    @EnvironmentObject private var appState: AppState
+
+    func body(content: Content) -> some View {
+        content
+            // The shell's own error messages — folder ops, backup, rename.
+            // Cards, not `.alert`s (see ModalMessageCard), and presented in the
+            // detail column like every other modal so failures don't read as a
+            // different, app-level layer.
+            .museAlert(isPresented: Binding(get: { !appState.moveFailureNames.isEmpty },
+                                            set: { if !$0 { appState.moveFailureNames = [] } }),
+                       palette: appState.moodPalette,
+                       title: String(localized: "Couldn’t move some files"),
+                       message: appState.moveFailureNames.joined(separator: "\n"))
+            .museAlert(isPresented: Binding(get: { appState.folderOpError != nil },
+                                            set: { if !$0 { appState.folderOpError = nil } }),
+                       palette: appState.moodPalette,
+                       title: String(localized: "Folder"),
+                       message: appState.folderOpError ?? "")
+            .museAlert(isPresented: Binding(get: { appState.backupError != nil },
+                                            set: { if !$0 { appState.backupError = nil } }),
+                       palette: appState.moodPalette,
+                       title: String(localized: "Backup"),
+                       message: appState.backupError ?? "")
+            .museAlert(isPresented: Binding(get: { appState.fileRenameError != nil },
+                                            set: { if !$0 { appState.fileRenameError = nil } }),
+                       palette: appState.moodPalette,
+                       title: String(localized: "Rename File"),
+                       message: appState.fileRenameError ?? "")
+    }
+}
+
+/// The five name prompts — rename collection / file / folder / tag, and new
+/// subfolder. All were `.alert`s with a TextField; they're `ModalPromptCard`s
+/// now (see ModalMessageCard for why system alerts left).
+///
+/// The draft still lives in LOCAL `@State` — inside the card, not here — so
+/// typing re-evaluates only the field and not the whole shell (binding a
+/// TextField to a `@Published` on AppState made typing visibly lag on slower
+/// Macs). The card is built only while presented, so it seeds itself on appear
+/// and the old external `draft` + `.onChange` re-seeding plumbing is gone.
+private struct NamePromptModals: ViewModifier {
+    @EnvironmentObject private var appState: AppState
+
+    func body(content: Content) -> some View {
+        content
+            .museModal(isPresented: Binding(
                 get: { appState.collectionRenameAlertRequest != nil },
-                set: { if !$0 { appState.collectionRenameAlertRequest = nil } }
-            )) {
-                TextField("Collection name", text: $draft)
-                Button("Rename") {
-                    if let req = appState.collectionRenameAlertRequest {
-                        appState.collectionRenameAlertRequest = nil
-                        appState.renameCollection(id: req.id, to: draft)
-                    }
+                set: { if !$0 { appState.collectionRenameAlertRequest = nil } }),
+                       width: ModalMessageCardWidth.standard,
+                       palette: appState.moodPalette) {
+                if let req = appState.collectionRenameAlertRequest {
+                    ModalPromptCard(
+                        title: String(localized: "Rename Collection"),
+                        message: String(localized: "Renames the collection. Its images are kept."),
+                        placeholder: String(localized: "Collection name"),
+                        confirmTitle: String(localized: "Rename"),
+                        initialText: req.currentName,
+                        onCommit: { name in
+                            appState.collectionRenameAlertRequest = nil
+                            appState.renameCollection(id: req.id, to: name)
+                        },
+                        onCancel: { appState.collectionRenameAlertRequest = nil })
+                    .id(req.id)
                 }
-                Button("Cancel", role: .cancel) { appState.collectionRenameAlertRequest = nil }
-            } message: {
-                Text("Renames the collection. Its images are kept.")
             }
-            .onChange(of: appState.collectionRenameAlertRequest?.id) { _, id in
-                if id != nil { draft = appState.collectionRenameAlertRequest?.currentName ?? "" }
-            }
-    }
-}
-
-/// The FILE rename prompt — same local-`@State` draft trick as the folder/
-/// collection prompts so typing doesn't re-evaluate the whole ContentView. The
-/// field holds only the STEM (base name); the locked extension is re-appended
-/// inside AppState.renameFile. Seeded with the file's stem on open, keyed on the
-/// request's `id` so re-targeting the same file re-seeds (closing passes nil).
-private struct FileRenameAlert: ViewModifier {
-    @EnvironmentObject private var appState: AppState
-    @State private var draft = ""
-
-    func body(content: Content) -> some View {
-        content
-            .alert("Rename File", isPresented: Binding(
+            // The field holds only the STEM; the locked extension is
+            // re-appended inside AppState.renameFile.
+            .museModal(isPresented: Binding(
                 get: { appState.fileRenameRequest != nil },
-                set: { if !$0 { appState.fileRenameRequest = nil } }
-            )) {
-                TextField("Name", text: $draft)
-                Button("Rename") {
-                    if let node = appState.fileRenameRequest {
-                        appState.fileRenameRequest = nil
-                        appState.renameFile(node, to: draft)
-                    }
-                }
-                Button("Cancel", role: .cancel) { appState.fileRenameRequest = nil }
-            } message: {
-                let ext = FileNameSplit.split(appState.fileRenameRequest?.basename ?? "").ext
-                // Separate Text literals (not a ternary) so each stays a
-                // LocalizedStringKey — a ternary with an interpolated branch can
-                // resolve to the non-localizing String overload (CLAUDE.md trap).
-                if ext.isEmpty {
-                    Text("Renames the file.")
-                } else {
-                    Text("The “\(ext)” extension is kept.")
-                }
-            }
-            .onChange(of: appState.fileRenameRequest?.id) { _, id in
-                if id != nil {
-                    draft = FileNameSplit.split(appState.fileRenameRequest?.basename ?? "").stem
+                set: { if !$0 { appState.fileRenameRequest = nil } }),
+                       width: ModalMessageCardWidth.standard,
+                       palette: appState.moodPalette) {
+                if let node = appState.fileRenameRequest {
+                    let split = FileNameSplit.split(node.basename)
+                    ModalPromptCard(
+                        title: String(localized: "Rename File"),
+                        message: split.ext.isEmpty
+                            ? String(localized: "Renames the file.")
+                            : String(localized: "The “\(split.ext)” extension is kept."),
+                        placeholder: String(localized: "Name"),
+                        confirmTitle: String(localized: "Rename"),
+                        initialText: split.stem,
+                        onCommit: { name in
+                            appState.fileRenameRequest = nil
+                            appState.renameFile(node, to: name)
+                        },
+                        onCancel: { appState.fileRenameRequest = nil })
+                    .id(node.id)
                 }
             }
-    }
-}
-
-/// The folder New-Subfolder / Rename prompts. Same trap as NameCollectionAlert:
-/// binding the field to a `@Published` draft on AppState re-evaluated the whole
-/// ContentView on every keystroke (laggy typing on slower Macs). The draft lives
-/// in LOCAL `@State` here, reaching AppState only on Create/Rename. Both prompts
-/// share one draft (only one is open at a time); it's seeded when either opens —
-/// empty for a new subfolder, the current name for a rename. Keying `.onChange` on
-/// the request's `id` (FolderNode isn't Equatable) still re-seeds when the SAME
-/// folder is re-targeted, since closing always passes through nil first.
-private struct FolderNameAlerts: ViewModifier {
-    @EnvironmentObject private var appState: AppState
-    @State private var draft = ""
-
-    func body(content: Content) -> some View {
-        content
-            .alert("New Subfolder", isPresented: Binding(
+            .museModal(isPresented: Binding(
                 get: { appState.newSubfolderRequest != nil },
-                set: { if !$0 { appState.newSubfolderRequest = nil } }
-            )) {
-                TextField("Folder name", text: $draft)
-                Button("Create") {
-                    if let node = appState.newSubfolderRequest {
-                        appState.newSubfolderRequest = nil
-                        appState.createSubfolder(named: draft, in: node)
-                    }
+                set: { if !$0 { appState.newSubfolderRequest = nil } }),
+                       width: ModalMessageCardWidth.standard,
+                       palette: appState.moodPalette) {
+                if let node = appState.newSubfolderRequest {
+                    ModalPromptCard(
+                        title: String(localized: "New Subfolder"),
+                        message: String(localized: "Creates a new folder inside “\(node.displayName)”."),
+                        placeholder: String(localized: "Folder name"),
+                        confirmTitle: String(localized: "Create"),
+                        onCommit: { name in
+                            appState.newSubfolderRequest = nil
+                            appState.createSubfolder(named: name, in: node)
+                        },
+                        onCancel: { appState.newSubfolderRequest = nil })
+                    .id(node.id)
                 }
-                Button("Cancel", role: .cancel) { appState.newSubfolderRequest = nil }
-            } message: {
-                Text("Creates a new folder inside “\(appState.newSubfolderRequest?.displayName ?? "")”.")
             }
-            .alert("Rename Folder", isPresented: Binding(
+            .museModal(isPresented: Binding(
                 get: { appState.folderRenameRequest != nil },
-                set: { if !$0 { appState.folderRenameRequest = nil } }
-            )) {
-                TextField("Folder name", text: $draft)
-                Button("Rename") {
-                    if let node = appState.folderRenameRequest {
-                        appState.folderRenameRequest = nil
-                        appState.renameFolder(node, to: draft)
-                    }
+                set: { if !$0 { appState.folderRenameRequest = nil } }),
+                       width: ModalMessageCardWidth.standard,
+                       palette: appState.moodPalette) {
+                if let node = appState.folderRenameRequest {
+                    ModalPromptCard(
+                        title: String(localized: "Rename Folder"),
+                        message: String(localized: "Renames the folder on disk. Tags and collections are kept."),
+                        placeholder: String(localized: "Folder name"),
+                        confirmTitle: String(localized: "Rename"),
+                        initialText: node.displayName,
+                        onCommit: { name in
+                            appState.folderRenameRequest = nil
+                            appState.renameFolder(node, to: name)
+                        },
+                        onCancel: { appState.folderRenameRequest = nil })
+                    .id(node.id)
                 }
-                Button("Cancel", role: .cancel) { appState.folderRenameRequest = nil }
-            } message: {
-                Text("Renames the folder on disk. Tags and collections are kept.")
             }
-            .onChange(of: appState.newSubfolderRequest?.id) { _, id in
-                if id != nil { draft = "" }
-            }
-            .onChange(of: appState.folderRenameRequest?.id) { _, id in
-                if id != nil { draft = appState.folderRenameRequest?.displayName ?? "" }
+            // Library-wide tag rename. Raised by the chip row's context menu,
+            // presented here — the chip is far too narrow to size a card.
+            .museModal(isPresented: Binding(
+                get: { appState.tagRenameRequest != nil },
+                set: { if !$0 { appState.tagRenameRequest = nil } }),
+                       width: ModalMessageCardWidth.standard,
+                       palette: appState.moodPalette) {
+                if let label = appState.tagRenameRequest {
+                    ModalPromptCard(
+                        title: String(localized: "Rename Tag"),
+                        message: String(localized: "Renames “\(label)” on every image in the library."),
+                        placeholder: String(localized: "Tag name"),
+                        confirmTitle: String(localized: "Rename"),
+                        initialText: label,
+                        onCommit: { appState.commitTagRename(from: label, to: $0) },
+                        onCancel: { appState.tagRenameRequest = nil })
+                    .id(label)
+                }
             }
     }
 }

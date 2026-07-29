@@ -516,7 +516,22 @@ final class AppState: ObservableObject {
             || duplicatesSheetVisible || reconnectShown
             || metadataImportRequest != nil || collectionModal != nil
             || addTagRequest != nil || newCollectionRequest
+            // Confirms, errors and name prompts were system alerts (their own
+            // window, so the grid couldn't get keys). As in-window cards they
+            // have to gate the key catcher and Escape like every other modal.
+            || alertRequest != nil
+            || folderOpError != nil || backupError != nil
+            || fileRenameError != nil || !moveFailureNames.isEmpty
+            || collectionRenameAlertRequest != nil || fileRenameRequest != nil
+            || newSubfolderRequest != nil || folderRenameRequest != nil
+            || tagRenameRequest != nil
     }
+
+    /// A confirm/error card awaiting presentation by the shell — raised from
+    /// views that can't present one themselves (a sidebar row, a tile, or the
+    /// content of another modal). Same hoisting rule as `collectionModal`:
+    /// an in-window card is sized from its host's geometry. See `MuseAlert`.
+    @Published var alertRequest: MuseAlert?
 
     /// A collection-scoped modal awaiting presentation by the shell. Set from a
     /// sidebar row / the Collections page / the share button; `ContentView`
