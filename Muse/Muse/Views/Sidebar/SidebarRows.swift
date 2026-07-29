@@ -245,6 +245,14 @@ struct SectionSortMenu<Mode: Hashable & Identifiable>: View {
 
     @State private var hovering = false
 
+    /// Accent ONLY while the section is hand-arranged — manual is the one mode
+    /// where the on-screen order is something the user built rather than a rule.
+    /// Every other mode uses the header's own secondary grey so the control
+    /// recedes into the label beside it.
+    private var glyphColor: Color {
+        isManual ? .accentColor : .secondary
+    }
+
     var body: some View {
         Menu {
             ForEach(modes) { mode in
@@ -259,16 +267,19 @@ struct SectionSortMenu<Mode: Hashable & Identifiable>: View {
             }
         } label: {
             Image(systemName: "arrow.up.and.down.text.horizontal")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(isManual ? AnyShapeStyle(Color.accentColor)
-                                          : AnyShapeStyle(.secondary))
-                .frame(width: 18, height: 18)
+                .font(.system(size: 9, weight: .semibold))
+                .frame(width: 15, height: 15)
                 .background(Circle().fill(Color.primary.opacity(hovering ? 0.10 : 0)))
                 .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
+        // On the MENU, not just its label image: a menu style paints its own
+        // label content, so a foregroundStyle applied inside the label was
+        // overridden and the control never actually turned accent in Manual.
+        .foregroundStyle(glyphColor)
+        .tint(glyphColor)
         .onHover { hovering = $0 }
         .help(accessibilityTitle)
         .accessibilityLabel(accessibilityTitle)

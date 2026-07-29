@@ -55,6 +55,21 @@ final class TagStore: ObservableObject {
     }
 
     /// All distinct tag labels in use, alphabetical.
+    /// The most-used labels, most-used first. The context menu offers a SHORT
+    /// list of these — an alphabetical dump of every tag in the library was a
+    /// menu hundreds of rows long that you had to scroll to use.
+    func topLabels(limit: Int) async -> [String] {
+        guard let queue = Database.shared.dbQueue else { return [] }
+        return (try? await queue.read { db in
+            try String.fetchAll(db, sql: """
+                SELECT label FROM tags
+                GROUP BY label
+                ORDER BY COUNT(*) DESC, label COLLATE NOCASE
+                LIMIT ?
+                """, arguments: [limit])
+        }) ?? []
+    }
+
     func allLabels() async -> [String] {
         guard let queue = Database.shared.dbQueue else { return [] }
         return (try? await queue.read { db in

@@ -144,19 +144,20 @@ enum CollectionAppearance {
         return .symbol(isValidSymbol(raw) ? raw : def)
     }
 
-    /// The curated emoji grid, 6 wide × 8 rows. Mirrors the SF Symbol catalog's
-    /// subject coverage (nature, media, travel, food, objects, people) so the
-    /// two picker tabs read as one set expressed twice. Anything outside these
-    /// 48 is reachable through the system emoji picker beside the grid.
+    /// The curated emoji grid: 50 entries, laid out 10 wide × 5 rows. Mirrors
+    /// the SF Symbol catalog's subject coverage (nature, media, travel, food,
+    /// objects, animals, people) so the two picker tabs read as one set
+    /// expressed twice.
+    ///
+    /// Curated and CLOSED — there's no free-entry field. Every entry here is
+    /// checked to render legibly at sidebar row size; an arbitrary pasted
+    /// character (a rare glyph with no colour font, a tofu box) would not be.
     static let emojiCatalog: [String] = [
-        "⭐️", "❤️", "🔥", "✨", "💡", "👑",
-        "🎨", "🖌️", "📷", "🖼️", "🎬", "🎵",
-        "📁", "📚", "🔖", "🏷️", "📌", "🗂️",
-        "🌊", "🌿", "🌸", "🌙", "☀️", "🌈",
-        "🏠", "🏙️", "🗺️", "✈️", "🚗", "🌍",
-        "🍔", "☕️", "🍕", "🍰", "🍷", "🥑",
-        "🐾", "🐶", "🐱", "🦋", "🐢", "🦊",
-        "🎁", "🛒", "🎮", "💼", "🏆", "🎯",
+        "⭐️", "❤️", "🔥", "✨", "💡", "👑", "🎯", "🏆", "🎁", "🔔",
+        "🎨", "🖌️", "📷", "🖼️", "🎬", "🎵", "📝", "📐", "🧩", "🕹️",
+        "📁", "📚", "🔖", "🏷️", "📌", "🗂️", "💼", "🛒", "💎", "🔑",
+        "🌊", "🌿", "🌸", "🌙", "☀️", "🌈", "🍃", "🌵", "🍁", "❄️",
+        "🏠", "🏙️", "🗺️", "✈️", "🚗", "🌍", "🍔", "☕️", "🐾", "🦊",
     ]
 
     /// True when the name exists in this OS's SF Symbols catalog.

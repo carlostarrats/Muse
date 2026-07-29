@@ -54,15 +54,17 @@ struct SelectionActionsMenu: View {
             }
             Button("New Collection from Selection") { appState.requestNewCollection(fallback: path) }
             Menu("Add Tag") {
-                // The grid had no way to create a tag at all — this menu listed
+                // The grid had no way to CREATE a tag at all — this menu listed
                 // only labels that already existed, so a new one could be made
-                // solely from the hero viewer. This opens the shell's Add Tag
-                // card, which both creates AND autocompletes against what's
-                // already there.
+                // solely from the hero viewer. New Tag… opens the shell's card,
+                // which creates and searches the full set.
                 Button("New Tag…") { appState.requestAddTag(fallback: path) }
-                if !appState.allTagLabels.isEmpty {
+                // A SHORT list of the most-used below it, not every tag in the
+                // library: the alphabetical dump ran to hundreds of rows and had
+                // to be scrolled, which is not a menu anyone uses.
+                if !appState.topTagLabels.isEmpty {
                     Divider()
-                    ForEach(appState.allTagLabels, id: \.self) { label in
+                    ForEach(appState.topTagLabels, id: \.self) { label in
                         // Display the localized vision term (e.g. "chien"); the
                         // canonical English `label` is still what gets written.
                         Button(VocabularyLocalizer.shared.display(label)) { addTag(label) }

@@ -189,8 +189,10 @@ final class CollectionAppearanceTests: XCTestCase {
         }
     }
 
-    func testEmojiCatalogFillsTheSixWideGrid() {
-        XCTAssertEqual(CollectionAppearance.emojiCatalog.count % 6, 0)
+    /// The picker lays the catalog out 10 across; a count that isn't a multiple
+    /// of that leaves a ragged last row.
+    func testEmojiCatalogFillsTheTenWideGrid() {
+        XCTAssertEqual(CollectionAppearance.emojiCatalog.count % 10, 0)
         XCTAssertEqual(Set(CollectionAppearance.emojiCatalog).count,
                        CollectionAppearance.emojiCatalog.count,
                        "the emoji catalog has a duplicate")

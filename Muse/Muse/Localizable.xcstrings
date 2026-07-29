@@ -673,16 +673,6 @@
         }
       }
     },
-    "Any emoji": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Autre emoji"
-          }
-        }
-      }
-    },
     "Applies to folders added from now on. Tags and collections you already have are kept. You can still analyze a folder or build your own collections by hand at any time.": {
       "localizations": {
         "fr": {
@@ -2240,16 +2230,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cadence"
-          }
-        }
-      }
-    },
-    "From similar images": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "D’après des images similaires"
           }
         }
       }
@@ -3827,16 +3807,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ouvrir le lien de %@"
-          }
-        }
-      }
-    },
-    "Open the system emoji picker": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrir le sélecteur d’emoji du système"
           }
         }
       }
@@ -6109,6 +6079,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zoom arrière"
+          }
+        }
+      }
+    },
+    "Suggestions": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suggestions"
           }
         }
       }

@@ -43,6 +43,11 @@ struct CustomizeCollectionSheet: View {
     @State private var hoveredEmoji: String?
     private static let defaultColorHoverID = "__default__"
 
+    /// Height reserved for the picker area under the tab, matching the taller
+    /// (Symbols) layout: an 11pt heading + 10pt gap + the 7-row colour grid
+    /// (7×24 + 6×10). Held constant so switching tabs never resizes the card.
+    private static let pickerHeight: CGFloat = 262
+
     /// This collection's "default" glyph — the smart funnel for a smart
     /// collection, the classic stack otherwise — so the preview and Reset match
     /// what the sidebar shows for it.
@@ -135,16 +140,24 @@ struct CustomizeCollectionSheet: View {
                     // own, so the Color column isn't dimmed on that tab — it
                     // isn't there. The emoji grid takes the whole width instead
                     // of squeezing into the half a two-column layout would leave.
-                    switch iconTab {
-                    case .symbols:
-                        HStack(alignment: .top, spacing: 24) {
-                            colorColumn
-                            Divider()
-                            symbolColumn
+                    Group {
+                        switch iconTab {
+                        case .symbols:
+                            HStack(alignment: .top, spacing: 24) {
+                                colorColumn
+                                Divider()
+                                symbolColumn
+                            }
+                        case .emoji:
+                            emojiColumn
                         }
-                    case .emoji:
-                        emojiColumn
                     }
+                    // A FIXED picker area, sized to the taller (Symbols) layout.
+                    // Without it the card's height tracked whichever tab was
+                    // showing and the modal resized as you switched — the two
+                    // tabs are one control and should occupy one box.
+                    .frame(height: Self.pickerHeight, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -306,15 +319,14 @@ struct CustomizeCollectionSheet: View {
     }
 
     /// The Emoji tab's whole body — full width, since there's no Color column
-    /// beside it.
+    /// beside it. The curated catalog is all there is: no free-entry field, so
+    /// what's offered is what renders well at row size.
     private var emojiColumn: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Icon")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
             emojiGrid
-            emojiField
-                .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -426,14 +438,20 @@ struct CustomizeCollectionSheet: View {
     /// Same 6-wide lattice and same cell chrome as the symbol grid, so the two
     /// tabs feel like one picker rather than two.
     private var emojiGrid: some View {
-        // 8 wide: 8×34 + 7×10 = 342pt inside the card's 424pt content width, and
-        // it divides the 48-entry catalog into exactly 6 rows (no ragged tail).
-        LazyVGrid(columns: Array(repeating: GridItem(.fixed(34), spacing: 10), count: 8),
-                  spacing: 10) {
+        // 10 wide: 10×34 + 9×10 = 430pt across the card's full content width,
+        // and it divides the 50-entry catalog into exactly 5 rows.
+        //
+        // `.frame(alignment: .leading)` is load-bearing: a LazyVGrid of FIXED
+        // columns centres itself in whatever width it's offered, so without it
+        // the grid floated in the middle of the card while everything around it
+        // was left-aligned.
+        LazyVGrid(columns: Array(repeating: GridItem(.fixed(34), spacing: 10), count: 10),
+                  alignment: .leading, spacing: 10) {
             ForEach(CollectionAppearance.emojiCatalog, id: \.self) { emoji in
                 emojiCell(emoji)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func emojiCell(_ emoji: String) -> some View {
@@ -465,31 +483,6 @@ struct CustomizeCollectionSheet: View {
         // system name from the character itself, which is the useful reading.
         .accessibilityLabel(String(localized: "Emoji \(emoji)"))
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-    }
-
-    /// Escape hatch past the 48-emoji catalog: type or paste any single emoji,
-    /// or open the system picker. Input is trimmed to its LAST grapheme cluster
-    /// so pasting a string leaves one usable character rather than an error.
-    private var emojiField: some View {
-        HStack(spacing: 8) {
-            TextField("Any emoji", text: Binding(
-                get: { draftEmoji },
-                set: { draftEmoji = String($0.suffix(1)) }
-            ))
-            .textFieldStyle(.roundedBorder)
-            .frame(width: 90)
-
-            Button {
-                NSApp.orderFrontCharacterPalette(nil)
-            } label: {
-                Image(systemName: "face.smiling")
-            }
-            .buttonStyle(.borderless)
-            .help("Open the system emoji picker")
-            .accessibilityLabel("Open the system emoji picker")
-
-            Spacer(minLength: 0)
-        }
     }
 
     // MARK: - Save

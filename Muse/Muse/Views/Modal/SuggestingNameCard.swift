@@ -2,77 +2,85 @@
 //  SuggestingNameCard.swift
 //  Muse
 //
-//  "Type a name — we'll complete it if it already exists." The shared card
-//  behind the grid's Add Tag and New Collection prompts.
+//  "Type a name, or pick one you already use." The shared card behind the
+//  grid's Add Tag and New Collection prompts.
 //
-//  These were SwiftUI `.alert`s, which can host only TextFields and Buttons, so
-//  a user had no way to see that "sunset" already existed before typing
-//  "Sunsets". The first pass at fixing that dropped a full filtered LIST under
-//  the field — but a list is a lot of card for a job the field can do itself,
-//  and its changing length made the card resize on every keystroke.
+//  These were SwiftUI `.alert`s, which can host only TextFields and Buttons —
+//  so a user had no way to see that "sunset" already existed before typing
+//  "Sunsets". As an in-window card it can show the matches.
 //
-//  So: the field INLINE-COMPLETES against what exists (type "sun", see
-//  "sun|set" with "set" selected — Return or → accepts, Delete rejects), and
-//  below it sits a short, FIXED row of suggested tags. Nothing about the card's
-//  size depends on what you've typed.
+//  The result list is a FIXED number of rows, reserved whether or not they're
+//  filled. That's the whole reason the count is capped: a list that grew and
+//  shrank with the query resized the card on every keystroke, moving the
+//  buttons out from under the cursor.
 //
 //  Modal rules this obeys (see Views/Modal/ModalPresenter.swift):
 //   - presented at the SHELL, never from a tile or a row;
-//   - naturally sized and CONSTANT — the suggestion area reserves its height
-//     whether or not it has content, so the card never grows or shrinks while
-//     the user types;
+//   - naturally sized and CONSTANT — see the reserved rows above;
 //   - the draft lives in LOCAL @State and reaches AppState only on commit.
 //     Binding a TextField straight to a @Published on AppState re-evaluates the
 //     whole shell on every keystroke.
 //
 
 import SwiftUI
-import AppKit
 
 struct SuggestingNameCard: View {
     let title: String
     /// One line under the title saying what this will act on.
     let subtitle: String
     let placeholder: String
-    /// Everything that already exists — the pool the field completes against.
+    /// Everything that already exists, filtered as the user types.
     let candidates: [TagSuggest.Candidate]
-    /// A short, pre-ranked row of offers shown under the field. For Add Tag
-    /// these are tags carried by visually similar photos; empty is fine.
+    /// What to show BEFORE anything is typed. For Add Tag these are tags carried
+    /// by visually similar photos; empty falls back to the most-used candidates.
     var suggestions: [TagSuggest.Candidate] = []
-    /// Heading above the suggestion row.
-    var suggestionsTitle: String = ""
-    /// Canonical label → the term to SHOW. Completion matches on the shown term
-    /// (a French user types "chien") but commits the canonical one.
+    /// Canonical label → the term to SHOW. Matching runs on the shown term (a
+    /// French user types "chien") but commits the canonical one.
     var displaying: (String) -> String = { $0 }
     let confirmTitle: String
-    /// Called with the canonical label — a suggestion's own label, or the typed
-    /// text when the user is creating something new.
+    /// Called with the canonical label — a row's own label, or the typed text
+    /// when the user is creating something new.
     let onCommit: (String) -> Void
     let onCancel: () -> Void
 
     @State private var draft = ""
+    /// Index of the keyboard-highlighted row, or nil when the user hasn't
+    /// arrowed into the list (Return then commits the typed text).
+    @State private var highlighted: Int?
     @FocusState private var fieldFocused: Bool
 
-    /// How many offers the row holds. Fixed: the row reserves this much height
-    /// even when it has fewer, so the card can't resize as suggestions load.
-    static let suggestionSlots = 6
+    /// Rows the list holds — and always reserves. Small on purpose: this is a
+    /// suggestion, not a browser. Typing narrows toward what you want; the tag
+    /// you can't find this way is one you're about to create anyway.
+    static let rowCount = 5
+    private static let rowHeight: CGFloat = 26
 
     private var trimmed: String {
         draft.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// The pool the field completes against, as display terms.
-    private var completionPool: [String] {
-        candidates.map { displaying($0.label) }
+    /// Empty field → the caller's suggestions (falling back to most-used);
+    /// typing → matches from the full pool.
+    private var shown: [TagSuggest.Candidate] {
+        if trimmed.isEmpty {
+            let base = suggestions.isEmpty
+                ? TagSuggest.rank(candidates, query: "", displaying: displaying,
+                                  limit: Self.rowCount)
+                : suggestions
+            return Array(base.prefix(Self.rowCount))
+        }
+        return TagSuggest.rank(candidates, query: draft, displaying: displaying,
+                               limit: Self.rowCount)
     }
 
-    /// Canonical label for a display term the user has landed on, so committing
-    /// an inline completion writes the stored key, not the translated text.
-    private func canonical(for displayed: String) -> String {
+    /// An exact hit on something that already exists — committing then reuses
+    /// it rather than minting a near-duplicate that differs only in case.
+    private var exactMatch: TagSuggest.Candidate? {
         candidates.first {
-            displaying($0.label).compare(displayed, options: [.caseInsensitive, .diacriticInsensitive])
+            displaying($0.label).compare(trimmed,
+                                         options: [.caseInsensitive, .diacriticInsensitive])
                 == .orderedSame
-        }?.label ?? displayed
+        }
     }
 
     var body: some View {
@@ -93,15 +101,17 @@ struct SuggestingNameCard: View {
             }
             .padding(.bottom, 16)
 
-            CompletingTextField(text: $draft,
-                                placeholder: placeholder,
-                                completions: completionPool,
-                                onSubmit: commit)
-                .frame(height: 22)
+            TextField(placeholder, text: $draft)
+                .textFieldStyle(.roundedBorder)
                 .focused($fieldFocused)
+                .onSubmit(commit)
+                // Typing invalidates any arrowed-to row: the list under the
+                // cursor just changed, so a stale index would commit whatever
+                // happens to sit at that position now.
+                .onChange(of: draft) { _, _ in highlighted = nil }
 
-            suggestionRow
-                .padding(.top, 16)
+            suggestionList
+                .padding(.top, 12)
 
             HStack {
                 Spacer()
@@ -109,164 +119,101 @@ struct SuggestingNameCard: View {
                     .keyboardShortcut(.cancelAction)
                 Button(confirmTitle) { commit() }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(trimmed.isEmpty)
+                    .disabled(trimmed.isEmpty && highlighted == nil)
             }
             .padding(.top, 20)
         }
         .padding(24)
+        // Arrow keys drive the list even while the field holds focus: a
+        // single-line field ignores ↑/↓, so they're free to mean "move through
+        // the suggestions" here.
+        .onKeyPress(.upArrow) { moveHighlight(-1) }
+        .onKeyPress(.downArrow) { moveHighlight(1) }
         .onAppear { fieldFocused = true }
     }
 
-    /// Fixed-height offers area. It reserves its space unconditionally — the
-    /// suggestions arrive from an async lookup, and a row that appears late
-    /// would otherwise shove the buttons down under the user's cursor.
-    private var suggestionRow: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(suggestionsTitle)
+    private var suggestionList: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(trimmed.isEmpty ? String(localized: "Suggestions")
+                                 : String(localized: "Matches"))
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(.secondary)
-                .opacity(suggestions.isEmpty ? 0 : 1)
+                .padding(.bottom, 6)
 
-            PillFlow(gap: 6, hovered: nil) {
-                ForEach(suggestions.prefix(Self.suggestionSlots)) { candidate in
-                    Button {
-                        onCommit(candidate.label)
-                    } label: {
-                        Text(displaying(candidate.label))
-                            .font(.system(size: 11, weight: .medium))
-                            .lineLimit(1)
-                            .padding(.horizontal, 10)
-                            .frame(height: 22)
-                            .background(Capsule(style: .continuous)
-                                .fill(Color.primary.opacity(0.08)))
-                            .contentShape(Capsule(style: .continuous))
-                    }
-                    .buttonStyle(.plain)
+            // A plain VStack, NOT a List or a ScrollView: this card is measured
+            // by the presenter and a scroller would take every point offered.
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(shown.enumerated()), id: \.element.id) { index, candidate in
+                    row(candidate, index: index)
                 }
             }
+            // Reserve every row's height whether or not it's filled, so the
+            // card is exactly as tall with five matches as with none.
+            .frame(height: Self.rowHeight * CGFloat(Self.rowCount), alignment: .top)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        // Two rows of 22pt pills + gap + heading: the most the flow can use at
-        // `suggestionSlots`. Held constant so the card's height is fixed.
-        .frame(height: 62, alignment: .top)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Commit the typed text (inline completion included — the field's text
-    /// already contains the completed suffix), mapped back to its canonical
-    /// label so differing case or accents can't mint a near-duplicate.
+    private func row(_ candidate: TagSuggest.Candidate, index: Int) -> some View {
+        let isHighlighted = highlighted == index
+        return Button {
+            onCommit(candidate.label)
+        } label: {
+            HStack(spacing: 8) {
+                Text(displaying(candidate.label))
+                    .font(.system(size: 13))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 8)
+                if candidate.count > 0 {
+                    Text("\(candidate.count)")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+            .padding(.horizontal, 8)
+            .frame(height: Self.rowHeight)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(isHighlighted ? Color.accentColor.opacity(0.18) : .clear)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isHighlighted ? [.isButton, .isSelected] : .isButton)
+    }
+
+    /// Return commits the arrowed-to row if there is one; otherwise the typed
+    /// text — so creating something new never needs the mouse, and picking an
+    /// existing one never needs to retype it exactly.
     private func commit() {
+        if let i = highlighted, shown.indices.contains(i) {
+            onCommit(shown[i].label)
+            return
+        }
+        if let match = exactMatch {
+            onCommit(match.label)
+            return
+        }
         guard !trimmed.isEmpty else { return }
-        onCommit(canonical(for: trimmed))
-    }
-}
-
-// MARK: - Inline-completing field
-
-/// An `NSTextField` that completes as you type: the matched suffix is inserted
-/// and left SELECTED, so continuing to type replaces it and Delete rejects it.
-///
-/// AppKit, not SwiftUI: `TextField` has no way to place a selection range, which
-/// is the entire mechanism here. `NSTextView.complete(_:)` isn't used either —
-/// it opens the system completion DROPDOWN, which is the list this design
-/// deliberately removed.
-private struct CompletingTextField: NSViewRepresentable {
-    @Binding var text: String
-    let placeholder: String
-    let completions: [String]
-    let onSubmit: () -> Void
-
-    func makeNSView(context: Context) -> NSTextField {
-        let field = NSTextField(string: text)
-        field.placeholderString = placeholder
-        field.delegate = context.coordinator
-        field.isBordered = true
-        field.bezelStyle = .roundedBezel
-        field.focusRingType = .default
-        field.font = .systemFont(ofSize: 13)
-        field.lineBreakMode = .byTruncatingTail
-        field.cell?.sendsActionOnEndEditing = false
-        return field
+        onCommit(trimmed)
     }
 
-    func updateNSView(_ field: NSTextField, context: Context) {
-        context.coordinator.parent = self
-        // Only write when the value genuinely differs: assigning stringValue
-        // resets the insertion point, which would fight the completion's
-        // selection on every re-render.
-        if field.stringValue != text { field.stringValue = text }
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator(self) }
-
-    final class Coordinator: NSObject, NSTextFieldDelegate {
-        var parent: CompletingTextField
-        /// True while we're programmatically inserting a completion, so the
-        /// resulting change notification doesn't recurse into completing again.
-        private var isCompleting = false
-
-        init(_ parent: CompletingTextField) { self.parent = parent }
-
-        func controlTextDidChange(_ obj: Notification) {
-            guard let field = obj.object as? NSTextField else { return }
-            guard !isCompleting else { return }
-
-            let typed = field.stringValue
-            parent.text = typed
-
-            // Only complete when the caret is at the END of what was typed —
-            // completing mid-edit (after a Delete, or an insertion in the
-            // middle) would fight the user rather than help.
-            guard !typed.isEmpty,
-                  let editor = field.currentEditor(),
-                  editor.selectedRange.location == typed.count,
-                  editor.selectedRange.length == 0,
-                  let match = bestCompletion(for: typed)
-            else { return }
-
-            isCompleting = true
-            field.stringValue = match
-            // Leave the ADDED suffix selected: typing on replaces it, Delete
-            // removes it, → accepts it. That's the standard inline-completion
-            // contract (Safari's address bar, Mail's To: field).
-            editor.selectedRange = NSRange(location: typed.count,
-                                           length: match.count - typed.count)
-            parent.text = match
-            isCompleting = false
+    /// Move the highlight, clamped at both ends. Arrowing UP off the first row
+    /// returns to "nothing highlighted", which is how you get back to creating
+    /// the text you typed.
+    private func moveHighlight(_ delta: Int) -> KeyPress.Result {
+        let rows = shown
+        guard !rows.isEmpty else { return .ignored }
+        switch (highlighted, delta) {
+        case (nil, 1):  highlighted = 0
+        case (nil, _):  return .ignored
+        case (let i?, _):
+            let next = i + delta
+            highlighted = next < 0 ? nil : min(next, rows.count - 1)
         }
-
-        /// Shortest prefix match, so the completion is the least presumptuous
-        /// one available; alphabetical breaks ties so it doesn't flicker
-        /// between equals as the pool re-orders.
-        private func bestCompletion(for typed: String) -> String? {
-            let needle = fold(typed)
-            guard !needle.isEmpty else { return nil }
-            return parent.completions
-                .filter { fold($0).hasPrefix(needle) && $0.count > typed.count }
-                .min { a, b in
-                    a.count != b.count ? a.count < b.count
-                        : a.localizedCaseInsensitiveCompare(b) == .orderedAscending
-                }
-        }
-
-        private func fold(_ s: String) -> String {
-            s.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-        }
-
-        func control(_ control: NSControl, textView: NSTextView,
-                     doCommandBy selector: Selector) -> Bool {
-            if selector == #selector(NSResponder.insertNewline(_:)) {
-                parent.onSubmit()
-                return true
-            }
-            // → at the end of the text accepts the completion by collapsing the
-            // selection, rather than moving the caret out of a selected suffix.
-            if selector == #selector(NSResponder.moveRight(_:)),
-               textView.selectedRange.length > 0 {
-                textView.selectedRange = NSRange(
-                    location: textView.string.count, length: 0)
-                return true
-            }
-            return false
-        }
+        return .handled
     }
 }

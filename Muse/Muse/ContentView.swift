@@ -204,7 +204,6 @@ struct ContentView: View {
                         placeholder: String(localized: "Tag name"),
                         candidates: tagSuggestCandidates,
                         suggestions: similarTags,
-                        suggestionsTitle: String(localized: "From similar images"),
                         displaying: { VocabularyLocalizer.shared.display($0) },
                         confirmTitle: String(localized: "Add"),
                         onCommit: { appState.confirmAddTag(label: $0) },
@@ -1067,7 +1066,7 @@ struct ContentView: View {
         let existing = Set(await TagStore.shared.tags(for: url).map(\.label))
         let found = await SimilarTagSuggestions.candidates(
             for: url, excluding: existing,
-            limit: SuggestingNameCard.suggestionSlots)
+            limit: SuggestingNameCard.rowCount)
         // The card may have been dismissed or re-targeted while this ran.
         guard appState.addTagRequest?.id == request.id else { return }
         similarTags = found
