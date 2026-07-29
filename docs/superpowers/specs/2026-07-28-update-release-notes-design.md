@@ -103,8 +103,13 @@ Every failure mode is a hard stop with a named cause, before anything
 irreversible:
 
 - Missing notes file → preflight failure, before the archive.
-- Notes present but not embedded (naming/flag drift) → post-generate assertion
-  failure, before publishing.
+- **Empty or whitespace-only** notes file → preflight failure. An empty file
+  satisfies `-f` and still yields an empty `<description>`, so treating it as
+  "present" ships a blank dialog on a green run — the `touch`-then-forget case.
+- Notes present but not embedded (naming/flag drift), **or embedded empty** →
+  post-generate assertion failure, before publishing. The assertion extracts the
+  CDATA body and requires non-whitespace content; checking that the
+  `<description>` tag merely exists is not enough.
 - `--no-notes` → an explicit, visible choice, echoed in the run output.
 
 Nothing degrades silently, because a silent degrade is the bug being fixed.

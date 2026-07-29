@@ -6881,3 +6881,20 @@ next real release, rendering is unverified.
 French notes were considered and deferred: Sparkle falls back to the single
 description for every locale, `generate_appcast` has no native localized-notes
 support, and adding one would put a translation gate on every release.
+
+**QA pass on this session's own change** found one defect and cleared two
+suspicions. The defect: an **empty** notes file passed both guards — `-f`
+satisfied the preflight, and the assertion only checked that a `<description>`
+TAG existed, which an empty CDATA still is. So `touch
+docs/release-notes-1.5.md` would print "✓ Release notes embedded" and ship a
+blank dialog: the exact green-run-blank-dialog failure the feature exists to
+prevent, reintroduced by the guard meant to prevent it. Both ends now reject
+it — the preflight requires non-whitespace content, and the assertion extracts
+the CDATA body rather than matching the tag. Cleared: notes containing a `]]>`
+CDATA terminator (Sparkle splits it into `]]]]><![CDATA[>`; `xmllint` confirms
+the appcast stays well-formed — worth knowing, because a malformed appcast
+would break updating entirely, not just the notes), and `<`/`&`/emoji in the
+notes. Verified by extracting the script's real step-6 block with `awk` and
+running it against the actual 1.4 DMG across four notes shapes (real, empty,
+whitespace-only, absent) — not by re-typing the logic into a test, which would
+only have tested the retype.

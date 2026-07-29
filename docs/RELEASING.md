@@ -75,8 +75,9 @@ in case you need to run or debug a single stage.
 Write `docs/release-notes-<version>.md` in user-facing language — what changed
 and why it matters, not commit subjects. This one file is the *only* source for
 both the Sparkle update dialog and the GitHub release body, so a release can't
-be cut without it (`release.sh` fails in preflight; `--no-notes` is the
-deliberate opt-out and ships an empty dialog).
+be cut without it (`release.sh` fails in preflight — an empty or whitespace-only
+file is rejected too, since it would ship a blank dialog on an otherwise green
+run; `--no-notes` is the deliberate opt-out).
 
 ### 1. Bump the version
 

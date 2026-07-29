@@ -70,11 +70,20 @@ command -v create-dmg >/dev/null 2>&1 || { echo "✗ create-dmg missing — brew
 
 # The release notes are what the user reads in the Sparkle update dialog before
 # agreeing to install. Catch a missing file HERE, not after a 20-minute archive.
-if [[ "$NOTES" == "yes" && ! -f "$NOTES_SRC" ]]; then
-  echo "✗ release notes missing: docs/release-notes-$VERSION.md" >&2
-  echo "  Write them first (they appear in the Sparkle update dialog AND the" >&2
-  echo "  GitHub release), or re-run with --no-notes to ship without notes." >&2
-  exit 1
+# EMPTY counts as missing: an empty file satisfies `-f` and still produces an
+# empty <description>, i.e. a blank dialog on an otherwise green run — which is
+# the exact failure this check exists to prevent (`touch`-then-forget).
+if [[ "$NOTES" == "yes" ]]; then
+  if [[ ! -f "$NOTES_SRC" ]]; then
+    echo "✗ release notes missing: docs/release-notes-$VERSION.md" >&2
+    echo "  Write them first (they appear in the Sparkle update dialog AND the" >&2
+    echo "  GitHub release), or re-run with --no-notes to ship without notes." >&2
+    exit 1
+  elif ! grep -q '[^[:space:]]' "$NOTES_SRC"; then
+    echo "✗ release notes are empty: docs/release-notes-$VERSION.md" >&2
+    echo "  An empty file would ship a blank update dialog." >&2
+    exit 1
+  fi
 fi
 # NB: an `[[ … ]] && echo` one-liner here would return 1 on the false branch and
 # `set -e` would kill the script on every normal release. Keep it an `if`.
@@ -189,10 +198,17 @@ fi
 "$SPARKLE_BIN/generate_appcast" --maximum-deltas 0 --embed-release-notes "$REL_DIR" \
   --download-url-prefix "https://github.com/$REPO_SLUG/releases/download/$TAG/"
 
+# Assert the notes really landed. Checking that a <description> TAG exists is
+# not enough — an empty CDATA is still a tag — so pull the body out and require
+# non-whitespace content. Both failure shapes (no tag, empty tag) land here.
 if [[ "$NOTES" == "yes" ]]; then
-  if ! grep -q '<description' "$REL_DIR/appcast.xml"; then
-    echo "✗ appcast has no <description> — the update dialog would be blank." >&2
-    echo "  Check that $REL_DIR/Muse-$VERSION.md exists and matches the DMG basename." >&2
+  notes_body="$(tr '\n' ' ' < "$REL_DIR/appcast.xml" \
+    | sed -n 's/.*<description[^>]*><!\[CDATA\[\(.*\)\]\]><\/description>.*/\1/p' \
+    | tr -d '[:space:]')"
+  if [[ -z "$notes_body" ]]; then
+    echo "✗ appcast carries no release notes — the update dialog would be blank." >&2
+    echo "  Check that $REL_DIR/Muse-$VERSION.md exists, matches the DMG basename," >&2
+    echo "  and that generate_appcast ran with --embed-release-notes." >&2
     exit 1
   fi
   echo "✓ Release notes embedded in the appcast"
