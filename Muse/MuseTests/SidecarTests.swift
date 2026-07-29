@@ -246,4 +246,58 @@ extension SidecarTests {
             mergeExisting: false, noteAuthoritative: true)
         XCTAssertNil(out.note)
     }
+
+    // MARK: - Rating exclusivity across sync
+    //
+    // A rating is stored as a manual tag, so the tag UNION would keep both
+    // sides' ratings — two devices rating the same photo offline would sync to
+    // a file carrying two ratings, breaking one-rating-per-photo.
+
+    private func sidecar(updatedAt: Int64, tags: [SidecarTag]) -> Sidecar {
+        Sidecar(schema: 1, updated_at: updatedAt, content_hash: "h", kind: "image",
+                width: nil, height: nil, duration_seconds: nil, created_at: nil,
+                modified_at: nil, caption: nil, dominant_color: nil, palette: nil,
+                feature_print: nil, analyzed_hash: nil, intent: nil,
+                intent_model_version: nil, tags: tags)
+    }
+
+    private func manual(_ label: String) -> SidecarTag {
+        SidecarTag(label: label, source: "manual", confidence: nil, model_version: nil)
+    }
+
+    func testMergeKeepsExactlyOneRatingNewestWins() {
+        let older = sidecar(updatedAt: 100, tags: [manual("★★★"), manual("beach")])
+        let newer = sidecar(updatedAt: 200, tags: [manual("★★"), manual("sunset")])
+        let merged = Sidecar.merge(older, newer)
+        let ratings = merged.tags.filter { StarRating.isRating($0.label) }
+        XCTAssertEqual(ratings.map(\.label), ["★★"], "newest rating wins, and only one survives")
+        // Ordinary tags still union.
+        XCTAssertEqual(Set(merged.tags.map(\.label)), ["★★", "beach", "sunset"])
+    }
+
+    func testMergeKeepsOlderRatingWhenNewerHasNone() {
+        // Union semantics never delete; a genuine clear travels the manual-edit
+        // path, which bypasses merge entirely.
+        let older = sidecar(updatedAt: 100, tags: [manual("★★★★")])
+        let newer = sidecar(updatedAt: 200, tags: [manual("beach")])
+        let merged = Sidecar.merge(older, newer)
+        XCTAssertEqual(merged.tags.filter { StarRating.isRating($0.label) }.map(\.label), ["★★★★"])
+    }
+
+    func testMergeLeavesASingleRatingAlone() {
+        let a = sidecar(updatedAt: 100, tags: [manual("★★★"), manual("beach")])
+        let b = sidecar(updatedAt: 200, tags: [manual("★★★"), manual("dusk")])
+        let merged = Sidecar.merge(a, b)
+        XCTAssertEqual(merged.tags.filter { StarRating.isRating($0.label) }.map(\.label), ["★★★"])
+    }
+
+    /// A sidecar written by an older build can already carry two ratings on
+    /// disk; materializing it must not reproduce the broken state locally.
+    func testTagRowsCollapseAPreexistingDoubleRating() {
+        let broken = sidecar(updatedAt: 1, tags: [manual("★★"), manual("★★★★"), manual("beach")])
+        var n = 0
+        let rows = broken.tagRows(fileID: "f1", parentDir: "/A", makeID: { n += 1; return "t\(n)" })
+        XCTAssertEqual(rows.filter { StarRating.isRating($0.label) }.map(\.label), ["★★★★"])
+        XCTAssertTrue(rows.contains { $0.label == "beach" })
+    }
 }

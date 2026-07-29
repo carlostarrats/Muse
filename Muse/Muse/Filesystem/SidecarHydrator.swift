@@ -47,9 +47,23 @@ enum SidecarHydrator {
                 sidecar.apply(onto: &file)
                 try file.update(db)
             }
+            // A rating is a manual tag but is MUTUALLY EXCLUSIVE, and the insert
+            // below only skips a tag whose exact label already exists — so a
+            // sidecar rating of "★★★★" would land alongside a local "★★" and
+            // leave the file carrying two. Ratings are therefore only hydrated
+            // onto a file that has NONE locally: a rating the user set on THIS
+            // device is never overwritten by a syncing one, which matches how
+            // `NoteStore.applyHydrated` protects a newer local note.
+            let hasLocalRating = try TagRow
+                .filter(TagRow.Columns.file_id == fileID)
+                .filter(TagRow.Columns.parent_dir == parentDir)
+                .fetchAll(db)
+                .contains { StarRating.isRating($0.label) }
+
             // Tags: insert sidecar tags scoped to this folder, honoring
             // manual-beats-vision (Q32) per (file_id, parent_dir).
             for t in sidecar.tagRows(fileID: fileID, parentDir: parentDir, makeID: { UUID().uuidString }) {
+                if hasLocalRating && StarRating.isRating(t.label) { continue }
                 if let existing = try TagRow
                     .filter(TagRow.Columns.file_id == fileID)
                     .filter(TagRow.Columns.parent_dir == parentDir)
