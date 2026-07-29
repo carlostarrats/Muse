@@ -292,6 +292,56 @@ final class IndexerReconcileTests: XCTestCase {
         }
     }
 
+    /// A collision edit re-links the path onto an existing files row whose FTS
+    /// basename is some OTHER copy's name — so the file stopped being findable
+    /// by its own name in "All folders" search. Mirrors the refresh the
+    /// new-path (external rename) branch already does.
+    func testCollisionEditRefreshesFTSBasenameWhenTargetIsSoleCopy() throws {
+        let q = try freshQueue()
+        try q.write { db in
+            // f1 = the file being edited (/a/x.png). f2 = a row for content h2
+            // whose only path already died (an earlier deletion), carrying its
+            // own stale basename in FTS.
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at) VALUES ('f1','h1','image',0)")
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at) VALUES ('f2','h2','image',0)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('pA','f1','/a/x.png',1)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('pOld','f2','/c/old-name.png',0)")
+            try db.execute(sql: "INSERT INTO files_fts (file_id, basename, ocr_text, caption) VALUES ('f1','x.png','','')")
+            try db.execute(sql: "INSERT INTO files_fts (file_id, basename, ocr_text, caption) VALUES ('f2','old-name.png','','')")
+
+            _ = try Indexer.reconcile(db: db, absPath: "/a/x.png", hash: "h2",
+                                      kind: .image, sizeBytes: 1,
+                                      createdAt: 0, modifiedAt: 9, now: 10)
+        }
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT file_id FROM paths WHERE id='pA'"), "f2")
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT basename FROM files_fts WHERE file_id='f2'"),
+                           "x.png", "the surviving identity must be searchable by its live name")
+        }
+    }
+
+    /// The counterpart: when the target keeps another alive path, one FTS row
+    /// cannot represent two basenames — leave it rather than clobber the other
+    /// copy's name.
+    func testCollisionEditLeavesFTSBasenameWhenTargetHasOtherAlivePath() throws {
+        let q = try freshQueue()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at) VALUES ('f1','h1','image',0)")
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at) VALUES ('f2','h2','image',0)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('pA','f1','/a/x.png',1)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('pB','f2','/b/keeper.png',1)")
+            try db.execute(sql: "INSERT INTO files_fts (file_id, basename, ocr_text, caption) VALUES ('f2','keeper.png','','')")
+
+            _ = try Indexer.reconcile(db: db, absPath: "/a/x.png", hash: "h2",
+                                      kind: .image, sizeBytes: 1,
+                                      createdAt: 0, modifiedAt: 9, now: 10)
+        }
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT basename FROM files_fts WHERE file_id='f2'"),
+                           "keeper.png")
+        }
+    }
+
     func testEditingSoleCopyStillRewritesInPlace() throws {
         // The regression guard: when the row is NOT shared, an edit must still
         // rewrite the existing row in place (no spurious split).

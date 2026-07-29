@@ -1124,9 +1124,14 @@ final class AppState: ObservableObject {
         let freshSelect = showLoading
         let dbQueue = Database.shared.dbQueue
         Task.detached(priority: .userInitiated) {
-            let raw = showSub
-                ? Self.enumerateRecursive(at: folderURL, showHidden: showHid)
-                : FolderReader.files(in: folderURL, showHidden: showHid, includeFolders: true)
+            // Recursive walks report the subfolders they couldn't descend into
+            // so the reconcile below can protect their rows — see RecursiveScan.
+            let scan = showSub
+                ? Self.enumerateRecursiveScan(at: folderURL, showHidden: showHid)
+                : RecursiveScan(nodes: FolderReader.files(in: folderURL, showHidden: showHid,
+                                                          includeFolders: true),
+                                unreadableDirs: [])
+            let raw = scan.nodes
             let merged = raw.map { fresh -> FileNode in
                 if let old = existing[fresh.url],
                    old.modifiedAt == fresh.modifiedAt,
@@ -1159,9 +1164,17 @@ final class AppState: ObservableObject {
                             at: folderURL, includingPropertiesForKeys: nil,
                             options: showHid ? [] : [.skipsHiddenFiles])) != nil
                 if trustworthy {
+                    // The probe above only proves the TOP folder is listable. In
+                    // recursive mode a deeper subfolder can still be unreadable
+                    // (locked permissions, an iCloud subfolder not yet
+                    // materialized on a cold launch) and the walk skips it in
+                    // total silence — so its files are absent from `present`
+                    // without being gone. Passing the failed directories keeps
+                    // their rows alive.
                     reconciledDead = PathReconciler.reconcile(
                         folder: folderURL, recursive: showSub,
-                        present: present, queue: dbQueue)
+                        present: present, queue: dbQueue,
+                        unreadableDirs: scan.unreadableDirs)
                 }
             }
             // Deep-deletion self-heal (runs on any fresh select, not gated on the
@@ -1293,17 +1306,48 @@ final class AppState: ObservableObject {
     /// Sorting is left to SmartSorter (the caller applies the active mode).
     /// Internal (not private): the metadata import (MetadataImportModel) is a
     /// second caller alongside the intent paths.
+    /// A recursive walk plus the directories it could NOT descend into.
+    ///
+    /// The unreadable list is load-bearing for `PathReconciler`: a walk with a
+    /// nil error handler skips an unreadable subtree in total silence (no error,
+    /// no partial results — verified against a chmod-000 subfolder), so its
+    /// absence from the result set is indistinguishable from deletion. Marking
+    /// those rows dead is the mass-false-deletion class, and it survives into a
+    /// permanent prune. Callers that DIFF this result against the database must
+    /// pass `unreadableDirs` through; callers that only consume the files can
+    /// use the `enumerateRecursive` convenience wrapper.
+    struct RecursiveScan {
+        let nodes: [FileNode]
+        /// Standardized paths of directories that failed to open. A failure to
+        /// create the enumerator at all reports the ROOT, which protects the
+        /// whole subtree.
+        let unreadableDirs: [String]
+    }
+
     nonisolated static func enumerateRecursive(at url: URL, showHidden: Bool) -> [FileNode] {
+        enumerateRecursiveScan(at: url, showHidden: showHidden).nodes
+    }
+
+    nonisolated static func enumerateRecursiveScan(at url: URL, showHidden: Bool) -> RecursiveScan {
         let fm = FileManager.default
+        // Collected from the enumerator's error callback, which fires on the
+        // OS thread driving the walk; the walk is serial and fully drained
+        // before the box is read, so a plain class box is sufficient.
+        final class Box: @unchecked Sendable { var dirs: [String] = [] }
+        let box = Box()
         guard let enumerator = fm.enumerator(
             at: url,
             includingPropertiesForKeys: [
                 .isDirectoryKey, .isPackageKey, .fileSizeKey,
                 .contentModificationDateKey, .creationDateKey
             ],
-            options: showHidden ? [] : [.skipsHiddenFiles]
+            options: showHidden ? [] : [.skipsHiddenFiles],
+            errorHandler: { failing, _ in
+                box.dirs.append(failing.standardizedFileURL.path)
+                return true          // keep walking the rest of the tree
+            }
         ) else {
-            return []
+            return RecursiveScan(nodes: [], unreadableDirs: [url.standardizedFileURL.path])
         }
         var nodes: [FileNode] = []
         for case let child as URL in enumerator {
@@ -1315,7 +1359,7 @@ final class AppState: ObservableObject {
             // AssetKind.detect's redundant per-file fileExists stat.
             nodes.append(FileNode(url: child, kind: AssetKind.classify(url: child, fallback: .unknown)))
         }
-        return nodes
+        return RecursiveScan(nodes: nodes, unreadableDirs: box.dirs)
     }
 
     func toggleSubfolders() {

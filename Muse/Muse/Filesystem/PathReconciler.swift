@@ -42,6 +42,27 @@ nonisolated enum PathReconciler {
         inScope.filter { !present.contains($0) }
     }
 
+    /// Drop every candidate living under a directory the enumeration could NOT
+    /// read. `present` is only evidence of absence where the walk actually
+    /// looked: `FileManager.enumerator` with a nil error handler skips an
+    /// unreadable subtree SILENTLY (verified — a chmod-000 subfolder yields the
+    /// directory itself and none of its children, with no error surfaced), and
+    /// the caller's top-level `trustworthy` probe only proves the ROOT is
+    /// listable. So in recursive mode a single unreadable/not-yet-materialized
+    /// subfolder used to flip every DB row beneath it to `is_alive = 0` — the
+    /// mass-false-deletion class `reconcileByExistence`'s `rootReachable` gate
+    /// and `Housekeeping.pruneUnreachable`'s root check both exist to prevent,
+    /// and worse here because those rows can then be permanently pruned along
+    /// with their tags and notes.
+    ///
+    /// Trailing-slash bounded like every other prefix test in the codebase, so
+    /// an unreadable `/a/Inspo` never protects `/a/Inspo Extra/x.jpg`.
+    static func excludingProtected(_ paths: [String], protectedDirs: [String]) -> [String] {
+        guard !protectedDirs.isEmpty else { return paths }
+        let prefixes = protectedDirs.map { $0.hasSuffix("/") ? $0 : $0 + "/" }
+        return paths.filter { path in !prefixes.contains { path.hasPrefix($0) } }
+    }
+
     // MARK: - Filesystem guard
 
     /// An OLD-STYLE evicted iCloud file shows a hidden `.<name>.icloud`
@@ -153,25 +174,21 @@ nonisolated enum PathReconciler {
 
     /// Full per-folder reconcile. `present` = standardized paths the folder
     /// enumeration found. Returns the number of rows marked dead.
+    ///
+    /// `unreadableDirs` = directories the enumeration that produced `present`
+    /// could not descend into (see `excludingProtected`). Rows beneath them are
+    /// left alive: absence from `present` is not evidence of deletion where the
+    /// walk never looked. The recursive caller MUST pass these.
     @discardableResult
     static func reconcile(folder: URL, recursive: Bool,
-                          present: Set<String>, queue: DatabaseQueue) -> Int {
+                          present: Set<String>, queue: DatabaseQueue,
+                          unreadableDirs: [String] = []) -> Int {
         let folderPath = folder.standardizedFileURL.path
         let alive = aliveUnder(folder: folderPath, queue: queue)
         let scoped = inScope(alive, folder: folderPath, recursive: recursive)
-        let gone = vanished(inScope: scoped, present: present)
+        let gone = excludingProtected(vanished(inScope: scoped, present: present),
+                                      protectedDirs: unreadableDirs)
             .filter { !isEvictedPlaceholder($0) }
-        // DIAGNOSTIC (2026-06-19, Lever 2 step 0): before hardening the reconcile
-        // against partial iCloud materialization, confirm the trigger is real —
-        // i.e. that a post-update cold launch is what marks the Saved Inspo iCloud
-        // files dead on a partial enumeration. Log the folder, how many rows this
-        // pass would flip, and a few sample paths. Remove (or fold into the guard)
-        // once the partial-materialization fix lands. See the spec's Plan step 0.
-        if !gone.isEmpty {
-            let samples = gone.prefix(5).map { URL(fileURLWithPath: $0).lastPathComponent }
-            print("[PathReconciler] marking \(gone.count) dead under \(folderPath) "
-                  + "(present=\(present.count), recursive=\(recursive)); samples: \(samples)")
-        }
         return markDead(gone, queue: queue)
     }
 }
