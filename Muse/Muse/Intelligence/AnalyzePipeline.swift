@@ -137,6 +137,7 @@ final class AnalyzePipeline: ObservableObject {
     /// analyzed_hash is missing or stale (new or edited images). Runs
     /// after every index pass — analyzing twice is a provable no-op.
     func analyzePending(in urls: [URL]) async {
+        PhaseTrace.mark("analyzePending.call", "urls=\(urls.count)")
         // Automatic tagging is opt-out (Preferences). Off → newly indexed
         // images stay viewable but untagged; the user can still Analyze /
         // Regenerate a folder by hand.
@@ -164,6 +165,7 @@ final class AnalyzePipeline: ObservableObject {
         }) ?? []
         guard !pending.isEmpty else { return }
         let pendingURLs = urls.filter { pending.contains($0.standardizedFileURL.path) }
+        PhaseTrace.mark("analyzePending.run", "stale=\(pendingURLs.count)")
         await analyze(folder: pendingURLs)
     }
 
@@ -389,6 +391,20 @@ final class AnalyzePipeline: ObservableObject {
         }
     }
 
+    /// Stamp `analyzed_hash` without writing any tags: "we tried these exact
+    /// bytes and got nothing decodable". Guarded on the hash still matching, the
+    /// same rule the real commit uses — if the file changed mid-pass, leave it
+    /// pending so the next pass reads the NEW content.
+    /// internal for tests.
+    static func markAnalysisAttempted(fileID: String, hash: String,
+                                      queue: DatabaseQueue) async {
+        try? await queue.write { db in
+            try db.execute(sql:
+                "UPDATE files SET analyzed_hash = ? WHERE id = ? AND content_hash = ?",
+                arguments: [hash, fileID, hash])
+        }
+    }
+
     private func analyzeOne(fileID: String, url: URL) async {
         // Skip non-image kinds; Vision pipeline only handles images
         let kind = AssetKind.detect(at: url)
@@ -406,7 +422,23 @@ final class AnalyzePipeline: ObservableObject {
         guard let analyzedHash else { return }
 
         let registry = IntelligenceRegistry.shared
-        guard let out = await registry.tagger.analyze(url: url) else { return }
+        guard let out = await registry.tagger.analyze(url: url) else {
+            // The image could not be DECODED — the tagger returns nil only when
+            // the CGImage load failed, which is a property of these bytes, not a
+            // transient hiccup (e.g. a Fuji .RAF that Apple's RAW codec doesn't
+            // support: macOS itself reports no pixel dimensions for it).
+            //
+            // Returning without stamping left `analyzed_hash` NULL, so the file
+            // stayed pending FOREVER: every visit to its folder re-queued it,
+            // raised the progress pill, redid the futile decode and gave up —
+            // owner-reported as a folder that "does that every time". Record the
+            // attempt against this content so the automatic pass stops retrying.
+            // Explicit Regenerate Tags still picks it up (it targets files with
+            // no tags), so a future codec or a re-encode can still recover it.
+            await Self.markAnalysisAttempted(fileID: fileID, hash: analyzedHash,
+                                             queue: queue)
+            return
+        }
         let caption = out.caption
         let basename = url.lastPathComponent
         let now = Int64(Date().timeIntervalSince1970)

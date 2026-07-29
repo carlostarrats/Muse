@@ -84,6 +84,14 @@ final class TagStore: ObservableObject {
         let dir = TagScope.parentDir(ofPath: absPath)
         let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return await tags(for: url) }
+        // A rating IS a manual tag (a run of ★), but it is MUTUALLY EXCLUSIVE and
+        // this path has no exclusion — a free-text "★★★" typed into the hero's
+        // "…or create a new one" field would sit alongside an existing "★★" and
+        // break `StarRating.resolution`. Ratings only ever come through
+        // `setRating`. Guarded here, at the write seam, rather than in each
+        // caller — the same reasoning that put the filter inside `TagSuggest.rank`
+        // and `MetadataImportApply.applyKeywords`.
+        guard StarRating.allowsManualTag(trimmed) else { return await tags(for: url) }
         do {
             try await queue.write { db in
                 guard let path = try PathRow
@@ -130,10 +138,24 @@ final class TagStore: ObservableObject {
     /// manual beats vision (Q32), the surviving row is manual if EITHER side
     /// was. Conflict is per (file_id, parent_dir): the same label under two
     /// folders are independent rows and don't merge.
-    func renameLabel(from old: String, to new: String) async {
-        guard let queue = Database.shared.dbQueue else { return }
+    /// Returns whether the rename actually happened. A refusal is not an error
+    /// the user needs to see, but the CALLER must know: it also rewrites the
+    /// active-tag filter to the new label, and doing that after a refused rename
+    /// leaves the grid filtering on a label no file carries.
+    @discardableResult
+    func renameLabel(from old: String, to new: String) async -> Bool {
+        guard let queue = Database.shared.dbQueue else { return false }
         let trimmed = new.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed != old else { return }
+        guard !trimmed.isEmpty, trimmed != old else { return false }
+        // Neither side may be a rating glyph run. Renaming FROM one is
+        // library-wide DATA LOSS — the chip row deliberately shows rating chips
+        // as a filter affordance, and their context menu offered the same
+        // "Rename Tag…" as any other chip, so renaming "★★★" to a word silently
+        // destroyed every three-star rating in the library. Renaming TO one mints
+        // a second rating on files that already have one, breaking
+        // `StarRating.resolution`'s one-rating-per-photo rule. Ratings are
+        // `setRating`'s alone.
+        guard StarRating.allowsRename(from: old, to: trimmed) else { return false }
         var affectedIDs: [String] = []
         do {
             affectedIDs = try await queue.write { db -> [String] in
@@ -171,7 +193,7 @@ final class TagStore: ObservableObject {
         // Chunk the IN list — a common vision label can touch tens of
         // thousands of files, past SQLite's bound-variable limit (every other
         // multi-id site chunks the same way).
-        guard !affectedIDs.isEmpty else { return }
+        guard !affectedIDs.isEmpty else { return true }
         let urls: [URL] = (try? await queue.read { db -> [URL] in
             var paths: [String] = []
             for chunk in stride(from: 0, to: affectedIDs.count, by: 500)
@@ -185,6 +207,7 @@ final class TagStore: ObservableObject {
             return paths.map { URL(fileURLWithPath: $0) }
         }) ?? []
         AnalyzePipeline.shared.exportSidecarsAfterTagEdit(for: urls)
+        return true
     }
 
     /// Delete every tag (manual + vision) for the given file URLs, scoped to

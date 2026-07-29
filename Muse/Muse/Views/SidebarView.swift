@@ -268,7 +268,7 @@ struct SidebarView: View {
                ICloudSidebarVisibility.rowVisible(
                    ICloudSidebarVisibility.presence(
                        configured: true,
-                       recursiveFileCount: appState.folderStats.stat(for: icloud.url)?.recursiveFileCount),
+                       recursiveFileCount: appState.folderStats.stat(for: icloud.url)?.knownRecursiveFileCount ?? nil),
                    showSetting: showICloudFolder) {
                 FolderTreeNode(node: icloud, depth: 0,
                                topLevelCount: topLevelCount(for: icloud))

@@ -100,7 +100,7 @@ extension Sidecar {
     /// folder this sidecar lives in — tags are per-location). `makeID` supplies
     /// unique row ids (UUID in production, deterministic in tests).
     nonisolated func tagRows(fileID: String, parentDir: String?, makeID: () -> String) -> [TagRow] {
-        tags.map {
+        Sidecar.collapsingRatings(tags).map {
             TagRow(id: makeID(), file_id: fileID, parent_dir: parentDir, label: $0.label,
                    source: $0.source, confidence: $0.confidence,
                    model_version: $0.model_version)
@@ -124,7 +124,37 @@ extension Sidecar {
         // and between two non-nil the fresh side wins. Genuine deletions travel
         // the manual-edit path (mergeExisting: false), which bypasses merge.
         winner.note = b.note ?? a.note
+        // A rating is stored as a manual tag, so the union above happily keeps
+        // BOTH sides' ratings — two devices that rated the same photo while
+        // offline would sync to a file carrying "★★" AND "★★★", breaking the
+        // one-rating-per-photo rule `StarRating.resolution` enforces everywhere
+        // else. A rating is a scalar, not a set: resolve it like the other
+        // scalars, newest wins, falling back to the older side when the newer
+        // carries none (union semantics never delete — a genuine clear travels
+        // the manual-edit path, which bypasses merge).
+        let newer = (b.updated_at > a.updated_at) ? b : a
+        let older = (b.updated_at > a.updated_at) ? a : b
+        let survivingRating = newer.tags.first { StarRating.isRating($0.label) }
+            ?? older.tags.first { StarRating.isRating($0.label) }
+        winner.tags = winner.tags.filter { !StarRating.isRating($0.label) }
+        if let survivingRating { winner.tags.append(survivingRating) }
+        winner.tags.sort { $0.label < $1.label }
         return winner
+    }
+
+    /// Keep at most ONE rating tag, highest first.
+    ///
+    /// Defensive counterpart to the resolution in `merge`, applied where a
+    /// sidecar becomes DB rows: a sidecar written by an older build (or merged
+    /// before that fix) can carry two ratings on disk, and materializing both
+    /// would reproduce the broken state locally. There are no timestamps to
+    /// compare here, so the tiebreak is deterministic rather than
+    /// chronological — the highest run wins.
+    nonisolated static func collapsingRatings(_ tags: [SidecarTag]) -> [SidecarTag] {
+        let ratings = tags.filter { StarRating.isRating($0.label) }
+        guard ratings.count > 1 else { return tags }
+        let keep = ratings.max { ($0.label.count) < ($1.label.count) }
+        return tags.filter { !StarRating.isRating($0.label) || $0.label == keep?.label }
     }
 
     /// Decide the sidecar to actually persist, given the freshly-built one

@@ -37,8 +37,29 @@ enum ReconnectApplier {
                 else { return }
                 file.meta.apply(onto: &fileRow)
                 try fileRow.update(db)
+                // A rating is a manual tag but is MUTUALLY EXCLUSIVE, and the
+                // insert below only skips a tag whose EXACT label already
+                // exists — so restoring "★★★★" onto a file the user has since
+                // rated "★★" would leave it carrying two, breaking
+                // `StarRating.resolution`. A restore is an explicit user action
+                // to reinstate the backed-up state, so the backup's rating
+                // REPLACES the local one (unlike passive sidecar hydration,
+                // which yields to a rating already set on this device).
+                let incomingRatings = Sidecar.collapsingRatings(m.occurrence.tags)
+                    .filter { StarRating.isRating($0.label) }
+                if incomingRatings.isEmpty == false {
+                    for existing in try TagRow
+                        .filter(TagRow.Columns.file_id == fid)
+                        .filter(TagRow.Columns.parent_dir == parentDir)
+                        .fetchAll(db) where StarRating.isRating(existing.label) {
+                        _ = try existing.delete(db)
+                    }
+                }
                 // Tags: occurrence's tags at the NEW parent_dir (manual beats vision).
-                for t in tagRows(from: m.occurrence.tags, fileID: fid, parentDir: parentDir) {
+                // Ratings collapsed to one first, in case the archive itself
+                // carries a pre-fix double rating.
+                for t in tagRows(from: Sidecar.collapsingRatings(m.occurrence.tags),
+                                 fileID: fid, parentDir: parentDir) {
                     if let existing = try TagRow
                         .filter(TagRow.Columns.file_id == fid)
                         .filter(TagRow.Columns.parent_dir == parentDir)

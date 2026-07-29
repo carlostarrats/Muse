@@ -63,7 +63,7 @@ struct SettingsView: View {
         ICloudSidebarVisibility.presence(
             configured: appState.iCloudFolderURL != nil,
             recursiveFileCount: appState.iCloudFolderURL
-                .flatMap { appState.folderStats.stat(for: $0)?.recursiveFileCount })
+                .flatMap { appState.folderStats.stat(for: $0)?.knownRecursiveFileCount })
     }
 
     /// Footer note beneath the Show-iCloud toggle — explains the disabled/hidden

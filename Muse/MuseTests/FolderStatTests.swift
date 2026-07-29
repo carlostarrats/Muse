@@ -50,4 +50,50 @@ final class FolderStatTests: XCTestCase {
         XCTAssertEqual(FolderStats.root(containing: "/Users/x/Photos/old.jpg", in: [a, b]), a)
         XCTAssertNil(FolderStats.root(containing: "/Users/y/z.jpg", in: [a, b]))
     }
+
+    /// A folder that cannot be listed must report `reachable: false` and a nil
+    /// KNOWN count. Zero counts from a failed listing are structurally
+    /// indistinguishable from an empty folder, and "0 files" is a decision
+    /// input: the iCloud sidebar row hides itself on `.empty`, so an
+    /// unlistable container used to hide a folder that may be full.
+    func testUnreadableFolderIsUnreachableNotEmpty() throws {
+        let fm = FileManager.default
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("MuseStatProbe-\(UUID().uuidString)")
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: root.appendingPathComponent("a.txt"))
+        try fm.setAttributes([.posixPermissions: 0], ofItemAtPath: root.path)
+        defer {
+            try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: root.path)
+            try? fm.removeItem(at: root)
+        }
+
+        let stat = FolderStats.compute(folder: root)
+        XCTAssertFalse(stat.reachable)
+        XCTAssertNil(stat.knownRecursiveFileCount)
+        // And the gate that consumes it must say "unknown", never "empty".
+        XCTAssertEqual(
+            ICloudSidebarVisibility.presence(configured: true,
+                                             recursiveFileCount: stat.knownRecursiveFileCount),
+            .unknown)
+        XCTAssertTrue(ICloudSidebarVisibility.rowVisible(.unknown, showSetting: false),
+                      "an unlistable folder must keep showing, not vanish")
+    }
+
+    /// The counterpart: a genuinely empty, readable folder still reports empty.
+    func testReadableEmptyFolderIsReachableAndZero() throws {
+        let fm = FileManager.default
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("MuseStatProbe-\(UUID().uuidString)")
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+
+        let stat = FolderStats.compute(folder: root)
+        XCTAssertTrue(stat.reachable)
+        XCTAssertEqual(stat.knownRecursiveFileCount, 0)
+        XCTAssertEqual(
+            ICloudSidebarVisibility.presence(configured: true,
+                                             recursiveFileCount: stat.knownRecursiveFileCount),
+            .empty)
+    }
 }

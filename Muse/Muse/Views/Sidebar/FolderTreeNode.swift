@@ -68,7 +68,7 @@ struct FolderTreeNode: View {
     /// folder isn't wrongly disabled.
     private var isEmptyICloudRoot: Bool {
         node.url == appState.iCloudFolderURL
-            && appState.folderStats.stat(for: node.url)?.recursiveFileCount == 0
+            && appState.folderStats.stat(for: node.url)?.knownRecursiveFileCount == 0
     }
 
     private var row: some View {

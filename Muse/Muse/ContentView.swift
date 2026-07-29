@@ -21,10 +21,11 @@ struct ContentView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject private var googleAuth: GoogleOAuth
     @ObservedObject private var indexProgress = IndexProgress.shared
-    @ObservedObject private var thumbProgress = ThumbProgress.shared
     @ObservedObject private var analyzePipeline = AnalyzePipeline.shared
     /// Unified background-progress state driving the single status pill.
     @State private var workProgress = WorkProgress()
+    /// Guards against queueing a second completion hold while one is running.
+    @State private var finishHoldScheduled = false
     @ObservedObject private var collectionsEngine = CollectionsEngine.shared
     @State private var moodPickerShown = false
     /// Tags from visually similar photos, for the Add Tag card's offer row.
@@ -470,27 +471,23 @@ struct ContentView: View {
                     .priority: NSAccessibilityPriorityLevel.high.rawValue
                 ])
         }
-        .overlay(alignment: .bottom) {
-            // ONE pill for every background phase. This used to be a four-way
-            // chain (Analyzing / Organizing / Indexing / Loading images), each
-            // with its own counter — after the 2026-07-28 perf work the phases
-            // got fast enough that it switched labels faster than a human can
-            // read AND restarted the count at zero on each switch. A user only
-            // needs to know progress is happening.
-            if workProgress.isActive {
-                statusPill(label: "Preparing your files…", progress: workProgress.fraction)
-            }
-        }
-        .onChange(of: workInput) { _, new in
-            withAnimation(.easeOut(duration: 0.2)) { workProgress.update(new) }
-            // Let the bar visibly REACH 100% before the pill goes away. Without
-            // the hold it vanished at whatever the last active phase reached
-            // (typically the low 90s), which reads as a stall rather than
-            // completion.
-            guard workProgress.isFinishing else { return }
-            Task {
-                try? await Task.sleep(nanoseconds: 450_000_000)
-                withAnimation(.easeOut(duration: 0.25)) { workProgress.reset() }
+        .onChange(of: workInput) { _, new in advanceProgress(new) }
+        // The phases go idle in GAPS, and an idle phase publishes nothing — so
+        // `onChange` alone can't notice that the grace window has elapsed. This
+        // tick is what actually ends a finished run.
+        //
+        // Bound to `isActive` so it exists ONLY while the pill is up. As a
+        // `Timer.publish(...).autoconnect()` it woke the main runloop three
+        // times a second for the entire life of the app, idle or not — which is
+        // exactly the sort of background hum this app is supposed to not have.
+        // A run can only START from the `onChange` above, so nothing is missed
+        // by not ticking while idle.
+        .task(id: workProgress.isActive) {
+            guard workProgress.isActive else { return }
+            while !Task.isCancelled && workProgress.isActive {
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                guard !Task.isCancelled else { return }
+                advanceProgress(workInput)
             }
         }
         .preferredColorScheme(appState.moodPalette.scheme)
@@ -503,6 +500,32 @@ struct ContentView: View {
     /// an `if #available` that lives OUTSIDE the toolbar builder — see the
     /// comment at the call site.
     private var detailCore: some View {
+        detailStage
+            // The pill belongs to the GRID, not the window. As an overlay on
+            // the whole NavigationSplitView it spanned sidebar + grid, so on a
+            // narrow window it slid over the sidebar and collided with its
+            // Folder button. Scoping it here fixed that; seating it
+            // bottom-LEADING — mirroring the zoom control's bottom-trailing
+            // seat, same 16pt insets — fixed the rest, since centred it still
+            // drifted into that control as the window narrowed. Growing from
+            // opposite edges, the two can only meet on a window narrower than
+            // both put together.
+            .overlay(alignment: .bottomLeading) {
+                // ONE pill for every background phase. This used to be a
+                // four-way chain (Analyzing / Organizing / Indexing / Loading
+                // images), each with its own counter — after the 2026-07-28 perf
+                // work the phases got fast enough that it switched labels faster
+                // than a human can read AND restarted the count at zero on each
+                // switch. A user only needs to know progress is happening.
+                if workProgress.isActive {
+                    statusPill(label: "Preparing your files…",
+                               progress: workProgress.fraction,
+                               percent: workProgress.percent)
+                }
+            }
+    }
+
+    private var detailStage: some View {
         ZStack {
             HStack(spacing: 0) {
                 // ZStack (not VStack) so the page⇄grid swap CROSS-fades in
@@ -992,6 +1015,33 @@ struct ContentView: View {
         }
     }
 
+    /// Feed one reading to the unified bar, and schedule the completion hold
+    /// when a run genuinely ends.
+    private func advanceProgress(_ input: WorkProgress.Input) {
+        withAnimation(.easeOut(duration: 0.2)) { workProgress.update(input) }
+        // A run that resumed (or a fresh one) clears any stale hold claim, so
+        // the guard below can't be left latched by a hold that was superseded.
+        // Today a finish needs 1.5s of idle and the hold lasts 0.45s, so they
+        // can't overlap — but that is an accident of two constants, and if it
+        // ever stopped being true the bar would stick at 100% forever.
+        if !workProgress.isFinishing { finishHoldScheduled = false }
+        // Let the bar visibly REACH 100% before the pill goes away. Without
+        // the hold it vanished at whatever the last active phase reached
+        // (typically the low 90s), which reads as a stall rather than
+        // completion.
+        // Schedule the hold ONCE. `isFinishing` stays true for its whole
+        // duration, and the tick above re-enters every 0.3s, so an unguarded
+        // schedule queued a fresh reset on each tick (harmless — `reset()` is
+        // guarded — but pointless churn).
+        guard workProgress.isFinishing, !finishHoldScheduled else { return }
+        finishHoldScheduled = true
+        Task {
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            withAnimation(.easeOut(duration: 0.25)) { workProgress.reset() }
+            finishHoldScheduled = false
+        }
+    }
+
     /// Live snapshot of every background phase, fed to the unified pill.
     /// Equatable, so `.onChange` only fires on a real change.
     private var workInput: WorkProgress.Input {
@@ -1000,15 +1050,14 @@ struct ContentView: View {
             indexActive: indexProgress.isActive,
             analyzeFraction: analyzePipeline.progress,
             analyzeActive: analyzePipeline.isRunning,
-            organizing: collectionsEngine.isClustering,
-            thumbFraction: Double(thumbProgress.completed) / Double(max(thumbProgress.total, 1)),
-            thumbActive: thumbProgress.isActive)
+            organizing: collectionsEngine.isClustering)
     }
 
     /// One shared pill for every phase — same glass as the grid's column
     /// slider: ultra-thin material capsule, hairline outline, same height,
     /// same 16pt bottom seat.
-    private func statusPill(label: LocalizedStringKey, progress: Double) -> some View {
+    private func statusPill(label: LocalizedStringKey, progress: Double,
+                            percent: Int) -> some View {
         HStack(spacing: 10) {
             ProgressView(value: min(max(progress, 0), 1))
                 .progressViewStyle(.linear)
@@ -1018,6 +1067,16 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
                 .lineLimit(1)
+                .fixedSize()
+            // A long pass over a big folder can sit at a similar-looking bar
+            // for a while; the number is what tells you it is still moving.
+            // Monospaced digits so it doesn't jitter as it counts.
+            // Same .secondary as the label beside it — on .tertiary it read as
+            // disabled next to live text.
+            Text(verbatim: "\(percent)%")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
                 .fixedSize()
         }
         // Hug the content — the pills now show short, stable counts (no
@@ -1029,6 +1088,7 @@ struct ContentView: View {
         .padding(.vertical, 9)
         .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
         .overlay(Capsule(style: .continuous).strokeBorder(.primary.opacity(0.08)))
+        .padding(.leading, 16)
         .padding(.bottom, 16)
         .transition(.opacity)
     }

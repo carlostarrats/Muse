@@ -79,9 +79,21 @@ struct TagChipsRow: View {
                                 }
                             }
                             .contextMenu {
-                                Button("Rename Tag…") {
-                                    appState.tagRenameRequest = tag.label
+                                // No rename for a rating chip: rename is
+                                // library-wide, so renaming "★★★" to a word
+                                // would wipe every three-star rating in the
+                                // library. Ratings change through the rating
+                                // control; TagStore.renameLabel refuses them
+                                // too, and this keeps a dead menu item off the
+                                // chip rather than letting it silently no-op.
+                                if !StarRating.isRating(tag.label) {
+                                    Button("Rename Tag…") {
+                                        appState.tagRenameRequest = tag.label
+                                    }
                                 }
+                                // Delete stays: on a rating chip it clears that
+                                // rating from the files in this view, which is
+                                // exactly what it says it does.
                                 Button("Delete Tag…", role: .destructive) {
                                     appState.tagDeleteRequest = tag.label
                                 }
@@ -209,7 +221,11 @@ struct TagChipsRow: View {
         appState.tagRenameRequest = nil
         guard !new.isEmpty, new != old else { return }
         Task { @MainActor in
-            await TagStore.shared.renameLabel(from: old, to: new)
+            // Only rewrite the filter if the rename actually happened. A refused
+            // rename (a rating glyph on either side) would otherwise leave the
+            // active filter pointing at a label no file carries — an empty grid
+            // under a chip that looks real.
+            guard await TagStore.shared.renameLabel(from: old, to: new) else { return }
             if appState.activeTagLabels.contains(old) {
                 appState.setActiveTags(
                     TagSelection.renaming(appState.activeTagLabels, from: old, to: new))

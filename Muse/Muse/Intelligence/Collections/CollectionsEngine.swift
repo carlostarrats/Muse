@@ -62,6 +62,7 @@ final class CollectionsEngine: ObservableObject {
         // existing collections remain, and the user can still build their own.
         guard AppSettings.autoCollections else { return }
         guard let q = Database.shared.dbQueue, !isClustering else { return }
+        PhaseTrace.mark("recluster.begin")
         isClustering = true
         defer { isClustering = false }
 

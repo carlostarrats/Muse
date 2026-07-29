@@ -18,6 +18,12 @@ enum SearchScope {
 @MainActor
 enum SearchService {
 
+    /// Cosine-similarity floor for a semantic hit. Read by BOTH the merge and
+    /// the folder-scope relaxation below — they must agree on what counts as a
+    /// semantic match, or a file could be merged in as semantic while still
+    /// being narrowed to its tag's folder.
+    static let semanticThreshold = 0.45
+
     static func search(query: String, scope: SearchScope) async -> [FileNode] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
@@ -76,7 +82,7 @@ enum SearchService {
                     // repeatable order across identical searches.
                     return s0 != s1 ? s0 < s1 : $0 < $1
                 }
-                return try aliveePaths(for: ranked, db: db)
+                return try aliveePaths(for: ranked, restrictedToDirs: [:], db: db)
             }
 
             // --- Existing text pipeline, now driven by textQuery ---
@@ -98,14 +104,36 @@ enum SearchService {
             let tagFilter = tagTerms
                 .map { TagRow.Columns.label.like("%" + $0 + "%") }
                 .joined(operator: .or)
-            let tagIDs = try TagRow
-                .filter(tagFilter)
-                .fetchAll(db)
-                .map { $0.file_id }
+            let tagRows = try TagRow.filter(tagFilter).fetchAll(db)
+            let tagIDs = tagRows.map { $0.file_id }
 
             // 2b) Note substring matches (per (file_id, parent_dir), LIKE — notes
             //     are not in FTS). Uses the raw text query, same as basename/OCR.
-            let noteIDs = try NoteStore.searchIDs(term: textQuery, db: db)
+            let noteScopes = try NoteStore.searchScopes(term: textQuery, db: db)
+            let noteIDs = noteScopes.map(\.fileID)
+
+            // Tags and notes are per (file_id, parent_dir): the same content in
+            // another folder is a different image with its own. Resolving those
+            // matches to EVERY alive path of the file leaked the other folder's
+            // duplicate into the results for a tag/note it does not carry — the
+            // exact cross-folder bleed the (file_id, parent_dir) grain exists to
+            // prevent. Record which folders actually matched so the resolve can
+            // narrow to them. FTS and semantic hits are content-derived and so
+            // are legitimately folder-agnostic; a file matched by either is left
+            // unrestricted.
+            // A NULL parent_dir is an orphaned tag row (no alive path) — it can't
+            // name a folder, so it contributes no restriction and the file falls
+            // back to unrestricted rather than being narrowed to nothing.
+            var matchedDirs: [String: Set<String>] = [:]
+            var unscopedTagIDs = Set<String>()
+            for r in tagRows {
+                if let dir = r.parent_dir {
+                    matchedDirs[r.file_id, default: []].insert(dir)
+                } else {
+                    unscopedTagIDs.insert(r.file_id)
+                }
+            }
+            for s in noteScopes { matchedDirs[s.fileID, default: []].insert(s.parentDir) }
 
             // Exact hits, ordered: FTS5 result order first, then tag matches
             // not already included, in their query order.
@@ -121,7 +149,15 @@ enum SearchService {
                 try? SemanticSearch.semanticIDs(queryVector: $0, db: db)
             }) ?? []
             var orderedIDs = SemanticSearch.merge(
-                exactIDs: exactIDs, semantic: semantic, threshold: 0.45)
+                exactIDs: exactIDs, semantic: semantic, threshold: Self.semanticThreshold)
+
+            // A file also matched by a content-derived tier — or by a tag row
+            // that names no folder — is unrestricted.
+            for id in ftsIDs { matchedDirs[id] = nil }
+            for id in unscopedTagIDs { matchedDirs[id] = nil }
+            for (id, score) in semantic where score >= Self.semanticThreshold {
+                matchedDirs[id] = nil
+            }
 
             // Color, when present alongside text, is an additional AND filter
             // over the text results (text ranking preserved).
@@ -130,7 +166,7 @@ enum SearchService {
             }
             guard !orderedIDs.isEmpty else { return [] }
 
-            return try aliveePaths(for: orderedIDs, db: db)
+            return try aliveePaths(for: orderedIDs, restrictedToDirs: matchedDirs, db: db)
         }) ?? []
 
         // Filter by scope
@@ -182,7 +218,12 @@ enum SearchService {
 
     /// Resolve ranked file IDs to their alive absolute paths, preserving the
     /// input order. Shared by the color-only and text search branches.
-    nonisolated private static func aliveePaths(for orderedIDs: [String], db: GRDB.Database) throws -> [String] {
+    /// `restrictedToDirs` narrows a file's resolved paths to the folders that
+    /// actually matched — set only for files whose sole evidence is a per-folder
+    /// tag or note. An absent entry means unrestricted (every alive path).
+    nonisolated private static func aliveePaths(for orderedIDs: [String],
+                                                restrictedToDirs: [String: Set<String>],
+                                                db: GRDB.Database) throws -> [String] {
         guard !orderedIDs.isEmpty else { return [] }
         let placeholders = orderedIDs.map { _ in "?" }.joined(separator: ",")
         let pathRows = try PathRow.fetchAll(
@@ -193,6 +234,8 @@ enum SearchService {
         var pathsByID: [String: [String]] = [:]
         for row in pathRows {
             guard let fid = row.file_id else { continue }
+            if let allowed = restrictedToDirs[fid],
+               !allowed.contains(TagScope.parentDir(ofPath: row.absolute_path)) { continue }
             pathsByID[fid, default: []].append(row.absolute_path)
         }
         return orderedIDs.flatMap { pathsByID[$0] ?? [] }

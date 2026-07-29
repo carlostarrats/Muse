@@ -101,6 +101,86 @@ final class PathReconcilerTests: XCTestCase {
         XCTAssertEqual(try isAlive(q, "/Users/me/Other/x.jpg"), 1)
     }
 
+    // MARK: - Unreadable-subfolder protection
+
+    func testExcludingProtectedIsPrefixBoundedBySlash() {
+        // A protected `/a/Inspo` must not swallow the sibling `/a/Inspo Extra`.
+        let candidates = ["/a/Inspo/x.jpg", "/a/Inspo/sub/y.jpg",
+                          "/a/Inspo Extra/z.jpg", "/a/Other/w.jpg"]
+        XCTAssertEqual(
+            PathReconciler.excludingProtected(candidates, protectedDirs: ["/a/Inspo"]),
+            ["/a/Inspo Extra/z.jpg", "/a/Other/w.jpg"])
+        // No protection = untouched passthrough.
+        XCTAssertEqual(PathReconciler.excludingProtected(candidates, protectedDirs: []),
+                       candidates)
+    }
+
+    func testRecursiveReconcileKeepsRowsUnderUnreadableSubfolder() throws {
+        // The regression: a recursive walk skips an unreadable subfolder in
+        // silence, so its files are missing from `present` without being gone.
+        // Their rows must stay alive; genuinely-vanished siblings still die.
+        let q = try makeQueue()
+        try insertAlivePath(q, "/Users/me/Inspo/a.jpg")
+        try insertAlivePath(q, "/Users/me/Inspo/locked/b.jpg")
+        try insertAlivePath(q, "/Users/me/Inspo/open/gone.jpg")
+
+        let n = PathReconciler.reconcile(
+            folder: URL(fileURLWithPath: "/Users/me/Inspo"),
+            recursive: true,
+            present: ["/Users/me/Inspo/a.jpg"],
+            queue: q,
+            unreadableDirs: ["/Users/me/Inspo/locked"])
+
+        XCTAssertEqual(n, 1)
+        XCTAssertEqual(try isAlive(q, "/Users/me/Inspo/a.jpg"), 1)
+        XCTAssertEqual(try isAlive(q, "/Users/me/Inspo/locked/b.jpg"), 1)
+        XCTAssertEqual(try isAlive(q, "/Users/me/Inspo/open/gone.jpg"), 0)
+    }
+
+    func testRecursiveReconcileWithoutProtectionStillReapsRealDeletions() throws {
+        // Guards the fix from over-reaching: with nothing protected the pass
+        // behaves exactly as before.
+        let q = try makeQueue()
+        try insertAlivePath(q, "/Users/me/Inspo/a.jpg")
+        try insertAlivePath(q, "/Users/me/Inspo/sub/gone.jpg")
+
+        let n = PathReconciler.reconcile(
+            folder: URL(fileURLWithPath: "/Users/me/Inspo"),
+            recursive: true,
+            present: ["/Users/me/Inspo/a.jpg"],
+            queue: q)
+
+        XCTAssertEqual(n, 1)
+        XCTAssertEqual(try isAlive(q, "/Users/me/Inspo/sub/gone.jpg"), 0)
+    }
+
+    /// End-to-end against real disk: the walk itself must report the directory
+    /// it could not descend into, or the protection above never engages.
+    func testRecursiveScanReportsUnreadableDirectory() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("MuseScanProbe-\(UUID().uuidString)")
+        let open = root.appendingPathComponent("open")
+        let locked = root.appendingPathComponent("locked")
+        let fm = FileManager.default
+        try fm.createDirectory(at: open, withIntermediateDirectories: true)
+        try fm.createDirectory(at: locked, withIntermediateDirectories: true)
+        try Data("a".utf8).write(to: open.appendingPathComponent("a.txt"))
+        try Data("b".utf8).write(to: locked.appendingPathComponent("b.txt"))
+        try fm.setAttributes([.posixPermissions: 0], ofItemAtPath: locked.path)
+        defer {
+            try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: locked.path)
+            try? fm.removeItem(at: root)
+        }
+
+        let scan = AppState.enumerateRecursiveScan(at: root, showHidden: false)
+        let names = Set(scan.nodes.map(\.url.lastPathComponent))
+        XCTAssertTrue(names.contains("a.txt"))
+        // The whole point: b.txt is silently absent, so the walk MUST flag its
+        // directory. Without this the reconcile reads the gap as a deletion.
+        XCTAssertFalse(names.contains("b.txt"))
+        XCTAssertEqual(scan.unreadableDirs, [locked.standardizedFileURL.path])
+    }
+
     func testMarkDeadChunksPastSQLiteVariableLimit() throws {
         // >999 paths in one call would blow SQLITE_MAX_VARIABLE_NUMBER if the IN
         // clause weren't chunked — the silent-no-op bug. Insert 1500 alive rows

@@ -54,4 +54,17 @@ final class BackupArchiveTests: XCTestCase {
         let back = try JSONDecoder().decode(BackupOccurrence.self, from: json)
         XCTAssertNil(back.note)
     }
+
+    /// An archive written before ratings were made exclusive can carry two
+    /// rating tags on one occurrence; restoring it must not reproduce that.
+    func testArchiveOccurrenceDoubleRatingCollapsesOnRestore() {
+        let tags = [
+            SidecarTag(label: "★★", source: "manual", confidence: nil, model_version: nil),
+            SidecarTag(label: "★★★★", source: "manual", confidence: nil, model_version: nil),
+            SidecarTag(label: "beach", source: "vision", confidence: 0.9, model_version: "v1"),
+        ]
+        let collapsed = Sidecar.collapsingRatings(tags)
+        XCTAssertEqual(collapsed.filter { StarRating.isRating($0.label) }.map(\.label), ["★★★★"])
+        XCTAssertTrue(collapsed.contains { $0.label == "beach" }, "ordinary tags survive")
+    }
 }

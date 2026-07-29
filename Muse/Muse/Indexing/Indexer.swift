@@ -35,20 +35,50 @@ actor Indexer {
 
     private var inFlightHashes: Set<String> = []
 
-    /// Index a single file synchronously (call site decides priority via dispatch).
-    /// Performs hashing + identity reconciliation per the matrix.
+    /// Claim a path for hashing. Actor-isolated so the check and the insert are
+    /// one indivisible step; returns false when another in-flight task already
+    /// holds it (the same file arriving from both the folder pass and an
+    /// FSEvents re-verify).
+    private func claim(_ absPath: String) -> Bool {
+        inFlightHashes.insert(absPath).inserted
+    }
+
+    private func release(_ absPath: String) {
+        inFlightHashes.remove(absPath)
+    }
+
+    /// Index a single file: hashing + identity reconciliation per the matrix.
     ///
     /// Returns `true` when the file's CONTENT changed in place (the path was
     /// already known but now hashes differently) — the signal AppState uses to
     /// drop stale thumbnails and re-run analysis. A brand-new file or a fresh
     /// path returns `false` (nothing cached to invalidate).
+    ///
+    /// **The body is deliberately `nonisolated`.** It used to be an isolated
+    /// synchronous method, which meant it never suspended and so ran to
+    /// completion under the actor's lock: `hashConcurrency` bought nothing and
+    /// every file's SHA-256 was serialized behind the previous one (measured
+    /// peak concurrency: 1, against the 4 the window advertises). It also made
+    /// `inFlightHashes` unreachable — set and cleared with no suspension point
+    /// between, so it could never observe a duplicate. Only the claim/release
+    /// bookkeeping needs isolation; the hash is pure I/O over one file, and the
+    /// reconcile's atomicity comes from GRDB's serialized `queue.write`
+    /// transaction, not from the actor.
     @discardableResult
-    func indexFile(at url: URL, kind: AssetKind) -> Bool {
+    nonisolated func indexFile(at url: URL, kind: AssetKind) async -> Bool {
         let absPath = url.standardizedFileURL.path
-        if inFlightHashes.contains(absPath) { return false }
-        inFlightHashes.insert(absPath)
-        defer { inFlightHashes.remove(absPath) }
+        guard await claim(absPath) else { return false }
+        // Released inline, not via `defer` + an unstructured Task: the claim
+        // must be gone before this call returns, or the next pass over the same
+        // file races the release and is skipped for no reason. Nothing between
+        // here and the release throws or suspends, so the claim can't leak.
+        let didChange = Self.indexFileBody(url: url, absPath: absPath, kind: kind)
+        await release(absPath)
+        return didChange
+    }
 
+    private nonisolated static func indexFileBody(url: URL, absPath: String,
+                                                  kind: AssetKind) -> Bool {
         // Dataless iCloud placeholders have no local bytes — hashing them
         // reads empty and corrupts identity. Skip until downloaded.
         if Self.isDataless(url) { return false }
@@ -194,6 +224,22 @@ actor Indexer {
                 var refreshed = target
                 refreshed.last_seen_at = now
                 try refreshed.update(db)
+
+                // The path now answers to `target`'s FTS row, which carries the
+                // OTHER copy's basename (or none, for a row dead at v9-backfill
+                // time) — so this file became unfindable by its own name in
+                // "All folders" search. Same rule as the new-path branch below:
+                // refresh the name only when this is the target's SOLE alive
+                // path, since one FTS row can't represent two basenames.
+                try ensureBasenameFTS(db: db, fileID: target.id, absPath: absPath)
+                let targetAlive = try PathRow
+                    .filter(PathRow.Columns.file_id == target.id)
+                    .filter(PathRow.Columns.is_alive == 1)
+                    .fetchCount(db)
+                if targetAlive == 1 {
+                    try db.execute(sql: "UPDATE files_fts SET basename = ? WHERE file_id = ?",
+                                   arguments: [(absPath as NSString).lastPathComponent, target.id])
+                }
             } else {
                 // The new content is genuinely new (no existing row has this
                 // hash). But this files row may be SHARED by more than one alive
@@ -715,6 +761,7 @@ actor Indexer {
         }
         guard !work.isEmpty else { return [] }
 
+        PhaseTrace.mark("index.begin", "n=\(work.count) force=\(force) silent=\(silent)")
         if !silent { await IndexProgress.shared.begin(work.count) }
         let taskPriority: TaskPriority = (priority == .high) ? .utility : .background
 
@@ -739,6 +786,7 @@ actor Indexer {
                 _ = enqueueNext()
             }
         }
+        PhaseTrace.mark("index.end", "changed=\(changed.count)")
         return changed
     }
 
