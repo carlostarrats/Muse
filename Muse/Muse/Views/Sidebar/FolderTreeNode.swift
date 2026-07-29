@@ -177,11 +177,9 @@ struct FolderTreeNode: View {
             // an empty iCloud root (nothing to show).
             .onTapGesture { if !isEmptyICloudRoot { appState.select(folder: node) } }
         }
-        // A root's DIRECT children sit at the root's own x — only grandchildren
-        // and deeper step in. The chevron + icon column already carry one level
-        // of hierarchy, so indenting the first level too reads as a double
-        // indent (see SidebarView.treeIndentStep).
-        .padding(.leading, CGFloat(max(0, depth - 1)) * SidebarView.treeIndentStep)
+        // Every nested level gets the (small) step, roots sit flush — see
+        // SidebarView.treeIndentStep for why the step is 8 and not Lineform's 14.
+        .padding(.leading, CGFloat(depth) * SidebarView.treeIndentStep)
         .padding(.horizontal, 6)
         .frame(height: node.isRoot ? SidebarView.rowHeight : SidebarView.childRowHeight)
         .background {

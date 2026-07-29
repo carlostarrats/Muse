@@ -126,6 +126,14 @@ struct CustomizeCollectionSheet: View {
                     preview
                         .padding(.bottom, 20)
 
+                    // The tab sits ABOVE BOTH columns, not inside the Icon one:
+                    // it governs the whole picker. On the Emoji tab the Color
+                    // column has nothing to offer (an emoji carries its own
+                    // colors), so a control nested under "Icon" that reaches out
+                    // and disables its neighbour reads as a bug.
+                    iconTabPicker
+                        .padding(.bottom, 16)
+
                     HStack(alignment: .top, spacing: 24) {
                         colorColumn
                         Divider()
@@ -304,13 +312,6 @@ struct CustomizeCollectionSheet: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
 
-            Picker("Icon kind", selection: $iconTab) {
-                Text("Symbols").tag(IconTab.symbols)
-                Text("Emoji").tag(IconTab.emoji)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-
             if iconTab == .symbols {
                 symbolGrid
             } else {
@@ -364,6 +365,61 @@ struct CustomizeCollectionSheet: View {
         .buttonStyle(.plain)
         .onHover { hoveredSymbol = $0 ? name : nil }
         .accessibilityLabel(CollectionAppearance.displayName(forSymbol: name))
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    // MARK: - Icon-kind tab
+
+    /// Symbols | Emoji. On macOS 26 it's a Liquid Glass capsule — the same
+    /// material language as the window toolbar's control clusters — with the
+    /// active segment as a filled pill inside it. Older systems fall back to the
+    /// stock segmented Picker; the glass API is 26-only and there's no sensible
+    /// approximation worth hand-rolling for one control.
+    @ViewBuilder private var iconTabPicker: some View {
+        if #available(macOS 26.0, *) {
+            HStack(spacing: 4) {
+                iconTabSegment(.symbols)
+                iconTabSegment(.emoji)
+            }
+            .padding(4)
+            .glassEffect(.regular, in: Capsule(style: .continuous))
+            // Hug the two segments — stretched across the card the control
+            // reads as a header bar rather than a picker.
+            .fixedSize()
+        } else {
+            Picker("Icon kind", selection: $iconTab) {
+                Text("Symbols").tag(IconTab.symbols)
+                Text("Emoji").tag(IconTab.emoji)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+        }
+    }
+
+    @ViewBuilder private func iconTabSegment(_ tab: IconTab) -> some View {
+        let selected = iconTab == tab
+        Button {
+            withAnimation(.easeOut(duration: 0.18)) { iconTab = tab }
+        } label: {
+            Group {
+                switch tab {
+                case .symbols: Label("Symbols", systemImage: "square.grid.2x2")
+                case .emoji:   Label("Emoji", systemImage: "face.smiling")
+                }
+            }
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(selected ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
+            .padding(.horizontal, 14)
+            .frame(height: 26)
+            .background {
+                if selected {
+                    Capsule(style: .continuous).fill(Color.accentColor)
+                }
+            }
+            .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 

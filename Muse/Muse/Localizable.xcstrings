@@ -296,6 +296,7 @@
       }
     },
     "+%lld more — keep typing to narrow": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -579,6 +580,7 @@
       }
     },
     "Already in use": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -2252,6 +2254,16 @@
         }
       }
     },
+    "From similar images": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "D’après des images similaires"
+          }
+        }
+      }
+    },
     "Fuchsia": {
       "localizations": {
         "fr": {
@@ -3149,6 +3161,7 @@
       }
     },
     "Matches": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -5350,6 +5363,16 @@
         }
       }
     },
+    "Sort Direction": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sens du tri"
+          }
+        }
+      }
+    },
     "Sort direction: %@": {
       "localizations": {
         "fr": {
@@ -5440,6 +5463,16 @@
         }
       }
     },
+    "Subfolders": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sous-dossiers"
+          }
+        }
+      }
+    },
     "Sun": {
       "localizations": {
         "fr": {
@@ -5521,6 +5554,16 @@
       }
     },
     "Tag order": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ordre des étiquettes"
+          }
+        }
+      }
+    },
+    "Tag Order": {
       "localizations": {
         "fr": {
           "stringUnit": {

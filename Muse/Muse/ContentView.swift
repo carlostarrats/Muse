@@ -27,6 +27,8 @@ struct ContentView: View {
     @State private var workProgress = WorkProgress()
     @ObservedObject private var collectionsEngine = CollectionsEngine.shared
     @State private var moodPickerShown = false
+    /// Tags from visually similar photos, for the Add Tag card's offer row.
+    @State private var similarTags: [TagSuggest.Candidate] = []
     @State private var filterPopoverShown = false
 
     /// Close whichever modal is up. Only one is ever presented at a time, so
@@ -201,6 +203,8 @@ struct ContentView: View {
                         subtitle: String(localized: "Tags \(request.displayName)."),
                         placeholder: String(localized: "Tag name"),
                         candidates: tagSuggestCandidates,
+                        suggestions: similarTags,
+                        suggestionsTitle: String(localized: "From similar images"),
                         displaying: { VocabularyLocalizer.shared.display($0) },
                         confirmTitle: String(localized: "Add"),
                         onCommit: { appState.confirmAddTag(label: $0) },
@@ -208,6 +212,7 @@ struct ContentView: View {
                     // Keyed on the request so re-opening for a different
                     // selection rebuilds the card with a fresh empty draft.
                     .id(request.id)
+                    .task(id: request.id) { await loadSimilarTags(for: request) }
                 }
             }
             .museModal(isPresented: Binding(
@@ -221,6 +226,9 @@ struct ContentView: View {
                         : String(localized: "Creates a collection from the selected images."),
                     placeholder: String(localized: "Collection name"),
                     candidates: collectionSuggestCandidates,
+                    // No suggestion row here: "which collection is like this
+                    // one?" has no meaning, and the field's inline completion
+                    // already surfaces the names in use.
                     confirmTitle: String(localized: "Create"),
                     // Committing a name that already exists ADDS to that
                     // collection instead of minting a second one with the same
@@ -629,6 +637,25 @@ struct ContentView: View {
 
     // Individual items — each renders as its own pill.
 
+    /// A toolbar button's label: the mood-tinted glyph, PLUS a text title that
+    /// the bar itself never draws.
+    ///
+    /// `.labelStyle(.iconOnly)` keeps the toolbar icon-only, but the Label still
+    /// carries its title — which is what the `»` overflow menu shows when the
+    /// window narrows. With a bare `Image` the overflow was a column of
+    /// unlabelled glyphs; with this it reads as a normal menu.
+    private func toolbarGlyph(_ systemImage: String,
+                              _ title: LocalizedStringKey,
+                              selected: Bool = false) -> some View {
+        Label {
+            Text(title)
+        } icon: {
+            Image(systemName: systemImage)
+                .moodToolbarIcon(appState.moodPalette, selected: selected)
+        }
+        .labelStyle(.iconOnly)
+    }
+
     @ToolbarContentBuilder
     private func sortItem(_ placement: ToolbarItemPlacement) -> some ToolbarContent {
         ToolbarItem(placement: placement) {
@@ -672,9 +699,8 @@ struct ContentView: View {
             // direction too, against the documented rule.
             Toggle(isOn: Binding(get: { appState.showSubfolders },
                                  set: { _ in appState.toggleSubfolders() })) {
-                Image(systemName: "rectangle.stack")
-                    .moodToolbarIcon(appState.moodPalette,
-                                     selected: appState.showSubfolders)
+                toolbarGlyph("rectangle.stack", "Subfolders",
+                             selected: appState.showSubfolders)
             }
             .help(appState.showSubfolders
                   ? "Hide files inside subfolders"
@@ -693,8 +719,7 @@ struct ContentView: View {
             Button {
                 appState.toggleCollectionsPage()
             } label: {
-                Image(systemName: "square.stack.3d.up")
-                    .moodToolbarIcon(appState.moodPalette)
+                toolbarGlyph("square.stack.3d.up", "Collections")
             }
             .help("Collections")
             .accessibilityLabel("Collections")
@@ -708,8 +733,7 @@ struct ContentView: View {
             Button {
                 appState.imageLayoutShown = true
             } label: {
-                Image(systemName: "square.grid.2x2")
-                    .moodToolbarIcon(appState.moodPalette)
+                toolbarGlyph("square.grid.2x2", "Image Layout")
             }
             .help("Image Layout")
             // Icon-only button: give VoiceOver an explicit name (the SF Symbol's
@@ -729,8 +753,7 @@ struct ContentView: View {
             Button {
                 appState.driveSharesShown = true
             } label: {
-                Image(systemName: "link")
-                    .moodToolbarIcon(appState.moodPalette)
+                toolbarGlyph("link", "Manage Drive Shares")
             }
             .help("Manage Drive Shares")
             .accessibilityLabel("Manage Drive Shares")
@@ -751,8 +774,7 @@ struct ContentView: View {
             Button {
                 appState.infoShown = true
             } label: {
-                Image(systemName: "info.circle")
-                    .moodToolbarIcon(appState.moodPalette)
+                toolbarGlyph("info.circle", "About Muse")
             }
             .help("About Muse — how indexing, analysis, collections, and tags work")
             .accessibilityLabel("About Muse")
@@ -768,8 +790,7 @@ struct ContentView: View {
             Button {
                 appState.settingsShown = true
             } label: {
-                Image(systemName: "gearshape")
-                    .moodToolbarIcon(appState.moodPalette)
+                toolbarGlyph("gearshape", "Settings")
             }
             .help("Settings")
             .accessibilityLabel("Settings")
@@ -851,8 +872,7 @@ struct ContentView: View {
             .pickerStyle(.inline)
             .labelsHidden()
         } label: {
-            Image(systemName: "arrow.up.and.down.text.horizontal")
-                .moodToolbarIcon(appState.moodPalette)
+            toolbarGlyph("arrow.up.and.down.text.horizontal", "Sort")
         }
         // Hide the dropdown chevron: with it, macOS 26 renders the Menu as its
         // OWN isolated glass pill and it won't merge with the adjacent
@@ -876,8 +896,7 @@ struct ContentView: View {
             .pickerStyle(.inline)
             .labelsHidden()
         } label: {
-            Image(systemName: "tag")
-                .moodToolbarIcon(appState.moodPalette)
+            toolbarGlyph("tag", "Tag Order")
         }
         .help("Tag order: \(appState.tagSortMode.label)")
         .accessibilityLabel("Tag order")
@@ -915,8 +934,7 @@ struct ContentView: View {
             .pickerStyle(.inline)
             .labelsHidden()
         } label: {
-            Image(systemName: ascending ? "arrow.up" : "arrow.down")
-                .moodToolbarIcon(appState.moodPalette)
+            toolbarGlyph(ascending ? "arrow.up" : "arrow.down", "Sort Direction")
         }
         // Same reason as the sort menu beside it: with the dropdown chevron
         // visible, macOS 26 renders this as its OWN isolated glass pill and it
@@ -939,9 +957,8 @@ struct ContentView: View {
             get: { filterPopoverShown || appState.gridFilter.isActive },
             set: { _ in filterPopoverShown.toggle() }
         )) {
-            Image(systemName: "line.3.horizontal.decrease.circle")
-                .moodToolbarIcon(appState.moodPalette,
-                                 selected: filterPopoverShown || appState.gridFilter.isActive)
+            toolbarGlyph("line.3.horizontal.decrease.circle", "Filter",
+                         selected: filterPopoverShown || appState.gridFilter.isActive)
         }
         .toggleStyle(.button)
         .help(appState.gridFilter.isActive ? String(localized: "Filter (active)") : String(localized: "Filter"))
@@ -962,8 +979,7 @@ struct ContentView: View {
         // selected fill (solid accent, white icon), identical to every other
         // toolbar button's behavior. No custom chrome.
         Toggle(isOn: $moodPickerShown) {
-            Image(systemName: "paintpalette")
-                .moodToolbarIcon(appState.moodPalette, selected: moodPickerShown)
+            toolbarGlyph("paintpalette", "Background")
         }
         .toggleStyle(.button)
         .help("Background: \(appState.mood.displayName)")
@@ -1037,6 +1053,26 @@ struct ContentView: View {
     /// already taken and route a matching name into that collection instead of
     /// creating a twin. Smart collections are excluded: their membership is
     /// rule-driven, so hand-adding files to one wouldn't stick.
+    /// Tags carried by photos that LOOK like the one being tagged. Loaded when
+    /// the Add Tag card opens; empty until it lands (the card reserves the row's
+    /// height, so a late arrival doesn't resize it) and empty forever for an
+    /// unanalyzed photo, which is fine — the field still inline-completes.
+    private func loadSimilarTags(for request: AddTagRequest) async {
+        similarTags = []
+        // Multi-selection has no single "this photo"; use the first, which is
+        // the tile that was right-clicked.
+        guard let url = request.urls.first else { return }
+        // Don't offer a tag the file already carries — re-adding is a harmless
+        // no-op, but seeing it in the row reads as the app not knowing.
+        let existing = Set(await TagStore.shared.tags(for: url).map(\.label))
+        let found = await SimilarTagSuggestions.candidates(
+            for: url, excluding: existing,
+            limit: SuggestingNameCard.suggestionSlots)
+        // The card may have been dismissed or re-targeted while this ran.
+        guard appState.addTagRequest?.id == request.id else { return }
+        similarTags = found
+    }
+
     private var collectionSuggestCandidates: [TagSuggest.Candidate] {
         collectionsEngine.collections
             .filter { $0.collection.smart_rules == nil }

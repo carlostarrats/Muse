@@ -97,12 +97,12 @@ struct SidebarView: View {
     /// Point size of the disclosure glyph — smaller than the row icon on purpose.
     static let chevronGlyphSize: CGFloat = 9
 
-    /// Per-level indent in the folder tree. A root's DIRECT children sit at the
-    /// root's own x (step 0); only grandchildren and deeper step in. That's the
-    /// native macOS source-list convention (Finder, Notes, Mail) — the chevron
-    /// plus the icon column already carry one level of hierarchy, so indenting
-    /// the first level too reads as a double indent.
-    static let treeIndentStep: CGFloat = 14
+    /// Per-level indent in the folder tree, applied from the FIRST nested level
+    /// down. Deliberately small: at 14 (Lineform's step) a subfolder read as
+    /// pushed away from its parent, and at 0 the tree read flat with nothing but
+    /// the chevron to carry hierarchy. 8 is enough for the eye to track the
+    /// structure by row x-position without the rows marching rightward.
+    static let treeIndentStep: CGFloat = 8
 
     /// Height of a nested (non-root) folder row. Roots keep `rowHeight` (28) so
     /// they read as section anchors above their slightly tighter children.
@@ -123,7 +123,15 @@ struct SidebarView: View {
             } else if showCollectionsInSidebar {
                 twoSectionScroll
             } else {
-                sortHeader
+                // Folders-only layout has no section header to host the control,
+                // so it keeps its own row — same icon, same behavior.
+                HStack {
+                    folderSortMenu
+                    Spacer()
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 8)
+                .padding(.bottom, 2)
                 foldersScroll
             }
 
@@ -229,9 +237,11 @@ struct SidebarView: View {
     private var twoSectionScroll: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                SectionHeader(title: String(localized: "FOLDERS"), collapsed: $foldersCollapsed)
+                SectionHeader(title: String(localized: "FOLDERS"),
+                              collapsed: $foldersCollapsed) {
+                    folderSortMenu
+                }
                 if !foldersCollapsed {
-                    sortHeader
                     folderList
                 }
                 // Content-gated: with no folders at all, or only an empty iCloud
@@ -249,9 +259,11 @@ struct SidebarView: View {
                     // padding + the shorter endDropZone, which render only when the
                     // FOLDERS section is expanded.
                     Color.clear.frame(height: 14)
-                    SectionHeader(title: String(localized: "COLLECTIONS"), collapsed: $collectionsCollapsed)
+                    SectionHeader(title: String(localized: "COLLECTIONS"),
+                                  collapsed: $collectionsCollapsed) {
+                        collectionSortMenu
+                    }
                     if !collectionsCollapsed {
-                        collectionsSortHeader
                         collectionsList
                     }
                 }
@@ -285,36 +297,13 @@ struct SidebarView: View {
 
     // MARK: - Collections sort header
 
-    private var collectionsSortHeader: some View {
-        HStack {
-            Menu {
-                ForEach(SidebarCollectionSortMode.allCases) { mode in
-                    Button { setCollectionSortMode(mode) } label: {
-                        if appState.sidebarCollectionSortMode == mode {
-                            Label(mode.label, systemImage: "checkmark")
-                        } else {
-                            Text(mode.label)
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text("Sort: \(appState.sidebarCollectionSortMode.label)")
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .semibold))
-                }
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .accessibilityLabel("Sort collections")
-            Spacer()
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, 4)
-        .padding(.bottom, 2)
+    private var collectionSortMenu: some View {
+        SectionSortMenu(modes: SidebarCollectionSortMode.allCases,
+                        label: { $0.label },
+                        current: appState.sidebarCollectionSortMode,
+                        isManual: appState.sidebarCollectionSortMode == .manual,
+                        accessibilityTitle: String(localized: "Sort collections"),
+                        select: { setCollectionSortMode($0) })
     }
 
     private func setCollectionSortMode(_ mode: SidebarCollectionSortMode) {
@@ -525,38 +514,15 @@ struct SidebarView: View {
 
     // MARK: - Sort header
 
-    private var sortHeader: some View {
-        HStack {
-            Menu {
-                ForEach(FolderSortMode.allCases) { mode in
-                    Button { setSortMode(mode) } label: {
-                        if sortMode == mode {
-                            Label(mode.label, systemImage: "checkmark")
-                        } else {
-                            Text(mode.label)
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text("Sort: \(sortMode.label)")
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .semibold))
-                }
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            // Disambiguate from the COLLECTIONS sort pop-up (same visible "Sort:…"
-            // shape) now that both can sit in the sidebar at once.
-            .accessibilityLabel("Sort folders")
-            Spacer()
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, 8)
-        .padding(.bottom, 2)
+    private var folderSortMenu: some View {
+        SectionSortMenu(modes: FolderSortMode.allCases,
+                        label: { $0.label },
+                        current: sortMode,
+                        isManual: sortMode == .manual,
+                        // Disambiguate from the COLLECTIONS control (same glyph)
+                        // now that both can sit in the sidebar at once.
+                        accessibilityTitle: String(localized: "Sort folders"),
+                        select: { setSortMode($0) })
     }
 
     private func setSortMode(_ mode: FolderSortMode) {

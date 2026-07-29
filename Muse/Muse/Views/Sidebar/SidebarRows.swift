@@ -120,13 +120,24 @@ struct AddFolderPillButton: View {
 /// A gray uppercase section label with a trailing circular collapse/expand
 /// button — the +/× toggle from the hero viewer, tuned for the light sidebar.
 /// `+` when collapsed, rotates 45°→`×` when expanded; same spring motion.
-struct SectionHeader: View {
+struct SectionHeader<Accessory: View>: View {
     let title: String
     @Binding var collapsed: Bool
+    /// Sits immediately after the title — the section's sort control. Inline
+    /// rather than on its own row below: a full "Sort: Manual" line read as a
+    /// list item, competing with the folders under it.
+    @ViewBuilder var accessory: () -> Accessory
     @State private var hovering = false
 
+    init(title: String, collapsed: Binding<Bool>,
+         @ViewBuilder accessory: @escaping () -> Accessory = { EmptyView() }) {
+        self.title = title
+        self._collapsed = collapsed
+        self.accessory = accessory
+    }
+
     var body: some View {
-        HStack {
+        HStack(spacing: 6) {
             Text(title)
                 .font(.system(size: 11, weight: .semibold))
                 .tracking(0.6)
@@ -134,6 +145,7 @@ struct SectionHeader: View {
                 // Expose the new sidebar sections to VoiceOver's heading rotor so
                 // the FOLDERS / COLLECTIONS structure is navigable.
                 .accessibilityAddTraits(.isHeader)
+            accessory()
             Spacer()
             Button {
                 // `collapsed` is a plain @State binding, so withAnimation spins
@@ -210,4 +222,56 @@ struct AddPillButton: View {
     }
 
     private var usesDark: Bool { colorScheme == .dark }
+}
+
+// MARK: - Section sort control
+
+/// The sort control that lives beside a sidebar section's title (FOLDERS /
+/// COLLECTIONS). Icon-only, using the SAME glyph as the grid's toolbar sort
+/// menu so "sort" reads identically in both places.
+///
+/// It turns ACCENT when the section is in Manual order — manual is the one mode
+/// where the on-screen order is something the user arranged by hand rather than
+/// a rule, so it's worth signalling at a glance. Every other mode uses the
+/// header's own secondary color, so the control recedes into the label.
+struct SectionSortMenu<Mode: Hashable & Identifiable>: View {
+    let modes: [Mode]
+    let label: (Mode) -> String
+    let current: Mode
+    /// True when `current` is the manual/hand-arranged mode.
+    let isManual: Bool
+    let accessibilityTitle: String
+    let select: (Mode) -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Menu {
+            ForEach(modes) { mode in
+                Button { select(mode) } label: {
+                    if mode == current {
+                        Label(NSLocalizedString(label(mode), comment: "Sidebar sort mode"),
+                              systemImage: "checkmark")
+                    } else {
+                        Text(NSLocalizedString(label(mode), comment: "Sidebar sort mode"))
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "arrow.up.and.down.text.horizontal")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(isManual ? AnyShapeStyle(Color.accentColor)
+                                          : AnyShapeStyle(.secondary))
+                .frame(width: 18, height: 18)
+                .background(Circle().fill(Color.primary.opacity(hovering ? 0.10 : 0)))
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .onHover { hovering = $0 }
+        .help(accessibilityTitle)
+        .accessibilityLabel(accessibilityTitle)
+        .accessibilityValue(NSLocalizedString(label(current), comment: "Sidebar sort mode"))
+    }
 }
