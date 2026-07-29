@@ -166,11 +166,14 @@ struct SidebarView: View {
     /// they read as section anchors above their slightly tighter children.
     static let childRowHeight: CGFloat = 26
 
-    /// Opaque card surface (Lineform's near-white / dark values) so the
-    /// sidebar reads as one continuous card rather than a translucent panel.
+    /// Base card surface (Lineform's near-white / dark values) so the sidebar
+    /// reads as one continuous card. Opaque as defined here — the body applies
+    /// a slight translucency at the top-leading corner via a gradient, so the
+    /// mood colour beneath washes through there; everywhere else this is the
+    /// literal surface colour.
     private var cardColor: Color {
         Color(nsColor: NSColor(
-            calibratedWhite: colorScheme == .dark ? 0.18 : 0.988, alpha: 1
+            calibratedWhite: colorScheme == .dark ? 0.10 : 0.988, alpha: 1
         ))
     }
 
@@ -196,14 +199,47 @@ struct SidebarView: View {
             bottomBar
         }
         .frame(minWidth: 220)
-        // One continuous card: the opaque surface flows up behind the title
-        // bar and curves with the window's top corner, like Lineform.
+        // One continuous card: the surface flows up behind the title bar and
+        // curves with the window's top corner, like Lineform.
         // Tapping the empty sidebar surface deselects the grid (folder rows and
         // the add button consume their own taps).
         .background {
-            cardColor.ignoresSafeArea()
-                .contentShape(Rectangle())
-                .onTapGesture { appState.clearSelection() }
+            ZStack {
+                // The app's own mood colour sits UNDER the card. Nothing behind
+                // the window is involved — this is Muse's palette showing
+                // through itself, so the wash tracks the mood and stays
+                // predictable regardless of what's on the desktop.
+                appState.moodPalette.background
+
+                // The card, thinning along the diagonal: slightly translucent at
+                // the top-leading corner so a tad of the mood colour reads
+                // there, closing to fully solid by three-quarters of the way
+                // down so the lower rows and the bottom pill bar sit on an
+                // untinted ground.
+                LinearGradient(
+                    stops: [
+                        .init(color: cardColor.opacity(0.84), location: 0.0),
+                        .init(color: cardColor, location: 0.75),
+                        .init(color: cardColor, location: 1.0),
+                    ],
+                    // The end point is pushed well PAST the trailing edge
+                    // (x: 2.5) rather than sitting on it. The sidebar is tall
+                    // and narrow, so a plain corner-to-corner diagonal is only
+                    // ~18° off vertical and reads as straight down; extending
+                    // the axis horizontally swings it to a visible lean.
+                    startPoint: .init(x: 0, y: 0),
+                    endPoint: .init(x: 2.5, y: 1)
+                )
+            }
+            // Cross-fade the wash on a mood switch, matching the 0.35 the grid
+            // backdrop uses (ContentView) — without this the sidebar's tint
+            // snapped while the grid beside it eased, which read as a glitch.
+            // Value-scoped on purpose: a global `withAnimation` transaction here
+            // would leak into every repositioned view in the same update.
+            .animation(.easeInOut(duration: 0.35), value: appState.moodPalette)
+            .ignoresSafeArea()
+            .contentShape(Rectangle())
+            .onTapGesture { appState.clearSelection() }
         }
     }
 
