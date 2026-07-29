@@ -6966,3 +6966,25 @@ recovered on remount; an onChange-raised card can't. Fixed by raising them from
 AppState (`deleteTagInView` / `deleteAllTagsInView` / `regenerateTaglessInView`)
 so the shell doesn't own tag logic. The gap: Metadata Import's Cancel/Done were
 the last stock buttons left in a card; they're `ModalButton`s now.
+
+## 2026-07-28 — two modal layout fixes (`feat/next-149`)
+
+**Manage Drive Shares: column headers instead of repeated words.** Each row read
+`10 images | created Jun 29, 2026 | expires Jul 29, 2026`, and at the card's
+520pt width the expiry date wrapped to a second line. Owner's mockup moved the
+context to the top: a `Images · Created · Expires` header row once, with bare
+values beneath it. Both the header and every value row render through the same
+`metaColumns(pipes:_:_:_:)` on fixed widths (count 40, dates 108, pipe 17), so
+they can't drift out of alignment; the header draws its separators invisibly to
+hold the same geometry. The columns are `lineLimit(1)` + a small
+`minimumScaleFactor` — a fixed column that wraps puts the layout back where it
+started, and the date width already carries the ~1.3× budget a longer locale
+needs. Since the values are now bare, the row carries an explicit VoiceOver
+sentence instead of `.combine`'s "Shopping 10 Jun 29 Jun 29". Catalog: the new
+label got its French value; `created %@` / `expires %@` are gone. Row spacing
+between the name and its metadata went 2 → 6pt (owner: "too tight").
+
+**Duplicates card: 1100 → 820pt.** It showed seven tiles per row when five is
+plenty; groups longer than that already scrolled horizontally, so the extra
+width bought nothing. 820 = 5×140 tiles + 4×12 spacing + the group panel's 20pt
+and the row scroller's 16pt insets.

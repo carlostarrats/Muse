@@ -52,6 +52,16 @@
         }
       }
     },
+    "%@, %lld images, created %@, expires %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, %lld images, créé le %@, expire le %@"
+          }
+        }
+      }
+    },
     "%@, %lld of %lld files reconnected" : {
       "localizations" : {
         "en" : {
@@ -2904,7 +2914,6 @@
       }
     },
     "MB" : {},
-    "MP" : {},
     "Make Smart" : {
       "localizations" : {
         "fr" : {
@@ -5957,16 +5966,6 @@
         }
       }
     },
-    "created %@" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "créé le %@"
-          }
-        }
-      }
-    },
     "e.g. Leslie-Ann Thomson ALDO MUAH 2025" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5995,16 +5994,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "p. ex. The Project"
-          }
-        }
-      }
-    },
-    "expires %@" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "expire le %@"
           }
         }
       }

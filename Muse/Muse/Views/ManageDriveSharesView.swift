@@ -60,6 +60,8 @@ struct ManageDriveSharesView: View {
             } else {
                 sortControls
                     .padding(.bottom, 16)
+                columnHeaders
+                    .padding(.bottom, 10)
                 ModalScroll {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(sortedRecords.enumerated()), id: \.element.id) { index, record in
@@ -124,29 +126,76 @@ struct ManageDriveSharesView: View {
         }
     }
 
+    /// Fixed metadata column widths. The words that used to prefix every value
+    /// ("10 images | created … | expires …") now live once in `columnHeaders`,
+    /// so the values themselves are short enough to sit on one line — the old
+    /// flowing layout wrapped the expiry date at this card's width.
+    private enum MetaColumn {
+        static let count: CGFloat = 40
+        // "Jun 29, 2026" measures ~84pt at 13pt; the extra room is the ~1.3×
+        // budget a longer locale's date needs (fr: "29 juin 2026").
+        static let date: CGFloat = 108
+        static let pipe: CGFloat = 17   // glyph + its breathing room
+    }
+
+    /// One metadata line laid out on the fixed columns. Headers and values go
+    /// through this same function so they can't drift out of alignment.
+    private func metaColumns<A: View, B: View, C: View>(
+        pipes: Bool, _ a: A, _ b: B, _ c: C
+    ) -> some View {
+        HStack(spacing: 0) {
+            a.frame(width: MetaColumn.count, alignment: .leading)
+            metaPipe(pipes)
+            b.frame(width: MetaColumn.date, alignment: .leading)
+            metaPipe(pipes)
+            c.frame(width: MetaColumn.date, alignment: .leading)
+            Spacer(minLength: 0)
+        }
+        // A fixed column must not wrap — a date that outgrew its width would
+        // put the layout back where it started. Shrink a little first, then
+        // truncate.
+        .lineLimit(1)
+        .minimumScaleFactor(0.85)
+        .truncationMode(.tail)
+    }
+
     /// Thin column separator between the metadata fields. Decorative — hidden
-    /// from VoiceOver so the "|" glyph isn't read aloud between fields.
-    private var metaPipe: some View {
-        Text(verbatim: "|").foregroundStyle(.tertiary).padding(.horizontal, 8)
+    /// from VoiceOver so the "|" glyph isn't read aloud between fields. Drawn
+    /// invisibly in the header row so the columns still line up.
+    private func metaPipe(_ visible: Bool) -> some View {
+        Text(verbatim: "|")
+            .foregroundStyle(.tertiary)
+            .opacity(visible ? 1 : 0)
+            .frame(width: MetaColumn.pipe)
             .accessibilityHidden(true)
+    }
+
+    /// The shared context for every row's metadata, stated once at the top.
+    private var columnHeaders: some View {
+        metaColumns(pipes: false,
+                    Text("Images"), Text("Created"), Text("Expires"))
+            .font(.system(size: 11))
+            .foregroundStyle(.tertiary)
+            .accessibilityHidden(true)   // each row states its own fields
     }
 
     private func row(_ record: DriveShareRecord) -> some View {
         HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(record.collectionName).font(.system(size: 15, weight: .semibold))
-                // Pipe-separated metadata, flowing naturally (no fixed columns).
-                HStack(spacing: 0) {
-                    Text("\(record.itemCount) images")
-                    metaPipe
-                    Text("created \(record.createdAt.formatted(date: .abbreviated, time: .omitted))")
-                    metaPipe
-                    Text("expires \(record.expiry.formatted(date: .abbreviated, time: .omitted))")
-                }
-                .font(.system(size: 13)).foregroundStyle(.secondary)
+                // `.formatted()` (a String) rather than "\(count)": an
+                // interpolated Int in a Text literal becomes a "%lld"
+                // localization key, which is a key nothing should own.
+                metaColumns(pipes: true,
+                            Text(record.itemCount.formatted()),
+                            Text(record.createdAt.formatted(date: .abbreviated, time: .omitted)),
+                            Text(record.expiry.formatted(date: .abbreviated, time: .omitted)))
+                    .font(.system(size: 13)).foregroundStyle(.secondary)
             }
-            // Name + metadata read as one VoiceOver element (pipes excluded).
-            .accessibilityElement(children: .combine)
+            // The values are bare now (the words are in the header), so VoiceOver
+            // gets an explicit sentence instead of "Shopping 10 Jun 29 Jun 29".
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("\(record.collectionName), \(record.itemCount) images, created \(record.createdAt.formatted(date: .abbreviated, time: .omitted)), expires \(record.expiry.formatted(date: .abbreviated, time: .omitted))"))
             Spacer()
             OpenLinkButton(shareName: record.collectionName) {
                 // driveShares.json is plaintext in App Support — don't hand an
