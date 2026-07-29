@@ -40,7 +40,9 @@ enum SidecarHydrator {
         }
     }
 
-    private static func apply(_ sidecar: Sidecar, fileID: String, parentDir: String,
+    // internal (not private) so the rating-exclusivity rule can be tested
+    // against a real DB rather than only at the pure-helper level.
+    static func apply(_ sidecar: Sidecar, fileID: String, parentDir: String,
                               basename: String, queue: DatabaseQueue) async {
         try? await queue.write { db in
             if var file = try FileRow.filter(FileRow.Columns.id == fileID).fetchOne(db) {
