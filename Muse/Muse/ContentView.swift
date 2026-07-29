@@ -24,6 +24,8 @@ struct ContentView: View {
     @ObservedObject private var analyzePipeline = AnalyzePipeline.shared
     /// Unified background-progress state driving the single status pill.
     @State private var workProgress = WorkProgress()
+    /// Guards against queueing a second completion hold while one is running.
+    @State private var finishHoldScheduled = false
     @ObservedObject private var collectionsEngine = CollectionsEngine.shared
     @State private var moodPickerShown = false
     /// Tags from visually similar photos, for the Add Tag card's offer row.
@@ -472,11 +474,21 @@ struct ContentView: View {
         .onChange(of: workInput) { _, new in advanceProgress(new) }
         // The phases go idle in GAPS, and an idle phase publishes nothing — so
         // `onChange` alone can't notice that the grace window has elapsed. This
-        // tick is what actually ends a finished run; while work is flowing it
-        // just re-applies the same input, which is a no-op.
-        .onReceive(Timer.publish(every: 0.3, on: .main, in: .common).autoconnect()) { _ in
+        // tick is what actually ends a finished run.
+        //
+        // Bound to `isActive` so it exists ONLY while the pill is up. As a
+        // `Timer.publish(...).autoconnect()` it woke the main runloop three
+        // times a second for the entire life of the app, idle or not — which is
+        // exactly the sort of background hum this app is supposed to not have.
+        // A run can only START from the `onChange` above, so nothing is missed
+        // by not ticking while idle.
+        .task(id: workProgress.isActive) {
             guard workProgress.isActive else { return }
-            advanceProgress(workInput)
+            while !Task.isCancelled && workProgress.isActive {
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                guard !Task.isCancelled else { return }
+                advanceProgress(workInput)
+            }
         }
         .preferredColorScheme(appState.moodPalette.scheme)
     }
@@ -489,16 +501,15 @@ struct ContentView: View {
     /// comment at the call site.
     private var detailCore: some View {
         detailStage
-            // The pill belongs to the GRID, not the window. As an overlay on the
-            // whole NavigationSplitView it centred across sidebar + grid, so on a
-            // narrow window it slid over the sidebar and collided with its Folder
-            // button (owner-reported, with a screenshot). Scoped here it centres
-            // in the detail column, like the zoom control it shares the bottom
-            // edge with.
-            // Bottom-LEADING, mirroring the zoom control's bottom-trailing seat
-            // (same 16pt insets). Centred, it drifted into the zoom control on a
-            // narrow window — the two now start from opposite edges and can only
-            // meet if the window is narrower than both put together.
+            // The pill belongs to the GRID, not the window. As an overlay on
+            // the whole NavigationSplitView it spanned sidebar + grid, so on a
+            // narrow window it slid over the sidebar and collided with its
+            // Folder button. Scoping it here fixed that; seating it
+            // bottom-LEADING — mirroring the zoom control's bottom-trailing
+            // seat, same 16pt insets — fixed the rest, since centred it still
+            // drifted into that control as the window narrowed. Growing from
+            // opposite edges, the two can only meet on a window narrower than
+            // both put together.
             .overlay(alignment: .bottomLeading) {
                 // ONE pill for every background phase. This used to be a
                 // four-way chain (Analyzing / Organizing / Indexing / Loading
@@ -1008,14 +1019,26 @@ struct ContentView: View {
     /// when a run genuinely ends.
     private func advanceProgress(_ input: WorkProgress.Input) {
         withAnimation(.easeOut(duration: 0.2)) { workProgress.update(input) }
+        // A run that resumed (or a fresh one) clears any stale hold claim, so
+        // the guard below can't be left latched by a hold that was superseded.
+        // Today a finish needs 1.5s of idle and the hold lasts 0.45s, so they
+        // can't overlap — but that is an accident of two constants, and if it
+        // ever stopped being true the bar would stick at 100% forever.
+        if !workProgress.isFinishing { finishHoldScheduled = false }
         // Let the bar visibly REACH 100% before the pill goes away. Without
         // the hold it vanished at whatever the last active phase reached
         // (typically the low 90s), which reads as a stall rather than
         // completion.
-        guard workProgress.isFinishing else { return }
+        // Schedule the hold ONCE. `isFinishing` stays true for its whole
+        // duration, and the tick above re-enters every 0.3s, so an unguarded
+        // schedule queued a fresh reset on each tick (harmless — `reset()` is
+        // guarded — but pointless churn).
+        guard workProgress.isFinishing, !finishHoldScheduled else { return }
+        finishHoldScheduled = true
         Task {
             try? await Task.sleep(nanoseconds: 450_000_000)
             withAnimation(.easeOut(duration: 0.25)) { workProgress.reset() }
+            finishHoldScheduled = false
         }
     }
 

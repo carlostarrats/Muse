@@ -186,10 +186,9 @@ extension WorkProgressTests {
     //
     // Owner-reported: "the progress bar goes towards finishing then goes back
     // and climbs again". The phases hand off with GAPS — analyzePending is
-    // invoked per folder load and per FSEvents batch, and ThumbProgress zeroes
-    // itself whenever a batch of tiles drains — so treating the first idle
-    // instant as the end turned one job into a dozen short runs, each snapping
-    // to 100% and restarting at 0.
+    // invoked per folder load and per FSEvents batch — so treating the first
+    // idle instant as the end turned one job into a dozen short runs, each
+    // snapping to 100% and restarting at 0.
 
     private var working: WorkProgress.Input {
         WorkProgress.Input(analyzeFraction: 0.5, analyzeActive: true)

@@ -154,6 +154,35 @@ open/close + Escape + arrow-flip on a >100 MP file, `sample` on any stall.
 
 923 unit tests + 6 UI tests green.
 
+## Post-audit change pass — 2026-07-28
+
+The fixes that came out of running the app (progress pill, thumbnails, the
+undecodable-file loop, pill placement) moved several rows past their audit, so
+the delta was re-reviewed under the same rules. Rows touched: **1** (Indexer,
+trace marks only), **6** (`SidecarHydrator.apply` made internal for tests),
+**8** (thumbnails), **9** (analyze), **10** (CollectionsEngine, trace marks
+only), **16** (ContentView / MuseApp).
+
+Reviewing that diff found **4 defects in the session's own fixes**:
+
+- The grace-window tick was a `Timer.publish(...).autoconnect()`, so it woke the
+  main runloop 3×/second for the entire life of the app, idle or not — a
+  background hum in an app whose whole point is not having one. Now a
+  `.task(id: isActive)` loop that exists only while the pill is up.
+- The completion hold was re-scheduled on every tick while `isFinishing` (~2
+  redundant tasks per run; `reset()` was guarded, so harmless but pointless).
+  Scheduled once now, and the claim is cleared when a run resumes so it can
+  never latch.
+- `PhaseTrace.mark` took plain `String`s, and Swift evaluates arguments before
+  the callee — so every index batch and FSEvents delivery built its interpolated
+  detail string even with tracing OFF. `@autoclosure` makes a disabled trace
+  genuinely free.
+- The pill's overlay carried two stacked comment blocks whose first half had
+  become wrong (it no longer centres).
+
+Three review rounds; the third found only a stale comment. 929 unit tests + 6 UI
+tests green.
+
 ## Notes
 
 - Muse's highest-consequence areas are the ones with the fewest tests, not the most: `MuseTests` is

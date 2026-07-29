@@ -32,10 +32,16 @@ enum PhaseTrace {
     /// Record one phase transition. `detail` carries the count that matters
     /// (how many files this batch is about) — the thing that says whether a
     /// second burst is real work or a repeat of the first.
-    static func mark(_ event: String, _ detail: String = "") {
+    /// `detail` is an @autoclosure: Swift evaluates call arguments BEFORE the
+    /// callee, so a plain `String` parameter meant every call site still built
+    /// its interpolated string ("n=\(count) force=\(force)…") on every index
+    /// batch and every FSEvents delivery even with tracing off. Deferring it
+    /// makes a disabled trace genuinely free — one Bool check.
+    static func mark(_ event: @autoclosure () -> String,
+                     _ detail: @autoclosure () -> String = "") {
         guard enabled else { return }
         let t = Date().timeIntervalSince(start)
-        let line = String(format: "%8.2fs  %@ %@\n", t, event, detail)
+        let line = String(format: "%8.2fs  %@ %@\n", t, event(), detail())
         queue.async {
             if let h = try? FileHandle(forWritingTo: url) {
                 h.seekToEndOfFile(); h.write(Data(line.utf8)); try? h.close()
