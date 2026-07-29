@@ -28,9 +28,18 @@ set -euo pipefail
 # ---- args -------------------------------------------------------------------
 VERSION="${1:-}"
 PUBLISH="no"
-[[ "${2:-}" == "--publish" ]] && PUBLISH="yes"
+NOTES="yes"
+shift || true
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --publish)  PUBLISH="yes" ;;
+    --no-notes) NOTES="no" ;;
+    *) echo "✗ unknown option: $1" >&2; exit 1 ;;
+  esac
+  shift
+done
 if [[ -z "$VERSION" ]]; then
-  echo "usage: scripts/release.sh <version> [--publish]   (e.g. 1.0.1)" >&2
+  echo "usage: scripts/release.sh <version> [--publish] [--no-notes]   (e.g. 1.0.1)" >&2
   exit 1
 fi
 
@@ -52,11 +61,36 @@ EXPORT_DIR="$BUILD_DIR/export"
 REL_DIR="$BUILD_DIR/releases"
 APP="$EXPORT_DIR/Muse.app"
 DMG="$REL_DIR/Muse-$VERSION.dmg"
+NOTES_SRC="$REPO_ROOT/docs/release-notes-$VERSION.md"
 
 echo "▸ Releasing Muse $VERSION  (tag $TAG, build $BUILD)"
 
 # ---- preflight --------------------------------------------------------------
 command -v create-dmg >/dev/null 2>&1 || { echo "✗ create-dmg missing — brew install create-dmg" >&2; exit 1; }
+
+# The release notes are what the user reads in the Sparkle update dialog before
+# agreeing to install. Catch a missing file HERE, not after a 20-minute archive.
+# EMPTY counts as missing: an empty file satisfies `-f` and still produces an
+# empty <description>, i.e. a blank dialog on an otherwise green run — which is
+# the exact failure this check exists to prevent (`touch`-then-forget).
+if [[ "$NOTES" == "yes" ]]; then
+  if [[ ! -f "$NOTES_SRC" ]]; then
+    echo "✗ release notes missing: docs/release-notes-$VERSION.md" >&2
+    echo "  Write them first (they appear in the Sparkle update dialog AND the" >&2
+    echo "  GitHub release), or re-run with --no-notes to ship without notes." >&2
+    exit 1
+  elif ! grep -q '[^[:space:]]' "$NOTES_SRC"; then
+    echo "✗ release notes are empty: docs/release-notes-$VERSION.md" >&2
+    echo "  An empty file would ship a blank update dialog." >&2
+    exit 1
+  fi
+fi
+# NB: an `[[ … ]] && echo` one-liner here would return 1 on the false branch and
+# `set -e` would kill the script on every normal release. Keep it an `if`.
+if [[ "$NOTES" == "no" ]]; then
+  echo "▸ --no-notes: this release will ship with an EMPTY update dialog"
+fi
+
 xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
   || { echo "✗ notary profile '$NOTARY_PROFILE' not found — see one-time setup in this script's header" >&2; exit 1; }
 
@@ -144,16 +178,55 @@ echo "▸ Signing update + writing appcast…"
 # hosts each version's assets under its own tag, so a single download-url-prefix
 # can't address older versions — and cross-tag deltas would 404. One DMG in →
 # one correct item out (full-download updates; no deltas).
-find "$REL_DIR" -maxdepth 1 \( -name '*.dmg' -o -name '*.delta' -o -name 'appcast.xml' \) \
+# The prune covers notes files too: a stale Muse-1.3.3.html sat here through the
+# 1.4 release, and a leftover notes file whose basename happens to match a
+# future DMG would silently ship the wrong version's notes.
+find "$REL_DIR" -maxdepth 1 \
+  \( -name '*.dmg' -o -name '*.delta' -o -name 'appcast.xml' -o -name '*.md' -o -name '*.html' \) \
   ! -name "$(basename "$DMG")" -delete
-"$SPARKLE_BIN/generate_appcast" --maximum-deltas 0 "$REL_DIR" \
+
+# generate_appcast picks up a notes file whose basename matches the archive —
+# Muse-1.4.dmg ↔ Muse-1.4.md. The match failing is SILENT, hence the assertion
+# below. --embed-release-notes puts the text inline in the appcast as
+# <description sparkle:format="markdown">; without it Sparkle writes a
+# <sparkle:releaseNotesLink> instead, which is a SECOND network fetch to an
+# asset that must be uploaded separately and reads blank if it 404s. Muse's
+# network policy is one appcast fetch — keep the notes embedded.
+if [[ "$NOTES" == "yes" ]]; then
+  cp "$NOTES_SRC" "$REL_DIR/Muse-$VERSION.md"
+fi
+"$SPARKLE_BIN/generate_appcast" --maximum-deltas 0 --embed-release-notes "$REL_DIR" \
   --download-url-prefix "https://github.com/$REPO_SLUG/releases/download/$TAG/"
+
+# Assert the notes really landed. Checking that a <description> TAG exists is
+# not enough — an empty CDATA is still a tag — so pull the body out and require
+# non-whitespace content. Both failure shapes (no tag, empty tag) land here.
+if [[ "$NOTES" == "yes" ]]; then
+  notes_body="$(tr '\n' ' ' < "$REL_DIR/appcast.xml" \
+    | sed -n 's/.*<description[^>]*><!\[CDATA\[\(.*\)\]\]><\/description>.*/\1/p' \
+    | tr -d '[:space:]')"
+  if [[ -z "$notes_body" ]]; then
+    echo "✗ appcast carries no release notes — the update dialog would be blank." >&2
+    echo "  Check that $REL_DIR/Muse-$VERSION.md exists, matches the DMG basename," >&2
+    echo "  and that generate_appcast ran with --embed-release-notes." >&2
+    exit 1
+  fi
+  echo "✓ Release notes embedded in the appcast"
+fi
 
 echo "✓ Built: $DMG"
 echo "✓ Appcast: $REL_DIR/appcast.xml"
 
 # ---- 7. publish (opt-in) ----------------------------------------------------
-GH_CMD=(gh release create "$TAG" "$DMG" "$REL_DIR/appcast.xml" --title "Muse $VERSION" --notes "Muse $VERSION")
+# The same notes the update dialog shows become the GitHub release body — one
+# hand-written file, both surfaces. --no-notes keeps the old placeholder so the
+# release page is never empty.
+GH_CMD=(gh release create "$TAG" "$DMG" "$REL_DIR/appcast.xml" --title "Muse $VERSION")
+if [[ "$NOTES" == "yes" ]]; then
+  GH_CMD+=(--notes-file "$NOTES_SRC")
+else
+  GH_CMD+=(--notes "Muse $VERSION")
+fi
 if [[ "$PUBLISH" == "yes" ]]; then
   echo "▸ Publishing to GitHub…"
   "${GH_CMD[@]}"

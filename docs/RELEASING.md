@@ -51,19 +51,33 @@ Once the one-time setup above is done, every release is just:
 ```sh
 scripts/release.sh 1.0.1            # build + notarize + DMG + sign + appcast
 scripts/release.sh 1.0.1 --publish  # …and publish the GitHub release too
+scripts/release.sh 1.0.1 --no-notes # skip the notes requirement (EMPTY dialog)
 ```
 
 It archives, notarizes and staples the app, builds the DMG with the
 drag-to-Applications background, notarizes and staples the DMG, EdDSA-signs
-the update, and writes the appcast. Without `--publish` it stops there and
-prints the exact `gh release create` command to run when you're ready. The
-build number (`CFBundleVersion`) is set automatically from the git commit
-count, so it always increases.
+the update, embeds the release notes, and writes the appcast. Without
+`--publish` it stops there and prints the exact `gh release create` command to
+run when you're ready. The build number (`CFBundleVersion`) is set
+automatically from the git commit count, so it always increases.
+
+**Write `docs/release-notes-<version>.md` first** — the run fails in preflight
+without it (before the ~20-minute archive), because that one file is what the
+user reads in the Sparkle update dialog *and* the GitHub release body.
 
 The manual breakdown below documents what that script does, step by step,
 in case you need to run or debug a single stage.
 
 ## Per-release steps (manual)
+
+### 0. Write the release notes
+
+Write `docs/release-notes-<version>.md` in user-facing language — what changed
+and why it matters, not commit subjects. This one file is the *only* source for
+both the Sparkle update dialog and the GitHub release body, so a release can't
+be cut without it (`release.sh` fails in preflight — an empty or whitespace-only
+file is rejected too, since it would ship a blank dialog on an otherwise green
+run; `--no-notes` is the deliberate opt-out).
 
 ### 1. Bump the version
 
@@ -117,12 +131,17 @@ Keychain EdDSA key and writes `appcast.xml`, pointing enclosure URLs at the
 GitHub release you're about to create (replace `<TAG>`, e.g. `v1.0.1`):
 
 ```sh
-"$SPARKLE_BIN/generate_appcast" build/releases/ \
+cp docs/release-notes-<VERSION>.md build/releases/Muse-<VERSION>.md
+"$SPARKLE_BIN/generate_appcast" --embed-release-notes build/releases/ \
   --download-url-prefix "https://github.com/carlostarrats/Muse/releases/download/<TAG>/"
 ```
 
-This produces `build/releases/appcast.xml`. (Add release notes by dropping a
-`Muse.html` next to the DMG, or edit the generated `<description>`.)
+This produces `build/releases/appcast.xml` with the notes inline as
+`<description sparkle:format="markdown">`. The `cp` is not optional:
+`generate_appcast` only picks up a notes file whose basename matches the
+archive (`Muse-1.4.dmg` ↔ `Muse-1.4.md`), and neither the mismatch nor a
+missing file produces a warning — see the two gotchas below. `release.sh` does
+this copy, passes the flag, and then asserts the `<description>` really landed.
 
 ### 5. Publish the GitHub Release
 
@@ -183,6 +202,17 @@ embedded public key, and offers the update.
   notarized direct distribution (not App Store). Note the fix only helps the
   app *doing* the updating — a build shipped without it can't self-update to a
   fixed build; that one must be installed manually.
+- **Release notes must be EMBEDDED, not linked.** Without
+  `--embed-release-notes`, `generate_appcast` writes a
+  `<sparkle:releaseNotesLink>` derived from `SUFeedURL` — the notes then have to
+  be uploaded as their own release asset and read blank if that asset 404s.
+  Embedding keeps the update check to a single appcast fetch, which is what the
+  app's network policy promises. Verified both ways, 2026-07-28.
+- **A notes-file basename mismatch is silent.** `Muse-1.4.dmg` needs
+  `Muse-1.4.md`; anything else yields no warning and no notes. That is exactly
+  how 1.4 shipped with an empty update dialog (a stale `Muse-1.3.3.html` was
+  sitting in `build/releases/` and matched nothing). `release.sh` now prunes
+  stale notes files and fails if no `<description>` made it into the appcast.
 - **The appcast is single-item per release.** `release.sh` prunes the appcast
   dir to just the current DMG and passes `--maximum-deltas 0`, because GitHub
   hosts each version's assets under its own tag — a multi-version appcast with
