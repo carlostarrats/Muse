@@ -495,7 +495,11 @@ struct ContentView: View {
             // button (owner-reported, with a screenshot). Scoped here it centres
             // in the detail column, like the zoom control it shares the bottom
             // edge with.
-            .overlay(alignment: .bottom) {
+            // Bottom-LEADING, mirroring the zoom control's bottom-trailing seat
+            // (same 16pt insets). Centred, it drifted into the zoom control on a
+            // narrow window — the two now start from opposite edges and can only
+            // meet if the window is narrower than both put together.
+            .overlay(alignment: .bottomLeading) {
                 // ONE pill for every background phase. This used to be a
                 // four-way chain (Analyzing / Organizing / Indexing / Loading
                 // images), each with its own counter — after the 2026-07-28 perf
@@ -1061,6 +1065,7 @@ struct ContentView: View {
         .padding(.vertical, 9)
         .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
         .overlay(Capsule(style: .continuous).strokeBorder(.primary.opacity(0.08)))
+        .padding(.leading, 16)
         .padding(.bottom, 16)
         .transition(.opacity)
     }
