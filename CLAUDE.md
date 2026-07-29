@@ -112,8 +112,8 @@ are the load-bearing reference artifacts.
 | Polish 26 — **Grid layout modes** (Columns/Rows/Grid; tile card + Tile Background deleted; spacing slider; one orientation truth) | ✅ shipped | `feat/grid-layout-modes` |
 | Polish 27 — **UI polish batch** (emoji collection symbols; sort-direction menu; menu icons + shortcuts; toolbar Settings; tag/collection autocomplete; compact star badge; sidebar geometry/colour rework; scope-bar-over-viewer fix; duplicate-root fix) | ✅ shipped | `feat/next-142` |
 
-> All rows above are merged to `main` and shipped in release **`v1.4`** (the
-> current released build; Polish 19–24 landed here after `v1.3.9`). Polish-row
+> All rows above are merged to `main` and shipped in release **`v1.5`** (the
+> current released build; Polish 25–27 landed here after `v1.4`). Polish-row
 > detail (the full
 > "why/how" per feature) lives in the **Durable constraints** section below and,
 > in full, in `docs/session-log.md` under each cited branch. Keep new rows to one
@@ -121,7 +121,7 @@ are the load-bearing reference artifacts.
 
 Each feature has its own spec + plan in `docs/superpowers/`; all are merged to
 `main`. `feat/file-viewer-rewrite` was merged after Phase 8 and kept as an audit
-trail of the per-phase progression. The current release tag is `v1.4`.
+trail of the per-phase progression. The current release tag is `v1.5`.
 
 ## Session history
 
