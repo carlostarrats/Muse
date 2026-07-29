@@ -3130,17 +3130,6 @@
         }
       }
     },
-    "Matches": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Correspondances"
-          }
-        }
-      }
-    },
     "MB": {},
     "modified": {
       "localizations": {
@@ -6089,6 +6078,66 @@
           "stringUnit": {
             "state": "translated",
             "value": "Suggestions"
+          }
+        }
+      }
+    },
+    "Map": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carte"
+          }
+        }
+      }
+    },
+    "Calendar": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calendrier"
+          }
+        }
+      }
+    },
+    "Clock": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Horloge"
+          }
+        }
+      }
+    },
+    "Envelope": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enveloppe"
+          }
+        }
+      }
+    },
+    "Document": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Document"
+          }
+        }
+      }
+    },
+    "Scissors": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ciseaux"
           }
         }
       }

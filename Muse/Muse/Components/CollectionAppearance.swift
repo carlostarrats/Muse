@@ -62,7 +62,7 @@ enum CollectionAppearance {
         ("pink",    Color(red: 0.925, green: 0.286, blue: 0.600)),
     ]
 
-    /// The curated symbol grid (36 = 6×6), default stack icon first. OUTLINE
+    /// The curated symbol grid (42 = 7×6), default stack icon first. OUTLINE
     /// variants on purpose — the app's iconography (toolbar, sidebar) is
     /// outline-weight, so filled picker symbols read foreign (owner call,
     /// 2026-07-07); symbols with no outline variant (sparkles, music.note,
@@ -79,7 +79,8 @@ enum CollectionAppearance {
         "car", "house", "building.2", "globe.americas",
         "mappin", "cup.and.saucer", "fork.knife", "pawprint",
         "person", "moon.stars", "sun.max", "lightbulb",
-        "crown",
+        "crown", "map", "calendar", "clock", "envelope",
+        "doc.text", "scissors",
     ]
 
     /// Resolve a stored color token. nil, or a token this build doesn't know
@@ -144,7 +145,7 @@ enum CollectionAppearance {
         return .symbol(isValidSymbol(raw) ? raw : def)
     }
 
-    /// The curated emoji grid: 50 entries, laid out 10 wide × 5 rows. Mirrors
+    /// The curated emoji grid: 45 entries, laid out 9 wide × 5 rows. Mirrors
     /// the SF Symbol catalog's subject coverage (nature, media, travel, food,
     /// objects, animals, people) so the two picker tabs read as one set
     /// expressed twice.
@@ -153,11 +154,11 @@ enum CollectionAppearance {
     /// checked to render legibly at sidebar row size; an arbitrary pasted
     /// character (a rare glyph with no colour font, a tofu box) would not be.
     static let emojiCatalog: [String] = [
-        "⭐️", "❤️", "🔥", "✨", "💡", "👑", "🎯", "🏆", "🎁", "🔔",
-        "🎨", "🖌️", "📷", "🖼️", "🎬", "🎵", "📝", "📐", "🧩", "🕹️",
-        "📁", "📚", "🔖", "🏷️", "📌", "🗂️", "💼", "🛒", "💎", "🔑",
-        "🌊", "🌿", "🌸", "🌙", "☀️", "🌈", "🍃", "🌵", "🍁", "❄️",
-        "🏠", "🏙️", "🗺️", "✈️", "🚗", "🌍", "🍔", "☕️", "🐾", "🦊",
+        "⭐️", "❤️", "🔥", "✨", "💡", "👑", "🎯", "🏆", "🎁",
+        "🎨", "🖌️", "📷", "🖼️", "🎬", "🎵", "📝", "📐", "🧩",
+        "📁", "📚", "🔖", "🏷️", "📌", "🗂️", "💼", "🛒", "🔑",
+        "🌊", "🌿", "🌸", "🌙", "☀️", "🌈", "🍃", "🌵", "🍁",
+        "🏠", "🏙️", "🗺️", "✈️", "🚗", "🌍", "🍔", "☕️", "🐾",
     ]
 
     /// True when the name exists in this OS's SF Symbols catalog.
@@ -242,6 +243,12 @@ enum CollectionAppearance {
         case "sun.max":          return String(localized: "Sun")
         case "lightbulb":        return String(localized: "Lightbulb")
         case "crown":            return String(localized: "Crown")
+        case "map":              return String(localized: "Map")
+        case "calendar":         return String(localized: "Calendar")
+        case "clock":            return String(localized: "Clock")
+        case "envelope":         return String(localized: "Envelope")
+        case "doc.text":         return String(localized: "Document")
+        case "scissors":         return String(localized: "Scissors")
         default:                    return name
         }
     }

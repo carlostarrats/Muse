@@ -48,7 +48,7 @@ final class CollectionAppearanceTests: XCTestCase {
 
     func testSymbolCatalogShape() {
         let symbols = CollectionAppearance.symbols
-        XCTAssertEqual(symbols.count, 36, "the picker grid is designed as 6×6")
+        XCTAssertEqual(symbols.count, 42, "the picker grid is designed as 7×6")
         XCTAssertEqual(symbols.first, CollectionAppearance.defaultIcon)
         XCTAssertEqual(Set(symbols).count, symbols.count, "duplicate symbol cell")
     }
@@ -189,10 +189,16 @@ final class CollectionAppearanceTests: XCTestCase {
         }
     }
 
-    /// The picker lays the catalog out 10 across; a count that isn't a multiple
-    /// of that leaves a ragged last row.
-    func testEmojiCatalogFillsTheTenWideGrid() {
-        XCTAssertEqual(CollectionAppearance.emojiCatalog.count % 10, 0)
+    /// Both picker tabs must occupy the SAME box, which they do by dividing
+    /// evenly into their grids: 45 emoji at 9 across = 5 rows, 42 symbol cells
+    /// at 7 across = 6 rows. A count that isn't a multiple leaves a ragged last
+    /// row and the two tabs stop matching.
+    func testCatalogsDivideEvenlyIntoTheirGrids() {
+        XCTAssertEqual(CollectionAppearance.emojiCatalog.count % 9, 0)
+        // The symbol grid draws the collection's own default glyph first, then
+        // every catalog entry except the stack — so the cell count equals the
+        // catalog count whichever kind of collection it is.
+        XCTAssertEqual(CollectionAppearance.symbols.count % 7, 0)
         XCTAssertEqual(Set(CollectionAppearance.emojiCatalog).count,
                        CollectionAppearance.emojiCatalog.count,
                        "the emoji catalog has a duplicate")

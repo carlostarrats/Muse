@@ -134,8 +134,10 @@ struct SuggestingNameCard: View {
 
     private var suggestionList: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(trimmed.isEmpty ? String(localized: "Suggestions")
-                                 : String(localized: "Matches"))
+            // Always "Suggestions" — the heading names what the area IS, and
+            // swapping it to "Matches" mid-type made it read as a different
+            // control appearing under the cursor.
+            Text("Suggestions")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .padding(.bottom, 6)
