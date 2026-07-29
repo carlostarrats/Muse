@@ -469,19 +469,6 @@ struct ContentView: View {
                     .priority: NSAccessibilityPriorityLevel.high.rawValue
                 ])
         }
-        .overlay(alignment: .bottom) {
-            // ONE pill for every background phase. This used to be a four-way
-            // chain (Analyzing / Organizing / Indexing / Loading images), each
-            // with its own counter — after the 2026-07-28 perf work the phases
-            // got fast enough that it switched labels faster than a human can
-            // read AND restarted the count at zero on each switch. A user only
-            // needs to know progress is happening.
-            if workProgress.isActive {
-                statusPill(label: "Preparing your files…",
-                           progress: workProgress.fraction,
-                           percent: workProgress.percent)
-            }
-        }
         .onChange(of: workInput) { _, new in advanceProgress(new) }
         // The phases go idle in GAPS, and an idle phase publishes nothing — so
         // `onChange` alone can't notice that the grace window has elapsed. This
@@ -501,6 +488,29 @@ struct ContentView: View {
     /// an `if #available` that lives OUTSIDE the toolbar builder — see the
     /// comment at the call site.
     private var detailCore: some View {
+        detailStage
+            // The pill belongs to the GRID, not the window. As an overlay on the
+            // whole NavigationSplitView it centred across sidebar + grid, so on a
+            // narrow window it slid over the sidebar and collided with its Folder
+            // button (owner-reported, with a screenshot). Scoped here it centres
+            // in the detail column, like the zoom control it shares the bottom
+            // edge with.
+            .overlay(alignment: .bottom) {
+                // ONE pill for every background phase. This used to be a
+                // four-way chain (Analyzing / Organizing / Indexing / Loading
+                // images), each with its own counter — after the 2026-07-28 perf
+                // work the phases got fast enough that it switched labels faster
+                // than a human can read AND restarted the count at zero on each
+                // switch. A user only needs to know progress is happening.
+                if workProgress.isActive {
+                    statusPill(label: "Preparing your files…",
+                               progress: workProgress.fraction,
+                               percent: workProgress.percent)
+                }
+            }
+    }
+
+    private var detailStage: some View {
         ZStack {
             HStack(spacing: 0) {
                 // ZStack (not VStack) so the page⇄grid swap CROSS-fades in
