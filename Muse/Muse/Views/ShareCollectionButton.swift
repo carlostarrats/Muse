@@ -21,7 +21,6 @@ struct ShareCollectionButton: View {
     @AppStorage("gridColumnCount") private var gridColumns = 4
     @State private var hovering = false
     @State private var preparing = false
-    @State private var exportFailed = false
 
     /// The collection's CURRENTLY VISIBLE members, in grid order — the on-screen
     /// set, so an active tag/facet filter narrows the export (images and file
@@ -77,12 +76,8 @@ struct ShareCollectionButton: View {
         .disabled(preparing || count == 0 || exportURLs.isEmpty)
         .help("Share collection")
         .accessibilityLabel("Share collection")
-        // The Drive form is presented by the SHELL — see CollectionModal.
-        .alert("Couldn’t Export the PDF", isPresented: $exportFailed) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("The PDF couldn’t be prepared — some images may be unreadable — or the location couldn’t be written. Check the images and that the location is writable with enough free space.")
-        }
+        // The Drive form and the failure message are presented by the SHELL —
+        // see CollectionModal / MuseAlert.
     }
 
     private func save() async {
@@ -95,6 +90,6 @@ struct ShareCollectionButton: View {
         // silent no-op otherwise — the panel closes looking like success. Surface
         // it: a save the user just triggered warrants a confirming alert (the
         // macOS norm), not a transient toast. A user cancel is not a failure.
-        if outcome == .failed { exportFailed = true }
+        if outcome == .failed { appState.alertRequest = .pdfExportFailed }
     }
 }

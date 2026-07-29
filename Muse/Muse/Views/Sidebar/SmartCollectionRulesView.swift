@@ -23,10 +23,12 @@ struct SmartCollectionRulesView: View {
     let memberCount: Int
     let onClose: () -> Void
 
+    /// Only for raising the convert confirmation to the shell (see MuseAlert).
+    @EnvironmentObject private var appState: AppState
+
     @State private var name: String
     @State private var match: SmartRuleSet.Match
     @State private var rules: [SmartRule]
-    @State private var showConvertConfirm = false
     @State private var addHover = false
 
     init(collectionID: String?, initialName: String, initialSet: SmartRuleSet,
@@ -118,23 +120,26 @@ struct SmartCollectionRulesView: View {
 
             HStack {
                 Spacer()
-                FooterButton(title: "Cancel", prominent: false, disabled: false) { onClose() }
-                    .keyboardShortcut(.cancelAction)
-                FooterButton(title: "Save", prominent: true, disabled: !canSave) {
-                    if isConversion && memberCount > 0 { showConvertConfirm = true } else { save() }
+                ModalButton(title: String(localized: "Cancel"), isCancel: true) { onClose() }
+                ModalButton(title: String(localized: "Save"), kind: .prominent, isDefault: true) {
+                    if isConversion && memberCount > 0 { requestConvertConfirm() } else { save() }
                 }
-                .keyboardShortcut(.defaultAction)
+                .disabled(!canSave)
             }
             .padding(.top, 14)
         }
         .padding(28)
         // Width and the height cap come from the modal presenter.
-        .alert("Replace this collection’s items with rules?", isPresented: $showConvertConfirm) {
-            Button("Replace", role: .destructive) { save() }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("The images you added by hand are removed from this collection and replaced by rule-based membership. Your files stay on disk.")
-        }
+    }
+
+    /// The convert confirmation is presented by the SHELL: this view IS a
+    /// modal card, and a card presented from inside one would be sized by it.
+    private func requestConvertConfirm() {
+        appState.alertRequest = .confirm(
+            title: String(localized: "Replace this collection’s items with rules?"),
+            message: String(localized: "The images you added by hand are removed from this collection and replaced by rule-based membership. Your files stay on disk."),
+            confirmTitle: String(localized: "Replace"),
+            onConfirm: { save() })
     }
 
     private func save() {
@@ -439,44 +444,6 @@ private struct SmartRuleRow: View {
         case "gray":   return String(localized: "Gray")
         case "white":  return String(localized: "White")
         default:       return token.capitalized
-        }
-    }
-}
-
-// MARK: - Footer button (hover state)
-
-/// Cancel / Save with an explicit hover tint, matching the rest of the sheet's
-/// custom hover feedback. `prominent` = the accent-filled default action.
-private struct FooterButton: View {
-    let title: LocalizedStringKey
-    let prominent: Bool
-    let disabled: Bool
-    let action: () -> Void
-    @State private var hover = false
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 13, weight: prominent ? .semibold : .regular))
-                .foregroundStyle(prominent ? Color.white : Color.primary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(background))
-                .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .disabled(disabled)
-        .opacity(disabled ? 0.5 : 1)
-        .onHover { hover = $0 && !disabled }
-    }
-
-    private var background: Color {
-        if prominent {
-            return Color.accentColor.opacity(hover ? 1.0 : 0.9)
-        } else {
-            return Color.primary.opacity(hover ? 0.14 : 0.07)
         }
     }
 }

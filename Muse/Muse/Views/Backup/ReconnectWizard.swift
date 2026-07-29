@@ -64,8 +64,8 @@ struct ReconnectWizard: View {
                     Spacer()
                     // A ternary of literals binds the non-localizing String overload,
                     // so each branch is wrapped explicitly (catalog carries both keys).
-                    Button(folder.newLocation == nil
-                           ? String(localized: "Locate…") : String(localized: "Relocate…")) {
+                    ModalButton(title: folder.newLocation == nil
+                                ? String(localized: "Locate…") : String(localized: "Relocate…")) {
                         if let url = pickDirectory() {
                             Task { await model.reconnectFolder(id: folder.id, location: url,
                                                                bookmarks: bookmarks) }
@@ -130,9 +130,10 @@ struct ReconnectWizard: View {
     private var footer: some View {
         HStack {
             Spacer()
-            Button("Done") { isPresented = false }
-                .keyboardShortcut(.defaultAction)
-                .disabled(model.folders.contains { $0.status == .working })
+            ModalButton(title: String(localized: "Done"), kind: .prominent, isDefault: true) {
+                isPresented = false
+            }
+            .disabled(model.folders.contains { $0.status == .working })
         }
     }
 

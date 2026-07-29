@@ -35,8 +35,7 @@ struct MetadataImportSheet: View {
                     .monospacedDigit()
                 HStack {
                     Spacer()
-                    Button("Cancel") { dismiss() }
-                        .keyboardShortcut(.cancelAction)
+                    ModalButton(title: String(localized: "Cancel"), isCancel: true) { dismiss() }
                 }
             case .done(let imported, let none, let skipped):
                 Text("Imported keywords or ratings for \(imported) files.")
@@ -51,8 +50,8 @@ struct MetadataImportSheet: View {
                 }
                 HStack {
                     Spacer()
-                    Button("Done") { dismiss() }
-                        .keyboardShortcut(.defaultAction)
+                    ModalButton(title: String(localized: "Done"),
+                                kind: .prominent, isDefault: true) { dismiss() }
                 }
             }
         }

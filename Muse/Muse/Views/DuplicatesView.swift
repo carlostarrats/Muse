@@ -23,7 +23,6 @@ struct DuplicatesView: View {
     // badge tracks survivors — any tile NOT in this set reads as "kept".
     @State private var selected: Set<URL> = []
     @State private var seededGroups: Set<UUID> = []
-    @State private var showDeleteConfirmation = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -89,11 +88,9 @@ struct DuplicatesView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("Delete Selected to Trash") {
-                    showDeleteConfirmation = true
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(selected.isEmpty)
+                ModalButton(title: String(localized: "Delete Selected to Trash"),
+                            kind: .destructive, isDefault: true) { requestDeleteConfirm() }
+                    .disabled(selected.isEmpty)
             }
             .padding(16)
         }
@@ -101,18 +98,6 @@ struct DuplicatesView: View {
         .background(Color(NSColor.windowBackgroundColor))
         .onAppear { seedDefaults() }
         .onChange(of: finder.groups) { _, _ in seedDefaults() }
-        .confirmationDialog(
-            "Move \(selected.count) file\(selected.count == 1 ? "" : "s") to Trash?",
-            isPresented: $showDeleteConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Move to Trash", role: .destructive) {
-                deleteSelected()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Files will be moved to the Trash and can be restored from there.")
-        }
     }
 
     @ViewBuilder
@@ -209,6 +194,19 @@ struct DuplicatesView: View {
 
     private func formatBytes(_ b: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: b, countStyle: .file)
+    }
+
+    /// The confirmation is presented by the SHELL: this view IS a modal card,
+    /// so a confirmation presented from inside it would be sized by it — and it
+    /// has to draw ABOVE it, which only the shell's outermost presenter does.
+    /// See MuseAlert.
+    private func requestDeleteConfirm() {
+        let count = selected.count
+        appState.alertRequest = .confirm(
+            title: String(localized: "Move \(count) file\(count == 1 ? "" : "s") to Trash?"),
+            message: String(localized: "Files will be moved to the Trash and can be restored from there."),
+            confirmTitle: String(localized: "Move to Trash"),
+            onConfirm: { deleteSelected() })
     }
 
     private func deleteSelected() {
