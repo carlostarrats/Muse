@@ -169,10 +169,34 @@ echo "▸ Signing update + writing appcast…"
 # hosts each version's assets under its own tag, so a single download-url-prefix
 # can't address older versions — and cross-tag deltas would 404. One DMG in →
 # one correct item out (full-download updates; no deltas).
-find "$REL_DIR" -maxdepth 1 \( -name '*.dmg' -o -name '*.delta' -o -name 'appcast.xml' \) \
+# The prune covers notes files too: a stale Muse-1.3.3.html sat here through the
+# 1.4 release, and a leftover notes file whose basename happens to match a
+# future DMG would silently ship the wrong version's notes.
+find "$REL_DIR" -maxdepth 1 \
+  \( -name '*.dmg' -o -name '*.delta' -o -name 'appcast.xml' -o -name '*.md' -o -name '*.html' \) \
   ! -name "$(basename "$DMG")" -delete
-"$SPARKLE_BIN/generate_appcast" --maximum-deltas 0 "$REL_DIR" \
+
+# generate_appcast picks up a notes file whose basename matches the archive —
+# Muse-1.4.dmg ↔ Muse-1.4.md. The match failing is SILENT, hence the assertion
+# below. --embed-release-notes puts the text inline in the appcast as
+# <description sparkle:format="markdown">; without it Sparkle writes a
+# <sparkle:releaseNotesLink> instead, which is a SECOND network fetch to an
+# asset that must be uploaded separately and reads blank if it 404s. Muse's
+# network policy is one appcast fetch — keep the notes embedded.
+if [[ "$NOTES" == "yes" ]]; then
+  cp "$NOTES_SRC" "$REL_DIR/Muse-$VERSION.md"
+fi
+"$SPARKLE_BIN/generate_appcast" --maximum-deltas 0 --embed-release-notes "$REL_DIR" \
   --download-url-prefix "https://github.com/$REPO_SLUG/releases/download/$TAG/"
+
+if [[ "$NOTES" == "yes" ]]; then
+  if ! grep -q '<description' "$REL_DIR/appcast.xml"; then
+    echo "✗ appcast has no <description> — the update dialog would be blank." >&2
+    echo "  Check that $REL_DIR/Muse-$VERSION.md exists and matches the DMG basename." >&2
+    exit 1
+  fi
+  echo "✓ Release notes embedded in the appcast"
+fi
 
 echo "✓ Built: $DMG"
 echo "✓ Appcast: $REL_DIR/appcast.xml"
