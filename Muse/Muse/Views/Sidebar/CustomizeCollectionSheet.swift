@@ -126,18 +126,24 @@ struct CustomizeCollectionSheet: View {
                     preview
                         .padding(.bottom, 20)
 
-                    // The tab sits ABOVE BOTH columns, not inside the Icon one:
-                    // it governs the whole picker. On the Emoji tab the Color
-                    // column has nothing to offer (an emoji carries its own
-                    // colors), so a control nested under "Icon" that reaches out
-                    // and disables its neighbour reads as a bug.
+                    // The tab governs the WHOLE picker, so it sits above
+                    // everything and each tab owns the full area below it.
                     iconTabPicker
                         .padding(.bottom, 16)
 
-                    HStack(alignment: .top, spacing: 24) {
-                        colorColumn
-                        Divider()
-                        symbolColumn
+                    // Symbols needs a color to go with it; an emoji carries its
+                    // own, so the Color column isn't dimmed on that tab — it
+                    // isn't there. The emoji grid takes the whole width instead
+                    // of squeezing into the half a two-column layout would leave.
+                    switch iconTab {
+                    case .symbols:
+                        HStack(alignment: .top, spacing: 24) {
+                            colorColumn
+                            Divider()
+                            symbolColumn
+                        }
+                    case .emoji:
+                        emojiColumn
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -233,24 +239,8 @@ struct CustomizeCollectionSheet: View {
                     swatch(entry.token, entry.color)
                 }
             }
-
-            // An emoji is drawn by the color-glyph font, so a tint either does
-            // nothing or flattens it. Rather than leave a live-looking control
-            // that has no effect, the whole column goes inert with a reason.
-            // The draft color is KEPT — switch back to Symbols and it returns.
-            if colorDisabled {
-                Text("Emoji use their own colors.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
-        .disabled(colorDisabled)
-        .opacity(colorDisabled ? 0.4 : 1)
-        .animation(.easeOut(duration: 0.15), value: colorDisabled)
     }
-
-    private var colorDisabled: Bool { iconTab == .emoji }
 
     /// The "no color" cell, first in the grid: the same diagonal light/dark
     /// split as the nav's Auto mood swatch, since "default" here means the
@@ -311,14 +301,22 @@ struct CustomizeCollectionSheet: View {
             Text("Icon")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
-
-            if iconTab == .symbols {
-                symbolGrid
-            } else {
-                emojiGrid
-                emojiField
-            }
+            symbolGrid
         }
+    }
+
+    /// The Emoji tab's whole body — full width, since there's no Color column
+    /// beside it.
+    private var emojiColumn: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Icon")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+            emojiGrid
+            emojiField
+                .padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var symbolGrid: some View {
@@ -428,8 +426,10 @@ struct CustomizeCollectionSheet: View {
     /// Same 6-wide lattice and same cell chrome as the symbol grid, so the two
     /// tabs feel like one picker rather than two.
     private var emojiGrid: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.fixed(30), spacing: 8), count: 6),
-                  spacing: 8) {
+        // 8 wide: 8×34 + 7×10 = 342pt inside the card's 424pt content width, and
+        // it divides the 48-entry catalog into exactly 6 rows (no ragged tail).
+        LazyVGrid(columns: Array(repeating: GridItem(.fixed(34), spacing: 10), count: 8),
+                  spacing: 10) {
             ForEach(CollectionAppearance.emojiCatalog, id: \.self) { emoji in
                 emojiCell(emoji)
             }
@@ -443,8 +443,8 @@ struct CustomizeCollectionSheet: View {
             draftEmoji = emoji
         } label: {
             Text(emoji)
-                .font(.system(size: 15))
-                .frame(width: 30, height: 30)
+                .font(.system(size: 17))
+                .frame(width: 34, height: 34)
                 .background {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(selected ? Color.accentColor.opacity(0.16)

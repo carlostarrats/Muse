@@ -1982,16 +1982,6 @@
         }
       }
     },
-    "Emoji use their own colors.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les emoji utilisent leurs propres couleurs."
-          }
-        }
-      }
-    },
     "Events": {
       "localizations": {
         "fr": {
