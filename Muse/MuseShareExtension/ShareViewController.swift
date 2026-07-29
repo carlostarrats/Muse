@@ -36,25 +36,61 @@ final class ShareViewController: NSViewController {
         return docs
     }
 
+    /// Every failure here used to be swallowed — `try?` on the copy, an ignored
+    /// coordinator error, and a `defer` that reported SUCCESS no matter what. A
+    /// user signed out of iCloud (no container), or a copy that failed on disk,
+    /// got the same silent "done" as a real one and their file simply never
+    /// appeared. There is no UI to show an error in (the view is 1×1 and the
+    /// extension completes immediately), so the honest signal is the system's
+    /// own: complete when at least one item landed, and `cancelRequest` — which
+    /// surfaces the error to the user — when we were given items and saved none.
     private func handleShare() async {
-        defer { extensionContext?.completeRequest(returningItems: nil) }
-        guard let dest = icloudFolder(),
-              let items = extensionContext?.inputItems as? [NSExtensionItem] else { return }
+        guard let items = extensionContext?.inputItems as? [NSExtensionItem] else {
+            extensionContext?.completeRequest(returningItems: nil)
+            return
+        }
+        guard let dest = icloudFolder() else {
+            finish(saved: 0, attempted: Self.attachmentCount(items),
+                   reason: "Muse couldn’t reach its iCloud folder. Check that you’re signed in to iCloud and iCloud Drive is on.")
+            return
+        }
+        var saved = 0
+        var attempted = 0
         for item in items {
             for provider in item.attachments ?? [] {
                 guard provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
                         || provider.hasItemConformingToTypeIdentifier(UTType.image.identifier)
                 else { continue }
+                attempted += 1
                 if let url = try? await loadFileURL(provider) {
-                    copyIn(url, to: dest)
+                    if copyIn(url, to: dest) { saved += 1 }
                 } else if let (data, ext) = try? await loadImageData(provider) {
                     // An image shared as in-memory data (no file URL) — e.g. from an
                     // app that doesn't back it with a file. The guard admits these
                     // (Info.plist advertises image activation), so handle them
                     // instead of silently dropping: write the bytes to a file.
-                    writeImageData(data, ext: ext, to: dest)
+                    if writeImageData(data, ext: ext, to: dest) { saved += 1 }
                 }
             }
+        }
+        finish(saved: saved, attempted: attempted,
+               reason: "Muse couldn’t save the shared item.")
+    }
+
+    private static func attachmentCount(_ items: [NSExtensionItem]) -> Int {
+        items.reduce(0) { $0 + ($1.attachments?.count ?? 0) }
+    }
+
+    /// Completes once. Reports failure only when we were handed something and
+    /// saved none of it — a partial success still completes, so one unreadable
+    /// item in a multi-file share doesn't discard the ones that worked.
+    private func finish(saved: Int, attempted: Int, reason: String) {
+        if attempted > 0 && saved == 0 {
+            let error = NSError(domain: "com.tarrats.Muse.share", code: 1,
+                                userInfo: [NSLocalizedDescriptionKey: reason])
+            extensionContext?.cancelRequest(withError: error)
+        } else {
+            extensionContext?.completeRequest(returningItems: nil)
         }
     }
 
@@ -89,23 +125,29 @@ final class ShareViewController: NSViewController {
         return (data, utType.preferredFilenameExtension ?? "img")
     }
 
-    private func writeImageData(_ data: Data, ext: String, to dest: URL) {
+    @discardableResult
+    private func writeImageData(_ data: Data, ext: String, to dest: URL) -> Bool {
         let target = uniqueDestination(for: "Shared Image.\(ext)", in: dest)
         var coordError: NSError?
+        var ok = false
         NSFileCoordinator().coordinate(writingItemAt: target, options: .forReplacing,
                                        error: &coordError) { writeURL in
-            try? data.write(to: writeURL)
+            ok = (try? data.write(to: writeURL)) != nil
         }
+        return ok && coordError == nil
     }
 
-    private func copyIn(_ src: URL, to dest: URL) {
+    @discardableResult
+    private func copyIn(_ src: URL, to dest: URL) -> Bool {
         let target = uniqueDestination(for: src.lastPathComponent, in: dest)
         var coordError: NSError?
+        var ok = false
         NSFileCoordinator().coordinate(readingItemAt: src, options: [],
                                        writingItemAt: target, options: .forReplacing,
                                        error: &coordError) { readURL, writeURL in
-            try? FileManager.default.copyItem(at: readURL, to: writeURL)
+            ok = (try? FileManager.default.copyItem(at: readURL, to: writeURL)) != nil
         }
+        return ok && coordError == nil
     }
 
     /// Avoid clobbering an existing file: append " 2", " 3", … if needed.
