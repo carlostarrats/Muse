@@ -306,6 +306,16 @@ locating where something lives. High-level layout of `Muse/Muse/`:
   "Cannot find type 'FileNode' in scope" and similar — they're cross-
   file resolution issues that disappear at build time. Always verify
   with `xcodebuild ... build` before assuming something's broken.
+- **`BUILD SUCCEEDED` is NOT proof the running app has your change — `stat` the
+  binary's mtime before handing the owner a build to look at.** An incremental
+  `xcodebuild` can print success while the `.app` executable stays weeks old (a
+  stale *signed* copy of the embedded share extension in DerivedData fails
+  codesign; the full log says `Embedded binary is not signed with the same
+  certificate` → `BUILD FAILED`, the filtered/incremental path does not). Cost a
+  whole session of visual iteration against a three-week-old binary once
+  (2026-07-28) — every round of owner feedback judged code that never ran. Fix is
+  `rm -rf` the built `Muse.app` and rebuild; signing settings and certs are fine,
+  don't touch them.
 - **The app is LOCALIZED — every new user-facing string MUST be localized.**
   Muse ships French (`feat/localization-french`, 346 UI strings in
   `Localizable.xcstrings` + 1303 Vision tag terms in

@@ -6785,3 +6785,44 @@ Ordering logic initially went straight into `load`, against this file's own
 stated contract ("formatting is pure and testable; `load` is the thin IO
 wrapper") — extracted to `withFileFacts` and unit-tested, which is what made
 the anchor bug visible.
+
+## 2026-07-28 — `feat/next-145` — sidebar mood wash + a stale-build trap
+
+**What shipped.** The sidebar card is no longer flatly opaque: the mood colour
+now sits UNDER it and washes faintly through the top-leading corner, fading to a
+fully solid card by three-quarters of the way down the diagonal. The dark card
+also went deeper, `calibratedWhite` 0.18 → 0.10.
+
+Two details worth keeping. (1) **The wash is Muse's own palette, not
+behind-window vibrancy.** The first attempt reached for the macOS material Mail
+uses — layering `cardColor` at 0.88 over what was assumed to be
+`NavigationSplitView`'s native sidebar material. It produced nothing: there is
+no `NSVisualEffectView` anywhere in the project and SwiftUI's own sidebar
+backdrop is opaque, so the 12% opened up just blended toward another solid
+surface. Painting `appState.moodPalette.background` under the card instead keeps
+the effect predictable (it tracks the mood, not the user's desktop) and needs no
+AppKit. (2) **The gradient's end point is pushed past the trailing edge**
+(`x: 2.5`) — the sidebar is tall and narrow, so a plain `.topLeading` →
+`.bottomTrailing` diagonal is only ~18° off vertical and reads as straight down.
+The background ZStack carries a value-scoped `.animation(_:value: moodPalette)`
+at 0.35 to match the grid backdrop's cross-fade; without it the sidebar's tint
+snapped while the grid beside it eased.
+
+**The trap that cost the session most of its time: `xcodebuild` printed
+`** BUILD SUCCEEDED **` while the `.app`'s binary stayed three weeks old.** Every
+"relaunched, take a look" for several rounds was really the 2026-07-07 build, so
+each round of owner feedback ("too much", "I don't see it", "it's on the bottom")
+was a verdict on code that had never run. The cause was a stale *signed* copy of
+the embedded share extension inside the DerivedData bundle: a full log showed
+`error: Embedded binary is not signed with the same certificate as the parent
+app` → `** BUILD FAILED **`, but the incremental path reported success. Both
+targets' signing settings were identical and both certs valid — deleting the
+stale `Muse.app` product and rebuilding fixed it, with no cert changes (see the
+one-cert memory: never touch the certificates for this class of error).
+
+**The rule this leaves behind:** before handing the owner a build to look at,
+`stat` the binary's mtime and confirm it postdates the edit. `BUILD SUCCEEDED`
+from a filtered grep is not evidence that the running app contains the change —
+this is the same "verify in the running app" discipline the hero-viewer work
+established, extended one step earlier to "verify the app you're running is
+actually the one you built."
