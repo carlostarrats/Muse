@@ -469,8 +469,18 @@ struct HeroStage: View {
         // formats render there even when ImageIO can't) and otherwise yields the
         // system type icon — anything is better than leaving the viewer blank.
         guard u == url,
+              // Quantized to the fixed ladder, NOT the raw viewport-derived
+              // target: the cache key includes the size, so a continuous value
+              // would mint variants `invalidate` can't enumerate and an edited
+              // file would serve this stale image forever (the on-disk PNG
+              // outlives launches).
               let fallback = await ThumbnailCache.shared.thumbnail(
-                  for: u, size: CGSize(width: target, height: target), scale: 1.0),
+                  for: u,
+                  size: {
+                      let s = ThumbnailCache.heroFallbackSize(forMaxDimension: CGFloat(target))
+                      return CGSize(width: s, height: s)
+                  }(),
+                  scale: 1.0),
               u == url, !isClosing
         else { return }
         image = fallback

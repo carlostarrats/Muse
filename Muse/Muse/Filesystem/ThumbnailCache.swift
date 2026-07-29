@@ -165,10 +165,28 @@ final class ThumbnailCache: ObservableObject {
     /// old thumbnail forever, including across launches (the on-disk PNG
     /// persists) and folder remove/re-add (same URL → same key). Keep this in
     /// sync with the sizes requested in GridView / HeroStage / prewarmToDisk.
+    /// The hero viewer's undecodable-format fallback needs a LARGE thumbnail,
+    /// and its natural size is the viewport — a continuous runtime value, which
+    /// would generate variants no enumeration could ever list. It is quantized
+    /// to this ladder instead, so the set stays finite and `invalidate` can
+    /// still drop every one.
+    static let heroFallbackSizes: [CGFloat] = [1600, 2048, 3072, 4096]
+
+    /// Smallest ladder step at or above `maxDimension` (the top step past it).
+    nonisolated static func heroFallbackSize(forMaxDimension d: CGFloat) -> CGFloat {
+        heroFallbackSizes.first { $0 >= d } ?? heroFallbackSizes[heroFallbackSizes.count - 1]
+    }
+
+    /// Duplicates-modal tile edge. Lives HERE, beside the enumeration that has
+    /// to cover it, rather than as a private constant in the view — that is how
+    /// it drifted off the list in the first place.
+    static let duplicateTileSize: CGFloat = 140
+
     static let renderedVariants: [(size: CGSize, scale: CGFloat)] = [
         (CGSize(width: 320, height: 320), 2.0),
         (CGSize(width: 160, height: 160), 2.0),
-    ]
+        (CGSize(width: duplicateTileSize, height: duplicateTileSize), 2.0),
+    ] + heroFallbackSizes.map { (CGSize(width: $0, height: $0), CGFloat(1.0)) }
 
     private init() {
         memCache.countLimit = 2000

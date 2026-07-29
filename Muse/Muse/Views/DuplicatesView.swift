@@ -272,7 +272,8 @@ private struct DuplicateImageTile: View {
 
     @State private var hovering = false
 
-    static let tileSize: CGFloat = 140
+    /// Defined on ThumbnailCache so it stays inside renderedVariants.
+    static let tileSize: CGFloat = ThumbnailCache.duplicateTileSize
     // Match a grid tile / the Image Layout modal's selection feel.
     private static let selectionInset: CGFloat = 10
     private static let ringWidth: CGFloat = 2.5
