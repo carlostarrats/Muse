@@ -202,7 +202,15 @@ echo "✓ Built: $DMG"
 echo "✓ Appcast: $REL_DIR/appcast.xml"
 
 # ---- 7. publish (opt-in) ----------------------------------------------------
-GH_CMD=(gh release create "$TAG" "$DMG" "$REL_DIR/appcast.xml" --title "Muse $VERSION" --notes "Muse $VERSION")
+# The same notes the update dialog shows become the GitHub release body — one
+# hand-written file, both surfaces. --no-notes keeps the old placeholder so the
+# release page is never empty.
+GH_CMD=(gh release create "$TAG" "$DMG" "$REL_DIR/appcast.xml" --title "Muse $VERSION")
+if [[ "$NOTES" == "yes" ]]; then
+  GH_CMD+=(--notes-file "$NOTES_SRC")
+else
+  GH_CMD+=(--notes "Muse $VERSION")
+fi
 if [[ "$PUBLISH" == "yes" ]]; then
   echo "▸ Publishing to GitHub…"
   "${GH_CMD[@]}"
