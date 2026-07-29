@@ -120,9 +120,39 @@ folder), and, historically, the enumeration guard that only checked the top
 folder. Every one of these was found by probing the failure mode on real disk,
 never by reading.
 
-Next session: start at the row with the oldest `Audited at` whose `Last changed`
-is newer, and give every row a `Verified at` — no row has one yet, and the
-Lineform precedent is that the verify round found more than the audit did.
+## Verify round — 2026-07-28, all 18 rows
+
+Every fix was re-attacked rather than re-read. The round found **3 defects
+introduced by the audit's own fixes**, one of them a real bug:
+
+- Making `renameLabel` refuse a rating left its CALLER unchanged, so a refused
+  rename still rewrote the active-tag filter to the new name — an empty grid
+  under a chip matching nothing. And the fix had only covered the chip's context
+  menu: the **Tags menu-bar item (⌃⌘R) still offered Rename for a rating chip**,
+  because it reads `singleActiveTag`. Right in isolation, wrong in context.
+- The folder-scope narrowing duplicated the `0.45` semantic threshold instead of
+  reading the one the merge is given; the two could drift apart.
+- Growing `renderedVariants` from 2 to 7 raised main-thread work in
+  `invalidate`, which `markContentChanged` loops per changed file. Measured:
+  `removeItem` on a missing path costs ~7µs (it builds an NSError) against
+  ~1.5µs to check existence, so the delete is now probed first.
+
+Fixes that had only pure-helper coverage were given real evidence:
+
+| Fix | How it was verified |
+|---|---|
+| Indexer moved off the actor | 32 concurrent reconciles of identical content → exactly 1 row, 32 alive paths; 32 distinct → 32 rows + 32 FTS rows. Attacks the "GRDB serializes everything" assumption the change rests on — if it didn't hold, both would insert and trip the `content_hash` UNIQUE, silently dropping a file. |
+| Audio kept from QuickLook | Built a real `.m4a` with embedded PNG art via `AVAssetExportSession`, read it back through the RESTRICTED asset, decoded it. Album art did NOT regress to the type icon — previously an assumption. |
+| Sidecar hydration rating rule | Real migrated DB: a syncing `★★★★` does not join a local `★★`; it lands when the file has none; a double-rated sidecar hydrates one. |
+| Restore rating rule | Real migrated DB: restore REPLACES a differing local rating (the deliberate opposite of hydration), leaves it alone when the archive has none, collapses a double-rated archive. |
+| Unreadable-folder handling (rows 1 & 3) | chmod-000 directories on real disk, in both the recursive walk and the stat pass. |
+
+**17 rows carry a `Verified at`. Row 13 (hero viewer) stays `static only`** — its
+guards are verified present, but its rule is diagnose-by-instrumenting and its
+failures are timing ones invisible to reading. It owes a runtime pass:
+open/close + Escape + arrow-flip on a >100 MP file, `sample` on any stall.
+
+923 unit tests + 6 UI tests green.
 
 ## Notes
 
