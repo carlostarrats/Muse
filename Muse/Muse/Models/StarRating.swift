@@ -38,6 +38,50 @@ nonisolated enum StarRating {
     /// All five canonical rating labels, ascending: ["★", …, "★★★★★"].
     static let allLabels: [String] = (1...maxStars).map { String(repeating: glyph, count: $0) }
 
+    // MARK: - Grid badge sizing
+    //
+    // The grid tile's rating badge draws `label(for:)` — a run of up to five
+    // stars. On a narrow tile that run wraps to a second line and the badge
+    // stops reading as a badge, so below a threshold it collapses to a digit
+    // plus one star ("5★"). These helpers are the pure decision; the tile just
+    // draws whatever `badgeLabel` returns.
+
+    /// Compact badge form: the count followed by a single star, e.g. "5★".
+    /// nil outside 1...maxStars, matching `label(for:)`.
+    static func compactLabel(for stars: Int) -> String? {
+        guard (1...maxStars).contains(stars) else { return nil }
+        return "\(stars)\(glyph)"
+    }
+
+    /// Rendered width of one ★ in the badge's font (10pt semibold system),
+    /// MEASURED via `NSAttributedString.size(withAttributes:)` rather than
+    /// guessed. Hard-coded so these helpers stay pure (no AppKit, unit-testable
+    /// off-main). If the badge's font ever changes, re-measure.
+    static let badgeStarGlyphWidth: CGFloat = 10.4559
+    /// Rendered width of the compact form in the same font. It's dominated by
+    /// the digit, so it varies by under half a point across 1...5; the widest
+    /// (17.284, at "4★") stands in for all of them, so the decision can't flip
+    /// between adjacent ratings at the same tile size.
+    static let badgeCompactWidth: CGFloat = 17.284
+    /// The badge capsule's own horizontal padding, per side.
+    static let badgeHorizontalPadding: CGFloat = 5
+
+    /// Which string the badge should draw for `stars`, given the width it may
+    /// occupy (the capsule's outer width, its padding included).
+    ///
+    /// Compact is chosen ONLY when it actually helps: the full run must not fit
+    /// AND the compact form must be narrower than it. At one star the compact
+    /// form ("1★", 17.3pt) is WIDER than the run itself ("★", 10.5pt), so a
+    /// one-star badge never collapses — doing so would make the overflow worse.
+    static func badgeLabel(for stars: Int, availableWidth: CGFloat) -> String? {
+        guard let full = label(for: stars) else { return nil }
+        let fullWidth = CGFloat(stars) * badgeStarGlyphWidth + badgeHorizontalPadding * 2
+        if fullWidth <= availableWidth { return full }
+        let compactWidth = badgeCompactWidth + badgeHorizontalPadding * 2
+        guard compactWidth < fullWidth else { return full }
+        return compactLabel(for: stars)
+    }
+
     /// Mutual-exclusion resolution. Given the labels a file already carries and
     /// the desired new rating (nil = remove rating), returns which rating labels
     /// to DELETE and which to ADD so the file ends with EXACTLY the desired

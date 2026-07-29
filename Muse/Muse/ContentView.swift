@@ -27,12 +27,16 @@ struct ContentView: View {
     @State private var workProgress = WorkProgress()
     @ObservedObject private var collectionsEngine = CollectionsEngine.shared
     @State private var moodPickerShown = false
+    /// Tags from visually similar photos, for the Add Tag card's offer row.
+    @State private var similarTags: [TagSuggest.Candidate] = []
     @State private var filterPopoverShown = false
 
     /// Close whichever modal is up. Only one is ever presented at a time, so
     /// this is a deterministic sweep rather than a real stack.
     private func dismissTopModal() {
         if appState.collectionModal != nil { appState.collectionModal = nil; return }
+        if appState.addTagRequest != nil { appState.addTagRequest = nil; return }
+        if appState.newCollectionRequest { appState.cancelNewCollection(); return }
         if appState.metadataImportRequest != nil { appState.metadataImportRequest = nil; return }
         if appState.reconnectShown { appState.reconnectShown = false; return }
         if appState.duplicatesSheetVisible { appState.duplicatesSheetVisible = false; return }
@@ -102,7 +106,8 @@ struct ContentView: View {
                     .toolbar(removing: .title)
                 } else {
                     detailCore.toolbar {
-                        plainLeading
+                        plainLeadingA
+                        plainLeadingB
                     }
                 }
             }
@@ -183,6 +188,53 @@ struct ContentView: View {
                     MetadataImportSheet(request: request)
                         .environmentObject(appState)
                 }
+            }
+            // Add Tag / New Collection: a field plus a live-filtered list of
+            // what already exists, so you pick "sunset" instead of minting
+            // "Sunsets". These were `.alert`s, which can host only TextFields
+            // and Buttons — a suggestion list can't live inside one.
+            .museModal(isPresented: Binding(
+                get: { appState.addTagRequest != nil },
+                set: { if !$0 { appState.addTagRequest = nil } }),
+                       width: 380, palette: appState.moodPalette) {
+                if let request = appState.addTagRequest {
+                    SuggestingNameCard(
+                        title: String(localized: "Add Tag"),
+                        subtitle: String(localized: "Tags \(request.displayName)."),
+                        placeholder: String(localized: "Tag name"),
+                        candidates: tagSuggestCandidates,
+                        suggestions: similarTags,
+                        displaying: { VocabularyLocalizer.shared.display($0) },
+                        confirmTitle: String(localized: "Add"),
+                        onCommit: { appState.confirmAddTag(label: $0) },
+                        onCancel: { appState.addTagRequest = nil })
+                    // Keyed on the request so re-opening for a different
+                    // selection rebuilds the card with a fresh empty draft.
+                    .id(request.id)
+                    .task(id: request.id) { await loadSimilarTags(for: request) }
+                }
+            }
+            .museModal(isPresented: Binding(
+                get: { appState.newCollectionRequest },
+                set: { if !$0 { appState.cancelNewCollection() } }),
+                       width: 380, palette: appState.moodPalette) {
+                SuggestingNameCard(
+                    title: String(localized: "Name Collection"),
+                    subtitle: appState.pendingNewCollectionPaths.isEmpty
+                        ? String(localized: "Creates a new collection.")
+                        : String(localized: "Creates a collection from the selected images."),
+                    placeholder: String(localized: "Collection name"),
+                    candidates: collectionSuggestCandidates,
+                    // No suggestion row here: "which collection is like this
+                    // one?" has no meaning, and the field's inline completion
+                    // already surfaces the names in use.
+                    confirmTitle: String(localized: "Create"),
+                    // Committing a name that already exists ADDS to that
+                    // collection instead of minting a second one with the same
+                    // name — see confirmNewCollection. That's the whole point of
+                    // showing the list.
+                    onCommit: { appState.confirmNewCollection(name: $0) },
+                    onCancel: { appState.cancelNewCollection() })
             }
             .museModal(isPresented: $appState.reconnectShown,
                        width: 600, palette: appState.moodPalette) {
@@ -389,7 +441,6 @@ struct ContentView: View {
         } message: {
             Text(appState.backupError ?? "")
         }
-        .modifier(NameCollectionAlert())
         .modifier(CollectionRenameAlert())
         .modifier(FileRenameAlert())
         .alert("Rename File", isPresented: Binding(
@@ -549,28 +600,60 @@ struct ContentView: View {
         ToolbarSpacer(.fixed)
         moodItem(.automatic)
         ToolbarSpacer(.fixed)
+        // About + Settings share ONE capsule (no spacer between them): they're
+        // the two "about this app" controls and read as a pair. Settings is here
+        // as well as under ⌘, so it doesn't live only in the Apple menu.
         infoItem(.automatic)
+        settingsItem(.automatic)
         ToolbarSpacer(.flexible)
     }
 
     // Sonoma/Sequoia don't merge items into a shared capsule, so these render
     // individually regardless — but keep the sort · direction · filter ORDER
     // consistent with the Tahoe grouping above.
+    //
+    // Split in two only because `@ToolbarContentBuilder.buildBlock` tops out at
+    // 10 elements and the list is now 11. The two halves are applied adjacently
+    // at the call site, so the rendered order is identical to one flat list.
     @ToolbarContentBuilder
-    private var plainLeading: some ToolbarContent {
+    private var plainLeadingA: some ToolbarContent {
         sortItem(.navigation)
         directionItem(.navigation)
         filterItem(.navigation)
         tagItem(.navigation)
         subfoldersItem(.navigation)
         collectionsItem(.navigation)
+    }
+
+    @ToolbarContentBuilder
+    private var plainLeadingB: some ToolbarContent {
         layoutItem(.navigation)
         manageDriveLinksItem(.navigation)
         moodItem(.navigation)
         infoItem(.navigation)
+        settingsItem(.navigation)
     }
 
     // Individual items — each renders as its own pill.
+
+    /// A toolbar button's label: the mood-tinted glyph, PLUS a text title that
+    /// the bar itself never draws.
+    ///
+    /// `.labelStyle(.iconOnly)` keeps the toolbar icon-only, but the Label still
+    /// carries its title — which is what the `»` overflow menu shows when the
+    /// window narrows. With a bare `Image` the overflow was a column of
+    /// unlabelled glyphs; with this it reads as a normal menu.
+    private func toolbarGlyph(_ systemImage: String,
+                              _ title: LocalizedStringKey,
+                              selected: Bool = false) -> some View {
+        Label {
+            Text(title)
+        } icon: {
+            Image(systemName: systemImage)
+                .moodToolbarIcon(appState.moodPalette, selected: selected)
+        }
+        .labelStyle(.iconOnly)
+    }
 
     @ToolbarContentBuilder
     private func sortItem(_ placement: ToolbarItemPlacement) -> some ToolbarContent {
@@ -590,7 +673,7 @@ struct ContentView: View {
     private func directionItem(_ placement: ToolbarItemPlacement) -> some ToolbarContent {
         // Flip the active sort mode's direction (newest↔oldest, A↔Z, …).
         ToolbarItem(placement: placement) {
-            sortDirectionButton.disabled(appState.isSearchActive)
+            sortDirectionMenu.disabled(appState.isSearchActive)
         }
     }
 
@@ -615,9 +698,8 @@ struct ContentView: View {
             // direction too, against the documented rule.
             Toggle(isOn: Binding(get: { appState.showSubfolders },
                                  set: { _ in appState.toggleSubfolders() })) {
-                Image(systemName: "rectangle.stack")
-                    .moodToolbarIcon(appState.moodPalette,
-                                     selected: appState.showSubfolders)
+                toolbarGlyph("rectangle.stack", "Subfolders",
+                             selected: appState.showSubfolders)
             }
             .help(appState.showSubfolders
                   ? "Hide files inside subfolders"
@@ -636,8 +718,7 @@ struct ContentView: View {
             Button {
                 appState.toggleCollectionsPage()
             } label: {
-                Image(systemName: "square.stack.3d.up")
-                    .moodToolbarIcon(appState.moodPalette)
+                toolbarGlyph("square.stack.3d.up", "Collections")
             }
             .help("Collections")
             .accessibilityLabel("Collections")
@@ -651,8 +732,7 @@ struct ContentView: View {
             Button {
                 appState.imageLayoutShown = true
             } label: {
-                Image(systemName: "square.grid.2x2")
-                    .moodToolbarIcon(appState.moodPalette)
+                toolbarGlyph("square.grid.2x2", "Image Layout")
             }
             .help("Image Layout")
             // Icon-only button: give VoiceOver an explicit name (the SF Symbol's
@@ -672,8 +752,7 @@ struct ContentView: View {
             Button {
                 appState.driveSharesShown = true
             } label: {
-                Image(systemName: "link")
-                    .moodToolbarIcon(appState.moodPalette)
+                toolbarGlyph("link", "Manage Drive Shares")
             }
             .help("Manage Drive Shares")
             .accessibilityLabel("Manage Drive Shares")
@@ -694,11 +773,26 @@ struct ContentView: View {
             Button {
                 appState.infoShown = true
             } label: {
-                Image(systemName: "info.circle")
-                    .moodToolbarIcon(appState.moodPalette)
+                toolbarGlyph("info.circle", "About Muse")
             }
             .help("About Muse — how indexing, analysis, collections, and tags work")
             .accessibilityLabel("About Muse")
+        }
+    }
+
+    /// Opens the in-app Settings card. Deliberately the SAME action as the ⌘,
+    /// menu command (`AppState.settingsShown`), so there's one presentation path
+    /// — this is a second door to it, not a second implementation.
+    @ToolbarContentBuilder
+    private func settingsItem(_ placement: ToolbarItemPlacement) -> some ToolbarContent {
+        ToolbarItem(placement: placement) {
+            Button {
+                appState.settingsShown = true
+            } label: {
+                toolbarGlyph("gearshape", "Settings")
+            }
+            .help("Settings")
+            .accessibilityLabel("Settings")
         }
     }
 
@@ -751,7 +845,7 @@ struct ContentView: View {
     private var sortMenu: some View {
         // On the Collections page the menu sorts the cards (collection modes
         // only); elsewhere it sorts the grid (all modes). Mirrors the
-        // `isCollectionsPage` ternary in sortDirectionButton + the help below.
+        // `isCollectionsPage` ternary in sortDirectionMenu + the help below.
         let cases = isCollectionsPage ? SortMode.collectionCases : SortMode.allCases
         let selection = Binding(
             get: { isCollectionsPage ? appState.collectionSortMode : appState.sortMode },
@@ -777,8 +871,7 @@ struct ContentView: View {
             .pickerStyle(.inline)
             .labelsHidden()
         } label: {
-            Image(systemName: "arrow.up.and.down.text.horizontal")
-                .moodToolbarIcon(appState.moodPalette)
+            toolbarGlyph("arrow.up.and.down.text.horizontal", "Sort")
         }
         // Hide the dropdown chevron: with it, macOS 26 renders the Menu as its
         // OWN isolated glass pill and it won't merge with the adjacent
@@ -802,27 +895,50 @@ struct ContentView: View {
             .pickerStyle(.inline)
             .labelsHidden()
         } label: {
-            Image(systemName: "tag")
-                .moodToolbarIcon(appState.moodPalette)
+            toolbarGlyph("tag", "Tag Order")
         }
         .help("Tag order: \(appState.tagSortMode.label)")
         .accessibilityLabel("Tag order")
     }
 
-    /// Flips the active sort mode's direction. On the Collections page it flips
-    /// the collections sort; elsewhere it flips the grid sort. The arrow points
-    /// up for ascending, down for descending; the tooltip spells out what that
-    /// means for the active mode (e.g. "Newest first" vs "Oldest first").
-    private var sortDirectionButton: some View {
+    /// Sort direction. A bare toggle button gave no clue what a click would do,
+    /// so this is a Menu listing the two directions SPELLED OUT for the active
+    /// mode ("Newest first" / "Oldest first", "Largest first" / "Smallest
+    /// first", …) via `SortMode.directionLabel`. The toolbar glyph still shows
+    /// the current state at a glance: up for ascending, down for descending.
+    ///
+    /// On the Collections page it drives the collections sort; elsewhere the
+    /// grid sort. Both write through their `toggle…` method rather than setting
+    /// `sortReversed` directly — the grid's setter also runs `resort()`, so a
+    /// direct write would change the arrow without reordering anything.
+    private var sortDirectionMenu: some View {
         let ascending = isCollectionsPage ? appState.collectionSortAscending : appState.sortAscending
         let mode = isCollectionsPage ? appState.collectionSortMode : appState.sortMode
-        return Button {
-            if isCollectionsPage { appState.toggleCollectionSortDirection() }
-            else { appState.toggleSortDirection() }
+        return Menu {
+            Picker("Sort direction", selection: Binding(
+                get: { ascending },
+                set: { wanted in
+                    // Re-picking the active direction is a no-op; only a real
+                    // change flips (and re-sorts).
+                    guard wanted != ascending else { return }
+                    if isCollectionsPage { appState.toggleCollectionSortDirection() }
+                    else { appState.toggleSortDirection() }
+                }
+            )) {
+                Label(mode.directionLabel(ascending: false), systemImage: "arrow.down")
+                    .tag(false)
+                Label(mode.directionLabel(ascending: true), systemImage: "arrow.up")
+                    .tag(true)
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
         } label: {
-            Image(systemName: ascending ? "arrow.up" : "arrow.down")
-                .moodToolbarIcon(appState.moodPalette)
+            toolbarGlyph(ascending ? "arrow.up" : "arrow.down", "Sort Direction")
         }
+        // Same reason as the sort menu beside it: with the dropdown chevron
+        // visible, macOS 26 renders this as its OWN isolated glass pill and it
+        // stops merging with sort + filter into the one "sorting" capsule.
+        .menuIndicator(.hidden)
         .help(mode.directionLabel(ascending: ascending))
         .accessibilityLabel(String(localized: "Sort direction: \(mode.directionLabel(ascending: ascending))"))
     }
@@ -840,9 +956,8 @@ struct ContentView: View {
             get: { filterPopoverShown || appState.gridFilter.isActive },
             set: { _ in filterPopoverShown.toggle() }
         )) {
-            Image(systemName: "line.3.horizontal.decrease.circle")
-                .moodToolbarIcon(appState.moodPalette,
-                                 selected: filterPopoverShown || appState.gridFilter.isActive)
+            toolbarGlyph("line.3.horizontal.decrease.circle", "Filter",
+                         selected: filterPopoverShown || appState.gridFilter.isActive)
         }
         .toggleStyle(.button)
         .help(appState.gridFilter.isActive ? String(localized: "Filter (active)") : String(localized: "Filter"))
@@ -863,8 +978,10 @@ struct ContentView: View {
         // selected fill (solid accent, white icon), identical to every other
         // toolbar button's behavior. No custom chrome.
         Toggle(isOn: $moodPickerShown) {
-            Image(systemName: "paintpalette")
-                .moodToolbarIcon(appState.moodPalette, selected: moodPickerShown)
+            // `selected:` is what swaps the glyph to white against the toggle's
+            // solid accent fill, the same as Collections and Filter. Dropping it
+            // left a mood-tinted glyph sitting on blue.
+            toolbarGlyph("paintpalette", "Background", selected: moodPickerShown)
         }
         .toggleStyle(.button)
         .help("Background: \(appState.mood.displayName)")
@@ -916,37 +1033,54 @@ struct ContentView: View {
         .transition(.opacity)
     }
 
+    // MARK: - Suggestion sources for the Add Tag / New Collection cards
 
-}
+    /// Every tag label in the library, most-used first, for the Add Tag card's
+    /// autocomplete. Read from the chip cache AppState already maintains (it's
+    /// refreshed on every tagsVersion bump), so opening the card costs no query.
+    ///
+    /// Rating glyphs are dropped by `TagSuggest.rank` itself, so this doesn't
+    /// have to remember to — attaching one here would give a file two ratings.
+    private var tagSuggestCandidates: [TagSuggest.Candidate] {
+        let all = appState.allTagLabels
+        let n = all.count
+        // allTagLabels arrives already ordered; encode that order as the count
+        // so an empty query preserves it (no second query just for counts).
+        return all.enumerated().map { i, label in
+            TagSuggest.Candidate(label: label, count: n - i)
+        }
+    }
 
-/// The "Name Collection" prompt's text field. Bound directly to AppState's
-/// `@Published` draft, every keystroke fired `AppState.objectWillChange`, which
-/// re-evaluated the whole `ContentView` body (sidebar + tag chips + grid) — on a
-/// large library that made typing visibly crawl on slower Macs. Holding the draft
-/// in LOCAL `@State` here confines each keystroke to this modifier's tiny body;
-/// the name reaches AppState only on Create. Reset on each open since the modifier
-/// (and its `@State`) outlives individual presentations.
-private struct NameCollectionAlert: ViewModifier {
-    @EnvironmentObject private var appState: AppState
-    @State private var draft = ""
+    /// Existing MANUAL collection names, so "Name Collection" can show what's
+    /// already taken and route a matching name into that collection instead of
+    /// creating a twin. Smart collections are excluded: their membership is
+    /// rule-driven, so hand-adding files to one wouldn't stick.
+    /// Tags carried by photos that LOOK like the one being tagged. Loaded when
+    /// the Add Tag card opens; empty until it lands (the card reserves the row's
+    /// height, so a late arrival doesn't resize it) and empty forever for an
+    /// unanalyzed photo, which is fine — the field still inline-completes.
+    private func loadSimilarTags(for request: AddTagRequest) async {
+        similarTags = []
+        // The CLICKED file, not `urls.first` — a multi-selection has no single
+        // "this photo", and the URL list is unordered.
+        let url = request.source
+        // Don't offer a tag the file already carries — re-adding is a harmless
+        // no-op, but seeing it in the row reads as the app not knowing.
+        let existing = Set(await TagStore.shared.tags(for: url).map(\.label))
+        let found = await SimilarTagSuggestions.candidates(
+            for: url, excluding: existing,
+            limit: SuggestingNameCard.rowCount)
+        // The card may have been dismissed or re-targeted while this ran.
+        guard appState.addTagRequest?.id == request.id else { return }
+        similarTags = found
+    }
 
-    func body(content: Content) -> some View {
-        content
-            .alert("Name Collection", isPresented: Binding(
-                get: { appState.newCollectionRequest },
-                set: { if !$0 { appState.cancelNewCollection() } }
-            )) {
-                TextField("Collection name", text: $draft)
-                Button("Create") { appState.confirmNewCollection(name: draft) }
-                Button("Cancel", role: .cancel) { appState.cancelNewCollection() }
-            } message: {
-                Text(appState.pendingNewCollectionPaths.isEmpty
-                     ? "Creates a new collection."
-                     : "Creates a collection from the selected images.")
-            }
-            .onChange(of: appState.newCollectionRequest) { _, open in
-                if open { draft = "" }
-            }
+    private var collectionSuggestCandidates: [TagSuggest.Candidate] {
+        collectionsEngine.collections
+            .filter { $0.collection.smart_rules == nil }
+            .map { TagSuggest.Candidate(id: $0.collection.id,
+                                        label: $0.collection.name,
+                                        count: $0.aliveCount) }
     }
 }
 

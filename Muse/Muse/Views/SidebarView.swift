@@ -61,8 +61,9 @@ struct SidebarView: View {
     @State private var collectionFrames: [String: CGRect] = [:]
     @State private var collectionDragStartFrames: [String: CGRect] = [:]
 
-    /// Height of a single collapsed folder row.
-    fileprivate static let rowHeight: CGFloat = 28
+    /// Height of a ROOT folder row (and of every flat row: collections, pins).
+    /// Internal, not fileprivate: the row types in Views/Sidebar/ read it.
+    static let rowHeight: CGFloat = 28
     /// Named coordinate space shared by the reorder drag gesture and the row
     /// frame measurements, so the two are always compared in the same space.
     /// Internal (not fileprivate): the row/support types in Views/Sidebar/ read it.
@@ -70,6 +71,100 @@ struct SidebarView: View {
 
     /// Low-opacity fill used behind a hovered row, matching Lineform.
     static let rowHoverFillOpacity = 0.08
+
+    /// Fill behind the SELECTED sidebar row — Apple's own source-list selection
+    /// grey, `unemphasizedSelectedContentBackgroundColor` (R220 light, R70 dark).
+    ///
+    /// This sidebar is custom-drawn rather than a native `List`, so no system
+    /// selection was ever in play; the fill was a hand-picked opacity. Measured
+    /// against Muse's card colour, the system grey works out to ~0.13 black on
+    /// light and ~0.115 white on dark — a touch lighter than the 0.14 it
+    /// replaces, and it adapts on its own.
+    ///
+    /// Grey rather than the blue a focused List would use, because the label and
+    /// icon already carry the blue; a blue wash under blue text puts two blues on
+    /// top of each other and separates poorly, worst on dark.
+    static let selectionFill = Color(nsColor: .unemphasizedSelectedContentBackgroundColor)
+
+    /// Label + icon color for the SELECTED row: Apple's own `systemBlue`.
+    ///
+    /// Measured, so the choice is on the record rather than by feel:
+    ///   systemBlue          R0 G136 B255 light · R0 G145 B255 dark  (adapts)
+    ///   controlAccentColor  R0 G122 B255 in BOTH                    (doesn't)
+    ///   linkColor           R0 G104 B218 light · R65 G156 B255 dark (adapts)
+    ///
+    /// `systemBlue` is exactly #0088FF in light — the value we'd otherwise have
+    /// hard-coded — and Apple lightens it a touch for dark, which is the
+    /// legibility fix we were reaching for. So this is the system colour, not a
+    /// custom one. `Color.accentColor` is deliberately NOT used: it resolves to
+    /// controlAccentColor, which never adapts and reads muddy on a dark sidebar.
+    /// The tradeoff is that a user who sets a non-blue system accent still sees
+    /// blue here — accepted, since this is a legibility colour, not a theme one.
+    static let selectedLabelColor = Color(nsColor: .systemBlue)
+
+    // MARK: - Row geometry (mirrors Lineform's source list)
+    //
+    // These constants define the shared leading geometry of EVERY sidebar
+    // row — folder tree, collection, pinned folder, and the live preview inside
+    // the Symbol & Color modal. They're here, not inlined per row, so the four
+    // surfaces can't drift out of alignment.
+    //
+    // INVARIANT: `chevronSlotWidth + chevronToIconGap` is the icon column's
+    // offset from the row's content edge, so the icons stay on one vertical line
+    // whether or not a chevron is actually drawn. Every surface reads these
+    // constants; change one and the whole sidebar moves together, which is the
+    // point — don't inline a copy.
+    //
+    // The slot is sized to the WIDEST disclosure glyph and leading-aligned, so
+    // the chevron sits hard against the content edge in both states rather than
+    // floating in dead space.
+
+    /// Inset from the selection highlight's edge to the row's content. Small on
+    /// purpose: the chevron then starts 4pt in, and everything after it — icon,
+    /// name, counts — rides that much further left too.
+    static let rowHorizontalPadding: CGFloat = 4
+
+    /// Width of the disclosure slot, LEADING-aligned so the glyph starts exactly
+    /// at the row's content edge. 10pt because that's how wide `chevron.down`
+    /// measures at this point size (`chevron.right` is 7) — a narrower slot
+    /// would clip the expanded state.
+    static let chevronSlotWidth: CGFloat = 10
+    /// Gap between the disclosure slot and the row's icon. See the invariant above.
+    ///
+    /// 3, not 6, because leading-aligning the glyph leaves slack INSIDE the slot:
+    /// `chevron.right` is 7pt in a 10pt slot, so 3pt of the visible gap is
+    /// already there before this is added. Six here read as a 9pt gap — wider
+    /// than before the chevron moved left. This restores the original spacing
+    /// while keeping the chevron at the content edge.
+    static let chevronToIconGap: CGFloat = 3
+    /// Point size of the disclosure glyph — smaller than the row icon on purpose.
+    static let chevronGlyphSize: CGFloat = 9
+
+    /// Gap between a row's icon slot and its label. The icon is centred in an
+    /// 18pt slot, so a 12pt glyph already contributes ~3pt of visual space on
+    /// its right — this is the gap ON TOP of that.
+    static let iconToTextGap: CGFloat = 6
+
+    /// Folder-icon point size: roots, then everything nested under one.
+    ///
+    /// Nested rows draw a slightly smaller glyph, the way Mail's sidebar steps
+    /// its mailboxes down — it reinforces the hierarchy the indent is carrying
+    /// without stealing more horizontal space. One step only, not per level: a
+    /// glyph that kept shrinking with depth would be illegible three deep. Pairs
+    /// with the existing root/child split in row height and label weight.
+    static let rootIconSize: CGFloat = 12
+    static let childIconSize: CGFloat = 11
+
+    /// Per-level indent in the folder tree, applied from the FIRST nested level
+    /// down. Deliberately small: at 14 (Lineform's step) a subfolder read as
+    /// pushed away from its parent, and at 0 the tree read flat with nothing but
+    /// the chevron to carry hierarchy. 8 is enough for the eye to track the
+    /// structure by row x-position without the rows marching rightward.
+    static let treeIndentStep: CGFloat = 8
+
+    /// Height of a nested (non-root) folder row. Roots keep `rowHeight` (28) so
+    /// they read as section anchors above their slightly tighter children.
+    static let childRowHeight: CGFloat = 26
 
     /// Opaque card surface (Lineform's near-white / dark values) so the
     /// sidebar reads as one continuous card rather than a translucent panel.
@@ -86,7 +181,15 @@ struct SidebarView: View {
             } else if showCollectionsInSidebar {
                 twoSectionScroll
             } else {
-                sortHeader
+                // Folders-only layout has no section header to host the control,
+                // so it keeps its own row — same icon, same behavior.
+                HStack {
+                    folderSortMenu
+                    Spacer()
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 8)
+                .padding(.bottom, 2)
                 foldersScroll
             }
 
@@ -192,9 +295,11 @@ struct SidebarView: View {
     private var twoSectionScroll: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                SectionHeader(title: String(localized: "FOLDERS"), collapsed: $foldersCollapsed)
+                SectionHeader(title: String(localized: "FOLDERS"),
+                              collapsed: $foldersCollapsed) {
+                    folderSortMenu
+                }
                 if !foldersCollapsed {
-                    sortHeader
                     folderList
                 }
                 // Content-gated: with no folders at all, or only an empty iCloud
@@ -212,9 +317,11 @@ struct SidebarView: View {
                     // padding + the shorter endDropZone, which render only when the
                     // FOLDERS section is expanded.
                     Color.clear.frame(height: 14)
-                    SectionHeader(title: String(localized: "COLLECTIONS"), collapsed: $collectionsCollapsed)
+                    SectionHeader(title: String(localized: "COLLECTIONS"),
+                                  collapsed: $collectionsCollapsed) {
+                        collectionSortMenu
+                    }
                     if !collectionsCollapsed {
-                        collectionsSortHeader
                         collectionsList
                     }
                 }
@@ -248,36 +355,13 @@ struct SidebarView: View {
 
     // MARK: - Collections sort header
 
-    private var collectionsSortHeader: some View {
-        HStack {
-            Menu {
-                ForEach(SidebarCollectionSortMode.allCases) { mode in
-                    Button { setCollectionSortMode(mode) } label: {
-                        if appState.sidebarCollectionSortMode == mode {
-                            Label(mode.label, systemImage: "checkmark")
-                        } else {
-                            Text(mode.label)
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text("Sort: \(appState.sidebarCollectionSortMode.label)")
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .semibold))
-                }
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .accessibilityLabel("Sort collections")
-            Spacer()
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, 4)
-        .padding(.bottom, 2)
+    private var collectionSortMenu: some View {
+        SectionSortMenu(modes: SidebarCollectionSortMode.allCases,
+                        label: { $0.label },
+                        current: appState.sidebarCollectionSortMode,
+                        isManual: appState.sidebarCollectionSortMode == .manual,
+                        accessibilityTitle: String(localized: "Sort collections"),
+                        select: { setCollectionSortMode($0) })
     }
 
     private func setCollectionSortMode(_ mode: SidebarCollectionSortMode) {
@@ -455,10 +539,14 @@ struct SidebarView: View {
         if showCollectionsInSidebar && !appState.rootNodes.isEmpty
             && collectionsEngine.hasReachableContent {
             HStack(spacing: 10) {
-                AddPillButton(systemImage: "folder", label: String(localized: "Add Folder")) {
+                AddPillButton(systemImage: "folder",
+                              label: String(localized: "Add Folder"),
+                              shortLabel: String(localized: "Folder")) {
                     appState.pickAndAddRoot()
                 }
-                AddPillButton(systemImage: "square.stack.3d.up", label: String(localized: "Add Collection")) {
+                AddPillButton(systemImage: "square.stack.3d.up",
+                              label: String(localized: "Add Collection"),
+                              shortLabel: String(localized: "Collection")) {
                     appState.requestNewCollection()
                 }
             }
@@ -488,38 +576,15 @@ struct SidebarView: View {
 
     // MARK: - Sort header
 
-    private var sortHeader: some View {
-        HStack {
-            Menu {
-                ForEach(FolderSortMode.allCases) { mode in
-                    Button { setSortMode(mode) } label: {
-                        if sortMode == mode {
-                            Label(mode.label, systemImage: "checkmark")
-                        } else {
-                            Text(mode.label)
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text("Sort: \(sortMode.label)")
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .semibold))
-                }
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            // Disambiguate from the COLLECTIONS sort pop-up (same visible "Sort:…"
-            // shape) now that both can sit in the sidebar at once.
-            .accessibilityLabel("Sort folders")
-            Spacer()
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, 8)
-        .padding(.bottom, 2)
+    private var folderSortMenu: some View {
+        SectionSortMenu(modes: FolderSortMode.allCases,
+                        label: { $0.label },
+                        current: sortMode,
+                        isManual: sortMode == .manual,
+                        // Disambiguate from the COLLECTIONS control (same glyph)
+                        // now that both can sit in the sidebar at once.
+                        accessibilityTitle: String(localized: "Sort folders"),
+                        select: { setSortMode($0) })
     }
 
     private func setSortMode(_ mode: FolderSortMode) {

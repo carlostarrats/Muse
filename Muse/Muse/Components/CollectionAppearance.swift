@@ -25,7 +25,7 @@ enum CollectionAppearance {
     static let smartDefaultIcon = "line.3.horizontal.decrease.circle"
 
     /// The 27 preset swatches, in picker order — with the Default cell they
-    /// fill a 7-row × 4 grid alongside the 6×6 symbol grid. SPECTRUM order
+    /// fill a 7-row × 4 grid alongside the 7×6 symbol grid. SPECTRUM order
     /// (owner call, 2026-07-07): reds → oranges → yellows → greens → teals →
     /// blues → violets → pinks, reading left-to-right then down, with each
     /// hue's deep variant beside its mid-tone. Fixed values chosen to stay
@@ -62,7 +62,7 @@ enum CollectionAppearance {
         ("pink",    Color(red: 0.925, green: 0.286, blue: 0.600)),
     ]
 
-    /// The curated symbol grid (36 = 6×6), default stack icon first. OUTLINE
+    /// The curated symbol grid (42 = 7×6), default stack icon first. OUTLINE
     /// variants on purpose — the app's iconography (toolbar, sidebar) is
     /// outline-weight, so filled picker symbols read foreign (owner call,
     /// 2026-07-07); symbols with no outline variant (sparkles, music.note,
@@ -79,7 +79,8 @@ enum CollectionAppearance {
         "car", "house", "building.2", "globe.americas",
         "mappin", "cup.and.saucer", "fork.knife", "pawprint",
         "person", "moon.stars", "sun.max", "lightbulb",
-        "crown",
+        "crown", "map", "calendar", "clock", "envelope",
+        "doc.text", "scissors",
     ]
 
     /// Resolve a stored color token. nil, or a token this build doesn't know
@@ -93,10 +94,74 @@ enum CollectionAppearance {
     /// Resolve a stored symbol name to something that will actually render:
     /// nil or a name this OS's SF Symbols set lacks falls back to the default
     /// stack icon (a customized collection must never show a blank).
+    ///
+    /// Symbol-only. Callers that RENDER should use `resolve(_:default:)` below,
+    /// which also understands emoji; this stays for the places that genuinely
+    /// need an SF Symbol name.
     static func resolvedIcon(_ name: String?) -> String {
         guard let name, isValidSymbol(name) else { return defaultIcon }
         return name
     }
+
+    // MARK: - Emoji icons
+
+    /// A collection's icon can be either an SF Symbol or an emoji. Both live in
+    /// the SAME `collections.icon` column — no migration — discriminated by a
+    /// prefix on the emoji form.
+    enum Icon: Equatable {
+        case symbol(String)
+        case emoji(String)
+    }
+
+    /// Marker that makes an emoji unambiguous in storage. An SF Symbol name is
+    /// always ASCII, so a bare emoji would already be distinguishable — the
+    /// prefix makes the discriminator EXPLICIT rather than a property of the
+    /// current symbol-name grammar, and it's what makes an older build fall
+    /// back cleanly (it fails `isValidSymbol` and shows the default glyph).
+    static let emojiPrefix = "emoji:"
+
+    /// Wrap an emoji for storage. Validate with `isValidEmoji` first — this
+    /// does not check.
+    static func encodeEmoji(_ emoji: String) -> String { emojiPrefix + emoji }
+
+    /// True when `s` is exactly ONE user-perceived character and isn't plain
+    /// ASCII. Swift's `String.count` counts grapheme CLUSTERS, so a ZWJ family
+    /// (👨‍👩‍👧), a skin-tone modifier (👋🏽) and a flag (🇫🇷) each count as one —
+    /// which is the whole reason this isn't a scalar count.
+    static func isValidEmoji(_ s: String) -> Bool {
+        guard s.count == 1, let first = s.unicodeScalars.first else { return false }
+        return !first.isASCII
+    }
+
+    /// Resolve a stored raw icon value for DISPLAY. Unknown or unrenderable
+    /// values fall back to `def` — a customized collection must never draw a
+    /// blank, whatever ends up in the column.
+    static func resolve(_ raw: String?, default def: String) -> Icon {
+        guard let raw else { return .symbol(def) }
+        if raw.hasPrefix(emojiPrefix) {
+            let emoji = String(raw.dropFirst(emojiPrefix.count))
+            return isValidEmoji(emoji) ? .emoji(emoji) : .symbol(def)
+        }
+        return .symbol(isValidSymbol(raw) ? raw : def)
+    }
+
+    /// The curated emoji grid: 66 entries, laid out 11 wide × 6 rows. Mirrors
+    /// the SF Symbol catalog's subject coverage (nature, media, travel, food,
+    /// objects, animals, people) so the two picker tabs read as one set
+    /// expressed twice.
+    ///
+    /// Curated and CLOSED — there's no free-entry field. Every entry here is
+    /// checked to render legibly at sidebar row size; an arbitrary pasted
+    /// character (a rare glyph with no colour font, a tofu box) would not be.
+    static let emojiCatalog: [String] = [
+        "⭐️", "❤️", "🔥", "✨", "💡", "👑", "🎯", "🏆", "🎁", "🔔",
+        "🎨", "🖌️", "📷", "🖼️", "🎬", "🎵", "📝", "📐", "🧩", "🕹️",
+        "📁", "📚", "🔖", "🏷️", "📌", "🗂️", "💼", "🛒", "💎", "🔑",
+        "🌊", "🌿", "🌸", "🌙", "☀️", "🌈", "🍃", "🌵", "🍁", "❄️",
+        "🏠", "🏙️", "🗺️", "✈️", "🚗", "🌍", "🍔", "☕️", "🐾", "🦊",
+        "🎧", "📺", "⚽️", "🧭", "⏰", "🔒", "🧪", "🪴", "🐳", "🌗",
+        "🍕", "🍰", "🍷", "🥑", "🐶", "🦋",
+    ]
 
     /// True when the name exists in this OS's SF Symbols catalog.
     static func isValidSymbol(_ name: String) -> Bool {
@@ -180,6 +245,12 @@ enum CollectionAppearance {
         case "sun.max":          return String(localized: "Sun")
         case "lightbulb":        return String(localized: "Lightbulb")
         case "crown":            return String(localized: "Crown")
+        case "map":              return String(localized: "Map")
+        case "calendar":         return String(localized: "Calendar")
+        case "clock":            return String(localized: "Clock")
+        case "envelope":         return String(localized: "Envelope")
+        case "doc.text":         return String(localized: "Document")
+        case "scissors":         return String(localized: "Scissors")
         default:                    return name
         }
     }

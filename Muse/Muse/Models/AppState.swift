@@ -181,6 +181,14 @@ final class AppState: ObservableObject {
     /// menu can list them synchronously — a context-menu `.task` doesn't fire
     /// reliably in the NSMenu bridge.
     @Published var allTagLabels: [String] = []
+    /// A SHORT, usage-ordered slice for the tile context menu. `allTagLabels` is
+    /// the full alphabetical set — fine as a search pool, but as a menu it was
+    /// hundreds of rows you had to scroll. Preloaded for the same reason:
+    /// a context-menu `.task` doesn't fire reliably in the NSMenu bridge.
+    @Published var topTagLabels: [String] = []
+    /// How many the menu offers. Anything else is reachable via New Tag…, which
+    /// searches the whole set.
+    static let contextMenuTagCount = 8
 
     func refreshTagLabels() {
         // Exclude star-rating glyph labels: they're ratings, not tags. Offering
@@ -189,6 +197,11 @@ final class AppState: ObservableObject {
         // tag. Ratings are set via the Rating menu / hero card only.
         Task { @MainActor in
             allTagLabels = await TagStore.shared.allLabels().filter { !StarRating.isRating($0) }
+            topTagLabels = await TagStore.shared
+                .topLabels(limit: AppState.contextMenuTagCount + StarRating.maxStars)
+                .filter { !StarRating.isRating($0) }
+                .prefix(AppState.contextMenuTagCount)
+                .map { $0 }
         }
     }
     /// Names of files a recent move couldn't relocate (drives an alert).
@@ -423,6 +436,11 @@ final class AppState: ObservableObject {
     /// confirm. Stored (not @Published) — extensions can't add stored props.
     var pendingNewCollectionPaths: [String] = []
 
+    /// Presentation state for the grid's "Add Tag" card. The URLs are captured
+    /// at right-click time (see requestAddTag in AppState+Filters) so a
+    /// selection change behind the open card can't retarget the write.
+    @Published var addTagRequest: AddTagRequest?
+
     // MARK: - Derived: visibleFiles cache
 
     /// Memoized backing for `visibleFiles` (computed in AppState+Filters.swift).
@@ -497,6 +515,7 @@ final class AppState: ObservableObject {
         infoShown || imageLayoutShown || settingsShown || driveSharesShown
             || duplicatesSheetVisible || reconnectShown
             || metadataImportRequest != nil || collectionModal != nil
+            || addTagRequest != nil || newCollectionRequest
     }
 
     /// A collection-scoped modal awaiting presentation by the shell. Set from a

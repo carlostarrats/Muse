@@ -36,8 +36,8 @@ struct InfoSheet: View {
                         """)
                     rowDivider
                     section("Library & folders", """
-                        Add folders from the sidebar with the Add Folder \
-                        button — Muse indexes them automatically (the status \
+                        Add folders with the + Folder button at the bottom of \
+                        the sidebar — Muse indexes them automatically (the status \
                         pills at the bottom show progress). Drag folders up or \
                         down to reorder them. Right-click a folder to make a \
                         New Subfolder, Rename it, Reveal it in Finder, or — \
@@ -82,7 +82,9 @@ struct InfoSheet: View {
                         They track your files: delete images or remove a \
                         folder and collections shrink to match — empty ones \
                         disappear. Open one to rename or delete it from its \
-                        header.
+                        header. Right-click a collection in the sidebar and \
+                        choose Change Symbol & Color… to give it its own icon \
+                        — either a symbol with a color, or an emoji.
                         """)
                     rowDivider
                     section("Tags", """
@@ -91,8 +93,13 @@ struct InfoSheet: View {
                         Whatever tags are active appear in a bar beneath the \
                         chips that you can clear one at a time or all at once. \
                         Right-click a chip to rename or delete the tag \
-                        everywhere; add tags from an image's right-click menu \
-                        or inside the viewer. Coming from Lightroom, Bridge, \
+                        everywhere. To tag an image, right-click it and choose \
+                        New Tag… — the card completes against tags you already \
+                        use, so you pick the one you have instead of making a \
+                        near-duplicate, and it offers tags from images that \
+                        look like this one. Your most-used tags sit right in \
+                        that menu, and the viewer's Tags card does the same \
+                        job. Coming from Lightroom, Bridge, \
                         or Capture One? File > Import Keywords & Ratings \
                         reads the keywords and stars already written into \
                         your files and turns them into Muse tags and ratings \
@@ -104,8 +111,10 @@ struct InfoSheet: View {
                         Search by name, tags, captions, and text found inside \
                         images. The magnifier menu scopes the search to the \
                         current folder or your whole library. Sort by date, \
-                        name, size, color, or shape, and use the arrow beside \
-                        the sort menu to flip the direction.
+                        name, size, color, or shape. The arrow beside the sort \
+                        menu sets the direction and spells out what it means \
+                        for whatever you're sorting by — newest or oldest \
+                        first, largest or smallest, A→Z or Z→A.
                         """)
                     rowDivider
                     section("Duplicates", """
@@ -170,7 +179,8 @@ struct InfoSheet: View {
                     rowDivider
                     section("Settings", """
                         Muse organizes automatically, but you're in control: in \
-                        Settings (⌘,) you can turn off automatic tagging or \
+                        Settings — the gear in the toolbar, or ⌘, — you can \
+                        turn off automatic tagging or \
                         automatic collections. Existing tags and collections \
                         stay; only future automatic work is paused, and the \
                         manual commands still work. Settings is also where you \

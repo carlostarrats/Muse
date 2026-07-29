@@ -15,9 +15,24 @@ struct CustomizeCollectionSheet: View {
     let loaded: CollectionStore.Loaded
     let onClose: () -> Void
 
-    // Draft state, seeded from the stored appearance. Icon holds the symbol
-    // NAME (default icon = default look); color holds the token or nil.
+    /// Which icon kind the picker is showing. An icon is EITHER an SF Symbol or
+    /// an emoji, so the two grids are tabs rather than one mixed grid: they're
+    /// different visual languages, and the color picker only applies to one.
+    private enum IconTab: Hashable { case symbols, emoji }
+
+    // Draft state, seeded from the stored appearance. Nothing persists until
+    // Update.
+    //
+    // The symbol, emoji and color drafts are all held SIMULTANEOUSLY and
+    // independently of the active tab, so flipping to Emoji and back restores
+    // the symbol and color you had rather than silently discarding them. Only
+    // `save()` collapses them down to what actually gets stored.
+    @State private var iconTab: IconTab
+    /// The symbol draft — always a valid SF Symbol name (default = default look).
     @State private var draftIcon: String
+    /// The emoji draft. Empty when none has been chosen yet.
+    @State private var draftEmoji: String
+    /// The color token draft, or nil for the default look.
     @State private var draftColor: String?
 
     // Hover feedback (one cell at a time, so two shared slots suffice).
@@ -25,7 +40,13 @@ struct CustomizeCollectionSheet: View {
     // with a real token.
     @State private var hoveredColor: String?
     @State private var hoveredSymbol: String?
+    @State private var hoveredEmoji: String?
     private static let defaultColorHoverID = "__default__"
+
+    /// Grid geometry for both tabs lives in `CollectionPickerLayout` — pure
+    /// arithmetic with a unit test that fails the moment the two tabs stop
+    /// occupying the same box. Don't inline these numbers back here.
+    private typealias Layout = CollectionPickerLayout
 
     /// This collection's "default" glyph — the smart funnel for a smart
     /// collection, the classic stack otherwise — so the preview and Reset match
@@ -38,15 +59,50 @@ struct CustomizeCollectionSheet: View {
         let isSmart = loaded.collection.smart_rules != nil
         let def = isSmart ? CollectionAppearance.smartDefaultIcon : CollectionAppearance.defaultIcon
         self.defaultIcon = def
-        // nil stored icon → show the kind-appropriate default (funnel vs stack).
-        _draftIcon = State(initialValue: loaded.collection.icon.flatMap {
-            CollectionAppearance.isValidSymbol($0) ? $0 : nil
-        } ?? def)
+        // Open on whichever tab matches what's stored, and seed only that
+        // tab's draft from it. nil / unrenderable → the kind-appropriate
+        // default symbol (funnel vs stack) on the Symbols tab.
+        switch CollectionAppearance.resolve(loaded.collection.icon, default: def) {
+        case .emoji(let e):
+            _iconTab = State(initialValue: .emoji)
+            _draftIcon = State(initialValue: def)
+            _draftEmoji = State(initialValue: e)
+        case .symbol(let name):
+            _iconTab = State(initialValue: .symbols)
+            _draftIcon = State(initialValue: name)
+            _draftEmoji = State(initialValue: "")
+        }
         _draftColor = State(initialValue: loaded.collection.color)
     }
 
+    /// The emoji draft, only if it's actually renderable.
+    private var validEmoji: String? {
+        CollectionAppearance.isValidEmoji(draftEmoji) ? draftEmoji : nil
+    }
+
+    /// What the preview draws — and, on Update, what gets stored. On the Emoji
+    /// tab an incomplete draft falls back to the symbol side so the preview is
+    /// never blank.
+    private var effectiveIcon: CollectionAppearance.Icon {
+        if iconTab == .emoji, let e = validEmoji { return .emoji(e) }
+        return .symbol(draftIcon)
+    }
+
+    /// An emoji carries its own colors, so the color token doesn't apply to it.
+    private var effectiveColor: String? {
+        if case .emoji = effectiveIcon { return nil }
+        return draftColor
+    }
+
     private var isDefault: Bool {
-        draftIcon == defaultIcon && draftColor == nil
+        if case .emoji = effectiveIcon { return false }
+        return draftIcon == defaultIcon && draftColor == nil
+    }
+
+    /// Update is blocked only when the Emoji tab is showing an unusable draft —
+    /// committing it would store nothing and silently look like a no-op.
+    private var canSave: Bool {
+        iconTab != .emoji || validEmoji != nil
     }
 
     var body: some View {
@@ -75,11 +131,38 @@ struct CustomizeCollectionSheet: View {
                     preview
                         .padding(.bottom, 20)
 
-                    HStack(alignment: .top, spacing: 24) {
-                        colorColumn
-                        Divider()
-                        symbolColumn
+                    // The tab governs the WHOLE picker, so it sits above
+                    // everything and each tab owns the full area below it.
+                    iconTabPicker
+                        .padding(.bottom, 16)
+
+                    // Symbols needs a color to go with it; an emoji carries its
+                    // own, so the Color column isn't dimmed on that tab — it
+                    // isn't there. The emoji grid takes the whole width instead
+                    // of squeezing into the half a two-column layout would leave.
+                    Group {
+                        switch iconTab {
+                        case .symbols:
+                            HStack(alignment: .top, spacing: Layout.columnGap) {
+                                colorColumn
+                                    .frame(width: Layout.colorColumnWidth)
+                                Divider()
+                                // Takes exactly the remainder, so the gaps on
+                                // either side of the divider are equal and
+                                // nothing is left over on the right.
+                                symbolColumn
+                                    .frame(maxWidth: .infinity)
+                            }
+                        case .emoji:
+                            emojiColumn
+                        }
                     }
+                    // A FIXED picker area, sized to the taller (Symbols) layout.
+                    // Without it the card's height tracked whichever tab was
+                    // showing and the modal resized as you switched — the two
+                    // tabs are one control and should occupy one box.
+                    .frame(height: Layout.pickerHeight, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -88,7 +171,9 @@ struct CustomizeCollectionSheet: View {
             HStack {
                 Button("Reset to Default") {
                     withAnimation(.easeOut(duration: 0.15)) {
+                        iconTab = .symbols
                         draftIcon = defaultIcon
+                        draftEmoji = ""
                         draftColor = nil
                     }
                 }
@@ -98,9 +183,10 @@ struct CustomizeCollectionSheet: View {
                     .keyboardShortcut(.cancelAction)
                 Button("Update") { save() }
                     .keyboardShortcut(.defaultAction)
+                    .disabled(!canSave)
             }
         }
-        .padding(28)
+        .padding(Layout.cardPadding)
         // Width and the height cap come from the modal presenter.
     }
 
@@ -110,22 +196,26 @@ struct CustomizeCollectionSheet: View {
     /// icon slot, name, and count metrics as CollectionSidebarRow — rendered
     /// with the DRAFT appearance on a sidebar-like backdrop.
     private var preview: some View {
-        HStack(spacing: 8) {
+        // Must mirror CollectionSidebarRow's geometry EXACTLY (spacing 0 +
+        // explicit leading padding, SidebarView's shared metrics) — if it
+        // drifts, the "Live Preview" stops previewing the row it claims to.
+        HStack(spacing: 0) {
             Image(systemName: "chevron.right")
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: SidebarView.chevronGlyphSize, weight: .semibold))
                 .opacity(0)
-                .frame(width: 10)
+                .frame(width: SidebarView.chevronSlotWidth, alignment: .leading)
 
-            Image(systemName: draftIcon)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(CollectionAppearance.color(for: draftColor)
-                                    .map(AnyShapeStyle.init) ?? AnyShapeStyle(.primary))
-                .frame(width: 18)
+            CollectionIconView(
+                icon: effectiveIcon,
+                tint: CollectionAppearance.color(for: effectiveColor)
+                    .map(AnyShapeStyle.init) ?? AnyShapeStyle(.primary))
+                .padding(.leading, SidebarView.chevronToIconGap)
 
             Text(loaded.collection.name)
                 .font(.system(size: 13))
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .padding(.leading, SidebarView.iconToTextGap)
 
             Spacer(minLength: 6)
 
@@ -134,8 +224,8 @@ struct CustomizeCollectionSheet: View {
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
         }
-        .padding(.horizontal, 6)
-        .frame(height: 28)
+        .padding(.horizontal, SidebarView.rowHorizontalPadding)
+        .frame(height: SidebarView.rowHeight)
         .background {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(Color.primary.opacity(SidebarView.rowHoverFillOpacity))
@@ -157,11 +247,13 @@ struct CustomizeCollectionSheet: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
 
-            // 28 cells (Default + 27 colors) in a 7-row × 4 grid whose
-            // height tracks the 6×6 symbol grid beside it (owner feedback:
-            // the color column should run down to align with the symbols).
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(24), spacing: 10), count: 4),
-                      spacing: 10) {
+            // 28 cells (Default + 27 colors) in a 7-row × 4 grid. Its height is
+            // the taller of the two Symbols-tab columns, so it's what
+            // `CollectionPickerLayout.pickerHeight` is sized from.
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(),
+                                                         spacing: Layout.colorGrid.gap),
+                                     count: Layout.colorGrid.columns),
+                      spacing: Layout.colorGrid.gap) {
                 defaultSwatch
                 ForEach(CollectionAppearance.colorTokens, id: \.token) { entry in
                     swatch(entry.token, entry.color)
@@ -229,9 +321,31 @@ struct CustomizeCollectionSheet: View {
             Text("Icon")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
+            symbolGrid
+        }
+    }
 
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(30), spacing: 8), count: 6),
-                      spacing: 8) {
+    /// The Emoji tab's whole body — full width, since there's no Color column
+    /// beside it. The curated catalog is all there is: no free-entry field, so
+    /// what's offered is what renders well at row size.
+    private var emojiColumn: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Icon")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+            emojiGrid
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var symbolGrid: some View {
+        // FLEXIBLE columns, not fixed: the grid then spans exactly the width
+        // it's given, at any card size, instead of adding up to whatever its
+        // cells happen to total and leaving a ragged gap on the right.
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(),
+                                                     spacing: Layout.symbolGrid.gap),
+                                 count: Layout.symbolGrid.columns),
+                  spacing: Layout.symbolGrid.gap) {
                 // First cell = this collection's NATIVE glyph (the funnel for a
                 // smart collection, the stack for a normal one), shown as an
                 // ordinary symbol so there's always a plain way back to the
@@ -242,7 +356,6 @@ struct CustomizeCollectionSheet: View {
                 }, id: \.self) { name in
                     symbolCell(name)
                 }
-            }
         }
     }
 
@@ -256,7 +369,8 @@ struct CustomizeCollectionSheet: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(selected ? AnyShapeStyle(Color.accentColor)
                                           : AnyShapeStyle(.primary))
-                .frame(width: 30, height: 30)
+                .frame(maxWidth: .infinity)
+                .frame(height: Layout.symbolGrid.cell)
                 .background {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(selected ? Color.accentColor.opacity(0.16)
@@ -277,13 +391,135 @@ struct CustomizeCollectionSheet: View {
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 
+    // MARK: - Icon-kind tab
+
+    /// Symbols | Emoji. On macOS 26 it's a Liquid Glass capsule — the same
+    /// material language as the window toolbar's control clusters — with the
+    /// active segment as a filled pill inside it. Older systems fall back to the
+    /// stock segmented Picker; the glass API is 26-only and there's no sensible
+    /// approximation worth hand-rolling for one control.
+    @ViewBuilder private var iconTabPicker: some View {
+        if #available(macOS 26.0, *) {
+            HStack(spacing: 4) {
+                iconTabSegment(.symbols)
+                iconTabSegment(.emoji)
+            }
+            .padding(4)
+            .glassEffect(.regular, in: Capsule(style: .continuous))
+            // Hug the two segments — stretched across the card the control
+            // reads as a header bar rather than a picker.
+            .fixedSize()
+        } else {
+            Picker("Icon kind", selection: $iconTab) {
+                Text("Symbols").tag(IconTab.symbols)
+                Text("Emoji").tag(IconTab.emoji)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+        }
+    }
+
+    @ViewBuilder private func iconTabSegment(_ tab: IconTab) -> some View {
+        let selected = iconTab == tab
+        Button {
+            withAnimation(.easeOut(duration: 0.18)) { iconTab = tab }
+        } label: {
+            Group {
+                switch tab {
+                case .symbols: Label("Symbols", systemImage: "square.grid.2x2")
+                case .emoji:   Label("Emoji", systemImage: "face.smiling")
+                }
+            }
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(selected ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
+            .padding(.horizontal, 14)
+            .frame(height: 26)
+            .background {
+                if selected {
+                    Capsule(style: .continuous).fill(Color.accentColor)
+                }
+            }
+            .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    // MARK: - Emoji
+
+    /// Same 6-wide lattice and same cell chrome as the symbol grid, so the two
+    /// tabs feel like one picker rather than two.
+    private var emojiGrid: some View {
+        // 11 columns across the card's full content width; the 66-entry catalog
+        // divides into exactly 6 rows, matching the Symbols tab's footprint (see
+        // CollectionPickerLayout).
+        //
+        // FLEXIBLE columns, like the other two grids: a fixed-column LazyVGrid
+        // centres itself in whatever width it's offered — which is what left the
+        // grid floating mid-card with a gap on the right while everything around
+        // it was left-aligned — and silently overflows when it doesn't fit.
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(),
+                                                     spacing: Layout.emojiGrid.gap),
+                                 count: Layout.emojiGrid.columns),
+                  spacing: Layout.emojiGrid.gap) {
+            ForEach(CollectionAppearance.emojiCatalog, id: \.self) { emoji in
+                emojiCell(emoji)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func emojiCell(_ emoji: String) -> some View {
+        let selected = draftEmoji == emoji
+        let hovered = hoveredEmoji == emoji
+        return Button {
+            draftEmoji = emoji
+        } label: {
+            Text(emoji)
+                .font(.system(size: 17))
+                .frame(maxWidth: .infinity)
+                .frame(height: Layout.emojiGrid.cell)
+                .background {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(selected ? Color.accentColor.opacity(0.16)
+                                       : Color.primary.opacity(hovered ? 0.10 : 0.04))
+                }
+                .overlay {
+                    if selected || hovered {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .strokeBorder(selected ? Color.accentColor
+                                                   : Color.primary.opacity(0.25),
+                                          lineWidth: 1.5)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .onHover { hoveredEmoji = $0 ? emoji : nil }
+        // No English name to translate — VoiceOver speaks the emoji's own
+        // system name from the character itself, which is the useful reading.
+        .accessibilityLabel(String(localized: "Emoji \(emoji)"))
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+
     // MARK: - Save
 
     /// Persist the draft (default look stores nil/nil, keeping the DB clean)
     /// and reload the engine so the sidebar row repaints immediately.
     private func save() {
-        let icon = draftIcon == defaultIcon ? nil : draftIcon
-        let color = draftColor
+        let icon: String?
+        let color: String?
+        switch effectiveIcon {
+        case .emoji(let e):
+            icon = CollectionAppearance.encodeEmoji(e)
+            // An emoji's color IS the emoji. Persisting a dead token would
+            // resurrect it if the user later switched back to a symbol, which
+            // reads as the app remembering a choice they didn't make.
+            color = nil
+        case .symbol(let name):
+            icon = name == defaultIcon ? nil : name
+            color = draftColor
+        }
         let id = loaded.collection.id
         onClose()
         Task { @MainActor in

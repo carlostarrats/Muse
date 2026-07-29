@@ -35,8 +35,6 @@ struct GridView: View {
         CGFloat(AppSettings.clampGridCornerRadius(gridCornerRadiusSetting))
     }
     private let contentInset: CGFloat = 20
-    @State private var addTagFile: FileNode? = nil
-    @State private var newTagText = ""
     /// User-set images-per-row, persisted; the bottom-right slider drives it.
     @AppStorage("gridColumnCount") private var gridColumns = 4
     /// Off-by-default: show each file's name under its tile.
@@ -271,16 +269,6 @@ struct GridView: View {
                         .padding(.bottom, 16)
                 }
             }
-            .alert("Add Tag", isPresented: Binding(
-                get: { addTagFile != nil },
-                set: { if !$0 { addTagFile = nil } }
-            )) {
-                TextField("Tag name", text: $newTagText)
-                Button("Add") { commitAddTag() }
-                Button("Cancel", role: .cancel) { addTagFile = nil }
-            } message: {
-                Text("Tags “\(addTagFile?.basename ?? "")”.")
-            }
             .onAppear {
                 aspects.load(appState.visibleFiles)
                 recompute(width: contentWidth)
@@ -385,7 +373,8 @@ struct GridView: View {
                                               forStandardizedPath: file.url.standardizedFileURL.path)
                          },
                          imageAspect: aspects.aspect(for: file),
-                         cornerRadius: cornerRadius)
+                         cornerRadius: cornerRadius,
+                         slotSize: rect.size)
                     .frame(width: rect.width, height: rect.height)
                     // The photo no longer paints the whole slot, so without an
                     // explicit shape the empty part of a Grid slot isn't
@@ -650,17 +639,6 @@ struct GridView: View {
         ].joined(separator: "|")
     }
 
-    private func commitAddTag() {
-        guard let file = addTagFile else { return }
-        let label = newTagText.trimmingCharacters(in: .whitespacesAndNewlines)
-        addTagFile = nil
-        guard !label.isEmpty else { return }
-        Task { @MainActor in
-            _ = await TagStore.shared.addManualTag(label: label, for: file.url)
-            appState.tagsVersion += 1
-        }
-    }
-
     /// Floating zoom control: fewer columns (bigger images) on the left,
     /// more (smaller) on the right.
     private var columnSlider: some View {
@@ -782,6 +760,10 @@ private struct TileView: View {
     /// grid mounts and unmounts tiles constantly, and one UserDefaults observer
     /// per live tile is churn for a value that's the same for all of them.
     var cornerRadius: CGFloat = 0
+    /// The slot this tile was framed to by the caller. Needed only to decide
+    /// whether the star badge's full ★-run fits — the tile is otherwise sized
+    /// entirely by the `.frame` the caller applies, so it never had to know.
+    var slotSize: CGSize = .zero
 
     @State private var thumbnail: NSImage?
     @State private var hovering = false
@@ -859,6 +841,24 @@ private struct TileView: View {
         }
         return imageAspect > 0 ? 1 / imageAspect : 1
     }
+
+    /// How wide the drawn content actually is inside the slot. For an image kind
+    /// `imageContent` aspect-fits the stack to the photo, so in Grid mode (square
+    /// slots) a landscape photo draws narrower than its slot — the badge lives
+    /// INSIDE that fitted stack, so the slot width would be the wrong budget. A
+    /// non-photo card fills the slot, so there it IS the slot width.
+    ///
+    /// Pure arithmetic on values already in hand (the same min-scale fit as
+    /// `ViewerGeometry.fitWithin`); no GeometryReader, no measurement pass.
+    private var drawnWidth: CGFloat {
+        let area = CGSize(width: slotSize.width,
+                          height: max(0, slotSize.height - captionHeight))
+        guard isImageKind, area.width > 0, area.height > 0 else { return area.width }
+        return min(area.width, area.height * drawnAspectRatio)
+    }
+
+    /// Outer padding between the badge capsule and the drawn image's edge.
+    private static let badgeInset: CGFloat = 6
 
     var body: some View {
         VStack(spacing: 0) {
@@ -995,15 +995,26 @@ private struct TileView: View {
             // corner (not sticking out past the ring). Display-only (never
             // clickable — a tap would fight tile select/open); the rating is
             // announced via the tile's accessibilityValue in GridView.
-            if let rating, let label = StarRating.label(for: rating) {
+            // On a narrow tile the full ★-run would wrap to a second line and the
+            // badge would stop reading as a badge, so below that width it draws
+            // the compact "5★" form instead (StarRating.badgeLabel owns the
+            // decision, including the one-star case where compact is WIDER and
+            // therefore never used). lineLimit is a backstop: if a future font
+            // change breaks the measured constants, the badge truncates rather
+            // than silently reintroducing the wrap this exists to prevent.
+            if let rating,
+               let label = StarRating.badgeLabel(
+                   for: rating,
+                   availableWidth: drawnWidth - Self.badgeInset * 2) {
                 Text(label)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.black)
+                    .lineLimit(1)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
                     .background(Capsule(style: .continuous)
                         .fill(Color(red: 250.0 / 255.0, green: 250.0 / 255.0, blue: 250.0 / 255.0)))
-                    .padding(6)
+                    .padding(Self.badgeInset)
                     .padding(isSelected ? Self.selectionInset : 0)
                     .frame(maxWidth: .infinity, maxHeight: .infinity,
                            alignment: .topTrailing)

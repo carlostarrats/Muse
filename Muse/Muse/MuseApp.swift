@@ -30,6 +30,12 @@ struct MuseApp: App {
             ? String(localized: "Unpin Folder") : String(localized: "Pin Folder")
     }
 
+    /// Menu icon paired with `pinMenuTitle`, so the glyph tracks the verb.
+    private var pinMenuIcon: String {
+        guard let folder = appState.selectedFolder else { return "pin" }
+        return appState.stars.isStarred(folder.url) ? "pin.slash" : "pin"
+    }
+
     /// The added root matching the current selection, if it is a root —
     /// only roots can be removed from the library.
     private var selectedRoot: Root? {
@@ -133,16 +139,22 @@ struct MuseApp: App {
             CommandGroup(after: .appInfo) {
                 CheckForUpdatesView(updater: updater.controller.updater)
                 Divider()
-                Button("Back Up Muse…") { appState.exportBackup() }
-                Button("Restore from Backup…") { appState.beginRestorePicker() }
+                Button { appState.exportBackup() } label: {
+                    Label("Back Up Muse…", systemImage: "arrow.down.doc")
+                }
+                Button { appState.beginRestorePicker() } label: {
+                    Label("Restore from Backup…", systemImage: "arrow.up.doc")
+                }
             }
 
             // Settings is an in-app modal sheet (dimmed + centered like the
             // other modals), not the native Preferences window, so replace the
             // standard "Settings…" item with one that opens the sheet (⌘,).
             CommandGroup(replacing: .appSettings) {
-                Button("Settings…") { appState.settingsShown = true }
-                    .keyboardShortcut(",", modifiers: .command)
+                Button { appState.settingsShown = true } label: {
+                    Label("Settings…", systemImage: "gearshape")
+                }
+                .keyboardShortcut(",", modifiers: .command)
             }
 
             // Folder actions on the current selection live in the Edit menu.
@@ -155,58 +167,78 @@ struct MuseApp: App {
             // the grid (the field editor still wins ⌘A while a text field is
             // focused). Only "Deselect All" is bespoke (no system equivalent).
             CommandGroup(after: .pasteboard) {
-                Button("Deselect All") { appState.clearSelection() }
-                    .keyboardShortcut("a", modifiers: [.command, .shift])
-                    .disabled(appState.selectedFiles.isEmpty)
+                Button { appState.clearSelection() } label: {
+                    Label("Deselect All", systemImage: "rectangle.dashed")
+                }
+                .keyboardShortcut("a", modifiers: [.command, .shift])
+                .disabled(appState.selectedFiles.isEmpty)
             }
 
             CommandGroup(after: .pasteboard) {
                 Divider()
-                Button(pinMenuTitle) {
+                Button {
                     if let folder = appState.selectedFolder {
                         appState.toggleStar(folder: folder)
                     }
+                } label: {
+                    Label(pinMenuTitle, systemImage: pinMenuIcon)
                 }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
                 .disabled(appState.selectedFolder == nil)
 
-                Button("Remove Folder") {
+                // No shortcut: removing a root is destructive-adjacent and rare.
+                Button {
                     if let root = selectedRoot {
                         appState.removeRoot(root)
                     }
+                } label: {
+                    Label("Remove Folder", systemImage: "minus.rectangle")
                 }
                 .disabled(selectedRoot == nil)
 
                 // Keyboard/menu parallel to the sidebar's mouse-only
                 // drag-to-reorder (closes the reorder accessibility gap).
-                Button("Move Folder Up") { moveSelectedRoot(by: -1) }
-                    .disabled(!canReorderSelectedRoot || (selectedRootIndex ?? 0) <= 0)
-                Button("Move Folder Down") { moveSelectedRoot(by: 1) }
+                Button { moveSelectedRoot(by: -1) } label: {
+                    Label("Move Folder Up", systemImage: "arrow.up")
+                }
+                .disabled(!canReorderSelectedRoot || (selectedRootIndex ?? 0) <= 0)
+                Button { moveSelectedRoot(by: 1) } label: {
+                    Label("Move Folder Down", systemImage: "arrow.down")
+                }
                     .disabled(!canReorderSelectedRoot
                               || selectedRootIndex == nil
                               || selectedRootIndex! >= displayedReorderableRoots.count - 1)
 
-                Button("Set as Collection Cover") {
+                Button {
                     if let file = appState.selectedFile {
                         appState.setCollectionCover(file)
                     }
+                } label: {
+                    Label("Set as Collection Cover", systemImage: "photo.badge.checkmark")
                 }
+                .keyboardShortcut("c", modifiers: [.command, .control])
                 .disabled(appState.activeCollectionID == nil || appState.selectedFile == nil)
 
                 Divider()
 
-                Button("New Subfolder…") {
+                Button {
                     if let folder = appState.selectedFolder {
                         appState.requestNewSubfolder(folder)
                     }
+                } label: {
+                    Label("New Subfolder…", systemImage: "folder.badge.plus")
                 }
+                .keyboardShortcut("n", modifiers: [.command, .control])
                 .disabled(appState.selectedFolder == nil)
 
-                Button("Rename Folder…") {
+                Button {
                     if let folder = appState.selectedFolder {
                         appState.requestRenameFolder(folder)
                     }
+                } label: {
+                    Label("Rename Folder…", systemImage: "pencil")
                 }
+                .keyboardShortcut("r", modifiers: .command)
                 .disabled(appState.selectedFolder == nil
                           || appState.selectedFolder?.url == appState.iCloudFolderURL)
             }
@@ -214,27 +246,35 @@ struct MuseApp: App {
             // Library tools live in the File menu.
             CommandGroup(after: .newItem) {
                 Divider()
-                Button("Find Duplicates in Folder") {
+                Button {
                     appState.findDuplicatesInCurrentFolder()
+                } label: {
+                    Label("Find Duplicates in Folder", systemImage: "square.on.square")
                 }
+                .keyboardShortcut("d", modifiers: .command)
                 // Scoped to a folder — during search `currentFiles` is the
                 // (cross-folder) search result set, not a folder, so the scan
                 // would betray the "in Folder" label. Disable, matching the
                 // other folder-scoped commands.
                 .disabled(appState.isSearchActive)
 
-                Button("Import Keywords & Ratings…") {
+                Button {
                     appState.importKeywordsAndRatings()
+                } label: {
+                    Label("Import Keywords & Ratings…", systemImage: "square.and.arrow.down")
                 }
+                .keyboardShortcut("i", modifiers: [.command, .shift])
 
                 Divider()
 
-                Button("Open") {
+                Button {
                     if let url = appState.selectedFile?.url { NSWorkspace.shared.open(url) }
+                } label: {
+                    Label("Open", systemImage: "arrow.up.forward.app")
                 }
                 .disabled(appState.selectedFile == nil)
 
-                Menu("Open With") {
+                Menu {
                     if let url = appState.selectedFile?.url {
                         ForEach(OpenWithMenu.applications(for: url), id: \.self) { appURL in
                             Button(appURL.deletingPathExtension().lastPathComponent) {
@@ -244,6 +284,8 @@ struct MuseApp: App {
                             }
                         }
                     }
+                } label: {
+                    Label("Open With", systemImage: "app.badge")
                 }
                 .disabled(appState.selectedFile == nil)
             }
@@ -255,50 +297,67 @@ struct MuseApp: App {
                 } label: {
                     Label("Manage Drive Shares…", systemImage: "link")
                 }
+                .keyboardShortcut("l", modifiers: [.command, .shift])
             }
 
             // Menu-bar equivalents of the chip context menu — keyboard and
             // VoiceOver reachable. Enabled while a tag filter is selected.
             CommandMenu("Tags") {
-                Button("Rename Tag…") {
+                Button {
                     if let label = appState.singleActiveTag {
                         appState.tagRenameRequest = label
                     }
+                } label: {
+                    Label("Rename Tag…", systemImage: "pencil")
                 }
+                .keyboardShortcut("r", modifiers: [.command, .control])
                 .disabled(appState.singleActiveTag == nil)
 
-                Button("Delete Tag…") {
+                // No shortcut on the destructive tag commands below: a stray
+                // chord shouldn't be able to wipe a tag off the whole library.
+                Button {
                     if let label = appState.singleActiveTag {
                         appState.tagDeleteRequest = label
                     }
+                } label: {
+                    Label("Delete Tag…", systemImage: "trash")
                 }
                 .disabled(appState.singleActiveTag == nil)
 
-                Button("Remove Tag from Selection") {
+                Button {
                     if let label = appState.singleActiveTag {
                         appState.removeTag(label,
                                            fromURLs: appState.effectiveSelectionURLs(fallback: ""))
                     }
+                } label: {
+                    Label("Remove Tag from Selection", systemImage: "tag.slash")
                 }
                 .disabled(appState.singleActiveTag == nil || appState.selectedFiles.isEmpty
                           || appState.isSearchActive)
 
                 Divider()
 
-                Button("Clear Tag Filter") {
+                Button {
                     appState.setActiveTag(nil)
+                } label: {
+                    Label("Clear Tag Filter", systemImage: "line.3.horizontal.decrease.circle.fill")
                 }
+                .keyboardShortcut("k", modifiers: [.command, .option])
                 .disabled(appState.activeTagLabels.isEmpty)
 
                 Divider()
 
-                Button("Delete All Tags…") {
+                Button {
                     appState.deleteAllTagsRequest = true
+                } label: {
+                    Label("Delete All Tags…", systemImage: "trash.slash")
                 }
                 .disabled(!appState.bulkTagCommandsAvailable)
 
-                Button("Regenerate Tags…") {
+                Button {
                     appState.regenerateTagsRequest = true
+                } label: {
+                    Label("Regenerate Tags…", systemImage: "arrow.clockwise")
                 }
                 .disabled(!appState.bulkTagCommandsAvailable)
             }
@@ -307,55 +366,73 @@ struct MuseApp: App {
             CommandMenu("Collections") {
                 // Keyboard/VoiceOver parallel to the grid right-click's "New
                 // Collection from Selection" (which is otherwise mouse-only).
-                Button("New Collection from Selection…") {
+                Button {
                     appState.requestNewCollection(fallback: "")
+                } label: {
+                    Label("New Collection from Selection…", systemImage: "rectangle.stack.badge.plus")
                 }
+                .keyboardShortcut("n", modifiers: [.command, .option])
                 .disabled(appState.selectedFiles.isEmpty)
 
                 Divider()
 
-                Button("Rename Collection…") {
+                Button {
                     appState.requestRenameActiveCollection()
+                } label: {
+                    Label("Rename Collection…", systemImage: "pencil")
                 }
+                .keyboardShortcut("r", modifiers: [.command, .option])
                 .disabled(appState.activeCollectionID == nil)
 
-                Button("Delete Collection…") {
+                // Destructive — no shortcut, same rule as the tag deletes.
+                Button {
                     appState.collectionDeleteRequest = true
+                } label: {
+                    Label("Delete Collection…", systemImage: "trash")
                 }
                 .disabled(appState.activeCollectionID == nil)
 
                 // Sidebar-only manual reorder (parallels the mouse-only drag).
-                Button("Move Collection Up") {
+                Button {
                     if let id = appState.activeCollectionID {
                         appState.moveSidebarCollection(id: id, by: -1)
                     }
+                } label: {
+                    Label("Move Collection Up", systemImage: "arrow.up")
                 }
                 .disabled(!sidebarManualMoveEnabled || (sidebarActiveCollectionIndex ?? 0) <= 0)
 
-                Button("Move Collection Down") {
+                Button {
                     if let id = appState.activeCollectionID {
                         appState.moveSidebarCollection(id: id, by: 1)
                     }
+                } label: {
+                    Label("Move Collection Down", systemImage: "arrow.down")
                 }
                 .disabled(!sidebarManualMoveEnabled
                           || sidebarActiveCollectionIndex == nil
                           || (sidebarActiveCollectionIndex ?? Int.max)
                              >= appState.sidebarCollections.count - 1)
 
-                Button("Remove Selection from Collection") {
+                Button {
                     if let cid = appState.activeCollectionID {
                         appState.removeFromCollection(cid,
                                                       urls: appState.effectiveSelectionURLs(fallback: ""))
                     }
+                } label: {
+                    Label("Remove Selection from Collection", systemImage: "rectangle.stack.badge.minus")
                 }
                 .disabled(appState.activeCollectionID == nil || appState.selectedFiles.isEmpty
                           || appState.isSearchActive)
 
                 Divider()
 
-                Button("Back to Library") {
+                Button {
                     appState.setActiveCollection(nil)
+                } label: {
+                    Label("Back to Library", systemImage: "photo.on.rectangle")
                 }
+                .keyboardShortcut("l", modifiers: .command)
                 .disabled(appState.activeCollectionID == nil)
             }
 
@@ -364,8 +441,10 @@ struct MuseApp: App {
             // current selection, mirroring "New Collection from Selection…".
             // ⌘0 clears, ⌘1–⌘5 set (Apple Photos convention).
             CommandMenu("Rating") {
-                Button("No Rating") {
+                Button {
                     appState.setRating(nil, forSelectionFallback: "")
+                } label: {
+                    Label("No Rating", systemImage: "star.slash")
                 }
                 .keyboardShortcut("0", modifiers: .command)
                 .disabled(appState.selectedFiles.isEmpty)
@@ -373,8 +452,12 @@ struct MuseApp: App {
                 Divider()
 
                 ForEach(1...StarRating.maxStars, id: \.self) { n in
-                    Button(StarRating.label(for: n) ?? "") {
+                    // The star run IS the label here — a text glyph, not an
+                    // icon — so these carry `star.fill` as their menu image.
+                    Button {
                         appState.setRating(n, forSelectionFallback: "")
+                    } label: {
+                        Label(StarRating.label(for: n) ?? "", systemImage: "star.fill")
                     }
                     .keyboardShortcut(KeyEquivalent(Character("\(n)")), modifiers: .command)
                     .disabled(appState.selectedFiles.isEmpty)

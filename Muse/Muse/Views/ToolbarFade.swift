@@ -55,18 +55,19 @@ enum ToolbarFade {
     static func hide(duration: TimeInterval = 0.20) {
         lastIntentHidden = true
         installFullScreenGuard()
-        guard let view = toolbarView() else { return }
+        let views = chromeViews()
+        guard !views.isEmpty else { return }
         generation += 1
         let expected = generation
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = duration
             ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            view.animator().alphaValue = 0
+            for view in views { view.animator().alphaValue = 0 }
         }, completionHandler: {
             // NSAnimationContext completions fire on the main thread.
             MainActor.assumeIsolated {
                 // Only commit the hide if no show() superseded this fade.
-                if generation == expected { view.isHidden = true }
+                if generation == expected { for view in views { view.isHidden = true } }
             }
         })
     }
@@ -84,20 +85,23 @@ enum ToolbarFade {
     static func show(duration: TimeInterval = 0.12) {
         lastIntentHidden = false
         installFullScreenGuard()
-        guard let view = toolbarView() else { return }
+        let views = chromeViews()
+        guard !views.isEmpty else { return }
         generation += 1
-        let startOpacity = view.layer?.presentation()?.opacity ?? Float(view.alphaValue)
-        view.isHidden = false
-        view.alphaValue = 1
-        if let layer = view.layer {
-            let anim = CABasicAnimation(keyPath: "opacity")
-            anim.fromValue = startOpacity
-            anim.toValue = 1.0
-            anim.duration = duration
-            // Fast-start ease-out: ~50% of the fade in the first quarter of
-            // the duration.
-            anim.timingFunction = CAMediaTimingFunction(controlPoints: 0.17, 0.84, 0.44, 1.0)
-            layer.add(anim, forKey: "tbfade")
+        for view in views {
+            let startOpacity = view.layer?.presentation()?.opacity ?? Float(view.alphaValue)
+            view.isHidden = false
+            view.alphaValue = 1
+            if let layer = view.layer {
+                let anim = CABasicAnimation(keyPath: "opacity")
+                anim.fromValue = startOpacity
+                anim.toValue = 1.0
+                anim.duration = duration
+                // Fast-start ease-out: ~50% of the fade in the first quarter of
+                // the duration.
+                anim.timingFunction = CAMediaTimingFunction(controlPoints: 0.17, 0.84, 0.44, 1.0)
+                layer.add(anim, forKey: "tbfade")
+            }
         }
     }
 
@@ -116,6 +120,7 @@ enum ToolbarFade {
     private static func installFullScreenGuard() {
         guard !fullScreenGuardInstalled else { return }
         fullScreenGuardInstalled = true
+        installAccessoryReassertGuard()
         NotificationCenter.default.addObserver(
             forName: NSWindow.didExitFullScreenNotification,
             object: nil,
@@ -125,10 +130,48 @@ enum ToolbarFade {
                 // The view is back in the titlebar now; re-assert intent with no
                 // animation (the transition itself already animated). Cancel any
                 // in-flight fade so it can't fight this final state.
-                guard let view = toolbarView() else { return }
-                view.layer?.removeAnimation(forKey: "tbfade")
-                view.alphaValue = lastIntentHidden ? 0 : 1
-                view.isHidden = lastIntentHidden
+                for view in chromeViews() {
+                    view.layer?.removeAnimation(forKey: "tbfade")
+                    view.alphaValue = lastIntentHidden ? 0 : 1
+                    view.isHidden = lastIntentHidden
+                }
+            }
+        }
+    }
+
+    // MARK: - Accessory re-assert guard
+
+    private static var accessoryGuardInstalled = false
+
+    /// Keep a RE-INSTALLED titlebar accessory hidden while the viewer is open.
+    ///
+    /// The search-scope bar isn't a stable view we can fade once: AppKit removes
+    /// and re-adds the whole accessory around search-field focus changes
+    /// (observed live — it vanished from the window entirely a beat after the
+    /// fade, then came back). A fade applied to the instance that existed at
+    /// open time therefore says nothing about an instance created a moment
+    /// later, which would draw over the hero at full opacity and swallow clicks
+    /// aimed at its ✕ — the original bug.
+    ///
+    /// `didUpdateNotification` fires on the window's event-loop updates, which
+    /// is exactly when a newly-installed accessory first becomes visible. The
+    /// handler only writes when a value actually differs, so the common case
+    /// (nothing to fix, or not hidden at all) costs two comparisons.
+    private static func installAccessoryReassertGuard() {
+        guard !accessoryGuardInstalled else { return }
+        accessoryGuardInstalled = true
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didUpdateNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            MainActor.assumeIsolated {
+                guard lastIntentHidden, let window = chromeWindow() else { return }
+                for vc in window.titlebarAccessoryViewControllers
+                where vc.layoutAttribute == .bottom {
+                    if vc.view.alphaValue != 0 { vc.view.alphaValue = 0 }
+                    if !vc.view.isHidden { vc.view.isHidden = true }
+                }
             }
         }
     }
@@ -144,6 +187,42 @@ enum ToolbarFade {
     /// NSToolbarView into a separate auto-hiding window it manages itself, and
     /// we must not touch it there (see the file header). Bailing here keeps
     /// hide()/show() as clean no-ops in full-screen.
+    /// Every titlebar view the viewer must dissolve: the toolbar strip itself,
+    /// PLUS any bottom-anchored titlebar ACCESSORY.
+    ///
+    /// The search-scope bar (All / This Folder) is not part of NSToolbarView —
+    /// it's a separate `NSTitlebarAccessoryViewController` (an
+    /// `AppKitAccessoryBarController` hosting a SwiftUI root, bottom layout,
+    /// 36pt) that macOS installs only while the search field is active, growing
+    /// the titlebar container from 52 to 88pt. Verified by dumping the live
+    /// hierarchy — this whole area is diagnosed by instrumenting the running
+    /// app, never by reading code.
+    ///
+    /// Because the accessory sits BELOW the toolbar it drew right over the open
+    /// hero viewer and, being visible and hit-testable, swallowed clicks aimed
+    /// at the viewer's ✕. Fading it with the toolbar fixes both. Hiding it does
+    /// not change the titlebar's height, so the viewer's geometry is untouched —
+    /// same property the toolbar fade relies on.
+    private static func chromeViews() -> [NSView] {
+        var views: [NSView] = []
+        if let toolbar = toolbarView() { views.append(toolbar) }
+        if let window = chromeWindow() {
+            for vc in window.titlebarAccessoryViewControllers
+            where vc.layoutAttribute == .bottom {
+                views.append(vc.view)
+            }
+        }
+        return views
+    }
+
+    /// The window whose chrome we manage — nil in full-screen for the same
+    /// reason `toolbarView()` bails there (macOS owns the relocated chrome).
+    private static func chromeWindow() -> NSWindow? {
+        guard let window = NSApp.windows.first(where: { $0.isVisible && $0.toolbar != nil }),
+              !window.styleMask.contains(.fullScreen) else { return nil }
+        return window
+    }
+
     private static func toolbarView() -> NSView? {
         guard let window = NSApp.windows.first(where: { $0.isVisible && $0.toolbar != nil }),
               !window.styleMask.contains(.fullScreen),
