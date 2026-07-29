@@ -99,8 +99,14 @@ final class BookmarkStore: ObservableObject {
     /// what the user meant by picking it.
     @discardableResult
     func addRoot(at url: URL) -> Root? {
-        let target = url.standardizedFileURL
-        if let existing = roots.first(where: { self.url(for: $0)?.standardizedFileURL == target }) {
+        // Compare PATHS, matching `dropDuplicateRoots` exactly. URL equality
+        // also happens to work (`URL(fileURLWithPath:)` probes the filesystem
+        // and adds the trailing slash for a real directory, so both sides agree
+        // — measured), but the two dedupe paths must not use different rules:
+        // if they ever disagreed, this would mint a duplicate that the next
+        // launch silently swallowed.
+        let target = url.standardizedFileURL.path
+        if let existing = roots.first(where: { self.url(for: $0)?.standardizedFileURL.path == target }) {
             return existing
         }
         return mintRoot(at: url)

@@ -6656,6 +6656,31 @@ whole branch diff found them.
   exactly 14 + 10 — zero slack on a value that RESERVES space, where
   under-reserving spills the grid over the buttons. Now 26.
 
+### The review loop itself
+
+Five passes, each reviewing the previous one's fixes, until one came up empty:
+
+| pass | scope | found |
+|---|---|---|
+| 1 | uncommitted diff | 3 — the `NSLocalizedString` double-lookup, the untestable inline dedupe, `headingBlock` with zero slack |
+| 2 | FULL branch diff (`main...HEAD`) | 1 — similar-tag suggestions keyed off an arbitrary file |
+| 3 | the pass-1/2 fixes | 1 — `addRoot` compared URLs while `dropDuplicateRoots` compared paths |
+| 4 | the pass-3 fix + neighbours | 2 — stale comments left by the live tuning (`6×6` grid, "right-aligned" chevron) |
+| 5 | sweep: every value asserted in a comment vs its constant | 0 — converged |
+
+Pass 2 only happened because the owner asked whether the review had covered the
+whole session; pass 1 had reviewed only the uncommitted half. Passes 3–5 only
+happened because they asked whether the fixes had themselves been reviewed. Both
+were fair, and both found real defects — the unit to review is the full branch
+diff, and a fix is not done until it has been reviewed like any other change.
+
+The pass-3 find is the instructive one: `addRoot` compared `URL`s while
+`dropDuplicateRoots` compared `.path`. Measured, URL equality happens to hold
+(`URL(fileURLWithPath:)` probes the filesystem and adds a directory's trailing
+slash, so both sides agree) — but two dedupe paths using different rules is a
+split-brain waiting to happen: `addRoot` would mint a duplicate that the next
+launch silently swallowed. Both compare paths now.
+
 Checked and found clean: no menu command or `.disabled` gate was lost in the
 Label conversion (26 and 32 of each, before and after); no duplicate keyboard
 shortcut across the whole app; `tagsVersion` has a live sink so `confirmAddTag`

@@ -73,9 +73,9 @@ struct FolderTreeNode: View {
 
     private var row: some View {
         // spacing 0 with explicit per-element leading padding: that's what lets
-        // the chevron sit right-aligned in a slot WIDER than its glyph (close to
-        // the icon it discloses) without moving the icon column. Slot + gap
-        // still sums to 18 — see the invariant on SidebarView.chevronSlotWidth.
+        // each gap be tuned on its own — the chevron sits at the row's content
+        // edge, and `chevronToIconGap` compensates for the slack the slot leaves
+        // in front of the icon. See the invariant on SidebarView.chevronSlotWidth.
         HStack(spacing: 0) {
             // Disclosure: a real button so it captures its own taps,
             // independent of the row's selection tap. Leaves keep an

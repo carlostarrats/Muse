@@ -25,7 +25,7 @@ enum CollectionAppearance {
     static let smartDefaultIcon = "line.3.horizontal.decrease.circle"
 
     /// The 27 preset swatches, in picker order — with the Default cell they
-    /// fill a 7-row × 4 grid alongside the 6×6 symbol grid. SPECTRUM order
+    /// fill a 7-row × 4 grid alongside the 7×6 symbol grid. SPECTRUM order
     /// (owner call, 2026-07-07): reds → oranges → yellows → greens → teals →
     /// blues → violets → pinks, reading left-to-right then down, with each
     /// hue's deep variant beside its mid-tone. Fixed values chosen to stay
