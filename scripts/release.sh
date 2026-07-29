@@ -28,9 +28,18 @@ set -euo pipefail
 # ---- args -------------------------------------------------------------------
 VERSION="${1:-}"
 PUBLISH="no"
-[[ "${2:-}" == "--publish" ]] && PUBLISH="yes"
+NOTES="yes"
+shift || true
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --publish)  PUBLISH="yes" ;;
+    --no-notes) NOTES="no" ;;
+    *) echo "✗ unknown option: $1" >&2; exit 1 ;;
+  esac
+  shift
+done
 if [[ -z "$VERSION" ]]; then
-  echo "usage: scripts/release.sh <version> [--publish]   (e.g. 1.0.1)" >&2
+  echo "usage: scripts/release.sh <version> [--publish] [--no-notes]   (e.g. 1.0.1)" >&2
   exit 1
 fi
 
@@ -52,11 +61,27 @@ EXPORT_DIR="$BUILD_DIR/export"
 REL_DIR="$BUILD_DIR/releases"
 APP="$EXPORT_DIR/Muse.app"
 DMG="$REL_DIR/Muse-$VERSION.dmg"
+NOTES_SRC="$REPO_ROOT/docs/release-notes-$VERSION.md"
 
 echo "▸ Releasing Muse $VERSION  (tag $TAG, build $BUILD)"
 
 # ---- preflight --------------------------------------------------------------
 command -v create-dmg >/dev/null 2>&1 || { echo "✗ create-dmg missing — brew install create-dmg" >&2; exit 1; }
+
+# The release notes are what the user reads in the Sparkle update dialog before
+# agreeing to install. Catch a missing file HERE, not after a 20-minute archive.
+if [[ "$NOTES" == "yes" && ! -f "$NOTES_SRC" ]]; then
+  echo "✗ release notes missing: docs/release-notes-$VERSION.md" >&2
+  echo "  Write them first (they appear in the Sparkle update dialog AND the" >&2
+  echo "  GitHub release), or re-run with --no-notes to ship without notes." >&2
+  exit 1
+fi
+# NB: an `[[ … ]] && echo` one-liner here would return 1 on the false branch and
+# `set -e` would kill the script on every normal release. Keep it an `if`.
+if [[ "$NOTES" == "no" ]]; then
+  echo "▸ --no-notes: this release will ship with an EMPTY update dialog"
+fi
+
 xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
   || { echo "✗ notary profile '$NOTARY_PROFILE' not found — see one-time setup in this script's header" >&2; exit 1; }
 
