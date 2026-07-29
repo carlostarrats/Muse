@@ -114,33 +114,15 @@ struct ViewerInfoColumn<Chrome: View>: View {
 
     // MARK: - Header
 
+    // The filename alone: size and dimensions used to sit under it as a bare
+    // grey line, but they're labeled INFO rows now (alongside Format and
+    // Megapixels), and the INFO card's dimensions come from the file header —
+    // so they're present for unanalyzed files too, which this line was not.
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(url.lastPathComponent)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.95))
-                .lineLimit(2)
-            Text(infoLine)
-                .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.5))
-        }
-    }
-
-    private var infoLine: String {
-        // Just size · dimensions here — dates live in the INFO card now, where
-        // they're labeled (Taken / Modified), so there's no ambiguous bare date.
-        var parts: [String] = []
-        let values = try? url.resourceValues(forKeys: [.fileSizeKey])
-        if let bytes = details?.sizeBytes ?? (values?.fileSize).map(Int64.init) {
-            let f = ByteCountFormatter()
-            f.allowedUnits = .useMB
-            f.countStyle = .file
-            parts.append(f.string(fromByteCount: bytes))
-        }
-        if let px = details?.pixelSize {
-            parts.append("\(Int(px.width))×\(Int(px.height)) px")
-        }
-        return parts.joined(separator: " · ")
+        Text(url.lastPathComponent)
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(.white.opacity(0.95))
+            .lineLimit(2)
     }
 
     // MARK: - Collection card

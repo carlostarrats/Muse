@@ -5,7 +5,6 @@ import GRDB
 struct ViewerFileDetails {
     var fileID: String
     var pixelSize: CGSize?
-    var sizeBytes: Int64?
     var dominantColor: String?
     var palette: [String]
     var tags: [TagRow]
@@ -39,7 +38,10 @@ struct ViewerFileDetails {
             let note = try NoteStore.read(fileID: fid, parentDir: dir, db: db) ?? ""
             var size: CGSize? = nil
             if let w = f.width, let h = f.height { size = CGSize(width: w, height: h) }
-            return ViewerFileDetails(fileID: fid, pixelSize: size, sizeBytes: f.size_bytes,
+            // No size here: the INFO card reads the on-disk size straight from
+            // the filesystem (FileMetadata), which is live and present for
+            // unanalyzed files too.
+            return ViewerFileDetails(fileID: fid, pixelSize: size,
                                      dominantColor: f.dominant_color, palette: palette,
                                      tags: tags, collections: cols, note: note)
         }

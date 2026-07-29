@@ -2253,6 +2253,16 @@
         }
       }
     },
+    "Format": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Format"
+          }
+        }
+      }
+    },
     "Fork and Knife": {
       "localizations": {
         "fr": {
@@ -3181,6 +3191,7 @@
       }
     },
     "MB": {},
+    "MP": {},
     "modified": {
       "localizations": {
         "fr": {
