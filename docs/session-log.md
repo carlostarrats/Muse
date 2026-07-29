@@ -6438,22 +6438,51 @@ Seven independent improvements, batched because each is small and they touch
 disjoint files. Spec: `docs/superpowers/specs/2026-07-28-ui-polish-batch-design.md`.
 Plan: `docs/superpowers/plans/2026-07-28-ui-polish-batch-plan.md`.
 
-### Sidebar geometry → Lineform
+### Sidebar geometry → Lineform, then tuned live
 
-Read the target metrics straight out of `Lineform/Outline/OutlineSidebarView.swift`
-rather than eyeballing them. Two real differences from what Muse had: the
-disclosure glyph is 9pt and **right-aligned in a 12pt slot** (so it hugs the icon
-it discloses instead of sitting centered in dead space), and a root's **direct
-children sit at the root's own x** — only grandchildren step in by 14. The step
-itself was already 14 in both apps; the double-indent feel came entirely from
-starting at depth 0.
+Started from Lineform's metrics, read out of `OutlineSidebarView.swift` rather
+than eyeballed. But almost every number moved again during the live review with
+the owner, which is the real lesson: the reference got the STRUCTURE right (one
+shared set of constants, chevron close to its icon, nested rows slightly
+tighter) and the values came from looking at the running app.
 
-The five metrics moved onto `SidebarView` as shared constants with the
-`slot + gap == 18` invariant documented, because four surfaces draw this row
-shape and nothing stopped them drifting. Rows went `spacing: 8` → `spacing: 0`
-with explicit per-element leading padding — that's what allows a slot wider than
-its glyph without moving the icon column. The chevron button keeps a 12×22 hit
-rect: shrinking the target along with the glyph would have made it fiddly.
+Where it landed, and why each is not arbitrary:
+
+- **Slot 10pt, leading-aligned.** `chevron.down` MEASURES 10pt wide at 9pt
+  semibold (`chevron.right` is 7) — a narrower slot clips the expanded state.
+  Leading-aligned puts the glyph exactly 4pt from the selection edge, which is
+  what the owner asked for.
+- **`chevronToIconGap` 3, not 6.** Leading-aligning leaves the slot's own slack
+  (10 − 7) in front of the icon, so 6 read as a 9pt gap — wider than before the
+  chevron moved. Three restores the original spacing.
+- **`treeIndentStep` 8.** Lineform's 14 read as a subfolder pushed away from its
+  parent; 0 (first attempt) read flat. Every nested level gets the small step.
+- **`rootIconSize` 12 / `childIconSize` 11.** One step only, like Mail. A glyph
+  that shrank per level would be illegible three deep — and the owner's own
+  screenshot went that far.
+
+Four surfaces draw this row shape, the fourth being the Symbol & Color modal's
+live PREVIEW, which stops previewing anything if it drifts — so every value is a
+constant on `SidebarView` and the rows are `HStack(spacing: 0)` with explicit
+per-element padding, so one gap can be tuned without dragging the rest along.
+
+### Sidebar selection colours — measured, not chosen
+
+The owner asked whether the blue was "the correct blue Apple uses". Measuring
+answered it and produced the fix:
+
+```
+systemBlue          R0 G136 B255 light · R0 G145 B255 dark   adapts
+controlAccentColor  R0 G122 B255 in BOTH                     does NOT
+linkColor           R0 G104 B218 light · R65 G156 B255 dark  adapts
+```
+
+`Color.accentColor` resolves to `controlAccentColor` — the same value in both
+appearances, which is why it read muddy on dark. `systemBlue` is exactly the
+#0088FF the owner named, and Apple lightens it for dark on its own. The fill is
+`unemphasizedSelectedContentBackgroundColor`, Apple's source-list grey. Both are
+system colours: this sidebar is custom-drawn, so there was never a native
+selection to inherit — the "defaults" had to be applied by hand.
 
 ### Sort-direction menu
 
@@ -6495,12 +6524,31 @@ Same `collections.icon` column, `emoji:` prefix, no migration. An older build
 falls back cleanly (the prefixed value fails `isValidSymbol`). `isValidEmoji`
 counts grapheme clusters — a scalar count would reject ZWJ families, skin-tone
 modifiers and flags, all of which are one user-perceived character.
-`CollectionIconView` is the single render seam. The picker gained a
-Symbols | Emoji segmented tab: a 48-entry curated grid mirroring the symbol
-catalog's subjects, plus a one-character field and a button to the system picker.
-The color column goes inert with a reason while Emoji shows; all three drafts
-(symbol, emoji, color) are held at once so flipping tabs and back restores what
-you had.
+`CollectionIconView` is the single render seam.
+
+The picker took four passes to get right, and the failure mode each time was me
+reasoning about layout instead of measuring it:
+
+1. A Symbols | Emoji tab nested inside the Icon column, reaching out to disable
+   the Colour column beside it — which reads as a bug, not a rule.
+2. Tab moved above both columns, but Emoji still SHARED the row with a dimmed
+   Colour column. Colour is irrelevant to an emoji; it shouldn't be present.
+3. Emoji got the full width, but the card still resized between tabs. Cause: the
+   reserved height (262) was less than the Symbols tab needed (281), so its grid
+   spilled over the buttons. The frame never moved; the content did.
+4. The card changed WIDTH. Cause: the usable width is
+   `cardWidth − ModalChrome.scrollBarChannel − padding*2` = **408**, not the 424
+   I'd sized against — so both tabs overflowed, by different amounts, and a
+   fixed-column `LazyVGrid` that doesn't fit spills past the card edge.
+
+The fix that finally held is structural rather than numeric: geometry lives in
+`CollectionPickerLayout` (pure, unit-tested, width asserted EXACTLY equal
+between tabs and equal to the content width), and both grids use FLEXIBLE
+columns so "spans the full width" is true at any card size with no number to
+keep in sync. Catalogs are sized to divide evenly into their grids (42 symbols =
+7×6, 66 emoji = 11×6) so neither ends on a ragged row. The free-entry "any
+emoji" field was dropped: the catalog is curated and closed, so everything
+offered is a glyph that renders legibly at row size.
 
 ### Tag / collection autocomplete
 
@@ -6535,3 +6583,64 @@ new modals joined `modalPresented` / `dismissTopModal`.
 Full unit suite green (`xcodebuild -scheme Muse test`), 13 new French keys filled
 (the 5 remaining untranslated keys — "", "=", "≤", "≥", "MB" — are pre-existing
 operator glyphs and a unit).
+
+### Live review pass — the rest of the session
+
+Everything below came out of running the app with the owner and fixing what
+looked wrong, so the entries are short and the reasoning is in the code.
+
+- **Toolbar overflow menu was unlabelled glyphs.** The buttons used a bare
+  `Image`, so the `»` menu had nothing to draw. Each now uses a `Label` with a
+  title displayed `.iconOnly` — the bar is unchanged, the overflow reads as a
+  normal menu. VERIFIED by dumping every `NSToolbarItem`'s `label` and
+  `menuFormRepresentation` from the running app, since the window can't be
+  resized from this session to see the overflow directly.
+- **Palette button didn't turn white when selected.** A regression from the
+  Label conversion above: I dropped `selected:` on that one item, so the glyph
+  stayed mood-tinted on the blue fill.
+- **Sidebar sort moved onto the section header** as the grid's own sort glyph,
+  accent-coloured only in Manual. The accent initially didn't apply at all: it
+  was set on the label's `Image`, but a menu style paints its own label content
+  and overrode it. Setting it on the `Menu` fixed it.
+- **Add Tag was a menu of every tag in the library**, alphabetically, hundreds of
+  rows. Now "New Tag…" plus a `Suggestions` section of the 8 most-used
+  (`TagStore.topLabels`, a new usage-ordered query; `allTagLabels` stays
+  alphabetical as the card's search pool).
+- **The Add Tag card's inline completion was reverted.** I'd replaced the field
+  with an AppKit inline-completing one — beyond what was asked, and it made
+  typing feel wrong. Back to a plain field; the only part kept is what was
+  actually requested: a FIXED 5-row result list, reserved whether filled or not,
+  so the card's height never changes as you type.
+- **Bottom Add pills** went from a near-black slab to a quiet neutral wash with a
+  smaller `+`, a 9pt label, and truncation rather than dropping the label
+  (`ViewThatFits` was tried and removed — at the sidebar's 220pt minimum
+  "Collection" doesn't fit, and a truncated word still says what the button is
+  where a bare glyph doesn't). `AddFolderPillButton`, the empty-library CTA,
+  deliberately keeps its high-contrast fill: there it IS the primary action.
+
+### Two real bugs found while looking at something else
+
+**The search scope bar drew over the hero viewer and ate its ✕.** Instrumenting
+the running app (the rule for this area) found why `ToolbarFade` never touched
+it: the All / This Folder bar isn't part of `NSToolbarView` at all — it's a
+bottom-layout `NSTitlebarAccessoryViewController` that grows the titlebar
+52→88pt. It now fades with the toolbar. Also learned by measurement: AppKit
+removes and re-adds that accessory around focus changes, so there's a
+`didUpdate` re-assert guard — and while the toolbar is hidden AppKit won't
+install it at all, which the probe confirmed over 12 forced re-activations.
+
+**The same folder could be added as a root twice.** Two roots at one path drew
+two identical sidebar rows that BOTH highlighted on click (the selected-row test
+compares URLs) and both counted toward reorder indices and reachability.
+`addRoot` now returns the existing root (so re-picking a folder navigates to it)
+and `load()` collapses duplicates already persisted. The merge rule is pure and
+tested (`RootDedupe`), and fails closed: an unresolvable root is always kept and
+never counts as a duplicate — two bookmarks that both fail to resolve are two
+folders we can't see, not one folder twice.
+
+### Also fixed in review
+
+`SectionSortMenu` was running `FolderSortMode.label` through `NSLocalizedString`
+— but those properties already return `String(localized:)` values, so it was
+looking translated text up as a key and only working because the lookup falls
+back to what it was handed.

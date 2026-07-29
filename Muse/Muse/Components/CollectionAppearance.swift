@@ -145,7 +145,7 @@ enum CollectionAppearance {
         return .symbol(isValidSymbol(raw) ? raw : def)
     }
 
-    /// The curated emoji grid: 60 entries, laid out 10 wide × 6 rows. Mirrors
+    /// The curated emoji grid: 66 entries, laid out 11 wide × 6 rows. Mirrors
     /// the SF Symbol catalog's subject coverage (nature, media, travel, food,
     /// objects, animals, people) so the two picker tabs read as one set
     /// expressed twice.
@@ -160,6 +160,7 @@ enum CollectionAppearance {
         "🌊", "🌿", "🌸", "🌙", "☀️", "🌈", "🍃", "🌵", "🍁", "❄️",
         "🏠", "🏙️", "🗺️", "✈️", "🚗", "🌍", "🍔", "☕️", "🐾", "🦊",
         "🎧", "📺", "⚽️", "🧭", "⏰", "🔒", "🧪", "🪴", "🐳", "🌗",
+        "🍕", "🍰", "🍷", "🥑", "🐶", "🦋",
     ]
 
     /// True when the name exists in this OS's SF Symbols catalog.

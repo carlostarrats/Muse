@@ -72,30 +72,88 @@ struct SidebarView: View {
     /// Low-opacity fill used behind a hovered row, matching Lineform.
     static let rowHoverFillOpacity = 0.08
 
+    /// Fill behind the SELECTED sidebar row — Apple's own source-list selection
+    /// grey, `unemphasizedSelectedContentBackgroundColor` (R220 light, R70 dark).
+    ///
+    /// This sidebar is custom-drawn rather than a native `List`, so no system
+    /// selection was ever in play; the fill was a hand-picked opacity. Measured
+    /// against Muse's card colour, the system grey works out to ~0.13 black on
+    /// light and ~0.115 white on dark — a touch lighter than the 0.14 it
+    /// replaces, and it adapts on its own.
+    ///
+    /// Grey rather than the blue a focused List would use, because the label and
+    /// icon already carry the blue; a blue wash under blue text puts two blues on
+    /// top of each other and separates poorly, worst on dark.
+    static let selectionFill = Color(nsColor: .unemphasizedSelectedContentBackgroundColor)
+
+    /// Label + icon color for the SELECTED row: Apple's own `systemBlue`.
+    ///
+    /// Measured, so the choice is on the record rather than by feel:
+    ///   systemBlue          R0 G136 B255 light · R0 G145 B255 dark  (adapts)
+    ///   controlAccentColor  R0 G122 B255 in BOTH                    (doesn't)
+    ///   linkColor           R0 G104 B218 light · R65 G156 B255 dark (adapts)
+    ///
+    /// `systemBlue` is exactly #0088FF in light — the value we'd otherwise have
+    /// hard-coded — and Apple lightens it a touch for dark, which is the
+    /// legibility fix we were reaching for. So this is the system colour, not a
+    /// custom one. `Color.accentColor` is deliberately NOT used: it resolves to
+    /// controlAccentColor, which never adapts and reads muddy on a dark sidebar.
+    /// The tradeoff is that a user who sets a non-blue system accent still sees
+    /// blue here — accepted, since this is a legibility colour, not a theme one.
+    static let selectedLabelColor = Color(nsColor: .systemBlue)
+
     // MARK: - Row geometry (mirrors Lineform's source list)
     //
-    // These five constants define the shared leading geometry of EVERY sidebar
+    // These constants define the shared leading geometry of EVERY sidebar
     // row — folder tree, collection, pinned folder, and the live preview inside
     // the Symbol & Color modal. They're here, not inlined per row, so the four
     // surfaces can't drift out of alignment.
     //
-    // INVARIANT: `chevronSlotWidth + chevronToIconGap == 18`. That sum is the
-    // icon column's offset from the row's content edge, so the icons stay on
-    // one vertical line whether or not a chevron is actually drawn. Change one
-    // of the two and you must change the other to compensate, or every icon in
-    // the sidebar shifts.
+    // INVARIANT: `chevronSlotWidth + chevronToIconGap` is the icon column's
+    // offset from the row's content edge, so the icons stay on one vertical line
+    // whether or not a chevron is actually drawn. Every surface reads these
+    // constants; change one and the whole sidebar moves together, which is the
+    // point — don't inline a copy.
     //
-    // The chevron is deliberately RIGHT-aligned in a slot wider than its glyph:
-    // that nudges it toward the icon it discloses instead of stranding it in
-    // dead space, which is the visual difference between this and a centered
-    // glyph in a tight slot.
+    // The slot is sized to the WIDEST disclosure glyph and leading-aligned, so
+    // the chevron sits hard against the content edge in both states rather than
+    // floating in dead space.
 
-    /// Width of the disclosure slot. The glyph is right-aligned inside it.
-    static let chevronSlotWidth: CGFloat = 12
+    /// Inset from the selection highlight's edge to the row's content. Small on
+    /// purpose: the chevron then starts 4pt in, and everything after it — icon,
+    /// name, counts — rides that much further left too.
+    static let rowHorizontalPadding: CGFloat = 4
+
+    /// Width of the disclosure slot, LEADING-aligned so the glyph starts exactly
+    /// at the row's content edge. 10pt because that's how wide `chevron.down`
+    /// measures at this point size (`chevron.right` is 7) — a narrower slot
+    /// would clip the expanded state.
+    static let chevronSlotWidth: CGFloat = 10
     /// Gap between the disclosure slot and the row's icon. See the invariant above.
-    static let chevronToIconGap: CGFloat = 6
+    ///
+    /// 3, not 6, because leading-aligning the glyph leaves slack INSIDE the slot:
+    /// `chevron.right` is 7pt in a 10pt slot, so 3pt of the visible gap is
+    /// already there before this is added. Six here read as a 9pt gap — wider
+    /// than before the chevron moved left. This restores the original spacing
+    /// while keeping the chevron at the content edge.
+    static let chevronToIconGap: CGFloat = 3
     /// Point size of the disclosure glyph — smaller than the row icon on purpose.
     static let chevronGlyphSize: CGFloat = 9
+
+    /// Gap between a row's icon slot and its label. The icon is centred in an
+    /// 18pt slot, so a 12pt glyph already contributes ~3pt of visual space on
+    /// its right — this is the gap ON TOP of that.
+    static let iconToTextGap: CGFloat = 6
+
+    /// Folder-icon point size: roots, then everything nested under one.
+    ///
+    /// Nested rows draw a slightly smaller glyph, the way Mail's sidebar steps
+    /// its mailboxes down — it reinforces the hierarchy the indent is carrying
+    /// without stealing more horizontal space. One step only, not per level: a
+    /// glyph that kept shrinking with depth would be illegible three deep. Pairs
+    /// with the existing root/child split in row height and label weight.
+    static let rootIconSize: CGFloat = 12
+    static let childIconSize: CGFloat = 11
 
     /// Per-level indent in the folder tree, applied from the FIRST nested level
     /// down. Deliberately small: at 14 (Lineform's step) a subfolder read as
@@ -481,10 +539,14 @@ struct SidebarView: View {
         if showCollectionsInSidebar && !appState.rootNodes.isEmpty
             && collectionsEngine.hasReachableContent {
             HStack(spacing: 10) {
-                AddPillButton(systemImage: "folder", label: String(localized: "Add Folder")) {
+                AddPillButton(systemImage: "folder",
+                              label: String(localized: "Add Folder"),
+                              shortLabel: String(localized: "Folder")) {
                     appState.pickAndAddRoot()
                 }
-                AddPillButton(systemImage: "square.stack.3d.up", label: String(localized: "Add Collection")) {
+                AddPillButton(systemImage: "square.stack.3d.up",
+                              label: String(localized: "Add Collection"),
+                              shortLabel: String(localized: "Collection")) {
                     appState.requestNewCollection()
                 }
             }

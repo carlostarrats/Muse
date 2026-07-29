@@ -89,7 +89,7 @@ struct FolderTreeNode: View {
                         // NOT shrink with the (deliberately small) glyph, or the
                         // chevron becomes fiddly to click.
                         .frame(width: SidebarView.chevronSlotWidth, height: 22,
-                               alignment: .trailing)
+                               alignment: .leading)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -98,21 +98,27 @@ struct FolderTreeNode: View {
                 Image(systemName: "chevron.right")
                     .font(.system(size: SidebarView.chevronGlyphSize, weight: .semibold))
                     .opacity(0)
-                    .frame(width: SidebarView.chevronSlotWidth, alignment: .trailing)
+                    .frame(width: SidebarView.chevronSlotWidth, alignment: .leading)
                     .accessibilityHidden(true)
             }
 
-            HStack(spacing: 8) {
+            // spacing 0 + explicit gaps: the icon→label gap is tuned on its own
+            // (see SidebarView.iconToTextGap) without dragging the trailing pin
+            // and count along with it.
+            HStack(spacing: 0) {
                 Image(systemName: node.url == appState.iCloudFolderURL ? "icloud" : "folder")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor)
+                    .font(.system(size: node.isRoot ? SidebarView.rootIconSize
+                                                    : SidebarView.childIconSize,
+                                  weight: .semibold))
+                    .foregroundStyle(isSelected ? AnyShapeStyle(SidebarView.selectedLabelColor)
                                                 : AnyShapeStyle(.primary))
                     .frame(width: 18)
                     .padding(.leading, SidebarView.chevronToIconGap)
 
                 Text(node.displayName)
+                    .padding(.leading, SidebarView.iconToTextGap)
                     .font(.system(size: 13, weight: node.isRoot ? .medium : .regular))
-                    .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor)
+                    .foregroundStyle(isSelected ? AnyShapeStyle(SidebarView.selectedLabelColor)
                                                 : AnyShapeStyle(.primary))
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -126,6 +132,7 @@ struct FolderTreeNode: View {
                     Image(systemName: "pin.fill")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.secondary)
+                        .padding(.trailing, 8)
                 }
 
                 // Trailing slot: the file count, which swaps in place for the
@@ -180,7 +187,7 @@ struct FolderTreeNode: View {
         // Every nested level gets the (small) step, roots sit flush — see
         // SidebarView.treeIndentStep for why the step is 8 and not Lineform's 14.
         .padding(.leading, CGFloat(depth) * SidebarView.treeIndentStep)
-        .padding(.horizontal, 6)
+        .padding(.horizontal, SidebarView.rowHorizontalPadding)
         .frame(height: node.isRoot ? SidebarView.rowHeight : SidebarView.childRowHeight)
         .background {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -271,7 +278,7 @@ struct FolderTreeNode: View {
 
     private var rowFill: Color {
         if isSelected {
-            return Color.accentColor.opacity(0.14)
+            return SidebarView.selectionFill
         }
         // Suppress the hover fill while a reorder drag is passing over rows.
         let showHover = isHovered && !isReordering

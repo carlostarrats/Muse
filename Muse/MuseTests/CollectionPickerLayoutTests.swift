@@ -25,9 +25,20 @@ final class CollectionPickerLayoutTests: XCTestCase {
 
     /// The whole point: switching tabs must not resize the card.
     func testTabsAreTheSameSize() {
-        XCTAssertLessThanOrEqual(L.widthDelta, 8,
-                                 "tabs differ in width by \(L.widthDelta)pt")
-        XCTAssertLessThanOrEqual(L.heightDelta, 8,
+        // Width must match EXACTLY: both tabs are laid out with flexible
+        // columns across the same content width, so any difference is a bug in
+        // the split, not a rounding artefact.
+        XCTAssertEqual(L.widthDelta, 0, accuracy: 0.01,
+                       "tabs differ in width by \(L.widthDelta)pt")
+        XCTAssertEqual(L.symbolsTabWidth, L.contentWidth, accuracy: 0.01,
+                       "the Symbols tab doesn't fill the card")
+        XCTAssertEqual(L.emojiTabWidth, L.contentWidth, accuracy: 0.01,
+                       "the Emoji tab doesn't fill the card")
+        // Height is bounded rather than equal: the colour swatches are
+        // fixed-diameter circles, so that column's height can't be tuned by
+        // changing widths. The reserved area clamps the card either way; this
+        // just keeps the leftover space from becoming conspicuous.
+        XCTAssertLessThanOrEqual(L.heightDelta, 12,
                                  "tabs differ in height by \(L.heightDelta)pt")
     }
 

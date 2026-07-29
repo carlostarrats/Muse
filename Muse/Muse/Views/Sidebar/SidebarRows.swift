@@ -30,11 +30,11 @@ struct StarRow: View {
             Image(systemName: "chevron.right")
                 .font(.system(size: SidebarView.chevronGlyphSize, weight: .semibold))
                 .opacity(0)
-                .frame(width: SidebarView.chevronSlotWidth, alignment: .trailing)
+                .frame(width: SidebarView.chevronSlotWidth, alignment: .leading)
                 .accessibilityHidden(true)
 
             Image(systemName: "pin.fill")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: SidebarView.rootIconSize, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .frame(width: 18)
                 .padding(.leading, SidebarView.chevronToIconGap)
@@ -43,11 +43,11 @@ struct StarRow: View {
             Text(star.displayName)
                 .font(.system(size: 13))
                 .lineLimit(1)
-                .padding(.leading, 8)
+                .padding(.leading, SidebarView.iconToTextGap)
 
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, SidebarView.rowHorizontalPadding)
         .frame(height: SidebarView.rowHeight)
         .background {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -176,33 +176,63 @@ struct SectionHeader<Accessory: View>: View {
 
 // MARK: - Compact add pill (two-up bottom bar)
 
-/// Icon-only "+ <glyph>" capsule for the two-up bottom bar (Add Folder / Add
-/// Collection). Mirrors AddFolderPillButton's fill so the two read as a set.
+/// "+ <glyph> <label>" capsule for the two-up bottom bar (Add Folder / Add
+/// Collection): a quiet neutral pill, since these are secondary actions sitting
+/// under the whole sidebar rather than the primary thing on screen.
+///
+/// NOTE: `AddFolderPillButton` — the single full-width CTA shown on an empty
+/// library — deliberately keeps its high-contrast fill. There it IS the primary
+/// action and the only control on screen, so the two are not meant to match.
 struct AddPillButton: View {
     let systemImage: String
+    /// Full action name — the tooltip and the VoiceOver label ("Add Folder").
     let label: String
+    /// Short form drawn inside the pill ("Folder"), where the + already says
+    /// "add" and repeating it wastes the width the label needs.
+    let shortLabel: String
     let action: () -> Void
-    @Environment(\.colorScheme) private var colorScheme
     @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
+            // spacing 0 + explicit gaps so the +/icon pair can be tightened on
+            // its own: they read as one mark, while the label keeps its own
+            // breathing room.
+            HStack(spacing: 0) {
+                // The + is a modifier on the kind glyph, not a peer of it, so it
+                // reads better a size down. At equal size the two competed and
+                // the pair looked heavy.
                 Image(systemName: "plus")
+                    .font(.system(size: 10, weight: .medium))
                 Image(systemName: systemImage)
+                    .font(.system(size: 12, weight: .medium))
+                    .padding(.leading, 3)
+                // Always drawn, and allowed to TRUNCATE rather than be dropped:
+                // at the sidebar's 220pt minimum "Collection" doesn't fit, and a
+                // half-word with an ellipsis still says what the button is where
+                // a bare glyph doesn't. No `fixedSize` for the same reason — it
+                // would refuse to compress and push the pill out of bounds.
+                Text(shortLabel)
+                    .font(.system(size: 9, weight: .medium))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .padding(.leading, 5)
             }
-            .font(.system(size: 12, weight: .medium))
+            .padding(.horizontal, 6)
             .frame(maxWidth: .infinity)
             .frame(height: 28)
-            // Without this, the tap/hover region hugs the two small glyphs
-            // centered in the middle of the capsule rather than the full
-            // stretched (`maxWidth: .infinity`) width — most of the visible
-            // pill was dead space to the pointer.
+            // Without this, the tap/hover region hugs the glyphs centered in the
+            // middle of the capsule rather than the full stretched
+            // (`maxWidth: .infinity`) width — most of the visible pill was dead
+            // space to the pointer.
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .background { Capsule(style: .continuous).fill(fillColor) }
-        .foregroundStyle(textColor)
+        // A shade off full strength: black read too hard against the pale pill,
+        // but much lighter and it stopped looking like a control. An opacity
+        // rather than a fixed grey so it inverts with the appearance.
+        .foregroundStyle(Color.primary.opacity(0.85))
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.12)) { isHovered = hovering }
         }
@@ -210,18 +240,14 @@ struct AddPillButton: View {
         .accessibilityLabel(label)
     }
 
+    /// A soft neutral wash rather than the near-black/near-white slab this used
+    /// to be: at the bottom of a quiet sidebar, a full-contrast pill read as the
+    /// loudest thing on screen for what is a secondary action. `Color.primary`
+    /// inverts with the appearance, so one expression covers both, and it sits
+    /// in the same family as the section headers' toggle and the row hover fill.
     private var fillColor: Color {
-        Color(nsColor: NSColor(calibratedWhite: usesDark
-            ? (isHovered ? 1.0 : 0.92)
-            : (isHovered ? 0.12 : 0.20),
-            alpha: 1))
+        Color.primary.opacity(isHovered ? 0.14 : 0.07)
     }
-
-    private var textColor: Color {
-        Color(nsColor: NSColor(calibratedWhite: usesDark ? 0.10 : 1.0, alpha: 1))
-    }
-
-    private var usesDark: Bool { colorScheme == .dark }
 }
 
 // MARK: - Section sort control
@@ -236,6 +262,11 @@ struct AddPillButton: View {
 /// header's own secondary color, so the control recedes into the label.
 struct SectionSortMenu<Mode: Hashable & Identifiable>: View {
     let modes: [Mode]
+    /// Already-LOCALIZED display name for a mode (`FolderSortMode.label` and
+    /// friends return `String(localized:)` values). Do NOT run these through
+    /// `NSLocalizedString` again — that looks the translated text up as if it
+    /// were a key, which only appears to work because the lookup falls back to
+    /// the string it was handed.
     let label: (Mode) -> String
     let current: Mode
     /// True when `current` is the manual/hand-arranged mode.
@@ -250,7 +281,7 @@ struct SectionSortMenu<Mode: Hashable & Identifiable>: View {
     /// Every other mode uses the header's own secondary grey so the control
     /// recedes into the label beside it.
     private var glyphColor: Color {
-        isManual ? .accentColor : .secondary
+        isManual ? SidebarView.selectedLabelColor : .secondary
     }
 
     var body: some View {
@@ -258,10 +289,9 @@ struct SectionSortMenu<Mode: Hashable & Identifiable>: View {
             ForEach(modes) { mode in
                 Button { select(mode) } label: {
                     if mode == current {
-                        Label(NSLocalizedString(label(mode), comment: "Sidebar sort mode"),
-                              systemImage: "checkmark")
+                        Label(label(mode), systemImage: "checkmark")
                     } else {
-                        Text(NSLocalizedString(label(mode), comment: "Sidebar sort mode"))
+                        Text(label(mode))
                     }
                 }
             }
@@ -283,6 +313,6 @@ struct SectionSortMenu<Mode: Hashable & Identifiable>: View {
         .onHover { hovering = $0 }
         .help(accessibilityTitle)
         .accessibilityLabel(accessibilityTitle)
-        .accessibilityValue(NSLocalizedString(label(current), comment: "Sidebar sort mode"))
+        .accessibilityValue(label(current))
     }
 }

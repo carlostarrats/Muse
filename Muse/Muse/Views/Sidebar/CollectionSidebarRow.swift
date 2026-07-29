@@ -77,10 +77,11 @@ struct CollectionSidebarRow: View {
             Image(systemName: "chevron.right")
                 .font(.system(size: SidebarView.chevronGlyphSize, weight: .semibold))
                 .opacity(0)
-                .frame(width: SidebarView.chevronSlotWidth, alignment: .trailing)
+                .frame(width: SidebarView.chevronSlotWidth, alignment: .leading)
                 .accessibilityHidden(true)
 
-            HStack(spacing: 8) {
+            // spacing 0 + explicit gaps — see FolderTreeNode for why.
+            HStack(spacing: 0) {
                 // Custom appearance (feat/next-128): stored symbol + color
                 // token, both nil = the classic stack icon. A custom color
                 // paints the ICON ONLY — name + selection stay standard —
@@ -90,8 +91,9 @@ struct CollectionSidebarRow: View {
                     .padding(.leading, SidebarView.chevronToIconGap)
 
                 Text(loaded.collection.name)
+                    .padding(.leading, SidebarView.iconToTextGap)
                     .font(.system(size: 13))
-                    .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor)
+                    .foregroundStyle(isSelected ? AnyShapeStyle(SidebarView.selectedLabelColor)
                                                 : AnyShapeStyle(.primary))
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -133,7 +135,7 @@ struct CollectionSidebarRow: View {
             .contentShape(Rectangle())
             .onTapGesture { appState.setActiveCollection(id) }
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, SidebarView.rowHorizontalPadding)
         .frame(height: SidebarView.rowHeight)
         .background {
             RoundedRectangle(cornerRadius: 6, style: .continuous).fill(rowFill)
@@ -226,11 +228,12 @@ struct CollectionSidebarRow: View {
         if let custom = CollectionAppearance.color(for: loaded.collection.color) {
             return AnyShapeStyle(custom)
         }
-        return isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.primary)
+        return isSelected ? AnyShapeStyle(SidebarView.selectedLabelColor)
+                          : AnyShapeStyle(.primary)
     }
 
     private var rowFill: Color {
-        if isSelected { return Color.accentColor.opacity(0.14) }
+        if isSelected { return SidebarView.selectionFill }
         let showHover = isHovered && !isReordering
         return Color.primary.opacity(showHover ? SidebarView.rowHoverFillOpacity : 0)
     }

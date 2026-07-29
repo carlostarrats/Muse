@@ -978,7 +978,10 @@ struct ContentView: View {
         // selected fill (solid accent, white icon), identical to every other
         // toolbar button's behavior. No custom chrome.
         Toggle(isOn: $moodPickerShown) {
-            toolbarGlyph("paintpalette", "Background")
+            // `selected:` is what swaps the glyph to white against the toggle's
+            // solid accent fill, the same as Collections and Filter. Dropping it
+            // left a mood-tinted glyph sitting on blue.
+            toolbarGlyph("paintpalette", "Background", selected: moodPickerShown)
         }
         .toggleStyle(.button)
         .help("Background: \(appState.mood.displayName)")

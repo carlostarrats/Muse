@@ -36,6 +36,34 @@ final class BookmarkStore: ObservableObject {
         for root in roots {
             activate(root)
         }
+        dropDuplicateRoots()
+    }
+
+    /// Collapse roots that resolve to the SAME folder, keeping the first.
+    ///
+    /// `addRoot` refuses to create these now, but a library that already has a
+    /// pair keeps showing two identical sidebar rows that both light up when
+    /// either is clicked — so it's fixed at load rather than left to the user to
+    /// notice and remove. Runs AFTER activation, since `url(for:)` needs the
+    /// security scope to resolve.
+    ///
+    /// Only merges when BOTH entries actually resolve: a root whose bookmark is
+    /// currently unresolvable reads as nil, and treating two nils as "the same
+    /// folder" would silently drop a root the user still has (an unplugged
+    /// volume, say). Same fail-closed rule as the reachability guards.
+    private func dropDuplicateRoots() {
+        let keep = Set(RootDedupe.keepIndices(
+            resolvedPaths: roots.map { url(for: $0)?.standardizedFileURL.path }))
+        guard keep.count != roots.count else { return }
+        for (i, root) in roots.enumerated() where !keep.contains(i) {
+            // Drop the duplicate's now-redundant security scope with it.
+            if let url = accessedURLs[root.id] {
+                url.stopAccessingSecurityScopedResource()
+                accessedURLs[root.id] = nil
+            }
+        }
+        roots = roots.enumerated().filter { keep.contains($0.offset) }.map(\.element)
+        save()
     }
 
     private func save() {
@@ -60,8 +88,25 @@ final class BookmarkStore: ObservableObject {
         return addRoot(at: url)
     }
 
+    /// Add `url` as a library root, or return the EXISTING root if it's already
+    /// one.
+    ///
+    /// Without the dedupe, picking a folder twice produced two roots pointing at
+    /// the same path — two identical sidebar rows, and since the selected-row
+    /// test compares URLs, clicking either lit up BOTH. (They also both counted
+    /// toward reorder indices and root-reachability checks.) Returning the
+    /// existing root makes a re-add behave like "go to that folder", which is
+    /// what the user meant by picking it.
     @discardableResult
     func addRoot(at url: URL) -> Root? {
+        let target = url.standardizedFileURL
+        if let existing = roots.first(where: { self.url(for: $0)?.standardizedFileURL == target }) {
+            return existing
+        }
+        return mintRoot(at: url)
+    }
+
+    private func mintRoot(at url: URL) -> Root? {
         // Read-WRITE scope: Muse moves files to Trash (delete + undo), which
         // needs write access. `.securityScopeAllowOnlyReadAccess` made every
         // delete fail with afpAccessDenied even though reads worked. The app's

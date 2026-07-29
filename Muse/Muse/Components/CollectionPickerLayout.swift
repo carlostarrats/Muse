@@ -15,22 +15,39 @@ import CoreGraphics
 
 nonisolated enum CollectionPickerLayout {
 
-    /// A grid's outer size, given its cell size, gap, column count and how many
-    /// cells it holds.
+    /// A grid that FILLS the width it's given: the columns are flexible, so the
+    /// cell size falls out of the available width rather than being fixed.
+    ///
+    /// Fixed columns were the mistake here. A fixed-column grid can only be as
+    /// wide as its cells happen to add up to, so it left a ragged gap on the
+    /// right — and when it didn't fit, it silently overflowed the card instead.
+    /// Flexible columns make "spans the full width" structural: it's true at any
+    /// card width, for any column count, with no number to keep in sync.
     struct Grid: Equatable {
-        var cell: CGFloat
+        /// Width the grid is laid out in.
+        var available: CGFloat
         var gap: CGFloat
         var columns: Int
         var count: Int
+        /// Row height, when the cell isn't square. The colour swatches are
+        /// fixed-diameter circles, so widening their column makes the grid wider
+        /// but not taller — deriving row height from cell width would overstate
+        /// it badly.
+        var rowHeight: CGFloat?
 
+        /// The resulting cell size — derived, never set.
+        var cell: CGFloat {
+            guard columns > 0 else { return 0 }
+            return (available - CGFloat(columns - 1) * gap) / CGFloat(columns)
+        }
         var rows: Int {
             columns > 0 ? Int((Double(count) / Double(columns)).rounded(.up)) : 0
         }
-        var width: CGFloat {
-            CGFloat(columns) * cell + CGFloat(max(0, columns - 1)) * gap
-        }
+        /// Always the full available width — that's the point.
+        var width: CGFloat { available }
         var height: CGFloat {
-            CGFloat(rows) * cell + CGFloat(max(0, rows - 1)) * gap
+            let h = rowHeight ?? cell
+            return CGFloat(rows) * h + CGFloat(max(0, rows - 1)) * gap
         }
         /// True when the cells fill every row — a ragged last row makes the tab
         /// shorter or taller than its partner.
@@ -54,10 +71,17 @@ nonisolated enum CollectionPickerLayout {
         cardWidth - ModalChrome.scrollBarChannel - cardPadding * 2
     }
 
-    /// Height of a column's "Color" / "Icon" heading plus the gap under it.
+    /// Height of a column's "Color" / "Icon" heading plus the 10pt gap under it.
     /// Both tabs draw exactly one such heading row, so it cancels out of the
-    /// comparison — it's here so `pickerHeight` is derived, not guessed.
-    static let headingBlock: CGFloat = 24
+    /// tab-vs-tab comparison — it's here so `pickerHeight` is derived rather
+    /// than guessed.
+    ///
+    /// The heading measures 14pt (11pt semibold), so 24 = 14 + 10 exactly. Two
+    /// points of slack on top of that: `pickerHeight` is a RESERVE, and
+    /// over-reserving costs a couple of blank points while under-reserving
+    /// clips the grid into the buttons below — the failure this whole type
+    /// exists to prevent.
+    static let headingBlock: CGFloat = 26
 
     /// Gap on each side of the Symbols tab's divider.
     static let columnGap: CGFloat = 14
@@ -65,15 +89,26 @@ nonisolated enum CollectionPickerLayout {
 
     // MARK: - The two tabs
 
-    /// 28 cells (Default + 27 tokens) in 4 columns = 7 rows.
-    static let colorGrid = Grid(cell: 24, gap: 10, columns: 4, count: 28)
-    /// 42 cells in 7 columns = 6 rows.
-    static let symbolGrid = Grid(cell: 28, gap: 7, columns: 7, count: 42)
-    /// 60 emoji in 10 columns = 6 rows — sized so the tab is as TALL as the
-    /// Symbols tab's colour column, not just as wide. A short grid left dead
-    /// space under it inside the reserved area.
-    static let emojiGrid = Grid(cell: 32, gap: 8, columns: 10, count: 60)
+    /// Width of the Symbols tab's colour column. Fixed, so the symbol grid can
+    /// take exactly the rest — that's what makes the two gaps around the divider
+    /// equal and leaves nothing spare on the right.
+    static let colorColumnWidth: CGFloat = 140
+    /// What's left for the symbol grid once the colour column, the divider and
+    /// its two gaps are taken out.
+    static var symbolColumnWidth: CGFloat {
+        contentWidth - colorColumnWidth - columnGap * 2 - dividerWidth
+    }
 
+    /// 28 cells (Default + 27 tokens) in 4 columns = 7 rows.
+    static let colorGrid = Grid(available: colorColumnWidth, gap: 10, columns: 4,
+                                count: 28, rowHeight: 24)
+    /// 42 cells in 7 columns = 6 rows.
+    static let symbolGrid = Grid(available: symbolColumnWidth, gap: 7, columns: 7, count: 42)
+    /// 66 emoji in 11 columns = 6 rows. More columns than the symbol grid on
+    /// purpose: emoji read fine smaller, so the extra width buys more choice.
+    static let emojiGrid = Grid(available: contentWidth, gap: 8, columns: 11, count: 66)
+
+    /// Both tabs span the full content width by construction.
     static var symbolsTabWidth: CGFloat {
         colorGrid.width + columnGap + dividerWidth + columnGap + symbolGrid.width
     }

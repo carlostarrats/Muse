@@ -145,8 +145,13 @@ struct CustomizeCollectionSheet: View {
                         case .symbols:
                             HStack(alignment: .top, spacing: Layout.columnGap) {
                                 colorColumn
+                                    .frame(width: Layout.colorColumnWidth)
                                 Divider()
+                                // Takes exactly the remainder, so the gaps on
+                                // either side of the divider are equal and
+                                // nothing is left over on the right.
                                 symbolColumn
+                                    .frame(maxWidth: .infinity)
                             }
                         case .emoji:
                             emojiColumn
@@ -198,7 +203,7 @@ struct CustomizeCollectionSheet: View {
             Image(systemName: "chevron.right")
                 .font(.system(size: SidebarView.chevronGlyphSize, weight: .semibold))
                 .opacity(0)
-                .frame(width: SidebarView.chevronSlotWidth, alignment: .trailing)
+                .frame(width: SidebarView.chevronSlotWidth, alignment: .leading)
 
             CollectionIconView(
                 icon: effectiveIcon,
@@ -210,7 +215,7 @@ struct CustomizeCollectionSheet: View {
                 .font(.system(size: 13))
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .padding(.leading, 8)
+                .padding(.leading, SidebarView.iconToTextGap)
 
             Spacer(minLength: 6)
 
@@ -219,7 +224,7 @@ struct CustomizeCollectionSheet: View {
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, SidebarView.rowHorizontalPadding)
         .frame(height: SidebarView.rowHeight)
         .background {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -242,13 +247,13 @@ struct CustomizeCollectionSheet: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
 
-            // 28 cells (Default + 27 colors) in a 7-row × 4 grid whose
-            // height tracks the 6×6 symbol grid beside it (owner feedback:
-            // the color column should run down to align with the symbols).
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(Layout.colorGrid.cell),
+            // 28 cells (Default + 27 colors) in a 7-row × 4 grid. Its height is
+            // the taller of the two Symbols-tab columns, so it's what
+            // `CollectionPickerLayout.pickerHeight` is sized from.
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(),
                                                          spacing: Layout.colorGrid.gap),
                                      count: Layout.colorGrid.columns),
-                      alignment: .leading, spacing: Layout.colorGrid.gap) {
+                      spacing: Layout.colorGrid.gap) {
                 defaultSwatch
                 ForEach(CollectionAppearance.colorTokens, id: \.token) { entry in
                     swatch(entry.token, entry.color)
@@ -334,10 +339,13 @@ struct CustomizeCollectionSheet: View {
     }
 
     private var symbolGrid: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.fixed(Layout.symbolGrid.cell),
+        // FLEXIBLE columns, not fixed: the grid then spans exactly the width
+        // it's given, at any card size, instead of adding up to whatever its
+        // cells happen to total and leaving a ragged gap on the right.
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(),
                                                      spacing: Layout.symbolGrid.gap),
                                  count: Layout.symbolGrid.columns),
-                  alignment: .leading, spacing: Layout.symbolGrid.gap) {
+                  spacing: Layout.symbolGrid.gap) {
                 // First cell = this collection's NATIVE glyph (the funnel for a
                 // smart collection, the stack for a normal one), shown as an
                 // ordinary symbol so there's always a plain way back to the
@@ -361,7 +369,8 @@ struct CustomizeCollectionSheet: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(selected ? AnyShapeStyle(Color.accentColor)
                                           : AnyShapeStyle(.primary))
-                .frame(width: Layout.symbolGrid.cell, height: Layout.symbolGrid.cell)
+                .frame(maxWidth: .infinity)
+                .frame(height: Layout.symbolGrid.cell)
                 .background {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(selected ? Color.accentColor.opacity(0.16)
@@ -442,17 +451,18 @@ struct CustomizeCollectionSheet: View {
     /// Same 6-wide lattice and same cell chrome as the symbol grid, so the two
     /// tabs feel like one picker rather than two.
     private var emojiGrid: some View {
-        // 9 wide × 38pt: 414pt across, 5 rows of the 45-entry catalog = 226pt
-        // tall — the same footprint as the Symbols tab (see pickerHeight).
+        // 11 columns across the card's full content width; the 66-entry catalog
+        // divides into exactly 6 rows, matching the Symbols tab's footprint (see
+        // CollectionPickerLayout).
         //
-        // `.frame(alignment: .leading)` is load-bearing: a LazyVGrid of FIXED
-        // columns centres itself in whatever width it's offered, so without it
-        // the grid floated in the middle of the card while everything around it
-        // was left-aligned.
-        LazyVGrid(columns: Array(repeating: GridItem(.fixed(Layout.emojiGrid.cell),
+        // FLEXIBLE columns, like the other two grids: a fixed-column LazyVGrid
+        // centres itself in whatever width it's offered — which is what left the
+        // grid floating mid-card with a gap on the right while everything around
+        // it was left-aligned — and silently overflows when it doesn't fit.
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(),
                                                      spacing: Layout.emojiGrid.gap),
                                  count: Layout.emojiGrid.columns),
-                  alignment: .leading, spacing: Layout.emojiGrid.gap) {
+                  spacing: Layout.emojiGrid.gap) {
             ForEach(CollectionAppearance.emojiCatalog, id: \.self) { emoji in
                 emojiCell(emoji)
             }
@@ -467,8 +477,9 @@ struct CustomizeCollectionSheet: View {
             draftEmoji = emoji
         } label: {
             Text(emoji)
-                .font(.system(size: 19))
-                .frame(width: Layout.emojiGrid.cell, height: Layout.emojiGrid.cell)
+                .font(.system(size: 17))
+                .frame(maxWidth: .infinity)
+                .frame(height: Layout.emojiGrid.cell)
                 .background {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(selected ? Color.accentColor.opacity(0.16)
