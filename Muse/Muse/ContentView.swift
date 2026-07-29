@@ -478,20 +478,19 @@ struct ContentView: View {
             // read AND restarted the count at zero on each switch. A user only
             // needs to know progress is happening.
             if workProgress.isActive {
-                statusPill(label: "Preparing your files…", progress: workProgress.fraction)
+                statusPill(label: "Preparing your files…",
+                           progress: workProgress.fraction,
+                           percent: workProgress.percent)
             }
         }
-        .onChange(of: workInput) { _, new in
-            withAnimation(.easeOut(duration: 0.2)) { workProgress.update(new) }
-            // Let the bar visibly REACH 100% before the pill goes away. Without
-            // the hold it vanished at whatever the last active phase reached
-            // (typically the low 90s), which reads as a stall rather than
-            // completion.
-            guard workProgress.isFinishing else { return }
-            Task {
-                try? await Task.sleep(nanoseconds: 450_000_000)
-                withAnimation(.easeOut(duration: 0.25)) { workProgress.reset() }
-            }
+        .onChange(of: workInput) { _, new in advanceProgress(new) }
+        // The phases go idle in GAPS, and an idle phase publishes nothing — so
+        // `onChange` alone can't notice that the grace window has elapsed. This
+        // tick is what actually ends a finished run; while work is flowing it
+        // just re-applies the same input, which is a no-op.
+        .onReceive(Timer.publish(every: 0.3, on: .main, in: .common).autoconnect()) { _ in
+            guard workProgress.isActive else { return }
+            advanceProgress(workInput)
         }
         .preferredColorScheme(appState.moodPalette.scheme)
     }
@@ -992,6 +991,21 @@ struct ContentView: View {
         }
     }
 
+    /// Feed one reading to the unified bar, and schedule the completion hold
+    /// when a run genuinely ends.
+    private func advanceProgress(_ input: WorkProgress.Input) {
+        withAnimation(.easeOut(duration: 0.2)) { workProgress.update(input) }
+        // Let the bar visibly REACH 100% before the pill goes away. Without
+        // the hold it vanished at whatever the last active phase reached
+        // (typically the low 90s), which reads as a stall rather than
+        // completion.
+        guard workProgress.isFinishing else { return }
+        Task {
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            withAnimation(.easeOut(duration: 0.25)) { workProgress.reset() }
+        }
+    }
+
     /// Live snapshot of every background phase, fed to the unified pill.
     /// Equatable, so `.onChange` only fires on a real change.
     private var workInput: WorkProgress.Input {
@@ -1008,7 +1022,8 @@ struct ContentView: View {
     /// One shared pill for every phase — same glass as the grid's column
     /// slider: ultra-thin material capsule, hairline outline, same height,
     /// same 16pt bottom seat.
-    private func statusPill(label: LocalizedStringKey, progress: Double) -> some View {
+    private func statusPill(label: LocalizedStringKey, progress: Double,
+                            percent: Int) -> some View {
         HStack(spacing: 10) {
             ProgressView(value: min(max(progress, 0), 1))
                 .progressViewStyle(.linear)
@@ -1018,6 +1033,14 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
                 .lineLimit(1)
+                .fixedSize()
+            // A long pass over a big folder can sit at a similar-looking bar
+            // for a while; the number is what tells you it is still moving.
+            // Monospaced digits so it doesn't jitter as it counts.
+            Text(verbatim: "\(percent)%")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .monospacedDigit()
                 .fixedSize()
         }
         // Hug the content — the pills now show short, stable counts (no

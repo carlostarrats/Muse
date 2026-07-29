@@ -82,17 +82,35 @@ struct WorkProgress: Equatable {
     /// briefly reads as completion; stopping at 93% reads as a stall.
     private(set) var isFinishing: Bool = false
 
-    mutating func update(_ i: Input) {
+    /// How long everything must be idle before a run is declared over.
+    ///
+    /// The phases hand off with gaps: `analyzePending` is invoked per folder
+    /// load AND per FSEvents batch, and `ThumbProgress` zeroes itself every time
+    /// a batch of tiles drains. Treating the first idle instant as the end made
+    /// each gap finish the run — bar snaps to 100%, resets, and the next batch
+    /// climbs from zero. That is the sawtooth: not one job progressing, but a
+    /// dozen short runs. Riding over the gaps turns them back into one run.
+    static let idleGrace: TimeInterval = 1.5
+
+    /// When everything first went idle in the current run, or nil while working.
+    private var idleSince: Date?
+
+    mutating func update(_ i: Input, now: Date = Date()) {
         guard i.anyActive else {
-            // Everything idle. If we were mid-run, fill the bar and hold — the
-            // view calls `reset()` after a beat. If we were already idle, stay
-            // idle (this must not re-trigger the finish hold on every publish).
-            if isActive && !isFinishing {
+            // Everything idle. Hold the bar where it is until the grace window
+            // passes — work usually resumes inside it, and that continuation is
+            // the same run. Only a sustained idle actually ends it.
+            guard isActive, !isFinishing else { return }
+            let since = idleSince ?? now
+            idleSince = since
+            if now.timeIntervalSince(since) >= Self.idleGrace {
                 fraction = 1
                 isFinishing = true
+                idleSince = nil
             }
             return
         }
+        idleSince = nil
         // Work resumed while the completed bar was still held. That is a NEW
         // run, not a continuation, so end the old one first — otherwise the
         // monotonic `max` below would keep the bar pinned at the 1.0 the finish
@@ -115,5 +133,10 @@ struct WorkProgress: Equatable {
         fraction = 0
         isActive = false
         isFinishing = false
+        idleSince = nil
     }
+
+    /// Whole-percent reading for the pill's label. Rounds DOWN so it never
+    /// shows 100% while work is still running.
+    var percent: Int { Int((min(max(fraction, 0), 1) * 100).rounded(.down)) }
 }
