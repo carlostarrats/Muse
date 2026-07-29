@@ -23,10 +23,18 @@ import Foundation
 
 struct WorkProgress: Equatable {
     /// A phase's share of the unified bar. Must sum to 1.
-    static let indexShare = 0.45
+    ///
+    /// Thumbnails are deliberately NOT a phase. The only path that reported them
+    /// was the INTERACTIVE one — a grid tile asking for an image it doesn't have
+    /// yet — so the pill appeared, completed and vanished on every scroll into
+    /// un-prewarmed tiles, over and over. That is browsing, not background
+    /// preparation, and tiles already show their own shimmer while they load.
+    /// (The bulk prewarm sweep never reported at all, so nothing real was lost
+    /// by dropping the signal.) The pill now means exactly one thing: Muse is
+    /// working through your library.
+    static let indexShare = 0.5
     static let analyzeShare = 0.45
     static let organizeShare = 0.05
-    static let thumbShare = 0.05
 
     /// Raw per-phase completion, each 0...1 (0 when the phase isn't running).
     struct Input: Equatable {
@@ -35,10 +43,8 @@ struct WorkProgress: Equatable {
         var analyzeFraction: Double = 0
         var analyzeActive: Bool = false
         var organizing: Bool = false
-        var thumbFraction: Double = 0
-        var thumbActive: Bool = false
 
-        var anyActive: Bool { indexActive || analyzeActive || organizing || thumbActive }
+        var anyActive: Bool { indexActive || analyzeActive || organizing }
     }
 
     /// Unclamped-by-history fraction implied by the current phase states.
@@ -63,7 +69,6 @@ struct WorkProgress: Equatable {
             total += analyzeShare
         }
         if i.organizing { total += organizeShare * 0.5 }
-        if i.thumbActive { total += thumbShare * clamp(i.thumbFraction) }
         return clamp(total)
     }
 
@@ -85,8 +90,7 @@ struct WorkProgress: Equatable {
     /// How long everything must be idle before a run is declared over.
     ///
     /// The phases hand off with gaps: `analyzePending` is invoked per folder
-    /// load AND per FSEvents batch, and `ThumbProgress` zeroes itself every time
-    /// a batch of tiles drains. Treating the first idle instant as the end made
+    /// load AND per FSEvents batch. Treating the first idle instant as the end made
     /// each gap finish the run — bar snaps to 100%, resets, and the next batch
     /// climbs from zero. That is the sawtooth: not one job progressing, but a
     /// dozen short runs. Riding over the gaps turns them back into one run.

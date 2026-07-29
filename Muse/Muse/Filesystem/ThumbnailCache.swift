@@ -21,29 +21,6 @@ import AVFoundation
 import ImageIO
 import UniformTypeIdentifiers
 
-/// Observable thumbnail-load progress; drives the bottom-center pill when
-/// a folder's tiles are streaming in. Small bursts (a viewer open) stay
-/// under the threshold and never flash the pill.
-@MainActor
-final class ThumbProgress: ObservableObject {
-    static let shared = ThumbProgress()
-    @Published private(set) var total = 0
-    @Published private(set) var completed = 0
-    /// Hysteresis: engages once a real batch builds up (≥4 pending) and
-    /// then STAYS up until the batch fully drains — no vanishing at 95%.
-    private var engaged = false
-    var isActive: Bool { engaged }
-
-    func begin() {
-        total += 1
-        if total - completed >= 4 { engaged = true }
-    }
-    func step() {
-        completed += 1
-        if completed >= total { total = 0; completed = 0; engaged = false }
-    }
-}
-
 /// Ordered concurrency gate: lowest `order` waits the shortest. Grid tiles
 /// pass their visual index, so thumbnails fill top-to-bottom; the viewer
 /// passes 0 and jumps the queue. The body runs OUTSIDE the actor
@@ -250,15 +227,13 @@ final class ThumbnailCache: ObservableObject {
             return hit
         }
         let diskURL = diskPath(for: key)
-        // The progress pill is for *generation* only. A disk hit (already
-        // prewarmed) is a fast read — counting it made scrolling a warm
-        // folder flash the pill for no real work. So only cold thumbnails
-        // (no PNG on disk yet) drive the pill.
-        let isCold = !FileManager.default.fileExists(atPath: diskURL.path)
-        if isCold { ThumbProgress.shared.begin() }
+        // Thumbnails no longer drive the status pill. This path is INTERACTIVE
+        // — a visible tile asking for its image — so reporting it made the pill
+        // appear, fill and vanish on every scroll into un-prewarmed tiles. The
+        // tile's own shimmer already says "this one is loading"; the pill is for
+        // background work over the whole library. See WorkProgress's shares.
         let img = await Self.loadOrGenerate(url: url, diskURL: diskURL,
                                             size: size, scale: scale, order: order)
-        if isCold { ThumbProgress.shared.step() }
         if let img {
             let cost = Int(img.size.width * img.size.height * 4 * scale * scale)
             memCache.setObject(img, forKey: key as NSString, cost: cost)

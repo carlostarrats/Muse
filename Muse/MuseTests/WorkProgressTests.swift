@@ -14,7 +14,7 @@ final class WorkProgressTests: XCTestCase {
 
     func testSharesSumToOne() {
         let sum = WorkProgress.indexShare + WorkProgress.analyzeShare
-                + WorkProgress.organizeShare + WorkProgress.thumbShare
+                + WorkProgress.organizeShare
         XCTAssertEqual(sum, 1.0, accuracy: 1e-9)
     }
 
@@ -89,7 +89,7 @@ final class WorkProgressTests: XCTestCase {
         XCTAssertLessThanOrEqual(WorkProgress.rawFraction(
             .init(indexFraction: 1, indexActive: true,
                   analyzeFraction: 1, analyzeActive: true,
-                  organizing: true, thumbFraction: 1, thumbActive: true)), 1.0)
+                  organizing: true)), 1.0)
     }
 
     func testOutOfRangeFractionsAreClamped() {
@@ -99,13 +99,16 @@ final class WorkProgressTests: XCTestCase {
         XCTAssertEqual(under, 0, accuracy: 1e-9)
     }
 
-    /// Thumbnails alone (scrolling a warm folder, no index/analyze) still shows
-    /// movement rather than sitting at zero.
-    func testThumbnailsOnlyStillReportsProgress() {
+    /// Thumbnail loading must NOT raise the pill. Only the interactive path
+    /// ever reported thumbnails, so the pill appeared, filled and vanished on
+    /// every scroll into un-prewarmed tiles — owner-reported as "it shows,
+    /// completes, then as I scroll does it again and again and again". Tiles
+    /// carry their own shimmer; the pill is for work over the whole library.
+    func testScrollingAloneNeverRaisesThePill() {
         var p = WorkProgress()
-        p.update(.init(thumbFraction: 0.5, thumbActive: true))
-        XCTAssertTrue(p.isActive)
-        XCTAssertGreaterThan(p.fraction, 0)
+        p.update(.init())                     // nothing but tiles loading
+        XCTAssertFalse(p.isActive, "scrolling is browsing, not background work")
+        XCTAssertEqual(p.fraction, 0, accuracy: 1e-9)
     }
 }
 
@@ -248,8 +251,7 @@ extension WorkProgressTests {
         var p = WorkProgress()
         p.update(WorkProgress.Input(indexFraction: 0.999, indexActive: true,
                                     analyzeFraction: 0.999, analyzeActive: true,
-                                    organizing: true,
-                                    thumbFraction: 0.999, thumbActive: true))
+                                    organizing: true))
         XCTAssertLessThanOrEqual(p.percent, 100)
         var q = WorkProgress()
         q.update(WorkProgress.Input(analyzeFraction: 0.5, analyzeActive: true))

@@ -21,7 +21,6 @@ struct ContentView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject private var googleAuth: GoogleOAuth
     @ObservedObject private var indexProgress = IndexProgress.shared
-    @ObservedObject private var thumbProgress = ThumbProgress.shared
     @ObservedObject private var analyzePipeline = AnalyzePipeline.shared
     /// Unified background-progress state driving the single status pill.
     @State private var workProgress = WorkProgress()
@@ -1014,9 +1013,7 @@ struct ContentView: View {
             indexActive: indexProgress.isActive,
             analyzeFraction: analyzePipeline.progress,
             analyzeActive: analyzePipeline.isRunning,
-            organizing: collectionsEngine.isClustering,
-            thumbFraction: Double(thumbProgress.completed) / Double(max(thumbProgress.total, 1)),
-            thumbActive: thumbProgress.isActive)
+            organizing: collectionsEngine.isClustering)
     }
 
     /// One shared pill for every phase — same glass as the grid's column
