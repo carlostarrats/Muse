@@ -1061,9 +1061,9 @@ struct ContentView: View {
     /// unanalyzed photo, which is fine — the field still inline-completes.
     private func loadSimilarTags(for request: AddTagRequest) async {
         similarTags = []
-        // Multi-selection has no single "this photo"; use the first, which is
-        // the tile that was right-clicked.
-        guard let url = request.urls.first else { return }
+        // The CLICKED file, not `urls.first` — a multi-selection has no single
+        // "this photo", and the URL list is unordered.
+        let url = request.source
         // Don't offer a tag the file already carries — re-adding is a harmless
         // no-op, but seeing it in the row reads as the app not knowing.
         let existing = Set(await TagStore.shared.tags(for: url).map(\.label))

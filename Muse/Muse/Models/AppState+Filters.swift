@@ -485,7 +485,12 @@ extension AppState {
         let targets = effectiveSelectionURLs(fallback: path)
             .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory != true }
         guard !targets.isEmpty else { return }
-        addTagRequest = AddTagRequest(urls: targets)
+        // Carry the CLICKED file separately. `effectiveSelectionURLs` maps over a
+        // Set, so `targets` has no meaningful order and `.first` is arbitrary —
+        // using it as "the photo being tagged" would key the similar-image
+        // suggestions off a random member of the selection.
+        let clicked = targets.first { $0.standardizedFileURL.path == path }
+        addTagRequest = AddTagRequest(urls: targets, source: clicked ?? targets[0])
     }
 
     /// Attach `label` to every captured target, then refresh the tag-derived UI.
@@ -654,6 +659,10 @@ extension AppState {
 struct AddTagRequest: Identifiable, Equatable {
     let id = UUID()
     let urls: [URL]
+    /// The file the user actually clicked — the one the "from similar images"
+    /// suggestions are computed against. Distinct from `urls.first`, which is
+    /// arbitrary (see `requestAddTag`).
+    let source: URL
 
     /// What the card's subtitle names — the single file, or "N images".
     var displayName: String {

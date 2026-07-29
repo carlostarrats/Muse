@@ -6640,7 +6640,24 @@ folders we can't see, not one folder twice.
 
 ### Also fixed in review
 
-`SectionSortMenu` was running `FolderSortMode.label` through `NSLocalizedString`
-— but those properties already return `String(localized:)` values, so it was
-looking translated text up as a key and only working because the lookup falls
-back to what it was handed.
+Reviewing only the uncommitted half of the session missed these; re-reading the
+whole branch diff found them.
+
+- `SectionSortMenu` was running `FolderSortMode.label` through
+  `NSLocalizedString` — but those properties already return `String(localized:)`
+  values, so it was looking translated text up as a KEY and only working because
+  the lookup falls back to what it was handed.
+- The Add Tag card's "from similar images" row was computed from
+  `request.urls.first`. `effectiveSelectionURLs` maps over a `Set`, so that's an
+  ARBITRARY member of the selection, not the clicked file — the suggestions were
+  keyed off a random photo whenever more than one was selected. `AddTagRequest`
+  now carries the clicked `source` URL separately.
+- `CollectionPickerLayout.headingBlock` was 24 against a heading that measures
+  exactly 14 + 10 — zero slack on a value that RESERVES space, where
+  under-reserving spills the grid over the buttons. Now 26.
+
+Checked and found clean: no menu command or `.disabled` gate was lost in the
+Label conversion (26 and 32 of each, before and after); no duplicate keyboard
+shortcut across the whole app; `tagsVersion` has a live sink so `confirmAddTag`
+does refresh the chips; every `NSToolbarItem` has a label and a
+`menuFormRepresentation` for the overflow menu (dumped from the running app).
