@@ -221,10 +221,21 @@ final class ThumbnailCache: ObservableObject {
         // An in-place edit can change the image's dimensions, so the memoized
         // header size has to go with the thumbnails.
         ImageHeaderSizeCache.invalidate(url)
+        // The variant list grew from 2 to 7 (the Duplicates tile + the hero
+        // fallback ladder), and this runs on the MAIN actor once per changed
+        // file — `markContentChanged` loops it over a whole batch, so a bulk
+        // iCloud sync-in pays the cost per file. Most of the added variants are
+        // absent for any given file, and `removeItem` on a missing path costs
+        // ~7µs (it constructs an NSError) against ~1.5µs for the existence
+        // check — measured, not assumed. So probe first and only pay for real
+        // deletions. Same race window as the unconditional delete had: a PNG
+        // written after the check survives either way.
+        let fm = FileManager.default
         for v in Self.renderedVariants {
             let key = Self.cacheKey(url: url, size: v.size, scale: v.scale)
             memCache.removeObject(forKey: key as NSString)
-            try? FileManager.default.removeItem(at: diskPath(for: key))
+            let path = diskPath(for: key)
+            if fm.fileExists(atPath: path.path) { try? fm.removeItem(at: path) }
         }
     }
 

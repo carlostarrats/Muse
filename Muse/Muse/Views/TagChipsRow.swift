@@ -221,7 +221,11 @@ struct TagChipsRow: View {
         appState.tagRenameRequest = nil
         guard !new.isEmpty, new != old else { return }
         Task { @MainActor in
-            await TagStore.shared.renameLabel(from: old, to: new)
+            // Only rewrite the filter if the rename actually happened. A refused
+            // rename (a rating glyph on either side) would otherwise leave the
+            // active filter pointing at a label no file carries — an empty grid
+            // under a chip that looks real.
+            guard await TagStore.shared.renameLabel(from: old, to: new) else { return }
             if appState.activeTagLabels.contains(old) {
                 appState.setActiveTags(
                     TagSelection.renaming(appState.activeTagLabels, from: old, to: new))

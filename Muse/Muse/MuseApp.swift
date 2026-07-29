@@ -311,7 +311,11 @@ struct MuseApp: App {
                     Label("Rename Tag…", systemImage: "pencil")
                 }
                 .keyboardShortcut("r", modifiers: [.command, .control])
-                .disabled(appState.singleActiveTag == nil)
+                // A rating chip can be the single active tag, and rename is
+                // library-wide — renaming "★★★" would wipe every three-star
+                // rating. The chip's own context menu hides the item for the
+                // same reason; this is the menu-bar/keyboard twin of that.
+                .disabled(appState.singleActiveTag.map(StarRating.isRating) ?? true)
 
                 // No shortcut on the destructive tag commands below: a stray
                 // chord shouldn't be able to wipe a tag off the whole library.

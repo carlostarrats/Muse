@@ -18,6 +18,12 @@ enum SearchScope {
 @MainActor
 enum SearchService {
 
+    /// Cosine-similarity floor for a semantic hit. Read by BOTH the merge and
+    /// the folder-scope relaxation below — they must agree on what counts as a
+    /// semantic match, or a file could be merged in as semantic while still
+    /// being narrowed to its tag's folder.
+    static let semanticThreshold = 0.45
+
     static func search(query: String, scope: SearchScope) async -> [FileNode] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
@@ -143,13 +149,15 @@ enum SearchService {
                 try? SemanticSearch.semanticIDs(queryVector: $0, db: db)
             }) ?? []
             var orderedIDs = SemanticSearch.merge(
-                exactIDs: exactIDs, semantic: semantic, threshold: 0.45)
+                exactIDs: exactIDs, semantic: semantic, threshold: Self.semanticThreshold)
 
             // A file also matched by a content-derived tier — or by a tag row
             // that names no folder — is unrestricted.
             for id in ftsIDs { matchedDirs[id] = nil }
             for id in unscopedTagIDs { matchedDirs[id] = nil }
-            for (id, score) in semantic where score >= 0.45 { matchedDirs[id] = nil }
+            for (id, score) in semantic where score >= Self.semanticThreshold {
+                matchedDirs[id] = nil
+            }
 
             // Color, when present alongside text, is an additional AND filter
             // over the text results (text ranking preserved).
