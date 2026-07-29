@@ -6826,3 +6826,58 @@ from a filtered grep is not evidence that the running app contains the change �
 this is the same "verify in the running app" discipline the hero-viewer work
 established, extended one step earlier to "verify the app you're running is
 actually the one you built."
+
+---
+
+## 2026-07-28 — `feat/release-notes` — the update dialog says what changed
+
+Sparkle's update dialog was **blank**. A user was asked to install a new
+version with no statement of what was in it — and Muse 1.4 shipped that way.
+
+The text was never the missing piece: `docs/release-notes-<version>.md` is
+already hand-written per release, already in user-facing language. The missing
+piece was a pipeline step. `generate_appcast` uses a release-notes file only
+when its basename matches the archive's, and `scripts/release.sh` never put one
+there. 1.3.3 had notes because a `Muse-1.3.3.html` was hand-dropped into
+`build/releases/` that once; nobody repeated it. `docs/RELEASING.md` made it
+worse by naming the file `Muse.html`, a basename that could never match.
+
+**Verified before designing anything**, by running the real `generate_appcast`
+(Sparkle 2.9.3, the same resolved artifact the app links) against the real
+`Muse-1.4.dmg` in a scratch dir, both ways:
+
+| Invocation | Result |
+|---|---|
+| `.md` present, no flag | `<sparkle:releaseNotesLink>` → `…/releases/latest/download/Muse-1.4.md`, a URL derived from `SUFeedURL` |
+| `.md` present, `--embed-release-notes` | `<description sparkle:format="markdown"><![CDATA[…]]></description>`, the file inline and intact |
+
+**Embedded is the design; linked was rejected.** The link form is a *second*
+network fetch to a *second* asset that must also be uploaded — and if it 404s
+the dialog is blank with no signal. Embedding keeps the update check to the one
+appcast fetch the network policy promises. Markdown survives the round trip
+verbatim (headings, bold, bullets, `---`, inline code, emoji), and Sparkle
+2.9.3 renders `sparkle:format="markdown"` client-side, so producer and consumer
+are version-matched by construction.
+
+What `release.sh` does now: fails in **preflight** when
+`docs/release-notes-$VERSION.md` is missing (before the ~20-minute archive, with
+`--no-notes` as the deliberate opt-out); copies it to `Muse-$VERSION.md`; passes
+`--embed-release-notes`; and **asserts a non-empty `<description>`** afterward.
+The same file becomes the GitHub release body via `--notes-file`, replacing the
+`"Muse 1.4"` placeholder. The prune now covers `*.md`/`*.html` too — that stale
+`Muse-1.3.3.html` had been sitting in `build/releases/` ever since.
+
+Two smaller things fell out. The arg parser only ever tested `$2`, so
+`release.sh 1.5 --no-notes --publish` would have silently dropped `--publish`;
+it's a flag loop now, order-independent. And the preflight's `--no-notes`
+warning is an `if`, not `[[ … ]] && echo` — the one-liner returns 1 on the false
+branch and `set -e` would have killed every normal release.
+
+**Still owed:** the mechanism is verified, the *rendering* is not. How the notes
+look in the sheet needs a signed, notarized build and an older install — the
+smoke test already in `docs/RELEASING.md` ▸ Verifying. Until that runs at the
+next real release, rendering is unverified.
+
+French notes were considered and deferred: Sparkle falls back to the single
+description for every locale, `generate_appcast` has no native localized-notes
+support, and adding one would put a translation gate on every release.
