@@ -96,7 +96,33 @@ the two classes Muse cannot take back once shipped; then correctness of identity
 | Export: collection PDF | `Export/CollectionPDFExporter`, `CollectionPDFLayout`, `PaperSize`, `Views/CollectionPDFSave` | 4571241 (07-28) | 07-28 | never | **none** — clean (the audio-to-QuickLook egress found here was fixed under row 5, its owning area). Verified: the decode-bomb guard runs before every export decode; row pagination consumes the screen packer; layout is unit-tested against the on-screen geometry |
 | App shell, settings, intents, updater | `ContentView`, `MuseApp`, `Models/AppState*`, `Settings/*`, `Agents/AppIntents`, `Updates/Updater`, `Components/EscapeAction` | f5f4c5f (07-28) | 07-28 | never | **none** — clean. Verified: App Intents never read `currentFiles` (they enumerate the folder); Sparkle feed is HTTPS with `SUPublicEDKey` set and the sandbox installer-launcher service enabled; the OAuth redirect scheme in Info.plist matches the derived scheme from `DriveConfig.clientID` EXACTLY (a mismatch would hang sign-in with no error); `AppDelegate` implements `selectAll(_:)` + `validateMenuItem` and secure restorable state |
 | Metadata import (keywords & ratings) | `Import/*` | 4571241 (07-28) | 07-28 | never | **none** — clean. This was the ONE write path already guarding rating glyphs before this audit, and it still does; the rating write goes through the single exclusive seam and only fills a gap, never overwrites; keywords are trimmed, empty-rejected and case-insensitively de-duplicated; ratings clamp (>5 → 5, 0/negative/absent → nil, so Lightroom's −1 "rejected" doesn't become a star) |
-| Localization completeness | `Localization/VocabularyLocalizer`, `Localizable.xcstrings`, `VisionVocabulary.json` | f03cc22 (07-28) | never | never | — |
+| Localization completeness | `Localization/VocabularyLocalizer`, `Localizable.xcstrings`, `VisionVocabulary.json` | f03cc22 (07-28) | 07-28 | never | 1 confirmed (self-inflicted, this audit): the two share-extension error strings added in row 7 shipped unwrapped — now `String(localized:)`. Catalog is otherwise complete: 611 keys, 0 genuinely untranslated (the 6 flagged are `=`/`≤`/`≥`/`MB`/`MP`/empty — symbols and units that are identical in French). 36 `stale` keys are the documented `NSLocalizedString(variable)` case and must NOT be pruned. **Note: the extension has no strings catalog of its own**, so its two strings resolve to English until one is added |
+
+## First full pass — 2026-07-28
+
+All 18 rows walked in one session. **17 audited, 1 (hero viewer) static-only by
+its own rule.** 15 defects confirmed and fixed, 25 suspicions refuted.
+
+The single most useful pattern: **one invariant, enforced at some write paths and
+not others.** Rating exclusivity ("a photo has at most one star rating") was
+correct in the rating control and the metadata import, and broken in five other
+places that can also create a rating — free-text tag entry, library-wide tag
+rename, the sidecar sync merge, sidecar hydration, and backup restore. Nothing
+was wrong with the rule; it just wasn't applied everywhere the rule could be
+reached. Rows 2, 6 and 7 are all the same finding arriving through different
+doors, which is exactly what a per-area sweep surfaces and a "review the
+codebase" prompt does not.
+
+Second pattern: **a failed read masquerading as an empty result.** An unreadable
+directory returns "no files" from `FileManager`, and three places believed it —
+the recursive reconcile (marked rows dead), the folder stats (hid a full iCloud
+folder), and, historically, the enumeration guard that only checked the top
+folder. Every one of these was found by probing the failure mode on real disk,
+never by reading.
+
+Next session: start at the row with the oldest `Audited at` whose `Last changed`
+is newer, and give every row a `Verified at` — no row has one yet, and the
+Lineform precedent is that the verify round found more than the audit did.
 
 ## Notes
 

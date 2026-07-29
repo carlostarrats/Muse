@@ -51,7 +51,7 @@ final class ShareViewController: NSViewController {
         }
         guard let dest = icloudFolder() else {
             finish(saved: 0, attempted: Self.attachmentCount(items),
-                   reason: "Muse couldn’t reach its iCloud folder. Check that you’re signed in to iCloud and iCloud Drive is on.")
+                   reason: String(localized: "Muse couldn’t reach its iCloud folder. Check that you’re signed in to iCloud and iCloud Drive is on."))
             return
         }
         var saved = 0
@@ -74,7 +74,7 @@ final class ShareViewController: NSViewController {
             }
         }
         finish(saved: saved, attempted: attempted,
-               reason: "Muse couldn’t save the shared item.")
+               reason: String(localized: "Muse couldn’t save the shared item."))
     }
 
     private static func attachmentCount(_ items: [NSExtensionItem]) -> Int {
