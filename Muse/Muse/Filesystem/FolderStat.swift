@@ -18,6 +18,21 @@ nonisolated struct FolderStat: Equatable {
     var recursiveFileCount: Int
     var totalSize: Int64
     var latestModified: Date?
+    /// False when the folder could not be listed at all (unplugged volume,
+    /// revoked scope, an iCloud container not yet materialized on a cold
+    /// launch). The counts are then structurally zero and mean NOTHING —
+    /// distinguishing that from a genuinely empty folder is the whole point,
+    /// because "0 files" is a decision input elsewhere.
+    var reachable: Bool = true
+
+    /// The recursive count when it is actually KNOWN, else nil.
+    ///
+    /// Every consumer that treats zero as a fact must read this, not the raw
+    /// count. `ICloudSidebarVisibility` is the load-bearing one: an unlistable
+    /// iCloud container used to report 0, which reads as `.empty` and HIDES a
+    /// folder that may be full — the case its `.unknown` state exists to
+    /// prevent, defeated because the stat could never say "unknown".
+    var knownRecursiveFileCount: Int? { reachable ? recursiveFileCount : nil }
 }
 
 nonisolated enum FolderStats {
@@ -32,12 +47,15 @@ nonisolated enum FolderStats {
         // count must include them to match — and Finder). The recursive tally
         // below stays files-only, matching the recursive grid (no folder tiles).
         var immediate = 0
+        // A failed listing is NOT an empty folder — record which it was.
+        var reachable = false
         if let entries = try? fm.contentsOfDirectory(
             at: folder,
             includingPropertiesForKeys: nil,
             options: opts
         ) {
             immediate = entries.count
+            reachable = true
         }
 
         var recursive = 0
@@ -68,7 +86,8 @@ nonisolated enum FolderStats {
         return FolderStat(immediateFileCount: immediate,
                           recursiveFileCount: recursive,
                           totalSize: size,
-                          latestModified: latest)
+                          latestModified: latest,
+                          reachable: reachable)
     }
 
     /// Which watched root contains `path` (longest prefix wins, since roots can
