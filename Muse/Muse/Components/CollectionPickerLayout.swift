@@ -58,17 +58,16 @@ nonisolated enum CollectionPickerLayout {
 
     /// The modal's width, and what's actually left to lay out in.
     ///
-    /// `scrollBarChannel` is the trap: the presenter frames the card's content
-    /// at `cardWidth - scrollBarChannel`, so the usable width is 16pt narrower
-    /// than the card. Sizing the grids against card-minus-padding alone left
-    /// both tabs overflowing — and by DIFFERENT amounts, so a fixed-column
-    /// LazyVGrid spilled past the card edge by a different margin per tab,
+    /// The presenter lays the card's content out at the FULL card width (the
+    /// reserved scrollbar strip is gone — see ModalChrome), so what's usable is
+    /// simply card-minus-padding. Both grids must be sized against this exact
+    /// number: when they weren't, they overflowed by DIFFERENT amounts per tab,
     /// which is what made the modal look like it changed width when you
     /// switched. Derive it, never restate it.
     static let cardWidth: CGFloat = 480
     static let cardPadding: CGFloat = 28
     static var contentWidth: CGFloat {
-        cardWidth - ModalChrome.scrollBarChannel - cardPadding * 2
+        cardWidth - cardPadding * 2
     }
 
     /// Height of a column's "Color" / "Icon" heading plus the 10pt gap under it.
