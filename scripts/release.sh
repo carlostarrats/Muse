@@ -91,6 +91,20 @@ if [[ "$NOTES" == "no" ]]; then
   echo "▸ --no-notes: this release will ship with an EMPTY update dialog"
 fi
 
+# The release is tagged at HEAD (--target below), and GitHub can only tag a
+# commit it already has. Catch an unpushed HEAD here rather than after the
+# ~20-minute build, when the artifacts are built and only the publish fails.
+if [[ "$PUBLISH" == "yes" ]]; then
+  HEAD_SHA="$(git rev-parse HEAD)"
+  git fetch origin --quiet 2>/dev/null || true   # remote-tracking refs may be stale
+  if ! git branch -r --contains "$HEAD_SHA" 2>/dev/null | grep -q .; then
+    echo "✗ HEAD ($HEAD_SHA) is not on any remote branch." >&2
+    echo "  Push it first — the release tag is pinned to this commit, and GitHub" >&2
+    echo "  can only tag a commit it has: git push origin $(git branch --show-current)" >&2
+    exit 1
+  fi
+fi
+
 xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
   || { echo "✗ notary profile '$NOTARY_PROFILE' not found — see one-time setup in this script's header" >&2; exit 1; }
 
@@ -221,7 +235,15 @@ echo "✓ Appcast: $REL_DIR/appcast.xml"
 # The same notes the update dialog shows become the GitHub release body — one
 # hand-written file, both surfaces. --no-notes keeps the old placeholder so the
 # release page is never empty.
-GH_CMD=(gh release create "$TAG" "$DMG" "$REL_DIR/appcast.xml" --title "Muse $VERSION")
+#
+# --target pins the tag to the commit this DMG was BUILT from. Without it,
+# `gh release create` tags whatever the default branch points at *on GitHub* —
+# so an unpushed local commit (or a push that lands after the ~20-minute build)
+# tags the wrong revision, and the artifact no longer matches its tag. That is
+# exactly how v1.5 first tagged two commits behind; fixing it after the fact
+# needs a force-update of a public ref. Pin it up front instead.
+GH_CMD=(gh release create "$TAG" "$DMG" "$REL_DIR/appcast.xml" \
+  --target "$(git rev-parse HEAD)" --title "Muse $VERSION")
 if [[ "$NOTES" == "yes" ]]; then
   GH_CMD+=(--notes-file "$NOTES_SRC")
 else
