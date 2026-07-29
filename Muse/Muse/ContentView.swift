@@ -169,9 +169,12 @@ struct ContentView: View {
             // Every one is presented HERE, at the shell, because the card is sized
             // from the geometry of whatever it's attached to: presented from a
             // sidebar row it would be laid out against the sidebar's width.
-            // Rows of image tiles — the one card that genuinely wants room.
+            // Rows of image tiles. Sized to show five tiles per row —
+            // 5×140 + 4×12 spacing + the group panel's 20pt and the row
+            // scroller's 16pt insets. A longer group scrolls horizontally,
+            // which it always did; seven tiles just made the card oversized.
             .museModal(isPresented: $appState.duplicatesSheetVisible,
-                       width: 1100, palette: appState.moodPalette) {
+                       width: 820, palette: appState.moodPalette) {
                 DuplicatesView(isPresented: $appState.duplicatesSheetVisible)
             }
             .museModal(isPresented: $appState.infoShown,
