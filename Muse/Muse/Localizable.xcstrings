@@ -479,12 +479,12 @@
         }
       }
     },
-    "Add folders from the sidebar with the Add Folder button — Muse indexes them automatically (the status pills at the bottom show progress). Drag folders up or down to reorder them. Right-click a folder to make a New Subfolder, Rename it, Reveal it in Finder, or — for a buried subfolder — Pin it to the top. Right-click a top-level folder to Remove it from Muse. Your files are never modified; deleting means moving to the Trash, and it's undoable.": {
+    "Add folders with the + Folder button at the bottom of the sidebar — Muse indexes them automatically (the status pills at the bottom show progress). Drag folders up or down to reorder them. Right-click a folder to make a New Subfolder, Rename it, Reveal it in Finder, or — for a buried subfolder — Pin it to the top. Right-click a top-level folder to Remove it from Muse. Your files are never modified; deleting means moving to the Trash, and it's undoable.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ajoutez des dossiers depuis la barre latérale avec le bouton Ajouter un dossier — Muse les indexe automatiquement (les pastilles d'état en bas indiquent la progression). Faites glisser les dossiers vers le haut ou le bas pour les réordonner. Cliquez avec le bouton droit sur un dossier pour créer un Nouveau sous-dossier, le Renommer, l'Afficher dans le Finder ou — pour un sous-dossier enfoui — l'Épingler en haut. Cliquez avec le bouton droit sur un dossier de premier niveau pour le Retirer de Muse. Vos fichiers ne sont jamais modifiés ; supprimer revient à déplacer vers la corbeille, et l'opération est réversible."
+            "value": "Ajoutez des dossiers avec le bouton + Dossier en bas de la barre latérale — Muse les indexe automatiquement (les pastilles d'état en bas indiquent la progression). Faites glisser les dossiers vers le haut ou le bas pour les réordonner. Cliquez avec le bouton droit sur un dossier pour créer un Nouveau sous-dossier, le Renommer, l'Afficher dans le Finder ou — pour un sous-dossier enfoui — l'Épingler en haut. Cliquez avec le bouton droit sur un dossier de premier niveau pour le Retirer de Muse. Vos fichiers ne sont jamais modifiés ; supprimer revient à déplacer vers la corbeille, et l'opération est réversible."
           }
         }
       }
@@ -944,6 +944,16 @@
         }
       }
     },
+    "Calendar": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calendrier"
+          }
+        }
+      }
+    },
     "Camera": {
       "localizations": {
         "fr": {
@@ -1090,6 +1100,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Effacer le filtre d'étiquettes"
+          }
+        }
+      }
+    },
+    "Clock": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Horloge"
           }
         }
       }
@@ -1808,6 +1828,16 @@
         }
       }
     },
+    "Document": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Document"
+          }
+        }
+      }
+    },
     "Documents": {
       "localizations": {
         "fr": {
@@ -1968,6 +1998,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Emoji %@"
+          }
+        }
+      }
+    },
+    "Envelope": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enveloppe"
           }
         }
       }
@@ -2394,12 +2434,12 @@
         }
       }
     },
-    "Groupings that span your whole library, suggested automatically from what Vision finds, plus any you build by hand in the viewer. Screenshots get their own smart collections by what they're of — recipes, receipts, places, articles, and more. Open the Collections page from the toolbar to browse them. They track your files: delete images or remove a folder and collections shrink to match — empty ones disappear. Open one to rename or delete it from its header.": {
+    "Groupings that span your whole library, suggested automatically from what Vision finds, plus any you build by hand in the viewer. Screenshots get their own smart collections by what they're of — recipes, receipts, places, articles, and more. Open the Collections page from the toolbar to browse them. They track your files: delete images or remove a folder and collections shrink to match — empty ones disappear. Open one to rename or delete it from its header. Right-click a collection in the sidebar and choose Change Symbol & Color… to give it its own icon — either a symbol with a color, or an emoji.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Des regroupements qui couvrent toute votre bibliothèque, suggérés automatiquement à partir de ce que Vision détecte, ainsi que ceux que vous créez à la main dans le visualiseur. Les captures d'écran obtiennent leurs propres collections intelligentes selon leur contenu — recettes, reçus, lieux, articles, et plus encore. Ouvrez la page Collections depuis la barre d'outils pour les parcourir. Elles suivent vos fichiers : supprimez des images ou retirez un dossier et les collections rétrécissent en conséquence — les collections vides disparaissent. Ouvrez-en une pour la renommer ou la supprimer depuis son en-tête."
+            "value": "Des regroupements qui couvrent toute votre bibliothèque, suggérés automatiquement à partir de ce que Vision détecte, ainsi que ceux que vous créez à la main dans le visualiseur. Les captures d'écran obtiennent leurs propres collections intelligentes selon leur contenu — recettes, reçus, lieux, articles, et plus encore. Ouvrez la page Collections depuis la barre d'outils pour les parcourir. Elles suivent vos fichiers : supprimez des images ou retirez un dossier et les collections rétrécissent en conséquence — les collections vides disparaissent. Ouvrez-en une pour la renommer ou la supprimer depuis son en-tête. Cliquez avec le bouton droit sur une collection dans la barre latérale et choisissez Symbole et couleur… pour lui donner sa propre icône — soit un symbole avec une couleur, soit un emoji."
           }
         }
       }
@@ -3090,6 +3130,16 @@
         }
       }
     },
+    "Map": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carte"
+          }
+        }
+      }
+    },
     "Map Pin": {
       "localizations": {
         "fr": {
@@ -3348,12 +3398,12 @@
         }
       }
     },
-    "Muse organizes automatically, but you're in control: in Settings (⌘,) you can turn off automatic tagging or automatic collections. Existing tags and collections stay; only future automatic work is paused, and the manual commands still work. Settings is also where you sign in to Google Drive for collection links — and sign out to switch accounts.": {
+    "Muse organizes automatically, but you're in control: in Settings — the gear in the toolbar, or ⌘, — you can turn off automatic tagging or automatic collections. Existing tags and collections stay; only future automatic work is paused, and the manual commands still work. Settings is also where you sign in to Google Drive for collection links — and sign out to switch accounts.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Muse organise automatiquement, mais vous gardez le contrôle : dans les Réglages (⌘,) vous pouvez désactiver l'ajout automatique de tags ou les collections automatiques. Les tags et collections existants demeurent ; seul le travail automatique futur est suspendu, et les commandes manuelles fonctionnent toujours. Les Réglages sont aussi l'endroit où vous vous connectez à Google Drive pour les liens de collection — et où vous vous déconnectez pour changer de compte."
+            "value": "Muse organise automatiquement, mais vous gardez le contrôle : dans les Réglages — la roue dentée dans la barre d'outils, ou ⌘, — vous pouvez désactiver l'ajout automatique de tags ou les collections automatiques. Les tags et collections existants demeurent ; seul le travail automatique futur est suspendu, et les commandes manuelles fonctionnent toujours. Les Réglages sont aussi l'endroit où vous vous connectez à Google Drive pour les liens de collection — et où vous vous déconnectez pour changer de compte."
           }
         }
       }
@@ -4822,6 +4872,16 @@
         }
       }
     },
+    "Scissors": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ciseaux"
+          }
+        }
+      }
+    },
     "Search & sort": {
       "localizations": {
         "fr": {
@@ -4832,12 +4892,12 @@
         }
       }
     },
-    "Search by name, tags, captions, and text found inside images. The magnifier menu scopes the search to the current folder or your whole library. Sort by date, name, size, color, or shape, and use the arrow beside the sort menu to flip the direction.": {
+    "Search by name, tags, captions, and text found inside images. The magnifier menu scopes the search to the current folder or your whole library. Sort by date, name, size, color, or shape. The arrow beside the sort menu sets the direction and spells out what it means for whatever you're sorting by — newest or oldest first, largest or smallest, A→Z or Z→A.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Recherchez par nom, tags, légendes et texte trouvé à l'intérieur des images. Le menu de la loupe limite la recherche au dossier courant ou à toute votre bibliothèque. Triez par date, nom, taille, couleur ou forme, et utilisez la flèche à côté du menu de tri pour inverser le sens."
+            "value": "Recherchez par nom, tags, légendes et texte trouvé à l'intérieur des images. Le menu de la loupe limite la recherche au dossier courant ou à toute votre bibliothèque. Triez par date, nom, taille, couleur ou forme. La flèche à côté du menu de tri définit le sens et précise ce qu'il signifie pour le critère choisi — du plus récent ou du plus ancien, du plus grand ou du plus petit, de A→Z ou de Z→A."
           }
         }
       }
@@ -5422,6 +5482,16 @@
         }
       }
     },
+    "Suggestions": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suggestions"
+          }
+        }
+      }
+    },
     "Sun": {
       "localizations": {
         "fr": {
@@ -5644,12 +5714,12 @@
         }
       }
     },
-    "The chip row shows the tags of the folder you're viewing. Click a chip to filter; hover for its count. Whatever tags are active appear in a bar beneath the chips that you can clear one at a time or all at once. Right-click a chip to rename or delete the tag everywhere; add tags from an image's right-click menu or inside the viewer. Coming from Lightroom, Bridge, or Capture One? File > Import Keywords & Ratings reads the keywords and stars already written into your files and turns them into Muse tags and ratings — files are only read, never modified, and a rating you set in Muse is never overwritten.": {
+    "The chip row shows the tags of the folder you're viewing. Click a chip to filter; hover for its count. Whatever tags are active appear in a bar beneath the chips that you can clear one at a time or all at once. Right-click a chip to rename or delete the tag everywhere. To tag an image, right-click it and choose New Tag… — the card completes against tags you already use, so you pick the one you have instead of making a near-duplicate, and it offers tags from images that look like this one. Your most-used tags sit right in that menu, and the viewer's Tags card does the same job. Coming from Lightroom, Bridge, or Capture One? File > Import Keywords & Ratings reads the keywords and stars already written into your files and turns them into Muse tags and ratings — files are only read, never modified, and a rating you set in Muse is never overwritten.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La rangée de pastilles affiche les tags du dossier que vous consultez. Cliquez sur une pastille pour filtrer ; survolez-la pour voir son décompte. Les tags actifs apparaissent dans une barre sous les pastilles que vous pouvez effacer un à un ou tous d'un coup. Cliquez avec le bouton droit sur une pastille pour renommer ou supprimer le tag partout ; ajoutez des tags depuis le menu contextuel d'une image ou à l'intérieur du visualiseur. Vous venez de Lightroom, Bridge ou Capture One ? Fichier > Importer les mots-clés et notes lit les mots-clés et les étoiles déjà écrits dans vos fichiers et les convertit en tags et notes Muse — les fichiers sont uniquement lus, jamais modifiés, et une note définie dans Muse n'est jamais écrasée."
+            "value": "La rangée de pastilles affiche les tags du dossier que vous consultez. Cliquez sur une pastille pour filtrer ; survolez-la pour voir son décompte. Les tags actifs apparaissent dans une barre sous les pastilles que vous pouvez effacer un à un ou tous d'un coup. Cliquez avec le bouton droit sur une pastille pour renommer ou supprimer le tag partout. Pour taguer une image, cliquez dessus avec le bouton droit et choisissez Nouvelle étiquette… — la fiche complète ce que vous tapez à partir des tags que vous utilisez déjà, pour que vous choisissiez celui que vous avez plutôt que d'en créer un presque identique, et elle propose des tags issus d'images qui ressemblent à celle-ci. Vos tags les plus utilisés figurent directement dans ce menu, et la fiche Tags du visualiseur fait la même chose. Vous venez de Lightroom, Bridge ou Capture One ? Fichier > Importer les mots-clés et notes lit les mots-clés et les étoiles déjà écrits dans vos fichiers et les convertit en tags et notes Muse — les fichiers sont uniquement lus, jamais modifiés, et une note définie dans Muse n'est jamais écrasée."
           }
         }
       }
@@ -6068,76 +6138,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zoom arrière"
-          }
-        }
-      }
-    },
-    "Suggestions": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Suggestions"
-          }
-        }
-      }
-    },
-    "Map": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Carte"
-          }
-        }
-      }
-    },
-    "Calendar": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Calendrier"
-          }
-        }
-      }
-    },
-    "Clock": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Horloge"
-          }
-        }
-      }
-    },
-    "Envelope": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enveloppe"
-          }
-        }
-      }
-    },
-    "Document": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Document"
-          }
-        }
-      }
-    },
-    "Scissors": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ciseaux"
           }
         }
       }

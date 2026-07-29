@@ -8,6 +8,32 @@ built, tested, and reviewed on its own.
 
 Owner decisions locked at brainstorm time are marked **[decided]**.
 
+> ## ⚠️ Partly superseded — read this first
+>
+> This is the design as agreed BEFORE implementation. Several decisions were
+> reversed during the live review with the owner, so do not treat the following
+> sections as binding:
+>
+> - **§5 Add Tag card.** The spec's filtered-list card shipped, then was replaced
+>   with an inline-completing AppKit field, then REVERTED to a plain field with a
+>   fixed 5-row list. The inline completion is gone on purpose — it was beyond
+>   what was asked and made typing feel wrong.
+> - **§1 Emoji picker.** No free-entry field and no system emoji picker: the
+>   catalog is curated and CLOSED (66 entries, 11×6). The tab sits above BOTH
+>   columns and the Emoji tab REPLACES the colour column rather than dimming it.
+>   Grid geometry now lives in `CollectionPickerLayout` with tests.
+> - **§7 Sidebar geometry.** Nearly every number changed. The chevron is
+>   leading-aligned in a 10pt slot (not right-aligned in 12), the gap to the icon
+>   is 3 (not 6), and EVERY nested level indents by 8 — the spec's
+>   `max(0, depth - 1) * 14` was tried and rejected as too flat.
+> - **§6 star badge / §2 sort menu / §3 menus / §4 Settings button** shipped as
+>   specified.
+>
+> The **as-shipped** record is `docs/session-log.md` under `feat/next-142`, and
+> the must-not-break rules are in `CLAUDE.md`. Two things the spec never
+> anticipated also shipped: the search-scope-bar-over-the-viewer fix and the
+> duplicate-root fix, both bugs found while looking at something else.
+
 ---
 
 ## 1. Emoji as a collection symbol

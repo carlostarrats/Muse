@@ -6656,6 +6656,24 @@ whole branch diff found them.
   exactly 14 + 10 — zero slack on a value that RESERVES space, where
   under-reserving spills the grid over the buttons. Now 26.
 
+### Info modal + spec/plan
+
+The Info modal ("About Muse") had gone stale in one place that CONTRADICTED
+shipped behaviour — Search & sort still told users to "use the arrow beside the
+sort menu to flip the direction", which is now a menu that spells out both
+directions. Fixed, plus three genuine gaps from this session: how to tag an
+image (New Tag… with completion and similar-image suggestions), how to give a
+collection its own symbol or emoji, and that Settings is now a toolbar button
+and not only ⌘,. Five superseded French strings replaced, five dead keys
+removed.
+
+The spec and plan were left as the historical record but flagged: the spec now
+opens with an amendment box listing what was reversed during the live review
+(the Add Tag field, the emoji picker's free-entry field, most of the sidebar
+numbers), pointing at this log for the as-shipped truth. A spec in
+`docs/superpowers/specs/` is treated as binding by a fresh session, so leaving
+reversed decisions in it unmarked is a trap.
+
 ### The review loop itself
 
 Five passes, each reviewing the previous one's fixes, until one came up empty:

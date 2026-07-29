@@ -3,6 +3,10 @@
 Spec: `docs/superpowers/specs/2026-07-28-ui-polish-batch-design.md`
 Branch: `feat/next-142`
 
+> **Superseded.** All seven tasks shipped, but several differ from what's
+> written here — see the amendment box at the top of the spec, and
+> `docs/session-log.md` under `feat/next-142` for the as-shipped record.
+
 Seven independent tasks, ordered smallest blast radius first. Each ends with a
 build + the unit suite green; the visual ones also need a look in the running
 app. Commit per task so any one can be reverted alone.
