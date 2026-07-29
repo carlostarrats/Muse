@@ -212,7 +212,16 @@ struct DuplicatesView: View {
     }
 
     private func deleteSelected() {
-        let urls = Array(selected)
+        // Re-assert the one invariant that matters, at the point of no return.
+        // The selection is kept safe incrementally — `selecting` refuses to
+        // empty a group, and `seedDefaults` re-runs `rescued` on every groups
+        // change — so this is normally a no-op. But that safety rests on
+        // SwiftUI having delivered the latest `onChange` before the button was
+        // pressed, and the action here is irreversible-shaped (a batch move to
+        // Trash). Cheaper to re-derive it than to depend on view-update
+        // ordering for "never delete every copy of a file".
+        let groups = finder.groups.map { $0.members.map(\.url) }
+        let urls = Array(DuplicateDeleteRules.rescued(selected, groups: groups))
         selected.removeAll()
         // The shown groups still reference the now-trashed files and don't
         // re-derive here, so leaving the modal open looks like nothing
