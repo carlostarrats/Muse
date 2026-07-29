@@ -215,8 +215,17 @@ enum CollectionPDFExporter {
     /// promise (same reason `ThumbnailCache.generate` keeps videos off QuickLook).
     /// Everything else (pdf/doc/zip…) uses QuickLook's type icon / content preview.
     private static func fallbackThumbnail(_ url: URL, maxPixel: Int) async -> CGImage? {
-        if AssetKind.detect(at: url) == .video {
+        let kind = AssetKind.detect(at: url)
+        if kind == .video {
             if let cg = await restrictedVideoFrame(url, maxPixel: maxPixel) { return cg }
+            return typeIcon(url, maxPixel: maxPixel)
+        }
+        // Audio takes the same route for the same reason: `.m4a` and friends are
+        // ISO-BMFF/QuickTime containers that can carry a remote data reference,
+        // and QuickLook opens them in its own UNRESTRICTED AVFoundation. Cover
+        // art comes from the reference-restricted asset instead.
+        if kind == .audio {
+            if let cg = await restrictedAudioArtwork(url, maxPixel: maxPixel) { return cg }
             return typeIcon(url, maxPixel: maxPixel)
         }
         return await quickLookThumbnail(url, maxPixel: maxPixel)
@@ -236,6 +245,29 @@ enum CollectionPDFExporter {
         return try? await gen.image(at: time).image
     }
 
+    /// Embedded cover art via the reference-restricted asset (no network) —
+    /// mirrors `ThumbnailCache.audioArtwork`. nil when there is no artwork, so
+    /// the caller falls back to the type icon rather than to QuickLook.
+    private static func restrictedAudioArtwork(_ url: URL, maxPixel: Int) async -> CGImage? {
+        let asset = AVURLAsset.noNetwork(url: url)
+        guard let metadata = try? await asset.load(.commonMetadata) else { return nil }
+        for item in AVMetadataItem.metadataItems(from: metadata,
+                                                 filteredByIdentifier: .commonIdentifierArtwork) {
+            guard let data = try? await item.load(.dataValue), !data.isEmpty,
+                  let src = CGImageSourceCreateWithData(data as CFData, nil),
+                  ThumbnailCache.withinDecodeBudget(src) else { continue }
+            let opts: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+            ]
+            if let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) {
+                return cg
+            }
+        }
+        return nil
+    }
+
     /// The static macOS type icon rendered to a CGImage — no content decode, no
     /// network. Fallback for a video whose restricted frame extraction failed.
     private static func typeIcon(_ url: URL, maxPixel: Int) -> CGImage? {
@@ -246,8 +278,15 @@ enum CollectionPDFExporter {
 
     /// The macOS type icon / content preview for a non-image file, via QuickLook
     /// (`.all` → same source as the grid's cards). Runs off the main thread.
-    /// Callers must NOT route videos here — see `fallbackThumbnail`.
+    ///
+    /// Video and audio must never arrive here — QuickLook opens them in its own
+    /// UNRESTRICTED AVFoundation, reopening the remote-data-reference egress.
+    /// That used to be a comment asking callers to behave; it is now enforced,
+    /// because a caller that forgets leaks silently and on mere folder open.
     private static func quickLookThumbnail(_ url: URL, maxPixel: Int) async -> CGImage? {
+        guard ThumbnailCache.mayUseQuickLook(AssetKind.detect(at: url)) else {
+            return typeIcon(url, maxPixel: maxPixel)
+        }
         let size = CGSize(width: maxPixel, height: maxPixel)
         let req = QLThumbnailGenerator.Request(
             fileAt: url, size: size, scale: 1, representationTypes: .all)

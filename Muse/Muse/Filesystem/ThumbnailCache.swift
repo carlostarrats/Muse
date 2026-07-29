@@ -373,6 +373,24 @@ final class ThumbnailCache: ObservableObject {
             return icon
         }
 
+        // Audio: same rule as video, for the same reason. `.m4a` (and the rest
+        // of the MPEG-4 family) is an ISO-BMFF/QuickTime container, so it can
+        // carry the very same `rdrf` remote data reference a reference MOVIE
+        // does — and QuickLook would open it in its own UNRESTRICTED,
+        // out-of-process AVFoundation, reopening the egress `.noNetwork` closes.
+        // Thumbnails run on mere folder open, so that would beacon with no click.
+        // Album art is read HERE instead, through the reference-restricted asset,
+        // so the artwork tile survives without handing the file to QuickLook;
+        // an audio file with no embedded art gets the static type icon.
+        if kind == .audio {
+            if let art = await audioArtwork(url: url, size: size, scale: scale) {
+                return art
+            }
+            let icon = NSWorkspace.shared.icon(forFile: url.path)
+            icon.size = size
+            return icon
+        }
+
         // Plain raster images (incl. RAW/PSD, which CGImageSource handles)
         // decode straight through ImageIO. This is the load-bearing path —
         // the vast majority of a library — and ImageIO never returns nil for a
@@ -386,6 +404,14 @@ final class ThumbnailCache: ObservableObject {
         }
 
         // Everything else (PDF, SVG, fonts, 3D, office, archives) → QuickLook.
+        // Enforced, not merely intended: an AVFoundation-backed kind that slipped
+        // past the branches above must never reach QuickLook's unrestricted,
+        // out-of-process AVFoundation.
+        guard mayUseQuickLook(kind) else {
+            let icon = NSWorkspace.shared.icon(forFile: url.path)
+            icon.size = size
+            return icon
+        }
         // `.all` (not just `.thumbnail`) so QuickLook returns its best available
         // representation: a real CONTENT preview when one exists (PDF first page,
         // text/office doc render) AND falls back to the native macOS TYPE ICON
@@ -405,6 +431,22 @@ final class ThumbnailCache: ObservableObject {
                 continuation.resume(returning: rep?.nsImage)
             }
         }
+    }
+
+    /// Whether a kind may be handed to QuickLook at all.
+    ///
+    /// QuickLook previews out-of-process in AVFoundation that Muse cannot
+    /// constrain, so anything AVFoundation opens must be excluded: a QuickTime
+    /// reference movie — or an `.m4a`, same ISO-BMFF container family — can
+    /// carry an `rdrf` remote data reference, and resolving it beacons the
+    /// viewer's IP on mere folder open. `.noNetwork` closes that for Muse's own
+    /// asset opens; this keeps the file from reaching the one component that
+    /// ignores the restriction. Both thumbnail paths (grid + PDF export) route
+    /// these kinds to a restricted frame/artwork read, then the static type icon.
+    ///
+    /// A NEW AVFoundation-backed kind must be added here.
+    nonisolated static func mayUseQuickLook(_ kind: AssetKind) -> Bool {
+        kind != .video && kind != .audio
     }
 
     /// Generous ceiling (300 megapixels) on the pixel count Muse will hand to an
@@ -450,6 +492,27 @@ final class ThumbnailCache: ObservableObject {
                                     height: CGFloat(cg.height) / scale))
     }
 
+    /// Same bounded ImageIO downsample, over bytes already in memory (embedded
+    /// audio cover art). Shares `withinDecodeBudget`, so an absurdly large
+    /// embedded cover is refused rather than materialized.
+    private nonisolated static func imageIOThumbnail(data: Data, size: CGSize,
+                                                     scale: CGFloat) -> NSImage? {
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil),
+              withinDecodeBudget(src) else { return nil }
+        let maxPixel = Int(max(size.width, size.height) * scale)
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+        ]
+        guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, options as CFDictionary)
+        else { return nil }
+        return NSImage(cgImage: cg,
+                       size: NSSize(width: CGFloat(cg.width) / scale,
+                                    height: CGFloat(cg.height) / scale))
+    }
+
     /// Representative video frame: min(1s, duration × 0.1) in, never earlier
     /// (zero tolerance before; a black frame 0 must not sneak back in).
     private nonisolated static func videoFrame(url: URL, size: CGSize,
@@ -472,6 +535,25 @@ final class ThumbnailCache: ObservableObject {
         return NSImage(cgImage: cg,
                        size: NSSize(width: CGFloat(cg.width) / scale,
                                     height: CGFloat(cg.height) / scale))
+    }
+
+    /// Embedded cover art from an audio file, read through the
+    /// reference-RESTRICTED asset so a crafted container can't resolve a remote
+    /// data reference. nil when the file carries no artwork (caller falls back
+    /// to the static type icon) — never a QuickLook call.
+    private nonisolated static func audioArtwork(url: URL, size: CGSize,
+                                                 scale: CGFloat) async -> NSImage? {
+        let asset = AVURLAsset.noNetwork(url: url)
+        guard let metadata = try? await asset.load(.commonMetadata) else { return nil }
+        let artwork = AVMetadataItem.metadataItems(from: metadata,
+                                                   filteredByIdentifier: .commonIdentifierArtwork)
+        for item in artwork {
+            guard let data = try? await item.load(.dataValue), !data.isEmpty else { continue }
+            // Downsample through the same bounded ImageIO path the grid uses, so
+            // an absurdly large embedded cover can't materialize a full raster.
+            if let image = imageIOThumbnail(data: data, size: size, scale: scale) { return image }
+        }
+        return nil
     }
 
     /// Encode an NSImage to PNG bytes via CGImageDestination — no TIFF round-trip.
