@@ -1037,9 +1037,11 @@ struct ContentView: View {
             // A long pass over a big folder can sit at a similar-looking bar
             // for a while; the number is what tells you it is still moving.
             // Monospaced digits so it doesn't jitter as it counts.
+            // Same .secondary as the label beside it — on .tertiary it read as
+            // disabled next to live text.
             Text(verbatim: "\(percent)%")
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
                 .monospacedDigit()
                 .fixedSize()
         }
