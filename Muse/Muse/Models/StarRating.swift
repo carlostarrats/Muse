@@ -35,6 +35,28 @@ nonisolated enum StarRating {
 
     static func isRating(_ label: String) -> Bool { rating(from: label) != nil }
 
+    // MARK: - Write policy
+    //
+    // A rating IS a manual tag, which means every generic tag-write path can
+    // reach it — and none of them enforce one-rating-per-photo. These two
+    // predicates are that enforcement, kept pure here beside the rules they
+    // protect and applied at TagStore's write seam (not per caller, so a future
+    // fourth entry point is safe by default).
+
+    /// Whether a free-text label may be added as an ordinary manual tag.
+    /// A glyph run must not be: `addManualTag` has no mutual exclusion, so it
+    /// would leave a file carrying two ratings and break `resolution`.
+    /// Ratings are `TagStore.setRating`'s alone.
+    static func allowsManualTag(_ label: String) -> Bool { !isRating(label) }
+
+    /// Whether a library-wide label rename may proceed.
+    /// FROM a rating is data loss (every file's rating at that level is
+    /// destroyed in one write); TO a rating mints a duplicate rating on files
+    /// that already have one.
+    static func allowsRename(from old: String, to new: String) -> Bool {
+        !isRating(old) && !isRating(new)
+    }
+
     /// All five canonical rating labels, ascending: ["★", …, "★★★★★"].
     static let allLabels: [String] = (1...maxStars).map { String(repeating: glyph, count: $0) }
 

@@ -58,12 +58,29 @@ nonisolated enum NoteStore {
     /// notes are NOT in FTS (files_fts is keyed by the immutable files.id, which
     /// can't represent a per-(file_id, parent_dir) value).
     static func searchIDs(term: String, db: GRDB.Database) throws -> [String] {
+        var seen = Set<String>()
+        return try searchScopes(term: term, db: db)
+            .map(\.fileID)
+            .filter { seen.insert($0).inserted }
+    }
+
+    /// The same search, keeping the FOLDER each match lives in. A note belongs
+    /// to a file IN A FOLDER, so dropping `parent_dir` here made a note written
+    /// on one copy surface its byte-identical twin in another folder — a search
+    /// result for text that copy doesn't carry. The caller uses the scope to
+    /// restrict which alive paths a note match may resolve to.
+    static func searchScopes(term: String,
+                             db: GRDB.Database) throws -> [(fileID: String, parentDir: String)] {
         let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
         let pattern = "%" + likeEscape(trimmed) + "%"
-        return try String.fetchAll(db, sql: """
-            SELECT DISTINCT file_id FROM notes WHERE body LIKE ? ESCAPE '\\'
-            """, arguments: [pattern])
+        return try Row.fetchAll(db, sql: """
+            SELECT file_id, parent_dir FROM notes WHERE body LIKE ? ESCAPE '\\'
+            """, arguments: [pattern]).compactMap { row in
+            guard let fid: String = row["file_id"],
+                  let dir: String = row["parent_dir"] else { return nil }
+            return (fid, dir)
+        }
     }
 
     /// Carry a note from one (file_id, parent_dir) identity/scope to another,

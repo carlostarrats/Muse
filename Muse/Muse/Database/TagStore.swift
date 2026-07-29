@@ -84,6 +84,14 @@ final class TagStore: ObservableObject {
         let dir = TagScope.parentDir(ofPath: absPath)
         let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return await tags(for: url) }
+        // A rating IS a manual tag (a run of ★), but it is MUTUALLY EXCLUSIVE and
+        // this path has no exclusion — a free-text "★★★" typed into the hero's
+        // "…or create a new one" field would sit alongside an existing "★★" and
+        // break `StarRating.resolution`. Ratings only ever come through
+        // `setRating`. Guarded here, at the write seam, rather than in each
+        // caller — the same reasoning that put the filter inside `TagSuggest.rank`
+        // and `MetadataImportApply.applyKeywords`.
+        guard StarRating.allowsManualTag(trimmed) else { return await tags(for: url) }
         do {
             try await queue.write { db in
                 guard let path = try PathRow
@@ -134,6 +142,15 @@ final class TagStore: ObservableObject {
         guard let queue = Database.shared.dbQueue else { return }
         let trimmed = new.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed != old else { return }
+        // Neither side may be a rating glyph run. Renaming FROM one is
+        // library-wide DATA LOSS — the chip row deliberately shows rating chips
+        // as a filter affordance, and their context menu offered the same
+        // "Rename Tag…" as any other chip, so renaming "★★★" to a word silently
+        // destroyed every three-star rating in the library. Renaming TO one mints
+        // a second rating on files that already have one, breaking
+        // `StarRating.resolution`'s one-rating-per-photo rule. Ratings are
+        // `setRating`'s alone.
+        guard StarRating.allowsRename(from: old, to: trimmed) else { return }
         var affectedIDs: [String] = []
         do {
             affectedIDs = try await queue.write { db -> [String] in

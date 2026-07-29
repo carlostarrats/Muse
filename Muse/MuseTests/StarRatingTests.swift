@@ -146,4 +146,35 @@ final class StarRatingTests: XCTestCase {
             XCTAssertNotNil(StarRating.badgeLabel(for: n, availableWidth: -50))
         }
     }
+
+    // MARK: - Write policy
+    //
+    // A rating is stored as a manual tag, so every generic tag-write path can
+    // reach it — and none of them enforce one-rating-per-photo.
+
+    func testManualTagPolicyRejectsRatingRunsOnly() {
+        // Every canonical rating is refused: addManualTag has no mutual
+        // exclusion, so one would leave a file carrying two ratings.
+        for label in StarRating.allLabels {
+            XCTAssertFalse(StarRating.allowsManualTag(label), "\(label) must not be addable as a tag")
+        }
+        // Ordinary labels are unaffected, including ones that merely CONTAIN a
+        // star or exceed the rating range — those are real user tags.
+        for label in ["beach", "★ favourite", "5 stars", "★★★★★★", "", "☆☆"] {
+            XCTAssertTrue(StarRating.allowsManualTag(label), "\(label) is a normal tag")
+        }
+    }
+
+    func testRenamePolicyRefusesBothDirections() {
+        // FROM a rating: library-wide data loss (every ★★★ in the library).
+        XCTAssertFalse(StarRating.allowsRename(from: "★★★", to: "three stars"))
+        // TO a rating: mints a second rating on files that already have one.
+        XCTAssertFalse(StarRating.allowsRename(from: "beach", to: "★★★"))
+        // Rating to rating is both at once.
+        XCTAssertFalse(StarRating.allowsRename(from: "★", to: "★★"))
+        // Ordinary renames still work, including near-misses on either side.
+        XCTAssertTrue(StarRating.allowsRename(from: "beach", to: "shore"))
+        XCTAssertTrue(StarRating.allowsRename(from: "★★★★★★", to: "six stars"))
+        XCTAssertTrue(StarRating.allowsRename(from: "sunset", to: "★ sunset"))
+    }
 }

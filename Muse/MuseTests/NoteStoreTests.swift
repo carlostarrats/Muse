@@ -84,6 +84,35 @@ final class NoteStoreTests: XCTestCase {
         XCTAssertEqual(ids, ["f1"])
     }
 
+    /// A note belongs to a file IN A FOLDER. The search must say WHICH folder
+    /// matched, or the caller resolves the hit to every alive path of the file
+    /// and surfaces a byte-identical copy in another folder that carries no note.
+    func testSearchScopesCarryTheMatchingFolder() throws {
+        let q = try makeQueue()
+        try q.write { db in
+            // One file (f1) living in two folders; only the /A copy has a note.
+            try NoteStore.write("a memo about ducks", fileID: "f1", parentDir: "/A", updatedAt: 10, db: db)
+        }
+        let scopes = try q.read { db in try NoteStore.searchScopes(term: "duck", db: db) }
+        XCTAssertEqual(scopes.count, 1)
+        XCTAssertEqual(scopes.first?.fileID, "f1")
+        XCTAssertEqual(scopes.first?.parentDir, "/A")
+    }
+
+    /// The same note text in two folders yields both scopes, and the ID list
+    /// stays de-duplicated.
+    func testSearchScopesReportEachFolderButIDsAreUnique() throws {
+        let q = try makeQueue()
+        try q.write { db in
+            try NoteStore.write("ducks", fileID: "f1", parentDir: "/A", updatedAt: 10, db: db)
+            try NoteStore.write("ducks", fileID: "f1", parentDir: "/B", updatedAt: 10, db: db)
+        }
+        let scopes = try q.read { db in try NoteStore.searchScopes(term: "duck", db: db) }
+        XCTAssertEqual(Set(scopes.map(\.parentDir)), ["/A", "/B"])
+        let ids = try q.read { db in try NoteStore.searchIDs(term: "duck", db: db) }
+        XCTAssertEqual(ids, ["f1"])
+    }
+
     func testSearchEmptyTermReturnsNothing() throws {
         let q = try makeQueue()
         try q.write { db in
