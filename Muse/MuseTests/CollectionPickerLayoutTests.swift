@@ -8,6 +8,14 @@ final class CollectionPickerLayoutTests: XCTestCase {
 
     private typealias L = CollectionPickerLayout
 
+    /// The usable width must account for the presenter's scrollbar channel.
+    /// Sizing against card-minus-padding alone is what let both tabs overflow.
+    func testContentWidthAccountsForTheScrollBarChannel() {
+        XCTAssertEqual(L.contentWidth,
+                       L.cardWidth - ModalChrome.scrollBarChannel - L.cardPadding * 2)
+        XCTAssertEqual(L.contentWidth, 408)
+    }
+
     func testBothTabsFitTheCardWidth() {
         XCTAssertLessThanOrEqual(L.symbolsTabWidth, L.contentWidth,
                                  "the Symbols tab overflows the card")
@@ -51,6 +59,6 @@ final class CollectionPickerLayoutTests: XCTestCase {
     func testRowMath() {
         XCTAssertEqual(L.colorGrid.rows, 7)
         XCTAssertEqual(L.symbolGrid.rows, 6)
-        XCTAssertEqual(L.emojiGrid.rows, 5)
+        XCTAssertEqual(L.emojiGrid.rows, 6)
     }
 }

@@ -63,11 +63,14 @@ struct SelectionActionsMenu: View {
                 // library: the alphabetical dump ran to hundreds of rows and had
                 // to be scrolled, which is not a menu anyone uses.
                 if !appState.topTagLabels.isEmpty {
-                    Divider()
-                    ForEach(appState.topTagLabels, id: \.self) { label in
-                        // Display the localized vision term (e.g. "chien"); the
-                        // canonical English `label` is still what gets written.
-                        Button(VocabularyLocalizer.shared.display(label)) { addTag(label) }
+                    // A named section, so the short list reads as an OFFER
+                    // rather than as a truncated index of every tag you own.
+                    Section("Suggestions") {
+                        ForEach(appState.topTagLabels, id: \.self) { label in
+                            // Display the localized vision term (e.g. "chien");
+                            // the canonical English `label` is still written.
+                            Button(VocabularyLocalizer.shared.display(label)) { addTag(label) }
+                        }
                     }
                 }
             }

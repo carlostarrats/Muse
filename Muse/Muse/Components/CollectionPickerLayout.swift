@@ -39,10 +39,20 @@ nonisolated enum CollectionPickerLayout {
 
     // MARK: - Card
 
-    /// The modal's width, and the content width left inside its padding.
+    /// The modal's width, and what's actually left to lay out in.
+    ///
+    /// `scrollBarChannel` is the trap: the presenter frames the card's content
+    /// at `cardWidth - scrollBarChannel`, so the usable width is 16pt narrower
+    /// than the card. Sizing the grids against card-minus-padding alone left
+    /// both tabs overflowing — and by DIFFERENT amounts, so a fixed-column
+    /// LazyVGrid spilled past the card edge by a different margin per tab,
+    /// which is what made the modal look like it changed width when you
+    /// switched. Derive it, never restate it.
     static let cardWidth: CGFloat = 480
     static let cardPadding: CGFloat = 28
-    static var contentWidth: CGFloat { cardWidth - cardPadding * 2 }
+    static var contentWidth: CGFloat {
+        cardWidth - ModalChrome.scrollBarChannel - cardPadding * 2
+    }
 
     /// Height of a column's "Color" / "Icon" heading plus the gap under it.
     /// Both tabs draw exactly one such heading row, so it cancels out of the
@@ -50,7 +60,7 @@ nonisolated enum CollectionPickerLayout {
     static let headingBlock: CGFloat = 24
 
     /// Gap on each side of the Symbols tab's divider.
-    static let columnGap: CGFloat = 16
+    static let columnGap: CGFloat = 14
     static let dividerWidth: CGFloat = 1
 
     // MARK: - The two tabs
@@ -58,9 +68,11 @@ nonisolated enum CollectionPickerLayout {
     /// 28 cells (Default + 27 tokens) in 4 columns = 7 rows.
     static let colorGrid = Grid(cell: 24, gap: 10, columns: 4, count: 28)
     /// 42 cells in 7 columns = 6 rows.
-    static let symbolGrid = Grid(cell: 30, gap: 8, columns: 7, count: 42)
-    /// 45 emoji in 9 columns = 5 rows.
-    static let emojiGrid = Grid(cell: 38, gap: 9, columns: 9, count: 45)
+    static let symbolGrid = Grid(cell: 28, gap: 7, columns: 7, count: 42)
+    /// 60 emoji in 10 columns = 6 rows — sized so the tab is as TALL as the
+    /// Symbols tab's colour column, not just as wide. A short grid left dead
+    /// space under it inside the reserved area.
+    static let emojiGrid = Grid(cell: 32, gap: 8, columns: 10, count: 60)
 
     static var symbolsTabWidth: CGFloat {
         colorGrid.width + columnGap + dividerWidth + columnGap + symbolGrid.width

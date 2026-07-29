@@ -190,11 +190,11 @@ final class CollectionAppearanceTests: XCTestCase {
     }
 
     /// Both picker tabs must occupy the SAME box, which they do by dividing
-    /// evenly into their grids: 45 emoji at 9 across = 5 rows, 42 symbol cells
+    /// evenly into their grids: 50 emoji at 10 across = 5 rows, 42 symbol cells
     /// at 7 across = 6 rows. A count that isn't a multiple leaves a ragged last
     /// row and the two tabs stop matching.
     func testCatalogsDivideEvenlyIntoTheirGrids() {
-        XCTAssertEqual(CollectionAppearance.emojiCatalog.count % 9, 0)
+        XCTAssertEqual(CollectionAppearance.emojiCatalog.count % 10, 0)
         // The symbol grid draws the collection's own default glyph first, then
         // every catalog entry except the stack — so the cell count equals the
         // catalog count whichever kind of collection it is.
