@@ -6704,3 +6704,32 @@ Label conversion (26 and 32 of each, before and after); no duplicate keyboard
 shortcut across the whole app; `tagsVersion` has a live sink so `confirmAddTag`
 does refresh the chips; every `NSToolbarItem` has a label and a
 `menuFormRepresentation` for the overflow menu (dumped from the running app).
+
+## 2026-07-28 — `feat/next-143`: modals had a permanent gap on the right
+
+Owner: "why do all the modals have extra space on the right hand side?"
+
+`ModalPresenter` framed every card's content at `cardWidth − scrollBarChannel`
+and padded the trailing edge by that same 16pt, whether or not the card
+actually scrolled. Since every card carries a uniform `.padding(28)`, the
+visible insets were 28 left / 44 right — off-centre on all ten modals, most
+obviously on the ✕ and the Settings toggles.
+
+The channel existed so macOS's overlay scroller wouldn't land on the last few
+characters of a wrapped line, and was applied in BOTH states so the width
+couldn't feed back into the height measurement that produced it. Owner's call:
+no reserve at all — other apps let the scroller float over the content. So
+`ModalChrome.scrollBarChannel` is gone; content runs the full card width.
+
+Two consequences handled:
+
+- `CollectionPickerLayout.contentWidth` is now `cardWidth − padding*2` = **424**
+  (it was 408 while the channel existed — see the `feat/next-142` entry above,
+  now superseded). Both grids use flexible columns, so they simply spread into
+  the extra 16pt; the tab-equality tests still pass unchanged.
+- The content frame is `maxWidth:`, not a fixed `width:`. Under "Show scroll
+  bars: Always" (and under Automatic with a mouse attached) macOS uses a LEGACY
+  scroller that takes its ~15pt out of the scroll view's content area; a hard
+  width would overhang and clip on the right. Every one of the ten cards is
+  greedy at its root (a `Spacer()` or `maxWidth: .infinity`), so in the usual
+  overlay case the cap is a no-op and content still fills the card exactly.

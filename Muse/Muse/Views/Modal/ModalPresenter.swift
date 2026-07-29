@@ -104,11 +104,18 @@ private struct MuseModalPresenter<ModalContent: View>: ViewModifier {
         // a three-row modal is three rows tall and nothing bounces.
         return chrome(
             ScrollView {
+                // Full card width, no reserved scrollbar strip — the overlay
+                // scroller floats above the content. See ModalChrome.
+                //
+                // maxWidth, not a fixed width: with "Show scroll bars: Always"
+                // (or a mouse attached under Automatic) macOS uses a LEGACY
+                // scroller, which takes its ~15pt out of the scroll view's
+                // content area. A hard width would then overhang and clip on the
+                // right; capping lets the content shrink into whatever it's
+                // actually given. In the overlay case — the usual one — the
+                // proposal is the full card width and this is a no-op.
                 modal()
-                    .frame(width: cardWidth - ModalChrome.scrollBarChannel)
-                    // Reserved on both states so the measurement can't feed back
-                    // into the width that produced it.
-                    .padding(.trailing, ModalChrome.scrollBarChannel)
+                    .frame(maxWidth: cardWidth)
                     .background(
                         GeometryReader { proxy in
                             Color.clear.preference(key: ModalCardHeight.self,
