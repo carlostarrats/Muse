@@ -6733,3 +6733,55 @@ Two consequences handled:
   width would overhang and clip on the right. Every one of the ten cards is
   greedy at its root (a `Spacer()` or `maxWidth: .infinity`), so in the usual
   overlay case the cap is a no-op and content still fills the card exactly.
+
+---
+
+## `feat/next-144` — hero INFO card: Size · Format · Dimensions · MP (2026-07-28)
+
+Owner's ask: the large image viewer's info section should carry file size,
+dimensions, file type/format, camera, and megapixels — each only when the file
+actually has it. Camera/Lens/Exposure/Taken/Location were already there; size
+and dimensions existed only as an unlabeled grey line under the filename, and
+format/megapixels didn't exist at all.
+
+**What landed.** `FileMetadata.withFileFacts` splices the universal rows
+(Modified · Size · Format, plus Dimensions · MP for a still image) into
+whatever the per-kind loader produced. The insertion point is anchored on the
+CAPTURE-date row ("Taken"/"Recorded"), not on the Modified row — a file with a
+capture date but no modification date would otherwise push its facts above the
+date it was taken. `dimensions` is nil for non-still kinds because the video
+loader already emits its own Dimensions row from the track's transformed
+natural size; passing it twice was the obvious way to get a duplicate.
+
+The grey `size · dimensions` line under the filename is gone — it duplicated
+the new labeled rows, and it read `ViewerFileDetails.pixelSize`/`sizeBytes`
+(the DB), so it showed nothing for an unanalyzed file. `ViewerFileDetails`
+dropped `sizeBytes` with it. The INFO card's Dimensions come from
+`ImageHeaderSizeCache` instead, which is orientation-applied and present
+regardless of analysis state.
+
+**Design notes worth keeping.** The megapixel row is labeled `MP` and carries
+a BARE number — owner's call, and spelling out "Megapixels: 12 MP" prints the
+unit twice. It's computed in Double (a hostile header can declare dimensions
+whose Int product traps) and suppressed below 0.1 MP, where "0.0" says nothing.
+Format is `UTType.localizedDescription` ("JPEG image"), falling back to the
+uppercased extension for an unregistered type and omitted entirely for an
+extensionless file. `Format` is localized; `MP` is a bare catalog key with no
+translation, like the existing `MB`.
+
+**Two bugs the review caught, both from exercising the real loader rather than
+reading it** (`FileMetadataLoadTests` writes actual JPEGs to a temp dir):
+
+- **A missing file grew an INFO card that invented its type.** Format is
+  derived from the path's extension, so a file the viewer outlived (external
+  delete, the burn-delete undo window) rendered a lone `Format: JPEG image` for
+  a file that wasn't there — where before it rendered no card at all. `load`
+  now bails when the file can't be stat'd.
+- **A small file read "0 KB".** `ByteCountFormatter` capped at KB-and-up
+  rounds a 120-byte SVG to zero. `.useBytes` is back in the allowed units;
+  nothing past 1 KB formats differently.
+
+Ordering logic initially went straight into `load`, against this file's own
+stated contract ("formatting is pure and testable; `load` is the thin IO
+wrapper") — extracted to `withFileFacts` and unit-tested, which is what made
+the anchor bug visible.

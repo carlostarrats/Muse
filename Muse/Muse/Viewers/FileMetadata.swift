@@ -14,6 +14,7 @@ import Foundation
 import ImageIO
 import PDFKit
 import AVFoundation
+import UniformTypeIdentifiers
 
 nonisolated struct InfoRow: Identifiable, Equatable {
     let id: UUID
@@ -221,6 +222,82 @@ nonisolated struct FileMetadata: Equatable {
         return df.string(from: date)
     }
 
+    /// On-disk size. Bytes are in the allowed units on purpose: capped at KB and
+    /// up, a small SVG or text file reads "0 KB", which is worse than the raw
+    /// count it was meant to spare the reader. Anything past 1 KB formats the
+    /// same either way. nil for a missing or zero size.
+    static func formatFileSize(_ bytes: Int64?) -> String? {
+        guard let bytes, bytes > 0 else { return nil }
+        let f = ByteCountFormatter()
+        f.countStyle = .file
+        f.allowedUnits = [.useBytes, .useKB, .useMB, .useGB]
+        return f.string(fromByteCount: bytes)
+    }
+
+    /// The system's human name for the file's type ("JPEG image"), falling back
+    /// to the bare uppercased extension when the type isn't registered. nil for
+    /// an extensionless file. Display-only — nothing derived from this is stored.
+    static func formatFileKind(extension ext: String) -> String? {
+        let e = ext.trimmingCharacters(in: .whitespaces)
+        guard !e.isEmpty else { return nil }
+        if let type = UTType(filenameExtension: e),
+           let desc = type.localizedDescription?.trimmingCharacters(in: .whitespaces),
+           !desc.isEmpty {
+            return desc
+        }
+        return e.uppercased()
+    }
+
+    /// Pixel count in megapixels, one decimal below 10 where the tenths still
+    /// mean something. The BARE number — the row's label is the unit ("MP"), so
+    /// spelling it out here would print it twice. Computed in Double: a hostile
+    /// header can declare dimensions whose product overflows Int. nil below
+    /// 0.1 MP (icons/sprites — "0.0" says nothing).
+    static func formatMegapixels(width: Int, height: Int) -> String? {
+        guard width > 0, height > 0 else { return nil }
+        let mp = (Double(width) * Double(height)) / 1_000_000
+        guard mp >= 0.1 else { return nil }
+        return mp < 10 ? String(format: "%.1f", mp) : String(format: "%.0f", mp)
+    }
+
+    /// Splice the rows that apply to EVERY file — Modified · Size · Format, plus
+    /// Dimensions · MP for a still image — into `rows` from the per-kind
+    /// loader. These are filesystem attributes and header reads, not byte reads,
+    /// which is why the INFO card shows for any non-dataless file rather than
+    /// only those carrying photo/PDF/AV metadata.
+    ///
+    /// They sit directly under the capture-date row when there is one ("Taken"
+    /// for photos, "Recorded" for videos), else at the top. The insertion point
+    /// is anchored on the CAPTURE date, not on the Modified row: a file with a
+    /// capture date but no modification date would otherwise push its facts
+    /// above the date it was taken.
+    ///
+    /// `dimensions` is nil for anything that isn't a still image — a video
+    /// already carries its own Dimensions row (from the track's transformed
+    /// natural size) and must not get a second one.
+    static func withFileFacts(_ rows: [InfoRow], modified: Date?, sizeBytes: Int64?,
+                              fileExtension: String,
+                              dimensions: (width: Int, height: Int)?) -> [InfoRow] {
+        var out = rows
+        var at = out.firstIndex(where: { $0.label == "Taken" || $0.label == "Recorded" })
+            .map { $0 + 1 } ?? 0
+        if let s = formatModifiedDate(modified) {
+            out.insert(InfoRow("Modified", s), at: at)
+            at += 1
+        }
+        var facts: [InfoRow] = []
+        if let s = formatFileSize(sizeBytes) { facts.append(InfoRow("Size", s)) }
+        if let k = formatFileKind(extension: fileExtension) { facts.append(InfoRow("Format", k)) }
+        if let d = dimensions, d.width > 0, d.height > 0 {
+            facts.append(InfoRow("Dimensions", "\(d.width) × \(d.height)"))
+            if let mp = formatMegapixels(width: d.width, height: d.height) {
+                facts.append(InfoRow("MP", mp))
+            }
+        }
+        out.insert(contentsOf: facts, at: at)
+        return out
+    }
+
     // MARK: - IO loader (not unit-tested: CG/PDFKit/AVFoundation layer)
 
     /// Read header metadata off-main for `url`, dispatched by `kind`. Returns
@@ -247,25 +324,35 @@ nonisolated struct FileMetadata: Equatable {
             default:
                 result = .empty
             }
-            // The Modified date applies to EVERY file — it's a filesystem
-            // attribute, not a byte read. It sits directly under "Taken" when a
-            // capture date exists, else at the top. This is why the INFO card
-            // now shows for any non-dataless file, not only those carrying
-            // photo/PDF/AV metadata.
-            if let mod = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
-                .contentModificationDate,
-               let s = formatModifiedDate(mod) {
-                let row = InfoRow("Modified", s)
-                // Sit directly under the capture-date row when present ("Taken"
-                // for photos, "Recorded" for videos), else at the top.
-                if let anchorIdx = result.rows.firstIndex(where: {
-                    $0.label == "Taken" || $0.label == "Recorded"
-                }) {
-                    result.rows.insert(row, at: anchorIdx + 1)
-                } else {
-                    result.rows.insert(row, at: 0)
+            // A file that can't be stat'd is gone or unreadable — a viewer can
+            // outlive the file it's showing (an external delete, the burn-delete
+            // undo window). Bail rather than fall through, or Format would still
+            // be inferred from the path's extension and the card would assert a
+            // type for a file that isn't there.
+            guard let values = try? url.resourceValues(forKeys: [.contentModificationDateKey,
+                                                                 .fileSizeKey])
+            else { return result }
+            // Still-image dimensions come from the header via
+            // ImageHeaderSizeCache — the single orientation-applied dimension
+            // truth the grid and the hero flight also read, so a rotated photo
+            // reports what it SHOWS. It's warmed off-main by the thumbnail pass,
+            // so this is normally a dictionary lookup, and it's available
+            // whether or not the file has been analyzed (the DB's width/height
+            // are analysis-only).
+            var dimensions: (width: Int, height: Int)? = nil
+            switch kind {
+            case .image, .raw, .psd:
+                if let px = ImageHeaderSizeCache.resolve(url) {
+                    dimensions = (Int(px.width), Int(px.height))
                 }
+            default:
+                break
             }
+            result.rows = withFileFacts(result.rows,
+                                        modified: values.contentModificationDate,
+                                        sizeBytes: values.fileSize.map(Int64.init),
+                                        fileExtension: url.pathExtension,
+                                        dimensions: dimensions)
             return result
         }.value
     }
