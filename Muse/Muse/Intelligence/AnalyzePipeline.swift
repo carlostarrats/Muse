@@ -137,6 +137,7 @@ final class AnalyzePipeline: ObservableObject {
     /// analyzed_hash is missing or stale (new or edited images). Runs
     /// after every index pass — analyzing twice is a provable no-op.
     func analyzePending(in urls: [URL]) async {
+        PhaseTrace.mark("analyzePending.call", "urls=\(urls.count)")
         // Automatic tagging is opt-out (Preferences). Off → newly indexed
         // images stay viewable but untagged; the user can still Analyze /
         // Regenerate a folder by hand.
@@ -164,6 +165,7 @@ final class AnalyzePipeline: ObservableObject {
         }) ?? []
         guard !pending.isEmpty else { return }
         let pendingURLs = urls.filter { pending.contains($0.standardizedFileURL.path) }
+        PhaseTrace.mark("analyzePending.run", "stale=\(pendingURLs.count)")
         await analyze(folder: pendingURLs)
     }
 

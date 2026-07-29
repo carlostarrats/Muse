@@ -761,6 +761,7 @@ actor Indexer {
         }
         guard !work.isEmpty else { return [] }
 
+        PhaseTrace.mark("index.begin", "n=\(work.count) force=\(force) silent=\(silent)")
         if !silent { await IndexProgress.shared.begin(work.count) }
         let taskPriority: TaskPriority = (priority == .high) ? .utility : .background
 
@@ -785,6 +786,7 @@ actor Indexer {
                 _ = enqueueNext()
             }
         }
+        PhaseTrace.mark("index.end", "changed=\(changed.count)")
         return changed
     }
 

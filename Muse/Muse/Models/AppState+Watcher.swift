@@ -29,10 +29,12 @@ extension AppState {
     /// re-analyze new/edited ones; (2) reflect adds/removes/renames in the
     /// grid listing. No folder-wide reindex — only the touched files do work.
     private func handleFolderEvent(changedPaths: [String]) {
+        PhaseTrace.mark("fsevent", "raw=\(changedPaths.count)")
         guard let folder = selectedFolder else { return }
         let media = FolderEventFilter.mediaChanges(
             paths: changedPaths, folder: folder.url, recursive: showSubfolders)
         let existing = media.filter { FileManager.default.fileExists(atPath: $0) }
+        PhaseTrace.mark("fsevent.media", "media=\(media.count) existing=\(existing.count)")
         if !existing.isEmpty {
             Task.detached(priority: .userInitiated) {
                 let pairs = existing.map { p -> (URL, AssetKind) in

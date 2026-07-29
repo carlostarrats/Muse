@@ -100,6 +100,7 @@ struct MuseApp: App {
                 .environmentObject(googleAuth)
                 .onAppear { appDelegate.appState = appState }
                 .task {
+                    PhaseTrace.begin()
                     ThumbnailCache.shared.enforceDiskCap()
                     // 180-day retention for data of removed folders.
                     if let queue = Database.shared.dbQueue {
@@ -127,7 +128,8 @@ struct MuseApp: App {
                                                                 icloudRoot: icloud)
                         }
                     }
-                    Task { await IntentBackfill.run() }
+                    PhaseTrace.mark("intent-backfill.start")
+                    Task { await IntentBackfill.run(); PhaseTrace.mark("intent-backfill.end") }
                     // Hard-delete any Drive shares past their expiry (no-op if
                     // not signed in or nothing is due).
                     await DriveExpirySweeper.sweep(auth: googleAuth)
