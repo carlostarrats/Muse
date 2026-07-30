@@ -84,7 +84,52 @@ struct SidebarView: View {
     /// Grey rather than the blue a focused List would use, because the label and
     /// icon already carry the blue; a blue wash under blue text puts two blues on
     /// top of each other and separates poorly, worst on dark.
-    static let selectionFill = Color(nsColor: .unemphasizedSelectedContentBackgroundColor)
+    /// LINEFORM'S values (2026-07-29, owner call), lifted from
+    /// `OutlineSidebarView.rowSelectionFillNSColor`:
+    ///
+    /// • LIGHT — the system grey blended `selectionFillLightening` (0.55) toward
+    ///   the sidebar page (0.988 white, the same page value both apps use). Raw
+    ///   AppKit grey reads heavy against a near-white sidebar.
+    /// • DARK — Lineform's RULE rather than its hex: the fill RECESSES below the
+    ///   nav. Apple's grey (R70) is far lighter than Muse's dark sidebar, so a
+    ///   selected row glowed and the blue label sat on a bright band (~2.8:1);
+    ///   Lineform's own `#282828` can't be copied straight over either, since it
+    ///   recesses below THEIR `#313131` nav but would land 4/255 ABOVE Muse's
+    ///   darker one (0.10 calibrated ≈ `#242424`). So the dark fill is derived
+    ///   from Muse's own nav — that surface darkened by `darkSelectionRecess` —
+    ///   which keeps the recess intact if the nav value ever moves.
+    ///
+    /// Built as a dynamic `NSColor` so each branch resolves against the view's
+    /// OWN appearance — the light and dark system greys differ, and reading a
+    /// dynamic colour outside the drawing appearance picks up the system's
+    /// light/dark rather than this sidebar's.
+    static let selectionFill = Color(nsColor: NSColor(name: "museSidebarSelectionFill") { appearance in
+        if appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua {
+            let nav = NSColor(calibratedWhite: darkPageWhiteComponent, alpha: 1)
+                .usingColorSpace(.sRGB) ?? .black
+            return nav.blended(withFraction: darkSelectionRecess, of: .black) ?? nav
+        }
+        var resolved = NSColor.unemphasizedSelectedContentBackgroundColor
+        appearance.performAsCurrentDrawingAppearance {
+            resolved = NSColor.unemphasizedSelectedContentBackgroundColor
+                .usingColorSpace(.sRGB) ?? resolved
+        }
+        let page = NSColor(calibratedWhite: lightPageWhiteComponent, alpha: 1)
+            .usingColorSpace(.sRGB) ?? .white
+        return resolved.blended(withFraction: selectionFillLightening, of: page) ?? resolved
+    })
+
+    /// How far the light selection grey is lifted toward the sidebar page.
+    static let selectionFillLightening: CGFloat = 0.55
+
+    /// How far the dark selection fill is darkened BELOW the nav surface.
+    static let darkSelectionRecess: CGFloat = 0.40
+
+    /// The sidebar page values `cardColor` draws — restated here because the
+    /// selection fill is derived from the surface it sits on, and the two must
+    /// not drift apart.
+    static let lightPageWhiteComponent: CGFloat = 0.988
+    static let darkPageWhiteComponent: CGFloat = 0.10
 
     /// Label + icon color for the SELECTED row: Apple's own `systemBlue`.
     ///
@@ -173,7 +218,9 @@ struct SidebarView: View {
     /// literal surface colour.
     private var cardColor: Color {
         Color(nsColor: NSColor(
-            calibratedWhite: colorScheme == .dark ? 0.10 : 0.988, alpha: 1
+            calibratedWhite: colorScheme == .dark
+                ? Self.darkPageWhiteComponent : Self.lightPageWhiteComponent,
+            alpha: 1
         ))
     }
 

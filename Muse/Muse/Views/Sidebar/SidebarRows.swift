@@ -139,8 +139,8 @@ struct SectionHeader<Accessory: View>: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(title)
-                .font(.system(size: 11, weight: .semibold))
-                .tracking(0.6)
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.5)
                 .foregroundStyle(.secondary)
                 // Expose the new sidebar sections to VoiceOver's heading rotor so
                 // the FOLDERS / COLLECTIONS structure is navigable.
@@ -156,9 +156,9 @@ struct SectionHeader<Accessory: View>: View {
                 }
             } label: {
                 Image(systemName: collapsed ? "plus" : "minus")   // + collapsed, − expanded
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(.secondary.opacity(hovering ? 1.0 : 0.8))
-                    .frame(width: 18, height: 18)
+                    .frame(width: 16, height: 16)
                     .background(Circle().fill(Color.primary.opacity(hovering ? 0.16 : 0.08)))
                     .contentTransition(.identity)
             }
@@ -260,6 +260,30 @@ struct AddPillButton: View {
 /// where the on-screen order is something the user arranged by hand rather than
 /// a rule, so it's worth signalling at a glance. Every other mode uses the
 /// header's own secondary color, so the control recedes into the label.
+/// The sort glyph, sized by an NSImage SYMBOL CONFIGURATION rather than a
+/// SwiftUI `.font`. `.menuStyle(.borderlessButton)` repaints its label — it
+/// overrode the font exactly the way it overrode `foregroundStyle` (verified:
+/// shrinking the font left the drawn glyph unchanged and only its frame moved).
+/// A configured NSImage carries its own intrinsic size, which the style can't
+/// override; `isTemplate` keeps it tintable so the Manual-mode accent applies.
+///
+/// Lives outside `SectionSortMenu` because that type is generic and Swift has
+/// no static stored properties in a generic type.
+enum SidebarSortGlyph {
+    static let pointSize: CGFloat = 11
+
+    static let image: Image = {
+        let name = "arrow.up.and.down.text.horizontal"
+        let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .semibold)
+        guard let img = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(config) else {
+            return Image(systemName: name)
+        }
+        img.isTemplate = true
+        return Image(nsImage: img)
+    }()
+}
+
 struct SectionSortMenu<Mode: Hashable & Identifiable>: View {
     let modes: [Mode]
     /// Already-LOCALIZED display name for a mode (`FolderSortMode.label` and
@@ -284,6 +308,7 @@ struct SectionSortMenu<Mode: Hashable & Identifiable>: View {
         isManual ? SidebarView.selectedLabelColor : .secondary
     }
 
+
     var body: some View {
         Menu {
             ForEach(modes) { mode in
@@ -296,8 +321,7 @@ struct SectionSortMenu<Mode: Hashable & Identifiable>: View {
                 }
             }
         } label: {
-            Image(systemName: "arrow.up.and.down.text.horizontal")
-                .font(.system(size: 9, weight: .semibold))
+            SidebarSortGlyph.image
                 .frame(width: 15, height: 15)
                 .background(Circle().fill(Color.primary.opacity(hovering ? 0.10 : 0)))
                 .contentShape(Rectangle())
@@ -306,8 +330,11 @@ struct SectionSortMenu<Mode: Hashable & Identifiable>: View {
         .menuIndicator(.hidden)
         .fixedSize()
         // On the MENU, not just its label image: a menu style paints its own
-        // label content, so a foregroundStyle applied inside the label was
-        // overridden and the control never actually turned accent in Manual.
+        // label content, so a font/foregroundStyle applied INSIDE the label is
+        // overridden — the control never turned accent in Manual, and a font
+        // set on the Image left the glyph full-size (only its frame shrank).
+        // The 14pt frame is a HIT TARGET around a deliberately small glyph.
+        .font(.system(size: 7, weight: .semibold))
         .foregroundStyle(glyphColor)
         .tint(glyphColor)
         .onHover { hovering = $0 }
