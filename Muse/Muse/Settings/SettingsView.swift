@@ -35,13 +35,22 @@ struct SettingsView: View {
     /// instead would merge the slider into a plain group and strip its
     /// adjustable trait, leaving VoiceOver able to read the setting but not
     /// change it.
+    /// One labeled slider as a `GridRow`, so every slider in the same `Grid`
+    /// gets the SAME track length.
+    ///
+    /// As plain `HStack`s each slider started after its own title, so "Spacing"
+    /// and "Corner Radius" produced visibly different track widths. A fixed
+    /// width on the title would equalize them but truncate a longer localized
+    /// label (French runs ~1.3× English); a Grid's first column sizes itself to
+    /// the widest label in the group, which holds in every language.
     private func measuredSlider(title: String,
                                 value: Binding<Double>,
                                 range: ClosedRange<Double>,
                                 clamp: @escaping (Double) -> Double) -> some View {
         let points = Int(clamp(value.wrappedValue))
-        return HStack(spacing: 12) {
+        return GridRow {
             Text(title)
+                .gridColumnAlignment(.leading)
                 .accessibilityHidden(true)
             Slider(value: Binding(get: { clamp(value.wrappedValue) },
                                   set: { value.wrappedValue = clamp($0.rounded()) }),
@@ -117,16 +126,20 @@ struct SettingsView: View {
             Section {
                 Toggle("Show file names", isOn: $showFileNames)
                 Toggle("Show star ratings", isOn: $showStarsOnGrid)
-                measuredSlider(
-                    title: String(localized: "Spacing"),
-                    value: $gridSpacing,
-                    range: AppSettings.gridSpacingRange,
-                    clamp: AppSettings.clampGridSpacing)
-                measuredSlider(
-                    title: String(localized: "Corner Radius"),
-                    value: $gridCornerRadius,
-                    range: AppSettings.gridCornerRadiusRange,
-                    clamp: AppSettings.clampGridCornerRadius)
+                // One Grid around both: it's what makes the two tracks the same
+                // length (see measuredSlider).
+                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
+                    measuredSlider(
+                        title: String(localized: "Spacing"),
+                        value: $gridSpacing,
+                        range: AppSettings.gridSpacingRange,
+                        clamp: AppSettings.clampGridSpacing)
+                    measuredSlider(
+                        title: String(localized: "Corner Radius"),
+                        value: $gridCornerRadius,
+                        range: AppSettings.gridCornerRadiusRange,
+                        clamp: AppSettings.clampGridCornerRadius)
+                }
             } header: {
                 Text("Grid")
             } footer: {
