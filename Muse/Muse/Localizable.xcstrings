@@ -1462,6 +1462,16 @@
         }
       }
     },
+    "Create New" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Créer"
+          }
+        }
+      }
+    },
     "Created" : {
       "localizations" : {
         "fr" : {

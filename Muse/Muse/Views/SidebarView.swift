@@ -612,8 +612,10 @@ struct SidebarView: View {
 
     /// One "Add Folder" pill when off (or on first run, before any folder
     /// exists — a collection with nothing behind it is a dead end, so Add
-    /// Collection isn't offered yet); two compact pills (Add Folder + Add
-    /// Collection) once the Collections section is shown AND a folder exists.
+    /// Collection isn't offered yet); a single "+ Create New" MENU pill (Add
+    /// Folder / Add Collection) once the Collections section is shown AND a
+    /// folder exists. The menu replaced two side-by-side pills, which had to
+    /// split the sidebar's 220pt minimum and truncate both labels.
     @ViewBuilder private var bottomBar: some View {
         // Offer "Add Collection" only when a real folder holds reachable images to
         // collect; first run / empty library gets just "Add Folder" (the real next
@@ -621,20 +623,11 @@ struct SidebarView: View {
         // content-gated COLLECTIONS section above (both a root AND content).
         if showCollectionsInSidebar && !appState.rootNodes.isEmpty
             && collectionsEngine.hasReachableContent {
-            HStack(spacing: 10) {
-                AddPillButton(systemImage: "folder",
-                              label: String(localized: "Add Folder"),
-                              shortLabel: String(localized: "Folder")) {
-                    appState.pickAndAddRoot()
-                }
-                AddPillButton(systemImage: "rectangle.on.rectangle.angled",
-                              label: String(localized: "Add Collection"),
-                              shortLabel: String(localized: "Collection")) {
-                    appState.requestNewCollection()
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            CreateNewMenuButton(
+                addFolder: { appState.pickAndAddRoot() },
+                addCollection: { appState.requestNewCollection() })
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
         } else {
             AddFolderPillButton { appState.pickAndAddRoot() }
                 .padding(.horizontal, 16)
