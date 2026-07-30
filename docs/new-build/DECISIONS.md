@@ -1,9 +1,9 @@
-# DECISIONS.md — binding decisions from Specs 01–02
+# DECISIONS.md — binding decisions from Specs 01–03
 
-*Extracted 2026-07-30 from `spec-01-implementation.md` and `spec-02-implementation.md`
-(the build-level specs, which supersede `spec-01-foundation-plumbing.md` /
-`spec-02-photo-library-core.md` where they deviate), verified against the codebase at
-`40a006b` (`feat/editing`). **Note:** as of that commit no Spec 01/02 code exists in the
+*Extracted 2026-07-30 from `spec-01-implementation.md`, `spec-02-implementation.md` and
+`spec-03-implementation.md` (the build-level specs, which supersede the corresponding
+`pre-spec-*` files where they deviate), verified against the codebase at `6fdce05`
+(`feat/editing`). **Note:** as of that commit no Spec 01/02/03 code exists in the
 tree — migrations end at `v12_smart_collections`; the implementation specs are the
 settled record, written before build. Product-level decisions live in
 `muse-photo-foundation.md` §13 (authoritative decision log); this file is the
@@ -31,10 +31,12 @@ build-level layer future specs must not contradict.*
 
 ## Network doctrine
 
-- Exactly three app-initiated network paths: (1) Google Drive share (user-initiated),
+- Exactly four app-initiated network paths: (1) Google Drive share (user-initiated),
   (2) `announcements.json` (once per launch, off-able), (3) custom-domain provisioning
-  Worker (future, paid, user-initiated). StoreKit/App Store traffic is OS-level and not
-  counted. Everything else stays blocked.
+  Worker (future, paid, user-initiated), (4) search-model download (Spec 03 —
+  strictly user-initiated via Settings or the one-time offer card, pinned host,
+  manifest SHA-256-verified, fail closed, nothing sent). StoreKit/App Store traffic is
+  OS-level and not counted. Everything else stays blocked.
 - Reverse geocoding is fully offline (bundled GeoNames + k-d tree). `CLGeocoder` and
   MapKit geocoding are forbidden (network + throttled).
 - Map link-outs (`maps://`, `https://www.google.com/maps?q=lat,lon` via
@@ -101,13 +103,15 @@ build-level layer future specs must not contradict.*
 - **`AppState` is frozen**: no new `@Published` properties, ever. New features get their
   own `@MainActor` singleton store observed directly by views (Pattern B, like
   `CollectionsEngine`): `CommerceStore`, `AnnouncementStore`, `PlacesStore`,
-  `RediscoveryStore`, `StacksStore`, `SearchFacets`.
+  `RediscoveryStore`, `StacksStore`, `SearchFacets`, `ClipModelStore`, `CompareStore`,
+  `CullStore`, `NLQuerySuggest`.
 - Sanctioned AppState integration cost per store: one stored `objectWillChange`-forwarding
   cancellable in `AppState.init` (the `folderStats` pattern) + a methods-only
   `AppState+<Feature>.swift` extension for orchestration. Nothing else.
 - New module folders: `Commerce/`, `Perf/`, `Search/`, `Intelligence/Geo/`,
   `Intelligence/Stacks/`, `Intelligence/Core/` (shared pure helpers, e.g.
-  `FeaturePrints`).
+  `FeaturePrints`), `Intelligence/Clip/` (model store, tokenizer, engine,
+  preprocessing), `Views/Compare/`.
 - Database read/write helpers are nonisolated enums of pure `db`-taking funcs in
   `Database/` (`PlaceQueries`, `RediscoveryQueries`, `StackStore` — the `NoteStore`
   shape).
@@ -127,8 +131,9 @@ build-level layer future specs must not contradict.*
 ## Database schema & migrations
 
 - Migration numbering is fixed: **v13 coordinates · v14 `photo_meta` · v15 `places` ·
-  v16 `last_viewed_at` · v17 stacks** — separate migrations so features land in
-  separate commits without renumbering. Registered at the end of
+  v16 `last_viewed_at` · v17 stacks · v18 `clip_embeddings` · v19 `photo_traits`** —
+  separate migrations so features land in separate commits without renumbering. Future
+  specs continue at v20. Registered at the end of
   `Database.makeMigrator()`, GRDB DSL, matching record structs in
   `Database/Records.swift` (snake_case fields, `Codable` + `FetchableRecord` +
   `MutablePersistableRecord`, inserted as `var`). Every new child table cascades on
@@ -296,9 +301,10 @@ build-level layer future specs must not contradict.*
   rediscovery/places; `removeRoot` re-resolves an active surface; activate/dismiss
   clear selection (the narrows-visibleFiles rule); burn-delete routes through
   `dropFromActiveCollection` → `RediscoveryStore.drop(path:)`.
-- Escape order (tested): modal → viewer → search → tags → collection →
+- Escape order (tested): modal → **compare** → viewer → search → tags → collection →
   **rediscovery** → collections page → **places page** → none. A rediscovery surface
-  behaves like a collection context; pages are outermost.
+  behaves like a collection context; pages are outermost. Compare and the hero viewer
+  never coexist; the resolver still keeps a total order.
 
 ## Near-duplicate stacks
 
@@ -392,6 +398,257 @@ build-level layer future specs must not contradict.*
   two across ±180°) + exact haversine in Swift. **`.near` decodes and evaluates but has
   no rule editor in v1** (the `ColorTerm.hex` precedent).
 
+## CLIP semantic engine & model delivery (Spec 03)
+
+- The build is model-agnostic: `Intelligence/Clip/ClipModel.swift` holds one compiled-in
+  descriptor `ClipModel.current` (`name`, `generation`, `dimension` 512,
+  `imageInputSide`, `downloadBytes`, `manifestURL`). Swapping models = edit the constant
+  + bump `generation`. Primary: MobileCLIP-S2 (weights TOU legal read gates *shipping*,
+  never building); fallback: self-converted OpenCLIP ViT-B/32.
+- Artifacts are fp16 Core ML (`ImageEncoder.mlmodelc`, `TextEncoder.mlmodelc`) + CLIP
+  BPE `vocab.json`/`merges.txt`, produced by the checked-in
+  `scripts/make-clip-coreml.py`. CLIP input normalization is baked into the image
+  encoder's input layer — the app supplies plain RGB and cannot drift from training
+  preprocessing.
+- Hosting: one `model.zip` split into ≤ 20 MiB chunks + `manifest.json`
+  (`{version, name, generation, totalBytes, sha256, chunks}`) under
+  `\(DriveConfig.shareBaseURL)/models/<name>-g<generation>/` (Pages caps assets at
+  25 MiB; an R2 bucket under the same manifest contract is the sanctioned alternative).
+- Install: reassemble → verify whole-file SHA-256 → unzip to
+  `Application Support/Muse/Models/<name>-g<generation>/` → load-test both encoders →
+  write a `verified` marker. Any failure deletes the partial directory (fail closed).
+  Older generation directories are deleted after the new one verifies. Manifest fetch:
+  pinned host, 16 KB cap, unknown `version` refused, `.ephemeral` session.
+- Download is strictly user-initiated: Settings "Search" section (status row +
+  Download/Cancel/Remove) plus a ONE-TIME `ModalMessageCard` offer — shown at the first
+  committed tokenless search of ≥ 3 words while the model is absent, never again after
+  "Not Now" (`AppSettings.clipOfferSeenKey`). Registered in `AppState.modalPresented`.
+- `ClipModelStore` (Pattern B): `state = .absent/.downloading(progress)/.installed/
+  .failed(message)`; `isReady` is the single gate every CLIP feature checks. On
+  `.installed`: kick `DeepAnalysisBackfill.run()` + `ClipPromptVectors.refreshAll()`,
+  then `SearchFacets.refresh()` on backfill completion. Zero AppState integration.
+- `ClipEngine` is an `actor` (`embedImage`/`embedText`/`unload`), lazy-loading with
+  `.all` compute units; residency is pass-scoped (`retain()`/`release()` tokens,
+  `unload()` when none outstanding — the `GeoNamesDataset` weak-residency pattern).
+  Outputs are 512-d **L2-normalized at the engine boundary** (cosine = dot product
+  downstream); zero-norm/empty input → nil.
+- `ClipTokenizer` is pure Swift BPE (~150 LOC, no dependency), 77-token context,
+  unit-tested against fixture pairs the conversion script generates from the Python
+  tokenizer — the two implementations must not diverge (the `PhotoHeaderReader` /
+  `FileMetadata` rule class).
+- `ClipPreprocess.pixelBuffer(from:side:)`: aspect-FILL scale + center crop, pure and
+  unit-tested.
+
+## Spec 03 schema (v18–v19)
+
+- **v18 `clip_embeddings`**: `file_id` TEXT PK cascade, `embedded_hash TEXT NOT NULL`,
+  `model_generation INTEGER NOT NULL`, `vector BLOB` nullable. Content-keyed (same
+  grain as `palette`/`feature_print`/`photo_meta`). **A NULL vector is the
+  attempted-marker for an undecodable file** (the `places` NULL-place pattern);
+  dataless iCloud files are skipped without stamping. Re-embed when the row is missing,
+  `embedded_hash != content_hash`, or `model_generation != ClipModel.current.generation`
+  (a model upgrade re-embeds the library via the backfill cap).
+- Vectors are stored as 512 × Float16 LE (1024 bytes), fp16 per the platform budget.
+  Converters live in `Intelligence/Core/ClipVectors.swift`
+  (`toData`/`fromData`); `fromData` refuses wrong-length blobs — vectors from
+  different generations must never pair (the `FeaturePrints.distance` rule class).
+  Centroid math (`ClipCentroid`) lives in the same file: mean then re-normalize.
+- **v19 `photo_traits`**: `file_id` TEXT PK cascade, `traits_scanned_hash TEXT NOT
+  NULL`, `traits_version INTEGER NOT NULL`, `face_count`, `largest_face_frac`,
+  `face_quality`, `pet_count`, `sharpness` (all nullable); indexes on `face_count` and
+  `pet_count` only. Faces + pets + sharpness deliberately share ONE table, marker and
+  backfill (all derived from one bounded decode); a future trait bumps
+  `PhotoTraits.currentVersion` (re-scan) rather than adding a parallel marker.
+- A missing `photo_traits` row means "never scanned", and `face_count = 0` means
+  "scanned, faceless" — trait tokens (incl. `faces:0`) match scanned files only.
+- Records: `ClipEmbeddingRow`, `PhotoTraitsRow`.
+
+## Analysis pipeline additions (Spec 03)
+
+- **The `embeddings` table (NLEmbedding text vectors) is NOT retired by CLIP** — it
+  remains clustering's input (`CollectionsEngine` reads `EmbeddingRow` as
+  `ClusterItem.textVector`) and feeds `SimilarTagSuggestions`. CLIP replaces the
+  semantic *search* leg only, behind `ClipModelStore.isReady`, with the NLEmbedding
+  path as the model-absent fallback. `AnalyzePipeline.embeddingsWritten` /
+  `ReclusterGate` count TEXT embeddings only — CLIP writes never bump them.
+- `VisionServices` runs seven concurrent requests on the one bounded 4096px raster
+  (adds `VNDetectFaceCaptureQualityRequest` + `VNRecognizeAnimalsRequest`); every new
+  request goes through the single-resume `runRequest` wrapper. `largest_face_frac` =
+  max normalized bbox area product; `pet_count` counts observations ≥
+  `VisionServices.petConfidenceFloor = 0.5`. Face-quality scores are comparable only
+  within a Vision revision — used relatively within one session on one machine
+  (recorded limitation).
+- `TaggerOutput` gains `traits: TraitFields?` and a `decodedImage: CGImage?`
+  passthrough — the analyze pass's raster is reused for traits AND the CLIP embed;
+  never decode the same file twice in one pass.
+- `SharpnessScore` (`Intelligence/Core/`): log10 variance-of-Laplacian over luminance
+  downsampled to `normalizedLongEdge = 1024` — the fixed long edge is what makes scores
+  comparable across resolutions. Buckets `softCeiling = 2.5` / `sharpFloor = 3.5`
+  (owner-validated).
+- The CLIP embedding write is a separate small transaction after the committed guard,
+  itself guarded on `content_hash` still matching (the `markAnalysisAttempted` shape).
+- `Intelligence/DeepAnalysisBackfill.swift`: launch pass (`maxPerLaunch = 5_000`,
+  `concurrency = 2`, `writeChunk = 200`, `decodeMaxPixel = 1024`) — ONE decode per file
+  feeds traits + optional CLIP embed. Selection is stale-by-any-marker (traits or,
+  when the model is installed, clip). Triggers: launch (chained after
+  `PhotoHeaderBackfill`) + model install. Completion with writes chains
+  `SearchFacets.refresh()` + `CollectionsEngine.reload()`. Undecodable → NULL-field
+  traits row + NULL-vector clip row; dataless → no stamp.
+
+## Retrieval & similarity search (Spec 03)
+
+- `Search/ClipIndex.swift` streams `chunkRows = 4_096` rows per cursor chunk
+  (Float16→Float32 unpack + one `vDSP_mmul` per chunk) — memory ceiling is
+  chunk-sized, independent of library size; **the no-RAM-residency rule is satisfied by
+  streaming now, not by a future rewrite**. sqlite-vec/mmap at the 800k tier swaps this
+  enum's body only. **No in-memory vector cache in v1** (measured optimization later).
+- Named constants, never validated live (owner validation outstanding):
+  `textMinScore = 0.20`, `imageMinScore = 0.55`, `topK = 400`.
+- **The semantic merge floor and the `matchedDirs` relaxation floor are one
+  engine-selected parameter** (`ClipIndex.textMinScore` when CLIP is ready, else
+  `SearchService.semanticThreshold = 0.45`) passed to both — two constants drifting
+  apart re-opens the folder-restriction bleed. The CLIP text encode is `await`ed off
+  the main actor before the `queue.read`.
+- A query with no Spec 03 token and the model absent runs the pre-Spec-03 pipeline
+  byte-identically (pinned by test).
+- **A similarity query rides the field text as a `similar:<handle>` token** against the
+  session-scoped `SimilarityRegistry` (`@MainActor`, handles `s<digits>`, entries carry
+  vector + display label) — the committed field text stays the single source of truth.
+  Shape-valid parses as a token; an unresolvable handle **matches nothing** (visible
+  empty result + removable "Similar (expired)" chip), never silently drops the
+  constraint. Handles are session-scoped, never persisted.
+- `PhotoSearch.filter` takes a `TokenContext { similarVectors: [String: [Float]] }`
+  (amendment to the Spec 02 signature — nothing to migrate). When a `similar` token is
+  present, similarity score DESC is the result order (replacing capture DESC); other
+  tokens intersect into it. Similar/faces/pets/is tokens are content-derived → no dir
+  restrictions.
+- All similarity entry points funnel through
+  `AppState+Similarity.runSimilarSearch(vector:label:)` (stash → `searchAllFolders =
+  true` → programmatic `searchQuery` + `runSearch` seam). Entry points: grid
+  context-menu "Find Similar Photos" (single image-kind selection, hidden unless
+  `isReady`; stored vector, else a user-initiated 1024px on-the-spot embed), hero
+  viewer "Similar" action, and image-drop of a file onto the grid
+  (`.onDrop(of: [.fileURL])`, overlay hint; a self-drop from Muse's own grid also
+  triggers it — accepted). The native `.searchable` field takes no drops.
+- Region similarity: hero-viewer chrome `viewfinder` button (image-kind + `isReady`
+  only) enters region mode — marquee ≥ `RegionSearch.minSide = 24` pt; crop is taken
+  from a fresh bounded decode of the ORIGINAL at `RegionSearch.decodeMaxPixel = 2048`
+  (never the displayed thumbnail); mapping via pure `Components/RegionMath.swift`.
+  **Region-mode Escape consumes `viewerClosing` inside the hero's onChange handler and
+  returns before `startClose()`** — the hero close sequence is untouched;
+  `EscapeResolver` is unchanged by region mode.
+
+## `.similar` smart rule (Spec 03)
+
+- `SmartRule` gains `case similar(SimilarTerm)`; `SimilarTerm = { anchorIDs: [String],
+  prompt: String?, promptVector: [Float]?, promptGeneration: Int?, threshold: Double }`.
+  Codable fully synthesized (same older-build decode-empty consequence as `.location`).
+  `thresholdRange = 0.40…0.80`, `defaultThreshold = 0.55`, `maxAnchors = 20` (all
+  owner-validated).
+- **Prompt vectors are encoded at rule-SAVE time and stamped with the model
+  generation; `SmartCollectionResolver` never runs the model.** No resolvable vector
+  (model absent, anchors unembedded, stale generation) → the rule evaluates EMPTY and
+  heals via `ClipPromptVectors.refreshAll()` (re-encodes stale prompts on model
+  install/upgrade). Anchor evaluation: PK-fetch vectors → `ClipCentroid` → 
+  `ClipIndex.matches(minScore: threshold)`.
+- Re-evaluation as new photos are analyzed comes free from the existing reload chain
+  (analyze → recluster → `CollectionsEngine.reload()` → `fetchAll` re-resolves) plus
+  the backfill-completion reload — no new machinery.
+- Editor: rules-card Kind "Looks Like" (plain vocabulary), offered only when
+  `isReady`; prompt `TextField` + Broad↔Exact threshold `Slider`. Anchor-driven rules
+  show "N reference photos" + slider — **the anchor list has no editor in v1** (the
+  `ColorTerm.hex` precedent). Anchors are minted by grid context-menu "New Smart
+  Collection from Selection" (1–20 image-kind selected AND `isReady`; opens the rules
+  card via the `AppState.collectionModal` seam).
+
+## Natural-language search layer (Spec 03)
+
+- macOS 26+ only, gated exactly like `FoundationModelNamer`
+  (`#if canImport(FoundationModels)` + `#available` + `SystemLanguageModel.default
+  .availability == .available`). Below the gate the path is inert — free text goes to
+  CLIP + FTS as normal.
+- `@Generable NLSearchIntent` (year/month/place/camera/minStars/subject) → pure
+  `NLTokenComposer.compose` → **token text round-tripped through `SearchQueryParser`**
+  — the parser stays the single source of truth; a composed text that parses to zero
+  tokens is dropped silently.
+- **Suggestion-only**: `NLQuerySuggest` (Pattern B, request-token-guarded) fires after
+  a committed search with zero tokens and ≥ `minWords = 3` words, never blocks the
+  search, and never rewrites the query unclicked. Surface: one `sparkles` pill in the
+  `TagChipsRow` active-filter row ("Try: …"); clicking runs the composed text through
+  the programmatic search path (tokens then individually editable/removable).
+
+## Compare & focus peaking (Spec 03)
+
+- `Models/CompareStore.swift` (Pattern B): `urls: [URL]?` (2…`maxPanes = 4`),
+  `focusedIndex`, shared `zoom` (1…8) + normalized `center`, `peaking`. Compare never
+  coexists with the hero viewer; it is a full-screen surface, NOT a modal card — it
+  gates `PageScrollCatcher.isActive` directly and Escape resolves `.closeCompare`
+  (modal cards raised over compare still win).
+- Entry: grid context-menu "Compare Side by Side" (2–4 image-kind selected, hidden
+  otherwise) + menu-bar command ⌘⇧C. Cull: menu-bar "Start Culling" ⌘⇧K.
+- Pane decode ladder = the hero's exact formula (`min(max(dim × scale × 2.5, 1600),
+  4096)`) through `withinDecodeBudget` first — compare gets full-window-class decode
+  targets, not grid thumbnails. Panes decode directly (no new `renderedVariants`
+  entry; only the existing 320 quick-thumb is used).
+- Synchronized zoom/pan is pure math (`Components/CompareGeometry.swift`): a
+  NORMALIZED center (not points) is what keeps differing aspects looking at the same
+  subject region.
+- Keyboard (a `KeyCaptureView`-pattern catcher): ←/→ swap the focused pane's candidate
+  through `visibleFiles`; Tab cycles focus; 1–5/0 rate via `TagStore.setRating` (the
+  only rating seam); K/X cull-mark when a session is active; P toggles peaking.
+  Panes call `RediscoveryStore.markViewed` in `.task(id:)`.
+- Sharpness badge is RELATIVE within the compared set (`Components/SharpnessRank`,
+  `tieBand = 0.15` log10 units); face-quality best-face badge only when every compared
+  photo has faces; missing traits row → no badge, never a fake neutral. The hero INFO
+  card shows the bucketed sharpness row. No absolute sharpness badge on the grid.
+- `Viewers/PeakingOverlay.swift` ports Surface Camera's enum with constants intact
+  (`edgeThreshold 0.03`, `highPassRadius 1.5`, `boundaryInset 3`) and two binding
+  adaptations: **the `CILinearToSRGBToneCurve` pre-encode is dropped** (Muse's decoded
+  input is already display-referred; re-adding it de-tunes the threshold) and **the
+  chain runs at `workingLongEdge = 1080`** (the scale the constants were tuned at),
+  scaled onto the pane by `align(_:to:)`. Accent = `moodPalette` accent, no raw hex.
+  Toggles live in compare chrome + hero chrome (`scope` glyph).
+- Spec 04 forward note: compare panes decode originals today and MUST join the
+  edit-stack render/`EffectiveDimensions` consumer sweep when the editor lands.
+
+## Ephemeral cull state (Spec 03)
+
+- **Cull state is memory-only by construction**: `Models/CullStore.swift` (Pattern B,
+  `marks: [standardized path: .keep/.reject]`) — no table, no UserDefaults key, no
+  sidecar field, ever. Quit mid-session = marks gone. A persistence surface for
+  keep/reject violates DECIDED #13.
+- Marks apply from grid (`PageScrollCatcher` gains a `onCullKey` branch — K/X/U,
+  empty-modifier, active-session only; keycode paging/arrow rules untouched), hero
+  viewer (`KeyCaptureView` passthrough), and compare.
+- Tile badge: **bottom-leading** (top-leading belongs to the stack badge, top-trailing
+  to the star badge), rendered only while a session is active, with a named
+  `.accessibilityAction` toggle.
+- **The cull session is NOT in the Escape chain** — sessions end only via the HUD's
+  Finish/Cancel; Cancel confirms with a `ModalMessageCard` when marks exist.
+- Resolution: `CullResolveCard` via `.museModal` at the shell, registered in
+  `modalPresented`; kept → optional rating via `TagStore.setRating` (default None);
+  rejected → `deletion.deleteWithBurn` per file (the grid multi-delete seam — undo
+  toast, `dropFromActiveCollection`, selection pruning inherited). No other write
+  paths. URLs for off-view marked paths are rebuilt from the standardized path.
+
+## Faces/pets tokens (Spec 03)
+
+- `SearchToken` gains `faces(NumericFilter)`, `pets(NumericFilter)`,
+  `traitIs(.portrait|.group)` (keys `faces:`, `pets:`, `is:`). `is:` with any other
+  value stays in free text verbatim.
+- `Intelligence/Core/PortraitHeuristic.swift`: `portraitMaxFaces = 2`,
+  `portraitMinFaceFrac = 0.05`, `groupMinFaces = 3` (owner-validated; single
+  declaration site). `is:portrait` = 1…2 faces AND frac ≥ floor; `is:group` = ≥ 3.
+- Suggestions: `faces:`/`pets:`/`is:` join the key list; `is:` values are the fixed
+  pair; numeric keys suggest static op-form hints (no facet query).
+- Trait tokens read no `tags` — "works with tags off" holds.
+
+## Perf baseline additions (Spec 03)
+
+- New recorded rows: CLIP text encode 40 ms · image embed 15 ms · `ClipIndex` 50k scan
+  100 ms · semantic leg end-to-end 150 ms (supports < 300 ms perceived) · `.similar`
+  rule resolve 120 ms · compare two-pane sharp 1200 ms · backfill ≥ 8 files/s.
+
 ## Naming & test conventions
 
 - Migrations: `vN_snake_case`, registered in order at the end of `makeMigrator()`.
@@ -411,8 +668,8 @@ build-level layer future specs must not contradict.*
 
 ## Out of scope / deferred / never
 
-- Spec 03: MobileCLIP/CLIP, region similarity, auto-growing albums, natural-language
-  parsing, compare/culling, faces.
+- Face identity/clustering/naming: deferred project (AuraFace Apache-2.0 path when
+  demanded); InsightFace/EdgeFace never (non-commercial licenses).
 - Spec 04: the `edits` table, edit stack provider, any editor UI.
 - Spec 06: import-scale throttling (battery/Low Power/thermal pausing).
 - Spec 09: pricing, trial enforcement policy.
