@@ -541,7 +541,7 @@ struct SidebarView: View {
     /// Opaque copy of the dragged collection row (mirrors `draggedRowOverlay`).
     private func draggedCollectionOverlay(_ loaded: CollectionStore.Loaded) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: "square.stack.3d.up")
+            Image(systemName: "rectangle.on.rectangle.angled")
                 .font(.system(size: 12, weight: .semibold))
                 .frame(width: 20)
             Text(loaded.collection.name)
@@ -580,7 +580,7 @@ struct SidebarView: View {
                               shortLabel: String(localized: "Folder")) {
                     appState.pickAndAddRoot()
                 }
-                AddPillButton(systemImage: "square.stack.3d.up",
+                AddPillButton(systemImage: "rectangle.on.rectangle.angled",
                               label: String(localized: "Add Collection"),
                               shortLabel: String(localized: "Collection")) {
                     appState.requestNewCollection()

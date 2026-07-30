@@ -9,7 +9,7 @@
 //  appearance-agnostic; resolution to a Color happens at display time.
 //
 //  Both fields nil = the default look the sidebar has always had
-//  (square.stack.3d.up, primary / accent-when-selected).
+//  (rectangle.on.rectangle.angled, primary / accent-when-selected).
 //
 
 import SwiftUI
@@ -18,7 +18,7 @@ import AppKit
 enum CollectionAppearance {
 
     /// The default sidebar collection symbol (pre-customization look).
-    static let defaultIcon = "square.stack.3d.up"
+    static let defaultIcon = "rectangle.on.rectangle.angled"
 
     /// The default sidebar glyph for a SMART collection when the user hasn't
     /// chosen one (v10). Reads as "rule-driven" vs. the classic stack.
