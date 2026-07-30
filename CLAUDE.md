@@ -111,9 +111,11 @@ are the load-bearing reference artifacts.
 | Polish 25 — **Analysis performance** (bounded Vision raster, sRGB colour fix, single decode, concurrent pass, exact vectorized clustering, recluster gate, size-aware thumbnail permits) | ✅ shipped | `feat/next-140` |
 | Polish 26 — **Grid layout modes** (Columns/Rows/Grid; tile card + Tile Background deleted; spacing slider; one orientation truth) | ✅ shipped | `feat/grid-layout-modes` |
 | Polish 27 — **UI polish batch** (emoji collection symbols; sort-direction menu; menu icons + shortcuts; toolbar Settings; tag/collection autocomplete; compact star badge; sidebar geometry/colour rework; scope-bar-over-viewer fix; duplicate-root fix) | ✅ shipped | `feat/next-142` |
+| Polish 28 — **visual polish pass** (collection glyph → `rectangle.on.rectangle.angled`; smaller section headers + intrinsic sort glyph; Lineform selection fill; hero open bounce + staggered close converge; grid margins track spacing; one “+ Create New” menu) | ✅ merged, unreleased | `feat/collection-icon-cards` |
 
-> All rows above are merged to `main` and shipped in release **`v1.5`** (the
-> current released build; Polish 25–27 landed here after `v1.4`). Polish-row
+> Every row through Polish 27 is merged to `main` and shipped in release **`v1.5`**;
+> Polish 28 is merged to `main` but NOT yet in a release (`v1.5` is still the
+> current released build; Polish 25–27 landed in it after `v1.4`). Polish-row
 > detail (the full
 > "why/how" per feature) lives in the **Durable constraints** section below and,
 > in full, in `docs/session-log.md` under each cited branch. Keep new rows to one
