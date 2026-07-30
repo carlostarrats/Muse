@@ -94,7 +94,13 @@ struct SmartCollectionRulesView: View {
                 // per-row remove buttons.
                 .padding(.trailing, 20)
             }
-            .frame(minHeight: 150, maxHeight: 360)
+            // `alignment: .top` is load-bearing: a frame CENTERS its child by
+            // default, so with one rule the row floated in the middle of the
+            // 150pt reserve, drifted upward as rules were added, and only
+            // settled at the top once they filled the space (owner-reported
+            // "the 1st tag is centered… then it pushes them down, which is
+            // weird"). Rules now start at the top and grow downward.
+            .frame(minHeight: 150, maxHeight: 360, alignment: .top)
 
             // ── Add rule (a real button, hover tint) ────────────────────────
             Button {

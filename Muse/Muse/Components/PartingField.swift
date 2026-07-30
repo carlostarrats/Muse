@@ -58,8 +58,8 @@ enum PartingField {
     /// Half the open stagger and capped tighter (0.05s vs 0.1s): the close
     /// flight is 0.34s and the last tile must still have settled by the
     /// landing, so the ramp has to fit in a much smaller envelope than open's.
-    /// The header note above ("Close is NOT staggered") described the old
-    /// behaviour — this replaces it.
+    /// `PartingFieldTests` pins both properties — every close delay is ≤ its
+    /// open delay, and cap + `convergeResponse` lands inside the 0.34s flight.
     static func closeDelay(distance: CGFloat) -> Double {
         min(Double(min(distance, 1500)) / 30_000, 0.05)
     }

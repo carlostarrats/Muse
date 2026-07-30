@@ -87,6 +87,41 @@ final class PartingFieldTests: XCTestCase {
         XCTAssertEqual(PartingField.openDelay(distance: 9000), 0.1, accuracy: 0.0001)
     }
 
+    // The CLOSE ramp: same propagate-outward shape as openDelay but a tighter
+    // envelope, because it has to fit inside the 0.34s return flight rather
+    // than open's ~0.3s+ one. A flat (zero) close delay is what made the
+    // converge read as one slab of motion instead of a wave.
+    func testCloseDelayPropagatesOutwardAndCapsTighterThanOpen() {
+        XCTAssertEqual(PartingField.closeDelay(distance: 0), 0)
+        let near = PartingField.closeDelay(distance: 200)
+        let far = PartingField.closeDelay(distance: 1000)
+        XCTAssertGreaterThan(far, near)
+        // Capped, and the cap holds past the distance clamp.
+        XCTAssertEqual(PartingField.closeDelay(distance: 1500), 0.05, accuracy: 0.0001)
+        XCTAssertEqual(PartingField.closeDelay(distance: 9000), 0.05, accuracy: 0.0001)
+        // Every tile's close stagger is shorter than its open stagger — the
+        // close has less room, so if these ever cross, the last tile is still
+        // moving when the image lands on its tile.
+        for d in [CGFloat(0), 200, 600, 1000, 1500, 9000] {
+            XCTAssertLessThanOrEqual(PartingField.closeDelay(distance: d),
+                                     PartingField.openDelay(distance: d))
+        }
+    }
+
+    // The whole close (stagger + spring settle) must finish inside the 0.34s
+    // return flight, or a neighbor is still bouncing after the image has landed
+    // back in its tile.
+    func testCloseRampFitsInsideTheReturnFlight() {
+        let landing = 0.34
+        XCTAssertLessThan(PartingField.closeDelay(distance: 9000)
+                          + PartingField.convergeResponse, landing)
+        // The fade is deliberately shorter than the motion, so the bounce is
+        // watched at full brightness rather than while tiles are still faint.
+        XCTAssertLessThan(PartingField.convergeFadeDuration, PartingField.convergeResponse)
+        // Damping below 1 is what makes it bounce at all.
+        XCTAssertLessThan(PartingField.convergeDamping, 1.0)
+    }
+
     // Grid-mode damping: strength scales the push linearly and the shrink's
     // deviation from 1 linearly — same motion, reduced amplitude.
     func testStrengthDampsBothComponents() {

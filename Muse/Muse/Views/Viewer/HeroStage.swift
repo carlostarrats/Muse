@@ -416,6 +416,15 @@ struct HeroStage: View {
         headerSize = nil
         resolveHeaderSize()
         zoom = 1; pan = .zero
+        // End the open-settle window. A flip is a RE-FIT of a new image in
+        // place, not a flight out of a tile, so it must not inherit the open
+        // spring's bounce — and without this it inherited it only when the flip
+        // landed inside the window, making the same keypress animate two
+        // different ways depending on how fast the user pressed it. With
+        // `openedAt` reset, every `settling(since:)` below (the flip's own write
+        // AND its post-decode write) resolves to the plain ease, which is what
+        // a flip did before the spring existed.
+        openedAt = .distantPast
         // thumbnail swaps in fast; .task(id: url) handles the full-res load
         if let quick = Self.quickThumbnail(for: url) {
             image = quick

@@ -427,23 +427,25 @@ struct GridView: View {
                             y: rect.minY + parting.offset.height)
                     // Value-scoped so ONLY hero open/close animates the
                     // scale/offset/fade — the placement component must stay
-                    // instant on scroll and relayout. Open: ~0.25s with a
-                    // per-tile distance delay so the shrink ripples outward
-                    // from the click. Close: one un-staggered easeOut
-                    // converge — NOT easeInOut: its dead-slow start under the
-                    // simultaneous opacity fade-in read as stop-start jitter
-                    // (motion happening while barely visible, popping into
-                    // view mid-move). easeOut moves immediately and settles
-                    // before the 0.34s landing.
-                    // CLOSE is now a spring (owner call, 2026-07-29, matching
-                    // Atlas): the parted neighbors bounce back toward the
-                    // landing image rather than easing flat into place. It
-                    // still moves IMMEDIATELY, which is the property the
-                    // easeOut note above is really about — the rejected
-                    // easeInOut was rejected for its dead-slow START under the
-                    // opacity fade-in, not for settling softly. Damping under 1
-                    // supplies the bounce; PartingField.convergeDamping is the
-                    // knob. Response stays under the 0.34s landing.
+                    // instant on scroll and relayout.
+                    //
+                    // OPEN: ~0.25s easeOut with a per-tile distance delay, so
+                    // the shrink ripples outward from the click.
+                    //
+                    // CLOSE: a distance-staggered SPRING (owner call,
+                    // 2026-07-29, matching Atlas) — parted neighbors bounce back
+                    // toward the landing image, near ones first, so it reads as
+                    // a ramp rather than one slab of motion. Damping under 1 is
+                    // the bounce (`PartingField.convergeDamping`); the stagger
+                    // is `closeDelay`, and stagger + response stay inside the
+                    // 0.34s landing (pinned by PartingFieldTests).
+                    //
+                    // What must NOT come back is an easeInOut here: its
+                    // dead-slow START under the simultaneous fade-in read as
+                    // stop-start jitter — motion happening while the tile was
+                    // barely visible, then popping into view mid-move. The
+                    // spring, like the easeOut it replaced, moves immediately;
+                    // that is the load-bearing property, not the settle shape.
                     //
                     // The TRANSFORM and the FADE are animated SEPARATELY, and
                     // that split is load-bearing. One shared `.animation` put

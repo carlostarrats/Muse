@@ -223,15 +223,21 @@ struct CreateNewMenuButton: View {
                     .padding(.leading, 5)
                 Spacer(minLength: 6)
                 // Both destinations shown as glyphs, so the pill says WHAT it
-                // creates without spelling out either name.
+                // creates without spelling out either name. All three are
+                // DECORATIVE to VoiceOver: the button's own accessibilityLabel
+                // already names it, and the separator would otherwise be read
+                // aloud as "vertical bar" between two unnamed images.
                 Image(systemName: "folder")
                     .font(.system(size: 11, weight: .medium))
-                Text("|")
+                    .accessibilityHidden(true)
+                Text(verbatim: "|")
                     .font(.system(size: 9, weight: .light))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 4)
+                    .accessibilityHidden(true)
                 Image(systemName: CollectionAppearance.defaultIcon)
                     .font(.system(size: 11, weight: .medium))
+                    .accessibilityHidden(true)
             }
             .padding(.horizontal, 10)
             .frame(maxWidth: .infinity)
@@ -291,7 +297,12 @@ enum SidebarSortGlyph {
             return Image(systemName: name)
         }
         img.isTemplate = true
-        return Image(nsImage: img)
+        // `.template` explicitly as well as `isTemplate`: the accent tint in
+        // Manual mode is applied by `foregroundStyle` on the Menu, and it only
+        // reaches a TEMPLATE image. Relying on the NSImage flag alone would fail
+        // silently — the glyph would just draw its own black and the
+        // hand-arranged signal would be gone with nothing to notice.
+        return Image(nsImage: img).renderingMode(.template)
     }()
 }
 

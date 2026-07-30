@@ -31,18 +31,18 @@ struct SettingsView: View {
     /// shape the grid's two continuous settings share.
     ///
     /// The label and the readout are folded INTO the slider's own accessibility
-    /// (label + value) and hidden as separate elements. Combining the HStack
+    /// (label + value) and hidden as separate elements. Combining the row
     /// instead would merge the slider into a plain group and strip its
     /// adjustable trait, leaving VoiceOver able to read the setting but not
     /// change it.
-    /// One labeled slider as a `GridRow`, so every slider in the same `Grid`
-    /// gets the SAME track length.
     ///
-    /// As plain `HStack`s each slider started after its own title, so "Spacing"
-    /// and "Corner Radius" produced visibly different track widths. A fixed
-    /// width on the title would equalize them but truncate a longer localized
-    /// label (French runs ~1.3× English); a Grid's first column sizes itself to
-    /// the widest label in the group, which holds in every language.
+    /// It returns a `GridRow`, so every slider inside the same `Grid` gets the
+    /// SAME track length. As plain `HStack`s each slider began after its own
+    /// title, so "Spacing" and "Corner Radius" produced visibly different track
+    /// widths. A fixed width on the title would equalize them too, but truncate
+    /// a longer localized label (French runs ~1.3× English); a Grid's first
+    /// column sizes itself to the widest label, which holds in every language.
+    /// Consequence: this must be called INSIDE a `Grid`.
     private func measuredSlider(title: String,
                                 value: Binding<Double>,
                                 range: ClosedRange<Double>,
