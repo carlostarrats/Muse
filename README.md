@@ -1,24 +1,5 @@
 # Muse
 
-**A filesystem-native file viewer and AI-organized library for macOS.**
-
-[![Download Muse for macOS](https://img.shields.io/badge/Download-Muse%20for%20macOS-111111?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/carlostarrats/Muse/releases/latest/download/Muse-1.5.dmg)
-[![Visit the website](https://img.shields.io/badge/Website-muse--site--phi.vercel.app-f2f2f2?style=for-the-badge)](https://muse-site-phi.vercel.app/)
-
-Muse is a local-first way to browse, view, and organize the folders you
-already have — Downloads, Documents, screenshots, an inspiration stash.
-Point it at a folder and it reads your files where they live. Nothing is
-imported, copied, or moved, and your files are never modified.
-
-In the spirit of Adobe Bridge, but local-first, Apple-Intelligence-native — no subscriptions, no in-app purchases, no ads.
-
-<img width="1359" height="948" alt="Screenshot 2026-06-15 at 11 14 32 AM" src="https://github.com/user-attachments/assets/3ecb33ff-2fe1-4875-9f72-f229c41b9e9a" />
-
-## Download
-
-**[Download Muse for macOS](https://github.com/carlostarrats/Muse/releases/latest/download/Muse-1.5.dmg)** — open the DMG and drag Muse to Applications.
-
-More builds and release notes are on the [Releases page](https://github.com/carlostarrats/Muse/releases). Once installed, Muse keeps itself up to date via Sparkle (**Muse ▸ Check for Updates…**). Requires macOS 14.6+. The product website is at [muse-site-phi.vercel.app](https://muse-site-phi.vercel.app/).
 
 ## Privacy first
 
