@@ -35,6 +35,35 @@ enum PartingField {
     /// What non-source tiles fade to while parted (GridView applies it).
     static let partedOpacity: CGFloat = 0.15
 
+    /// The CLOSE converge spring (owner call, 2026-07-29): parted neighbors
+    /// bounce back toward the landing image instead of easing flat. Damping
+    /// below 1 is the bounce — lower it for more, raise toward 1 for less.
+    /// Response stays under the 0.34s close flight so the grid has settled by
+    /// the time the image lands on its tile.
+    static let convergeResponse: Double = 0.26
+    static let convergeDamping: Double = 0.60
+
+    /// The close fade-in, animated SEPARATELY from the converge spring (see the
+    /// note at GridView's tile `.animation`). Shorter than the spring on
+    /// purpose: the tiles are back to full brightness early, so the bounce is
+    /// watched at full opacity instead of happening while they're still faint.
+    static let convergeFadeDuration: Double = 0.14
+
+    /// Per-tile CLOSE stagger — the close counterpart to `openDelay`, and the
+    /// reason the converge reads as a RAMP rather than one flat move: near
+    /// neighbors snap back first and the far ones follow a beat later, so the
+    /// bounce arrives as a wave and its apparent strength varies across the
+    /// grid (owner: Atlas's "not consistent bounce... like a ramp up").
+    ///
+    /// Half the open stagger and capped tighter (0.05s vs 0.1s): the close
+    /// flight is 0.34s and the last tile must still have settled by the
+    /// landing, so the ramp has to fit in a much smaller envelope than open's.
+    /// The header note above ("Close is NOT staggered") described the old
+    /// behaviour — this replaces it.
+    static func closeDelay(distance: CGFloat) -> Double {
+        min(Double(min(distance, 1500)) / 30_000, 0.05)
+    }
+
     struct Displacement: Equatable {
         var offset: CGSize
         var scale: CGFloat
@@ -72,8 +101,8 @@ enum PartingField {
 
     /// Per-tile open-animation delay: the ripple propagates outward, one
     /// extra millisecond per ~15pt of distance, capped at 0.1s so the far
-    /// corners still land inside the reference's ~0.3s envelope. Close is
-    /// NOT staggered — everything converges together with the return flight.
+    /// corners still land inside the reference's ~0.3s envelope. The close has
+    /// its own, tighter stagger — see `closeDelay`.
     static func openDelay(distance: CGFloat) -> Double {
         Double(min(distance, 1500)) / 15_000
     }

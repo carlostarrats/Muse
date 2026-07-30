@@ -402,7 +402,6 @@ struct GridView: View {
                     // not watched). The source tile keeps identity + full
                     // opacity: its image handoff has its own gate above.
                     .scaleEffect(parting.scale)
-                    .opacity(parting == .identity ? 1 : PartingField.partedOpacity)
                     .offset(x: rect.minX + parting.offset.width,
                             y: rect.minY + parting.offset.height)
                     // Value-scoped so ONLY hero open/close animates the
@@ -415,8 +414,36 @@ struct GridView: View {
                     // (motion happening while barely visible, popping into
                     // view mid-move). easeOut moves immediately and settles
                     // before the 0.34s landing.
+                    // CLOSE is now a spring (owner call, 2026-07-29, matching
+                    // Atlas): the parted neighbors bounce back toward the
+                    // landing image rather than easing flat into place. It
+                    // still moves IMMEDIATELY, which is the property the
+                    // easeOut note above is really about — the rejected
+                    // easeInOut was rejected for its dead-slow START under the
+                    // opacity fade-in, not for settling softly. Damping under 1
+                    // supplies the bounce; PartingField.convergeDamping is the
+                    // knob. Response stays under the 0.34s landing.
+                    //
+                    // The TRANSFORM and the FADE are animated SEPARATELY, and
+                    // that split is load-bearing. One shared `.animation` put
+                    // the opacity on the bouncy spring too — and a spring
+                    // overshoots, so opacity ran past 1, clamped there, and
+                    // came back: a visible hitch in the middle of the converge
+                    // (owner-reported "i see the bounce but it's not smooth").
+                    // Only geometry should bounce; brightness has nothing to
+                    // overshoot toward.
                     .animation(partingClicked == nil
-                                   ? .easeOut(duration: 0.3)
+                                   ? .spring(response: PartingField.convergeResponse,
+                                             dampingFraction: PartingField.convergeDamping)
+                                       .delay(PartingField.closeDelay(
+                                           distance: parting.distance))
+                                   : .easeOut(duration: 0.25)
+                                       .delay(PartingField.openDelay(
+                                           distance: parting.distance)),
+                               value: partingClicked)
+                    .opacity(parting == .identity ? 1 : PartingField.partedOpacity)
+                    .animation(partingClicked == nil
+                                   ? .easeOut(duration: PartingField.convergeFadeDuration)
                                    : .easeOut(duration: 0.25)
                                        .delay(PartingField.openDelay(
                                            distance: parting.distance)),
