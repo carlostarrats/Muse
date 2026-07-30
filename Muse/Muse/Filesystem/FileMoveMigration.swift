@@ -107,5 +107,10 @@ enum FileMoveMigration {
                 .filter(TagRow.Columns.parent_dir == oldDir)
                 .deleteAll(db)
         }
+        // Ratings are manual tags with distinct labels, so re-scoping a "★★"
+        // into a newDir already rated "★★★★" keeps both and breaks the
+        // one-rating-per-photo rule. Collapse to the highest, matching the
+        // sidecar seam and Indexer.unionTags.
+        try Indexer.collapseRatings(db: db, fileID: fileID, parentDir: newDir)
     }
 }

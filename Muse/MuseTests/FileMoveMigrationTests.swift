@@ -39,6 +39,28 @@ final class FileMoveMigrationTests: XCTestCase {
         }
     }
 
+    func testMoveCollapsesRatingIntoDestinationWithOne() throws {
+        let q = try freshQueue()
+        try q.write { db in
+            // The moving file is rated ★★ in /a; a byte-identical, differently
+            // rated (★★★★) sibling of the SAME identity already lives in /b.
+            // The move re-scopes (f1,/a) → (f1,/b), which must not leave two
+            // ratings on (f1,/b).
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at) VALUES ('f1','h1','image',0)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('p1','f1','/a/x.png',1)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('p2','f1','/b/y.png',1)")
+            try db.execute(sql: "INSERT INTO tags (id, file_id, label, source, confidence, parent_dir) VALUES ('r1','f1','\u{2605}\u{2605}','manual',NULL,'/a')")
+            try db.execute(sql: "INSERT INTO tags (id, file_id, label, source, confidence, parent_dir) VALUES ('r2','f1','\u{2605}\u{2605}\u{2605}\u{2605}','manual',NULL,'/b')")
+
+            try FileMoveMigration.apply(db, moves: [(from: "/a/x.png", to: "/b/x.png")])
+        }
+        try q.read { db in
+            let ratings = try String.fetchAll(db, sql:
+                "SELECT label FROM tags WHERE file_id='f1' AND parent_dir='/b' AND label GLOB '*\u{2605}*'")
+            XCTAssertEqual(ratings, ["\u{2605}\u{2605}\u{2605}\u{2605}"], "one rating, the higher run")
+        }
+    }
+
     func testMoveCopiesTagsWhenSiblingStaysInSourceFolder() throws {
         let q = try freshQueue()
         try q.write { db in

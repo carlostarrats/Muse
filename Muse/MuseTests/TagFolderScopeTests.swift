@@ -104,4 +104,51 @@ final class TagFolderScopeTests: XCTestCase {
             XCTAssertEqual(dir, "/A")
         }
     }
+
+    // MARK: rating exclusivity survives a tag merge
+
+    func testUnionTagsCollapsesRatingToHighest() throws {
+        let q = try migrated()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, kind, last_seen_at) VALUES ('from','image',0)")
+            try db.execute(sql: "INSERT INTO files (id, kind, last_seen_at) VALUES ('to','image',0)")
+            // Both scopes carry a DIFFERENT manual rating in /A. A rating is a
+            // manual tag with a distinct label, so the exact-label conflict check
+            // never fires — the union would keep both without the collapse.
+            try db.execute(sql: "INSERT INTO tags (id, file_id, parent_dir, label, source) VALUES ('r1','from','/A','\u{2605}\u{2605}','manual')")
+            try db.execute(sql: "INSERT INTO tags (id, file_id, parent_dir, label, source) VALUES ('r2','to','/A','\u{2605}\u{2605}\u{2605}\u{2605}','manual')")
+
+            try Indexer.unionTags(db: db, fromFileID: "from", toFileID: "to")
+        }
+        try q.read { db in
+            let ratings = try String.fetchAll(db, sql:
+                "SELECT label FROM tags WHERE file_id='to' AND parent_dir='/A' ORDER BY label")
+            // Exactly one rating survives, and it's the higher run.
+            XCTAssertEqual(ratings, ["\u{2605}\u{2605}\u{2605}\u{2605}"])
+        }
+    }
+
+    func testCollapseRatingsIsPerFolderAndLeavesNonRatings() throws {
+        let q = try migrated()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, kind, last_seen_at) VALUES ('f','image',0)")
+            // /A has two ratings + a real tag; /B has a single rating.
+            try db.execute(sql: "INSERT INTO tags (id, file_id, parent_dir, label, source) VALUES ('a1','f','/A','\u{2605}','manual')")
+            try db.execute(sql: "INSERT INTO tags (id, file_id, parent_dir, label, source) VALUES ('a2','f','/A','\u{2605}\u{2605}\u{2605}','manual')")
+            try db.execute(sql: "INSERT INTO tags (id, file_id, parent_dir, label, source) VALUES ('a3','f','/A','dog','manual')")
+            try db.execute(sql: "INSERT INTO tags (id, file_id, parent_dir, label, source) VALUES ('b1','f','/B','\u{2605}\u{2605}','manual')")
+
+            try Indexer.collapseRatings(db: db, fileID: "f", parentDir: nil)
+        }
+        try q.read { db in
+            // /A collapses to the highest rating, non-rating tag untouched.
+            XCTAssertEqual(try String.fetchAll(db, sql:
+                "SELECT label FROM tags WHERE file_id='f' AND parent_dir='/A' ORDER BY label"),
+                ["dog", "\u{2605}\u{2605}\u{2605}"])
+            // /B's lone rating is left alone.
+            XCTAssertEqual(try String.fetchAll(db, sql:
+                "SELECT label FROM tags WHERE file_id='f' AND parent_dir='/B'"),
+                ["\u{2605}\u{2605}"])
+        }
+    }
 }

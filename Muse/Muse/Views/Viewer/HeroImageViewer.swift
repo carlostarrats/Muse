@@ -138,6 +138,11 @@ struct HeroImageViewer: View {
                     do {
                         let ticket = try await TrashManager.trash(url)
                         appState.currentFiles.removeAll { $0.url == url }
+                        // The grid renders activeCollectionFiles while a collection
+                        // is open — drop the tile there too or it ghosts back on
+                        // close and rides into Save-to / Share Drive Link (both read
+                        // visibleFiles), matching completeDelete.
+                        appState.dropFromActiveCollection(path: url.standardizedFileURL.path)
                         if appState.selectedFile?.url == url { appState.selectedFile = nil }
                         // Clear the stale selection on the trashed file so an
                         // Undo doesn't restore a tile already wearing the ring.

@@ -495,6 +495,30 @@ actor Indexer {
             if let parentDir { doomed = doomed.filter(TagRow.Columns.parent_dir == parentDir) }
             try doomed.deleteAll(db)
         }
+        // A rating IS a manual tag, and the conflict check above keys on the
+        // EXACT label — so unioning a scope rated "★★" into one already rated
+        // "★★★★" inserts both (different labels, no UNIQUE clash), doubling the
+        // rating and breaking StarRating.resolution. Collapse to one per
+        // (file_id, parent_dir), the same rule Sidecar.collapsingRatings applies
+        // at the sidecar seam.
+        try collapseRatings(db: db, fileID: toFileID, parentDir: parentDir)
+    }
+
+    /// Enforce one-rating-per-(file_id, parent_dir) after a tag merge. Ratings
+    /// are manual tags with distinct labels ("★★" vs "★★★★"), so a merge that
+    /// keys conflicts on the exact label leaves two of them. TagRow carries no
+    /// timestamp, so the tiebreak is the same deterministic one the sidecar seam
+    /// uses (Sidecar.collapsingRatings): the highest run wins. `parentDir` nil
+    /// scopes across every folder the identity touches (a nil-scoped union), so
+    /// the collapse groups by parent_dir internally.
+    static func collapseRatings(db: GRDB.Database, fileID: String, parentDir: String?) throws {
+        var query = TagRow.filter(TagRow.Columns.file_id == fileID)
+        if let parentDir { query = query.filter(TagRow.Columns.parent_dir == parentDir) }
+        let ratingRows = try query.fetchAll(db).filter { StarRating.isRating($0.label) }
+        for (_, rows) in Dictionary(grouping: ratingRows, by: { $0.parent_dir }) where rows.count > 1 {
+            guard let keep = rows.max(by: { $0.label.count < $1.label.count }) else { continue }
+            for row in rows where row.id != keep.id { try row.delete(db) }
+        }
     }
 
     /// A brand-new path of already-known content inherits the file's VISION
