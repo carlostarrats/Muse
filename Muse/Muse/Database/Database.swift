@@ -330,7 +330,9 @@ final class Database {
             // Optional per-collection sidebar appearance: an SF Symbol name and
             // a canonical color token ("red", never hex — tokens resolve to
             // system colors that adapt to light/dark). Both nil = the default
-            // look (square.stack.3d.up, primary / accent-when-selected).
+            // look (`CollectionAppearance.defaultIcon`, primary /
+            // accent-when-selected) — named by the constant rather than spelled
+            // out, so this migration comment can't drift when the glyph changes.
             try db.alter(table: "collections") { t in
                 t.add(column: "icon", .text)
                 t.add(column: "color", .text)

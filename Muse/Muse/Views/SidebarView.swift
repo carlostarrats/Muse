@@ -84,7 +84,52 @@ struct SidebarView: View {
     /// Grey rather than the blue a focused List would use, because the label and
     /// icon already carry the blue; a blue wash under blue text puts two blues on
     /// top of each other and separates poorly, worst on dark.
-    static let selectionFill = Color(nsColor: .unemphasizedSelectedContentBackgroundColor)
+    /// LINEFORM'S values (2026-07-29, owner call), lifted from
+    /// `OutlineSidebarView.rowSelectionFillNSColor`:
+    ///
+    /// • LIGHT — the system grey blended `selectionFillLightening` (0.55) toward
+    ///   the sidebar page (0.988 white, the same page value both apps use). Raw
+    ///   AppKit grey reads heavy against a near-white sidebar.
+    /// • DARK — Lineform's RULE rather than its hex: the fill RECESSES below the
+    ///   nav. Apple's grey (R70) is far lighter than Muse's dark sidebar, so a
+    ///   selected row glowed and the blue label sat on a bright band (~2.8:1);
+    ///   Lineform's own `#282828` can't be copied straight over either, since it
+    ///   recesses below THEIR `#313131` nav but would land 4/255 ABOVE Muse's
+    ///   darker one (0.10 calibrated ≈ `#242424`). So the dark fill is derived
+    ///   from Muse's own nav — that surface darkened by `darkSelectionRecess` —
+    ///   which keeps the recess intact if the nav value ever moves.
+    ///
+    /// Built as a dynamic `NSColor` so each branch resolves against the view's
+    /// OWN appearance — the light and dark system greys differ, and reading a
+    /// dynamic colour outside the drawing appearance picks up the system's
+    /// light/dark rather than this sidebar's.
+    static let selectionFill = Color(nsColor: NSColor(name: "museSidebarSelectionFill") { appearance in
+        if appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua {
+            let nav = NSColor(calibratedWhite: darkPageWhiteComponent, alpha: 1)
+                .usingColorSpace(.sRGB) ?? .black
+            return nav.blended(withFraction: darkSelectionRecess, of: .black) ?? nav
+        }
+        var resolved = NSColor.unemphasizedSelectedContentBackgroundColor
+        appearance.performAsCurrentDrawingAppearance {
+            resolved = NSColor.unemphasizedSelectedContentBackgroundColor
+                .usingColorSpace(.sRGB) ?? resolved
+        }
+        let page = NSColor(calibratedWhite: lightPageWhiteComponent, alpha: 1)
+            .usingColorSpace(.sRGB) ?? .white
+        return resolved.blended(withFraction: selectionFillLightening, of: page) ?? resolved
+    })
+
+    /// How far the light selection grey is lifted toward the sidebar page.
+    static let selectionFillLightening: CGFloat = 0.55
+
+    /// How far the dark selection fill is darkened BELOW the nav surface.
+    static let darkSelectionRecess: CGFloat = 0.40
+
+    /// The sidebar page values `cardColor` draws — restated here because the
+    /// selection fill is derived from the surface it sits on, and the two must
+    /// not drift apart.
+    static let lightPageWhiteComponent: CGFloat = 0.988
+    static let darkPageWhiteComponent: CGFloat = 0.10
 
     /// Label + icon color for the SELECTED row: Apple's own `systemBlue`.
     ///
@@ -173,7 +218,9 @@ struct SidebarView: View {
     /// literal surface colour.
     private var cardColor: Color {
         Color(nsColor: NSColor(
-            calibratedWhite: colorScheme == .dark ? 0.10 : 0.988, alpha: 1
+            calibratedWhite: colorScheme == .dark
+                ? Self.darkPageWhiteComponent : Self.lightPageWhiteComponent,
+            alpha: 1
         ))
     }
 
@@ -541,7 +588,7 @@ struct SidebarView: View {
     /// Opaque copy of the dragged collection row (mirrors `draggedRowOverlay`).
     private func draggedCollectionOverlay(_ loaded: CollectionStore.Loaded) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: "square.stack.3d.up")
+            Image(systemName: "rectangle.on.rectangle.angled")
                 .font(.system(size: 12, weight: .semibold))
                 .frame(width: 20)
             Text(loaded.collection.name)
@@ -565,8 +612,10 @@ struct SidebarView: View {
 
     /// One "Add Folder" pill when off (or on first run, before any folder
     /// exists — a collection with nothing behind it is a dead end, so Add
-    /// Collection isn't offered yet); two compact pills (Add Folder + Add
-    /// Collection) once the Collections section is shown AND a folder exists.
+    /// Collection isn't offered yet); a single "+ Create New" MENU pill (Add
+    /// Folder / Add Collection) once the Collections section is shown AND a
+    /// folder exists. The menu replaced two side-by-side pills, which had to
+    /// split the sidebar's 220pt minimum and truncate both labels.
     @ViewBuilder private var bottomBar: some View {
         // Offer "Add Collection" only when a real folder holds reachable images to
         // collect; first run / empty library gets just "Add Folder" (the real next
@@ -574,20 +623,11 @@ struct SidebarView: View {
         // content-gated COLLECTIONS section above (both a root AND content).
         if showCollectionsInSidebar && !appState.rootNodes.isEmpty
             && collectionsEngine.hasReachableContent {
-            HStack(spacing: 10) {
-                AddPillButton(systemImage: "folder",
-                              label: String(localized: "Add Folder"),
-                              shortLabel: String(localized: "Folder")) {
-                    appState.pickAndAddRoot()
-                }
-                AddPillButton(systemImage: "square.stack.3d.up",
-                              label: String(localized: "Add Collection"),
-                              shortLabel: String(localized: "Collection")) {
-                    appState.requestNewCollection()
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            CreateNewMenuButton(
+                addFolder: { appState.pickAndAddRoot() },
+                addCollection: { appState.requestNewCollection() })
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
         } else {
             AddFolderPillButton { appState.pickAndAddRoot() }
                 .padding(.horizontal, 16)

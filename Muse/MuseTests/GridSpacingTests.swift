@@ -19,7 +19,7 @@ final class GridSpacingTests: XCTestCase {
     }
 
     func testClampsAboveRange() {
-        XCTAssertEqual(AppSettings.clampGridSpacing(999), 28)
+        XCTAssertEqual(AppSettings.clampGridSpacing(999), 40)
     }
 
     /// Images must never touch. The floor is a real gap, not zero — a flush
@@ -30,8 +30,10 @@ final class GridSpacingTests: XCTestCase {
         XCTAssertEqual(AppSettings.clampGridSpacing(3), 4)
     }
 
+    /// Ceiling raised 28 → 40 (2026-07-29). The grid's side margin tracks this
+    /// same value, so the top of the range widens the window gutters too.
     func testRangeUpperBound() {
-        XCTAssertEqual(AppSettings.gridSpacingRange.upperBound, 28)
+        XCTAssertEqual(AppSettings.gridSpacingRange.upperBound, 40)
     }
 }
 

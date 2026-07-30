@@ -2,7 +2,8 @@
 //  SidebarRows.swift
 //  Muse
 //
-//  Small sidebar subviews: StarRow, AddFolderPillButton, SectionHeader, AddPillButton.
+//  Small sidebar subviews: StarRow, AddFolderPillButton, SectionHeader,
+//  CreateNewMenuButton, SectionSortMenu, SidebarSortGlyph.
 //  Extracted verbatim from SidebarView.swift in the 2026-06-20 code-health
 //  refactor (file moves only; `private` types became internal so they can live
 //  in their own files). Behavior unchanged.
@@ -139,8 +140,8 @@ struct SectionHeader<Accessory: View>: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(title)
-                .font(.system(size: 11, weight: .semibold))
-                .tracking(0.6)
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.5)
                 .foregroundStyle(.secondary)
                 // Expose the new sidebar sections to VoiceOver's heading rotor so
                 // the FOLDERS / COLLECTIONS structure is navigable.
@@ -156,9 +157,9 @@ struct SectionHeader<Accessory: View>: View {
                 }
             } label: {
                 Image(systemName: collapsed ? "plus" : "minus")   // + collapsed, − expanded
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(.secondary.opacity(hovering ? 1.0 : 0.8))
-                    .frame(width: 18, height: 18)
+                    .frame(width: 16, height: 16)
                     .background(Circle().fill(Color.primary.opacity(hovering ? 0.16 : 0.08)))
                     .contentTransition(.identity)
             }
@@ -174,81 +175,97 @@ struct SectionHeader<Accessory: View>: View {
 }
 
 
-// MARK: - Compact add pill (two-up bottom bar)
 
-/// "+ <glyph> <label>" capsule for the two-up bottom bar (Add Folder / Add
-/// Collection): a quiet neutral pill, since these are secondary actions sitting
-/// under the whole sidebar rather than the primary thing on screen.
+// MARK: - Create New menu pill
+
+/// The sidebar's single bottom action: one "+ Create New" pill that opens a
+/// menu offering Add Folder / Add Collection (owner call, 2026-07-29).
 ///
-/// NOTE: `AddFolderPillButton` — the single full-width CTA shown on an empty
-/// library — deliberately keeps its high-contrast fill. There it IS the primary
-/// action and the only control on screen, so the two are not meant to match.
-struct AddPillButton: View {
-    let systemImage: String
-    /// Full action name — the tooltip and the VoiceOver label ("Add Folder").
-    let label: String
-    /// Short form drawn inside the pill ("Folder"), where the + already says
-    /// "add" and repeating it wastes the width the label needs.
-    let shortLabel: String
-    let action: () -> Void
+/// Replaces the two side-by-side add pills (now deleted). At the sidebar's 220pt
+/// minimum those two had to share the width, which forced their labels to
+/// truncate to half-words; one pill gets the whole width and stays readable.
+/// The menu opens UPWARD on its own — it's pinned to the bottom of the window,
+/// and macOS flips a menu that has no room below.
+///
+/// Styling notes, learned the hard way elsewhere in this file: a menu style
+/// REPAINTS its label, so `font`/`foregroundStyle` set inside the label are
+/// discarded. They go on the `Menu`. The capsule background is applied to the
+/// Menu too, mirroring how `AddFolderPillButton` puts its background outside
+/// the Button.
+struct CreateNewMenuButton: View {
+    let addFolder: () -> Void
+    let addCollection: () -> Void
+
     @State private var isHovered = false
 
     var body: some View {
-        Button(action: action) {
-            // spacing 0 + explicit gaps so the +/icon pair can be tightened on
-            // its own: they read as one mark, while the label keeps its own
-            // breathing room.
+        Menu {
+            Button {
+                addFolder()
+            } label: {
+                Label("Add Folder", systemImage: "folder")
+            }
+            Button {
+                addCollection()
+            } label: {
+                Label("Add Collection", systemImage: CollectionAppearance.defaultIcon)
+            }
+        } label: {
             HStack(spacing: 0) {
-                // The + is a modifier on the kind glyph, not a peer of it, so it
-                // reads better a size down. At equal size the two competed and
-                // the pair looked heavy.
+                // Same relationship as the old pill: the + is a modifier on the
+                // kind glyphs, so it sits a size down rather than competing.
                 Image(systemName: "plus")
                     .font(.system(size: 10, weight: .medium))
-                Image(systemName: systemImage)
-                    .font(.system(size: 12, weight: .medium))
-                    .padding(.leading, 3)
-                // Always drawn, and allowed to TRUNCATE rather than be dropped:
-                // at the sidebar's 220pt minimum "Collection" doesn't fit, and a
-                // half-word with an ellipsis still says what the button is where
-                // a bare glyph doesn't. No `fixedSize` for the same reason — it
-                // would refuse to compress and push the pill out of bounds.
-                Text(shortLabel)
-                    .font(.system(size: 9, weight: .medium))
+                Text(String(localized: "Create New"))
+                    .font(.system(size: 11, weight: .medium))
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .padding(.leading, 5)
+                Spacer(minLength: 6)
+                // Both destinations shown as glyphs, so the pill says WHAT it
+                // creates without spelling out either name. All three are
+                // DECORATIVE to VoiceOver: the button's own accessibilityLabel
+                // already names it, and the separator would otherwise be read
+                // aloud as "vertical bar" between two unnamed images.
+                Image(systemName: "folder")
+                    .font(.system(size: 11, weight: .medium))
+                    .accessibilityHidden(true)
+                Text(verbatim: "|")
+                    .font(.system(size: 9, weight: .light))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 4)
+                    .accessibilityHidden(true)
+                Image(systemName: CollectionAppearance.defaultIcon)
+                    .font(.system(size: 11, weight: .medium))
+                    .accessibilityHidden(true)
             }
-            .padding(.horizontal, 6)
+            .padding(.horizontal, 10)
             .frame(maxWidth: .infinity)
             .frame(height: 28)
-            // Without this, the tap/hover region hugs the glyphs centered in the
-            // middle of the capsule rather than the full stretched
-            // (`maxWidth: .infinity`) width — most of the visible pill was dead
-            // space to the pointer.
+            // Without this the pointer only hits the glyph ink, leaving most of
+            // the stretched capsule dead — same fix the old add pills needed.
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .frame(maxWidth: .infinity)
+        .frame(height: 28)
         .background { Capsule(style: .continuous).fill(fillColor) }
-        // A shade off full strength: black read too hard against the pale pill,
-        // but much lighter and it stopped looking like a control. An opacity
-        // rather than a fixed grey so it inverts with the appearance.
         .foregroundStyle(Color.primary.opacity(0.85))
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.12)) { isHovered = hovering }
         }
-        .help(label)
-        .accessibilityLabel(label)
+        .help(String(localized: "Create New"))
+        .accessibilityLabel(String(localized: "Create New"))
     }
 
-    /// A soft neutral wash rather than the near-black/near-white slab this used
-    /// to be: at the bottom of a quiet sidebar, a full-contrast pill read as the
-    /// loudest thing on screen for what is a secondary action. `Color.primary`
-    /// inverts with the appearance, so one expression covers both, and it sits
-    /// in the same family as the section headers' toggle and the row hover fill.
+    /// The same soft neutral wash the two pills used — a secondary action at the
+    /// bottom of a quiet sidebar shouldn't be the loudest thing on screen.
     private var fillColor: Color {
         Color.primary.opacity(isHovered ? 0.14 : 0.07)
     }
 }
+
 
 // MARK: - Section sort control
 
@@ -260,6 +277,35 @@ struct AddPillButton: View {
 /// where the on-screen order is something the user arranged by hand rather than
 /// a rule, so it's worth signalling at a glance. Every other mode uses the
 /// header's own secondary color, so the control recedes into the label.
+/// The sort glyph, sized by an NSImage SYMBOL CONFIGURATION rather than a
+/// SwiftUI `.font`. `.menuStyle(.borderlessButton)` repaints its label — it
+/// overrode the font exactly the way it overrode `foregroundStyle` (verified:
+/// shrinking the font left the drawn glyph unchanged and only its frame moved).
+/// A configured NSImage carries its own intrinsic size, which the style can't
+/// override; `isTemplate` keeps it tintable so the Manual-mode accent applies.
+///
+/// Lives outside `SectionSortMenu` because that type is generic and Swift has
+/// no static stored properties in a generic type.
+enum SidebarSortGlyph {
+    static let pointSize: CGFloat = 11
+
+    static let image: Image = {
+        let name = "arrow.up.and.down.text.horizontal"
+        let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .semibold)
+        guard let img = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(config) else {
+            return Image(systemName: name)
+        }
+        img.isTemplate = true
+        // `.template` explicitly as well as `isTemplate`: the accent tint in
+        // Manual mode is applied by `foregroundStyle` on the Menu, and it only
+        // reaches a TEMPLATE image. Relying on the NSImage flag alone would fail
+        // silently — the glyph would just draw its own black and the
+        // hand-arranged signal would be gone with nothing to notice.
+        return Image(nsImage: img).renderingMode(.template)
+    }()
+}
+
 struct SectionSortMenu<Mode: Hashable & Identifiable>: View {
     let modes: [Mode]
     /// Already-LOCALIZED display name for a mode (`FolderSortMode.label` and
@@ -284,6 +330,7 @@ struct SectionSortMenu<Mode: Hashable & Identifiable>: View {
         isManual ? SidebarView.selectedLabelColor : .secondary
     }
 
+
     var body: some View {
         Menu {
             ForEach(modes) { mode in
@@ -296,8 +343,7 @@ struct SectionSortMenu<Mode: Hashable & Identifiable>: View {
                 }
             }
         } label: {
-            Image(systemName: "arrow.up.and.down.text.horizontal")
-                .font(.system(size: 9, weight: .semibold))
+            SidebarSortGlyph.image
                 .frame(width: 15, height: 15)
                 .background(Circle().fill(Color.primary.opacity(hovering ? 0.10 : 0)))
                 .contentShape(Rectangle())
@@ -306,8 +352,11 @@ struct SectionSortMenu<Mode: Hashable & Identifiable>: View {
         .menuIndicator(.hidden)
         .fixedSize()
         // On the MENU, not just its label image: a menu style paints its own
-        // label content, so a foregroundStyle applied inside the label was
-        // overridden and the control never actually turned accent in Manual.
+        // label content, so a font/foregroundStyle applied INSIDE the label is
+        // overridden — the control never turned accent in Manual, and a font
+        // set on the Image left the glyph full-size (only its frame shrank).
+        // The 14pt frame is a HIT TARGET around a deliberately small glyph.
+        .font(.system(size: 7, weight: .semibold))
         .foregroundStyle(glyphColor)
         .tint(glyphColor)
         .onHover { hovering = $0 }

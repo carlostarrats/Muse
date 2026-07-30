@@ -291,7 +291,7 @@ Muse/Muse/
                                    unpublish (delete the Drive folder now)
     AspectRatioCache.swift         per-file aspect (h÷w) for layout: bulk DB width/height + ImageIO
                                    header fallback, off-main
-    CollectionsPage.swift          dedicated Collections page (toolbar square.stack.3d.up):
+    CollectionsPage.swift          dedicated Collections page (toolbar rectangle.on.rectangle.angled):
                                    "Collections" header (back + "+" New Collection) over a 4-up card
                                    grid; ordered by the toolbar sort via CollectionSort. "+" opens
                                    the shared "Name Collection" modal

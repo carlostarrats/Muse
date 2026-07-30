@@ -743,7 +743,7 @@ struct ContentView: View {
             Button {
                 appState.toggleCollectionsPage()
             } label: {
-                toolbarGlyph("square.stack.3d.up", "Collections")
+                toolbarGlyph("rectangle.on.rectangle.angled", "Collections")
             }
             .help("Collections")
             .accessibilityLabel("Collections")

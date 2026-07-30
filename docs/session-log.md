@@ -6988,3 +6988,100 @@ between the name and its metadata went 2 → 6pt (owner: "too tight").
 plenty; groups longer than that already scrolled horizontally, so the extra
 width bought nothing. 820 = 5×140 tiles + 4×12 spacing + the group panel's 20pt
 and the row scroller's 16pt insets.
+
+## 2026-07-29 — sidebar/grid/hero polish pass (`feat/collection-icon-cards`)
+
+A single owner-driven visual session: collection glyph, sidebar chrome, hero
+motion, grid margins, one sidebar button. Everything here was judged in the
+running app, not from code.
+
+**Collection glyph → `rectangle.on.rectangle.angled`.** Swapped at every site
+that draws it: `CollectionAppearance.defaultIcon` (so sidebar rows, the
+Collections page and the Symbol picker's default cell all follow), the toolbar
+Collections button, the sidebar drag overlay, and the old add pill. Smart
+collections keep their funnel glyph, and a collection the user already customized
+keeps its stored symbol/emoji. The v10 migration comment now names the CONSTANT
+instead of a glyph literal, so it can't drift again.
+
+**Section headers a step smaller.** FOLDERS/COLLECTIONS label 11 → 10pt (tracking
+0.6 → 0.5), collapse +/− 9 → 8pt in a 16pt circle, sort glyph drawn at 11pt in a
+15pt hit frame.
+
+The sort glyph cost most of the session, and the lesson is worth keeping:
+`.menuStyle(.borderlessButton)` REPAINTS its label, so a `.font` set on the
+`Image` inside the label is discarded — exactly the way this file already
+documented it discarding `foregroundStyle`. Three rounds of "make it smaller" did
+nothing but shrink an invisible frame, because the drawn glyph never changed.
+Fixed by giving the glyph an intrinsic size (`SidebarSortGlyph`, an NSImage built
+with a `SymbolConfiguration`), which no style can override. It carries
+`renderingMode(.template)` explicitly as well as `isTemplate`: the tint is what
+signals Manual order, and relying on the flag alone would fail silently — the
+glyph would just draw black and the signal would be gone with nothing to notice.
+
+**Selection fill takes Lineform's treatment.** Light = the system unemphasized
+grey blended 55% toward the 0.988 page (raw AppKit grey reads heavy on a
+near-white sidebar). Dark = Lineform's RULE, not its hex: Apple's R70 grey glowed
+against Muse's darker nav and put the blue label on a bright band, but Lineform's
+own `#282828` recesses below THEIR `#313131` nav and would land 4/255 ABOVE
+Muse's `≈#242424`. So the dark fill is derived from Muse's own nav darkened 40%
+toward black. `cardColor` now reads the same page constants as the fill, so
+surface and selection can't drift apart. The selected label stays `systemBlue` —
+already the value Lineform uses.
+
+**Hero open bounces; the close converge ramps.** Modeled on Atlas (which
+`PartingField` was already measured against). Two non-obvious findings:
+
+1. The bounce was invisible at first for a reason no amount of tuning would have
+   fixed: every decode step re-writes `displayRect = fitRect`, and a normal
+   image's sharp decode lands ~100–200 ms in, so its `withAnimation(.easeOut)`
+   REPLACED the running spring with a flat curve. Those writes now stay on the
+   spring while it is still settling (`HeroFlightMotion.settling`). Same class as
+   the `isClosing` bug already documented in `loadFullRes`.
+2. `.spring(response:dampingFraction:)` was the wrong form — it has no bounded
+   settle, so damping high enough to tame the overshoot still crept for over half
+   a second: slow AND bounceless at once. `.spring(duration:bounce:)` separates
+   them (`openDuration` 0.30, `openBounce` 0.28), which is what finally let
+   "faster" and "less bounce" be asked for independently.
+
+A flip (arrow key) is a re-fit, not a flight, so `flipTo` clears the settle
+window — otherwise the same keypress bounced or didn't depending on how fast the
+user pressed it after opening.
+
+The close converge is a distance-staggered spring (`PartingField.closeDelay`,
+≤0.05s — half the open stagger, because it must fit the 0.34s return flight).
+Crucially the TRANSFORM and the FADE are animated separately: one shared
+`.animation` put opacity on the bouncy spring, and a spring overshoots, so
+brightness ran past 1, clamped, and came back — a visible hitch mid-converge.
+Only geometry bounces. The close FLIGHT itself stays on its fixed 0.34s curve;
+the backdrop fade (0.3s) and unmount (0.36s) are timed against that number.
+
+**Grid margins align to spacing.** Slider ceiling 28 → 40, and the left/right
+margin IS the gutter value now, so the gap to the window edge matches the gap
+between tiles at every setting. Top/bottom stays 20 — the top edge is governed by
+the floating-toolbar clearance reserved above the scroll view. The spacing
+`onChange` no longer animates: it fires on every tick of a continuous drag, and a
+0.25s easeInOut per tick left tiles still interpolating toward the previous
+target when the next arrived, so they curved past each other instead of following
+the handle ("the images like go around"). Discrete controls keep their animation.
+
+**One "+ Create New" menu replaces the two add pills.** At the sidebar's 220pt
+minimum those two split the width and truncated both labels to half-words. The
+menu opens upward on its own. `AddPillButton` is deleted; the first-run
+full-width Add Folder CTA is untouched, and the zero-folders path still offers
+only Add Folder. Menu items reuse the existing "Add Folder"/"Add Collection"
+keys, so `Create New` (fr: `Créer`) was the only new catalog string.
+
+**Smart-collection rules start at the top.** `.frame(minHeight:maxHeight:)`
+CENTERS its child by default, so a single rule floated mid-reserve and the set
+drifted upward as rules were added, only settling at the top once they filled the
+space. `alignment: .top` fixes it; the 150pt minimum stays so the card doesn't
+shrink-jump between one rule and two.
+
+**Settings sliders are equal length.** Both are rows of one `Grid`, so the title
+column sizes to the wider label. A fixed title width would equalize them too, but
+truncate the longer French labels.
+
+Tests: `PartingFieldTests` gained the close-ramp coverage (every close delay ≤ its
+open delay; stagger + response inside the 0.34s landing; fade shorter than the
+motion). `GridSpacingTests`' two ceiling assertions moved 28 → 40. Full suite 934
+passing.

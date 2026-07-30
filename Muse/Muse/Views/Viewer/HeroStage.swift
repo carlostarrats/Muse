@@ -36,6 +36,50 @@ private struct FlightEffect: GeometryEffect {
     }
 }
 
+/// The OPEN flight's curve: a spring with a little overshoot, so the image
+/// arrives with a bounce instead of easing flat into place (owner call,
+/// 2026-07-29, after the same feel in Atlas). Speed and bounce are separate
+/// knobs — see `openDuration` / `openBounce`.
+///
+/// Only OPEN is a spring. The CLOSE flight keeps its fixed 0.34s timing curve
+/// on purpose: the backdrop's 0.3s fade-out and the 0.36s unmount are timed
+/// against that number (see the hero open/close durable constraint), and a
+/// spring has no duration to time them against.
+enum HeroFlightMotion {
+    /// `.spring(duration:bounce:)`, NOT `.spring(response:dampingFraction:)`.
+    /// The response/damping form has no bounded settle time — response 0.36 at
+    /// 0.86 damping still crept for well over half a second, which read as
+    /// "super slow opening" while the overshoot was too small to see. This form
+    /// separates the two: `duration` is what the flight actually takes, and
+    /// `bounce` is the overshoot, tunable without touching the speed.
+    static let openDuration: Double = 0.30
+    /// 0 = no overshoot, 0.5 = very springy. Raise for more bounce.
+    static let openBounce: Double = 0.28
+
+    static var open: Animation {
+        .spring(duration: openDuration, bounce: openBounce)
+    }
+
+    /// How long the open spring is still visibly settling. A `displayRect`
+    /// write inside this window must stay ON the spring — see `settling(since:)`.
+    static let openSettleWindow: TimeInterval = 0.40
+
+    /// The curve for a post-decode `displayRect = fitRect` write.
+    ///
+    /// Load-bearing: every decode step (quick thumb → mid-res → sharp) re-writes
+    /// that rect, and a normal image's sharp decode lands ~100–200 ms after the
+    /// flight starts — INSIDE the spring. A `withAnimation(.easeOut)` there
+    /// REPLACES the running spring with a flat curve, which swallowed the bounce
+    /// entirely (owner-reported "when it opens it does not bounce"). Staying on
+    /// the spring lets it finish; after the window a plain ease is right, since
+    /// by then it's a correction, not the flight.
+    static func settling(since openedAt: Date) -> Animation {
+        Date().timeIntervalSince(openedAt) < openSettleWindow
+            ? open
+            : .easeOut(duration: 0.2)
+    }
+}
+
 /// A rounded rect whose corner radius is pre-divided by the flight's current
 /// scale, so the radius the VIEWER sees stays constant while the image flies.
 ///
@@ -293,11 +337,11 @@ struct HeroStage: View {
                 // Viewport settled a beat after mount (toolbar relayout):
                 // fold the correction into the open curve — a separate
                 // easeOut here bends the flight into a visible arc.
-                withAnimation(.timingCurve(0.25, 0.8, 0.25, 1, duration: 0.4)) {
+                withAnimation(HeroFlightMotion.open) {
                     displayRect = fitRect
                 }
             } else {
-                withAnimation(.easeOut(duration: 0.2)) { displayRect = fitRect }
+                withAnimation(HeroFlightMotion.settling(since: openedAt)) { displayRect = fitRect }
             }
         }
         .task(id: url) { await loadFullRes() }
@@ -324,7 +368,7 @@ struct HeroStage: View {
         if let quick = Self.quickThumbnail(for: url) {
             image = quick
             displayRect = sourceRect
-            withAnimation(.timingCurve(0.25, 0.8, 0.25, 1, duration: 0.4)) {
+            withAnimation(HeroFlightMotion.open) {
                 displayRect = fitRect
             }
         } else {
@@ -332,7 +376,7 @@ struct HeroStage: View {
                 image = await ThumbnailCache.shared.thumbnail(
                     for: url, size: CGSize(width: 320, height: 320))
                 displayRect = sourceRect
-                withAnimation(.timingCurve(0.25, 0.8, 0.25, 1, duration: 0.4)) {
+                withAnimation(HeroFlightMotion.open) {
                     displayRect = fitRect
                 }
             }
@@ -372,15 +416,24 @@ struct HeroStage: View {
         headerSize = nil
         resolveHeaderSize()
         zoom = 1; pan = .zero
+        // End the open-settle window. A flip is a RE-FIT of a new image in
+        // place, not a flight out of a tile, so it must not inherit the open
+        // spring's bounce — and without this it inherited it only when the flip
+        // landed inside the window, making the same keypress animate two
+        // different ways depending on how fast the user pressed it. With
+        // `openedAt` reset, every `settling(since:)` below (the flip's own write
+        // AND its post-decode write) resolves to the plain ease, which is what
+        // a flip did before the spring existed.
+        openedAt = .distantPast
         // thumbnail swaps in fast; .task(id: url) handles the full-res load
         if let quick = Self.quickThumbnail(for: url) {
             image = quick
-            withAnimation(.easeOut(duration: 0.2)) { displayRect = fitRect }
+            withAnimation(HeroFlightMotion.settling(since: openedAt)) { displayRect = fitRect }
         } else {
             Task {
                 image = await ThumbnailCache.shared.thumbnail(
                     for: url, size: CGSize(width: 320, height: 320))
-                withAnimation(.easeOut(duration: 0.2)) { displayRect = fitRect }
+                withAnimation(HeroFlightMotion.settling(since: openedAt)) { displayRect = fitRect }
             }
         }
     }
@@ -459,7 +512,7 @@ struct HeroStage: View {
         // guard from either of the two exits below.
         if let img, u == url, !isClosing {
             image = img
-            withAnimation(.easeOut(duration: 0.2)) { displayRect = fitRect }
+            withAnimation(HeroFlightMotion.settling(since: openedAt)) { displayRect = fitRect }
             return
         }
         if isClosing { return }
@@ -484,7 +537,7 @@ struct HeroStage: View {
               u == url, !isClosing
         else { return }
         image = fallback
-        withAnimation(.easeOut(duration: 0.2)) { displayRect = fitRect }
+        withAnimation(HeroFlightMotion.settling(since: openedAt)) { displayRect = fitRect }
     }
 
     private var panGesture: some Gesture {

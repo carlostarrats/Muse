@@ -34,7 +34,20 @@ struct GridView: View {
     private var cornerRadius: CGFloat {
         CGFloat(AppSettings.clampGridCornerRadius(gridCornerRadiusSetting))
     }
+    /// Top/bottom padding around the canvas. Fixed — the floating-toolbar
+    /// clearance above the scroll view is what governs the top edge (see the
+    /// ScrollView-clipping rule), so this stays put while the sides move.
     private let contentInset: CGFloat = 20
+
+    /// LEFT/RIGHT margin — the gutter value, so the gap to the window edge
+    /// matches the gap between tiles (owner call, 2026-07-29: "have the margins
+    /// align to spacing so it's all consistent"). Every width calculation must
+    /// read THIS, not `contentInset`: the two used to be one 20pt constant, and
+    /// a site left on the old value would size the canvas to a different width
+    /// than the padding actually reserves, pushing the last column under the
+    /// window edge. Spacing changes already recompute the layout (the
+    /// `gridSpacingSetting` onChange below), so the margin animates with it.
+    private var horizontalInset: CGFloat { spacing }
     /// User-set images-per-row, persisted; the bottom-right slider drives it.
     @AppStorage("gridColumnCount") private var gridColumns = 4
     /// Off-by-default: show each file's name under its tile.
@@ -112,7 +125,7 @@ struct GridView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let contentWidth = max(0, geo.size.width - contentInset * 2)
+            let contentWidth = max(0, geo.size.width - horizontalInset * 2)
 
             ScrollView {
                 ZStack(alignment: .topLeading) {
@@ -221,7 +234,8 @@ struct GridView: View {
                                         }
                                 }
                             )
-                            .padding(contentInset)
+                            .padding(.horizontal, horizontalInset)
+                            .padding(.vertical, contentInset)
                             // Collection/tag switches replace the grid wholesale —
                             // one instant swap, not a per-tile reflow. Keyed on
                             // `tagFilterGeneration` (bumps with the RESOLVED
@@ -274,7 +288,7 @@ struct GridView: View {
                 recompute(width: contentWidth)
             }
             .onChange(of: geo.size) { _, newSize in
-                recompute(width: max(0, newSize.width - contentInset * 2))
+                recompute(width: max(0, newSize.width - horizontalInset * 2))
             }
             .onChange(of: gridSignature) { _, _ in
                 // Drop the previous set's cached ratios before loading the new one,
@@ -289,9 +303,16 @@ struct GridView: View {
                 }
             }
             .onChange(of: gridSpacingSetting) { _, _ in
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    recompute(width: contentWidth)
-                }
+                // NOT animated, unlike the column-count / layout changes below.
+                // This fires on every tick of a CONTINUOUS drag, and a 0.25s
+                // easeInOut per tick meant each tile was still interpolating
+                // toward the previous target when the next one arrived — they
+                // curved and drifted past each other instead of following the
+                // cursor (owner-reported "the images like go around"). A slider
+                // is direct manipulation: the layout should track the handle
+                // exactly, the same way it stays instant on scroll and resize.
+                // Discrete controls keep their animation — one change, one move.
+                recompute(width: contentWidth)
             }
             .onChange(of: showFileNames) { _, _ in
                 withAnimation(.easeInOut(duration: 0.25)) {
@@ -402,21 +423,50 @@ struct GridView: View {
                     // not watched). The source tile keeps identity + full
                     // opacity: its image handoff has its own gate above.
                     .scaleEffect(parting.scale)
-                    .opacity(parting == .identity ? 1 : PartingField.partedOpacity)
                     .offset(x: rect.minX + parting.offset.width,
                             y: rect.minY + parting.offset.height)
                     // Value-scoped so ONLY hero open/close animates the
                     // scale/offset/fade — the placement component must stay
-                    // instant on scroll and relayout. Open: ~0.25s with a
-                    // per-tile distance delay so the shrink ripples outward
-                    // from the click. Close: one un-staggered easeOut
-                    // converge — NOT easeInOut: its dead-slow start under the
-                    // simultaneous opacity fade-in read as stop-start jitter
-                    // (motion happening while barely visible, popping into
-                    // view mid-move). easeOut moves immediately and settles
-                    // before the 0.34s landing.
+                    // instant on scroll and relayout.
+                    //
+                    // OPEN: ~0.25s easeOut with a per-tile distance delay, so
+                    // the shrink ripples outward from the click.
+                    //
+                    // CLOSE: a distance-staggered SPRING (owner call,
+                    // 2026-07-29, matching Atlas) — parted neighbors bounce back
+                    // toward the landing image, near ones first, so it reads as
+                    // a ramp rather than one slab of motion. Damping under 1 is
+                    // the bounce (`PartingField.convergeDamping`); the stagger
+                    // is `closeDelay`, and stagger + response stay inside the
+                    // 0.34s landing (pinned by PartingFieldTests).
+                    //
+                    // What must NOT come back is an easeInOut here: its
+                    // dead-slow START under the simultaneous fade-in read as
+                    // stop-start jitter — motion happening while the tile was
+                    // barely visible, then popping into view mid-move. The
+                    // spring, like the easeOut it replaced, moves immediately;
+                    // that is the load-bearing property, not the settle shape.
+                    //
+                    // The TRANSFORM and the FADE are animated SEPARATELY, and
+                    // that split is load-bearing. One shared `.animation` put
+                    // the opacity on the bouncy spring too — and a spring
+                    // overshoots, so opacity ran past 1, clamped there, and
+                    // came back: a visible hitch in the middle of the converge
+                    // (owner-reported "i see the bounce but it's not smooth").
+                    // Only geometry should bounce; brightness has nothing to
+                    // overshoot toward.
                     .animation(partingClicked == nil
-                                   ? .easeOut(duration: 0.3)
+                                   ? .spring(response: PartingField.convergeResponse,
+                                             dampingFraction: PartingField.convergeDamping)
+                                       .delay(PartingField.closeDelay(
+                                           distance: parting.distance))
+                                   : .easeOut(duration: 0.25)
+                                       .delay(PartingField.openDelay(
+                                           distance: parting.distance)),
+                               value: partingClicked)
+                    .opacity(parting == .identity ? 1 : PartingField.partedOpacity)
+                    .animation(partingClicked == nil
+                                   ? .easeOut(duration: PartingField.convergeFadeDuration)
                                    : .easeOut(duration: 0.25)
                                        .delay(PartingField.openDelay(
                                            distance: parting.distance)),

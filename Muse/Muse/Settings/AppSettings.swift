@@ -127,7 +127,11 @@ enum AppSettings {
     /// zero: flush-packed images read as one continuous picture rather than a
     /// grid, so the tightest setting still separates them.
     static let defaultGridSpacing: Double = 14
-    static let gridSpacingRange: ClosedRange<Double> = 4...28
+    /// Upper bound raised 28 → 40 (owner call, 2026-07-29) for people who want
+    /// the images to breathe. The grid's side MARGIN tracks this same value
+    /// (`GridView.horizontalInset`), so a wide setting spaces the tiles from the
+    /// window edges by exactly as much as it spaces them from each other.
+    static let gridSpacingRange: ClosedRange<Double> = 4...40
 
     /// Bound a stored or slider-supplied gutter to the usable range. A value
     /// outside it doesn't just look wrong — a negative gutter overlaps tiles.
