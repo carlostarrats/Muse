@@ -199,6 +199,11 @@ actor Indexer {
                     // Notes follow tags: copy every note onto the target; the old
                     // row's remaining note rows cascade-delete when it's pruned.
                     try NoteStore.carryAll(fromFileID: file.id, toFileID: target.id, db: db)
+                    // Edits ride with notes at every one of these seams: an
+                    // edit stack is per (file_id, parent_dir) too, so an
+                    // identity rewrite that forgets it silently discards the
+                    // user's adjustments.
+                    try EditRecordStore.carryAll(fromFileID: file.id, toFileID: target.id, db: db)
                 } else {
                     let keepsSiblingInDir = otherAlive
                         .contains { TagScope.parentDir(ofPath: $0.absolute_path) == dir }
@@ -207,6 +212,9 @@ actor Indexer {
                     try NoteStore.carry(fromFileID: file.id, fromDir: dir,
                                         toFileID: target.id, toDir: dir,
                                         deleteOriginal: !keepsSiblingInDir, db: db)
+                    try EditRecordStore.carry(fromFileID: file.id, fromDir: dir,
+                                              toFileID: target.id, toDir: dir,
+                                              deleteOriginal: !keepsSiblingInDir, db: db)
                 }
                 // Manual collection membership is precious user data keyed on
                 // the old identity — copy it to the new one, mirroring the
@@ -297,6 +305,13 @@ actor Indexer {
                     try NoteStore.carry(fromFileID: file.id, fromDir: dir,
                                         toFileID: newFile.id, toDir: dir,
                                         deleteOriginal: !keepsSiblingInDir, db: db)
+                    // A pure edit-in-place KEEPS its stack: the parameters are
+                    // normalized, so they still apply to the new bytes, and
+                    // discarding a user's adjustments because a file changed
+                    // is the worse of the two failures.
+                    try EditRecordStore.carry(fromFileID: file.id, fromDir: dir,
+                                              toFileID: newFile.id, toDir: dir,
+                                              deleteOriginal: !keepsSiblingInDir, db: db)
                     // Manual collection membership is content-identity (file_id)
                     // keyed and is precious user data — carry it to the edited
                     // copy's new identity so an edit doesn't silently eject the

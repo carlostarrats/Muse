@@ -43,6 +43,16 @@ nonisolated struct Sidecar: Codable, Equatable, Sendable {
     /// User-authored note, per (file_id, parent_dir). Optional so pre-note
     /// sidecars decode to nil. NOT a FileRow column (`apply` never touches it).
     var note: String? = nil
+    /// The CURRENT edit stack's canonical JSON, per (file_id, parent_dir).
+    /// Optional so pre-edit sidecars decode unchanged. Versions/snapshots are
+    /// device-local and deliberately do NOT ride sidecars (recorded
+    /// limitation) — only the stack that renders everywhere syncs.
+    var edit_stack: String? = nil
+    /// The edit field's OWN clock, independent of `updated_at`. An edit and a
+    /// tag change are separate writers of the same file, so resolving edits by
+    /// the sidecar-wide clock would let an unrelated analyze-export on another
+    /// device roll back an edit it never saw.
+    var edit_updated_at: Int64? = nil
 
     static let currentSchema = 1
 }
@@ -51,7 +61,8 @@ extension Sidecar {
     /// Build a sidecar from a fully-analyzed file row + its tags. Returns
     /// nil if the file has no content hash (its identity isn't established).
     static func build(from file: FileRow, tags: [TagRow], updatedAt: Int64,
-                      note: String? = nil) -> Sidecar? {
+                      note: String? = nil,
+                      edit: (stack: String, updatedAt: Int64)? = nil) -> Sidecar? {
         guard let hash = file.content_hash else { return nil }
         return Sidecar(
             schema: Sidecar.currentSchema,
@@ -74,7 +85,9 @@ extension Sidecar {
                 SidecarTag(label: $0.label, source: $0.source,
                            confidence: $0.confidence, model_version: $0.model_version)
             },
-            note: note
+            note: note,
+            edit_stack: edit?.stack,
+            edit_updated_at: edit?.updatedAt
         )
     }
 
@@ -124,6 +137,21 @@ extension Sidecar {
         // and between two non-nil the fresh side wins. Genuine deletions travel
         // the manual-edit path (mergeExisting: false), which bypasses merge.
         winner.note = b.note ?? a.note
+        // The edit stack resolves by its OWN field clock, not the sidecar's:
+        // greater non-nil `edit_updated_at` wins, and nil never clobbers
+        // (union-never-deletes). Both fields move together — carrying a stack
+        // with the other side's clock would make the next merge non-monotonic.
+        if let bClock = b.edit_updated_at,
+           bClock >= (a.edit_updated_at ?? Int64.min) {
+            winner.edit_stack = b.edit_stack
+            winner.edit_updated_at = bClock
+        } else if let aClock = a.edit_updated_at {
+            winner.edit_stack = a.edit_stack
+            winner.edit_updated_at = aClock
+        } else {
+            winner.edit_stack = nil
+            winner.edit_updated_at = nil
+        }
         // A rating is stored as a manual tag, so the union above happily keeps
         // BOTH sides' ratings — two devices that rated the same photo while
         // offline would sync to a file carrying "★★" AND "★★★", breaking the
@@ -165,8 +193,14 @@ extension Sidecar {
     /// tag/rating/import edit that merely rewrites the sidecar), the note field
     /// must be left as the on-disk value so an unrelated edit can't wipe a note
     /// this device hasn't hydrated yet.
+    /// `editAuthoritative` is the same idea for the edit field, and for the
+    /// same reason: only the edit-save/reset export owns it, so a tag or
+    /// rating edit can't wipe an edit stack this device hasn't hydrated. When
+    /// it IS authoritative, `fresh` wins INCLUDING a clear — that's how a
+    /// Reset propagates rather than being read as "nothing to say".
     static func resolveForWrite(fresh: Sidecar, existing: Sidecar?,
-                                mergeExisting: Bool, noteAuthoritative: Bool) -> Sidecar {
+                                mergeExisting: Bool, noteAuthoritative: Bool,
+                                editAuthoritative: Bool = false) -> Sidecar {
         guard let existing else { return fresh }
         if mergeExisting { return merge(existing, fresh) }
         var out = fresh
@@ -174,6 +208,10 @@ extension Sidecar {
             // Non-note edit: never change the synced note (preserve on-disk;
             // fall back to the fresh value only when the disk has none).
             out.note = existing.note ?? fresh.note
+        }
+        if !editAuthoritative {
+            out.edit_stack = existing.edit_stack ?? fresh.edit_stack
+            out.edit_updated_at = existing.edit_updated_at ?? fresh.edit_updated_at
         }
         return out
     }

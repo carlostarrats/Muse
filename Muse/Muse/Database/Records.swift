@@ -275,3 +275,69 @@ struct ClipEmbeddingRow: Codable, FetchableRecord, MutablePersistableRecord {
         static let vector = Column("vector")
     }
 }
+
+/// The CURRENT edit stack for one file IN ONE FOLDER (v20). Per
+/// `(file_id, parent_dir)` like tags and notes — never content-keyed.
+/// A neutral stack has NO row; the absence is the "unedited" state.
+struct EditRow: Codable, FetchableRecord, MutablePersistableRecord {
+    static let databaseTableName = "edits"
+
+    var file_id: String
+    var parent_dir: String
+    /// Canonical `.sortedKeys` JSON — see `EditStackCodec`.
+    var stack: String
+    /// SHA-256 of `stack`; the thumbnail cache key's edit component.
+    var stack_hash: String
+    /// Denormalized from the blob so a renderer can refuse a newer stack
+    /// without decoding it.
+    var process_version: Int
+    /// Epoch seconds; the sidecar's `edit_updated_at` field clock.
+    var updated_at: Int64
+
+    enum Columns {
+        static let file_id = Column("file_id")
+        static let parent_dir = Column("parent_dir")
+        static let stack_hash = Column("stack_hash")
+        static let updated_at = Column("updated_at")
+    }
+}
+
+/// A saved version or snapshot of an edit stack (v20). Same table, same
+/// shape; `kind` decides which surface offers it.
+struct EditVersionRow: Codable, FetchableRecord, MutablePersistableRecord {
+    static let databaseTableName = "edit_versions"
+
+    var id: String
+    var file_id: String
+    var parent_dir: String
+    /// "version" (the switcher + grid badge count) | "snapshot" (the
+    /// before/after compare picker).
+    var kind: String
+    var name: String
+    var stack: String
+    var created_at: Int64
+
+    enum Columns {
+        static let id = Column("id")
+        static let file_id = Column("file_id")
+        static let parent_dir = Column("parent_dir")
+        static let kind = Column("kind")
+        static let created_at = Column("created_at")
+    }
+}
+
+/// A library-global look (v21). Stored MINUS the geometry group.
+struct EditPresetRow: Codable, FetchableRecord, MutablePersistableRecord, Identifiable {
+    static let databaseTableName = "edit_presets"
+
+    var id: String
+    var name: String
+    var stack: String
+    var created_at: Int64
+    var updated_at: Int64
+
+    enum Columns {
+        static let id = Column("id")
+        static let name = Column("name")
+    }
+}

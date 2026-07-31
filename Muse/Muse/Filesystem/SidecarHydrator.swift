@@ -83,6 +83,17 @@ enum SidecarHydrator {
             // NoteStore.applyHydrated).
             try NoteStore.applyHydrated(sidecar.note, fileID: fileID, parentDir: parentDir,
                                         incomingUpdatedAt: sidecar.updated_at, db: db)
+            // The edit stack is row-level LWW on its OWN clock, not the
+            // sidecar's: an analyze-export from a device that never saw the
+            // edit carries a newer `updated_at` but an older (or absent)
+            // `edit_updated_at`, and must not roll the edit back. A sidecar
+            // carrying no edit clock at all says nothing about edits, so it's
+            // skipped rather than treated as a synced reset.
+            if let editClock = sidecar.edit_updated_at {
+                try EditRecordStore.applyHydrated(json: sidecar.edit_stack,
+                                                  incomingUpdatedAt: editClock,
+                                                  fileID: fileID, parentDir: parentDir, db: db)
+            }
             // FTS5 — mirror AnalyzePipeline's keying.
             try db.execute(sql: "DELETE FROM files_fts WHERE file_id = ?", arguments: [fileID])
             try db.execute(sql: """

@@ -503,6 +503,58 @@ final class Database {
             try db.create(index: "photo_traits_pets_idx", on: "photo_traits", columns: ["pet_count"])
         }
 
+        migrator.registerMigration("v20_edits") { db in
+            // The CURRENT edit stack, one row per (file, folder). The grain is
+            // (file_id, parent_dir) — the tags/notes grain — deliberately NOT a
+            // column on `files`: content_hash is UNIQUE there, so two folders'
+            // copies of the same bytes would be forced to share one stack.
+            //
+            // A NEUTRAL stack deletes the row. "No edit" is the absence of a
+            // row, never a stored no-op (the NoteStore.write blank-deletes
+            // rule) — which is also what reverts the thumbnail cache key to
+            // its nil-stack variant.
+            try db.create(table: "edits") { t in
+                t.column("file_id", .text).notNull()
+                    .references("files", onDelete: .cascade)
+                t.column("parent_dir", .text).notNull()
+                t.column("stack", .text).notNull()          // canonical JSON
+                t.column("stack_hash", .text).notNull()
+                // Denormalized so a consumer can refuse to render a stack from
+                // a newer renderer without decoding the blob first.
+                t.column("process_version", .integer).notNull()
+                t.column("updated_at", .integer).notNull()
+                t.primaryKey(["file_id", "parent_dir"])
+            }
+            // Versions and snapshots share one table, differing only in which
+            // surface shows them (the version switcher vs the compare picker).
+            try db.create(table: "edit_versions") { t in
+                t.column("id", .text).primaryKey()
+                t.column("file_id", .text).notNull()
+                    .references("files", onDelete: .cascade)
+                t.column("parent_dir", .text).notNull()
+                t.column("kind", .text).notNull()           // "version" | "snapshot"
+                t.column("name", .text).notNull()
+                t.column("stack", .text).notNull()
+                t.column("created_at", .integer).notNull()
+            }
+            try db.create(index: "edit_versions_scope_idx", on: "edit_versions",
+                          columns: ["file_id", "parent_dir"])
+        }
+
+        migrator.registerMigration("v21_edit_presets") { db in
+            // Library-global looks. No UNIQUE on name — two presets called
+            // "Warm" is the user's business, not a constraint violation.
+            try db.create(table: "edit_presets") { t in
+                t.column("id", .text).primaryKey()
+                t.column("name", .text).notNull()
+                // Stored MINUS the geometry group: a preset carrying a crop
+                // ambushes every photo it's applied to.
+                t.column("stack", .text).notNull()
+                t.column("created_at", .integer).notNull()
+                t.column("updated_at", .integer).notNull()
+            }
+        }
+
         return migrator
     }
 

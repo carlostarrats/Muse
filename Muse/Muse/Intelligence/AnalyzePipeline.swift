@@ -345,24 +345,32 @@ final class AnalyzePipeline: ObservableObject {
     /// with manual-beats-vision). Manual tag EDITS pass false — there the
     /// local DB is authoritative (including deletions) and merging would
     /// resurrect a just-deleted tag from the old sidecar.
-    private func writeSidecarIfICloud(fileID: String, url: URL, mergeExisting: Bool, noteAuthoritative: Bool = false) async {
+    private func writeSidecarIfICloud(fileID: String, url: URL, mergeExisting: Bool,
+                                      noteAuthoritative: Bool = false,
+                                      editAuthoritative: Bool = false) async {
         guard ICloudZone.contains(url, folder: iCloudFolder) else { return }
         guard let queue = Database.shared.dbQueue else { return }
         let now = Int64(Date().timeIntervalSince1970)
         let dir = TagScope.parentDir(of: url)
-        let bundle: (FileRow, [TagRow], String?)? = try? await queue.read { db -> (FileRow, [TagRow], String?)? in
+        let bundle: (FileRow, [TagRow], String?, EditRow?)? =
+        try? await queue.read { db -> (FileRow, [TagRow], String?, EditRow?)? in
             guard let file = try FileRow.filter(FileRow.Columns.id == fileID).fetchOne(db)
             else { return nil }
-            // Sidecar lives in this file's folder → carry only this folder's tags + note.
+            // Sidecar lives in this file's folder → carry only this folder's
+            // tags, note and edit stack.
             let tags = try TagRow
                 .filter(TagRow.Columns.file_id == fileID)
                 .filter(TagRow.Columns.parent_dir == dir)
                 .fetchAll(db)
             let note = try NoteStore.read(fileID: fileID, parentDir: dir, db: db)
-            return (file, tags, note)
+            let edit = try EditRecordStore.read(fileID: fileID, parentDir: dir, db: db)
+            return (file, tags, note, edit)
         }
-        guard let (file, tags, note) = bundle,
-              let sidecar = Sidecar.build(from: file, tags: tags, updatedAt: now, note: note) else { return }
+        guard let (file, tags, note, edit) = bundle,
+              let sidecar = Sidecar.build(
+                from: file, tags: tags, updatedAt: now, note: note,
+                edit: edit.map { (stack: $0.stack, updatedAt: $0.updated_at) })
+        else { return }
         let hash = sidecar.content_hash
         // Sidecar + URL are Sendable; write off-main so the (tiny) coordinated
         // disk write never blocks the main actor. Log on failure — a silent
@@ -372,7 +380,8 @@ final class AnalyzePipeline: ObservableObject {
                 let existing = SidecarStore.read(forAsset: url, contentHash: hash)
                 let out = Sidecar.resolveForWrite(fresh: sidecar, existing: existing,
                                                   mergeExisting: mergeExisting,
-                                                  noteAuthoritative: noteAuthoritative)
+                                                  noteAuthoritative: noteAuthoritative,
+                                                  editAuthoritative: editAuthoritative)
                 try SidecarStore.write(out, forAsset: url)
             }
             catch { print("[AnalyzePipeline] sidecar write failed for \(url.lastPathComponent): \(error)") }
@@ -396,6 +405,26 @@ final class AnalyzePipeline: ObservableObject {
                 await writeSidecarIfICloud(fileID: fid, url: url, mergeExisting: false,
                                           noteAuthoritative: noteAuthoritative)
             }
+        }
+    }
+
+    /// Re-export sidecars after an edit save/reset — the ONLY caller that
+    /// passes `editAuthoritative: true`, so `fresh` wins for the edit field
+    /// including a CLEAR (that is how a Reset propagates instead of reading as
+    /// "nothing to say"). Every other export leaves the on-disk edit alone.
+    ///
+    /// Awaited rather than fire-and-forget: `EditStore.save` already runs in a
+    /// Task, and the caller's next action is often closing the editor.
+    func exportSidecarsAfterEditChange(for urls: [URL]) async {
+        let zone = iCloudFolder
+        let inZone = urls.filter { ICloudZone.contains($0, folder: zone) }
+        guard !inZone.isEmpty, let queue = Database.shared.dbQueue else { return }
+        let idByPath = await Self.aliveFileIDs(queue: queue,
+                                               absPaths: inZone.map { $0.standardizedFileURL.path })
+        for url in inZone {
+            guard let fid = idByPath[url.standardizedFileURL.path] else { continue }
+            await writeSidecarIfICloud(fileID: fid, url: url, mergeExisting: false,
+                                       editAuthoritative: true)
         }
     }
 

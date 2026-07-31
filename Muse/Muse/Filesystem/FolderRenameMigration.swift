@@ -101,6 +101,11 @@ enum FolderRenameMigration {
             """, arguments: [new, old, old, old, old])
         // SET expressions read the OLD row value, so the CASE matches the
         // renamed folder's own pin and relabels it; nested pins keep their name.
+        // edits/edit_versions are keyed (file_id, parent_dir) exactly like
+        // notes, so they need the same pre-clear + prefix rewrite or every
+        // edit under a renamed folder is orphaned at the old parent_dir —
+        // i.e. the photo silently reverts to its original pixels.
+        try EditRecordStore.rewriteParentDirPrefix(oldPrefix: old, newPrefix: new, db: db)
         try db.execute(sql: """
             UPDATE starred_folders
             SET absolute_path = ? || SUBSTR(absolute_path, LENGTH(?) + 1),

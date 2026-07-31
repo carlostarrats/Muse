@@ -67,6 +67,12 @@ enum FileMoveMigration {
             try NoteStore.carry(fromFileID: fid, fromDir: oldDir,
                                 toFileID: fid, toDir: newDir,
                                 deleteOriginal: !keepsSiblingInOldDir, db: db)
+            // The edit stack + its versions follow the identical rule — same
+            // file_id, re-scoped oldDir → newDir, copy when a same-folder
+            // sibling still surfaces them.
+            try EditRecordStore.carry(fromFileID: fid, fromDir: oldDir,
+                                      toFileID: fid, toDir: newDir,
+                                      deleteOriginal: !keepsSiblingInOldDir, db: db)
         }
     }
 
