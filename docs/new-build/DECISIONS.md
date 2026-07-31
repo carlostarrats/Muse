@@ -1,9 +1,9 @@
-# DECISIONS.md — binding decisions from Specs 01–08
+# DECISIONS.md — binding decisions from Specs 01–09
 
 *Extracted 2026-07-30 from `spec-01-implementation.md` through
-`spec-08-implementation.md` (the build-level specs, which supersede the corresponding
+`spec-09-implementation.md` (the build-level specs, which supersede the corresponding
 `pre-spec-*` files where they deviate), verified against the codebase at `cefa008`
-(`feat/editing`). **Note:** as of that commit no Spec 01/02/03/04/05/06/07/08 code exists in
+(`feat/editing`). **Note:** as of that commit no Spec 01–09 code exists in
 the tree — migrations end at `v12_smart_collections`; the implementation specs are the
 settled record, written before build. Product-level decisions live in
 `muse-photo-foundation.md` §13 (authoritative decision log); this file is the
@@ -73,8 +73,9 @@ build-level layer future specs must not contradict.*
   label unchanged.
 - Trial: MAS forces free download → trial → unlock IAP. `Commerce/TrialGate.swift` is a
   pure function of `(now, firstLaunch, entitled, TrialPolicy)`. Policy default: 14 days,
-  **`enforced: false` until pricing is decided (Spec 09)** — the gate computes state,
-  nothing is blocked.
+  `enforced: false` at Spec 01 time — **superseded by Spec 09, which flips it true**
+  (see "Pricing & trial (Spec 09)"; sandbox purchases mean testers exercise the gate
+  rather than being locked out).
 - Trial anchor: first-launch date in Keychain
   (`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`), earliest-wins against any
   UserDefaults mirror, never moved forward.
@@ -1624,6 +1625,136 @@ build-level layer future specs must not contradict.*
   launch refresher with nothing configured = zero network calls (code-shape fact,
   noted in the report).
 
+## Pricing & trial (Spec 09)
+
+- **Pricing is NOT decided** (owner statement 2026-07-30: "none of the pricing is
+  decided"). ASC working placeholders — unlock **$49.99**, sharing **$19.99/yr** — exist
+  only so products load and TestFlight flows run E2E. The final call lands after the
+  TestFlight photographer pass, is recorded here + foundation §13, and requires ZERO code
+  change (prices are ASC-side only).
+- **No price literal ever appears in code, resources, or `.xcstrings` values** — every
+  price renders `Product.displayPrice`; products not loaded → the copy omits the number,
+  never guesses or hardcodes. Acceptance: grep for `$49`/`49.99` etc. → zero hits.
+- Trial working shape: **14-day full trial, hard gate at expiry** (the pre-spec's own
+  recommendation; owner-confirmable alongside pricing — duration is one constant).
+  Capacity-limited and feature-limited shapes are deliberately NOT built.
+- `TrialPolicy.current = (duration: 14 d, enforced: true)` — **enforced flips true in
+  Spec 09's build**, superseding Spec 01's tester-lockout rationale: sandbox purchases
+  are free, so testers exercise the gate instead of being locked out by it.
+- `TrialPolicy.epoch = 1`; the Keychain anchor key is `"muse.trial.anchor.e<epoch>"`.
+  Epoch 1 also reads Spec 01's legacy unnumbered key + the UserDefaults mirror,
+  earliest-wins, so no existing anchor resets. A future epoch bump reads ONLY its own
+  key — that IS the "generous re-trial on major versions" mechanism. **The epoch does
+  NOT bump at GA** (long-running testers hitting the gate is the intended E2E).
+- `CommerceStore` gains `@Published trialState` + computed `trialGateActive`
+  (`.expired` ∧ ¬unlocked). Recompute at: init (synchronous, from the cached anchor —
+  correct at first paint), every entitlement change, and
+  `didBecomeActiveNotification`. **No timer** — mid-session expiry gates on the next
+  activation (recorded).
+- Gate integration adds ZERO AppState state: `modalPresented` gains
+  `|| CommerceStore.shared.trialGateActive` (keys stay gated behind the card). **The
+  gate is not dismissible and not in the Escape peel** — `dismissTopModal` skips it;
+  when only the gate is presented, Escape is a no-op. `EscapeResolver` order unchanged.
+- `Views/UnlockGateView.swift`: shell overlay attached ABOVE the `alertRequest`
+  presenter, reusing `.museModal` card visuals but never the `.museModal` machinery
+  (that machinery exists to dismiss). Contents: reassurance body (no-catalog story),
+  price via `displayPrice`, Unlock / Restore / Redeem Code
+  (`https://apps.apple.com/redeem`) / Privacy+Terms links / **Quit Muse**. Purchase and
+  restore errors render INLINE in the card — nothing presents above the gate. The card
+  never mentions the sharing tier.
+- During trial: the Settings Muse-section status line is state-aware ("Trial — N days
+  left"), and at `daysLeft ≤ 3` a once-per-launch (never persisted) confirm
+  `ModalMessageCard` fires via the `alertRequest` seam (Unlock… / Later). Nothing else —
+  no toolbar badge, no per-launch nag; the status pill stays background-work-only.
+- **The gate blocks the UI, never background data maintenance** — backfills,
+  `DriveExpirySweeper`, `ShareDomainRefresher`, and sidecar hydration run behind it
+  (freezing them could rot the user's own state).
+- `Views/SubscriptionLegalLinks.swift` (Privacy/Terms links beside purchase UI) is
+  shared by `UnlockGateView` and `ShareDomainCard`'s pitch state — **Spec 08 amendment
+  A3** (App Review requires working policy links next to subscription purchase UI).
+- Settings Muse section gains a **Manage Subscription** row
+  (`https://apps.apple.com/account/subscriptions`), visible only while
+  `entitlements.sharing`.
+
+## Launch flips (Spec 09)
+
+- Build-time flips (land in Spec 09's build): `TrialPolicy.current.enforced = true` and
+  `SharingTier.enforced = true` (its single `ShareCollectionButton` call site is
+  untouched; `SharingTierTests` updated).
+- GA-deploy-time flip: Worker `ALLOW_SANDBOX = "false"` — **never before GA**
+  (TestFlight domain testing needs sandbox JWS accepted). Post-GA domain testing uses a
+  second staging Worker with sandbox on (noted in `workers/domains/README`).
+- Independent flip: `DriveConfig.consentScreenVerified = true` when Google completes
+  OAuth verification.
+- `ITSAppUsesNonExemptEncryption = false` added to Info.plist (HTTPS-only exemption).
+
+## Backup amendment A2 (Spec 09 → Spec 04)
+
+- **Spec 04/05's "the `.muselibrary` archive carries the DB" was factually wrong** —
+  the shipped backup is a JSON encode of `BackupArchive` (occurrences carry tags +
+  note; the DB file is never copied), so edit data did not survive a round trip.
+  Corrected in Spec 09: `BackupOccurrence` gains optional `edit_stack` /
+  `edit_updated_at` / `edit_versions`; `BackupArchive` gains optional `edit_presets` /
+  `edit_luts`. **`BackupArchive.currentSchema` stays 1** — the optional-fields decode
+  pattern (pre-A2 archives decode unchanged; post-A2 archives decode on older builds
+  minus the new fields).
+- **LUT bytes are carried** (base64 `Data`): a restored stack referencing an absent LUT
+  renders as the ORIGINAL (Spec 05 rule) — a backup restoring edits but losing looks is
+  a half-restore. Bounded by `CubeLUTParser.maxSize = 128`; accepted. Versions/snapshots
+  ride too — "device-local" is a *sidecar sync* limitation, not a *backup* rule.
+- Restore semantics: the stack applies via `EditRecordStore.write` **restore-wins** at
+  the matched NEW `parent_dir` (mirrors the existing `NoteStore.write` restore line —
+  recovery, not merge); versions insert with fresh UUIDs (the carry rule); presets and
+  LUTs are `INSERT OR IGNORE` (LUT immutability preserved; re-restore idempotent). Then
+  the standard edit-save consequences run once: provider index rebuild,
+  `markContentChanged` (both thumbnail key variants), `EditStore.generation` bump,
+  `LutRegistry.invalidate`. **No sidecar re-export on restore** (hydration owns sidecar
+  reconciliation; restore must not stomp newer on-disk sidecars).
+
+## Launch validation (Spec 09)
+
+- `scripts/make-synthetic-library.swift`: checked-in, zero-dependency, seeded generator
+  of N unique-content-hash 64×64 JPEGs (≤ 1,000/folder) with EXIF/GPS variety written
+  through the same property keys `PhotoHeaderReader` parses; ~2 GB at 500k.
+- `PerfBaselineTests` gains a **`MUSE_PERF_500K=1`**-gated section (never default CI):
+  500k synthetic `photo_meta` + `clip_embeddings` rows; recorded targets — three-token
+  intersect ≤ 500 ms · full `ClipIndex` scan ≤ 1.5 s · scan footprint delta ≤ 200 MB
+  (the streaming/no-RAM-residency proof made measurable).
+- **The launch perf gate is a human reading committed reports**
+  (`docs/perf-baseline-<date>.md` + `docs/launch-validation-<date>.md`), never a CI
+  assertion — record-never-assert holds; "regressions block launch" is a process rule.
+- The "tested with 500,000+ libraries" marketing line may appear ONLY after the
+  end-to-end owner protocol (index/search/memory/integrity/thermal on the M1 Air 8 GB)
+  passes and is recorded in the validation doc — earned, never asserted first.
+
+## Site & metadata (Spec 09)
+
+- `web/share` `about`/`privacy`/`terms` are rewritten for a paid PolyForm-Shield app
+  (they currently claim "free, open-source" — false at launch). `about.html` keeps its
+  OAuth-consent-home role and the `google-site-verification` meta (load-bearing).
+  `privacy.html` enumerates exactly the four app-initiated network paths WITH what each
+  sends — the domain-provisioning calls carry the App Store **transaction JWS** (product
+  id, dates, transaction ids — no name/email/Apple ID) — plus the share PAGE's portfolio
+  `manifest.json` fetch. `terms.html` gains purchases/subscriptions (the 30-day grace
+  number MUST equal `DomainConfig.lapseGraceDays` — a third citation site of that
+  constant) and extends acceptable-use/takedown to usernames + custom hostnames.
+- `InfoSheet`'s "open source under the MIT license" line is replaced: PolyForm Shield +
+  attributions (GRDB MIT · fflate MIT · GeoNames CC-BY 4.0 · the CLIP model license line
+  per the resolution below). Worker deps (`jose`/`@peculiar/x509`) are credited in
+  `workers/domains/README`, not the About card (they are not in the app binary).
+- ASO drafts (owner finalizes): name "Muse — Photo Library" · subtitle "Fast, local
+  photo organizer" · category Photography · keyword field built around "photo
+  organizer/photo library" terms · screenshots MUST show the editor readouts · review
+  notes pre-state the guideline-4.8 position (Drive OAuth connects the user's own
+  account; it is not an app login). **No Lightroom references in any owned copy.**
+- **MobileCLIP license gate is a GA blocker**: legal read of Apple's ML Research Model
+  TOU before shipping paid. Refusal → the mechanical Spec 03 swap (self-converted
+  OpenCLIP ViT-B/32 through `make-clip-coreml.py`, `ClipModel.current` edit +
+  `generation` bump, hosted chunks; installed users re-embed via the standing
+  generation-mismatch backfill). Outcome recorded here when made.
+- Trial-gate + legal-page strings are localized at introduction; launch requires the
+  French export pass at 0 untranslated (checklist row).
+
 ## Naming & test conventions
 
 - Migrations: `vN_snake_case`, registered in order at the end of `makeMigrator()`.
@@ -1669,9 +1800,12 @@ build-level layer future specs must not contradict.*
   an in-app link-base override for self-hosters (the escape hatch is docs-only) ·
   email/anything else on user domains · per-registrar DNS walkthrough UI (generic
   CNAME copy only) · analytics of any kind on share pages (never).
-- Spec 09: pricing, trial enforcement policy, and `SharingTier.enforced` (portfolio
-  tier gating ships computing-but-unenforced); the Worker's `ALLOW_SANDBOX` flips
-  false at public launch alongside Spec 09's pricing go-live.
+- Spec 09 exclusions: the pricing DECISION itself (still open — ASC placeholders
+  $49.99 / $19.99-yr stand until the TestFlight photographer pass concludes) ·
+  capacity-limited and feature-limited trial shapes (not built) · the marketing site
+  (separate repo — Spec 09 ships the in-repo `web/share` pages + a copy brief only) ·
+  CI-asserted perf gates (human-read committed reports, by design) · any migration
+  (future specs still continue at v24).
 - `HybridClusterer` time-bucketing: NOT done — it changes clustering semantics and the
   `SimilarityMatrixTests` equivalence guarantee; time-bucketing landed in
   `BurstClusterer` instead. Measured in the baseline, not changed.
