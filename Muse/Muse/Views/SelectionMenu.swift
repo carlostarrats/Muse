@@ -165,7 +165,9 @@ struct SelectionActionsMenu: View {
 
     private func share() {
         guard let contentView = NSApp.keyWindow?.contentView, !fileURLs.isEmpty else { return }
-        let picker = NSSharingServicePicker(items: fileURLs)
+        // Pixels leaving the app render through OutputRender (identity today).
+        guard let rendered = try? OutputRender.forOutput(fileURLs) else { return }
+        let picker = NSSharingServicePicker(items: rendered.map(\.url))
         picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
     }
 }

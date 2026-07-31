@@ -86,14 +86,20 @@ enum CollectionPDFExporter {
             // QuickLook fallback is a per-file XPC round-trip; serial would make
             // a file-card-heavy export feel hung) and reassemble in input order.
             let maxConcurrent = 8
+            // Everything that leaves the app renders through OutputRender —
+            // mapped once, up front, index-aligned with `urls`. Identity today.
+            guard let rendered = try? OutputRender.forOutput(urls) else { return nil }
             var slots = [CGImage?](repeating: nil, count: urls.count)
             await withTaskGroup(of: (Int, CGImage?).self) { group in
                 var next = 0
                 func schedule(_ i: Int) {
-                    let url = urls[i]
+                    let out = rendered[i]
                     group.addTask {
-                        if let cg = imageIOThumbnail(url, maxPixel: maxPixel) { return (i, cg) }
-                        return (i, await fallbackThumbnail(url, maxPixel: maxPixel))
+                        if let cg = imageIOThumbnail(out, maxPixel: maxPixel) { return (i, cg) }
+                        // The fallback paths (video frame extraction, QuickLook
+                        // type icons) are not RENDERING paths — a type icon
+                        // carries no edit stack — so they keep taking a bare URL.
+                        return (i, await fallbackThumbnail(out.url, maxPixel: maxPixel))
                     }
                 }
                 while next < min(maxConcurrent, urls.count) { schedule(next); next += 1 }
@@ -194,18 +200,13 @@ enum CollectionPDFExporter {
 
     /// Downsampled, orientation-corrected image thumbnail via ImageIO, or nil
     /// when the file isn't an ImageIO-decodable image (e.g. zip/pdf/doc).
-    private static func imageIOThumbnail(_ url: URL, maxPixel: Int) -> CGImage? {
+    private static func imageIOThumbnail(_ out: RenderedOutput, maxPixel: Int) -> CGImage? {
         // Same decompression-bomb guard as the grid path — refuse a header that
         // declares an absurd pixel count before decoding (export is user-driven,
         // but a planted image in a shared collection shouldn't OOM the export).
-        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+        guard let src = CGImageSourceCreateWithURL(out.url as CFURL, nil),
               ThumbnailCache.withinDecodeBudget(src) else { return nil }
-        let opts: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixel
-        ]
-        return CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary)
+        return OutputRender.image(out, maxPixel: maxPixel)
     }
 
     /// Thumbnail for a file ImageIO couldn't decode. A VIDEO is frame-extracted

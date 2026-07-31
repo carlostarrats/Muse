@@ -118,9 +118,12 @@ enum ImageMetadataStripper {
 
     // MARK: entry
 
-    static func strip(url: URL, mime: String) throws -> Output {
+    /// Takes a `RenderedOutput`, never a bare URL: the strip runs on the
+    /// RENDERED bytes (render first, strip second), so no future edit pass can
+    /// reintroduce metadata after the stripper has run.
+    static func strip(_ out: RenderedOutput, mime: String) throws -> Output {
         // mappedIfSafe avoids a full in-memory copy for large files.
-        let data = try Data(contentsOf: url, options: .mappedIfSafe)
+        let data = try Data(contentsOf: out.url, options: .mappedIfSafe)
         guard let src = CGImageSourceCreateWithData(data as CFData, nil),
               let srcType = CGImageSourceGetType(src) else {
             throw StripError.notAnImage

@@ -5,6 +5,12 @@
 //  Reads the live DB and assembles a portable BackupArchive. Re-keys all
 //  collection membership/cover from the per-machine FileRow.id to content_hash.
 //
+//  Backup is deliberately NOT an `OutputRender` consumer — the one exclusion
+//  from "everything that leaves the app renders through OutputRender". This
+//  archive restores ORIGINALS, matched by content hash; rendering an edit stack
+//  into it would change the bytes the restore identifies files by and corrupt
+//  the restore. Edits travel as their own stack data, never as baked pixels.
+//
 
 import Foundation
 import GRDB

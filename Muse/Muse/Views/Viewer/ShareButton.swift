@@ -43,7 +43,9 @@ struct ShareButton: View {
 
     private func share() {
         guard let contentView = NSApp.keyWindow?.contentView else { return }
-        let picker = NSSharingServicePicker(items: [url])
+        // Pixels leaving the app render through OutputRender (identity today).
+        guard let rendered = try? OutputRender.forOutput(url) else { return }
+        let picker = NSSharingServicePicker(items: [rendered.url])
         picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
     }
 }

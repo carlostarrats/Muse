@@ -59,7 +59,9 @@ import Foundation
 
     // MARK: files
 
-    func uploadFile(url: URL, name: String, mime: String, parent: String) async throws -> String {
+    /// Takes a `RenderedOutput`, never a bare URL — the render step runs BEFORE
+    /// the strip, so a future edit can't reintroduce metadata past the stripper.
+    func uploadFile(_ out: RenderedOutput, name: String, mime: String, parent: String) async throws -> String {
         // Strip all private metadata (GPS/EXIF/camera/IPTC/XMP/maker notes)
         // BEFORE upload: the file is made anyone-readable and its id rides the
         // public share URL, so the original — not just the EXIF-free Google
@@ -67,7 +69,7 @@ import Foundation
         // than ever upload an un-stripped original. Run off the main actor —
         // decode/re-encode is heavy CPU + memory and DriveClient is @MainActor.
         let stripped = try await Task.detached(priority: .utility) {
-            try ImageMetadataStripper.strip(url: url, mime: mime)
+            try ImageMetadataStripper.strip(out, mime: mime)
         }.value
         let boundary = "muse-\(UUID().uuidString)"
         var req = try await authed(uploadEndpoint)

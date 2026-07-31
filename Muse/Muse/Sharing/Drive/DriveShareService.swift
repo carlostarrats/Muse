@@ -94,7 +94,10 @@ struct DriveShareForm {
                     let mime = Self.mimeType(for: url)
                     let id: String
                     do {
-                        id = try await client.uploadFile(url: url, name: url.lastPathComponent,
+                        // Everything that leaves the app renders through
+                        // OutputRender first (identity today).
+                        let out = try OutputRender.forOutput(url)
+                        id = try await client.uploadFile(out, name: url.lastPathComponent,
                                                          mime: mime, parent: folderID)
                     } catch is ImageMetadataStripper.StripError {
                         throw PublishError.unshareableImage(url.lastPathComponent)

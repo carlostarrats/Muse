@@ -72,7 +72,7 @@ final class ImageMetadataStripperTests: XCTestCase {
         XCTAssertNotNil(before[kCGImagePropertyGPSDictionary], "fixture should embed GPS")
         XCTAssertNotNil(before[kCGImagePropertyExifDictionary], "fixture should embed EXIF")
 
-        let out = try ImageMetadataStripper.strip(url: url, mime: "image/jpeg")
+        let out = try ImageMetadataStripper.strip(OutputRender.forOutput(url), mime: "image/jpeg")
         let after = properties(of: out.data)
 
         XCTAssertNil(after[kCGImagePropertyGPSDictionary], "GPS must be stripped")
@@ -88,7 +88,7 @@ final class ImageMetadataStripperTests: XCTestCase {
         let url = try makeTaggedJPEG(orientation: 6, width: 24, height: 16)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let out = try ImageMetadataStripper.strip(url: url, mime: "image/jpeg")
+        let out = try ImageMetadataStripper.strip(OutputRender.forOutput(url), mime: "image/jpeg")
         let after = properties(of: out.data)
 
         XCTAssertEqual(after[kCGImagePropertyPixelWidth] as? Int, 24, "pixel width preserved")
@@ -125,7 +125,7 @@ final class ImageMetadataStripperTests: XCTestCase {
         let url = try makeAnimatedGIF(frames: 3)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let out = try ImageMetadataStripper.strip(url: url, mime: "image/gif")
+        let out = try ImageMetadataStripper.strip(OutputRender.forOutput(url), mime: "image/gif")
         let src = CGImageSourceCreateWithData(out.data as CFData, nil)!
         // Regression guard: a multi-frame image must NOT be collapsed to a still.
         XCTAssertEqual(CGImageSourceGetCount(src), 3, "all animation frames must survive stripping")
@@ -157,7 +157,7 @@ final class ImageMetadataStripperTests: XCTestCase {
 
         XCTAssertFalse(ImageMetadataStripper.isClean(data),
                        "the verifier must flag a GIF comment extension")
-        let out = try ImageMetadataStripper.strip(url: tainted, mime: "image/gif")
+        let out = try ImageMetadataStripper.strip(OutputRender.forOutput(tainted), mime: "image/gif")
         XCTAssertNil(out.data.range(of: secret), "comment text must not survive the strip")
         XCTAssertTrue(ImageMetadataStripper.isClean(out.data))
     }
@@ -196,7 +196,7 @@ final class ImageMetadataStripperTests: XCTestCase {
         // Sanity: the original really embeds the secret in its XMP packet.
         XCTAssertNotNil(try Data(contentsOf: url).range(of: needle), "fixture should embed the XMP secret")
 
-        let out = try ImageMetadataStripper.strip(url: url, mime: "image/jpeg")
+        let out = try ImageMetadataStripper.strip(OutputRender.forOutput(url), mime: "image/jpeg")
         XCTAssertNil(out.data.range(of: needle), "XMP metadata (location etc.) must be stripped")
     }
 
@@ -243,7 +243,7 @@ final class ImageMetadataStripperTests: XCTestCase {
         guard try Data(contentsOf: url).range(of: Data(needle.utf8)) != nil else {
             throw XCTSkip("host did not embed HEIC metadata; nothing to assert")
         }
-        let out = try ImageMetadataStripper.strip(url: url, mime: "image/heic")
+        let out = try ImageMetadataStripper.strip(OutputRender.forOutput(url), mime: "image/heic")
         XCTAssertNil(out.data.range(of: Data(needle.utf8)), "HEIC private text must be stripped")
         XCTAssertTrue(ImageMetadataStripper.isClean(out.data), "stripped HEIC must verify clean")
     }
@@ -260,7 +260,7 @@ final class ImageMetadataStripperTests: XCTestCase {
         guard beforeProps[kCGImagePropertyGPSDictionary] != nil else {
             throw XCTSkip("host did not embed GPS in PNG; nothing to assert")
         }
-        let out = try ImageMetadataStripper.strip(url: url, mime: "image/png")
+        let out = try ImageMetadataStripper.strip(OutputRender.forOutput(url), mime: "image/png")
         let src = CGImageSourceCreateWithData(out.data as CFData, nil)!
         let p = (CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any]) ?? [:]
         XCTAssertNil(p[kCGImagePropertyGPSDictionary], "PNG GPS must be stripped")
@@ -279,7 +279,7 @@ final class ImageMetadataStripperTests: XCTestCase {
         guard try Data(contentsOf: url).range(of: Data(needle.utf8)) != nil else {
             throw XCTSkip("host did not embed TIFF metadata")
         }
-        let out = try ImageMetadataStripper.strip(url: url, mime: "image/tiff")
+        let out = try ImageMetadataStripper.strip(OutputRender.forOutput(url), mime: "image/tiff")
         XCTAssertNil(out.data.range(of: Data(needle.utf8)), "TIFF private metadata must be stripped")
         XCTAssertTrue(ImageMetadataStripper.isClean(out.data))
     }
@@ -320,7 +320,7 @@ final class ImageMetadataStripperTests: XCTestCase {
         XCTAssertNotNil(beforeProps[kCGImagePropertyGPSDictionary], "fixture should carry GPS")
         XCTAssertNotNil(try Data(contentsOf: url).range(of: Data(needle.utf8)))
 
-        let out = try ImageMetadataStripper.strip(url: url, mime: "image/jpeg")
+        let out = try ImageMetadataStripper.strip(OutputRender.forOutput(url), mime: "image/jpeg")
         let after = (CGImageSourceCopyPropertiesAtIndex(
             CGImageSourceCreateWithData(out.data as CFData, nil)!, 0, nil) as? [CFString: Any]) ?? [:]
         XCTAssertNil(after[kCGImagePropertyGPSDictionary], "GPS must be gone on a thumbnailed image")
@@ -343,7 +343,7 @@ final class ImageMetadataStripperTests: XCTestCase {
         guard try Data(contentsOf: url).range(of: Data(needle.utf8)) != nil else {
             throw XCTSkip("host did not embed maker note; nothing to assert")
         }
-        let out = try ImageMetadataStripper.strip(url: url, mime: "image/jpeg")
+        let out = try ImageMetadataStripper.strip(OutputRender.forOutput(url), mime: "image/jpeg")
         XCTAssertNil(out.data.range(of: Data(needle.utf8)), "maker note must be stripped")
         let src = CGImageSourceCreateWithData(out.data as CFData, nil)!
         let p = (CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any]) ?? [:]
@@ -390,7 +390,7 @@ final class ImageMetadataStripperTests: XCTestCase {
             throw XCTSkip("host did not embed TIFF page metadata; nothing to assert")
         }
         let containerEmbedded = raw.range(of: Data(needleContainer.utf8)) != nil
-        let out = try ImageMetadataStripper.strip(url: url, mime: "image/tiff")
+        let out = try ImageMetadataStripper.strip(OutputRender.forOutput(url), mime: "image/tiff")
         XCTAssertNil(out.data.range(of: Data(needlePage.utf8)), "per-page metadata must be stripped")
         if containerEmbedded {
             XCTAssertNil(out.data.range(of: Data(needleContainer.utf8)), "container metadata must be stripped")
@@ -440,7 +440,7 @@ final class ImageMetadataStripperTests: XCTestCase {
         guard try Data(contentsOf: url).range(of: Data(needle.utf8)) != nil else {
             throw XCTSkip("host did not embed multi-frame EXIF/maker metadata; nothing to assert")
         }
-        let out = try ImageMetadataStripper.strip(url: url, mime: "image/tiff")
+        let out = try ImageMetadataStripper.strip(OutputRender.forOutput(url), mime: "image/tiff")
         XCTAssertNil(out.data.range(of: Data(needle.utf8)),
                      "multi-frame EXIF/maker free-text must not survive (stripped or re-encoded away)")
         XCTAssertTrue(ImageMetadataStripper.isClean(out.data),
@@ -456,7 +456,7 @@ final class ImageMetadataStripperTests: XCTestCase {
             .appendingPathComponent("muse-liar-\(UUID().uuidString).png")   // .png ext, JPEG bytes
         try Data(contentsOf: jpegURL).write(to: liar)
         defer { try? FileManager.default.removeItem(at: liar) }
-        let out = try ImageMetadataStripper.strip(url: liar, mime: "image/png")
+        let out = try ImageMetadataStripper.strip(OutputRender.forOutput(liar), mime: "image/png")
         XCTAssertEqual(out.mime, "image/jpeg", "mime must come from the bytes, not the extension")
     }
 
@@ -466,6 +466,6 @@ final class ImageMetadataStripperTests: XCTestCase {
         try Data("not an image".utf8).write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
         // Fail closed: a file we can't decode must NOT pass through unstripped.
-        XCTAssertThrowsError(try ImageMetadataStripper.strip(url: url, mime: "application/octet-stream"))
+        XCTAssertThrowsError(try ImageMetadataStripper.strip(OutputRender.forOutput(url), mime: "application/octet-stream"))
     }
 }
