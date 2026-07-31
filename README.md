@@ -137,10 +137,9 @@ appcast to GitHub Releases) is documented step by step in
 
 ## License
 
-Muse is **source-available** under the [PolyForm Shield License 1.0.0](LICENSE).
-You're free to read, run, and modify the code — the one restriction is that you
-may not use it to build a product that competes with Muse. The source is public
-so the privacy claims above can be verified, not so a clone can be shipped.
+Muse is proprietary software. All rights reserved — see [LICENSE](LICENSE).
+The source is visible so the privacy claims above can be verified, not to
+grant any rights to use, copy, modify, or distribute the code.
 
 ## Acknowledgements
 
