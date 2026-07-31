@@ -130,6 +130,10 @@ struct MuseApp: App {
                     }
                     PhaseTrace.mark("intent-backfill.start")
                     Task { await IntentBackfill.run(); PhaseTrace.mark("intent-backfill.end") }
+                    // Independent fire-and-forget pass — header-only GPS reads
+                    // for files indexed before v13. Self-limiting per launch.
+                    PhaseTrace.mark("coordinate-backfill.start")
+                    Task { await CoordinateBackfill.run(); PhaseTrace.mark("coordinate-backfill.end") }
                     // Hard-delete any Drive shares past their expiry (no-op if
                     // not signed in or nothing is due).
                     await DriveExpirySweeper.sweep(auth: googleAuth)

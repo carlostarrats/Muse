@@ -405,9 +405,59 @@ final class AnalyzePipeline: ObservableObject {
         }
     }
 
+    /// Stamp lat/lon/coords_scanned_hash under the SAME content_hash guard the
+    /// main analyze write uses — a file edited mid-pass keeps its coordinates
+    /// pending rather than being stamped from stale bytes.
+    ///
+    /// `coords_scanned_hash` is written even when no GPS was found: it's the
+    /// attempted-marker, not a "has coordinates" flag. Without it every
+    /// GPS-less file is re-opened on every launch forever (the
+    /// analyzed_hash-NULL retry-loop shape, 2026-07-28).
+    static func writeCoordinates(fileID: String, hash: String,
+                                 coord: Coordinate?, queue: DatabaseQueue) async {
+        try? await queue.write { db in
+            guard var file = try FileRow.filter(FileRow.Columns.id == fileID).fetchOne(db),
+                  file.content_hash == hash else { return }
+            if let coord {
+                file.lat = coord.lat
+                file.lon = coord.long
+            }
+            file.coords_scanned_hash = hash
+            try file.update(db)
+        }
+    }
+
+    /// Video kinds skip the Vision pipeline entirely but still need their
+    /// coordinate written — a geotagged video must not be invisible to
+    /// location search just because Vision doesn't tag videos. A separate,
+    /// smaller guarded transaction mirroring the main one's content_hash
+    /// re-check.
+    ///
+    /// Videos are never stamped with `analyzed_hash`, so `analyzePending`
+    /// re-queues them on every folder visit; the `coords_scanned_hash` check
+    /// here is what keeps that cheap (one indexed read, no header open).
+    private static func writeCoordinatesOnly(fileID: String, url: URL, kind: AssetKind) async {
+        guard let queue = Database.shared.dbQueue else { return }
+        let row: FileRow? = (try? await queue.read { db in
+            try FileRow.filter(FileRow.Columns.id == fileID).fetchOne(db)
+        }) ?? nil
+        guard let row, let hash = row.content_hash else { return }
+        guard row.coords_scanned_hash != hash else { return }
+        let coord = await CoordinateReader.read(url: url, kind: kind)
+        await writeCoordinates(fileID: fileID, hash: hash, coord: coord, queue: queue)
+    }
+
     private func analyzeOne(fileID: String, url: URL) async {
-        // Skip non-image kinds; Vision pipeline only handles images
         let kind = AssetKind.detect(at: url)
+
+        // Coordinates are read for image AND video kinds. The video branch runs
+        // before the image-only Vision guard below, since a video never reaches
+        // the main write transaction.
+        if kind == .video {
+            await Self.writeCoordinatesOnly(fileID: fileID, url: url, kind: kind)
+        }
+
+        // Skip non-image kinds; Vision pipeline only handles images
         guard kind == .image || kind == .raw || kind == .psd else { return }
 
         guard let queue = Database.shared.dbQueue else { return }
@@ -420,6 +470,11 @@ final class AnalyzePipeline: ObservableObject {
             try FileRow.filter(FileRow.Columns.id == fileID).fetchOne(db)?.content_hash
         }) ?? nil
         guard let analyzedHash else { return }
+
+        // Header-only GPS read, concurrent with the Vision pass below — it's a
+        // few hundred bytes off the front of the file, not a decode, so it must
+        // not serialize behind classify/OCR/palette.
+        async let coordinate = CoordinateReader.read(url: url, kind: kind)
 
         let registry = IntelligenceRegistry.shared
         guard let out = await registry.tagger.analyze(url: url) else {
@@ -435,8 +490,15 @@ final class AnalyzePipeline: ObservableObject {
             // attempt against this content so the automatic pass stops retrying.
             // Explicit Regenerate Tags still picks it up (it targets files with
             // no tags), so a future codec or a re-encode can still recover it.
+            //
+            // The GPS header is still readable when the PIXELS aren't (the
+            // .RAF case above has intact EXIF), so the coordinate is stamped
+            // here too rather than being lost with the rest of the pass.
+            let coord = await coordinate
             await Self.markAnalysisAttempted(fileID: fileID, hash: analyzedHash,
                                              queue: queue)
+            await Self.writeCoordinates(fileID: fileID, hash: analyzedHash,
+                                        coord: coord, queue: queue)
             return
         }
         let caption = out.caption
@@ -461,6 +523,7 @@ final class AnalyzePipeline: ObservableObject {
         // would be a data race under strict concurrency).
         let finalIntentKey = intentKey
         let finalIntentVersion = intentVersion
+        let finalCoordinate = await coordinate
 
         var committed = false
         do {
@@ -485,6 +548,14 @@ final class AnalyzePipeline: ObservableObject {
                 file.analyzed_hash = analyzedHash
                 file.intent = finalIntentKey
                 file.intent_model_version = finalIntentVersion
+                // coords_scanned_hash is stamped unconditionally (the
+                // attempted-marker); only lat/lon are conditional on a GPS
+                // header actually being present.
+                if let finalCoordinate {
+                    file.lat = finalCoordinate.lat
+                    file.lon = finalCoordinate.long
+                }
+                file.coords_scanned_hash = analyzedHash
                 try file.update(db)
 
                 // Vision tags apply to EVERY folder this content lives in
