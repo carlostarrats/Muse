@@ -1,9 +1,29 @@
+import CoreGraphics
 import Foundation
 
 struct IntelTag: Equatable {
     var label: String
     var confidence: Double?
     var source: String        // "vision" | "vision-color" | "vision-kind" | future
+}
+
+/// The raster-derived scalars that land in `photo_traits`. Carried through
+/// `TaggerOutput` so the analyze pass writes them inside its own guarded
+/// transaction rather than re-decoding the file.
+struct TraitFields {
+    var faceCount: Int
+    var largestFaceFrac: Double?
+    var faceQuality: Double?
+    var petCount: Int
+    var sharpness: Double?
+
+    init(from result: VisionResult) {
+        faceCount = result.faceCount
+        largestFaceFrac = result.largestFaceFrac
+        faceQuality = result.faceQuality
+        petCount = result.petCount
+        sharpness = result.sharpness
+    }
 }
 
 struct TaggerOutput {
@@ -15,6 +35,10 @@ struct TaggerOutput {
     var featurePrint: Data?
     var width: Int?
     var height: Int?
+    var traits: TraitFields?
+    /// The bounded raster the tagger already decoded — reused by the CLIP
+    /// embed write so a file is never decoded twice in one pass.
+    var decodedImage: CGImage?
 }
 
 protocol Tagger {

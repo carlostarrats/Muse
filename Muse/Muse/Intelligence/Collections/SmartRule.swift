@@ -57,6 +57,30 @@ nonisolated enum DateOp: Codable, Equatable {
     case after(Int64)
 }
 
+/// A "looks like" rule term. Either a set of ANCHOR photos (their CLIP
+/// vectors are averaged at evaluation time — they live in `clip_embeddings`,
+/// so nothing is duplicated here) or a text PROMPT whose vector is encoded
+/// once at rule-SAVE time and stamped with the model generation. Evaluation
+/// never runs the model; a generation mismatch evaluates to empty and heals
+/// via `ClipPromptVectors.refreshAll()`.
+nonisolated struct SimilarTerm: Codable, Equatable {
+    var anchorIDs: [String]
+    var prompt: String?
+    var promptVector: [Float]?
+    var promptGeneration: Int?
+    var threshold: Double
+
+    static let thresholdRange: ClosedRange<Double> = 0.40...0.80
+    static let defaultThreshold: Double = 0.55
+    static let maxAnchors = 20
+
+    var isValid: Bool {
+        let hasAnchorsOrPrompt = !anchorIDs.isEmpty
+            || !(prompt ?? "").trimmingCharacters(in: .whitespaces).isEmpty
+        return hasAnchorsOrPrompt && SimilarTerm.thresholdRange.contains(threshold)
+    }
+}
+
 nonisolated enum SmartRule: Codable, Equatable {
     case rating(op: Comparison, stars: Int)
     case color(ColorTerm)
@@ -69,6 +93,9 @@ nonisolated enum SmartRule: Codable, Equatable {
     /// is that a rule set containing `.location` decodes as empty on an older
     /// build — the collection itself survives.
     case location(LocationTerm)
+    /// Visual similarity (CLIP). Same Codable consequence as `.location`: a
+    /// rule set containing `.similar` decodes as empty on an older build.
+    case similar(SimilarTerm)
 
     /// A display-friendly grouping of AssetKind values (files.kind rawValue).
     enum KindGroup: String, Codable, CaseIterable {
@@ -111,6 +138,7 @@ nonisolated enum SmartRule: Codable, Equatable {
                 return PhotoHeaderReader.sanitize(Coordinate(lat: lat, long: lon)) != nil
                     && radiusKM > 0
             }
+        case let .similar(term):           return term.isValid
         }
     }
 

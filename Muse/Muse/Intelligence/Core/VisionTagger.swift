@@ -41,6 +41,8 @@ final class VisionTagger: Tagger {
                             dominantColor: v.dominantColor,
                             palette: palette,
                             featurePrint: v.featurePrint,
-                            width: v.width, height: v.height)
+                            width: v.width, height: v.height,
+                            traits: TraitFields(from: v),
+                            decodedImage: v.decodedImage)
     }
 }

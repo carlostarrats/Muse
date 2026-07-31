@@ -156,6 +156,10 @@ struct SmartCollectionRulesView: View {
         onClose()
         Task { @MainActor in
             guard let q = Database.shared.dbQueue else { return }
+            // A `.similar` PROMPT is encoded here, at rule-save time — the one
+            // place a rule edit runs the model. Evaluation is a live grid
+            // query and must never touch it.
+            let set = await Self.stampingPromptVectors(set)
             if let id {
                 if convert {
                     // Always go through makeSmart when converting — even with zero
@@ -173,6 +177,26 @@ struct SmartCollectionRulesView: View {
             await CollectionsEngine.shared.reload()
         }
     }
+
+    /// Encode every `.similar` prompt whose vector is missing or from another
+    /// model generation, stamping the current generation alongside it.
+    private static func stampingPromptVectors(_ set: SmartRuleSet) async -> SmartRuleSet {
+        var out = set
+        for i in out.rules.indices {
+            guard case let .similar(term) = out.rules[i],
+                  term.anchorIDs.isEmpty,
+                  let prompt = term.prompt,
+                  !prompt.trimmingCharacters(in: .whitespaces).isEmpty,
+                  term.promptVector == nil || term.promptGeneration != ClipModel.current.generation
+            else { continue }
+            guard let vector = await ClipEngine.shared.embedText(prompt) else { continue }
+            var updated = term
+            updated.promptVector = vector
+            updated.promptGeneration = ClipModel.current.generation
+            out.rules[i] = .similar(updated)
+        }
+        return out
+    }
 }
 
 // MARK: - Rule row
@@ -187,7 +211,7 @@ private struct SmartRuleRow: View {
     @State private var removeHover = false
 
     private enum Kind: String, CaseIterable, Identifiable {
-        case rating, color, tag, kind, date, filename, size, location
+        case rating, color, tag, kind, date, filename, size, location, similar
         var id: String { rawValue }
         var label: String {
             switch self {
@@ -199,8 +223,16 @@ private struct SmartRuleRow: View {
             case .filename: return String(localized: "Filename")
             case .size:     return String(localized: "Size")
             case .location: return String(localized: "Location")
+            case .similar:  return String(localized: "Looks Like")
             }
         }
+    }
+
+    /// `.similar` needs the CLIP model, so it's only OFFERED once the model is
+    /// installed. An EXISTING `.similar` rule still renders its row regardless
+    /// — it decodes fine without the model, it just can't be freshly created.
+    private var offeredKinds: [Kind] {
+        Kind.allCases.filter { $0 != .similar || ClipModelStore.shared.isReady || currentKind == .similar }
     }
 
     private var currentKind: Kind {
@@ -213,6 +245,7 @@ private struct SmartRuleRow: View {
         case .filename: return .filename
         case .size:     return .size
         case .location: return .location
+        case .similar:  return .similar
         }
     }
 
@@ -221,7 +254,7 @@ private struct SmartRuleRow: View {
             Picker("", selection: Binding(
                 get: { currentKind },
                 set: { rule = SmartRuleRow.defaultRule(for: $0) })) {
-                ForEach(Kind.allCases) { k in Text(k.label).tag(k) }
+                ForEach(offeredKinds) { k in Text(k.label).tag(k) }
             }
             .labelsHidden()
             .frame(width: 112)
@@ -256,6 +289,9 @@ private struct SmartRuleRow: View {
         case .filename: return .filename(contains: "")
         case .size:     return .size(op: .atMost, bytes: 5_000_000)
         case .location: return .location(.place(""))
+        case .similar:  return .similar(SimilarTerm(anchorIDs: [], prompt: "", promptVector: nil,
+                                                    promptGeneration: nil,
+                                                    threshold: SimilarTerm.defaultThreshold))
         }
     }
 
@@ -340,6 +376,43 @@ private struct SmartRuleRow: View {
                 // away and back reseeds it as `.place("")`.
                 Text("radius rule").foregroundStyle(.secondary)
             }
+
+        case let .similar(term):
+            if term.anchorIDs.isEmpty {
+                TextField(String(localized: "Describe the look — e.g. beach sunset"),
+                          text: Binding(
+                            get: { term.prompt ?? "" },
+                            set: { newValue in
+                                var t = term
+                                t.prompt = newValue
+                                // The prompt changed, so the stamped vector no
+                                // longer describes it — drop it; the save path
+                                // re-encodes.
+                                t.promptVector = nil
+                                t.promptGeneration = nil
+                                rule = .similar(t)
+                            }))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 210)
+            } else {
+                Text("\(term.anchorIDs.count) reference photos")
+                    .foregroundStyle(.secondary)
+            }
+            Slider(value: Binding(get: { term.threshold },
+                                  set: { newValue in
+                                      var t = term
+                                      t.threshold = newValue
+                                      rule = .similar(t)
+                                  }),
+                   in: SimilarTerm.thresholdRange) {
+                EmptyView()
+            } minimumValueLabel: {
+                Text("Broad")
+            } maximumValueLabel: {
+                Text("Exact")
+            }
+            .frame(width: 160)
+            .accessibilityLabel(String(localized: "Similarity strictness"))
         }
     }
 

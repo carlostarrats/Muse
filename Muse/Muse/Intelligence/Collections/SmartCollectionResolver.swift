@@ -171,6 +171,30 @@ enum SmartCollectionResolver {
                 }
                 return out
             }
+
+        case let .similar(term):
+            // Anchors resolve from clip_embeddings (never duplicated into the
+            // rule); a prompt uses the vector stamped at SAVE time. Evaluation
+            // NEVER runs the model — this is a live grid query.
+            let queryVector: [Float]?
+            if !term.anchorIDs.isEmpty {
+                let anchorVectors: [[Float]] = try term.anchorIDs.compactMap { id in
+                    guard let row = try ClipEmbeddingRow.fetchOne(db, key: id),
+                          row.model_generation == ClipModel.current.generation
+                    else { return nil }
+                    return row.vector.flatMap(ClipVectors.fromData)
+                }
+                queryVector = ClipCentroid.centroid(anchorVectors)
+            } else if let vector = term.promptVector,
+                      term.promptGeneration == ClipModel.current.generation {
+                queryVector = vector
+            } else {
+                queryVector = nil
+            }
+            guard let queryVector else { return [] }
+            let hits = try ClipIndex.matches(query: queryVector,
+                                             minScore: Float(term.threshold), db: db)
+            return Set(hits.map(\.id))
         }
     }
 

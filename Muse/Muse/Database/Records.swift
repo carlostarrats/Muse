@@ -219,3 +219,59 @@ struct StackMemberRow: Codable, FetchableRecord, MutablePersistableRecord {
     var stack_id: String
     var file_id: String
 }
+
+/// Raster-derived per-photo traits (v19): faces, pets, sharpness — every
+/// scalar a single decode can produce. Content-keyed like `palette`, never the
+/// `(file_id, parent_dir)` grain tags/notes/ratings use.
+///
+/// A row with NULL trait fields is an ATTEMPTED-MARKER (the file was reached
+/// and couldn't be decoded), not absence — absence of the row entirely means
+/// unscanned, which is why `faces:0` matches only files that have a row.
+struct PhotoTraitsRow: Codable, FetchableRecord, MutablePersistableRecord {
+    static let databaseTableName = "photo_traits"
+
+    var file_id: String
+    var traits_scanned_hash: String
+    var traits_version: Int
+    var face_count: Int?
+    var largest_face_frac: Double?
+    var face_quality: Double?
+    var pet_count: Int?
+    var sharpness: Double?
+
+    enum Columns {
+        static let file_id = Column("file_id")
+        static let traits_scanned_hash = Column("traits_scanned_hash")
+        static let traits_version = Column("traits_version")
+        static let face_count = Column("face_count")
+        static let pet_count = Column("pet_count")
+    }
+}
+
+/// Bump when a NEW trait is added to `photo_traits` — the backfill re-selects
+/// every row whose `traits_version` is behind, so a new trait needs no new
+/// marker column and no parallel table.
+nonisolated enum PhotoTraits {
+    static let currentVersion = 1
+}
+
+/// A CLIP image embedding (v18). fp16, L2-normalized, content-keyed.
+/// `model_generation` pins the vector to the model that produced it —
+/// vectors from different generations must never be compared.
+struct ClipEmbeddingRow: Codable, FetchableRecord, MutablePersistableRecord {
+    static let databaseTableName = "clip_embeddings"
+
+    var file_id: String
+    var embedded_hash: String
+    var model_generation: Int
+    /// NULL is an attempted-marker (reached, couldn't embed) — the backfill
+    /// must not retry it at the same generation every launch.
+    var vector: Data?
+
+    enum Columns {
+        static let file_id = Column("file_id")
+        static let embedded_hash = Column("embedded_hash")
+        static let model_generation = Column("model_generation")
+        static let vector = Column("vector")
+    }
+}

@@ -18,6 +18,15 @@ struct VisionResult {
     var classifications: [String: Float] = [:]   // label → confidence
     var ocrText: String = ""
     var faceCount: Int = 0
+    /// Fraction of the frame the LARGEST detected face covers (0…1), nil with
+    /// no faces. `is:portrait` needs to know the subject actually fills the
+    /// frame, not merely that a face exists.
+    var largestFaceFrac: Double?
+    /// Best `VNFaceObservation.faceCaptureQuality` across detected faces.
+    var faceQuality: Double?
+    var petCount: Int = 0
+    /// log10(variance of Laplacian) — see SharpnessScore.
+    var sharpness: Double?
     var dominantColor: String?                   // hex like "#aabbcc"
     var featurePrint: Data?                      // VNFeaturePrintObservation.data
     var width: Int?
@@ -34,8 +43,9 @@ enum VisionServices {
 
     /// Run the full pipeline. Returns whatever succeeded.
     static func analyze(url: URL) async -> VisionResult {
-        var result = VisionResult()
-        guard let cgImage = await loadCGImage(url: url) else { return result }
+        guard let cgImage = await loadCGImage(url: url) else { return VisionResult() }
+
+        var result = await analyze(cgImage: cgImage)
 
         // The image's TRUE pixel dimensions, from the header — NOT the decoded
         // raster's. Since the analyze decode became bounded (4096px long edge),
@@ -47,22 +57,39 @@ enum VisionServices {
         let declared = ImageHeaderSizeCache.resolve(url)
         result.width = declared.map { Int($0.width) } ?? cgImage.width
         result.height = declared.map { Int($0.height) } ?? cgImage.height
+        return result
+    }
+
+    /// The request fan-out, over a raster the caller already decoded. Both the
+    /// per-file live analyze and `DeepAnalysisBackfill` go through here so the
+    /// face/pet/sharpness logic can never exist in two copies. `width`/`height`
+    /// come from the RASTER here; `analyze(url:)` overwrites them with the
+    /// header's true dimensions.
+    static func analyze(cgImage: CGImage) async -> VisionResult {
+        var result = VisionResult()
+        result.width = cgImage.width
+        result.height = cgImage.height
         result.decodedImage = cgImage
 
         async let classify = classify(cgImage: cgImage)
         async let ocr = ocr(cgImage: cgImage)
-        async let faces = detectFaces(cgImage: cgImage)
+        async let faceTraits = detectFaceTraits(cgImage: cgImage)
         async let featurePrint = featurePrint(cgImage: cgImage)
         async let dominantColor = dominantColor(cgImage: cgImage)
+        async let pets = detectAnimals(cgImage: cgImage)
 
-        let (cls, text, faceCount, fp, color) =
-            await (classify, ocr, faces, featurePrint, dominantColor)
+        let (cls, text, faces, fp, color, petCount) =
+            await (classify, ocr, faceTraits, featurePrint, dominantColor, pets)
 
         result.classifications = cls
         result.ocrText = text
-        result.faceCount = faceCount
+        result.faceCount = faces.count
+        result.largestFaceFrac = faces.largestFrac
+        result.faceQuality = faces.quality
         result.featurePrint = fp
         result.dominantColor = color
+        result.petCount = petCount
+        result.sharpness = SharpnessScore.score(cgImage)
         return result
     }
 
@@ -175,12 +202,41 @@ enum VisionServices {
         }
     }
 
-    // MARK: - Face count
+    // MARK: - Face traits
 
-    private static func detectFaces(cgImage: CGImage) async -> Int {
-        await runRequest(on: cgImage, fallback: 0) { finish in
+    /// A recognized-animal label below this confidence isn't counted as a pet —
+    /// `pets:>0` must not fire on a low-confidence guess at a stuffed toy.
+    static let petConfidenceFloor: Float = 0.5
+
+    private static func detectFaceTraits(cgImage: CGImage) async
+        -> (count: Int, largestFrac: Double?, quality: Double?) {
+        let rects = await runRequest(on: cgImage, fallback: [VNFaceObservation]()) { finish in
             VNDetectFaceRectanglesRequest { req, _ in
-                finish((req.results as? [VNFaceObservation])?.count ?? 0)
+                finish((req.results as? [VNFaceObservation]) ?? [])
+            }
+        }
+        guard !rects.isEmpty else { return (0, nil, nil) }
+        let largestFrac = rects.map { Double($0.boundingBox.width * $0.boundingBox.height) }.max()
+
+        let qualities = await runRequest(on: cgImage, fallback: [VNFaceObservation]()) { finish in
+            VNDetectFaceCaptureQualityRequest { req, _ in
+                finish((req.results as? [VNFaceObservation]) ?? [])
+            }
+        }
+        let quality = qualities.compactMap { $0.faceCaptureQuality.map(Double.init) }.max()
+
+        return (rects.count, largestFrac, quality)
+    }
+
+    private static func detectAnimals(cgImage: CGImage) async -> Int {
+        await runRequest(on: cgImage, fallback: 0) { finish in
+            VNRecognizeAnimalsRequest { req, _ in
+                let count = ((req.results as? [VNRecognizedObjectObservation]) ?? [])
+                    .filter { obs in
+                        obs.labels.contains { $0.confidence >= petConfidenceFloor }
+                    }
+                    .count
+                finish(count)
             }
         }
     }

@@ -144,6 +144,11 @@ struct MuseApp: App {
                     // the search-facet refresh when it writes anything.
                     PhaseTrace.mark("photo-header-backfill.start")
                     Task { await PhotoHeaderBackfill.run(); PhaseTrace.mark("photo-header-backfill.end") }
+                    // Faces/pets/sharpness (and CLIP vectors once the model is
+                    // installed) for files whose analyzed_hash is already
+                    // current — analyzePending would never revisit those.
+                    PhaseTrace.mark("deep-analysis-backfill.start")
+                    Task { await DeepAnalysisBackfill.run(); PhaseTrace.mark("deep-analysis-backfill.end") }
                     // Also run geocoding independently: coordinates may already
                     // exist (a v13 library, or a GeoNamesDataset.version bump)
                     // with no fresh header pass to chain from. Both paths are

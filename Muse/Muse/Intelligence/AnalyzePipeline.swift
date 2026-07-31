@@ -653,6 +653,19 @@ final class AnalyzePipeline: ObservableObject {
                     }
                 }
 
+                // Raster-derived traits (faces/pets/sharpness) from the SAME
+                // decode Vision used. Inside the guarded transaction so a
+                // mid-pass edit can't stamp stale traits at the new hash.
+                if let traits = out.traits {
+                    var traitsRow = PhotoTraitsRow(
+                        file_id: fileID, traits_scanned_hash: analyzedHash,
+                        traits_version: PhotoTraits.currentVersion,
+                        face_count: traits.faceCount, largest_face_frac: traits.largestFaceFrac,
+                        face_quality: traits.faceQuality, pet_count: traits.petCount,
+                        sharpness: traits.sharpness)
+                    try traitsRow.save(db)
+                }
+
                 // FTS5 — keyed by files.id (immutable). Replace the row.
                 try db.execute(sql: "DELETE FROM files_fts WHERE file_id = ?", arguments: [fileID])
                 try db.execute(sql: """

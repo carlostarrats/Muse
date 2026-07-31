@@ -467,6 +467,42 @@ final class Database {
             try db.create(index: "stack_members_file_idx", on: "stack_members", columns: ["file_id"])
         }
 
+        migrator.registerMigration("v18_clip_embeddings") { db in
+            // CLIP's 512-d joint embedding, fp16, content-keyed (same grain as
+            // palette/feature_print/photo_meta — NOT the (file_id, parent_dir)
+            // grain tags use). A NULL vector is a legitimate attempted-marker:
+            // the file was reached and couldn't be embedded, so the backfill
+            // must not retry it every launch.
+            try db.create(table: "clip_embeddings") { t in
+                t.column("file_id", .text).primaryKey()
+                    .references("files", onDelete: .cascade)
+                t.column("embedded_hash", .text).notNull()
+                t.column("model_generation", .integer).notNull()
+                t.column("vector", .blob)
+            }
+        }
+
+        migrator.registerMigration("v19_photo_traits") { db in
+            // One shared table for faces + pets + sharpness: all raster-derived
+            // scalars from a single decode. traits_version covers future trait
+            // additions without a new marker column or a parallel table.
+            // A missing row means UNSCANNED — which is why `faces:0` matches
+            // only files that actually have a row.
+            try db.create(table: "photo_traits") { t in
+                t.column("file_id", .text).primaryKey()
+                    .references("files", onDelete: .cascade)
+                t.column("traits_scanned_hash", .text).notNull()
+                t.column("traits_version", .integer).notNull()
+                t.column("face_count", .integer)
+                t.column("largest_face_frac", .double)
+                t.column("face_quality", .double)
+                t.column("pet_count", .integer)
+                t.column("sharpness", .double)
+            }
+            try db.create(index: "photo_traits_faces_idx", on: "photo_traits", columns: ["face_count"])
+            try db.create(index: "photo_traits_pets_idx", on: "photo_traits", columns: ["pet_count"])
+        }
+
         return migrator
     }
 
