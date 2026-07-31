@@ -462,6 +462,12 @@ struct ViewerInfoColumn<Chrome: View>: View {
                 if infoExpanded {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(metadata.rows) { row in
+                            // With a geocoded place, the Location row shows the
+                            // NAME and the raw coordinates move to a tooltip —
+                            // "Lisboa, Portugal" is the answer, "38.7223,
+                            // -9.1393" is the evidence.
+                            let isLocation = row.label == "Location"
+                            let placeName = isLocation ? details?.place : nil
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 // row.label is canonical English (also used as a
                                 // comparison key in FileMetadata); localize for
@@ -471,17 +477,24 @@ struct ViewerInfoColumn<Chrome: View>: View {
                                     .font(.system(size: 11))
                                     .foregroundStyle(.white.opacity(0.42))
                                     .frame(width: 80, alignment: .leading)
-                                Text(row.value)
+                                Text(placeName ?? row.value)
                                     .font(.system(size: 11))
                                     .foregroundStyle(.white.opacity(0.9))
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .fixedSize(horizontal: false, vertical: true)
+                                    .help(placeName != nil ? row.value : "")
                             }
                             .accessibilityElement(children: .combine)
                         }
                         if let coord = metadata.coordinate {
-                            OpenInMapsButton(coordinate: coord)
-                                .padding(.top, 2)
+                            // Both link-outs are browser/app HAND-OFFS via
+                            // NSWorkspace.open — the app never touches these
+                            // URLs with URLSession.
+                            HStack(spacing: 14) {
+                                OpenInMapsButton(coordinate: coord)
+                                OpenInGoogleMapsButton(coordinate: coord)
+                            }
+                            .padding(.top, 2)
                         }
                     }
                     .transition(.opacity.combined(with: .move(edge: .top)))
@@ -808,6 +821,32 @@ private struct OpenInMapsButton: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .accessibilityLabel("Open location in Maps")
+    }
+}
+
+/// "Google Maps" link-button — same shape and styling as OpenInMapsButton, so
+/// the two sit consistently side by side. A browser hand-off, never a fetch.
+private struct OpenInGoogleMapsButton: View {
+    let coordinate: Coordinate
+    @State private var hovering = false
+
+    var body: some View {
+        Button {
+            let u = String(format: "https://www.google.com/maps?q=%.6f,%.6f",
+                           coordinate.lat, coordinate.long)
+            if let url = URL(string: u) { NSWorkspace.shared.open(url) }
+        } label: {
+            HStack(spacing: 4) {
+                Text("Google Maps").underline()
+                Image(systemName: "arrow.up.forward")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(hovering ? .white : .white.opacity(0.7))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityLabel("Open location in Google Maps")
     }
 }
 

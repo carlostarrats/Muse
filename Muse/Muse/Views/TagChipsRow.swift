@@ -124,6 +124,41 @@ struct TagChipsRow: View {
         // collection with no matches — which has no chip in the scope row above —
         // stays visible and removable. Each pill's ✕ removes one tag; Clear all
         // wipes the filter back to "All" so the folder/collection shows in full.
+        // Search tokens render as removable chips in this SAME bar — no new
+        // toolbar surface. The bar holds no state: it parses the committed
+        // query (the single source of truth for tokens) and edits a token by
+        // REWRITING that query text, then re-running the search.
+        if appState.isSearchActive {
+            let parsed = SearchQueryParser.parse(appState.searchQuery)
+            if !parsed.tokens.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        Text("Search")
+                            .foregroundStyle(.secondary)
+                        ForEach(Array(parsed.tokens.enumerated()), id: \.offset) { index, token in
+                            BannerPill(label: token.displayLabel) {
+                                let rebuilt = parsed.removing(tokenAt: index)
+                                    .trimmingCharacters(in: .whitespaces)
+                                // Removing the last token with no free text left
+                                // clears the search outright — the same path
+                                // EscapeAction.clearSearch takes, not a special case.
+                                if rebuilt.isEmpty {
+                                    appState.clearSearch()
+                                } else {
+                                    appState.searchQuery = rebuilt
+                                    Task { await appState.runSearch(rebuilt) }
+                                }
+                            }
+                        }
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                    .padding(.horizontal, 14)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, 10)
+            }
+        }
+
         if !appState.activeTagLabels.isEmpty {
             // Horizontal scroll mirrors the chip row above so a long set scrolls
             // instead of squeezing each pill into ugly per-element truncation.

@@ -21,6 +21,7 @@ struct SettingsView: View {
     @AppStorage(AppSettings.showFileNamesKey) private var showFileNames = false
     @AppStorage(AppSettings.showStarsOnGridKey) private var showStarsOnGrid = true
     @AppStorage(AppSettings.showCollectionsInSidebarKey) private var showCollectionsInSidebar = true
+    @AppStorage(AppSettings.showLibraryInSidebarKey) private var showLibraryInSidebar = true
     @AppStorage(AppSettings.showICloudFolderInSidebarKey) private var showICloudFolder = true
     @AppStorage(AppSettings.gridSpacingKey) private var gridSpacing =
         AppSettings.defaultGridSpacing
@@ -153,6 +154,7 @@ struct SettingsView: View {
 
             Section {
                 Toggle("Show Collections in the Sidebar", isOn: $showCollectionsInSidebar)
+                Toggle("Show Library in the Sidebar", isOn: $showLibraryInSidebar)
                 Toggle("Show iCloud Folder in the Sidebar", isOn: $showICloudFolder)
                     .disabled(ICloudSidebarVisibility.toggleDisabled(iCloudPresence))
             } header: {
@@ -160,6 +162,7 @@ struct SettingsView: View {
             } footer: {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Show your collections as a collapsible section beneath the folders, with their own sort order.")
+                    Text("Library holds Places, On This Day, Rarely Seen and Shuffle.")
                     iCloudFooterNote
                 }
                 .font(.callout)

@@ -1,21 +1,23 @@
 //
-//  CoordinateBackfill.swift
+//  PhotoHeaderBackfill.swift
 //  Muse
 //
-//  Launch-time pass filling files.lat/lon/coords_scanned_hash for files the
-//  analysis pipeline hasn't stamped yet — libraries indexed before v13, and
-//  files whose bytes changed since their last GPS read. Mirrors IntentBackfill:
-//  fire-and-forget, self-limiting, safe to call on every launch.
+//  Launch-time pass filling files.lat/lon/coords_scanned_hash and the
+//  photo_meta row for files the analysis pipeline hasn't stamped yet —
+//  libraries indexed before v13/v14, and files whose bytes changed since
+//  their last header read. Supersedes Spec 01's CoordinateBackfill; one
+//  header read now serves both. Mirrors IntentBackfill: fire-and-forget,
+//  self-limiting, safe to call on every launch.
 //
-//  Header-only reads (no decode), bounded concurrency, and capped per launch so
-//  a 100k cold library spreads over a few launches instead of hammering the
-//  disk once at startup.
+//  Header-only reads (no decode), bounded concurrency, and capped per launch
+//  so a 100k cold library spreads over a few launches instead of hammering
+//  the disk once at startup.
 //
 
 import Foundation
 import GRDB
 
-enum CoordinateBackfill {
+enum PhotoHeaderBackfill {
     /// Cap per launch — see file header.
     static let maxPerLaunch = 5_000
     /// Rows per write transaction. Batching keeps the serial DB queue free
@@ -31,9 +33,10 @@ enum CoordinateBackfill {
         let kind: AssetKind
     }
 
-    /// Pure: which enumerated rows are worth opening. A kind CoordinateReader
-    /// doesn't handle would be re-selected on every launch (it never gets a
-    /// coords_scanned_hash), so filtering here is what keeps the pass bounded.
+    /// Pure: which enumerated rows are worth opening. A kind
+    /// `PhotoHeaderReader` doesn't handle would be re-selected on every launch
+    /// (it never gets a scanned hash), so filtering here is what keeps the
+    /// pass bounded.
     static func candidate(id: String, path: String) -> Candidate? {
         let url = URL(fileURLWithPath: path)
         let kind = AssetKind.detect(at: url)
@@ -48,14 +51,19 @@ enum CoordinateBackfill {
     static func run() async {
         guard let q = Database.shared.dbQueue else { return }
 
+        // Stale by EITHER marker — a library upgraded from v13 already has
+        // coordinates but no photo_meta at all.
         let candidates: [Candidate] = (try? await q.read { db in
             let rows = try Row.fetchAll(db, sql: """
                 SELECT f.id AS id, MIN(p.absolute_path) AS absolute_path
                 FROM files f
                 JOIN paths p ON p.file_id = f.id AND p.is_alive = 1
-                WHERE (f.coords_scanned_hash IS NULL
-                       OR f.coords_scanned_hash != f.content_hash)
-                  AND f.content_hash IS NOT NULL
+                LEFT JOIN photo_meta m ON m.file_id = f.id
+                WHERE f.content_hash IS NOT NULL
+                  AND (f.coords_scanned_hash IS NULL
+                       OR f.coords_scanned_hash != f.content_hash
+                       OR m.exif_scanned_hash IS NULL
+                       OR m.exif_scanned_hash != f.content_hash)
                 GROUP BY f.id
                 LIMIT \(maxPerLaunch)
                 """)
@@ -67,6 +75,7 @@ enum CoordinateBackfill {
         }) ?? []
         guard !candidates.isEmpty else { return }
 
+        var wroteAny = false
         var index = 0
         while index < candidates.count {
             if Task.isCancelled { return }
@@ -74,12 +83,12 @@ enum CoordinateBackfill {
             let chunk = Array(candidates[index..<end])
             index = end
 
-            var results: [(id: String, hash: String, coord: Coordinate?)] = []
-            await withTaskGroup(of: (String, String, Coordinate?)?.self) { group in
+            var results: [(id: String, hash: String, header: PhotoHeader)] = []
+            await withTaskGroup(of: (String, String, PhotoHeader)?.self) { group in
                 var iterator = chunk.makeIterator()
                 var spawned = 0
 
-                @Sendable func work(_ c: Candidate) async -> (String, String, Coordinate?)? {
+                @Sendable func work(_ c: Candidate) async -> (String, String, PhotoHeader)? {
                     // Re-read the hash rather than carrying it from the
                     // selection query: the file may have been re-indexed since,
                     // and the write below guards on this value.
@@ -87,8 +96,8 @@ enum CoordinateBackfill {
                         try FileRow.filter(FileRow.Columns.id == c.id).fetchOne(db)?.content_hash
                     }) ?? nil
                     guard let hash else { return nil }
-                    let coord = await CoordinateReader.read(url: c.url, kind: c.kind)
-                    return (c.id, hash, coord)
+                    let header = await PhotoHeaderReader.read(url: c.url, kind: c.kind)
+                    return (c.id, hash, header)
                 }
 
                 while spawned < concurrency, let c = iterator.next() {
@@ -104,20 +113,23 @@ enum CoordinateBackfill {
             }
 
             let batch = results
-            try? await q.write { db in
-                for (id, hash, coord) in batch {
-                    guard var file = try FileRow.filter(FileRow.Columns.id == id).fetchOne(db),
-                          file.content_hash == hash else { continue }
-                    if let coord {
-                        file.lat = coord.lat
-                        file.lon = coord.long
-                    }
-                    // Stamped even with no GPS — the attempted-marker, without
-                    // which every GPS-less file is re-selected on every launch.
-                    file.coords_scanned_hash = hash
-                    try file.update(db)
+            let wrote: Bool = (try? await q.write { db -> Bool in
+                var any = false
+                for (id, hash, header) in batch {
+                    try AnalyzePipeline.writePhotoHeader(db: db, fileID: id,
+                                                        hash: hash, header: header)
+                    any = true
                 }
-            }
+                return any
+            }) ?? false
+            if wrote { wroteAny = true }
+        }
+
+        if wroteAny {
+            // Fresh coordinates mean fresh places; fresh EXIF means the
+            // autocomplete facets are stale.
+            await GeocodeBackfill.run()
+            await SearchFacets.shared.refresh()
         }
     }
 }

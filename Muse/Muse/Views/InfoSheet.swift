@@ -201,6 +201,14 @@ struct InfoSheet: View {
                         lives at github.com/carlostarrats/Muse.
                         """)
                     rowDivider
+                    section("Places", """
+                        Photos that carry a location get a place name — city, \
+                        region and country — worked out entirely on this Mac \
+                        from a bundled list of towns and cities. Nothing is \
+                        looked up online. Place names come from GeoNames \
+                        (geonames.org), used under CC BY 4.0.
+                        """)
+                    rowDivider
                     section("Privacy & retention", """
                         Everything happens on this Mac. Muse collects nothing — \
                         no analytics, no telemetry; nothing about you or your \

@@ -56,7 +56,12 @@ struct HeroVideoViewer: View {
             withAnimation(.easeOut(duration: 0.35).delay(0.22)) { stageVisible = true }
             withAnimation(.easeOut(duration: 0.4).delay(0.15)) { chromeVisible = true }
         }
-        .task(id: file.url) { await loadDetails() }
+        .task(id: file.url) {
+            // Arrow-key flips change the shown file without touching
+            // AppState.selectedFile, so ContentView's hook misses them.
+            RediscoveryStore.shared.markViewed(url: file.url)
+            await loadDetails()
+        }
         // Reload tag/collection pills when tags mutate library-wide.
         .onChange(of: appState.tagsVersion) { _, _ in
             Task { await loadDetails() }

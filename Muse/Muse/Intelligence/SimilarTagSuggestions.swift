@@ -16,7 +16,6 @@
 //
 
 import Foundation
-import Vision
 import GRDB
 
 nonisolated enum SimilarTagSuggestions {
@@ -85,16 +84,15 @@ nonisolated enum SimilarTagSuggestions {
 
         // Distance math off the main actor — this runs while a modal is opening.
         let nearest: [String] = await Task.detached(priority: .userInitiated) {
-            guard let me = unarchive(selfPrint) else { return [] }
+            guard let me = FeaturePrints.floats(selfPrint) else { return [] }
             var scored: [(id: String, distance: Float)] = []
             scored.reserveCapacity(rows.count)
             for row in rows {
-                guard let other = unarchive(row.print) else { continue }
-                var d: Float = 0
-                // Throws on a dimension/revision mismatch (e.g. prints written by
+                guard let other = FeaturePrints.floats(row.print) else { continue }
+                // nil on a dimension/revision mismatch (e.g. prints written by
                 // a different Vision revision) — skip those rather than fail the
                 // whole lookup.
-                guard (try? me.computeDistance(&d, to: other)) != nil else { continue }
+                guard let d = FeaturePrints.distance(me, other) else { continue }
                 scored.append((row.fileID, d))
             }
             return scored.sorted { $0.distance < $1.distance }
@@ -129,10 +127,5 @@ nonisolated enum SimilarTagSuggestions {
             return a.label.localizedCaseInsensitiveCompare(b.label) == .orderedAscending
         }
         return Array(out.prefix(limit))
-    }
-
-    private static func unarchive(_ data: Data) -> VNFeaturePrintObservation? {
-        try? NSKeyedUnarchiver.unarchivedObject(
-            ofClass: VNFeaturePrintObservation.self, from: data)
     }
 }

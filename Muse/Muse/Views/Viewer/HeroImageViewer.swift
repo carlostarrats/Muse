@@ -184,7 +184,12 @@ struct HeroImageViewer: View {
         .onChange(of: toast?.id) { _, id in
             if lingering && id == nil { reallyFinish() }
         }
-        .task(id: currentURL) { await loadDetails() }
+        .task(id: currentURL) {
+            // Arrow-key flips change the shown file without touching
+            // AppState.selectedFile, so ContentView's hook misses them.
+            RediscoveryStore.shared.markViewed(url: currentURL)
+            await loadDetails()
+        }
         // Reload tag pills when tags mutate library-wide (e.g. the menu-bar
         // Delete All / Regenerate commands fire while this viewer is open) —
         // .task is keyed on the URL, so it wouldn't otherwise refresh.

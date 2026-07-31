@@ -138,10 +138,18 @@ struct MuseApp: App {
                     }
                     PhaseTrace.mark("intent-backfill.start")
                     Task { await IntentBackfill.run(); PhaseTrace.mark("intent-backfill.end") }
-                    // Independent fire-and-forget pass — header-only GPS reads
-                    // for files indexed before v13. Self-limiting per launch.
-                    PhaseTrace.mark("coordinate-backfill.start")
-                    Task { await CoordinateBackfill.run(); PhaseTrace.mark("coordinate-backfill.end") }
+                    // Independent fire-and-forget pass — one header-only read
+                    // per file for GPS + EXIF, for libraries indexed before
+                    // v13/v14. Self-limiting per launch; chains geocoding and
+                    // the search-facet refresh when it writes anything.
+                    PhaseTrace.mark("photo-header-backfill.start")
+                    Task { await PhotoHeaderBackfill.run(); PhaseTrace.mark("photo-header-backfill.end") }
+                    // Also run geocoding independently: coordinates may already
+                    // exist (a v13 library, or a GeoNamesDataset.version bump)
+                    // with no fresh header pass to chain from. Both paths are
+                    // idempotent — selection is stale-by-marker.
+                    PhaseTrace.mark("geocode-backfill.start")
+                    Task { await GeocodeBackfill.run(); PhaseTrace.mark("geocode-backfill.end") }
                     // Developer perf harness. Env-gated like PhaseTrace, so a
                     // shipped run never reaches it.
                     if PerfBaseline.enabled {

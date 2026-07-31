@@ -42,6 +42,9 @@ struct FileRow: Codable, FetchableRecord, MutablePersistableRecord {
     /// stops a GPS-less file being re-opened on every launch forever. Mirrors
     /// `analyzed_hash`.
     var coords_scanned_hash: String?
+    /// Unix seconds this file was last opened in the viewer. Device-local
+    /// behavioral data (v16): never exported to a sidecar, never synced.
+    var last_viewed_at: Int64?
 
     enum Columns {
         static let id = Column("id")
@@ -160,4 +163,59 @@ struct CollectionMemberRow: Codable, FetchableRecord, MutablePersistableRecord {
     var collection_id: String
     var file_id: String
     var added_by: String          // "auto" | "manual"
+}
+
+/// EXIF read from the file's own header (v14). Content-keyed like coordinates:
+/// two byte-identical copies have identical EXIF by definition.
+struct PhotoMetaRow: Codable, FetchableRecord, MutablePersistableRecord {
+    static let databaseTableName = "photo_meta"
+    var file_id: String
+    /// content_hash at the time of the last EXIF read — the attempted-marker,
+    /// same role as `files.coords_scanned_hash`.
+    var exif_scanned_hash: String?
+    var capture_date: Int64?        // unix seconds, DateTimeOriginal in local time
+    var capture_md: String?         // "MM-DD" — materialized on-this-day key
+    var camera_make: String?
+    var camera_model: String?
+    var lens: String?
+    var iso: Int?
+    var f_number: Double?
+    var exposure_seconds: Double?
+    var focal_length: Double?       // mm
+    var focal_length_35mm: Int?
+    var flash_fired: Bool?          // EXIF Flash bit 0; nil = unknown
+}
+
+/// Offline reverse-geocoding result (v15). The row's mere existence is the
+/// attempted-marker: NULL place fields mean "geocoded, nothing within range".
+struct PlaceRow: Codable, FetchableRecord, MutablePersistableRecord {
+    static let databaseTableName = "places"
+    var file_id: String
+    var geocoded_hash: String
+    var dataset_version: Int
+    var city: String?
+    var admin: String?
+    /// ISO 3166-1 alpha-2 code — display names resolve at render time.
+    var country: String?
+    /// Lowercased "city|admin|country"; nil when nothing was within range.
+    var place_key: String?
+}
+
+/// A near-duplicate stack (v17). Presentation-only: sets of file ids, never
+/// paths, tags, ratings, notes or collection membership.
+struct StackRow: Codable, FetchableRecord, MutablePersistableRecord {
+    static let databaseTableName = "stacks"
+    var id: String
+    var kind: String                // "auto" | "manual"
+    /// Permanent tombstone — an unstacked stack keeps its row and members so
+    /// the auto-stacker never re-forms it. Never cleaned up.
+    var dissolved: Bool
+    var pick_file_id: String?
+    var created_at: Int64
+}
+
+struct StackMemberRow: Codable, FetchableRecord, MutablePersistableRecord {
+    static let databaseTableName = "stack_members"
+    var stack_id: String
+    var file_id: String
 }

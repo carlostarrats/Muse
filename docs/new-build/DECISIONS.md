@@ -187,6 +187,154 @@ and additions:
 
 ---
 
+## Spec 02 as built (2026-07-31, `new-product-build-1`)
+
+*Where this disagrees with the pre-build sections below, this section wins.*
+
+### Scope actually shipped
+
+- Built: the feature-print fix; v14–v17; `PhotoHeaderReader`/`PhotoHeaderBackfill`;
+  offline geocoding + Places; rediscovery (Rarely Seen / On This Day / Shuffle);
+  near-duplicate stacks; phase-1 token search + native autocomplete + chip-bar
+  rendering via `TagChipsRow`'s parse-only path; the `.location` smart rule.
+- **NOT built:** the token-search `PerfBaseline` metric (the plan's own conditional
+  Task 15 — it needs a 50k synthetic `photo_meta` fixture; deferred to the harness).
+- **v13 already existed** (Spec 01), so this spec added v14–v17 only. Future specs
+  still continue at v18.
+
+### Superseded Spec 01 units
+
+- `Filesystem/CoordinateReader.swift` and `Intelligence/CoordinateBackfill.swift` are
+  **deleted**, along with `AnalyzePipeline.writeCoordinates` and their two test files.
+  `PhotoHeaderReader` / `PhotoHeaderBackfill` / `AnalyzePipeline.writePhotoHeader`
+  replace them. The v13 schema, sanitize rules, caps (5 000/launch, 200/transaction,
+  4-wide) and the pure `candidate(id:path:)` selection predicate carried over verbatim.
+
+### Header pass — as built
+
+- `PhotoHeaderReader.read(url:kind:) async -> PhotoHeader` + pure
+  `sanitize(_:)`, `exifFields(exif:tiff:)`, `parseExifDate(_:)`, `monthDay(_:)`.
+  Key handling uses the SAME prefix-stripping `sub()` shape as
+  `FileMetadata.loadImage`, so both see bare keys ("FNumber", "Make", "Latitude").
+- **Two write forms.** `writePhotoHeader(fileID:hash:header:queue:)` opens its own
+  transaction; `writePhotoHeader(db:fileID:hash:header:)` runs inside a caller's. Both
+  are **`nonisolated`** (the backfill is a nonisolated enum). The analyze pass uses the
+  `db:` form inside the transaction that already guards on `analyzedHash`, so the
+  header lands atomically with tags/caption/palette; the backfill uses it to batch 200
+  rows per write.
+- Both attempted-markers are stamped even on an empty header; the whole write is
+  skipped when both already equal this content hash (amendment A1, built in from the
+  start rather than retrofitted).
+- The video branch (`writePhotoHeaderOnly`) checks BOTH markers before opening the
+  file, and runs before the image-kind guard.
+
+### Geocoding — as built
+
+- **`GeoNamesDataset` does NOT cache the parsed cities.** The pre-build sketch's weak
+  box was illusory (its only strong reference was the returned array), so `cities()`
+  parses on demand and the caller holds it for exactly one pass. The tiny admin1 map
+  IS process-cached. `maxInflatedBytes = 64_000_000`; a size/decode mismatch, an empty
+  parse, or a missing resource all return nil — fail closed.
+- `GeoBounds.boxes` returns ONE `-180...180` box when the radius wraps the globe
+  (rather than two overlapping boxes); latitude is clamped to ±90 and `cos(lat)` to
+  0.01 so a polar query can't produce an infinite span.
+- `ReverseGeocoder.placeKey(city:admin:country:)` is the single declaration of the
+  lowercased `"city|admin|country"` key — `PhotoSearch`, `PlaceQueries` and the
+  `.location` rule all match against what it produced.
+- `GeocodeBackfill` loads the dataset only AFTER finding candidates, and releases it on
+  return. It chains `PlacesStore.reload()` + `SearchFacets.refresh()` when it wrote.
+- **The bundled `Resources/geonames-cities.tsv.zlib` / `geonames-admin1.tsv` are
+  9-city PLACEHOLDERS.** Byte-format correct (the bounded-inflate tests run against
+  them), but Places stays near-empty for a real library until the owner runs
+  `scripts/make-geonames.sh` and bumps `GeoNamesDataset.version`.
+
+### Places — as built
+
+- `PlaceQueries.groups(db:)` fetches flat rows and groups in SWIFT (count, cover =
+  most-recent member, `latestAt` = `COALESCE(capture_date, modified_at, created_at)`).
+  The pre-build `HAVING coverPath = (correlated subquery)` shape was dropped: it is
+  quadratic per group for no benefit at this scale.
+- `PlacesStore` holds its own `rootPaths`, pushed by `AppState.rebuildRootNodes` (the
+  `CollectionsEngine.setRoots` pattern) — the store never reaches back into AppState.
+  Empty roots means no filtering, matching `CollectionStore.fetchAll`'s fallback.
+- `PlacesPage` reuses the existing 320×320 `renderedVariants` entry; no new variant.
+
+### Rediscovery — as built
+
+- `RediscoveryQueries.defaultLimit = 500`. `onThisDay`'s fallback leg admits a file
+  with a `photo_meta` row whose `capture_md` is NULL (not only one with no row at all).
+- `RediscoveryStore.activate` runs its resolve in a `Task` on the main actor under a
+  request token; `dismiss()` is a no-op when nothing is active (so the teardown calls
+  sprinkled through `select(folder:)`/`removeRoot` don't publish spuriously).
+- `markViewed` dedupe window is 5 s (`RediscoveryStore.viewedDedupeWindow`). Hooks:
+  `ContentView`'s `.onChange(of: appState.selectedFile?.url)` plus both hero viewers'
+  existing `.task(id:)` (arrow-key flips).
+- `AppState.rootPathList` (on `AppState+Rediscovery`) is the shared standardized-root
+  accessor these surfaces use.
+
+### Stacks — as built
+
+- `StackStore.idChunk = 800` is the shared `IN (...)` chunk size (also used by
+  `AutoStacker` and `StacksStore`'s path→file_id map).
+- **`BurstClusterer`'s oversized-session split breaks ties toward the MIDPOINT.** With
+  evenly-spaced frames every gap is equal, so a plain "largest gap" split lands at
+  index 1 and peels one item at a time, bounding nothing.
+- `AutoStacker` accumulates `claimedNow` across clusters inside its write transaction,
+  so two clusters can't both claim a file. It is limited to `image/raw/psd`.
+- `StacksStore.reload(for:)` is triggered from `AppState.currentFiles.didSet` (skipped
+  during search / inside a collection) — the lazy per-folder trigger, no launch pass.
+  `entries` excludes dissolved stacks; `badges` is a plain var.
+- Collapse runs LAST in `visibleFiles`, after the facet filter, and only when
+  `!isSearchActive && activeCollectionFiles == nil && RediscoveryStore.shared.files == nil`.
+
+### Search tokens — as built
+
+- `SearchToken.NumericFilter`/`DateToken` carry `displayLabel`, and `SearchToken` a
+  `displayLabel`, so the chip bar has no formatting logic of its own.
+- The parser also accepts `≥`/`≤` prefixes, rejects out-of-range `star:`/`in:` values
+  (they stay in free text), and requires a non-empty key.
+- `SearchQueryParser.keys` is the single list of canonical keys, read by
+  `SearchSuggest`.
+- `PhotoSearch.isIntersectable` names the `.text`/`.color` exclusion explicitly;
+  `filter` returns nil when no intersectable token is present.
+- `PhotoSearch.countryCode(forDisplayName:)` is the shared localized-country →
+  ISO resolver, reused by the `.location` smart rule.
+- `SearchService` gained: `parsed`/`hasTokens`/`effectiveQuery` at the top (a `text:`
+  value folds into the free-text leg, a `color:` value into the existing palette leg
+  via `SmartRule.parsedHex`/`SmartColor.rgb`), a token leg that short-circuits an
+  empty intersection, a token-only branch resolving `tok.ids` directly, the
+  `tok.idSet` intersection AFTER the existing legs, dir-restriction merge AFTER the
+  relaxation loop, and `!hasTokens` added to the unindexed-extras guard.
+- Autocomplete quotes a facet value containing spaces so it re-parses as one token.
+  `SearchFacets.facetLimit = 50`; refreshed from the analyze pass and both backfills.
+
+### `.location` — as built
+
+- `SmartRule.location(LocationTerm)` with `LocationTerm = .place(String) |
+  .near(lat:lon:radiusKM:)`; `isValid` for `.near` reuses `PhotoHeaderReader.sanitize`.
+- The rules editor gains a Location kind whose default is `.place("")`; `.near` has no
+  editor (the `ColorTerm.hex` precedent) and renders a static "radius rule" label.
+
+### AppState integration — as built
+
+- Three new forwarded cancellables in `AppState.init` (`rediscoveryCancellable`,
+  `placesCancellable`, `stacksCancellable`). The rediscovery and stacks ones also call
+  the new `AppState.invalidateVisibleFiles()` — both stores participate in the memo.
+- No new `@Published` property on `AppState`. `EscapeResolver.action` gained
+  `rediscoveryActive:` and `showingPlacesPage:` (both defaulted, so existing tests and
+  callers are unchanged).
+- `StarRating.labels(atLeast:)` was added as the shared "≥ N stars" label list (the
+  resolver's private `qualifyingRatingLabels` stays private and unchanged).
+
+### Docs & localization
+
+- `scripts/make-geonames.sh` is checked in and executable. GeoNames CC BY 4.0
+  attribution is in README.md and a new "Places" section of the About card.
+- French export reports **0 untranslated** (49 new keys filled, including the Spec 01
+  commerce/announcement strings that had never been translated).
+
+---
+
 ## Platform & distribution
 
 - Distribution is Mac App Store exclusively. No Sparkle, no DMG/appcast/GitHub-release
@@ -335,7 +483,8 @@ and additions:
 
 ## Database schema & migrations
 
-- Migration numbering is fixed: **v13 coordinates · v14 `photo_meta` · v15 `places` ·
+- Migration numbering is fixed (v13–v17 are BUILT as of 2026-07-31 — see "Spec 02 as
+  built"): **v13 coordinates · v14 `photo_meta` · v15 `places` ·
   v16 `last_viewed_at` · v17 stacks · v18 `clip_embeddings` · v19 `photo_traits` ·
   v20 `edits` + `edit_versions` · v21 `edit_presets` · v22 `photo_traits`
   capture-stats columns · v23 `edit_luts`** — separate migrations so features land in

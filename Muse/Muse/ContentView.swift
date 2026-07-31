@@ -28,6 +28,8 @@ struct ContentView: View {
     /// Guards against queueing a second completion hold while one is running.
     @State private var finishHoldScheduled = false
     @ObservedObject private var collectionsEngine = CollectionsEngine.shared
+    @ObservedObject private var placesStore = PlacesStore.shared
+    @ObservedObject private var searchFacets = SearchFacets.shared
     @State private var moodPickerShown = false
     /// Tags from visually similar photos, for the Add Tag card's offer row.
     @State private var similarTags: [TagSuggest.Candidate] = []
@@ -146,6 +148,16 @@ struct ContentView: View {
             )) {
                 Text("All").tag(SearchFolderScope.all)
                 Text("This Folder").tag(SearchFolderScope.thisFolder)
+            }
+            // Token autocomplete rides the NATIVE suggestion list — no custom
+            // popover, and no in-field NSTokenField-style tokens (the native
+            // .searchable field is a durable constraint). Facets are refreshed
+            // after backfills/analyze passes, never per keystroke.
+            .searchSuggestions {
+                ForEach(SearchSuggest.suggestions(fieldText: searchText,
+                                                  facets: searchFacets.snapshot)) { suggestion in
+                    Text(suggestion.display).searchCompletion(suggestion.completion)
+                }
             }
             .onChange(of: searchText) { _, newValue in
                 handleSearchTextChange(newValue)
@@ -398,6 +410,14 @@ struct ContentView: View {
         }
         GridToastHost(deletion: appState.deletion)
             .zIndex(60)
+            // `last_viewed_at` is written from the VIEW layer only — AppState
+            // keeps no didSet on selectedFile. ViewerRouter is the single
+            // dispatch point for every kind, so this one funnel covers them
+            // all; the hero viewers add their own hook for arrow-key flips,
+            // which change the shown file without touching selectedFile.
+            .onChange(of: appState.selectedFile?.url) { _, url in
+                if let url { RediscoveryStore.shared.markViewed(url: url) }
+            }
         }
         .animation(.easeInOut(duration: 0.18), value: appState.selectedFile?.id)
         .background(
@@ -425,7 +445,9 @@ struct ContentView: View {
                     searchActive: searchPresent,
                     tagsActive: !appState.activeTagLabels.isEmpty,
                     insideCollection: appState.activeCollectionID != nil,
-                    showingCollectionsPage: appState.showingCollections
+                    rediscoveryActive: RediscoveryStore.shared.active != nil,
+                    showingCollectionsPage: appState.showingCollections,
+                    showingPlacesPage: PlacesStore.shared.showingPlaces
                 ) {
                 case .closeHero:
                     // Hero viewer: run the return flight instead of popping.
@@ -460,9 +482,15 @@ struct ContentView: View {
                 case .exitCollection:
                     // Same as the in-collection header BackArrowButton.
                     appState.setActiveCollection(nil)
+                case .exitRediscovery:
+                    // Same as the rediscovery header's back arrow.
+                    appState.closeRediscovery()
                 case .exitCollectionsPage:
                     // Same as the Collections-page back arrow.
                     appState.toggleCollectionsPage()
+                case .exitPlacesPage:
+                    // Same as the Places-page back arrow.
+                    appState.closePlacesPage()
                 case .dismissModal:
                     dismissTopModal()
                 case .none:
@@ -556,6 +584,12 @@ struct ContentView: View {
                     if isCollectionsPage {
                         // Dedicated Collections page — no tag chips here.
                         CollectionsPage()
+                            .transition(Self.pageReveal)
+                    } else if placesStore.showingPlaces && !appState.isSearchActive {
+                        // A committed `near:` search shows the ordinary search
+                        // grid, not this page — openPlaceSearch already closes
+                        // it, so the guard is a safety net for any other path.
+                        PlacesPage()
                             .transition(Self.pageReveal)
                     } else {
                         // Chips stay pinned — on the main grid AND inside a

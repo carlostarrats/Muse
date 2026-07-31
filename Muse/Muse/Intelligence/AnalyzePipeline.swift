@@ -313,6 +313,14 @@ final class AnalyzePipeline: ObservableObject {
             }
         }
         isRunning = false; current = ""; progress = 0; completed = 0; total = 0
+        // End-of-pass work over exactly THIS pass's file ids: auto-stack the
+        // virgin ones, and refresh the search-autocomplete facets (this pass
+        // may have written new cameras/lenses/dates).
+        let passFileIDs = pairs.map(\.id)
+        if !shouldStop && !passFileIDs.isEmpty {
+            Task { await AutoStacker.run(fileIDs: passFileIDs) }
+            await SearchFacets.shared.refresh()
+        }
         // Skip the (non-trivial) recluster if the pass was cancelled — e.g. the
         // folder was removed out from under us; there's nothing new to cluster.
         if shouldStop { return }
@@ -405,56 +413,96 @@ final class AnalyzePipeline: ObservableObject {
         }
     }
 
-    /// Stamp lat/lon/coords_scanned_hash under the SAME content_hash guard the
-    /// main analyze write uses — a file edited mid-pass keeps its coordinates
-    /// pending rather than being stamped from stale bytes.
+    /// Stamp coordinates AND EXIF from one header read, under the SAME
+    /// content_hash guard the main analyze write uses — a file edited mid-pass
+    /// keeps its header data pending rather than being stamped from stale
+    /// bytes.
     ///
-    /// `coords_scanned_hash` is written even when no GPS was found: it's the
-    /// attempted-marker, not a "has coordinates" flag. Without it every
+    /// Both markers are written even when nothing was found: they are
+    /// attempted-markers, not "has GPS"/"has EXIF" flags. Without them every
     /// GPS-less file is re-opened on every launch forever (the
     /// analyzed_hash-NULL retry-loop shape, 2026-07-28).
-    static func writeCoordinates(fileID: String, hash: String,
-                                 coord: Coordinate?, queue: DatabaseQueue) async {
+    ///
+    /// The whole write is skipped when both markers already equal this hash —
+    /// an unconditional re-write would clobber externally-supplied GPS/date
+    /// (Spec 06's import supplement) with a header re-read producing NULLs.
+    static func writePhotoHeader(fileID: String, hash: String,
+                                 header: PhotoHeader, queue: DatabaseQueue) async {
         try? await queue.write { db in
-            guard var file = try FileRow.filter(FileRow.Columns.id == fileID).fetchOne(db),
-                  file.content_hash == hash else { return }
-            if let coord {
+            try writePhotoHeader(db: db, fileID: fileID, hash: hash, header: header)
+        }
+    }
+
+    /// The same write, inside a caller's transaction (the analyze pass runs it
+    /// in the one transaction that already guards on `analyzedHash`).
+    nonisolated static func writePhotoHeader(db: GRDB.Database, fileID: String, hash: String,
+                                             header: PhotoHeader) throws {
+        guard var file = try FileRow.filter(FileRow.Columns.id == fileID).fetchOne(db),
+              file.content_hash == hash else { return }
+        var meta = (try PhotoMetaRow.filter(Column("file_id") == fileID).fetchOne(db))
+            ?? PhotoMetaRow(file_id: fileID)
+        let coordsCurrent = file.coords_scanned_hash == hash
+        let metaCurrent = meta.exif_scanned_hash == hash
+        if coordsCurrent && metaCurrent { return }
+
+        if !coordsCurrent {
+            if let coord = header.coordinate {
                 file.lat = coord.lat
                 file.lon = coord.long
             }
             file.coords_scanned_hash = hash
             try file.update(db)
         }
+
+        if !metaCurrent {
+            if let exif = header.exif {
+                meta.capture_date = exif.captureDate
+                meta.capture_md = exif.captureMD
+                meta.camera_make = exif.cameraMake
+                meta.camera_model = exif.cameraModel
+                meta.lens = exif.lens
+                meta.iso = exif.iso
+                meta.f_number = exif.fNumber
+                meta.exposure_seconds = exif.exposureSeconds
+                meta.focal_length = exif.focalLength
+                meta.focal_length_35mm = exif.focalLength35mm
+                meta.flash_fired = exif.flashFired
+            }
+            meta.exif_scanned_hash = hash
+            try meta.save(db)
+        }
     }
 
     /// Video kinds skip the Vision pipeline entirely but still need their
-    /// coordinate written — a geotagged video must not be invisible to
-    /// location search just because Vision doesn't tag videos. A separate,
-    /// smaller guarded transaction mirroring the main one's content_hash
-    /// re-check.
+    /// coordinate + capture date written — a geotagged or dated video must not
+    /// be invisible to `near:`/`in:`/On This Day just because Vision doesn't
+    /// tag videos. A separate, smaller guarded transaction mirroring the main
+    /// one's content_hash re-check.
     ///
     /// Videos are never stamped with `analyzed_hash`, so `analyzePending`
-    /// re-queues them on every folder visit; the `coords_scanned_hash` check
-    /// here is what keeps that cheap (one indexed read, no header open).
-    private static func writeCoordinatesOnly(fileID: String, url: URL, kind: AssetKind) async {
+    /// re-queues them on every folder visit; the marker check here is what
+    /// keeps that cheap (one indexed read, no header open).
+    private static func writePhotoHeaderOnly(fileID: String, url: URL, kind: AssetKind) async {
         guard let queue = Database.shared.dbQueue else { return }
-        let row: FileRow? = (try? await queue.read { db in
-            try FileRow.filter(FileRow.Columns.id == fileID).fetchOne(db)
+        let state: (hash: String, coordsStale: Bool, exifStale: Bool)? = (try? await queue.read { db -> (String, Bool, Bool)? in
+            guard let row = try FileRow.filter(FileRow.Columns.id == fileID).fetchOne(db),
+                  let hash = row.content_hash else { return nil }
+            let meta = try PhotoMetaRow.filter(Column("file_id") == fileID).fetchOne(db)
+            return (hash, row.coords_scanned_hash != hash, meta?.exif_scanned_hash != hash)
         }) ?? nil
-        guard let row, let hash = row.content_hash else { return }
-        guard row.coords_scanned_hash != hash else { return }
-        let coord = await CoordinateReader.read(url: url, kind: kind)
-        await writeCoordinates(fileID: fileID, hash: hash, coord: coord, queue: queue)
+        guard let state, state.coordsStale || state.exifStale else { return }
+        let header = await PhotoHeaderReader.read(url: url, kind: kind)
+        await writePhotoHeader(fileID: fileID, hash: state.hash, header: header, queue: queue)
     }
 
     private func analyzeOne(fileID: String, url: URL) async {
         let kind = AssetKind.detect(at: url)
 
-        // Coordinates are read for image AND video kinds. The video branch runs
-        // before the image-only Vision guard below, since a video never reaches
-        // the main write transaction.
+        // The header (GPS + EXIF) is read for image AND video kinds. The video
+        // branch runs before the image-only Vision guard below, since a video
+        // never reaches the main write transaction.
         if kind == .video {
-            await Self.writeCoordinatesOnly(fileID: fileID, url: url, kind: kind)
+            await Self.writePhotoHeaderOnly(fileID: fileID, url: url, kind: kind)
         }
 
         // Skip non-image kinds; Vision pipeline only handles images
@@ -471,10 +519,11 @@ final class AnalyzePipeline: ObservableObject {
         }) ?? nil
         guard let analyzedHash else { return }
 
-        // Header-only GPS read, concurrent with the Vision pass below — it's a
-        // few hundred bytes off the front of the file, not a decode, so it must
-        // not serialize behind classify/OCR/palette.
-        async let coordinate = CoordinateReader.read(url: url, kind: kind)
+        // Header-only GPS + EXIF read, concurrent with the Vision pass below —
+        // it's a few hundred bytes off the front of the file, not a decode, so
+        // it must not serialize behind classify/OCR/palette. One header pass
+        // serves both coordinates and photo_meta.
+        async let photoHeader = PhotoHeaderReader.read(url: url, kind: kind)
 
         let registry = IntelligenceRegistry.shared
         guard let out = await registry.tagger.analyze(url: url) else {
@@ -494,11 +543,11 @@ final class AnalyzePipeline: ObservableObject {
             // The GPS header is still readable when the PIXELS aren't (the
             // .RAF case above has intact EXIF), so the coordinate is stamped
             // here too rather than being lost with the rest of the pass.
-            let coord = await coordinate
+            let header = await photoHeader
             await Self.markAnalysisAttempted(fileID: fileID, hash: analyzedHash,
                                              queue: queue)
-            await Self.writeCoordinates(fileID: fileID, hash: analyzedHash,
-                                        coord: coord, queue: queue)
+            await Self.writePhotoHeader(fileID: fileID, hash: analyzedHash,
+                                        header: header, queue: queue)
             return
         }
         let caption = out.caption
@@ -523,7 +572,7 @@ final class AnalyzePipeline: ObservableObject {
         // would be a data race under strict concurrency).
         let finalIntentKey = intentKey
         let finalIntentVersion = intentVersion
-        let finalCoordinate = await coordinate
+        let finalHeader = await photoHeader
 
         var committed = false
         do {
@@ -548,15 +597,14 @@ final class AnalyzePipeline: ObservableObject {
                 file.analyzed_hash = analyzedHash
                 file.intent = finalIntentKey
                 file.intent_model_version = finalIntentVersion
-                // coords_scanned_hash is stamped unconditionally (the
-                // attempted-marker); only lat/lon are conditional on a GPS
-                // header actually being present.
-                if let finalCoordinate {
-                    file.lat = finalCoordinate.lat
-                    file.lon = finalCoordinate.long
-                }
-                file.coords_scanned_hash = analyzedHash
                 try file.update(db)
+
+                // Coordinates + EXIF from the header read that ran concurrent
+                // with Vision. Re-fetches the (just-updated) row inside the
+                // same transaction, so both markers land atomically with the
+                // rest of the analysis.
+                try Self.writePhotoHeader(db: db, fileID: fileID,
+                                          hash: analyzedHash, header: finalHeader)
 
                 // Vision tags apply to EVERY folder this content lives in
                 // (identical pixels → identical vision tags), independently per

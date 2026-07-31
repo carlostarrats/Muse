@@ -386,6 +386,87 @@ final class Database {
                 """)
         }
 
+        migrator.registerMigration("v14_photo_meta") { db in
+            // EXIF gets its own table rather than columns on `files` — every
+            // existing fetch path does `SELECT *` on files, and eleven more
+            // columns would ride along on all of them for no benefit.
+            try db.create(table: "photo_meta") { t in
+                t.column("file_id", .text).primaryKey()
+                    .references("files", onDelete: .cascade)
+                t.column("exif_scanned_hash", .text)
+                t.column("capture_date", .integer)   // unix seconds (DateTimeOriginal, local-time)
+                t.column("capture_md", .text)        // "MM-DD" — materialized on-this-day key
+                t.column("camera_make", .text)
+                t.column("camera_model", .text)
+                t.column("lens", .text)
+                t.column("iso", .integer)
+                t.column("f_number", .double)
+                t.column("exposure_seconds", .double)
+                t.column("focal_length", .double)    // mm
+                t.column("focal_length_35mm", .integer)
+                t.column("flash_fired", .boolean)    // EXIF Flash bit 0; nil = unknown
+            }
+            // capture_md is MATERIALIZED, not computed with strftime at query
+            // time: a strftime WHERE clause can't use an index. The
+            // "query time touches only precomputed data" rule at schema level.
+            try db.create(index: "photo_meta_capture_idx", on: "photo_meta", columns: ["capture_date"])
+            try db.create(index: "photo_meta_md_idx", on: "photo_meta", columns: ["capture_md"])
+            try db.create(index: "photo_meta_camera_idx", on: "photo_meta", columns: ["camera_make", "camera_model"])
+            try db.create(index: "photo_meta_lens_idx", on: "photo_meta", columns: ["lens"])
+            try db.create(index: "photo_meta_iso_idx", on: "photo_meta", columns: ["iso"])
+            try db.create(index: "photo_meta_f_idx", on: "photo_meta", columns: ["f_number"])
+            try db.create(index: "photo_meta_focal_idx", on: "photo_meta", columns: ["focal_length"])
+        }
+
+        migrator.registerMigration("v15_places") { db in
+            // A row with NULL place fields means "geocoded, nothing within
+            // range" — the row itself is the attempted-marker, so an ocean
+            // photo isn't re-geocoded on every launch. country holds the ISO
+            // 3166-1 alpha-2 code; display names resolve at render time.
+            try db.create(table: "places") { t in
+                t.column("file_id", .text).primaryKey()
+                    .references("files", onDelete: .cascade)
+                t.column("geocoded_hash", .text).notNull()
+                t.column("dataset_version", .integer).notNull()
+                t.column("city", .text)
+                t.column("admin", .text)
+                t.column("country", .text)
+                t.column("place_key", .text)
+            }
+            try db.create(index: "places_key_idx", on: "places", columns: ["place_key"])
+        }
+
+        migrator.registerMigration("v16_rediscovery") { db in
+            // Device-local behavioral data: never exported to sidecars, never
+            // synced, never sent anywhere. No index — rediscovery queries run
+            // once per surface activation, never per keystroke.
+            try db.alter(table: "files") { t in
+                t.add(column: "last_viewed_at", .integer)
+            }
+        }
+
+        migrator.registerMigration("v17_stacks") { db in
+            // Stacks are presentation-only, content-keyed sets of file ids.
+            // `dissolved` is a permanent tombstone (the collection setHidden
+            // pattern): unstacking keeps the row + members so the auto-stacker
+            // never re-forms it.
+            try db.create(table: "stacks") { t in
+                t.column("id", .text).primaryKey()
+                t.column("kind", .text).notNull()          // "auto" | "manual"
+                t.column("dissolved", .boolean).notNull().defaults(to: false)
+                t.column("pick_file_id", .text)
+                t.column("created_at", .integer).notNull()
+            }
+            try db.create(table: "stack_members") { t in
+                t.column("stack_id", .text).notNull()
+                    .references("stacks", onDelete: .cascade)
+                t.column("file_id", .text).notNull()
+                    .references("files", onDelete: .cascade)
+                t.primaryKey(["stack_id", "file_id"])
+            }
+            try db.create(index: "stack_members_file_idx", on: "stack_members", columns: ["file_id"])
+        }
+
         return migrator
     }
 

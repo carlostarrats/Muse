@@ -60,6 +60,14 @@ nonisolated enum StarRating {
     /// All five canonical rating labels, ascending: ["★", …, "★★★★★"].
     static let allLabels: [String] = (1...maxStars).map { String(repeating: glyph, count: $0) }
 
+    /// The labels a "≥ N stars" match covers. Empty for an out-of-range N —
+    /// an unparseable rating matches nothing rather than crashing on a
+    /// reversed range (the same guard SmartCollectionResolver applies).
+    static func labels(atLeast stars: Int) -> [String] {
+        guard (1...maxStars).contains(stars) else { return [] }
+        return (stars...maxStars).compactMap { label(for: $0) }
+    }
+
     // MARK: - Grid badge sizing
     //
     // The grid tile's rating badge draws `label(for:)` — a run of up to five

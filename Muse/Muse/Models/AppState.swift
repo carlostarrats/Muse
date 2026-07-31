@@ -95,7 +95,17 @@ final class AppState: ObservableObject {
 
     /// Files in the selected folder (or, if recursive, including subfolders).
     @Published var currentFiles: [FileNode] = [] {
-        didSet { _visibleFilesValid = false }
+        didSet {
+            _visibleFilesValid = false
+            // Stacks are resolved lazily per folder — this is the trigger.
+            // There is no global launch pass; a library stacks up folder by
+            // folder as it's browsed. Search results / collections don't
+            // collapse, so they need no resolve.
+            if !isSearchActive && activeCollectionFiles == nil {
+                let files = currentFiles
+                Task { await StacksStore.shared.reload(for: files) }
+            }
+        }
     }
 
     /// Per-path content version, bumped when a file's bytes change in place
@@ -455,6 +465,12 @@ final class AppState: ObservableObject {
     var _visibleFilesCache: [FileNode] = []
     var _visibleFilesValid = false
 
+    /// Drop the memo when an input that ISN'T an AppState property changes —
+    /// the Pattern B stores that participate in `visibleFiles`.
+    func invalidateVisibleFiles() {
+        _visibleFilesValid = false
+    }
+
     /// Shared duration for navigation crossfades — the Collections page⇄grid
     /// swap, the collection/tag filter swaps, and search enter/exit. Kept short
     /// so the brief moment where two image-heavy grids composite at once (the
@@ -591,6 +607,13 @@ final class AppState: ObservableObject {
     private var starsCancellable: AnyCancellable?
     private var folderStatsCancellable: AnyCancellable?
     private var reachabilityCancellable: AnyCancellable?
+    /// The sanctioned one-cancellable-per-store integration cost for the
+    /// Pattern B stores this spec adds. Neither store publishes through
+    /// AppState; each just invalidates the memoized `visibleFiles` and
+    /// re-renders the shell.
+    private var rediscoveryCancellable: AnyCancellable?
+    private var placesCancellable: AnyCancellable?
+    private var stacksCancellable: AnyCancellable?
 
     init() {
         updateAutoMoodTimer()
@@ -656,6 +679,21 @@ final class AppState: ObservableObject {
             .sink { [weak self] _ in self?.objectWillChange.send() }
         folderStatsCancellable = folderStats.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
+        // A rediscovery surface substitutes for `currentFiles` in
+        // `visibleFiles`, so its changes must invalidate that memo.
+        rediscoveryCancellable = RediscoveryStore.shared.objectWillChange
+            .sink { [weak self] _ in
+                self?.invalidateVisibleFiles()
+                self?.objectWillChange.send()
+            }
+        placesCancellable = PlacesStore.shared.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+        // Collapsing a stack changes what the grid shows, same as above.
+        stacksCancellable = StacksStore.shared.objectWillChange
+            .sink { [weak self] _ in
+                self?.invalidateVisibleFiles()
+                self?.objectWillChange.send()
+            }
 
         // When the library loses ALL reachable images, the content-gated Collections
         // UI empties — so don't strand the user inside a now-ungated collection or on
@@ -827,6 +865,9 @@ final class AppState: ObservableObject {
         // narrowed to members under an active root so it matches what the grid
         // can show (Lever 1, 2026-06-19 count-vs-contents fix).
         CollectionsEngine.shared.setRoots(rootNodes.map(\.url))
+        // Places groups are root-scoped by the same rule, so the store needs
+        // the same push (it never reaches back into AppState).
+        PlacesStore.shared.setRootPaths(rootNodes.map { $0.url.standardizedFileURL.path })
         // Clear ghost `is_alive` rows under each root (deleted files a browsed-depth
         // reconcile can't reach) so content-gated collections hide promptly — even
         // for the iCloud "Muse" root, which is never auto-selected on launch.
@@ -897,6 +938,8 @@ final class AppState: ObservableObject {
         if rootNodes.isEmpty {
             if activeCollectionID != nil { setActiveCollection(nil) }
             if showingCollections { showingCollections = false }
+            RediscoveryStore.shared.dismiss()
+            PlacesStore.shared.setShowing(false)
         } else if activeCollectionID != nil {
             // A collection can span MULTIPLE roots, so removing ANY root — not
             // just the active one — can drop members out of reach. The count
@@ -909,6 +952,14 @@ final class AppState: ObservableObject {
             // still-reachable action (New Collection from Selection…/move/share)
             // can't operate on a file under the folder that was just removed.
             setActiveCollection(activeCollectionID)
+        }
+        // A rediscovery surface can span roots for the same reason a collection
+        // can — re-resolve it against the new root set rather than leaving
+        // unreachable tiles on screen. (rebuildRootNodes above already pushed
+        // the new root list to PlacesStore.)
+        Task { await PlacesStore.shared.reload() }
+        if let surface = RediscoveryStore.shared.active {
+            RediscoveryStore.shared.activate(surface, roots: rootPathList)
         }
     }
 
@@ -932,6 +983,10 @@ final class AppState: ObservableObject {
         // view vanishes in one frame; then the folder fades in (tag row first,
         // images already in place below it).
         if showingCollections { showingCollections = false }
+        // A rediscovery surface and the Places page are cross-folder contexts
+        // too — teardown parity with the collection/search/tag teardown below.
+        RediscoveryStore.shared.dismiss()
+        PlacesStore.shared.setShowing(false)
         // Always tear down (unconditionally, NOT `if activeCollectionID != nil`):
         // setActiveCollection commits activeCollectionID only AFTER an await, so
         // while a collection is still loading activeCollectionID is still nil and

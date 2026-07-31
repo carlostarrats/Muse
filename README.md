@@ -143,6 +143,10 @@ grant any rights to use, copy, modify, or distribute the code.
 
 ## Acknowledgements
 
+- Place names for offline reverse geocoding come from
+  [GeoNames](https://www.geonames.org), used under
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The bundled
+  `cities1000` extract is regenerated with `scripts/make-geonames.sh`.
 - Custom background color sliders are designed after
   [SwiftUI-Color-Kit](https://github.com/kieranb662/SwiftUI-Color-Kit)
   by Kieran Brown (implemented natively in Muse — no dependency).

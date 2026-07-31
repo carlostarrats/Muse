@@ -39,13 +39,46 @@ enum SearchService {
 
         guard let queue = Database.shared.dbQueue else { return [] }
 
+        // Search tokens (camera:/lens:/iso:/f:/in:/near:/text:/color:/star:/
+        // kind:) are parsed out of the committed field text BEFORE every other
+        // leg. With no token this is a pure no-op and the pipeline below runs
+        // byte-identically to the pre-token behaviour, legacy bare-hex colour
+        // included — that equivalence is pinned by test.
+        let parsed = SearchQueryParser.parse(trimmed)
+        let hasTokens = !parsed.tokens.isEmpty
+        // `text:` folds into the free-text leg; `color:` folds into the
+        // existing palette leg. Neither is matched by PhotoSearch.
+        let tokenText = parsed.tokens.compactMap { token -> String? in
+            if case let .text(v) = token { return v }
+            return nil
+        }.joined(separator: " ")
+        let tokenColors = parsed.tokens.compactMap { token -> String? in
+            if case let .color(v) = token { return v }
+            return nil
+        }
+        let effectiveQuery: String = {
+            guard hasTokens else { return trimmed }
+            return [parsed.freeText, tokenText]
+                .filter { !$0.isEmpty }.joined(separator: " ")
+        }()
+
         // Pull any hex color tokens out of the query. Non-hex tokens (incl.
         // color *names* like "red", which are already tags) stay as text and
         // flow through the pipeline unchanged. A query with no hex is inert
         // on the color path — identical to today's behavior.
-        let cq = ColorQuery.parse(trimmed)
-        let colorQuery: [LabColor] = cq.hexes.map { LabColor(rgb: $0) }
-        let textQuery = colorQuery.isEmpty ? trimmed : cq.textRemainder
+        let cq = ColorQuery.parse(effectiveQuery)
+        // A `color:` token routes into this SAME leg rather than a parallel
+        // matcher: a hex value joins the hex list, a named swatch resolves
+        // through SmartColor exactly as the smart-rule path does.
+        var colorQuery: [LabColor] = cq.hexes.map { LabColor(rgb: $0) }
+        for value in tokenColors {
+            if let rgb = SmartRule.parsedHex(value) {
+                colorQuery.append(LabColor(rgb: rgb))
+            } else if let rgb = SmartColor.rgb(for: value.lowercased()) {
+                colorQuery.append(LabColor(rgb: rgb))
+            }
+        }
+        let textQuery = cq.hexes.isEmpty ? effectiveQuery : cq.textRemainder
         let hasText = !textQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
         let escaped = ftsEscape(textQuery)
@@ -57,6 +90,18 @@ enum SearchService {
         guard cancellation?.isCancelled != true else { return [] }
 
         let absPaths: [String] = (try? await queue.read { db -> [String] in
+            // Token leg: an AND intersection over indexed columns only. Runs
+            // first so an empty intersection short-circuits the expensive legs.
+            let tokenResult = hasTokens ? try PhotoSearch.filter(tokens: parsed.tokens, db: db) : nil
+            if let tokenResult, tokenResult.idSet.isEmpty { return [] }
+
+            // Token-only query (no free text, no `text:`, no colour): the
+            // capture-DESC order PhotoSearch already produced IS the result.
+            if let tokenResult, !hasText, colorQuery.isEmpty {
+                return try aliveePaths(for: tokenResult.ids,
+                                       restrictedToDirs: tokenResult.dirRestrictions, db: db)
+            }
+
             // Color filter: IDs whose palette matches EVERY query color (AND),
             // plus a closeness score for color-only ranking. Only when the
             // query actually carries a hex token.
@@ -88,13 +133,17 @@ enum SearchService {
             // Color-only query (no text remainder) → rank by palette closeness
             // (closest first), resolve, return.
             if !colorQuery.isEmpty && !hasText {
-                let ranked = (colorIDs ?? []).sorted {
+                var eligible = colorIDs ?? []
+                if let tokenResult { eligible.formIntersection(tokenResult.idSet) }
+                let ranked = eligible.sorted {
                     let s0 = colorScore[$0] ?? .infinity, s1 = colorScore[$1] ?? .infinity
                     // Tiebreak on id so equal-distance files keep a stable,
                     // repeatable order across identical searches.
                     return s0 != s1 ? s0 < s1 : $0 < $1
                 }
-                return try aliveePaths(for: ranked, restrictedToDirs: [:], db: db)
+                return try aliveePaths(for: ranked,
+                                       restrictedToDirs: tokenResult?.dirRestrictions ?? [:],
+                                       db: db)
             }
 
             // --- Existing text pipeline, now driven by textQuery ---
@@ -180,6 +229,19 @@ enum SearchService {
             if let colorIDs {
                 orderedIDs = orderedIDs.filter { colorIDs.contains($0) }
             }
+
+            // Tokens AND the text result — the same precedent as the colour
+            // intersection just above. Dir restrictions are applied AFTER the
+            // relaxation loop that cleared `matchedDirs` for FTS/semantic hits,
+            // so an FTS match can never un-restrict a rating token (ratings are
+            // per (file_id, parent_dir); a text hit on a byte-identical copy in
+            // another folder must not surface that unrated copy).
+            if let tokenResult {
+                orderedIDs = orderedIDs.filter { tokenResult.idSet.contains($0) }
+                for (id, dirs) in tokenResult.dirRestrictions {
+                    matchedDirs[id] = matchedDirs[id].map { $0.intersection(dirs) } ?? dirs
+                }
+            }
             guard !orderedIDs.isEmpty else { return [] }
 
             return try aliveePaths(for: orderedIDs, restrictedToDirs: matchedDirs, db: db)
@@ -210,8 +272,10 @@ enum SearchService {
         // Skipped for color queries: an unindexed file has no palette, so it
         // can never satisfy a color filter — color search only surfaces
         // analyzed images.
+        // Also skipped when tokens are present: an unindexed file has no
+        // photo_meta/places row either, so it can never satisfy a token.
         var extras: [FileNode] = []
-        if case .currentFolder(let url) = scope, colorQuery.isEmpty {
+        if case .currentFolder(let url) = scope, colorQuery.isEmpty, !hasTokens {
             let lower = trimmed.lowercased()
             let rankedPaths = Set(ranked.map { $0.url.standardizedFileURL })
             extras = await Task.detached(priority: .userInitiated) { () -> [FileNode] in

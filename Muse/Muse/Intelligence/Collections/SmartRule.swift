@@ -41,6 +41,15 @@ nonisolated enum ColorTerm: Codable, Equatable {
     case hex(String)
 }
 
+/// A location rule term. `.place` matches city OR admin OR country (a
+/// localized country name resolves back to its ISO code in Swift before the
+/// query — the DB stores "PT", the user types "Portugal"). `.near` decodes and
+/// evaluates but has NO rule editor in v1 — the ColorTerm.hex precedent.
+nonisolated enum LocationTerm: Codable, Equatable {
+    case place(String)
+    case near(lat: Double, lon: Double, radiusKM: Double)
+}
+
 /// Relative or absolute date bound. Dates are epoch seconds (files.created_at).
 nonisolated enum DateOp: Codable, Equatable {
     case withinDays(Int)
@@ -56,6 +65,10 @@ nonisolated enum SmartRule: Codable, Equatable {
     case date(field: DateField, op: DateOp)
     case filename(contains: String)
     case size(op: Comparison, bytes: Int64)
+    /// Codable stays fully synthesized (house style). The accepted consequence
+    /// is that a rule set containing `.location` decodes as empty on an older
+    /// build — the collection itself survives.
+    case location(LocationTerm)
 
     /// A display-friendly grouping of AssetKind values (files.kind rawValue).
     enum KindGroup: String, Codable, CaseIterable {
@@ -89,6 +102,15 @@ nonisolated enum SmartRule: Codable, Equatable {
             return true
         case let .filename(contains):      return !contains.isEmpty
         case let .size(_, bytes):          return bytes > 0
+        case let .location(term):
+            switch term {
+            case let .place(name):
+                return !name.trimmingCharacters(in: .whitespaces).isEmpty
+            case let .near(lat, lon, radiusKM):
+                // Reuses the reader's range check rather than duplicating it.
+                return PhotoHeaderReader.sanitize(Coordinate(lat: lat, long: lon)) != nil
+                    && radiusKM > 0
+            }
         }
     }
 

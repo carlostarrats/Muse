@@ -131,6 +131,46 @@ enum SmartCollectionResolver {
                 }
             }
             return out
+
+        case let .location(term):
+            switch term {
+            case let .place(name):
+                let lower = name.trimmingCharacters(in: .whitespaces).lowercased()
+                guard !lower.isEmpty else { return [] }
+                // places.country stores the ISO 3166-1 alpha-2 code, so a
+                // localized display name ("Portugal") is resolved back to "PT"
+                // in Swift BEFORE the query — the display-time-localization
+                // rule, applied in reverse.
+                let iso = (PhotoSearch.countryCode(forDisplayName: name) ?? "").lowercased()
+                return try idSet(db, sql: """
+                    SELECT file_id FROM places
+                    WHERE place_key IS NOT NULL
+                      AND (LOWER(city) = ? OR LOWER(admin) = ? OR LOWER(country) = ?
+                           OR LOWER(country) = ?)
+                    """, args: [lower, lower, lower, iso])
+
+            case let .near(lat, lon, radiusKM):
+                // Bounding-box prefilter on the v13 partial index (split in two
+                // across ±180°), then an exact haversine pass in Swift.
+                var out = Set<String>()
+                for box in GeoBounds.boxes(lat: lat, lon: lon, radiusKM: radiusKM) {
+                    let rows = try Row.fetchAll(db, sql: """
+                        SELECT id, lat, lon FROM files
+                        WHERE lat IS NOT NULL AND lon IS NOT NULL
+                          AND lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?
+                        """, arguments: [box.latRange.lowerBound, box.latRange.upperBound,
+                                          box.lonRange.lowerBound, box.lonRange.upperBound])
+                    for row in rows {
+                        guard let id: String = row["id"], let rlat: Double = row["lat"],
+                              let rlon: Double = row["lon"] else { continue }
+                        if GreatCircle.distanceKM(lat1: lat, lon1: lon,
+                                                  lat2: rlat, lon2: rlon) <= radiusKM {
+                            out.insert(id)
+                        }
+                    }
+                }
+                return out
+            }
         }
     }
 

@@ -16,7 +16,6 @@
 //
 
 import Foundation
-import Vision
 import GRDB
 
 struct DuplicateGroup: Identifiable, Hashable {
@@ -213,51 +212,75 @@ final class DuplicateFinder: ObservableObject {
 
         if entries.count < 2 { return [] }
 
-        // Pre-filter by resolution bucket (within ±10%) and dominant color hex equality.
-        // Then brute-force cosine on the survivors.
-        let printObs: [(PathRow, FileRow, VNFeaturePrintObservation)] = entries.compactMap { (p, f) in
+        // feature_print holds the RAW VNFeaturePrintObservation.data element
+        // buffer — it was never archived, so the NSKeyedUnarchiver this used
+        // to do returned nil for every row and this whole mode was dead.
+        // Compare the raw float buffers instead (FeaturePrints).
+        let printed: [(PathRow, FileRow, [Float])] = entries.compactMap { (p, f) in
             guard let data = f.feature_print,
-                  let obs = try? NSKeyedUnarchiver.unarchivedObject(ofClass: VNFeaturePrintObservation.self, from: data) else {
-                return nil
-            }
-            return (p, f, obs)
+                  let floats = FeaturePrints.floats(data) else { return nil }
+            return (p, f, floats)
         }
 
-        // Group candidates by bucket
+        let items = printed.map { (p, f, floats) in
+            VisualItem(id: p.id,
+                       floats: floats,
+                       area: (f.width ?? 0) * (f.height ?? 0),
+                       colorPrefix: String((f.dominant_color ?? "").prefix(4)))
+        }
+
+        return DuplicateFinder.visualGroupIndices(items).map { indices in
+            let cluster = indices.map { printed[$0] }
+            let members = scoreVisualKeepers(items: cluster)
+            return DuplicateGroup(id: UUID(), reason: .visual, members: members)
+        }
+    }
+
+    /// One candidate for visual grouping, reduced to exactly what the pure
+    /// grouping pass needs. Extracted so the grouping is testable with
+    /// synthesized prints — this path shipped dead once and stays pinned.
+    nonisolated struct VisualItem {
+        let id: String
+        let floats: [Float]
+        let area: Int
+        let colorPrefix: String
+    }
+
+    /// Smaller distance = more similar.
+    nonisolated static let visualDistanceThreshold: Float = 0.45
+
+    /// Pre-filter by resolution bucket (within ±10%) and dominant color hex
+    /// prefix, then brute-force distance on the survivors. Returns clusters of
+    /// indices into `items` (only clusters of 2+).
+    nonisolated static func visualGroupIndices(_ items: [VisualItem]) -> [[Int]] {
         struct Bucket: Hashable {
             let kindBucket: Int
             let colorPrefix: String
         }
-        func bucketFor(_ f: FileRow) -> Bucket {
-            let area = (f.width ?? 0) * (f.height ?? 0)
+        func bucketFor(_ item: VisualItem) -> Bucket {
             // Discretize area into ±10% bins via log
-            let bin = area > 0 ? Int(log(Double(area)) / log(1.21)) : 0
-            let prefix = String((f.dominant_color ?? "").prefix(4))
-            return Bucket(kindBucket: bin, colorPrefix: prefix)
+            let bin = item.area > 0 ? Int(log(Double(item.area)) / log(1.21)) : 0
+            return Bucket(kindBucket: bin, colorPrefix: item.colorPrefix)
         }
 
-        let bucketed = Dictionary(grouping: printObs, by: { bucketFor($0.1) })
+        let bucketed = Dictionary(grouping: items.indices, by: { bucketFor(items[$0]) })
 
-        let threshold: Float = 0.45 // smaller distance = more similar
-
-        var clusters: [[(PathRow, FileRow, VNFeaturePrintObservation)]] = []
+        var clusters: [[Int]] = []
         var visited = Set<String>()
         for (_, candidates) in bucketed where candidates.count >= 2 {
+            let candidates = Array(candidates)
             for i in 0..<candidates.count {
-                let key = candidates[i].0.id
+                let key = items[candidates[i]].id
                 if visited.contains(key) { continue }
-                var cluster: [(PathRow, FileRow, VNFeaturePrintObservation)] = [candidates[i]]
+                var cluster: [Int] = [candidates[i]]
                 visited.insert(key)
                 for j in (i+1)..<candidates.count {
-                    let otherKey = candidates[j].0.id
+                    let otherKey = items[candidates[j]].id
                     if visited.contains(otherKey) { continue }
-                    var distance: Float = .infinity
-                    do {
-                        try candidates[i].2.computeDistance(&distance, to: candidates[j].2)
-                    } catch {
-                        continue
-                    }
-                    if distance < threshold {
+                    guard let distance = FeaturePrints.distance(items[candidates[i]].floats,
+                                                               items[candidates[j]].floats)
+                    else { continue }
+                    if distance < visualDistanceThreshold {
                         cluster.append(candidates[j])
                         visited.insert(otherKey)
                     }
@@ -267,15 +290,11 @@ final class DuplicateFinder: ObservableObject {
                 }
             }
         }
-
-        return clusters.map { cluster in
-            let members = scoreVisualKeepers(items: cluster)
-            return DuplicateGroup(id: UUID(), reason: .visual, members: members)
-        }
+        return clusters
     }
 
     /// Visual smart suggest: keep highest resolution, but only if gap is >10%.
-    private func scoreVisualKeepers(items: [(PathRow, FileRow, VNFeaturePrintObservation)]) -> [DuplicateGroup.Member] {
+    private func scoreVisualKeepers(items: [(PathRow, FileRow, [Float])]) -> [DuplicateGroup.Member] {
         let pixels: [(idx: Int, px: Int)] = items.enumerated().map { (i, item) in
             (i, (item.1.width ?? 0) * (item.1.height ?? 0))
         }

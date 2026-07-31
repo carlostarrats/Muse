@@ -6,6 +6,52 @@ the durable rules + a compact index live in `CLAUDE.md`. Nothing here is
 load-bearing for a fresh session beyond what that index already surfaces;
 read an entry when you need the full "why" behind a specific change.
 
+### Spec 02 — photo library core — 2026-07-31 (`new-product-build-1`)
+
+Implemented `docs/superpowers/plans/2026-07-30-spec-02-photo-library-core.md` end to
+end. Five migrations (v14 `photo_meta`, v15 `places`, v16 `last_viewed_at`, v17
+stacks — v13 already existed from Spec 01), one shared header reader, offline
+geocoding, three rediscovery surfaces, near-duplicate stacks, phase-1 token search,
+and the `.location` smart rule. 1162 tests green.
+
+Notable decisions and deviations from the plan, in build order:
+
+- **Section A** found exactly the bug it predicted: `files.feature_print` holds the raw
+  `VNFeaturePrintObservation.data` element buffer, so the `NSKeyedUnarchiver` at both
+  call sites returned nil for every row. `FeaturePrints` replaces it; the grouping pass
+  was extracted as `DuplicateFinder.visualGroupIndices` so a test can pin it without a
+  Vision run.
+- **`CoordinateReader`/`CoordinateBackfill` were DELETED**, not left beside the new
+  reader — Spec 01 shipped them knowing Spec 02 supersedes them. `writeCoordinates` is
+  gone too; `writePhotoHeader` is the one write seam, and it deliberately does NOT
+  stamp the EXIF marker on a coordinate-only write (there is no such call any more).
+- **`writePhotoHeader` has two forms** — one taking a queue, one taking a `db` inside a
+  caller's transaction. The analyze pass uses the second so the header lands atomically
+  with the rest of the analysis; the backfill uses it to batch 200 rows per write.
+- **`GeoNamesDataset` does not cache the parsed cities.** The plan sketched a weak-boxed
+  cache; a weak box whose only strong reference is the returned array dies immediately,
+  so the caching was illusory. Not caching is the honest version of the same intent
+  (hold it for one pass, free it after) and a geocode pass parses it exactly once.
+- **`PlaceQueries.groups` groups in Swift**, not with the plan's
+  `HAVING coverPath = (correlated subquery)` — the subquery form is quadratic per group
+  and the Swift reduction is one pass over rows a place library never makes large.
+- **`GeoBounds.boxes` gained a whole-globe case**: a radius wide enough to wrap returns
+  ONE `-180...180` box rather than two overlapping ones.
+- **`BurstClusterer`'s oversized-session split breaks ties toward the midpoint.** With
+  every gap identical (an evenly-spaced burst), "largest gap" is index 1 and the
+  splitter peels one item at a time — bounding nothing. Caught by the test the plan
+  itself sketched.
+- **Stacks resolve from `AppState.currentFiles.didSet`**, which is the lazy per-folder
+  trigger the plan describes; the analyze pass triggers `AutoStacker` over exactly its
+  own file ids alongside the `SearchFacets` refresh.
+- **Task 15 (the token-search `PerfBaseline` metric) was skipped** — see the plan's own
+  conditional. `PerfBaseline` exists, but the metric needs a 50k synthetic
+  `photo_meta` fixture whose seeding cost belongs with the harness work, not here.
+- **The bundled GeoNames artifacts are 9-city placeholders.** They are byte-format
+  correct (the bounded-inflate tests run against them), but Places stays near-empty for
+  a real library until the owner runs `scripts/make-geonames.sh` and bumps
+  `GeoNamesDataset.version`.
+
 ### Post-polish session — 2026-06-12 (on `main`)
 
 A long live-review pass. Landed:

@@ -181,6 +181,14 @@ enum AppSettings {
         UserDefaults.standard.object(forKey: showCollectionsInSidebarKey) as? Bool ?? true
     }
 
+    static let showLibraryInSidebarKey = "showLibraryInSidebar"
+
+    /// Show the LIBRARY section (Places / On This Day / Rarely Seen / Shuffle)
+    /// in the sidebar. Default true. Unset → on.
+    static var showLibraryInSidebar: Bool {
+        UserDefaults.standard.object(forKey: showLibraryInSidebarKey) as? Bool ?? true
+    }
+
     static let showICloudFolderInSidebarKey = "showICloudFolderInSidebar"
 
     /// Show the app-managed iCloud "Muse" folder in the sidebar. Default true.

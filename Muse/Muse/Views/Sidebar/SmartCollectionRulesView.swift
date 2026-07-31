@@ -187,7 +187,7 @@ private struct SmartRuleRow: View {
     @State private var removeHover = false
 
     private enum Kind: String, CaseIterable, Identifiable {
-        case rating, color, tag, kind, date, filename, size
+        case rating, color, tag, kind, date, filename, size, location
         var id: String { rawValue }
         var label: String {
             switch self {
@@ -198,6 +198,7 @@ private struct SmartRuleRow: View {
             case .date:     return String(localized: "Date")
             case .filename: return String(localized: "Filename")
             case .size:     return String(localized: "Size")
+            case .location: return String(localized: "Location")
             }
         }
     }
@@ -211,6 +212,7 @@ private struct SmartRuleRow: View {
         case .date:     return .date
         case .filename: return .filename
         case .size:     return .size
+        case .location: return .location
         }
     }
 
@@ -253,6 +255,7 @@ private struct SmartRuleRow: View {
         case .date:     return .date(field: .modified, op: .withinDays(30))
         case .filename: return .filename(contains: "")
         case .size:     return .size(op: .atMost, bytes: 5_000_000)
+        case .location: return .location(.place(""))
         }
     }
 
@@ -322,6 +325,21 @@ private struct SmartRuleRow: View {
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 72)
             Text("MB").foregroundStyle(.secondary)
+
+        case let .location(term):
+            switch term {
+            case let .place(name):
+                TextField(String(localized: "city or country"),
+                          text: Binding(get: { name },
+                                        set: { rule = .location(.place($0)) }))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 210)
+            case .near:
+                // `.near` decodes and evaluates but has no editor in v1 — the
+                // same handling ColorTerm.hex gets. Switching the Kind picker
+                // away and back reseeds it as `.place("")`.
+                Text("radius rule").foregroundStyle(.secondary)
+            }
         }
     }
 

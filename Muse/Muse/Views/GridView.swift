@@ -202,7 +202,14 @@ struct GridView: View {
                     // can use tags within a collection). Returns nothing when
                     // no collection is active.
                     if !appState.isSearchActive {
-                        CollectionsRow()
+                        // A rediscovery surface takes the header slot the
+                        // in-collection header would otherwise occupy — the two
+                        // are mutually exclusive contexts.
+                        if RediscoveryStore.shared.active != nil {
+                            RediscoveryHeader()
+                        } else {
+                            CollectionsRow()
+                        }
                     }
                     if appState.visibleFiles.isEmpty {
                         if appState.isLoadingFolder {
@@ -534,6 +541,7 @@ struct GridView: View {
                             let single = !appState.selectedFiles.contains(p)
                                 || appState.selectedFiles.count <= 1
                             SelectionActionsMenu(path: p)
+                            stackMenuSection(for: file, path: p)
                             Divider()
                             if single {
                                 OpenWithMenu(url: file.url)
@@ -671,6 +679,48 @@ struct GridView: View {
         layoutWidth = width
     }
 
+    /// Manual stacking, v1. "Stack Selection" is offered only when ≥2
+    /// image-kind files are selected and NONE is already stacked — there is no
+    /// merging into an existing stack, and the item is HIDDEN rather than shown
+    /// disabled. `.folder` and non-image kinds never see this section.
+    @ViewBuilder
+    private func stackMenuSection(for file: FileNode, path: String) -> some View {
+        let imageKinds: Set<AssetKind> = [.image, .raw, .psd]
+        let selected = appState.selectedFiles.contains(path)
+            ? Array(appState.selectedFiles) : [path]
+        let byPath = Dictionary(appState.visibleFiles.map {
+            ($0.url.standardizedFileURL.path, $0)
+        }, uniquingKeysWith: { a, _ in a })
+        let stackablePaths = selected.filter { p in
+            guard let node = byPath[p] else { return false }
+            return imageKinds.contains(node.kind)
+        }
+        let anyAlreadyStacked = stackablePaths.contains { StacksStore.shared.entries[$0] != nil }
+        let entry = StacksStore.shared.entries[path]
+
+        if imageKinds.contains(file.kind), stackablePaths.count >= 2, !anyAlreadyStacked {
+            Divider()
+            Button("Stack Selection") {
+                let paths = stackablePaths
+                Task { await StacksStore.shared.stackSelection(paths: paths) }
+            }
+        }
+        if let entry {
+            Divider()
+            Button("Unstack") {
+                Task { await StacksStore.shared.unstack(entry.stackID) }
+            }
+            if !entry.isPick {
+                Button("Set as Stack Pick") {
+                    Task { await StacksStore.shared.setPick(stackID: entry.stackID, path: path) }
+                }
+            }
+            Button("Remove from Stack") {
+                Task { await StacksStore.shared.removeFromStack(path: path) }
+            }
+        }
+    }
+
     /// Cheap signature of everything that changes the *set* of files shown
     /// (folder, sort, collection/tag filters, search). Avoids mapping 1700
     /// ids on every render just to drive an onChange.
@@ -684,6 +734,9 @@ struct GridView: View {
             appState.isSearchActive ? "s" : "",
             appState.searchQuery,
             String(describing: appState.sortMode),
+            // Collapsing/expanding a stack changes the SET of tiles, so the
+            // geometry has to recompute.
+            String(StacksStore.shared.generation),
             files.first?.url.path ?? "",
             files.last?.url.path ?? ""
         ].joined(separator: "|")
@@ -1054,6 +1107,38 @@ private struct TileView: View {
             // therefore never used). lineLimit is a backstop: if a future font
             // change breaks the measured constants, the badge truncates rather
             // than silently reintroducing the wrap this exists to prevent.
+            // Stack badge — top-LEADING (the star badge owns top-trailing).
+            // Unlike the star badge this one IS a click target (expand /
+            // collapse), so it carries a named accessibility action too: a
+            // mouse-only affordance with no VoiceOver equivalent is unreachable.
+            if let stackCount = StacksStore.shared.badges[file.url.standardizedFileURL.path],
+               stackCount > 1 {
+                let stackID = StacksStore.shared.entries[file.url.standardizedFileURL.path]?.stackID
+                let isExpanded = stackID.map { StacksStore.shared.expanded.contains($0) } ?? false
+                Button {
+                    if let stackID { StacksStore.shared.toggleExpanded(stackID) }
+                } label: {
+                    HStack(spacing: 2) {
+                        Image(systemName: isExpanded ? "square.stack.fill" : "square.stack")
+                        Text("\(stackCount)")
+                    }
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Capsule(style: .continuous).fill(Color.black.opacity(0.6)))
+                }
+                .buttonStyle(.plain)
+                .contentShape(Capsule(style: .continuous))
+                .padding(Self.badgeInset)
+                .padding(isSelected ? Self.selectionInset : 0)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .accessibilityLabel(String(format: NSLocalizedString(
+                    "Stack of %lld photos", comment: "stack badge VoiceOver label"), stackCount))
+                .accessibilityAction(named: Text(isExpanded ? "Collapse Stack" : "Expand Stack")) {
+                    if let stackID { StacksStore.shared.toggleExpanded(stackID) }
+                }
+            }
             if let rating,
                let label = StarRating.badgeLabel(
                    for: rating,
