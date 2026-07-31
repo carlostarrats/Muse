@@ -233,9 +233,12 @@ struct HeroStage: View {
     private func resolveHeaderSize() {
         let u = url
         headerSizeURL = u
-        if let warm = ImageHeaderSizeCache.cached(u) { headerSize = warm; return }
+        // EffectiveDimensions, not ImageHeaderSizeCache: this drives the
+        // flight's take-off/landing rect, so it must be what the image DRAWS
+        // (post-crop), not what the original file measures.
+        if let warm = EffectiveDimensions.cached(u) { headerSize = warm; return }
         Task.detached(priority: .userInitiated) {
-            guard let size = ImageHeaderSizeCache.resolve(u) else { return }
+            guard let size = EffectiveDimensions.resolve(u) else { return }
             await MainActor.run {
                 guard headerSizeURL == u else { return }
                 headerSize = size
@@ -456,7 +459,12 @@ struct HeroStage: View {
         // them beyond one extra cheap decode.
         // Cache-only: `.task` runs on the main actor, so this must not do I/O.
         // An unknown size just skips the extra mid-res pass.
-        if (headerSize ?? ImageHeaderSizeCache.cached(u))
+        // ImageHeaderSizeCache directly, NOT headerSize/EffectiveDimensions:
+        // this gate is about what it costs to DECODE the file, which is a
+        // property of the original bytes. A crop shrinks what's drawn, not what
+        // ImageIO has to read, so the effective size would understate the cost
+        // and skip the mid-res pass on exactly the files that need it.
+        if ImageHeaderSizeCache.cached(u)
             .map({ $0.width * $0.height > 40_000_000 }) == true {
             let mid = await Task.detached(priority: .userInitiated) { () -> NSImage? in
                 guard let src = CGImageSourceCreateWithURL(u as CFURL, nil),

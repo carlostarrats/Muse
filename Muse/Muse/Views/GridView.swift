@@ -878,14 +878,16 @@ private struct TileView: View {
     /// Where the photo draws inside its slot, as a width ÷ height ratio for
     /// `.aspectRatio(_:contentMode:)`.
     ///
-    /// Prefers `ImageHeaderSizeCache` — the same never-evicting table the hero
-    /// flight resolves its take-off rect from, warmed off-main by the thumbnail
-    /// pass long before any click. Using it here means the ring and the flight
-    /// are computing the same rect from the same number. `imageAspect` (from
-    /// AspectRatioCache, which may still hold a placeholder or a stale DB
-    /// value) is the cold-start fallback.
+    /// Prefers `EffectiveDimensions` — the crop-aware layer over
+    /// `ImageHeaderSizeCache`, the same never-evicting table the hero flight
+    /// resolves its take-off rect from, warmed off-main by the thumbnail pass
+    /// long before any click. Using it here means the ring and the flight are
+    /// computing the same rect from the same number, and a cropped photo packs
+    /// at the shape it DRAWS. `imageAspect` (from AspectRatioCache, which may
+    /// still hold a placeholder or a stale DB value) is the cold-start
+    /// fallback.
     private var drawnAspectRatio: CGFloat {
-        if let size = ImageHeaderSizeCache.cached(file.url),
+        if let size = EffectiveDimensions.cached(file.url),
            size.width > 0, size.height > 0 {
             return size.width / size.height
         }

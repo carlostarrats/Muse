@@ -342,7 +342,10 @@ nonisolated struct FileMetadata: Equatable {
             var dimensions: (width: Int, height: Int)? = nil
             switch kind {
             case .image, .raw, .psd:
-                if let px = ImageHeaderSizeCache.resolve(url) {
+                // EffectiveDimensions: the Info card states what the user is
+                // LOOKING AT, so a crop is reflected here rather than the
+                // original file's measurements.
+                if let px = EffectiveDimensions.resolve(url) {
                     dimensions = (Int(px.width), Int(px.height))
                 }
             default:

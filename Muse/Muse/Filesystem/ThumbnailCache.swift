@@ -207,12 +207,22 @@ final class ThumbnailCache: ObservableObject {
         // check — measured, not assumed. So probe first and only pay for real
         // deletions. Same race window as the unconditional delete had: a PNG
         // written after the check survives either way.
+        //
+        // Both stack states are cleared, not just the current one: an edited
+        // file's PNGs are keyed by its stack hash and the ORIGINAL's by no hash
+        // at all, so dropping only one leaves live orphans that resurface the
+        // moment the edit is reverted (or re-applied).
+        let currentStackHash = EditStackIndex.stackHash(for: url)
+        let stackStates: [String?] = currentStackHash == nil ? [nil] : [currentStackHash, nil]
         let fm = FileManager.default
         for v in Self.renderedVariants {
-            let key = Self.cacheKey(url: url, size: v.size, scale: v.scale)
-            memCache.removeObject(forKey: key as NSString)
-            let path = diskPath(for: key)
-            if fm.fileExists(atPath: path.path) { try? fm.removeItem(at: path) }
+            for stackHash in stackStates {
+                let key = Self.cacheKey(url: url, size: v.size, scale: v.scale,
+                                        stackHash: stackHash)
+                memCache.removeObject(forKey: key as NSString)
+                let path = diskPath(for: key)
+                if fm.fileExists(atPath: path.path) { try? fm.removeItem(at: path) }
+            }
         }
     }
 
@@ -339,15 +349,42 @@ final class ThumbnailCache: ObservableObject {
     }
 
     private nonisolated static func cacheKey(url: URL, size: CGSize, scale: CGFloat) -> String {
+        cacheKey(url: url, size: size, scale: scale,
+                 stackHash: EditStackIndex.stackHash(for: url))
+    }
+
+    /// `stackHash` is the file's edit-stack identity (nil = unedited). It's an
+    /// explicit parameter rather than always read from `EditStackIndex` so
+    /// `invalidate` can compute the key for a stack state that ISN'T the
+    /// currently-installed one — clearing the pre-edit PNGs alongside the
+    /// edited ones, so a revert can't resurface an orphan.
+    private nonisolated static func cacheKey(url: URL, size: CGSize, scale: CGFloat,
+                                             stackHash: String?) -> String {
         // Standardized path (NOT absoluteString) so the key is independent of
         // how the URL was constructed — a tile's enumerated URL and an
         // invalidate()/reconstructed-from-path URL must hash to the SAME key,
         // or stale thumbnails survive an edit. (Changing this orphans the old
         // absoluteString-keyed PNGs; they regenerate once, then LRU-evict.)
-        let raw = "\(url.standardizedFileURL.path)|\(Int(size.width))x\(Int(size.height))@\(scale)"
+        var raw = "\(url.standardizedFileURL.path)|\(Int(size.width))x\(Int(size.height))@\(scale)"
+        // Appended ONLY when a stack hash exists — the unedited key must stay
+        // BYTE-IDENTICAL to the pre-edit-aware one, or every cached PNG in
+        // every existing library re-keys on upgrade and the whole grid
+        // re-thumbnails on first launch. Note this is not `|\(hash ?? "")`,
+        // which would append a trailing separator even when unedited.
+        if let stackHash {
+            raw += "|\(stackHash)"
+        }
         let hash = SHA256.hash(data: Data(raw.utf8))
         return hash.map { String(format: "%02x", $0) }.joined()
     }
+
+    #if DEBUG
+    /// Test seam — `cacheKey` is private and must stay that way (the key
+    /// format is an internal invariant, not API).
+    nonisolated static func cacheKeyForTesting(url: URL, size: CGSize, scale: CGFloat) -> String {
+        cacheKey(url: url, size: size, scale: scale)
+    }
+    #endif
 
     private nonisolated func diskPath(for key: String) -> URL {
         diskRoot.appendingPathComponent(key + ".png")

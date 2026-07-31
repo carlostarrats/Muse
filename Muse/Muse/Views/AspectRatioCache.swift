@@ -102,7 +102,16 @@ final class AspectRatioCache: ObservableObject {
             //    files like PDFs that have no aspect to resolve) is marked
             //    resolved now, so a later load() skips them instead of
             //    reprocessing the whole folder each call.
-            let fromDB = queue.map { Self.dbDimensions(paths: paths, queue: $0) } ?? [:]
+            var fromDB = queue.map { Self.dbDimensions(paths: paths, queue: $0) } ?? [:]
+            // files.width/height describe the ORIGINAL bytes, so a cropped
+            // file would pack at the wrong shape. The crop wins here exactly as
+            // it does in EffectiveDimensions — same rule, applied before the DB
+            // value is published. (No-op today: no edit-stack provider exists.)
+            for path in paths {
+                guard let crop = EditStackIndex.croppedSize(for: URL(fileURLWithPath: path)),
+                      crop.width > 0, crop.height > 0 else { continue }
+                fromDB[path] = crop.height / crop.width
+            }
             let gaps = imageURLs.filter { fromDB[$0.standardizedFileURL.path] == nil }
             let gapSet = Set(gaps.map { $0.standardizedFileURL.path })
             let nonGap = paths.filter { !gapSet.contains($0) }
@@ -113,7 +122,18 @@ final class AspectRatioCache: ObservableObject {
             //    a fraction of a second.
             await withTaskGroup(of: (String, CGFloat?).self) { group in
                 for url in gaps {
-                    group.addTask { (url.standardizedFileURL.path, Self.imageIOAspect(url: url)) }
+                    group.addTask {
+                        let path = url.standardizedFileURL.path
+                        // Warm effective (crop-aware) dimensions win over a
+                        // fresh header read — `imageIOAspect` stays a pure
+                        // reader of the original file, so preferring the
+                        // effective value is the CALLER's job.
+                        if let size = EffectiveDimensions.cached(url),
+                           size.width > 0, size.height > 0 {
+                            return (path, size.height / size.width)
+                        }
+                        return (path, Self.imageIOAspect(url: url))
+                    }
                 }
                 var batch: [String: CGFloat] = [:]
                 var attempted: [String] = []
