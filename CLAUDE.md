@@ -112,10 +112,17 @@ are the load-bearing reference artifacts.
 | Polish 26 — **Grid layout modes** (Columns/Rows/Grid; tile card + Tile Background deleted; spacing slider; one orientation truth) | ✅ shipped | `feat/grid-layout-modes` |
 | Polish 27 — **UI polish batch** (emoji collection symbols; sort-direction menu; menu icons + shortcuts; toolbar Settings; tag/collection autocomplete; compact star badge; sidebar geometry/colour rework; scope-bar-over-viewer fix; duplicate-root fix) | ✅ shipped | `feat/next-142` |
 | Polish 28 — **visual polish pass** (collection glyph → `rectangle.on.rectangle.angled`; smaller section headers + intrinsic sort glyph; Lineform selection fill; hero open bounce + staggered close converge; grid margins track spacing; one “+ Create New” menu) | ✅ merged, unreleased | `feat/collection-icon-cards` |
+| Foundation 1 — **Spec-01 foundation & plumbing** (v13 coordinates + backfill; the three edit-aware seams `EditStackIndex`/`EffectiveDimensions`/`OutputRender`, all identity functions today; StoreKit 2 plumbing with an UNENFORCED trial gate; announcements channel; semantic-search cancellation + `PerfBaseline`) | ✅ merged, unreleased | `new-product-build-1` |
 
 > Every row through Polish 27 is merged to `main` and shipped in release **`v1.5`**;
 > Polish 28 is merged to `main` but NOT yet in a release (`v1.5` is still the
-> current released build; Polish 25–27 landed in it after `v1.4`). Polish-row
+> current released build; Polish 25–27 landed in it after `v1.4`). Foundation 1
+> lives on `new-product-build-1` and is not on `main` yet. **Distribution is
+> unchanged** — the Mac App Store move (doctrine revisions, Sparkle excision,
+> Apple-Silicon-only build settings) was split out of Spec 01 at the owner's
+> request into `docs/superpowers/plans/deferred-mac-app-store-migration.md` and
+> has NOT been run: the app still ships direct with Sparkle, and the StoreKit
+> plumbing is inert scaffolding until it does. Polish-row
 > detail (the full
 > "why/how" per feature) lives in the **Durable constraints** section below and,
 > in full, in `docs/session-log.md` under each cited branch. Keep new rows to one

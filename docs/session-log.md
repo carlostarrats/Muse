@@ -7085,3 +7085,116 @@ Tests: `PartingFieldTests` gained the close-ramp coverage (every close delay ≤
 open delay; stagger + response inside the 0.34s landing; fade shorter than the
 motion). `GridSpacingTests`' two ceiling assertions moved 28 → 40. Full suite 934
 passing.
+
+### Spec 01 — foundation & plumbing — 2026-07-31 (on `new-product-build-1`)
+
+The non-visible groundwork for the photo repositioning. Nothing user-facing changed
+except a new Settings section; the point was to land the seams that make later specs
+small.
+
+**Distribution did NOT move.** The Mac App Store work that was originally Section A of
+this plan — doctrine revisions, Sparkle excision, Apple-Silicon-only build settings —
+was split out at the owner's request into `docs/superpowers/plans/deferred-mac-app-store-
+migration.md` and is unrun. The app still ships direct with Sparkle self-update, and
+still has two dependencies (GRDB + Sparkle). The StoreKit plumbing below is inert
+scaffolding until that migration happens.
+
+**Coordinates (v13).** `files.lat/lon/coords_scanned_hash` plus a partial index that
+costs nothing in a library with no geotagged photos. GPS is content-keyed like
+palette/caption/dominant_color — deliberately NOT the tags/notes per-location grain,
+because two byte-identical copies in different folders have identical coordinates by
+definition. `CoordinateReader` reads the header only (no decode) and calls
+`FileMetadata`'s own pure parsers, so the stored value and the viewer's "Open in Maps"
+link can never diverge; it skips dataless iCloud placeholders and refuses non-finite or
+out-of-range values rather than putting a pin in the sea. `analyzeOne` reads it
+concurrently with the Vision pass and writes it inside the existing content-hash-guarded
+transaction; videos get their own small guarded write BEFORE the image-only guard, since
+they never reach the main one. `coords_scanned_hash` is stamped even when a file carries
+no GPS — that is the attempted-marker, and its absence is exactly the
+`analyzed_hash`-NULL retry-loop bug shape from 2026-07-28: without it every GPS-less
+file is re-opened on every launch forever. Videos are re-queued by `analyzePending` on
+every folder visit (they never get `analyzed_hash`), so the video path checks the
+scanned hash first and costs one indexed read after the first pass.
+`CoordinateBackfill` covers pre-v13 libraries: capped at 5k files per launch,
+4-wide, batched writes, fire-and-forget beside `IntentBackfill`.
+
+**The three edit-aware seams.** All identity functions today — no provider is installed,
+so behaviour is bit-for-bit what it was — but every consumer is now wired, which is what
+turns Spec 04's editor into a 3–5 week job instead of a rewrite. `EditStackIndex` holds
+a file's edit-stack identity, URL-keyed because an edit stack is per file LOCATION like
+tags and notes (`files.content_hash` is UNIQUE, so a column there would force one stack
+onto the same photo in two folders). `ThumbnailCache`'s key now carries that hash —
+appended ONLY when one exists, so the unedited key is byte-identical to the old one and
+no existing library re-thumbnails on upgrade (`ThumbnailStackKeyTests` pins that
+equality; `"|\(hash ?? "")"` would have broken it with a trailing separator). Its
+`invalidate` loops variants × {current hash, nil}, because an edited file's PNGs are
+keyed by its hash and the original's by no hash at all — dropping one leaves live
+orphans that resurface on revert. `EffectiveDimensions` is the crop-aware layer above
+`ImageHeaderSizeCache`, and the split between them is by QUESTION, not by file: layout
+("what does it DRAW") reads the new one — grid tile aspect, hero flight geometry, the
+Info card, `AspectRatioCache`'s DB and cold paths — while decode budgets and analysis
+("what does the FILE cost / what is it") keep reading the header cache. The hero's >40MP
+mid-res gate is the case that makes this concrete: it stayed on `ImageHeaderSizeCache`
+on purpose, since a crop shrinks what's drawn but not what ImageIO must read, and the
+effective size would have understated the cost and skipped the mid-res pass on exactly
+the files that need it. `OutputRender` is the export choke point: `RenderedOutput`'s
+`fileprivate` init means a new share/export/publish path physically cannot compile
+without going through it. PDF export, the Drive publish, and both share-sheet paths were
+converted; the Drive path renders FIRST and strips SECOND, so no future edit can
+reintroduce metadata past `ImageMetadataStripper`. Backup is the one deliberate
+exclusion — it restores originals matched by content hash, and baking edits in would
+corrupt the restore — noted in `BackupBuilder`'s header as well as `OutputRender`'s, so
+it's findable from either direction. All three are recorded as durable constraints in
+`CLAUDE.md`.
+
+**Commercial plumbing.** `CommerceStore` and `AnnouncementStore` are standalone
+`ObservableObject`s injected exactly like `GoogleOAuth`; `AppState` gained no
+`@Published` property (DECIDED #26). `TrialGate` is pure and ships **unenforced** — the
+state is computed and shown in Settings, but nothing is blocked, because pricing is
+still open (Spec 09). Flipping one Bool turns it on. `CommerceCache` is permissive-only:
+it can grant ahead of a verified StoreKit read, so a purchased user offline is never
+locked out, and revokes only after a walk that COMPLETED and lacked the entitlement. The
+unlock flag and the first-launch anchor mirror into the Keychain with the Drive token
+store's access class, and the anchor is earliest-wins so it can never move forward and
+silently restart a trial. `Product.products(for:)` returns empty until App Store Connect
+records exist (an owner step) — init stays synchronous and cheap regardless.
+
+**Announcements** (DECIDED #28): one GET of a static file on the existing Cloudflare
+Pages host per launch, on an ephemeral cookie-less session, no query string, no
+identifiers. Off-able in Settings, and the toggle disables the FETCH, not just the
+display. The payload is remote text, so it's hardened like the share manifest —
+size-capped before decode, unknown feed versions ignored rather than guessed at, fields
+sanitized (bidi overrides, isolates, zero-width, control chars) and length-capped,
+https-only links. Every failure is silent: no feed is deployed yet, and a launch that
+404s must produce no UI at all. It presents as a `museModal` like every other card, and
+mirrors into a plain (non-`@Published`) `AppState.announcementPresented` so the grid's
+key catcher and the Escape resolver treat it as a modal without growing AppState's
+published surface.
+
+**Performance.** The known per-keystroke semantic-search issue is now a cancellation
+fix: the `searchRequestToken` guard already stopped a stale result from LANDING, but not
+from being COMPUTED, and the semantic leg walks every embedding row in the library — so
+typing a second query paid for the first in full. The signal is an explicit
+`SearchCancellation` object rather than `Task.isCancelled`, because task-local
+cancellation does not propagate into GRDB's read closure, which is exactly where that
+work runs. `PerfBaseline` (`MUSE_PERF=1`, gated like `PhaseTrace`) records cold start,
+search latency and thumbnail decode beside their M1 Air 8GB budgets and writes
+`docs/perf-baseline-<date>.md`; grid scroll frame time is emitted as a not-measured row
+since it needs a scripted scroll against a mounted view. `PhaseTrace` gained an
+in-memory, first-occurrence-wins timeline (`elapsed(from:to:)`) to back the cold-start
+number, recorded under either env var so a shipped run still stores nothing.
+
+Not built here, by design: any editor UI, search UI, places/rediscovery/stacks, faces —
+those are Specs 02–04. `HybridClusterer` time-bucketing is measured by `PerfBaseline`,
+not changed (it belongs with Spec 02's near-duplicate stacks, since it changes clustering
+semantics). Owner-only steps remain outstanding: App Store Connect records and pricing,
+Small Business Program enrollment, sandbox purchase/restore/promo-code testing, deploying
+`announcements.json`, and running `PerfBaseline` on the actual M1 Air.
+
+Tests: new suites `CoordinateMigrationTests`, `CoordinateReaderTests`,
+`AnalyzeCoordinateWriteTests`, `CoordinateBackfillTests`, `EditStackIndexTests`,
+`ThumbnailStackKeyTests`, `EffectiveDimensionsTests`, `OutputRenderTests`,
+`TrialGateTests`, `CommerceEntitlementTests`, `AnnouncementFeedTests`,
+`SearchCancellationTests`, `PerfBaselineTests`. `ImageMetadataStripperTests` was updated
+to obtain a `RenderedOutput` — which is itself the compile-time proof the choke point
+can't be bypassed. Full suite green.

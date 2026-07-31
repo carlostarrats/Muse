@@ -489,3 +489,50 @@ MuseShareExtension/                (separate app-extension target) "Send to Muse
   record the file rather than the bounded analysis raster. Stores DISPLAY dimensions —
   EXIF orientation applied, via `displaySize(width:height:orientation:)` — so every
   consumer agrees about rotated photos.
+
+
+### Components added 2026-07-31 (Spec 01, foundation & plumbing)
+
+Coordinates (v13):
+
+- `Filesystem/CoordinateReader.swift` — header-only GPS read (EXIF for images/RAW,
+  ISO-6709 common metadata for video, through the reference-restricted asset). Calls
+  `FileMetadata`'s own pure parsers, so the DB and the viewer can't disagree; skips
+  dataless iCloud placeholders; `sanitize` rejects non-finite/out-of-range values.
+- `Intelligence/CoordinateBackfill.swift` — launch pass for libraries indexed before v13.
+  Mirrors `IntentBackfill`: fire-and-forget, capped per launch, bounded concurrency,
+  batched writes. `candidate(id:path:)` is the pure, tested selection predicate.
+- `AnalyzePipeline.writeCoordinates` / `writeCoordinatesOnly` — the guarded write points
+  (content-hash re-check, `coords_scanned_hash` stamped even with no GPS).
+
+Edit-aware seams — all three are IDENTITY FUNCTIONS today; Spec 04 changes one
+implementation per seam and every consumer is already wired:
+
+- `Models/EditStackIndex.swift` — `EditStackProviding` + the installed-provider slot.
+  A file's edit-stack identity (`stackHash`) and post-crop size, URL-keyed because an
+  edit stack is per file LOCATION like tags and notes.
+- `Components/EffectiveDimensions.swift` — the crop-aware layer over
+  `ImageHeaderSizeCache`. What LAYOUT reads; the header cache stays what decode budgets
+  and analysis read.
+- `Export/OutputRender.swift` — `RenderedOutput` (fileprivate init) + `forOutput`. The
+  choke point every export/share/publish path goes through. Backup is the one exclusion.
+
+Commerce + announcements (own stores; `AppState` gains no `@Published`):
+
+- `Commerce/CommerceConfig.swift` — product ids, announcements + redeem URLs,
+  `Entitlements`.
+- `Commerce/TrialGate.swift` — pure trial-state resolution. Ships `enforced: false`.
+- `Commerce/CommerceCache.swift` — permissive-only entitlement mirror (grant/merge/revoke)
+  + `KeychainCommerceStore` (unlock flag + first-launch anchor, Drive's access class).
+- `Commerce/CommerceStore.swift` — StoreKit 2 (`@EnvironmentObject`, like `GoogleOAuth`).
+- `Commerce/AnnouncementFeed.swift` — pure parse/selection + `AnnouncementSanitizer`.
+- `Commerce/AnnouncementStore.swift` — the once-per-launch fetch; `Views/Modal/
+  AnnouncementCard.swift` presents it.
+
+Performance:
+
+- `Database/SearchCancellation.swift` — supersede signal that survives the hop onto
+  GRDB's thread (task-local cancellation doesn't).
+- `Perf/PerfBaseline.swift` — `MUSE_PERF=1` harness writing `docs/perf-baseline-<date>.md`.
+  `Components/PhaseTrace.swift` gains an in-memory, first-occurrence-wins timeline
+  (`elapsed(from:to:)`) to back it.
