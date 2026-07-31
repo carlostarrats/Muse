@@ -85,14 +85,34 @@ enum SearchService {
         // Embed the query here on the main actor (the registry is @MainActor);
         // the off-main DB scan below only does cosine scoring on this vector.
         guard cancellation?.isCancelled != true else { return [] }
-        let queryVector = hasText ? IntelligenceRegistry.shared.embedder?.embed(textQuery) : nil
+        // Engine selection for the semantic leg: CLIP when its model is
+        // installed, NLEmbedding otherwise. With the model absent every value
+        // below is byte-identical to the pre-CLIP path.
+        let clipReady = ClipModelStore.shared.isReady
+        let queryVector: [Float]?
+        if hasText {
+            queryVector = clipReady
+                ? await ClipEngine.shared.embedText(textQuery)
+                : IntelligenceRegistry.shared.embedder?.embed(textQuery)
+        } else {
+            queryVector = nil
+        }
+        // ONE floor, threaded to both the merge and the matchedDirs relaxation
+        // below — they must agree on what counts as a semantic match, and two
+        // constants kept in sync by hand is exactly how that drifts.
+        let semanticFloor: Double = clipReady ? Double(ClipIndex.textMinScore) : Self.semanticThreshold
+        // A similarity handle resolves to a vector here, on the main actor; the
+        // read closure captures the plain value.
+        let tokenContext = PhotoSearch.TokenContext(similarVectors: SimilarityRegistry.shared.snapshot)
         // Last check before the read: everything past here is on GRDB's thread.
         guard cancellation?.isCancelled != true else { return [] }
 
         let absPaths: [String] = (try? await queue.read { db -> [String] in
             // Token leg: an AND intersection over indexed columns only. Runs
             // first so an empty intersection short-circuits the expensive legs.
-            let tokenResult = hasTokens ? try PhotoSearch.filter(tokens: parsed.tokens, db: db) : nil
+            let tokenResult = hasTokens
+                ? try PhotoSearch.filter(tokens: parsed.tokens, context: tokenContext, db: db)
+                : nil
             if let tokenResult, tokenResult.idSet.isEmpty { return [] }
 
             // Token-only query (no free text, no `text:`, no colour): the
@@ -209,18 +229,26 @@ enum SearchService {
             // The expensive leg: every embedding row, cosine-scored. A
             // superseded pass skips it entirely rather than finishing work
             // whose result the caller's token guard will discard.
-            let semantic: [(String, Double)] = cancellation?.isCancelled == true ? [] :
-                (queryVector.flatMap {
+            let semantic: [(String, Double)]
+            if cancellation?.isCancelled == true {
+                semantic = []
+            } else if clipReady {
+                semantic = (queryVector.flatMap {
+                    try? ClipIndex.matches(query: $0, minScore: Float(semanticFloor), db: db)
+                })?.map { ($0.id, $0.score) } ?? []
+            } else {
+                semantic = (queryVector.flatMap {
                     try? SemanticSearch.semanticIDs(queryVector: $0, db: db)
                 }) ?? []
+            }
             var orderedIDs = SemanticSearch.merge(
-                exactIDs: exactIDs, semantic: semantic, threshold: Self.semanticThreshold)
+                exactIDs: exactIDs, semantic: semantic, threshold: semanticFloor)
 
             // A file also matched by a content-derived tier — or by a tag row
             // that names no folder — is unrestricted.
             for id in ftsIDs { matchedDirs[id] = nil }
             for id in unscopedTagIDs { matchedDirs[id] = nil }
-            for (id, score) in semantic where score >= Self.semanticThreshold {
+            for (id, score) in semantic where score >= semanticFloor {
                 matchedDirs[id] = nil
             }
 

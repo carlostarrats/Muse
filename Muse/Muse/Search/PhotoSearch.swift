@@ -35,15 +35,45 @@ nonisolated enum PhotoSearch {
         }
     }
 
+    /// Query-time values a token can't carry in its own text. Resolved on the
+    /// main actor BEFORE entering `queue.read`, so the read closure captures a
+    /// plain value, never an isolated store.
+    struct TokenContext: Sendable {
+        var similarVectors: [String: [Float]] = [:]
+
+        init(similarVectors: [String: [Float]] = [:]) {
+            self.similarVectors = similarVectors
+        }
+    }
+
     /// nil when there is nothing to intersect (no intersectable tokens).
-    static func filter(tokens: [SearchToken], db: GRDB.Database) throws -> Result? {
+    static func filter(tokens: [SearchToken], context: TokenContext = .init(),
+                       db: GRDB.Database) throws -> Result? {
         let usable = tokens.filter(isIntersectable)
         guard !usable.isEmpty else { return nil }
 
         var idSet: Set<String>?
         var dirRestrictions: [String: Set<String>] = [:]
+        /// When a `similar:` token is present, SIMILARITY SCORE DESC replaces
+        /// capture DESC as the result order — that's the whole point of the
+        /// query. Other tokens still intersect via `idSet`.
+        var similarityRanking: [(id: String, score: Double)]?
 
         for token in usable {
+            if case let .similar(handle) = token {
+                guard let vector = context.similarVectors[handle] else {
+                    // Unresolvable handle → matches NOTHING. Never a silent
+                    // widening back to the unfiltered library.
+                    return Result(ids: [], idSet: [], dirRestrictions: [:])
+                }
+                let hits = try ClipIndex.matches(query: vector,
+                                                 minScore: ClipIndex.imageMinScore, db: db)
+                similarityRanking = hits
+                let matched = Set(hits.map(\.id))
+                idSet = idSet.map { $0.intersection(matched) } ?? matched
+                if idSet?.isEmpty == true { break }
+                continue
+            }
             let (matched, dirs) = try matchIDs(for: token, db: db)
             for (id, d) in dirs {
                 dirRestrictions[id] = dirRestrictions[id].map { $0.union(d) } ?? d
@@ -54,8 +84,13 @@ nonisolated enum PhotoSearch {
         let finalSet = idSet ?? []
         // Dir restrictions only matter for surviving files.
         dirRestrictions = dirRestrictions.filter { finalSet.contains($0.key) }
-        return Result(ids: try orderByCapture(ids: finalSet, db: db),
-                      idSet: finalSet, dirRestrictions: dirRestrictions)
+        let ordered: [String]
+        if let similarityRanking {
+            ordered = similarityRanking.map(\.id).filter { finalSet.contains($0) }
+        } else {
+            ordered = try orderByCapture(ids: finalSet, db: db)
+        }
+        return Result(ids: ordered, idSet: finalSet, dirRestrictions: dirRestrictions)
     }
 
     // MARK: - Per-token matching
@@ -132,6 +167,36 @@ nonisolated enum PhotoSearch {
             let rows = try Row.fetchAll(db, sql: "SELECT id FROM files WHERE kind IN (\(placeholders))",
                                         arguments: StatementArguments(group.kinds))
             return (Set(rows.compactMap { $0["id"] as String? }), [:])
+
+        // Trait tokens read `photo_traits` only. A file with NO row is
+        // UNSCANNED, so `faces:0` matches only files that were actually
+        // scanned and found faceless — never "we haven't looked yet".
+        case let .faces(f):
+            return (try traitNumericIDs(column: "face_count", filter: f, db: db), [:])
+        case let .pets(f):
+            return (try traitNumericIDs(column: "pet_count", filter: f, db: db), [:])
+
+        case let .traitIs(query):
+            switch query {
+            case .portrait:
+                let rows = try Row.fetchAll(db, sql: """
+                    SELECT file_id FROM photo_traits
+                    WHERE face_count BETWEEN 1 AND ? AND largest_face_frac >= ?
+                    """, arguments: [PortraitHeuristic.portraitMaxFaces,
+                                      PortraitHeuristic.portraitMinFaceFrac])
+                return (fileIDs(rows), [:])
+            case .group:
+                let rows = try Row.fetchAll(db, sql: """
+                    SELECT file_id FROM photo_traits WHERE face_count >= ?
+                    """, arguments: [PortraitHeuristic.groupMinFaces])
+                return (fileIDs(rows), [:])
+            }
+
+        case .similar:
+            // Unreachable — handled ahead of this switch in `filter`, where the
+            // TokenContext is in scope. Kept explicit so a future token can't
+            // fall through to a silent empty set.
+            return ([], [:])
         }
     }
 
@@ -168,6 +233,24 @@ nonisolated enum PhotoSearch {
         case let .range(lo, hi): clause = "\(column) BETWEEN ? AND ?"; args = [lo, hi]
         }
         let rows = try Row.fetchAll(db, sql: "SELECT file_id FROM photo_meta WHERE \(clause)",
+                                    arguments: StatementArguments(args))
+        return fileIDs(rows)
+    }
+
+    /// The same numeric-op shape as `numericIDs`, over `photo_traits`.
+    private static func traitNumericIDs(column: String, filter: SearchToken.NumericFilter,
+                                        db: GRDB.Database) throws -> Set<String> {
+        let clause: String
+        let args: [DatabaseValueConvertible]
+        switch filter.op {
+        case .eq:  clause = "\(column) = ?";  args = [filter.value]
+        case .gt:  clause = "\(column) > ?";  args = [filter.value]
+        case .gte: clause = "\(column) >= ?"; args = [filter.value]
+        case .lt:  clause = "\(column) < ?";  args = [filter.value]
+        case .lte: clause = "\(column) <= ?"; args = [filter.value]
+        case let .range(lo, hi): clause = "\(column) BETWEEN ? AND ?"; args = [lo, hi]
+        }
+        let rows = try Row.fetchAll(db, sql: "SELECT file_id FROM photo_traits WHERE \(clause)",
                                     arguments: StatementArguments(args))
         return fileIDs(rows)
     }

@@ -121,6 +121,11 @@ nonisolated enum SearchSuggest {
         case "lens":   return facets.lenses
         case "near":   return facets.places
         case "in":     return facets.years
+        // Not DB-enumerable like camera/lens — a fixed vocabulary and a single
+        // numeric-op hint, so the key still completes into something usable.
+        case "is":     return SearchToken.TraitQuery.allCases.map(\.rawValue)
+        case "faces":  return [">2", "0"]
+        case "pets":   return [">0"]
         default:       return []
         }
     }

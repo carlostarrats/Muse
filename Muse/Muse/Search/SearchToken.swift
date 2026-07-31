@@ -28,6 +28,18 @@ nonisolated enum SearchToken: Equatable, Sendable {
     case color(String)
     case rating(atLeast: Int)
     case kind(SmartRule.KindGroup)
+    case faces(NumericFilter)
+    case pets(NumericFilter)
+    case traitIs(TraitQuery)
+    /// A similarity query is a VECTOR, which can't ride the field text — so it
+    /// rides a session-scoped HANDLE resolved against `SimilarityRegistry` at
+    /// query time. An unresolvable handle matches nothing, never the
+    /// unfiltered set.
+    case similar(handle: String)
+
+    nonisolated enum TraitQuery: String, Equatable, Sendable, CaseIterable {
+        case portrait, group
+    }
 
     nonisolated struct NumericFilter: Equatable, Sendable {
         enum Op: Equatable, Sendable { case eq, gt, gte, lt, lte, range(Double, Double) }
@@ -76,6 +88,20 @@ nonisolated enum SearchToken: Equatable, Sendable {
         case let .color(v):     return "\(String(localized: "color")): \(v)"
         case let .rating(n):    return String(repeating: "★", count: n) + "+"
         case let .kind(g):      return "\(String(localized: "kind")): \(g.rawValue)"
+        case let .faces(f):     return "\(String(localized: "faces")) \(f.displayLabel)"
+        case let .pets(f):      return "\(String(localized: "pets")) \(f.displayLabel)"
+        case let .traitIs(q):
+            switch q {
+            case .portrait: return String(localized: "Portrait")
+            case .group:    return String(localized: "Group photo")
+            }
+        case let .similar(handle):
+            // A handle whose entry is gone (a new session, a cleared registry)
+            // must SAY so — the chip is the only sign the filter is on.
+            if let entry = SimilarityRegistry.shared.entry(for: handle) {
+                return "\(String(localized: "similar")): \(entry.label)"
+            }
+            return String(localized: "Similar (expired)")
         }
     }
 }
@@ -122,7 +148,8 @@ nonisolated enum SearchQueryParser {
     private static let starGlyph: Character = "★"
 
     /// Every canonical key, in the order autocomplete offers them.
-    static let keys = ["camera", "lens", "iso", "f", "in", "near", "text", "color", "star", "kind"]
+    static let keys = ["camera", "lens", "iso", "f", "in", "near", "text", "color", "star", "kind",
+                       "faces", "pets", "is"]
 
     static func parse(_ raw: String) -> ParsedQuery {
         let segments = splitRespectingQuotes(raw)
@@ -199,6 +226,18 @@ nonisolated enum SearchQueryParser {
         case "kind":
             guard let group = SmartRule.KindGroup(rawValue: value.lowercased()) else { return nil }
             return .kind(group)
+        case "faces": return parseNumericFilter(value).map(SearchToken.faces)
+        case "pets":  return parseNumericFilter(value).map(SearchToken.pets)
+        case "is":
+            // An unrecognized is: value is NOT a token — it stays free text, so
+            // "is: that photo of us" can't be silently eaten.
+            guard let query = SearchToken.TraitQuery(rawValue: value.lowercased()) else { return nil }
+            return .traitIs(query)
+        case "similar":
+            // Handle shape only: `s` + digits. Anything else stays free text.
+            guard value.count > 1, value.hasPrefix("s"),
+                  value.dropFirst().allSatisfy(\.isNumber) else { return nil }
+            return .similar(handle: value)
         default:
             return nil
         }
