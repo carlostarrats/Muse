@@ -5,6 +5,15 @@ log is authoritative). This is the build-level expansion: exact files, exact sch
 seams, exact tests. Written before implementation; kept as the record of what was built and
 what was deliberately left to the owner.*
 
+> **2026-07-31 amendment:** §1.4 (Sparkle excision), §1.5 (MAS build configuration), and
+> the Distribution/Min-macOS doctrine rows in §1.1 are **deferred** at the owner's
+> request — the app stays on direct distribution (Sparkle self-update) for now, no fixed
+> date for the Mac App Store move. The executable task breakdown for that work now lives
+> standalone in `docs/superpowers/plans/deferred-mac-app-store-migration.md`; the
+> corresponding tasks were removed from `docs/superpowers/plans/2026-07-30-spec-01-foundation-plumbing.md`.
+> Everything else in this spec (§2 onward) is unaffected and does not depend on the MAS
+> move landing first.
+
 ---
 
 ## 0. What this spec does and does not touch

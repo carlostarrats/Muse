@@ -9,6 +9,182 @@ settled record, written before build. Product-level decisions live in
 `muse-photo-foundation.md` §13 (authoritative decision log); this file is the
 build-level layer future specs must not contradict.*
 
+*Updated 2026-07-31: **Spec 01 is built** (branch `new-product-build-1`), so the
+"no Spec 01–09 code exists" note above no longer holds for Spec 01. The section
+"Spec 01 as built" below records what shipped, including where it deviates from
+the pre-build record; where the two disagree, the as-built section wins.*
+
+---
+
+## Spec 01 as built (2026-07-31, `new-product-build-1`)
+
+### Scope actually shipped
+
+- Built: v13 coordinates + reader + write points + backfill; the three edit-aware seams;
+  StoreKit 2 plumbing; announcements channel; semantic-search cancellation;
+  `PerfBaseline`.
+- **NOT built — deferred, at the owner's request, to
+  `docs/superpowers/plans/deferred-mac-app-store-migration.md`:** the Mac App Store move.
+  That covers the doctrine revisions, Sparkle excision, direct-distribution tooling
+  removal, and the Apple-Silicon-only / deployment-target build settings. Consequently,
+  **as of this commit the app still ships direct with Sparkle self-update and has TWO
+  dependencies (GRDB + Sparkle)**. The "Platform & distribution" decisions below remain
+  binding as decisions; they are simply not yet in effect. The StoreKit plumbing is
+  inert scaffolding until that plan runs.
+- Also not built (belongs to later specs, unchanged): any editor or search UI,
+  places/rediscovery/stacks, faces, `HybridClusterer` time-bucketing.
+
+### Coordinates (v13) — as built
+
+- v13 schema landed exactly as specified (`files.lat`/`lon`/`coords_scanned_hash` +
+  `files_coords_idx`). `FileRow` gained the three fields; no new `Columns` cases.
+- Shipped as `Filesystem/CoordinateReader.swift` + `Intelligence/CoordinateBackfill.swift`
+  (Spec 02 supersedes both with the single-pass `PhotoHeaderReader`/`PhotoHeaderBackfill`
+  — already recorded below; the schema, sanitize rules, caps and video handling carry
+  verbatim).
+- API: `CoordinateReader.read(url:kind:) async -> Coordinate?` and
+  `CoordinateReader.sanitize(_:) -> Coordinate?`. It calls `FileMetadata.coordinate(…)`
+  and `FileMetadata.parseISO6709(_:)` rather than reimplementing them — the shared pure
+  function is the mechanism that keeps the DB and the viewer from diverging.
+- Write seams on `AnalyzePipeline`: `static func writeCoordinates(fileID:hash:coord:queue:)`
+  (internal — it is the tested seam, like `markAnalysisAttempted`) and a private
+  `writeCoordinatesOnly(fileID:url:kind:)` for the video path.
+- **The video path checks `coords_scanned_hash != content_hash` BEFORE opening the
+  file.** Videos never receive `analyzed_hash`, so `analyzePending` re-queues them on
+  every folder visit; without this check every visit would re-read every video's
+  metadata. Any future per-kind work hung off `analyzeOne` for a kind that skips the
+  Vision write needs the same guard.
+- **The undecodable-image branch stamps coordinates too.** `VisionTagger.analyze`
+  returning nil means the PIXELS failed, but the GPS header is usually intact, so that
+  branch calls `markAnalysisAttempted` AND `writeCoordinates`.
+- `CoordinateBackfill.candidate(id:path:) -> Candidate?` is the pure, tested selection
+  predicate; only `.image/.raw/.psd/.video` are admitted, because a kind the reader
+  can't handle would never get a scanned hash and would be re-selected forever.
+  `maxPerLaunch = 5_000`, `chunkSize = 200`, `concurrency = 4`.
+
+### Edit-aware seams — as built
+
+Everything recorded under "Edit-aware seams (Spec 01…)" below shipped as written. Deltas
+and additions:
+
+- All three seam types are declared `nonisolated` (the project builds with
+  `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`); `EditStackIndex`'s provider slot is
+  `NSLock`-guarded, because these are synchronous reads from view bodies and background
+  decode workers where an `await` would sit on the grid's critical path.
+- `EditStackIndex` is keyed by the `URL` the caller holds; normalization is each
+  consumer's business (`ThumbnailCache` standardizes for its own key). A Spec 04
+  provider must therefore standardize internally.
+- `ThumbnailCache` gained a private `cacheKey(url:size:scale:stackHash:)` overload —
+  `invalidate` needs the key for a stack state that ISN'T the installed one — plus a
+  `#if DEBUG` `cacheKeyForTesting`. The public `cacheKey(url:size:scale:)` signature is
+  unchanged, so no call site moved.
+- **The layout/decode split is by QUESTION, not by file.** `HeroStage`'s >40 MP mid-res
+  decode gate deliberately keeps reading `ImageHeaderSizeCache` even though the rest of
+  `HeroStage` converted: it asks what the file costs to DECODE, which a crop does not
+  change, and the effective size would understate it and skip the mid-res pass on
+  exactly the files that need it.
+- Converted layout consumers: `GridView.TileView.drawnAspectRatio`,
+  `HeroStage.resolveHeaderSize`, `FileMetadata`'s dimensions row, and **both** of
+  `AspectRatioCache`'s paths — a crop overrides the `files.width/height` DB map as well
+  as the cold header read, since the DB value describes the original bytes.
+- `OutputRender` also exposes `image(_:maxPixel:)` (the downsampled decode used by the
+  PDF exporter). Decode-budget guarding stays with the caller: `OutputRender` is the
+  render step, not the safety step.
+- Signatures changed to take `RenderedOutput`: `DriveClient.uploadFile(_:name:mime:parent:)`
+  and `ImageMetadataStripper.strip(_:mime:)`. Non-rendering fallbacks (video frame
+  extraction, QuickLook type icons) keep taking a bare `URL` — they carry no edit stack.
+- The Backup exclusion is documented in `Backup/BackupBuilder.swift`'s header as well as
+  `OutputRender.swift`'s, so it is findable from either direction.
+
+### Commerce — as built
+
+- `Commerce/CommerceConfig.swift`: `unlockProductID = "com.tarrats.Muse.unlock"`,
+  `sharingYearlyProductID = "com.tarrats.Muse.sharing.yearly"`,
+  `sharingSubscriptionGroupID = "sharing"`, `announcementsURL =
+  <DriveConfig.shareBaseURL>/announcements.json`, `redeemURL =
+  https://apps.apple.com/redeem`. These strings appear nowhere else.
+- `struct Entitlements { var unlocked: Bool; var sharing: Bool }` — two independent axes.
+- `TrialPolicy(duration: 14 days, enforced: false)` is the shipped default. `TrialGate`
+  is pure (`state(now:firstLaunch:entitled:policy:)`): entitled short-circuits to
+  `.unlocked`; a missing anchor is day 0; a backwards clock clamps to full duration;
+  remaining days round DOWN; exact expiry is `.expired`; an UNENFORCED policy past
+  duration reports `.trial(daysLeft: 0)` and never `.expired`. Spec 09 turns it on by
+  flipping `enforced`.
+- `CommerceCache` is permissive-only: `grant` is one-way (passing `false` is not a
+  revoke), `merge(remoteGrants:)` only ever adds, and `revoke` is the sole clearing
+  path. `CommerceStore.refresh` calls `revoke` only after a walk of
+  `Transaction.currentEntitlements` that COMPLETED — verified absence, not offline.
+- Persistence: UserDefaults `commerce.unlocked` / `commerce.sharing` /
+  `commerce.firstLaunch`, mirrored for the unlock flag and the anchor into
+  `KeychainCommerceStore` (service `com.tarrats.Muse.commerce`, accounts `unlock-flag`
+  and `first-launch`, `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` — the Drive
+  token store's access class). The unlock flag is the OR of both mirrors; **the anchor
+  is earliest-wins and never moves forward**, so a defaults wipe can't restart a trial.
+- `CommerceStore.init()` is synchronous and cheap: the cache is read before the first
+  frame, StoreKit refreshes after. `products()` returns `[]` until App Store Connect
+  records exist and must not throw or hang.
+- Settings gains a "Muse" `Section` placed BEFORE "Google Drive": entitlement/trial
+  line, Unlock, Restore Purchases, Redeem Code… (opens `CommerceConfig.redeemURL`), and
+  the announcements toggle. Buttons are `ModalButton`, with a `purchaseBusy` guard
+  mirroring the existing `authBusy`.
+
+### Announcements — as built
+
+- `AppSettings.announcementsEnabledKey = "announcementsEnabled"`, default true. OFF
+  disables the FETCH, not just the display.
+- Feed shape: `{ "version": 1, "messages": [{ id, title, body, url, minAppVersion }] }`.
+  `AnnouncementFeed.parse` is pure and fail-soft — 64 KB payload cap applied BEFORE
+  decode, unknown `version` rejected outright, id required and ≤100 chars, title capped
+  at 200, body at 2000, non-https urls dropped (the message survives; only its url
+  goes). `AnnouncementSanitizer.strip` removes bidi overrides (U+202A–202E), bidi
+  isolates (U+2066–2069), zero-width (U+200B–200D, U+FEFF) and control characters.
+- `AnnouncementFeed.unseen(_:seen:appVersion:)` gates on `minAppVersion` with
+  `.compare(_:options: .numeric)`, so "1.10" correctly outranks "1.6".
+- `AnnouncementStore.fetchIfNeeded()` runs once per launch on an EPHEMERAL,
+  cookie-less `URLSession`, 10 s timeout, no query string, no identifiers. Every
+  failure is silent — a launch with no feed deployed must produce no UI. Seen ids
+  persist in `announcementsSeenIDs`, capped at 200.
+- Presentation is `Views/Modal/AnnouncementCard.swift` via `.museModal` at
+  `ContentView` — never `.alert`, never `.sheet`, like every other modal. The url is
+  re-checked for `https` at the point of `NSWorkspace.open`, not only at parse.
+- **`AppState` gained one PLAIN, non-`@Published` stored property,
+  `announcementPresented`**, OR'd into `modalPresented` so the grid's key catcher and
+  the Escape resolver treat the card as a modal. `ContentView` is its only writer (via
+  `.onChange` on the store's `pending`). This is the reading of "AppState is frozen"
+  that this build settled on and that future specs should follow: **the freeze is on
+  the `@Published` re-render surface, not on stored properties**. A feature store that
+  needs to participate in a global gate mirrors into a plain property rather than
+  publishing from `AppState`.
+
+### Performance — as built
+
+- `Database/SearchCancellation.swift`: a lock-guarded, one-way `@unchecked Sendable`
+  flag. It is an explicit object rather than `Task.isCancelled` because **task-local
+  cancellation does not propagate into a GRDB `queue.read` closure** (GRDB runs it on
+  its own thread behind a continuation) — and that closure is exactly where the
+  expensive semantic walk happens.
+- `SearchService.search(query:scope:cancellation:)` — the parameter defaults to nil, so
+  existing callers (App Intents, tests) are unchanged. Checked at entry, before query
+  embedding, before the read, and immediately before the semantic leg.
+- `AppState.inFlightSearchCancellation` is plain and non-`@Published` (same rule as
+  above). `searchRequestToken` remains the guard on the RESULT; this is the guard on
+  the WORK. Superseded by `runSearch`, `clearSearch`, and the folder-selection teardown.
+- `PhaseTrace` gained `timelineEnabled` (`MUSE_TRACE=1` OR `MUSE_PERF=1`), an in-memory
+  **first-occurrence-wins** mark timeline, and `elapsed(from:to:) -> TimeInterval?`.
+  First-occurrence-wins is load-bearing: a repeated phase must not move a baseline's
+  start or end. New marks: `app.start` (in `PhaseTrace.begin`) and `grid.firstPaint`
+  (first non-empty `currentFiles` publish).
+- `Perf/PerfBaseline.swift` runs at launch under `MUSE_PERF=1`. `PerfMeasurement` carries
+  an `unavailable` flag so a measurement that couldn't be taken renders as "not
+  measured" rather than a 0 that reads like a spectacular result — used by cold start
+  with no marks, the 24 MP decode with no `MUSE_PERF_FIXTURE_24MP` fixture, and grid
+  scroll frame time (which needs a scripted scroll against a mounted view and is
+  emitted budget-only). The report goes to `docs/perf-baseline-<date>.md`, falling back
+  to the sandbox tmp dir, and the path is always printed. **The suite asserts report
+  FORMATTING, never timing numbers** — a perf assertion on a busy machine is noise.
+- The thumbnail-decode probe size must be a `ThumbnailCache.renderedVariants` entry, or
+  `invalidate` can't clear it and the measurement silently times a cache hit.
+
 ---
 
 ## Platform & distribution
