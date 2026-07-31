@@ -1656,8 +1656,10 @@ build-level layer future specs must not contradict.*
   gate is not dismissible and not in the Escape peel** — `dismissTopModal` skips it;
   when only the gate is presented, Escape is a no-op. `EscapeResolver` order unchanged.
 - `Views/UnlockGateView.swift`: shell overlay attached ABOVE the `alertRequest`
-  presenter, reusing `.museModal` card visuals but never the `.museModal` machinery
-  (that machinery exists to dismiss). Contents: reassurance body (no-catalog story),
+  presenter, width 460, reusing `.museModal` card visuals but never the `.museModal`
+  machinery (that machinery exists to dismiss); built only while `trialGateActive`, so
+  a purchase unmounts it via the entitlements publish. Contents: reassurance body
+  (no-catalog story),
   price via `displayPrice`, Unlock / Restore / Redeem Code
   (`https://apps.apple.com/redeem`) / Privacy+Terms links / **Quit Muse**. Purchase and
   restore errors render INLINE in the card — nothing presents above the gate. The card
@@ -1710,6 +1712,13 @@ build-level layer future specs must not contradict.*
   `markContentChanged` (both thumbnail key variants), `EditStore.generation` bump,
   `LutRegistry.invalidate`. **No sidecar re-export on restore** (hydration owns sidecar
   reconciliation; restore must not stomp newer on-disk sidecars).
+- Records: `BackupEditVersion` (`kind` `"version"`|`"snapshot"`, `name`, `stack`,
+  `created_at`), `BackupEditPreset` (`id`, `name`, `stack`, `created_at`,
+  `updated_at`), `BackupLut` (`id` = the `edit_luts` content-hash PK, `name`, `size`,
+  `data` — float32 LE RGB, base64 via Codable `Data`). Decode compatibility is pinned
+  both directions: a raw-JSON post-A2 fixture decodes on the pre-A2 struct shape
+  (`BackupArchiveCompatTests`) and a pre-A2 archive fixture decodes unchanged
+  (`BackupEditRoundTripTests`).
 
 ## Launch validation (Spec 09)
 
