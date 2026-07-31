@@ -34,6 +34,14 @@ struct FileRow: Codable, FetchableRecord, MutablePersistableRecord {
     var intent: String?
     /// Classifier model version that last set `intent` (drives one-time backfill).
     var intent_model_version: String?
+    /// WGS-84 latitude read from the file's own header (EXIF GPS / ISO-6709).
+    var lat: Double?
+    /// WGS-84 longitude, same source as `lat`.
+    var lon: Double?
+    /// content_hash at the time of the last GPS read — the attempted-marker that
+    /// stops a GPS-less file being re-opened on every launch forever. Mirrors
+    /// `analyzed_hash`.
+    var coords_scanned_hash: String?
 
     enum Columns {
         static let id = Column("id")

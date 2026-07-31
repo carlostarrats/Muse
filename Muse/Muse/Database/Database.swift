@@ -364,6 +364,28 @@ final class Database {
             }
         }
 
+        migrator.registerMigration("v13_coordinates") { db in
+            // GPS lives in the file's own bytes — content-keyed like palette/caption/
+            // dominant_color/feature_print, deliberately NOT the tags/notes
+            // per-location grain (two byte-identical copies in different folders
+            // have identical coordinates by definition; edit-in-place already
+            // splits the row).
+            try db.alter(table: "files") { t in
+                t.add(column: "lat", .double)
+                t.add(column: "lon", .double)
+                // The content_hash we last read GPS from. Storing the hash (not a
+                // bare bool) means an edit-in-place re-reads new bytes for new GPS,
+                // mirroring analyzed_hash — and avoids the analyzed_hash-NULL
+                // retry-loop bug shape (2026-07-28): without an attempted-marker,
+                // every GPS-less file would be re-opened on every launch forever.
+                t.add(column: "coords_scanned_hash", .text)
+            }
+            // Partial index — a library with no geotagged photos costs nothing.
+            try db.execute(sql: """
+                CREATE INDEX files_coords_idx ON files(lat, lon) WHERE lat IS NOT NULL
+                """)
+        }
+
         return migrator
     }
 
