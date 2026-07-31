@@ -282,6 +282,29 @@ struct MuseApp: App {
             CommandGroup(after: .newItem) {
                 Divider()
                 Button {
+                    let urls = appState.effectiveSelectionURLs(fallback: "")
+                    guard appState.selectedFile == nil,
+                          (2...CompareStore.maxPanes).contains(urls.count) else { return }
+                    CompareStore.shared.open(urls: Array(urls))
+                } label: {
+                    Label("Compare Side by Side", systemImage: "rectangle.split.2x1")
+                }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+                .disabled(appState.selectedFile != nil
+                          || !(2...CompareStore.maxPanes)
+                              .contains(appState.effectiveSelectionURLs(fallback: "").count))
+
+                Button {
+                    guard appState.visibleFiles.filter({ $0.kind.isPhotoKind }).count >= 2 else { return }
+                    CullStore.shared.begin()
+                } label: {
+                    Label("Start Culling", systemImage: "checkmark.circle")
+                }
+                .keyboardShortcut("k", modifiers: [.command, .shift])
+                .disabled(appState.visibleFiles.filter { $0.kind.isPhotoKind }.count < 2)
+
+                Divider()
+                Button {
                     appState.findDuplicatesInCurrentFolder()
                 } label: {
                     Label("Find Duplicates in Folder", systemImage: "square.on.square")

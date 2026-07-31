@@ -35,12 +35,16 @@ struct PageScrollCatcher: NSViewRepresentable {
     /// Plain-Space open: open the highlighted tile (hero viewer / navigate-in for
     /// a folder) — the same path as double-click.
     var onSpace: () -> Void = {}
+    /// K / X / U while a cull session is active. Returns true if consumed;
+    /// false forwards to the normal handling below, untouched.
+    var onCullKey: (Character) -> Bool = { _ in false }
 
     func makeNSView(context: Context) -> CatcherView {
         let v = CatcherView()
         v.isActive = isActive
         v.onArrow = onArrow
         v.onSpace = onSpace
+        v.onCullKey = onCullKey
         v.grabFocusSoon()
         return v
     }
@@ -52,6 +56,7 @@ struct PageScrollCatcher: NSViewRepresentable {
         // or scroll — same reason `isActive` is reassigned here.
         nsView.onArrow = onArrow
         nsView.onSpace = onSpace
+        nsView.onCullKey = onCullKey
         // Re-claim focus when paging becomes active again (e.g. a hero viewer
         // just closed) so Page keys resume without needing a grid click.
         let active = isActive()
@@ -65,6 +70,7 @@ struct PageScrollCatcher: NSViewRepresentable {
         var isActive: () -> Bool = { false }
         var onArrow: (GridKeyboardNav.Direction) -> KeyboardScrollTarget? = { _ in nil }
         var onSpace: () -> Void = {}
+        var onCullKey: (Character) -> Bool = { _ in false }
         var lastActive = false
         private var clickMonitor: Any?
 
@@ -136,6 +142,16 @@ struct PageScrollCatcher: NSViewRepresentable {
             // reads as a modified key. Meaningful modifiers = ⌘/⌥/⌃/⇧ only.
             let mods = event.modifierFlags.intersection(
                 [.command, .option, .control, .shift])
+
+            // Cull marking, checked FIRST and purely additive: a plain letter
+            // key that a live cull session claims. Everything below — the
+            // keycode-only paging rule and the plain-arrow modifier
+            // intersection — is untouched, and with no session active this
+            // branch never fires.
+            if mods.isEmpty, isActive(),
+               let c = event.charactersIgnoringModifiers?.first, onCullKey(c) {
+                return
+            }
 
             // Page Up / Page Down — the DEDICATED keycodes. On Mac laptops the
             // physical Fn+Up / Fn+Down remaps to these very keycodes, so we detect

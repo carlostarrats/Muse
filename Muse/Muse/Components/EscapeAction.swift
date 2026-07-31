@@ -21,6 +21,10 @@ enum EscapeAction: Equatable {
     /// swallows Escape for them, and a modal opened over a viewer is the
     /// innermost layer.
     case dismissModal
+    /// The side-by-side compare workbench is open — close it. Resolves ABOVE
+    /// the viewer cases: compare and the hero viewer are mutually exclusive,
+    /// but a stale `selectedFile` must never win over the visible overlay.
+    case closeCompare
     /// Image/raw/psd hero viewer open — run its return flight (viewerClosing).
     case closeHero
     /// A non-hero viewer (PDF, video, …) open — clear the selected file.
@@ -68,12 +72,16 @@ enum EscapeResolver {
                        insideCollection: Bool,
                        rediscoveryActive: Bool = false,
                        showingCollectionsPage: Bool,
-                       showingPlacesPage: Bool = false) -> EscapeAction {
+                       showingPlacesPage: Bool = false,
+                       compareActive: Bool = false) -> EscapeAction {
         // Above the viewer: a modal card sits on top of everything, and since
         // modals became in-window cards (not sheets) nothing else consumes
         // Escape for them. Returning early also keeps the modal press from
         // touching the hero close sequence.
         if modalPresented { return .dismissModal }
+        // Below a modal (the cull resolve card can be raised over compare),
+        // above everything else.
+        if compareActive { return .closeCompare }
         if hasSelectedFile {
             return selectedFileIsHero ? .closeHero : .closeViewer
         }

@@ -20,6 +20,9 @@ enum AppSettings {
     static let showFileNamesKey = "showFileNames"
     static let showStarsOnGridKey = "showStarsOnGrid"
     static let colorsCardExpandedKey = "heroColorsCardExpanded"
+    /// The one-time "Smarter Search" offer has been shown. Set on ANY dismissal
+    /// — declining once must never nag again.
+    static let clipOfferSeenKey = "clipOfferSeen"
     static let announcementsEnabledKey = "announcementsEnabled"
 
     /// Automatically run the Vision pass (tags/caption/colors/OCR) on newly

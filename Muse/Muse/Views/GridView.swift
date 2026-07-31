@@ -155,7 +155,8 @@ struct GridView: View {
                     // valid frame with no full-set materialization — virtualization
                     // is untouched.
                     PageScrollCatcher(
-                        isActive: { appState.selectedFile == nil && !appState.modalPresented },
+                        isActive: { appState.selectedFile == nil && !appState.modalPresented
+                                    && !CompareStore.shared.isActive },
                         onArrow: { direction in
                             let files = appState.visibleFiles
                             guard !files.isEmpty, !frames.isEmpty else { return nil }
@@ -186,6 +187,19 @@ struct GridView: View {
                                 appState.openSubfolder(file.url)
                             } else {
                                 appState.selectedFile = file
+                            }
+                        },
+                        onCullKey: { c in
+                            guard CullStore.shared.active else { return false }
+                            let files = appState.visibleFiles
+                            guard let idx = appState.currentKeyboardIndex(order: files),
+                                  idx < files.count, files[idx].kind.isPhotoKind else { return false }
+                            let path = files[idx].url.standardizedFileURL.path
+                            switch c {
+                            case "k", "K": CullStore.shared.setMark(.keep, path: path); return true
+                            case "x", "X": CullStore.shared.setMark(.reject, path: path); return true
+                            case "u", "U": CullStore.shared.setMark(nil, path: path); return true
+                            default: return false
                             }
                         })
                         .frame(width: 0, height: 0)
@@ -542,6 +556,8 @@ struct GridView: View {
                                 || appState.selectedFiles.count <= 1
                             SelectionActionsMenu(path: p)
                             stackMenuSection(for: file, path: p)
+                            compareMenuSection(for: file, path: p)
+                            similarityMenuSection(for: file, path: p, single: single)
                             Divider()
                             if single {
                                 OpenWithMenu(url: file.url)
@@ -683,6 +699,53 @@ struct GridView: View {
     /// image-kind files are selected and NONE is already stacked — there is no
     /// merging into an existing stack, and the item is HIDDEN rather than shown
     /// disabled. `.folder` and non-image kinds never see this section.
+    /// The photo URLs the current right-click actually targets: the whole
+    /// selection when this tile is part of it, otherwise just this tile.
+    private func photoTargets(for file: FileNode, path: String) -> [URL] {
+        let byPath = Dictionary(appState.visibleFiles.map {
+            ($0.url.standardizedFileURL.path, $0)
+        }, uniquingKeysWith: { a, _ in a })
+        let paths = appState.selectedFiles.contains(path)
+            ? Array(appState.selectedFiles) : [path]
+        return paths.compactMap { byPath[$0] }.filter { $0.kind.isPhotoKind }.map(\.url)
+    }
+
+    /// Compare + cull entry points. Compare needs 2–4 photos; culling needs a
+    /// view with at least two photos in it.
+    @ViewBuilder
+    private func compareMenuSection(for file: FileNode, path: String) -> some View {
+        let targets = photoTargets(for: file, path: path)
+        if (2...CompareStore.maxPanes).contains(targets.count) {
+            Button("Compare Side by Side") {
+                guard appState.selectedFile == nil else { return }
+                CompareStore.shared.open(urls: targets)
+            }
+        }
+        if !CullStore.shared.active,
+           appState.visibleFiles.filter({ $0.kind.isPhotoKind }).count >= 2 {
+            Button("Start Culling") { CullStore.shared.begin() }
+        }
+    }
+
+    /// Similarity entry points — hidden entirely (not disabled) until the
+    /// search model is installed, since neither can do anything without it.
+    @ViewBuilder
+    private func similarityMenuSection(for file: FileNode, path: String, single: Bool) -> some View {
+        if ClipModelStore.shared.isReady {
+            let targets = photoTargets(for: file, path: path)
+            if single, file.kind.isPhotoKind {
+                Button("Find Similar Photos") {
+                    appState.findSimilar(to: file.url)
+                }
+            }
+            if (1...SimilarTerm.maxAnchors).contains(targets.count) {
+                Button("New Smart Collection from Selection") {
+                    appState.newSmartCollectionFromSelection(urls: targets)
+                }
+            }
+        }
+    }
+
     @ViewBuilder
     private func stackMenuSection(for file: FileNode, path: String) -> some View {
         let imageKinds: Set<AssetKind> = [.image, .raw, .psd]

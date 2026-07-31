@@ -206,4 +206,35 @@ extension EscapeActionTests {
                                   insideCollection: true, showingCollectionsPage: true),
             .clearTags)
     }
+
+    // MARK: - Compare (spec-03)
+
+    func testCompareResolvesAfterModalBeforeViewer() {
+        let action = EscapeResolver.action(modalPresented: false, hasSelectedFile: true,
+                                            selectedFileIsHero: true, searchActive: false,
+                                            tagsActive: false, insideCollection: false,
+                                            rediscoveryActive: false, showingCollectionsPage: false,
+                                            showingPlacesPage: false, compareActive: true)
+        XCTAssertEqual(action, .closeCompare,
+                       "compare must resolve before the viewer cases even when a file is selected")
+    }
+
+    func testModalStillWinsOverCompare() {
+        let action = EscapeResolver.action(modalPresented: true, hasSelectedFile: false,
+                                            selectedFileIsHero: false, searchActive: false,
+                                            tagsActive: false, insideCollection: false,
+                                            rediscoveryActive: false, showingCollectionsPage: false,
+                                            showingPlacesPage: false, compareActive: true)
+        XCTAssertEqual(action, .dismissModal,
+                       "a modal raised over compare (the cull resolve card) must dismiss first")
+    }
+
+    func testCompareInactiveFallsThroughToViewer() {
+        let action = EscapeResolver.action(modalPresented: false, hasSelectedFile: true,
+                                            selectedFileIsHero: false, searchActive: false,
+                                            tagsActive: false, insideCollection: false,
+                                            rediscoveryActive: false, showingCollectionsPage: false,
+                                            showingPlacesPage: false, compareActive: false)
+        XCTAssertEqual(action, .closeViewer)
+    }
 }

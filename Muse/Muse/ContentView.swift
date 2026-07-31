@@ -37,6 +37,34 @@ struct ContentView: View {
 
     /// Close whichever modal is up. Only one is ever presented at a time, so
     /// this is a deterministic sweep rather than a real stack.
+    /// Resolve a cull session: rate the keepers, trash the rejects, end the
+    /// session. Both writes go through the EXISTING seams (`TagStore.setRating`
+    /// and `deleteWithBurn`) — a cull mark is never itself persisted.
+    private func applyCull(rating: Int?, moveToTrash: Bool) {
+        let summary = CullStore.shared.summary
+        Task { @MainActor in
+            if let rating {
+                let keepURLs = summary.keepPaths.map { URL(fileURLWithPath: $0) }
+                if !keepURLs.isEmpty {
+                    await TagStore.shared.setRating(rating, forURLs: keepURLs)
+                    appState.tagsVersion += 1
+                }
+            }
+            if moveToTrash {
+                let byPath = Dictionary(
+                    appState.visibleFiles.map { ($0.url.standardizedFileURL.path, $0) },
+                    uniquingKeysWith: { a, _ in a })
+                for path in summary.rejectPaths {
+                    guard let node = byPath[URL(fileURLWithPath: path).standardizedFileURL.path],
+                          node.kind != .folder else { continue }
+                    await appState.deletion.deleteWithBurn(node)
+                }
+            }
+            CullStore.shared.end()
+            appState.cullResolveShown = false
+        }
+    }
+
     private func dismissTopModal() {
         // Confirms/errors first: they're presented outermost, so one raised
         // from inside another card (a delete confirm over Duplicates) is the
@@ -206,6 +234,35 @@ struct ContentView: View {
                        width: 560, palette: appState.moodPalette) {
                 SettingsView(isPresented: $appState.settingsShown)
                     .environmentObject(appState)
+            }
+            // Cull resolution. Presented at the shell like every other card;
+            // Cancel here returns to the LIVE session with nothing applied.
+            .museModal(isPresented: $appState.cullResolveShown,
+                       width: 380, palette: appState.moodPalette) {
+                CullResolveCard(
+                    summary: CullStore.shared.summary,
+                    onApply: { rating, moveToTrash in
+                        applyCull(rating: rating, moveToTrash: moveToTrash)
+                    },
+                    onCancel: { appState.cullResolveShown = false })
+            }
+            // One-time offer to download the on-device search model.
+            .museModal(isPresented: $appState.clipOfferShown,
+                       width: 420, palette: appState.moodPalette,
+                       onDismiss: {
+                           // Whichever way it's dismissed, the offer is
+                           // one-time — never nag again.
+                           UserDefaults.standard.set(true, forKey: AppSettings.clipOfferSeenKey)
+                       }) {
+                ModalMessageCard(
+                    alert: MuseAlert(
+                        title: String(localized: "Smarter Search"),
+                        message: String(localized: "Muse can learn what's in your photos so you can search for them in plain words. It's a one-time download that runs entirely on this Mac — nothing you search ever leaves it."),
+                        confirmTitle: String(localized: "Download"),
+                        cancelTitle: String(localized: "Not Now"),
+                        onConfirm: { ClipModelStore.shared.download() })) {
+                    appState.clipOfferShown = false
+                }
             }
             // A list of share rows: name, date, two buttons.
             .museModal(isPresented: $appState.driveSharesShown,
@@ -408,6 +465,30 @@ struct ContentView: View {
                 .transition(selected.kind == .image || selected.kind == .raw
                             || selected.kind == .psd ? .identity : .opacity)
         }
+        // Compare is a workbench overlay at the same layer as the viewer —
+        // mutually exclusive with it, and below modal presentation.
+        CompareView(store: CompareStore.shared, cull: CullStore.shared)
+            .zIndex(55)
+        // The cull HUD floats over whatever surface is culling (grid, hero or
+        // compare), so it sits above both.
+        VStack {
+            Spacer()
+            CullHUD(store: CullStore.shared,
+                    onFinish: { appState.cullResolveShown = true },
+                    onCancel: {
+                        if CullStore.shared.marks.isEmpty {
+                            CullStore.shared.end()
+                        } else {
+                            appState.alertRequest = MuseAlert.confirm(
+                                title: String(localized: "Discard this cull pass?"),
+                                message: String(localized: "The keep and reject marks will be lost. Nothing has been applied yet."),
+                                confirmTitle: String(localized: "Discard"),
+                                onConfirm: { CullStore.shared.end() })
+                        }
+                    })
+                .padding(.bottom, 24)
+        }
+        .zIndex(58)
         GridToastHost(deletion: appState.deletion)
             .zIndex(60)
             // `last_viewed_at` is written from the VIEW layer only — AppState
@@ -447,8 +528,11 @@ struct ContentView: View {
                     insideCollection: appState.activeCollectionID != nil,
                     rediscoveryActive: RediscoveryStore.shared.active != nil,
                     showingCollectionsPage: appState.showingCollections,
-                    showingPlacesPage: PlacesStore.shared.showingPlaces
+                    showingPlacesPage: PlacesStore.shared.showingPlaces,
+                    compareActive: CompareStore.shared.isActive
                 ) {
+                case .closeCompare:
+                    CompareStore.shared.close()
                 case .closeHero:
                     // Hero viewer: run the return flight instead of popping.
                     // Fire the SINGLE trigger (viewerClosing) and let startClose()
