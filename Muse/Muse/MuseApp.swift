@@ -142,6 +142,11 @@ struct MuseApp: App {
                     // for files indexed before v13. Self-limiting per launch.
                     PhaseTrace.mark("coordinate-backfill.start")
                     Task { await CoordinateBackfill.run(); PhaseTrace.mark("coordinate-backfill.end") }
+                    // Developer perf harness. Env-gated like PhaseTrace, so a
+                    // shipped run never reaches it.
+                    if PerfBaseline.enabled {
+                        Task { _ = await PerfBaseline.run() }
+                    }
                     // Announcements: one GET of a static file per launch,
                     // off-able in Settings (which disables the fetch itself).
                     Task { await announcementStore.fetchIfNeeded() }

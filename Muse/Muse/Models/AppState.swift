@@ -948,6 +948,9 @@ final class AppState: ObservableObject {
         // results, and — for an "All" search — this folder un-highlighted.
         if isSearchActive || !searchQuery.isEmpty {
             searchRequestToken += 1   // invalidate any in-flight search result
+            // …and stop it computing, not just landing (see the property's note).
+            inFlightSearchCancellation?.cancel()
+            inFlightSearchCancellation = nil
             searchQuery = ""
             isSearchActive = false
         }
@@ -1234,6 +1237,9 @@ final class AppState: ObservableObject {
                 // A newer selection started while we were loading — drop this.
                 guard token == self.folderLoadToken else { return }
                 self.currentFiles = sorted
+                // Cold-start budget's end point. `mark` keeps the FIRST
+                // occurrence, so later folder switches don't move it.
+                if !sorted.isEmpty { PhaseTrace.mark("grid.firstPaint") }
                 self.isLoadingFolder = false
                 if freshSelect {
                     // Supersede any in-flight chip load, then reveal files + chips
@@ -1328,6 +1334,14 @@ final class AppState: ObservableObject {
     /// methods live in AppState+Search.swift and the folder-selection path here
     /// also bumps it.
     var searchRequestToken = 0
+
+    /// Supersede signal for the in-flight search pass. Plain, NOT `@Published`:
+    /// nothing renders from it, and AppState's published surface is frozen
+    /// (DECIDED #26) — a published property here would re-evaluate the whole
+    /// shell on every keystroke-driven search. Bumped alongside
+    /// `searchRequestToken`, which stays the guard on the RESULT; this is the
+    /// guard on the WORK.
+    var inFlightSearchCancellation: SearchCancellation?
 
     /// Nonisolated so it can run off the main thread during a folder load.
     /// Sorting is left to SmartSorter (the caller applies the active mode).

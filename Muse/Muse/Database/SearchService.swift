@@ -24,9 +24,18 @@ enum SearchService {
     /// being narrowed to its tag's folder.
     static let semanticThreshold = 0.45
 
-    static func search(query: String, scope: SearchScope) async -> [FileNode] {
+    /// `cancellation` lets a superseded pass bail before doing the expensive
+    /// work. The token guard at the call site already stops a stale result from
+    /// LANDING; this stops it from being COMPUTED — without it, typing a second
+    /// query runs the first one's full embedding walk to completion for nothing.
+    /// It's an explicit object rather than `Task.isCancelled` because task-local
+    /// cancellation doesn't reach inside GRDB's read closure (see
+    /// SearchCancellation).
+    static func search(query: String, scope: SearchScope,
+                       cancellation: SearchCancellation? = nil) async -> [FileNode] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
+        guard cancellation?.isCancelled != true else { return [] }
 
         guard let queue = Database.shared.dbQueue else { return [] }
 
@@ -42,7 +51,10 @@ enum SearchService {
         let escaped = ftsEscape(textQuery)
         // Embed the query here on the main actor (the registry is @MainActor);
         // the off-main DB scan below only does cosine scoring on this vector.
+        guard cancellation?.isCancelled != true else { return [] }
         let queryVector = hasText ? IntelligenceRegistry.shared.embedder?.embed(textQuery) : nil
+        // Last check before the read: everything past here is on GRDB's thread.
+        guard cancellation?.isCancelled != true else { return [] }
 
         let absPaths: [String] = (try? await queue.read { db -> [String] in
             // Color filter: IDs whose palette matches EVERY query color (AND),
@@ -145,9 +157,13 @@ enum SearchService {
 
             // 3) Semantic hits (embedding cosine similarity), merged after
             // exact hits — exact first, semantic by descending similarity.
-            let semantic = (queryVector.flatMap {
-                try? SemanticSearch.semanticIDs(queryVector: $0, db: db)
-            }) ?? []
+            // The expensive leg: every embedding row, cosine-scored. A
+            // superseded pass skips it entirely rather than finishing work
+            // whose result the caller's token guard will discard.
+            let semantic: [(String, Double)] = cancellation?.isCancelled == true ? [] :
+                (queryVector.flatMap {
+                    try? SemanticSearch.semanticIDs(queryVector: $0, db: db)
+                }) ?? []
             var orderedIDs = SemanticSearch.merge(
                 exactIDs: exactIDs, semantic: semantic, threshold: Self.semanticThreshold)
 

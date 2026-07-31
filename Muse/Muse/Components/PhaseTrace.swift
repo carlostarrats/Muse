@@ -26,8 +26,27 @@ enum PhaseTrace {
     static let url: URL = URL(fileURLWithPath: NSTemporaryDirectory())
         .appendingPathComponent("muse-phase-trace.log")
 
+    /// Keep an in-memory timeline as well as the log file. Enabled by MUSE_PERF
+    /// too, because PerfBaseline measures cold start as the delta between two
+    /// marks and parsing the log back would be absurd. Both are env-gated, so a
+    /// shipped run still pays one Bool check and stores nothing.
+    static let timelineEnabled = enabled
+        || ProcessInfo.processInfo.environment["MUSE_PERF"] == "1"
+
     private static let queue = DispatchQueue(label: "com.tarrats.Muse.phaseTrace")
     private static let start = Date()
+
+    private static let timelineLock = NSLock()
+    nonisolated(unsafe) private static var timeline: [String: TimeInterval] = [:]
+
+    /// Seconds between two recorded marks, or nil if either is missing. First
+    /// occurrence of each event wins — a repeated phase must not move a
+    /// baseline's start or end.
+    static func elapsed(from: String, to: String) -> TimeInterval? {
+        timelineLock.lock(); defer { timelineLock.unlock() }
+        guard let a = timeline[from], let b = timeline[to], b >= a else { return nil }
+        return b - a
+    }
 
     /// Record one phase transition. `detail` carries the count that matters
     /// (how many files this batch is about) — the thing that says whether a
@@ -39,9 +58,14 @@ enum PhaseTrace {
     /// makes a disabled trace genuinely free — one Bool check.
     static func mark(_ event: @autoclosure () -> String,
                      _ detail: @autoclosure () -> String = "") {
-        guard enabled else { return }
+        guard timelineEnabled else { return }
         let t = Date().timeIntervalSince(start)
-        let line = String(format: "%8.2fs  %@ %@\n", t, event(), detail())
+        let name = event()
+        timelineLock.lock()
+        if timeline[name] == nil { timeline[name] = t }
+        timelineLock.unlock()
+        guard enabled else { return }
+        let line = String(format: "%8.2fs  %@ %@\n", t, name, detail())
         queue.async {
             if let h = try? FileHandle(forWritingTo: url) {
                 h.seekToEndOfFile(); h.write(Data(line.utf8)); try? h.close()
@@ -52,6 +76,9 @@ enum PhaseTrace {
     }
 
     static func begin() {
+        // The timeline's zero point. Recorded whenever either env var is set,
+        // so PerfBaseline has a start even with tracing off.
+        mark("app.start")
         guard enabled else { return }
         try? FileManager.default.removeItem(at: url)
         mark("TRACE-START", url.path)

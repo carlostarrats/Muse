@@ -28,7 +28,15 @@ extension AppState {
         } else {
             scope = .everywhere
         }
-        let results = await SearchService.search(query: trimmed, scope: scope)
+        // Supersede the predecessor BEFORE starting: the token guard below
+        // stops a stale result from LANDING, but only this stops it from being
+        // COMPUTED — the semantic leg walks every embedding row in the library,
+        // so typing a second query used to pay for the first one in full.
+        inFlightSearchCancellation?.cancel()
+        let cancellation = SearchCancellation()
+        inFlightSearchCancellation = cancellation
+        let results = await SearchService.search(query: trimmed, scope: scope,
+                                                 cancellation: cancellation)
         // A newer search — or clearSearch() — invalidates this stale result.
         guard token == searchRequestToken else { return }
         // Search narrows visibleFiles to a different scope (the global/folder
@@ -48,6 +56,8 @@ extension AppState {
 
     func clearSearch() {
         searchRequestToken += 1   // cancel any in-flight search result
+        inFlightSearchCancellation?.cancel()
+        inFlightSearchCancellation = nil
         searchQuery = ""
         isSearchActive = false
         reloadCurrentFiles()
