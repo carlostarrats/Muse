@@ -20,6 +20,7 @@ private enum SearchFolderScope: Hashable {
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject private var googleAuth: GoogleOAuth
+    @EnvironmentObject private var announcementStore: AnnouncementStore
     @ObservedObject private var indexProgress = IndexProgress.shared
     @ObservedObject private var analyzePipeline = AnalyzePipeline.shared
     /// Unified background-progress state driving the single status pill.
@@ -38,6 +39,7 @@ struct ContentView: View {
         // Confirms/errors first: they're presented outermost, so one raised
         // from inside another card (a delete confirm over Duplicates) is the
         // one on top — Escape has to peel it before its host.
+        if let a = announcementStore.pending { announcementStore.dismiss(a.id); return }
         if appState.alertRequest != nil { appState.alertRequest = nil; return }
         if !appState.moveFailureNames.isEmpty { appState.moveFailureNames = []; return }
         if appState.folderOpError != nil { appState.folderOpError = nil; return }
@@ -310,6 +312,22 @@ struct ContentView: View {
                     ModalMessageCard(alert: alert) { appState.alertRequest = nil }
                         .id(alert.id)
                 }
+            }
+            // Announcements (DECIDED #28). Presented at the shell like every
+            // other modal, and mirrored into AppState.announcementPresented so
+            // the grid's key catcher and the Escape resolver treat it as one.
+            .museModal(isPresented: Binding(
+                get: { announcementStore.pending != nil },
+                set: { if !$0, let a = announcementStore.pending { announcementStore.dismiss(a.id) } }),
+                       width: ModalMessageCardWidth.standard,
+                       palette: appState.moodPalette) {
+                if let a = announcementStore.pending {
+                    AnnouncementCard(announcement: a) { announcementStore.dismiss(a.id) }
+                        .id(a.id)
+                }
+            }
+            .onChange(of: announcementStore.pending) { _, pending in
+                appState.announcementPresented = pending != nil
             }
             // Transparent title bar so the sidebar card flows continuously up
             // to the top and curves with the window corner (Lineform-style).

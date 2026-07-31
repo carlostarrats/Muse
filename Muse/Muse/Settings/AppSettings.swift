@@ -20,6 +20,7 @@ enum AppSettings {
     static let showFileNamesKey = "showFileNames"
     static let showStarsOnGridKey = "showStarsOnGrid"
     static let colorsCardExpandedKey = "heroColorsCardExpanded"
+    static let announcementsEnabledKey = "announcementsEnabled"
 
     /// Automatically run the Vision pass (tags/caption/colors/OCR) on newly
     /// indexed images. Default true. Unset → treated as on.
@@ -43,6 +44,13 @@ enum AppSettings {
     /// a collection and in the hero viewer. Unset → treated as on.
     static var showStarsOnGrid: Bool {
         UserDefaults.standard.object(forKey: showStarsOnGridKey) as? Bool ?? true
+    }
+
+    /// Fetch the announcements feed at launch. OFF disables the FETCH itself,
+    /// not just the display — no request is made at all. Default true.
+    /// Unset → treated as on.
+    static var announcementsEnabled: Bool {
+        UserDefaults.standard.object(forKey: announcementsEnabledKey) as? Bool ?? true
     }
 
     /// Hero viewer COLORS card: expanded (swatches visible) vs collapsed. This

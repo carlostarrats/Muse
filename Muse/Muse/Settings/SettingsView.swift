@@ -15,6 +15,7 @@ struct SettingsView: View {
     @Binding var isPresented: Bool
     @EnvironmentObject private var googleAuth: GoogleOAuth
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var commerceStore: CommerceStore
     @AppStorage(AppSettings.autoTagKey) private var autoTag = true
     @AppStorage(AppSettings.autoCollectionsKey) private var autoCollections = true
     @AppStorage(AppSettings.showFileNamesKey) private var showFileNames = false
@@ -25,7 +26,9 @@ struct SettingsView: View {
         AppSettings.defaultGridSpacing
     @AppStorage(AppSettings.gridCornerRadiusKey) private var gridCornerRadius =
         AppSettings.defaultGridCornerRadius
+    @AppStorage(AppSettings.announcementsEnabledKey) private var announcementsEnabled = true
     @State private var authBusy = false
+    @State private var purchaseBusy = false
 
     /// A labelled slider with its current value in points on the right — the
     /// shape the grid's two continuous settings share.
@@ -165,6 +168,46 @@ struct SettingsView: View {
 
             Section {
                 HStack {
+                    Text(commerceStore.entitlements.unlocked
+                         ? String(localized: "Unlocked")
+                         : trialStatusLine)
+                    Spacer()
+                    if purchaseBusy {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        if !commerceStore.entitlements.unlocked {
+                            ModalButton(title: String(localized: "Unlock"),
+                                        kind: .prominent) {
+                                Task { await runPurchase {
+                                    await commerceStore.purchase(CommerceConfig.unlockProductID)
+                                } }
+                            }
+                        }
+                        ModalButton(title: String(localized: "Restore Purchases")) {
+                            Task { await runPurchase { await commerceStore.restore() } }
+                        }
+                    }
+                }
+                HStack {
+                    Text("Have a code?")
+                    Spacer()
+                    // Gift codes are Apple promo codes — redemption happens in
+                    // the App Store, so there is no coupon system to build.
+                    ModalButton(title: String(localized: "Redeem Code…")) {
+                        NSWorkspace.shared.open(CommerceConfig.redeemURL)
+                    }
+                }
+                Toggle("Show announcements", isOn: $announcementsEnabled)
+            } header: {
+                Text("Muse")
+            } footer: {
+                Text("Unlock the full app, or restore a previous purchase. Redeeming a promo code opens the App Store. Announcements are occasional notices fetched once per launch; turning them off stops the fetch entirely.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                HStack {
                     Text(googleAuth.isSignedIn
                          ? String(localized: "Signed in to Google")
                          : String(localized: "Not signed in"))
@@ -191,6 +234,25 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
+    }
+
+    /// Trial state as a line of text. Never blocks anything — the shipped
+    /// policy is unenforced until pricing is decided (Spec 09).
+    private var trialStatusLine: String {
+        switch commerceStore.trialState() {
+        case .unlocked: return String(localized: "Unlocked")
+        case .trial(let daysLeft): return String(localized: "Trial — \(daysLeft) days left")
+        case .expired: return String(localized: "Trial expired")
+        }
+    }
+
+    /// Same double-tap guard as `runAuth`: a purchase or restore round-trips
+    /// through StoreKit, and two in flight is two sheets.
+    private func runPurchase(_ action: () async -> Void) async {
+        guard !purchaseBusy else { return }
+        purchaseBusy = true
+        await action()
+        purchaseBusy = false
     }
 
     /// Run a sign-in/out action with the busy spinner shown. Guards against a

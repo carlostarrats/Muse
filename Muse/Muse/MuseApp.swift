@@ -21,6 +21,12 @@ struct MuseApp: App {
     /// share UI, the Manage sheet, and the launch expiry sweep.
     @StateObject private var googleAuth = GoogleOAuth()
 
+    /// Commerce + announcements are their own stores — AppState is frozen
+    /// (DECIDED #26), so new features never grow it. Same injection pattern as
+    /// googleAuth above.
+    @StateObject private var commerceStore = CommerceStore()
+    @StateObject private var announcementStore = AnnouncementStore()
+
     /// Pin / Unpin label reflects the selected folder's current state.
     private var pinMenuTitle: String {
         // String-typed property, so these literals aren't in an extractable
@@ -98,6 +104,8 @@ struct MuseApp: App {
             ContentView()
                 .environmentObject(appState)
                 .environmentObject(googleAuth)
+                .environmentObject(commerceStore)
+                .environmentObject(announcementStore)
                 .onAppear { appDelegate.appState = appState }
                 .task {
                     PhaseTrace.begin()
@@ -134,6 +142,9 @@ struct MuseApp: App {
                     // for files indexed before v13. Self-limiting per launch.
                     PhaseTrace.mark("coordinate-backfill.start")
                     Task { await CoordinateBackfill.run(); PhaseTrace.mark("coordinate-backfill.end") }
+                    // Announcements: one GET of a static file per launch,
+                    // off-able in Settings (which disables the fetch itself).
+                    Task { await announcementStore.fetchIfNeeded() }
                     // Hard-delete any Drive shares past their expiry (no-op if
                     // not signed in or nothing is due).
                     await DriveExpirySweeper.sweep(auth: googleAuth)

@@ -525,7 +525,19 @@ final class AppState: ObservableObject {
             || collectionRenameAlertRequest != nil || fileRenameRequest != nil
             || newSubfolderRequest != nil || folderRenameRequest != nil
             || tagRenameRequest != nil
+            || announcementPresented
     }
+
+    /// Mirror of `AnnouncementStore.pending != nil`, so the key-catcher gate
+    /// and the Escape resolver see the announcement card like any other modal.
+    ///
+    /// Deliberately NOT `@Published`: AppState is frozen (DECIDED #26), and a
+    /// published flag here would fan a whole-shell re-render out of a feature
+    /// that owns its own store. It doesn't need to be — the card is presented
+    /// from `ContentView`, which observes `AnnouncementStore` directly, so the
+    /// body that reads `modalPresented` is already re-evaluating when this
+    /// changes. `ContentView` is the only writer.
+    var announcementPresented = false
 
     /// A confirm/error card awaiting presentation by the shell — raised from
     /// views that can't present one themselves (a sidebar row, a tile, or the
