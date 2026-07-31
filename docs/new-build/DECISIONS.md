@@ -1,10 +1,10 @@
-# DECISIONS.md — binding decisions from Specs 01–03
+# DECISIONS.md — binding decisions from Specs 01–08
 
-*Extracted 2026-07-30 from `spec-01-implementation.md`, `spec-02-implementation.md` and
-`spec-03-implementation.md` (the build-level specs, which supersede the corresponding
-`pre-spec-*` files where they deviate), verified against the codebase at `6fdce05`
-(`feat/editing`). **Note:** as of that commit no Spec 01/02/03 code exists in the
-tree — migrations end at `v12_smart_collections`; the implementation specs are the
+*Extracted 2026-07-30 from `spec-01-implementation.md` through
+`spec-08-implementation.md` (the build-level specs, which supersede the corresponding
+`pre-spec-*` files where they deviate), verified against the codebase at `cefa008`
+(`feat/editing`). **Note:** as of that commit no Spec 01/02/03/04/05/06/07/08 code exists in
+the tree — migrations end at `v12_smart_collections`; the implementation specs are the
 settled record, written before build. Product-level decisions live in
 `muse-photo-foundation.md` §13 (authoritative decision log); this file is the
 build-level layer future specs must not contradict.*
@@ -33,7 +33,9 @@ build-level layer future specs must not contradict.*
 
 - Exactly four app-initiated network paths: (1) Google Drive share (user-initiated),
   (2) `announcements.json` (once per launch, off-able), (3) custom-domain provisioning
-  Worker (future, paid, user-initiated), (4) search-model download (Spec 03 —
+  Worker (Spec 08, live: `DomainConfig.workerBaseURL` ONLY; paid; user-initiated, plus
+  a launch status/refresh call only while a domain or address is configured — the
+  `DriveExpirySweeper` class), (4) search-model download (Spec 03 —
   strictly user-initiated via Settings or the one-time offer card, pinned host,
   manifest SHA-256-verified, fail closed, nothing sent). StoreKit/App Store traffic is
   OS-level and not counted. Everything else stays blocked.
@@ -42,6 +44,18 @@ build-level layer future specs must not contradict.*
 - Map link-outs (`maps://`, `https://www.google.com/maps?q=lat,lon` via
   `NSWorkspace.open`) are browser/app hand-offs, not app network calls — same doctrine
   class; the app never touches those URLs with `URLSession`.
+- The share PAGE (recipient's browser, Spec 07) makes exactly one kind of network
+  fetch: the portfolio `manifest.json` GET to `https://www.googleapis.com`,
+  `connect-src`-pinned in the CSP, bounded (`MAX_MANIFEST_BYTES` 512 KB, 6 s timeout),
+  re-validated, never chained. It is recipient-browser traffic, not an app network
+  path — the four-path app list above is unchanged. The page carries a
+  Drive-API-restricted, quota-only API key for this fetch — **the referrer
+  restriction is dropped by Spec 08** (custom hostnames are unenumerable, and the
+  restriction would break the portfolio fetch on exactly the paid tier's pages); an
+  API key for public data is NOT a secret, and this **revises the older "no API key
+  on the page" wording** — the binding invariant is *no secret and no OAuth
+  credential on the page*, plus classic (non-portfolio) shares still touch no
+  network beyond Drive image loads.
 
 ## Commerce
 
@@ -104,36 +118,52 @@ build-level layer future specs must not contradict.*
   own `@MainActor` singleton store observed directly by views (Pattern B, like
   `CollectionsEngine`): `CommerceStore`, `AnnouncementStore`, `PlacesStore`,
   `RediscoveryStore`, `StacksStore`, `SearchFacets`, `ClipModelStore`, `CompareStore`,
-  `CullStore`, `NLQuerySuggest`.
+  `CullStore`, `NLQuerySuggest`, `EditStore`, `EditPresetStore`, `EditClipboard`,
+  `LutStore`, `EditReferenceStore`, `WorkThrottleStore`, `AnalysisStatusStore`,
+  `ShareDomainStore`
+  (plus the per-file, non-singleton `EditSession` created on entering Edit mode, and
+  the per-run, non-singleton import models in `Import/` and `SocialExportModel`
+  (Spec 07) — the shipped `MetadataImportModel` shape).
 - Sanctioned AppState integration cost per store: one stored `objectWillChange`-forwarding
   cancellable in `AppState.init` (the `folderStats` pattern) + a methods-only
   `AppState+<Feature>.swift` extension for orchestration. Nothing else.
 - New module folders: `Commerce/`, `Perf/`, `Search/`, `Intelligence/Geo/`,
   `Intelligence/Stacks/`, `Intelligence/Core/` (shared pure helpers, e.g.
   `FeaturePrints`), `Intelligence/Clip/` (model store, tokenizer, engine,
-  preprocessing), `Views/Compare/`.
+  preprocessing), `Views/Compare/`, `Editing/` + `Editing/Render/` (Spec 04 —
+  platform-neutral: Foundation/CoreGraphics/CoreImage/Metal only, NEVER AppKit,
+  enforced by `EditingModuleImportTests`), `Views/Editor/`, `Views/Theme/`,
+  `Export/Social/` (Spec 07 — platform-neutral: Foundation/CoreGraphics/CoreImage/
+  ImageIO/UniformTypeIdentifiers only, never AppKit) + `Views/Export/`,
+  `Sharing/Domains/` (Spec 08). Non-app deployables live top-level beside `web/`:
+  `workers/domains/` (Spec 08 — the provisioning Worker).
 - Database read/write helpers are nonisolated enums of pure `db`-taking funcs in
-  `Database/` (`PlaceQueries`, `RediscoveryQueries`, `StackStore` — the `NoteStore`
-  shape).
+  `Database/` (`PlaceQueries`, `RediscoveryQueries`, `StackStore`, `EditRecordStore` —
+  the `NoteStore` shape).
 - Pure logic lives in nonisolated enums/structs, unit-tested without UI; `Components/`
   holds pure UI math (`StackDisplay`). House convention: no UI unit tests.
 - Shared mutable statics read off-main are lock-guarded `nonisolated(unsafe)` (the
   `ImageHeaderSizeCache` pattern — used by `EditStackIndex`).
 - Launch backfills are fire-and-forget `Task`s from `MuseApp`'s `.task`, modelled on
   `IntentBackfill`: self-limiting, safe to call every launch, `PhaseTrace`-marked.
-- The semantic-token Theme layer (foundation #27) does **not** exist and is not created
-  by Specs 01–02. Until its own spec lands (required before Spec 04's editor UI), new
-  surfaces use system semantic colors, the shared `SidebarView` constants, and
-  `moodPalette` — no raw hex.
+- The semantic-token Theme layer (foundation #27) is created **minimally by Spec 04**:
+  `Views/Theme/Theme.swift`, an Environment value (role-named colors/spacing/radius/
+  fonts) resolved from `moodPalette` + system semantics, injected once in
+  `ContentView`. Every NEW editor-adjacent surface must read `@Environment(\.theme)`;
+  pre-existing surfaces are NOT migrated (opportunistic later). Non-editor surfaces
+  keep the prior rule: system semantic colors, shared `SidebarView` constants,
+  `moodPalette` — no raw hex anywhere.
 - Mobile-later prerequisites remain design constraints: edit stacks mirrored into
   sidecars; nothing may make the per-field sidecar clock harder.
 
 ## Database schema & migrations
 
 - Migration numbering is fixed: **v13 coordinates · v14 `photo_meta` · v15 `places` ·
-  v16 `last_viewed_at` · v17 stacks · v18 `clip_embeddings` · v19 `photo_traits`** —
-  separate migrations so features land in separate commits without renumbering. Future
-  specs continue at v20. Registered at the end of
+  v16 `last_viewed_at` · v17 stacks · v18 `clip_embeddings` · v19 `photo_traits` ·
+  v20 `edits` + `edit_versions` · v21 `edit_presets` · v22 `photo_traits`
+  capture-stats columns · v23 `edit_luts`** — separate migrations so features land in
+  separate commits without renumbering. Future specs continue at
+  v24. Registered at the end of
   `Database.makeMigrator()`, GRDB DSL, matching record structs in
   `Database/Records.swift` (snake_case fields, `Codable` + `FetchableRecord` +
   `MutablePersistableRecord`, inserted as `var`). Every new child table cascades on
@@ -178,7 +208,7 @@ build-level layer future specs must not contradict.*
   (`photo_meta`), places, `last_viewed_at`, stacks. Rationale: the data lives in (or
   derives from) the bytes; edit-in-place already splits the row.
 - Per `(file_id, parent_dir)` (never content-keyed): tags, ratings, notes, and the
-  future edit stack.
+  edit stack (`edits`/`edit_versions`, Spec 04).
 - Sidecars carry none of the new data: `photo_meta`/`places` are derived and recompute
   locally for free (same rule as OCR text); `last_viewed_at` is device-local behavioral
   data — never exported, never synced, never sent anywhere.
@@ -191,7 +221,7 @@ build-level layer future specs must not contradict.*
   search token) must carry `parent_dir` restrictions; content-derived matches stay
   folder-unrestricted.
 
-## Edit-aware seams (identity functions until Spec 04)
+## Edit-aware seams (Spec 01; made live by Spec 04)
 
 - `Models/EditStackIndex.swift`: `stackHash(for url:) -> String?`,
   `croppedSize(for url:) -> CGSize?`, `installProvider(_ p: (any EditStackProviding)?)`.
@@ -649,6 +679,951 @@ build-level layer future specs must not contradict.*
   100 ms · semantic leg end-to-end 150 ms (supports < 300 ms perceived) · `.similar`
   rule resolve 120 ms · compare two-pane sharp 1200 ms · backfill ≥ 8 files/s.
 
+## Edit model & storage (Spec 04)
+
+- `EditStack { schemaVersion, processVersion, rawParams: RawParams?, adjustments:
+  [Adjustment], masks: [Mask] }`; `currentSchemaVersion = 1`,
+  `currentProcessVersion = 1`. Decoding NEVER bumps either version — only newly
+  constructed stacks stamp current. `masks` is always `[]` in v1 (reserved slot that
+  round-trips in the JSON shape from day one).
+- `Adjustment` is enum-tagged with one typed params struct per group, cases in
+  canonical order **tone · color · presence · curve · geometry · vignette · toneZone ·
+  lut** (the last two from Spec 05), at most
+  one per case; `EditStack.normalized()` sorts/dedupes; the renderer iterates its OWN
+  fixed chain, never the array's order — reorderability is unrepresentable. JSON via
+  an explicit keyed wrapper `{"type": …, "params": …}`; an unknown `type` fails the
+  whole-stack decode (detectably), never misparses. **New cases must always APPEND at
+  the enum end** — canonical order is declaration order, so mid-list insertion re-keys
+  every edited thumbnail and breaks `stack_hash` stability (the pinned fixture hash is
+  the tripwire). Neither `schemaVersion` nor `processVersion` bumps for a new case:
+  the unknown-`type` whole-stack decode failure IS the forward mechanism (an older
+  build renders a new-case stack as the ORIGINAL, blob preserved, detectably).
+- Stored units: `ToneParams.exposureEV` in real EV (−5…+5); other scalars −1…+1 (or
+  0…1) with `neutral`/`isNeutral`/`clamped()` per struct. Temperature/tint map in
+  MIRED, never raw Kelvin. `GeometryParams.crop` is a normalized unit rect in
+  display-oriented, straightened coordinates; `appliedDisplaySize(to:)` is the pure
+  post-geometry size function layout consumes. `RawParams` holds only what has no
+  encoded-source equivalent (`lensCorrection`, `decoderVersion` pinned at first
+  edit); the WB/NR/sharpen sliders are stored ONCE (ColorParams/PresenceParams) and
+  ROUTED by the renderer per source kind — copy/paste/presets work across RAW↔JPEG
+  with one model.
+- `EditStackCodec`: canonical bytes = `.sortedKeys` JSON of the normalized stack;
+  `stack_hash` = full SHA-256 hex of those bytes (stability pinned by a fixture
+  test). `decode` → nil for corrupt JSON or `schemaVersion > current`;
+  `processVersion > current` decodes but `EditRenderer.canRender` is false.
+- Unrenderable-blob rule: a stack the renderer can't honor renders as the ORIGINAL
+  image — never a partial stack — and the stored blob is never rewritten or deleted
+  by the render path; only an explicit user edit or Reset overwrites it.
+- `EditHistory` is a session-only value type (Surface Camera port: push-dedupe,
+  truncate-forward on push, undo/redo), capacity 100, pushed on gesture END only
+  (`EditSession.commitGesture` is the single push site). Cross-session persistence is
+  the stack + snapshots/versions, never the history.
+
+## Spec 04 schema (v20–v21)
+
+- **v20 `edits`**: composite PK `(file_id, parent_dir)` (`file_id` cascades on file
+  delete), `stack` TEXT (canonical JSON), `stack_hash` TEXT NOT NULL,
+  `process_version` INTEGER NOT NULL (denormalized), `updated_at` INTEGER NOT NULL.
+  One row per (file, folder) = the CURRENT stack. **A neutral stack DELETES the
+  row** — "no edit" is the absence of a row (the `NoteStore.write` blank-deletes
+  rule), which reverts the thumbnail key to the nil-stack variant.
+- **v20 `edit_versions`**: `id` UUID PK, `(file_id, parent_dir)` scope (cascade),
+  `kind` `"version"` | `"snapshot"`, `name`, `stack`, `created_at`; index on
+  `(file_id, parent_dir)`. Versions and snapshots share one table, differing only in
+  surface (version switcher + grid badge vs the before/after compare picker).
+- **v21 `edit_presets`**: `id` PK, `name` (no UNIQUE; NOCASE ordering), `stack`
+  (geometry group excluded at save), `created_at`, `updated_at`. Library-global.
+- Records: `EditRow`, `EditVersionRow`, `EditPresetRow`.
+- A virtual copy/version is a SWITCHABLE stack: exactly one current stack (the
+  `edits` row) renders everywhere; switching copies the chosen version into the
+  current row (auto-preserving the previous current as a version first). Never a
+  parallel grid tile — path-keyed identity cannot show one path twice. Reset clears
+  the current stack only; versions/snapshots survive a reset.
+
+## Edit carry & identity (Spec 04)
+
+- `EditRecordStore.carry`/`carryAll` mirror `NoteStore.carry`/`carryAll` (INSERT OR
+  IGNORE — never clobbers a destination edit; copy-vs-move by the same
+  same-dir-sibling rule) and are called BESIDE the existing `NoteStore` call at all
+  five rewrite sites: Indexer hash-collision sole-path (`carryAll`), hash-collision
+  shared-row, shared-row split, `FileMoveMigration.apply`, and
+  `FolderRenameMigration.apply` — which also gives `edits`/`edit_versions` the same
+  stale-target pre-clear + `SUBSTR`-prefix `parent_dir` rewrite as tags/notes. Any
+  NEW path rewriting `file_id` or `parent_dir` must carry `edits` too. Carried
+  `edit_versions` rows get fresh UUIDs.
+- Pure edit-in-place (external overwrite, sole alive path) KEEPS the stack —
+  parameters are normalized, so they still apply; discarding user edits because the
+  bytes changed is the worse failure.
+- `analyzed_hash`, `files.width/height`, `content_hash`, and every analysis input
+  stay keyed on ORIGINAL bytes; an edit never changes content identity and never
+  triggers re-analysis.
+
+## Edit store, provider & save sequence (Spec 04)
+
+- `EditStore` (Pattern B) has ZERO AppState integration — not even a forwarded
+  `objectWillChange` cancellable; the grid reads `EditStore.generation` through
+  `gridSignature`.
+- `LiveEditStackProvider` implements Spec 01's `EditStackProviding` over a
+  lock-guarded `nonisolated(unsafe)` static index (the `ImageHeaderSizeCache`
+  pattern) keyed by standardized alive path; entries hold
+  `(stackHash, geometry, processRenderable)` + a lazily decoded stack. The provider
+  does NO I/O, ever; `croppedSize(for:)` =
+  `geometry.appliedDisplaySize(to: ImageHeaderSizeCache.cached(url))`, nil when
+  either side is unknown. Installed in `MuseApp`'s `.task` before the backfills;
+  full index rebuild at launch, `warmIndex(paths:)` per folder load, rebuild after
+  move/rename.
+- The save sequence, one place, in order: resolve scope via alive path →
+  `EditRecordStore.write`/`delete` → update the index entry →
+  `appState.markContentChanged([path])` — **the tile-refresh seam for edit saves**
+  (it already invalidates both thumbnail-key variants and bumps the tile task token;
+  no parallel edits-version channel) → `generation += 1` (relayout — a crop changes
+  tile aspect) → `exportSidecarsAfterEditChange`.
+- The editor autosaves (400 ms debounce + save on exit/close/flip); there is no
+  Done/Cancel — the grid updates live while editing.
+
+## Edit sidecars (Spec 04)
+
+- `Sidecar` gains `edit_stack: String?` + `edit_updated_at: Int64?` (defaults nil —
+  pre-edit sidecars decode unchanged). Only the CURRENT stack rides sidecars;
+  versions/snapshots are device-local (recorded limitation).
+- `Sidecar.merge` resolves edits by the `edit_updated_at` field clock: the greater
+  non-nil clock wins; nil never clobbers (union-never-deletes).
+- `Sidecar.resolveForWrite` gains `editAuthoritative: Bool = false`; ONLY the
+  edit-save/reset export path (`AnalyzePipeline.exportSidecarsAfterEditChange`,
+  mirroring `exportSidecarsAfterTagEdit`) passes true — fresh wins including a
+  clear; every other export preserves the on-disk edit field.
+- `SidecarHydrator` applies incoming edits via `EditRecordStore.applyHydrated`
+  (row-level LWW, strictly-newer local wins — the `NoteStore.applyHydrated` shape),
+  then refreshes the provider index and invalidates the path's thumbnails.
+
+## Render pipeline (Spec 04)
+
+- Core Image + Metal, zero third-party image dependencies. Working space: extended
+  linear sRGB, explicit on every context. Surface's `EncodedImage`/`LinearImage`
+  type-safety wrapper ports as `Editing/Render/WorkingImage.swift`: the single
+  decode crossing is `EncodedImage.toLinearWorkingSpace()`;
+  `CIImage(contentsOf:)` sources enter via `LinearImage.alreadyDecodedFromFile`;
+  adjustment methods exist only on `LinearImage` (an encoded image cannot be
+  adjusted, by type).
+- Fixed chain order (code, never data): decode/orient (RAW via `CIRAWFilter`) →
+  geometry → tone (exposure → temp/tint [encoded sources only] → toneBands →
+  contrast) → **toneZone** (scene-referred, un-clamped linear, single hue-preserving
+  gain — Spec 05) → curve → color (vibrance → saturation) → **lut** (display-referred
+  pocket like the curve — Spec 05) → presence (NR → clarity →
+  texture → sharpen) → vignette → consumer-side display transform. Scene-referred:
+  un-clamped linear until the curve/display stage; highlight recovery must actually
+  work (test-pinned).
+- The curve is the deliberate display-referred exception: CPU monotone-cubic
+  (Fritsch–Carlson) spline → 1024-entry LUT → `CIColorCurves` with an explicit sRGB
+  space. `CIToneCurve` is never used anywhere in the app.
+- Highlights/Shadows/Whites/Blacks = one custom `[[stitchable]]` Metal
+  `CIColorKernel` (luminance-band exposure-space gains, hue-preserving, exact
+  identity at 0); Clarity/Texture = one shared stitchable blend kernel
+  (midtone-weighted local contrast) invoked at two radius/weight settings. Kernels
+  live in `Editing/Render/EditKernels.metal`, compile into the default metallib (no
+  `-fcikernel`), load via `CIColorKernel(functionName:fromMetalLibraryData:)`, and a
+  load-by-name smoke test gates the build phase. Never CIKL.
+- RAW: neutralize Apple's default look (`baselineExposure = 0, shadowBias = 0,
+  boostAmount = 0, localToneMapAmount = 0, isGamutMappingEnabled = false`); every
+  property set gated on `isSupported(option:)` through one `setIfSupported` helper;
+  WB happens ONLY at demosaic (`neutralTemperature`/`neutralTint`, mired offsets
+  from the as-shot neutral) — never `CITemperatureAndTint` on a RAW source's output;
+  NR/sharpen route to the filter; the decoder version is pinned at first edit
+  (`rawParams.decoderVersion`, prefer `.version9`), substituted-not-hidden when no
+  longer supported.
+- Every scale-dependent parameter (clarity/texture/sharpen radii, vignette feather)
+  is a fraction of the SOURCE long edge scaled by the decode ratio;
+  `EditRenderConsistencyTests` (one all-groups stack × 2 fixtures × 3 resolutions,
+  downsampled agreement) is the permanent gate on any renderer change.
+- Contexts: one long-lived preview `CIContext` (`cacheIntermediates: true`, extended
+  linear sRGB) + a per-export context (`cacheIntermediates: false`, `memoryLimit`
+  1 GB); export sources are lazy `CIImage(contentsOf:)` (CI tiles internally).
+  There is NO Extended Virtual Addressing entitlement on macOS (iOS-only). Preview
+  never decodes full-res: proxy = the hero ladder formula, capped 4096.
+- Slider rendering goes through `RenderCoalescer` (actor): at most one render in
+  flight, latest params win, no queue.
+- HDR: load `.expandToHDR`; `CIToneMapHeadroom` before display; export writes HDR
+  HEIF with gain map on macOS 15+, tone-mapped SDR on 14.6 (recorded limitation);
+  unedited files always export original bytes.
+- The editor canvas (`EditCanvasView`, MTKView + `CIRenderDestination`) and the CI
+  kernels are the app's sanctioned Metal surface (supersedes "no Metal shaders
+  remain").
+
+## Edit-aware consumers & exports (Spec 04)
+
+- Binding sweep rule: EVERY surface that displays or ships a photo's pixels consults
+  `EditStackIndex` and renders via `EditRenderer.render(url:stack:maxPixel:)` when a
+  stack exists — grid thumbnails (`ThumbnailCache.generate` image branch), the hero
+  decode ladder (both rungs; every HeroStage guard/curve untouched), compare panes,
+  and `OutputRender` (PDF via direct bounded render; Drive/share sheet via a
+  full-res rendered temp file). Render failure falls back to original pixels. Backup
+  stays the one exclusion (its DB now carries edits/versions/presets).
+- Edited thumbnails render at the SAME `renderedVariants` sizes — no new variant.
+- `OutputRender` formats are named constants: same container for JPEG (q 0.92) /
+  PNG / TIFF / HEIC (q 0.9); RAW renders JPEG q 0.92 sRGB on share paths. Rendered
+  temps live in `tmp/muse-render/` with a >1-day launch sweep. The metadata strip
+  still runs on POST-render bytes (render first, strip second).
+- Grid badge corners are fully assigned: top-leading stack · top-trailing star ·
+  bottom-leading cull · **bottom-trailing edited** (`slider.horizontal.3`, count
+  appended when versions exist; NOT a click target). `gridSignature` folds in
+  `EditStore.generation`; `TileView.drawnAspectRatio` reads `EffectiveDimensions`.
+
+## Editor UI & Theme (Spec 04)
+
+- Editable kinds (Path A) are `.image` and `.raw` ONLY — `.psd` is excluded (its
+  flat composite is a preview; editing it is Path B's job).
+- The editor lives INSIDE the hero viewer: a (Preview | Edit) segmented control
+  top-center; Edit mode swaps the STAGE content and hides the info column — the
+  hero open/close choreography is untouched. Edit-mode Escape is consumed in the
+  hero's `viewerClosing` onChange (first branch, before region mode) and exits to
+  Preview; `EscapeResolver` is unchanged. Arrow-key file flips are DISABLED in Edit
+  mode.
+- Editor backdrop: flat neutral, five named levels (white 1.0 / light 0.85 /
+  **mid 0.48 default** / dark 0.18 / black 0), right-click to switch, persisted as
+  `AppSettings.editorBackdropKey`.
+- Panels are anchored floating cards (draggable with snap-back; nothing persisted).
+  Right card tabs **Light / Color / Looks** (Looks hosts user presets in v1; Spec 05
+  replaces the rows with the live-thumbnail browser + LUTs); left card tabs
+  **Info / History (+ Snapshots) / Scopes** (Scopes is an empty scaffold — Spec 05's
+  mount point). The tone-zone slot is reserved above the Light sliders.
+- `CurveEditorView(histogram: CurveHistogram?)` — a 64-bin value type drawn behind
+  the curve when non-nil; Spec 04 always passes nil (Spec 05 fills it). This is the
+  histogram-behind seam.
+- WB eyedropper: encoded sources solve the mired/tint offset from the sampled proxy
+  pixel (pure, tested); RAW uses `CIRAWFilter.neutralLocation`, then stores the
+  equivalent slider offsets — the stack stays declarative, never a click location.
+- Before/after: hold-`\` (or the Before button) peek · ⌘Y side-by-side · split-wipe
+  with draggable divider, comparable against Original or any snapshot; implemented
+  over cached rendered textures.
+- `EditSlider` is the one scalar control: per-slider reset (double-click label/
+  value), option-drag fine steps, history push on gesture end.
+- New shell modal flags registered in `AppState.modalPresented`:
+  `openWithForkRequest` and the copy/paste group-selection card.
+
+## Copy/paste/sync & presets (Spec 04)
+
+- `AdjustmentGroup` = tone / color / presence / curve / geometry / vignette / raw /
+  toneZone / lut (rawValues `"toneZone"`/`"lut"`, Spec 05).
+  `EditTransfer.adjustedGroups(of:)` (non-neutral groups — the auto-select default;
+  never a checkbox wall) and `apply(groups:from:onto:)` are pure; apply is
+  COPY-BY-VALUE and a group absent in the source CLEARS it in the target.
+- `EditClipboard` is in-memory only — never `NSPasteboard`, never persisted.
+- Surfaces: editor chrome + Edit-menu commands (⌥⌘C / ⌥⌘V) + grid context-menu
+  "Paste Adjustments" (batch sync over the effective selection; each file runs the
+  full save sequence; no progress UI — the status pill stays background-work-only).
+- Presets store stacks MINUS the geometry group (a stored crop ambushes every
+  applied photo); copy/paste DOES offer geometry. Presets MAY carry the lut group
+  (a look is often LUT + tweaks) — geometry stays the ONLY preset exclusion.
+  Copy/paste of the lut group copies the reference + strength (safe: LUT data is
+  immutable). Application is copy-by-value; a
+  stack stores no preset reference; preset mutation happens only via the explicit
+  "Update Preset from This Photo" / "Save as New" actions.
+
+## Edit-a-Copy (Spec 04)
+
+- EVERY external hand-off of a file with Muse edits (any Open / Open With path)
+  routes through the single `OpenWithItems.open(with:)` seam and presents the fork
+  card (`AppState.openWithForkRequest`, shell `.museModal`): Edit a Copy with Muse
+  Adjustments (prominent) / Edit Original / Cancel.
+- Copy naming: `EditCopyNaming.candidate` — `<stem>-Edit.<ext>`, collision ladder
+  `-Edit-2`… (case-insensitive). RAW/DNG copies render 16-bit TIFF (an editing
+  master — external editors can't write RAW); other formats keep their container.
+- The copy keeps the original's EXIF/IPTC minus orientation — metadata stripping is
+  a Drive-share rule, not a local one.
+- Flow (ordered, fail-closed): full-res render → move beside the original →
+  `Indexer.indexFile` (deterministic — never wait for FSEvents) →
+  `StackStore.createStack(kind: "manual", [parentID, copyID], pick: parent)` when
+  v17 exists (skipped and recorded until then) → folder reload →
+  `NSWorkspace.open` with the chosen app. A render/write failure aborts with an
+  alert and writes nothing.
+- The copy is a fresh asset: no inherited stack, normal analysis; later external
+  saves to it are ordinary edit-in-place.
+
+## Perf baseline additions (Spec 04)
+
+- New recorded rows: slider→canvas render (24 MP, warm context) 50 ms perceived /
+  ~16 ms steady-state · edited 320@2x thumbnail 120 ms · 60 MP export < 20 s with no
+  memory-pressure kill on the M1 Air 8 GB · editor enter → first draw 400 ms ·
+  stack decode + hash < 1 ms.
+
+## Spec 05 schema (v22–v23)
+
+- **v22 `photo_stats`**: adds to `photo_traits` — `clip_high_r`, `clip_high_g`,
+  `clip_high_b`, `clip_low`, `noise_sigma` (all REAL nullable);
+  `PhotoTraits.currentVersion` 1 → 2, so existing rows are version-behind and
+  `DeepAnalysisBackfill` re-scans them under the standing per-launch cap. No new
+  table, marker, or index — the Spec 03 version-bump mechanism used as designed.
+  `TraitFields`/`VisionResult` gain the five fields; both compute sites ride the
+  existing single decode (never a second decode).
+- Stored capture stats use FIXED thresholds `ClippingStats.storedHighThreshold =
+  254/255` / `storedLowThreshold = 2/255` — never the user's zebra prefs (DB rows
+  must not change meaning when a pref moves).
+- `Intelligence/Core/NoiseEstimate.swift`: noise sigma = MAD (×1.4826) of the 3×3
+  Laplacian over the flattest half of 32×32 luminance tiles, `normalizedLongEdge =
+  1024` (the `SharpnessScore` normalization), nil on degenerate input.
+- **v23 `edit_luts`**: `id` TEXT PK = content hash (`CubeLUT.hash`, SHA-256 of the
+  canonical float bytes), `name`, `size`, `data` BLOB (float32 LE RGB,
+  R fastest-varying), `created_at`. Library-global like `edit_presets`, no file
+  cascade. Record: `EditLutRow`.
+
+## Edit model additions (Spec 05)
+
+- `ToneZoneParams`: `zoneCount = 9` gains, −1…+1 each, zones spanning −8…0 EV one
+  stop apart (`gains[0]` = deepest shadows); `clamped()` also pads/truncates a
+  wrong-length array. The EV mapping is renderer-side: `ToneZoneMath.maxZoneEV =
+  2.0` (±1 ↦ ±2 EV, owner-tuned constant).
+- `LutParams { lutHash, name, strength }`: `lutHash` = the `edit_luts` PK — a
+  REFERENCE, never embedded data (a 64³ table is ~3 MB; the stack rides sidecars and
+  is hashed per edit); `name` is the display fallback for the missing-LUT notice;
+  `strength` 0…1, neutral at 0. At most one `lut` case per stack (no LUT stacking).
+
+## LUT rules (Spec 05)
+
+- LUT rows are IMMUTABLE: import is INSERT OR IGNORE on the content hash (re-import
+  dedupes), rename touches `name` only, there is no update path — a `lutHash`
+  resolves to byte-identical data or nothing, restoring value guarantees to the
+  reference.
+- `EditRenderer.canRender` = `processVersion ≤ current` AND every `lut` reference
+  resolves. An unresolvable LUT renders the ORIGINAL everywhere (thumbnails / hero /
+  exports via `OutputRender`'s identity branch), NEVER a partial stack; the blob is
+  never rewritten; importing the matching `.cube` heals every referencing photo
+  (thumbnail invalidation + `EditStore.generation` bump). The editor shows the
+  original plus a notice row naming the missing LUT with an Import button.
+- `Editing/LutRegistry.swift`: nonisolated, LRU cache (`cacheLimit = 8` decoded
+  LUTs — never library-resident), miss = one sync `queue.read` of the blob;
+  render-path-only — NEVER call it on the main thread. `invalidate(id)` on
+  import/delete.
+- `CubeLUTParser` (`Editing/CubeLUT.swift`): `maxFileBytes` 64 MB, `maxSize` 128;
+  `TITLE` → default display name; non-default `DOMAIN_MIN/MAX` refused
+  (`unsupportedDomain` — resampling would misrepresent the look); `LUT_1D_SIZE`
+  refused; R fastest-varying pinned by an asymmetric fixture; parse errors carry
+  line numbers.
+- Render: `CIFilter.colorCubeWithColorSpace` with an EXPLICIT sRGB space (never bare
+  `CIColorCube` — P3 shift) + `extrapolate = true` (HDR headroom); strength via the
+  `lutMix` kernel.
+- `edit_luts` data never rides sidecars (it is in backups via the DB). Recorded
+  limitation: a hydrated stack referencing an un-imported LUT renders as the
+  original on that device until the same `.cube` is imported there (hash-keyed
+  heal, filename-independent).
+- `Models/LutStore.swift` (Pattern B): listings only resident (no blobs);
+  `importCubes` surfaces per-file failures by filename via the `MuseAlert` seam;
+  delete confirms with `referenceCount` (LIKE on the 64-hex id across
+  `edits`/`edit_versions`/`edit_presets`).
+
+## Editor readouts & statistics (Spec 05)
+
+- One shared stats tap, piggybacked on `RenderCoalescer` at `statsSampleLongEdge =
+  256`, two extra renders per completed frame: display-referred RGBA8 (histogram +
+  clipping) and the smoothed-EV zone map. Computed ONLY while a consumer is visible
+  (`EditSession.statsVisible` — Light or Scopes tab, Edit mode), never in Preview,
+  never full-res, never a second render loop.
+- `Editing/HistogramCompute.swift` is pure over raw buffers: `HistogramData` (64
+  bins × r/g/b/luma), `ClippingStats` (per-channel high fractions, low fraction,
+  clip-mass row centroids), `zoneMass`, and the `CurveHistogram` fill — Spec 04's
+  `CurveEditorView(histogram:)` seam is closed by this data.
+- `EditSession.stats` is `@Published`; the `zoneEVMap` buffer is NON-published
+  (hover sampling reads it imperatively — publishing a per-render buffer would
+  re-render panels for nothing).
+- **Zebras, the live clipping stats, and the Scopes messages read the SAME two
+  AppSettings thresholds** (`editorZebraHighKey`/`editorZebraLowKey`, defaults
+  0.98/0.02) — their agreement is structural; never fork the constant. The zebra
+  toggle itself is session-scoped (`session.zebrasOn` + the J key in Edit mode),
+  never persisted; only the thresholds persist.
+- Zebras and the zone overlay are single `[[stitchable]]` kernel passes on the
+  ≤-canvas-res display-referred image. New kernels in `EditKernels.metal`, all
+  covered by `EditKernelLoadTests`: `zebraStripes`, `zoneHatch`, `toneZoneGain`,
+  `tzSquare`, `tzLinearCoeffs`, `tzApplyCoeffs`, `lutMix`.
+- Raw-sensor (pre-demosaic) clipping is SKIPPED, never approximated — `CIRAWFilter`
+  exposes no cheap pre-demosaic tap; display clipping is what the zebras mean.
+- `Editing/ClippingMessages.swift`: deterministic, stats-only (`messageFloor =
+  0.001`, `channelDominanceRatio = 3.0`); spatial hints come from the clip-mass row
+  centroid → top/middle/bottom phrasing — NEVER scene semantics.
+- Histogram drag-to-adjust: left third → blacks, right third → exposure, middle
+  inert; live draft writes with `commitGesture()` on gesture end (the `EditSlider`
+  contract); the accessible parallel path is the Light sliders themselves.
+- The Scopes-tab scaffold is replaced by `Views/Editor/ScopesPanel.swift` +
+  `Views/Editor/HistogramView.swift`.
+
+## Tone-zone control (Spec 05)
+
+- Render stage 2b (`Editing/Render/ToneZoneFilter.swift`): log2-luminance guide at
+  ≤ 1024 px, self-guided guided filter (`guidedRadiusFraction = 0.05` × long edge —
+  scale-normalized like every pipeline radius; `guidedEpsilon = 0.25`), application
+  = `exp2(Σ weight_i · gain_i · maxZoneEV)` as a single gain on RGB. Exact identity
+  at zero gains.
+- Pure math in `Editing/ToneZoneMath.swift` (raised-cosine partition-of-unity
+  weights, end-zone clamping); the Metal kernel mirrors it, pinned through the
+  consistency/neutrality goldens.
+- `smoothedEVMap` is ONE pipeline serving the render stage, the stats tap, and the
+  zone overlay — three consumers, one mask, by construction.
+- The zone strip (`Views/Editor/ToneZoneStrip.swift`) mounts in Spec 04's reserved
+  Light-tab slot; per-cell vertical drag adjusts gains; the accessible fallback is a
+  disclosure of 9 standard `EditSlider`s (that IS the VoiceOver path — the strip
+  drag needs no parallel accessibility action).
+- Scroll-to-adjust lives behind an explicit TARGET MODE (the WB-eyedropper pattern —
+  plain scroll keeps zooming the canvas); the hover readout samples the SMOOTHED
+  mask EV so the number shown is the number scrolled; Escape consumes targeting
+  INSIDE the hero's edit-mode branch before exiting to Preview — `EscapeResolver`
+  unchanged.
+- Zone overlay: `zoneHatch` where the hovered zone's weight ≥ `overlayWeightFloor =
+  0.5`; hover-scoped, Edit mode only.
+- **`EditRenderConsistencyTests`' all-groups fixture must include every renderable
+  group, current and future** — a new chain stage lands inside the standing
+  3-resolution thumbnail/screen/export gate in the same commit (toneZone + lut are
+  in it now; tolerance unchanged).
+
+## Photo feedback (Spec 05)
+
+- `Editing/PhotoFeedback.swift` is a DETERMINISTIC rule table, Swift-declared —
+  never an external data file (xcstrings extraction can't see one) and NEVER an
+  LLM. Inputs come only from precomputed columns (`photo_meta` + `photo_traits`,
+  read by `Database/PhotoStatsQueries.feedbackInputs` inside the hero's existing
+  details load) — the surface must never trigger a decode or query-time analysis.
+- Fixed severity order clipping → shadows → motion blur → noise → soft → thin
+  focus; `maxNotes = 3`; an empty result renders NO card (silence is a feature).
+  Flash suppresses the motion-blur note; motion blur suppresses the soft note
+  (cause beats symptom). Named thresholds, one declaration site each:
+  `clipNoteFloor 0.002`, `shadowNoteFloor 0.02`, `noiseISOFloor 3200`,
+  `thinApertureCeiling 2.0`, `handheldFallbackFocal 50`, `noiseSigmaQuiet`
+  (owner-tuned). Absent input fields never fire a rule.
+- Surfaces: a hero INFO-column card "WHY IT LOOKS THIS WAY" (global last-choice
+  collapse via `AppSettings.feedbackCardExpandedKey`, the colorsCard
+  @State-seeded pattern) + the editor Info tab — which also shows the RAW process
+  line (pinned decoder vs live support, substitution stated; the Spec 04
+  recorded-not-hidden promise surfaced).
+- Localized display text lives on the typed cases via `String(localized:)` format
+  keys; tests assert typed notes, not strings (English-host rule).
+
+## Looks browser & reference view (Spec 05)
+
+- The Looks-tab rows are replaced by the browser grid (Presets + LUTs sections),
+  every look rendered live on the CURRENT photo: base proxy decoded ONCE at 200 pt
+  × 2 through `withinDecodeBudget`, the draft's geometry applied, then one
+  `EditRenderer.apply` per look; latest-wins sweep with `looksRefreshDebounce =
+  400 ms`. Thumbs are session-memory only — never `ThumbnailCache`, never disk, no
+  `renderedVariants` entry. The strength slider appears only for the applied
+  LUT-based look.
+- A preset click is `EditTransfer.apply` copy-by-value; a LUT click writes
+  `LutParams`; either is exactly one `commitGesture()` undo step.
+- `Models/EditReferenceStore.swift` (Pattern B): `{ url, paneVisible }`,
+  memory-only, never persisted. Set via the grid context menu "Use as Reference
+  Photo" (single image-kind selection); no in-editor picker in v1. The pane renders
+  the reference THROUGH ITS OWN edit stack via `EditRenderer.render` (the
+  consumer-sweep rule), fit-only, no zoom sync; any active before/after compare
+  mode hides the pane until it returns to `.off`.
+- The status pill stays background-work-only: stats taps, looks sweeps, and LUT
+  imports report nothing to it. Spec 05 adds zero AppState `@Published` properties.
+
+## Perf baseline additions (Spec 05)
+
+- New recorded rows: stats tap ≤ 3 ms per coalesced render · zebra pass ≤ 4 ms ·
+  toneZone stage ≤ 15 ms on a 24 MP proxy · zone overlay ≤ 8 ms · 30-look browser
+  refresh < 1 s · 64³ `.cube` import < 300 ms · warm LUT stage ≤ 5 ms ·
+  `DeepAnalysisBackfill` v2 throughput ≥ 8 files/s.
+
+## Import surface (Spec 06)
+
+- **Spec 06 adds NO migrations** — every write lands in existing tables (`tags`,
+  `notes`, `edits`/`edit_presets`, `photo_meta`/`files.lat/lon`, `collections`).
+  Future specs still continue at v24.
+- One **File > Import submenu** (five items: Metadata & Lightroom Edits · Lightroom
+  Presets · Apple Photos · Google Takeout · Eagle Library). Items whose spec
+  dependency is unbuilt are ABSENT, not disabled.
+- `AppState.importModal: ImportModal?` (enum payload: `.metadata` / `.labelMapping`
+  / `.lightroomPresets` / `.applePhotos` / `.takeout` / `.eagle` / `.report`)
+  **replaces** `metadataImportRequest` 1-for-1 — one shell-modal flag for all import
+  UI, net-zero AppState property count, registered in `modalPresented`; card swaps
+  (run → label sheet → report) are phase changes of the one flag, never stacked
+  modals.
+- Every import run card: built only while presented, `.onAppear` starts the model,
+  `.onDisappear` cancels it; applied work stays; re-runs are idempotent (the
+  shipped `MetadataImportSheet` contract, kept for all five sources).
+- One shared `ImportReport` + `ImportReportCard` for every source: counts,
+  per-label outcomes, `unsupportedSliders` disclosure, stated-plainly `notices`.
+  Models accumulate; the card computes nothing.
+- **Every import writes through existing seams only**: tags via
+  `MetadataImportApply.applyKeywords` (insert-or-promote manual; rating-glyph
+  labels dropped), ratings via `TagStore.setRating` behind
+  `MetadataImportRules.ratingToApply` (gap-fill), notes via `NoteStore` (fill-gaps),
+  edits via `EditStore.save` (never clobbers), collections via
+  `CollectionStore.createManual(name:fileID:)`/`addFile` (added_by `'manual'`).
+  A new source is a reader + a mapper, never a new writer.
+- Destination/root handling for every source: a picked folder outside all roots is
+  added via `BookmarkStore.addRoot` first (the shipped trailing-slash containment
+  check); copied files are indexed deterministically via
+  `Indexer.indexBatch(priority: .high)` in ≤ 50-file batches — never wait for
+  FSEvents.
+
+## Universal metadata layer (Spec 06)
+
+- `MetadataKeywordReader` keeps its name, entry point, and guarantees;
+  `Extracted` gains `label`, `title`, `caption`, `creator`, `coordinate`. Per-field
+  priority stays sidecar → embedded XMP → embedded IPTC; existing keywords/rating
+  behavior is pinned byte-identical by test.
+- `XMPGPS` (pure): parses XMP-format `exif:GPSLatitude/Longitude` strings
+  ("DD,MM.mmmH") — the one coordinate source `PhotoHeaderReader` structurally
+  cannot reach (sidecar-only RAW workflows); rejects non-finite/out-of-range.
+- Title/caption/creator land in the per-`(file_id, parent_dir)` **note** via pure
+  `ImportedText.note` (order title · caption · "© creator", newline-joined,
+  case-insensitive dedupe, 2 000-char cap), **fill-gaps only** — an import never
+  overwrites an existing note; sidecar export rides the NON-authoritative path.
+  Never `files.caption` (Vision-owned, content-keyed).
+- `ImportSupplement.apply(db:fileID:contentHash:header:external:)` is the one
+  writer for externally-sourced GPS/dates (XMP GPS, Takeout JSON, PHAsset):
+  **header-wins / external-fills-gaps per field**, writes `files.lat/lon` +
+  `photo_meta`, stamps BOTH markers (`coords_scanned_hash` +
+  `exif_scanned_hash` = content_hash), row-guarded on the hash. `(0,0)`
+  coordinates are absent, never null island.
+- **Spec 02 amendment A1**: `AnalyzePipeline.analyzeOne` and `PhotoHeaderBackfill`
+  SKIP their photo_meta/coords write when both markers already equal
+  `content_hash` — else the first analyze pass clobbers supplement-imported
+  GPS/dates with header NULLs. Recorded limitation: an edit-in-place stales the
+  markers, the header is re-read, and supplement values drop until re-import.
+- Runs that applied supplements chain `GeocodeBackfill.run()` then
+  `SearchFacets.refresh()` (when built), fire-and-forget.
+
+## Color labels (Spec 06)
+
+- Label tags are ordinary manual tags stored with the canonical-English prefix
+  **`"Label: "`** (`LabelTag.prefix`); chips render visually distinct (outline +
+  `tag` glyph). Rename/delete/filter/smart-`.tag` behavior is standard.
+- **The tag-search leg excludes `LabelTag.isLabel` rows** unless
+  `LabelTag.queryTargetsLabels(query)` (query contains "label") — a workflow
+  marker must never answer a content color query. Pinned by test: "red" ∌
+  `Label: Red`; "label: red" ∋.
+- `LabelMapping.Choice` = `.skip` / `.namespaced` / `.tag(String)`; default
+  `.namespaced`; mapping targets refuse ★-runs (enforced inside
+  `resolvedLabel`, not per caller). Choices persist in UserDefaults
+  (`AppSettings.importLabelChoicesKey`) keyed by the RAW source string (localized
+  LR label names are distinct keys, deliberately). All values remembered → the
+  sheet is skipped and choices apply silently.
+- Labels are accumulated during the scan (value → alive paths) and applied after
+  the mapping decision, in `queue.write` chunks through `applyKeywords`.
+
+## Lightroom import (Spec 06)
+
+- **The import envelope is the enumerated field list in `LightroomXMP`**: crop /
+  CropAngle / orientation (exact); WB, Exposure2012, Contrast2012, Vibrance,
+  Saturation (directional); ToneCurvePV2012 + per-channel (as curves). Presence of
+  the `2012`-suffixed keys IS the process-version gate — no `crs:ProcessVersion`
+  parsing. Everything else (Highlights/Shadows/Whites/Blacks 2012, Clarity,
+  Texture, Dehaze, grain, post-crop vignette, local corrections, retouch, looks)
+  is parse-detected ONLY for the report's unsupported disclosure. The list may not
+  grow without a foundation-doc change.
+- Conversions (named constants, single declaration site): Exposure2012 →
+  `exposureEV` clamped ±5 · Contrast/Vibrance/Saturation ÷ 100 · encoded WB =
+  `Incremental*` ÷ 100 · RAW WB = (mired(crs:Temperature) − mired(as-shot)) /
+  `TemperatureMap.miredPerUnit`, where that constant is the RENDERER's own mired
+  mapping hoisted into `Editing/Render/` and shared by renderer and importer —
+  the imported number means what the slider means. As-shot neutral comes from
+  `CIRAWFilter` off-main; absent → WB skipped + report notice. Curves ÷ 255;
+  identity curves dropped; > `CurveParams.maxPoints` keeps endpoints and evenly
+  subsamples the interior. EXIF orientation 1–8 → quarterTurns/flips via a pure
+  table; the CropAngle sign is pinned by an owner-verified fixture.
+- **`EditStack` gains `origin: EditOrigin?`** (case `lightroom`), nil-omitted from
+  the canonical JSON — every pre-existing stack's canonical bytes and `stack_hash`
+  are byte-identical (the original pinned fixture hash must never change; a second
+  fixture pins the origin shape). Origin is provenance, not data: never copied by
+  `EditTransfer.apply` (target keeps its own), stripped at preset save, gone on
+  Reset; rides sidecars via the stack JSON; older builds decode it away harmlessly.
+- The LR importer **never clobbers an existing Muse edit** (existing `edits` row →
+  skip + count; re-runs idempotent), never pins `rawParams.decoderVersion` (first
+  USER edit does), never writes a neutral mapped stack, and applies via the full
+  `EditStore.save` sequence per file (sequential; no progress UI beyond the run
+  card — the status pill stays background-only).
+- The before/after suite gains a **"Lightroom preview"** compare source when
+  `stack.origin == .lightroom` and an embedded preview exists —
+  `EmbeddedPreview.image` uses `CGImageSourceCreateThumbnailAtIndex` with
+  `ThumbnailFromImageIfAbsent: false` (embedded bytes only, never a primary
+  decode), through `withinDecodeBudget` first.
+- **LR preset `.xmp` import** (the Spec 05 deferral, landed): same parser/mapper
+  with no as-shot context; geometry stripped; `origin = .lightroom`; named from
+  `crs:Name` else the filename stem with a ` 2` collision ladder (courtesy —
+  `edit_presets` has no UNIQUE); per-file failures surfaced by filename.
+
+## Apple Photos import (Spec 06)
+
+- Entitlement `com.apple.security.personal-information.photos-library` in BOTH
+  entitlement files + `NSPhotoLibraryUsageDescription`; authorization
+  `.readWrite` (PhotoKit's read level); `.limited` selections handled
+  transparently.
+- PhotoKit's iCloud-Photos fetches (`isNetworkAccessAllowed = true`) are
+  OS-mediated system traffic — the StoreKit/`bird` doctrine class, NOT an app
+  network path.
+- Supported path is current-version render only: images via
+  `requestImageDataAndOrientation(version: .current)` (extension corrected to the
+  returned UTI), videos via `PHAssetResource` `.fullSizeVideo` else `.video`;
+  filenames from `PHAssetResource.originalFilename` with a case-insensitive
+  collision ladder; copied into a user-chosen destination.
+- Metadata carried: `PHAsset.creationDate`/`location` via `ImportSupplement`;
+  favorites → the `Favorite` manual tag or skip (per-card choice; **never a
+  star** — a binary flag must not fabricate a rating); user albums →
+  find-or-create manual collections by case-insensitive name; smart albums
+  skipped. Idempotent: existing destination filename → skip + count.
+- **Apple Photos keywords are not importable** (PhotoKit exposes no keyword API) —
+  stated plainly in the card and report. AAE/`PHAdjustmentData` is never parsed;
+  the "edits applied, adjustments unrecoverable (private format)" message is
+  required UI.
+
+## Google Takeout import (Spec 06)
+
+- Takeout folders are imported **in place** (no copy) — the extracted archive is
+  ordinary files; Muse references them where they live (added as root if
+  uncovered).
+- `TakeoutJSON.jsonCandidates` ladder, best-first, each rule test-pinned:
+  `<name>.<ext>.supplemental-metadata.json` → `<name>.<ext>.json` →
+  duplicate-counter swap (`IMG(1).jpg` ↔ `IMG.jpg(1).json`) → edited-suffix strip
+  (localized suffix list constant) → 46-char truncation re-derive.
+  `photoTakenTime.timestamp` is a STRING epoch; `geoData` falls back to
+  `geoDataExif`; `(0,0)` → absent.
+- Apply: supplement (dates/GPS) · `description` → note (fill-gaps) · `favorited` →
+  `Favorite` tag (per-card choice) · people names → plain tags or skip, default
+  SKIP, never face identities. `-edited` siblings both receive the original's
+  JSON metadata; no auto-pairing/stacking of edited↔original.
+
+## Eagle import (Spec 06)
+
+- **Verification-first is binding**: the parser is written against a real scratch
+  `.library` created in Eagle; the test fixture is a miniaturized real library.
+- Copy once, flat, via `FileManager.copyItem` (source read-only, never
+  `FileMover.move`); destination-name-exists → skip (idempotent); ` 2` ladder for
+  distinct-item collisions; sequence copy → indexBatch → apply.
+- Eagle folders → find-or-create manual collections, nested names flattened
+  "Parent – Child"; tags → manual tags; star → gap-fill rating via
+  `TagStore.setRating`; **annotation → note** (fill-gaps — supersedes the
+  2026-07-07 future-features doc's "dropped", which predated v11 notes). Dropped:
+  URLs, smart folders, Eagle palette data.
+
+## Analysis throttling & import-size FYI (Spec 06)
+
+- `ThrottlePolicy` (pure): `userPaused` OR thermal `.serious`/`.critical` →
+  `.paused`; on-battery OR Low Power → `.reduced`; else `.normal`. Concurrency:
+  normal = `AnalyzePipeline.analyzeConcurrency` (3), reduced = 1, paused = 0.
+- `WorkThrottleStore` (Pattern B, ZERO AppState integration): monitors
+  thermal-state / power-state notifications + IOKit power sources (public
+  `IOPS*` API, no entitlement); `waitUntilRunnable()` suspends while paused,
+  cancellation-safe.
+- `userPaused` persists (`AppSettings.analysisPausedKey`, default false) across
+  relaunch; thermal/battery states are live-only, never persisted. **Pause is
+  scheduling, never an off switch** — markers, selection logic, and data paths
+  are untouched (DECIDED #22 intact); there is still no analysis toggle.
+- Spawn gates: `AnalyzePipeline.analyze(folder:)` gates BOTH spawn sites on
+  `waitUntilRunnable()` and re-reads concurrency per spawn — in-flight files
+  finish, the pass claim is held across a pause, cancel still works.
+  `PhotoHeaderBackfill`/`GeocodeBackfill`/`DeepAnalysisBackfill` gate once per
+  write chunk; their `.utility` priority is unchanged. **Import runs themselves
+  are never throttled** (foreground, cancellable).
+- `AnalysisStatusStore` (Pattern B): `analyzableTotal`/`pending` `@Published`;
+  `secondsPerFile` EMA (α = 0.1) deliberately NON-published; `refresh()` is one
+  off-main count query, ≤ 1 per 5 s, token-guarded, triggered by index batches,
+  analyze completions, and backfill chunks; `analyzeOne` reports per-file
+  durations via `recordCompletion`.
+- Progress surfaces: a Settings **Library** row ("X of Y analyzed" +
+  Pause/Resume + state line) and a sidebar footer row above
+  `CreateNewMenuButton`, visible only while `pending > 0` AND (running OR
+  paused). **The status pill is untouched** (background-work-only rule and
+  inputs unchanged).
+- `AnalysisEstimator`: `calibrationMinimum = 200` completions before any estimate
+  exists (measured on-device EMA — never hardcoded); `fyiThresholdSeconds =
+  25 × 60` (owner-tunable). The FYI is a one-button `ModalMessageCard` via the
+  `alertRequest` seam: shown at most once per launch, only when pending grew ≥
+  `calibrationMinimum` since launch AND the estimate exceeds the threshold;
+  below threshold fully silent; never a choice dialog, never a skip path.
+
+## Perf baseline additions (Spec 06)
+
+- New recorded rows: metadata scan ≥ 30 files/s · `LightroomXMP` read + map
+  < 2 ms/file (RAW as-shot resolve recorded separately, < 80 ms, WB-carrying RAW
+  only) · Takeout match + parse < 1 ms/file · `AnalysisStatusStore.refresh` at
+  100k rows < 30 ms · Apple-export and Eagle-copy throughput recorded with no
+  target (PhotoKit/disk-bound).
+
+## Share manifest v2 & page layouts (Spec 07)
+
+- **Spec 07 adds NO migrations** — social export persists nothing (an explicitly
+  saved crop rides Spec 04's `edit_versions`); portfolio records ride the existing
+  `driveShares.json` (`DriveShareStore`), never SQLite. Future specs still continue
+  at v24.
+- `DriveShareManifest` v2 keys: `y` = layout (`DriveShareLayout.rawValue`:
+  `"grid"`/`"sheet"`/`"essay"`; absent = grid), `s` = bodyText (intro paragraph),
+  `m` = manifestID (portfolio pointer, Drive file id). **Every new manifest field is
+  optional with a nil default** — a manifest not using a feature encodes none of the
+  new keys, and legacy fragments decode forever (pinned by tests on both the Swift
+  and node sides).
+- `DriveShareLayout` raw values are the wire values; the page's `layoutOf` must match
+  them exactly (the two-implementations-one-contract rule class); unknown/absent `y`
+  renders grid (forward-compat fallback, never a rejection).
+- App-side publish guards mirror the page validator: `DriveShareManifest.maxImages =
+  1000`, `maxFieldLength = 4096` (filenames 1024) — the app may never mint a link its
+  own page rejects.
+- `validateManifest(m, opts)`: `e` (strict date-only) stays REQUIRED for
+  non-portfolio manifests — the fail-open guard is never loosened. `m` present ⇒
+  portfolio ⇒ never expires, `e` ignored; manifests fetched from Drive validate with
+  `{portfolio: true}` and get full structural validation otherwise.
+- The three layouts are CSS off one `data-layout` attribute; ONE tile-builder DOM
+  path serves all of them (captions, lightbox, sanitize, deterrents inherit). The
+  grid sizer is layout-parameterized (`SIZER_BY_LAYOUT`) and hidden in essay.
+- `DriveShareManifest.jsonData()` is the plain-JSON encoding used for the uploaded
+  `manifest.json`; the fragment keeps `encoded()` (base64url + optional DEFLATE)
+  unchanged.
+- `AppSettings.driveShareLayout` (default `"grid"`) remembers the last layout; the
+  intro paragraph is per-collection prose and is never remembered.
+
+## Portfolio mode (Spec 07)
+
+- A portfolio share = Drive folder (images + `manifest.json`) + a page URL whose
+  fragment carries the manifest file's id (`m`) AND a full inline snapshot. The
+  Drive-hosted `manifest.json` (same object minus `m`) is the live truth; the page
+  fetches it and falls back to the inline snapshot on ANY failure. Updates rewrite
+  the manifest via `files.update` — the file id, and therefore the URL, never
+  changes. State lives only in the user's Drive; zero server-side share state.
+- The fetched manifest's own `m` is stripped before use — exactly one fetch, no
+  chaining, no recursion.
+- `DriveClient` contract additions: `uploadManifest(_ json: Data, parent: String) ->
+  String` (**the only non-image upload path, JSON-typed and narrowly named** —
+  image bytes reach Drive exclusively through `uploadFile`'s strip-verified
+  fail-closed path), `updateManifest(id:json:)` (PATCH `uploadType=media`),
+  `listChildren(of:) -> [(id, name)]` (drive.file sees only Muse-created files; one
+  page suffices under the 1000-image cap).
+- `DriveShareRecord` grows OPTIONAL fields only: `kind` (`"portfolio"`; nil =
+  classic), `manifestFileID`, `collectionID`, `layout`, `introTitle`, `bodyText`.
+  `expiry` stays non-optional; portfolios store the sentinel
+  `DriveShareRecord.neverExpires` (2100-01-01) — **never an optional Date**, which
+  would make new records undecodable by the prior build (whose failed `load()`
+  silently drops the whole share list on next save). `DriveExpirySweeper` and
+  `DriveExpiry` are byte-untouched; the sentinel is the design.
+- `DriveShareStore.portfolio(forCollectionID:)` is the lookup seam binding
+  "Update Portfolio…" to its collection.
+- Publish order (fail-closed): folder → images (unchanged strip path) →
+  `uploadManifest` → `setAnyoneReader` on the FOLDER (children inherit — the single
+  permission call) → fragment + record. Any failure after folder creation →
+  `cleanupFolder`.
+- **Update order is binding: upload-new → `updateManifest` (the atomic cutover) →
+  delete-old** (list-driven; per-file delete failures are non-fatal and retried by
+  the next update's sweep). Reordering shows recipients a manifest whose images are
+  gone. v1 re-uploads every image — no content diffing. The record is upserted in
+  place (same `pageURL`, same `manifestFileID`, same `createdAt`).
+- Recorded limitation: after an update, an OLD copy of the link rendered offline
+  (inline-snapshot fallback) shows last-published state with dead image ids; the
+  live-fetch path never has this problem.
+- A 404 on the portfolio folder at update time is terminal ("publish a new one") —
+  the drive.file account-switch orphan doctrine applies to portfolios too.
+- `CollectionModal.driveShare` carries a `DriveShareRequest { title, urls, mode,
+  collectionID }`; `DriveShareMode` = `.share` / `.portfolioNew` /
+  `.portfolioUpdate(DriveShareRecord)`. Portfolio menu items (Publish / Update /
+  Copy Link) are absent-not-disabled and share the raster-kinds-only URL filter.
+- `Commerce/SharingTier.swift` (pure): `enforced = false` until Spec 09;
+  `portfolioAvailable(entitledToSharing:)` computes but never blocks; the single
+  call site is menu-item visibility.
+- `DriveConfig.consentScreenVerified` is a compiled constant (not a Settings key)
+  gating the "unverified app" guidance copy; the signed-out publish explainer is
+  additive (sign-in runnable before the form is filled) and the
+  download-originals question is answered in copy only, never built.
+
+## Social export (Spec 07)
+
+- Module: `Export/Social/` — `SocialPreset.swift` (the preset table as data),
+  `SocialRender.swift` (pipeline), `SocialMetadata.swift` (output properties);
+  pure crop math in `Components/SocialCropMath.swift`; UI in
+  `Views/Export/SocialExportCard.swift` with a per-run, non-singleton
+  `SocialExportModel`.
+- `AppState.socialExportRequest: SocialExportRequest?` is the one new shell-modal
+  flag (the sanctioned `openWithForkRequest` class), registered in
+  `modalPresented`. Entry points: grid context menu, hero `ShareButton` menu,
+  collection `ShareCollectionButton` menu — raster kinds only
+  (`.image`/`.raw`/`.psd`).
+- The preset table is 12 presets pinned entry-by-entry by `SocialPresetTests`
+  (ids, dims, quality, byte targets, sharpen levels, EXIF defaults) — the table
+  cannot drift from the spec silently. IG-family byte target is 800 KB.
+- Fit modes (`SocialFit`: crop / matte / blurExtend) exist for fixed-dimension
+  presets only; long-edge/original presets have no crop step. Matte output dims
+  exactly equal preset dims. `blurExtendRadiusFraction = 0.04`.
+- Pipeline order (code, fixed): `OutputRender.forOutput` FIRST (edited pixels ride
+  the choke point) → `withinDecodeBudget` → ImageIO thumbnail decode with
+  orientation BAKED (`kCGImageSourceCreateThumbnailWithTransform`; no output
+  orientation tag can exist) at `min(source, max(4096, 4 × output long edge))` →
+  fit compose → `CILanczosScaleTransform` → `CIUnsharpMask` ONLY when a downscale
+  happened (standard 1.2/0.5, light 0.8/0.25) → alpha flattened → 8-bit sRGB →
+  JPEG with byte-target quality ladder (step 0.05, floor 0.70; X floor 0.55) →
+  write with the `EditCopyNaming`-style collision ladder,
+  `<stem>-<preset.id>.jpg`.
+- **Never upscale**, globally: a source smaller than the target exports at native
+  cropped size, stated in the card.
+- X preset invariants, test-pinned (`XPresetRuleTests`), all five required before
+  write: ≤ 4096², < 5 MB, RGB/no-alpha, no orientation tag, bytes < W×H. Failing
+  even at the floor fails that file, never ships a recompressible one. End-to-end
+  survival is a manual owner byte-compare protocol, not a unit test.
+- Metadata: default output writes NO source properties and must pass
+  `ImageMetadataStripper.isClean` (verify, don't trust construction). EXIF-on
+  keeps EXIF/TIFF/IPTC and ALWAYS drops orientation keys, thumbnail/preview
+  dicts, and maker notes; **GPS is a separate opt-in sub-toggle, default OFF,
+  never remembered**. The EXIF choice is remembered per preset id
+  (`AppSettings.socialExifChoices`); matte shade in `AppSettings.socialMatteShade`.
+- **Nothing in the card persists unless the user explicitly saves**: crop
+  positions, zooms, fit modes, and the location toggle die with the card. The one
+  opt-in — "Save Crop as Version" (absent without Spec 04) — composes the social
+  rect via `SocialCropMath.composedCrop` and writes ONE `edit_versions` row
+  through `EditStore.saveVersion(name:kind:stack:for:)` with kind `"version"`;
+  the current stack is untouched. No new write path.
+- The crop-stage preview decodes DIRECTLY at ≤ 2048 through `withinDecodeBudget` —
+  no `ThumbnailCache` entry, no `renderedVariants` change (the compare-pane
+  rule). Carousel locks every image to the uniform 4:5 frame; story presets draw
+  250/1920-fraction safe-zone guides.
+- Exports run in the foreground card with their own progress; per-file failures
+  surface by filename via the `MuseAlert` seam; the status pill stays
+  background-work-only.
+
+## Perf baseline additions (Spec 07)
+
+- New recorded rows: 24 MP → IG Feed Portrait export 1.5 s · 24 MP → X export
+  4 s · 10-image carousel 15 s · crop-stage preview decode 250 ms · byte-target
+  ladder ≤ 3 encodes · portfolio update of 30 images recorded with no target
+  (network-bound) · fetched-manifest page render recorded manually, not CI.
+
+## Domain-tier infrastructure (Spec 08)
+
+- **Spec 08 adds NO migrations** — future specs still continue at v24 — and changes
+  **nothing in `web/share/`**: the same static deployment serves every hostname (the
+  manifest rides the fragment, origin-independent by construction).
+- Topology (owner-provisioned; the apex domain is a prerequisite, not "the existing
+  Pages zone" — `muse-share.pages.dev` is not a zone): production apex zone (working
+  name `muse.app`; the real domain substitutes via `DomainConfig` + Worker env
+  constants only, no code change). `share.muse.app` = Pages custom domain on the
+  muse-share project, doubling as the customer CNAME target AND the
+  Cloudflare-for-SaaS fallback origin, with an explicit Worker route exclusion
+  (`share.muse.app/* → None`). `domains.muse.app` = the provisioning API.
+  `*.muse.app` wildcard route → the Worker (username serving).
+- Custom hostnames (Cloudflare for SaaS): `photos.customer.com` CNAME →
+  `share.muse.app`; per-hostname DV certs (`ssl.method "http"`, min TLS 1.2, no TXT
+  record in the common path); custom-hostname traffic never touches the Worker.
+  Apex hostnames are refused (`apex_not_supported`, its own error code), enforced in
+  the Worker validator AND pre-validated app-side.
+
+## Provisioning Worker (Spec 08)
+
+- `workers/domains/`: `worker.js` (host dispatch + scheduled), `router.js` (pure
+  handlers taking injected `{verify, cf, kv, now}`), `verify.js`, `apple.js`,
+  `cf.js`, `validate.js`, `serve.js`, `certs/AppleRootCA-G3.der` (pinned root),
+  shared fixtures, `domains.test.mjs` (`node --test`), README (deploy / secret
+  rotation / takedown path).
+- Worker dependencies: exactly two — `jose` + `@peculiar/x509` (pure-JS/WebCrypto,
+  edge-native, MIT, exact-pinned, bundled at deploy, no runtime fetch). Apple JWS
+  chain verification is never hand-rolled ASN.1. The app-target dependency count
+  (one — GRDB) is untouched.
+- API contract: JSON, HTTPS, EVERY endpoint authenticated by
+  `Authorization: Bearer <StoreKit 2 transaction JWS>`; no anonymous endpoints
+  (claiming IS the availability probe). Endpoints: `POST`/`GET`/`DELETE`
+  `/v1/hostname`, `POST /v1/hostname/refresh`, `POST`/`GET`/`DELETE` `/v1/username`.
+  Errors are `{error: <code>, message}` with a closed, test-pinned code set
+  (`bad_jws`, `wrong_product`, `subscription_lapsed`, `revoked`, `sandbox_refused`,
+  `invalid_hostname`, `apex_not_supported`, `invalid_username`, `reserved_username`,
+  `hostname_taken`, `username_taken`, `already_has_hostname`, `already_has_username`,
+  `no_hostname`, `no_username`, `cf_error`, `rate_limited`); the app maps codes to
+  localized copy and never renders the Worker's English message.
+- `verify.js` requires ALL of: ES256 + exactly-3-cert `x5c`; chain signatures +
+  validity windows; root byte-equal to the pinned Apple Root CA - G3; leaf OID
+  `1.2.840.113635.100.6.11.1` + intermediate OID `1.2.840.113635.100.6.2.1`; JWS
+  signature by the leaf key; `bundleId` match; environment `Production` (Sandbox
+  only while `ALLOW_SANDBOX`, which flips false at launch). OCSP/CRL deliberately
+  skipped. Product/expiry gating is the ROUTER's job — verify.js stays
+  product-agnostic. Hostname endpoints require the sharing subscription (active +
+  grace, unrevoked); username endpoints require the unlock (non-consumable,
+  unrevoked, never lapse-swept).
+- KV is the ONLY server-side state and is provisioning-only:
+  `sub:<originalTransactionId>`, `host:<hostname>`, `user:<username>`,
+  `unlockuser:<otid>` — pairs always written and cleared together; nothing about
+  photos, manifests, or links ever enters KV (#19 intact).
+- One hostname per subscription; change = DELETE then POST (no atomic replace
+  endpoint). `refresh` re-stamps stored expiry MONOTONICALLY (never backward — a
+  stale JWS from one Mac must not shorten a recorded renewal). Worker DELETE treats
+  CF 404 as success (the orphan-doctrine class). `LAPSE_GRACE_DAYS = 30`, and
+  `DomainConfig.lapseGraceDays` MUST equal it (the UI copy cites the number).
+- Lapse sweep (cron): only entries past expiry + grace are checked, against the App
+  Store Server API (status 1/3/4 → re-stamp; 2/5 → deprovision; transient failure →
+  leave, retry next cron). **No ASC key configured → the sweep no-ops entirely** —
+  stored expiry alone never deletes a hostname (fail closed in the paying user's
+  favor).
+- Username tier: grammar `^[a-z0-9](?:-?[a-z0-9]){2,29}$` + a RESERVED list, both
+  fixture-pinned. Serving is Worker-gated, never bare wildcard DNS: KV claim lookup
+  (`cacheTtl: 3600` — a released name may serve up to an hour, recorded), claimed →
+  GET/HEAD passthrough to the Pages origin with status/body/headers verbatim;
+  unclaimed/reserved → bare 404 (no page shell to phish with). Takedown path
+  documented in the Worker README. Rate limit: `MAX_MUTATIONS_PER_DAY = 20` per
+  transaction id (churn brake; the JWS is the security boundary).
+
+## App domain module & link base (Spec 08)
+
+- `Sharing/Domains/`: `DomainConfig.swift` (`workerBaseURL`, `apexZone`,
+  `cnameTarget`, `statusPollSeconds = 30`, `lapseGraceDays = 30`, `requestTimeout =
+  15` — the DriveConfig no-secret pattern), `ShareDomain.swift`
+  (`ShareDomainState` / `MuseAddressState` / `ShareDomainFile` incl. the persisted
+  one-shot `lapseNoticeShown`, + pure `DomainStatus.map` folding
+  status × sslStatus to `.pendingDNS/.pendingSSL/.active/.problem`,
+  unknown-string-lenient), `DomainClient.swift` (`.ephemeral` session, talks ONLY
+  to `workerBaseURL`), `DomainValidate.swift`, `ShareLinkBase.swift`,
+  `ShareDomainStore.swift` (Pattern B + `ShareDomainRefresher`).
+- Persistence: `shareDomain.json` in App Support (the `DriveShareStore`
+  load/save/atomic discipline). The transaction JWS is never persisted — fetched per
+  call from `CommerceStore`.
+- **`ShareLinkBase` is the single link-base decision point**: precedence
+  active-custom-domain → claimed-address → `DriveConfig.shareBaseURL`;
+  pending/failed domains never mint links. `DriveShareService` (and the portfolio
+  publish/update) mint via the existing `pageURL(base:)` parameter with
+  `ShareLinkBase.current(…)`.
+- The Manage Open-Link gate is origin-EXACT via `ShareLinkBase.isSanctioned`
+  (URLComponents scheme + exact-host compare) — never `hasPrefix` (suffix-spoof:
+  `https://muse-share.pages.dev.evil.com` passes a prefix test).
+  `sanctionedOrigins` always includes `DriveConfig.shareBaseURL`.
+- Domain/address removal REBASES local share records onto the new current base with
+  the fragment preserved verbatim (`ShareLinkBase.rebased`); records are NEVER
+  rebased when a domain is added (default-base links serve forever — Pages never
+  stops answering). Distributed links on a removed hostname die; the removal
+  confirm says so.
+- Announcements and the model-download manifest stay pinned to
+  `DriveConfig.shareBaseURL` by name — the custom domain is a share-LINK base, never
+  a fetch origin; the pinned-host fail-closed rule never acquires a
+  user-configurable host.
+- `ShareDomainRefresher` (launch, `DriveExpirySweeper` shape, beside it in
+  `MuseApp`'s `.task`): ZERO network when nothing is configured; refresh + status
+  poll while pending; `no_hostname` from the Worker → clear state, rebase records,
+  one-shot `MuseAlert` via the `alertRequest` seam (guarded by `lapseNoticeShown`);
+  any network failure is silent, state untouched.
+- `DomainValidate` (app) and `validate.js` (Worker) are pinned to ONE shared fixture
+  set — `workers/domains/fixtures/hostnames.json` / `usernames.json`, consumed by
+  both test suites (the two-implementations-one-contract rule class). Non-ASCII
+  hostname input is punycoded app-side before validation.
+- UI: one sanctioned shell-modal flag `AppState.shareDomainSetupShown` (registered
+  in `modalPresented`; a card raised from Settings must present at the shell, above
+  it); `Views/ShareDomainCard.swift` (`.museModal`, width 520) with
+  pitch / enter-domain / DNS-instructions-with-polling / active / problem states.
+  Card polling rides a `.task(id:)` bound to presentation — never a free-running
+  timer. Settings gains a "Share Links" section (below Google Drive): Muse Address
+  row + Custom Domain row + a footer stating the effective base. Subscription price
+  always renders from `Product.displayPrice`, never hardcoded (Spec 09 owns the
+  number).
+- Domains gate on transaction POSSESSION (`CommerceStore.entitlements` + Worker-side
+  JWS verification), NOT on `SharingTier.enforced` — `SharingTier` keeps its single
+  portfolio call site and its computes-never-blocks posture until Spec 09. Sandbox
+  purchases against `ALLOW_SANDBOX = true` are the TestFlight path; Xcode-environment
+  (local StoreKit config) JWS fail chain verification by construction and cannot
+  exercise the Worker.
+- `CommerceStore` gains `transactionJWS(for productID:) async -> String?` — returns
+  `VerificationResult.jwsRepresentation` from `Transaction.currentEntitlements` for
+  an owned product; never cached, never persisted.
+- Escape hatch is docs-only: `docs/self-hosting-share-page.md` (self-host
+  `web/share/` on the user's own account/domain; a link's fragment is the entire
+  share, so swapping the origin ahead of `#` re-targets any link). No in-app base
+  override is built.
+- The app binary carries no Cloudflare credential and makes no Cloudflare API call —
+  acceptance includes a `strings` check for `api.cloudflare.com` (zero hits).
+
+## Perf baseline additions (Spec 08)
+
+- New recorded rows: Worker `POST /v1/hostname` end-to-end recorded with no target
+  (network-bound) · `verify.js` fixture verification recorded manually, not CI ·
+  launch refresher with nothing configured = zero network calls (code-shape fact,
+  noted in the report).
+
 ## Naming & test conventions
 
 - Migrations: `vN_snake_case`, registered in order at the end of `makeMigrator()`.
@@ -670,9 +1645,33 @@ build-level layer future specs must not contradict.*
 
 - Face identity/clustering/naming: deferred project (AuraFace Apache-2.0 path when
   demanded); InsightFace/EdgeFace never (non-commercial licenses).
-- Spec 04: the `edits` table, edit stack provider, any editor UI.
-- Spec 06: import-scale throttling (battery/Low Power/thermal pausing).
-- Spec 09: pricing, trial enforcement policy.
+- Spec 05 deferrals (v2 candidates, do not build now): waveform/RGB parade scopes,
+  ΔE spot adjustment, 3-way grade wheels, HSL chips with eyedropper, film-negative
+  inversion. LR `.xmp` PRESET import rides Spec 06's crs: work (specified there).
+  No `lut:`/`edited:` search tokens and no new smart-rule cases in v1.
+- v1 editing exclusions (Spec 04): no `edited:` search token, no `.edited` smart
+  rule, no analyze-the-edit mode; `masks` always empty; `.psd`/video/non-image kinds
+  never editable in-app. Masking/healing/layers/AI selection/dehaze/parametric
+  curve/reorderable stack/own demosaic remain NEVER (foundation §6).
+- Spec 06 exclusions: Capture One `.costyle` (still deferred) · face identity from
+  any import source (people names are plain tags or skipped) · any write-back to
+  source apps · AAE/`PHAdjustmentData` parsing · translation of adaptive LR
+  operators (Highlights/Shadows/Whites/Blacks/Clarity/Dehaze/local/retouch —
+  disclosed, never attempted) · pick/reject flags (LR doesn't export them; no
+  handling invented) · auto-pairing Takeout `-edited` siblings · new search
+  tokens, smart-rule cases, analysis modes, or analysis toggles.
+- Spec 07 exclusions: custom domains, `username.muse.app` subdomains, and the
+  provisioning Worker (Spec 08) · video social-export presets (photo-first) ·
+  portfolio content diffing on update (v1 re-uploads all images).
+- Spec 08 exclusions: apex custom hostnames (CF Enterprise — refused with
+  `apex_not_supported`) · multi-hostname per subscription · anonymous availability
+  endpoints · an atomic hostname-replace endpoint (change = delete-then-create) ·
+  an in-app link-base override for self-hosters (the escape hatch is docs-only) ·
+  email/anything else on user domains · per-registrar DNS walkthrough UI (generic
+  CNAME copy only) · analytics of any kind on share pages (never).
+- Spec 09: pricing, trial enforcement policy, and `SharingTier.enforced` (portfolio
+  tier gating ships computing-but-unenforced); the Worker's `ALLOW_SANDBOX` flips
+  false at public launch alongside Spec 09's pricing go-live.
 - `HybridClusterer` time-bucketing: NOT done — it changes clustering semantics and the
   `SimilarityMatrixTests` equivalence guarantee; time-bucketing landed in
   `BurstClusterer` instead. Measured in the baseline, not changed.
