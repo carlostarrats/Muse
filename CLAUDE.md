@@ -114,6 +114,7 @@ are the load-bearing reference artifacts.
 | Polish 28 — **visual polish pass** (collection glyph → `rectangle.on.rectangle.angled`; smaller section headers + intrinsic sort glyph; Lineform selection fill; hero open bounce + staggered close converge; grid margins track spacing; one “+ Create New” menu) | ✅ merged, unreleased | `feat/collection-icon-cards` |
 | Foundation 1 — **Spec-01 foundation & plumbing** (v13 coordinates + backfill; the three edit-aware seams `EditStackIndex`/`EffectiveDimensions`/`OutputRender`, all identity functions today; StoreKit 2 plumbing with an UNENFORCED trial gate; announcements channel; semantic-search cancellation + `PerfBaseline`) | ✅ merged, unreleased | `new-product-build-1` |
 | Foundation 2 — **Spec-02 photo library core** (v14–v17; `PhotoHeaderReader` one-pass GPS+EXIF; offline GeoNames reverse geocoding + Places page; rediscovery surfaces; near-duplicate stacks; phase-1 token search; `.location` smart rule; dead visual-duplicate fix) | ✅ merged, unreleased | `new-product-build-1` |
+| Foundation 3 — **Spec-03 culling & search phase 2** (v18–v19; CLIP engine/index/model-store; faces/pets/`is:`/`similar:` tokens; compare workbench + focus peaking; ephemeral cull; `.similar` smart rule; NL suggestions) | ✅ merged, unreleased | `new-product-build-1` |
 
 > Every row through Polish 27 is merged to `main` and shipped in release **`v1.5`**;
 > Polish 28 is merged to `main` but NOT yet in a release (`v1.5` is still the

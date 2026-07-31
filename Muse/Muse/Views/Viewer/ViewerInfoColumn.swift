@@ -525,6 +525,7 @@ struct ViewerInfoColumn<Chrome: View>: View {
 
     // MARK: - Actions row
 
+    @ViewBuilder
     private var actionsRow: some View {
         HStack(spacing: 8) {
             // Finder fills the leftover width; Delete hugs its own (short) label,
@@ -532,6 +533,15 @@ struct ViewerInfoColumn<Chrome: View>: View {
             // instead of being squeezed into a forced 50/50 split.
             ActionButton(label: String(localized: "Open in Finder"), systemImage: "folder", fillsWidth: true, action: onOpenInFinder)
             ActionButton(label: String(localized: "Delete"), systemImage: "trash", isDestructive: true, action: onDelete)
+        }
+        // Hidden entirely (not disabled) until the search model is installed —
+        // there is nothing it could do without it.
+        if ClipModelStore.shared.isReady {
+            ActionButton(label: String(localized: "Similar"),
+                         systemImage: "sparkle.magnifyingglass", fillsWidth: true) {
+                appState.findSimilar(to: url)
+                appState.viewerClosing = true
+            }
         }
     }
 

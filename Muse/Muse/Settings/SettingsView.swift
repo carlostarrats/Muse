@@ -12,6 +12,7 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @ObservedObject private var clipStore = ClipModelStore.shared
     @Binding var isPresented: Bool
     @EnvironmentObject private var googleAuth: GoogleOAuth
     @EnvironmentObject private var appState: AppState
@@ -205,6 +206,35 @@ struct SettingsView: View {
                 Text("Muse")
             } footer: {
                 Text("Unlock the full app, or restore a previous purchase. Redeeming a promo code opens the App Store. Announcements are occasional notices fetched once per launch; turning them off stops the fetch entirely.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                HStack {
+                    switch clipStore.state {
+                    case .absent:
+                        Text("Not downloaded")
+                        Spacer()
+                        ModalButton(title: String(localized: "Download")) { clipStore.download() }
+                    case let .downloading(progress):
+                        Text("Downloading \(Int(progress * 100))%")
+                        Spacer()
+                        ModalButton(title: String(localized: "Cancel")) { clipStore.cancelDownload() }
+                    case .installed:
+                        Text("Installed")
+                        Spacer()
+                        ModalButton(title: String(localized: "Remove")) { clipStore.remove() }
+                    case let .failed(message):
+                        Text(message).foregroundStyle(.red)
+                        Spacer()
+                        ModalButton(title: String(localized: "Retry")) { clipStore.download() }
+                    }
+                }
+            } header: {
+                Text("Search")
+            } footer: {
+                Text("Search understands what's in your photos. The model runs entirely on this Mac — nothing you search ever leaves it.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }

@@ -2150,3 +2150,170 @@ and additions:
 - No server-side share state ever; Google Drive is the only share backend; no
   download-originals feature.
 - Rediscovery adds no new analysis — queries over existing/backfilled data only.
+
+## Spec 03 as-built (culling & search phase 2)
+
+Binding facts from the actual implementation. Where this differs from the plan,
+this section wins.
+
+### Schema
+
+- `v18_clip_embeddings` then `v19_photo_traits`, both registered in that order
+  after `v17_stacks`. The migration chain now ends at **v19** — future specs
+  continue from there (this supersedes the "future specs continue at v24" note).
+- `photo_traits(file_id PK cascade, traits_scanned_hash, traits_version,
+  face_count, largest_face_frac, face_quality, pet_count, sharpness)` + indexes on
+  `face_count` and `pet_count`. Content-keyed, NOT `(file_id, parent_dir)`.
+  A row with NULL trait fields is an ATTEMPTED-MARKER (reached, undecodable);
+  ABSENCE of the row means unscanned — which is why `faces:0` matches only files
+  that have a row. A new trait bumps `PhotoTraits.currentVersion` rather than
+  adding a parallel marker or table.
+- `clip_embeddings(file_id PK cascade, embedded_hash, model_generation, vector)`.
+  fp16, L2-normalized, content-keyed. NULL vector at the CURRENT generation is an
+  attempted-marker and is never reselected by the backfill.
+
+### CLIP
+
+- `ClipVectors.toData/fromData` — fp16 LE; `fromData` refuses an ODD-length blob
+  (the plan said "wrong length"; length is only knowable against a query, so the
+  real length check lives in `ClipIndex`, which skips any vector whose count
+  differs from the query's — the FeaturePrints rule, applied where it can be).
+- `ClipModel.current` is the single descriptor (name/generation/dimension/
+  imageInputSide/manifestURL) + `ClipModel.directory()`. Swapping models = edit it
+  and bump `generation`, which invalidates every stored vector by construction.
+- `ClipEngine` is an actor with `retain()/release()/unload()/canLoad()`; encoder
+  input/output feature names are read from `MLModel.modelDescription` rather than
+  hard-coded, so the conversion script's naming isn't a build-time contract.
+  `MLModel.prediction(from:)` is AWAITED (it is async on this SDK).
+- `ClipIndex.matches(query:minScore:db:)` streams `chunkRows = 4096` — the
+  no-RAM-residency rule is satisfied here, not deferred. `textMinScore = 0.20`,
+  `imageMinScore = 0.55`, `topK = 400`. Never validated live.
+- `ClipModelStore` download is user-initiated only; fail-closed at every step
+  (manifest cap 16 KB, unknown version refused, SHA-256 verify, load-test both
+  encoders BEFORE writing the `.verified` marker, delete the directory on any
+  failure). Older generation directories are removed only after the new one
+  verifies. On success it chains `DeepAnalysisBackfill.run()` +
+  `ClipPromptVectors.refreshAll()`.
+- **Network doctrine is now FOUR app-initiated paths**: Sparkle, the Drive
+  publish, announcements, and the search-model download.
+
+### Search
+
+- New tokens: `faces:<numeric>`, `pets:<numeric>`, `is:portrait|group`,
+  `similar:s<N>`. `faces`/`pets`/`is` are in `SearchQueryParser.keys` (so they
+  autocomplete); `similar` deliberately is NOT — its handles are generated, not
+  typed. An unrecognized `is:` value or an off-shape `similar:` value stays free
+  text, per the standing grammar rule.
+- `PhotoSearch.filter` gained `context: TokenContext` (default `.init()`, so
+  every existing call site is unchanged). `.similar` is resolved AHEAD of the
+  per-token switch, where the context is in scope; `matchIDs` keeps an explicit
+  unreachable `.similar` case. An unresolvable handle returns an EMPTY result,
+  never the unfiltered set.
+- When a `similar:` token is present, SIMILARITY SCORE DESC replaces capture DESC
+  as the result order; other tokens still intersect via `idSet`.
+- `SimilarityRegistry` is a lock-based `nonisolated final class`, NOT a
+  `@MainActor ObservableObject` — `SearchToken.displayLabel` is a nonisolated read
+  and must be able to resolve a handle's label ("Similar: IMG_1234" vs
+  "Similar (expired)").
+- `SearchService`: `clipReady = ClipModelStore.shared.isReady` selects the
+  semantic engine (CLIP `embedText` + `ClipIndex.matches`, else NLEmbedding +
+  `SemanticSearch.semanticIDs`). `semanticFloor` is ONE threaded value used by
+  both `SemanticSearch.merge` and the `matchedDirs` relaxation — never two
+  constants kept in sync by hand. With the model absent, every value is
+  byte-identical to the pre-CLIP path.
+
+### Traits
+
+- `VisionServices.analyze(url:)` now delegates to a new
+  `VisionServices.analyze(cgImage:)` seam; the per-file live pass and
+  `DeepAnalysisBackfill` share it so face/pet/sharpness logic can never fork.
+  `analyze(url:)` still overwrites width/height from the HEADER.
+- `VisionServices.petConfidenceFloor = 0.5`; `VNRecognizeAnimalsRequest` counts
+  only observations with a label at or above it.
+- `SharpnessScore` = log10(variance of a 3×3 Laplacian) over luminance,
+  downsampled to a fixed 1024px long edge first. The convolution uses divisor 1
+  and bias 128 (the signed result must stay representable in UInt8; a constant
+  bias cancels out of the variance), and reads row-by-row honouring
+  `vImage_Buffer.rowBytes`. Zero variance returns `-Double.greatestFiniteMagnitude`
+  (not `-.infinity`, which XCTest arithmetic can't compare).
+- `TraitFields` + `TaggerOutput.traits` + `TaggerOutput.decodedImage` carry the
+  scalars and the already-decoded raster from `VisionTagger` into `analyzeOne`,
+  which writes the `photo_traits` row INSIDE its existing guarded transaction.
+- `DeepAnalysisBackfill` decodes at **1024px** (traits and CLIP's 256px input
+  both need far less than the 4096px Vision pass), 2-wide, 200-row write chunks,
+  5000/launch. It unions the traits and CLIP candidate sets so a file needing
+  either is scanned ONCE. Every flush re-checks `content_hash` before saving.
+  Wired into `MuseApp`'s `.task` after `PhotoHeaderBackfill`.
+- `PortraitHeuristic`: portrait = 1–2 faces AND largest face ≥ 5% of frame;
+  group = ≥3 faces. A nil `largestFaceFrac` is never a portrait.
+
+### Compare / cull
+
+- `CompareStore` (Pattern B, `maxPanes = 4`, minimum 2), `CompareGeometry`
+  (normalized center is what keeps differing aspects on the same subject;
+  `zoomRange = 1...8`; zoom 1 collapses the center to 0.5/0.5).
+- `EscapeAction.closeCompare` resolves BELOW `.dismissModal` and ABOVE the viewer
+  cases. Order is now: modal → **compare** → viewer → search → tags → collection
+  → rediscovery → collectionsPage → placesPage → none.
+- `PageScrollCatcher` gained `onCullKey: (Character) -> Bool`, checked FIRST and
+  purely additive — the keycode-only paging rule and the plain-arrow modifier
+  intersection are untouched. Its `isActive` gate also requires
+  `!CompareStore.shared.isActive`.
+- `CompareKeyCatcher` is a NEW sibling of `KeyCaptureView`, not an extension —
+  that view's three fixed closures back the hero's arrow-flip/return path.
+- `ComparePane` decodes the ORIGINAL via `VisionServices.boundedDecode` rather
+  than `ThumbnailCache`, deliberately: a pane-sized variant would have to be
+  listed in `renderedVariants` or it would survive an in-place edit forever.
+  Compare therefore adds NO new thumbnail variant.
+- `SharpnessRank.tieBand = 0.15` log10 units; ranking is relative WITHIN the
+  compared set only. The face-quality badge shows only when EVERY pane has a face.
+- `CullStore` is memory-only — no table, no defaults key, no sidecar field.
+  `setMark` is a no-op while inactive. The session is deliberately NOT in the
+  Escape chain; Finish/Cancel are the only exits, and Cancel with marks present
+  raises a discard confirm. Resolution writes go through `TagStore.setRating` and
+  `deletion.deleteWithBurn` only.
+- `AppState` grew exactly two `@Published` flags (`cullResolveShown`,
+  `clipOfferShown`), both in `modalPresented`. Everything else is a Pattern B
+  store read directly.
+- `AssetKind.isPhotoKind` is the new shared predicate for image/raw/psd.
+
+### Smart rules
+
+- `SmartRule.similar(SimilarTerm)` is the 8th case. `SimilarTerm`:
+  `thresholdRange 0.40...0.80`, `defaultThreshold 0.55`, `maxAnchors 20`.
+  Anchors are FILE IDS (vectors stay in `clip_embeddings`, averaged via
+  `ClipCentroid` at evaluation); a prompt's vector is encoded at rule-SAVE time
+  and stamped with `promptGeneration`. Evaluation NEVER runs the model — a
+  generation mismatch (anchor or prompt) evaluates to EMPTY and heals via
+  `ClipPromptVectors.refreshAll()`.
+- The "Looks Like" `Kind` case is offered only when the model is installed, but an
+  EXISTING `.similar` rule still renders its row (it decodes fine without it).
+- Same Codable consequence as `.location`: a rule set containing `.similar`
+  decodes as empty on an older build.
+
+### Natural language
+
+- `NLTokenComposer.compose` emits `in:YYYY[-MM]`, `near:"..."`, `camera:"..."`,
+  `star:N` — the REAL grammar (the plan's sketched `★≥N` fragment was one of two
+  accepted forms; `star:N` is the canonical key). Multi-word values are quoted.
+  Out-of-range months/stars and blank strings are dropped.
+- `NLQuerySuggest.minWords = 3`; it fires only when the parse yields ZERO tokens,
+  is token-guarded against supersession, and DROPS a composition that doesn't
+  round-trip into at least one token. Gated on the exact
+  `canImport + @available(macOS 26) + SystemLanguageModel.default.availability`
+  triple.
+
+### Not built in this pass (deliberate, tracked)
+
+- Hero-viewer region similarity (marquee mode), the hero peaking chrome button,
+  hero K/X/U cull marking, and the grid image-DROP similarity search. `RegionMath`
+  and `PeakingOverlay` — the pure halves both need — ARE built and tested; only
+  the `HeroImageViewer` wiring is outstanding. That file is under the
+  diagnose-by-instrumenting-the-running-app rule, so it was left for a pass that
+  can exercise the running app rather than reasoned into.
+- The grid cull-mark tile BADGE (compare panes do show it).
+- The hero INFO card's Sharpness row.
+- `scripts/make-clip-coreml.py` and the tokenizer fixtures — owner-only steps.
+  `ClipTokenizer` is written and compiles; it is unexercised until they exist.
+- `PerfBaseline` rows for the seven spec-03 measurements.
+- The French localization export pass for this spec's new strings.

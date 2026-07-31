@@ -47,6 +47,11 @@ extension AppState {
         // setActiveCollection/setActiveTags, the other scope-change inputs.
         clearSelection()
         isSearchActive = true
+        // Post-search, non-blocking: offer the model once, and let the
+        // natural-language layer propose a token rewrite. Neither delays the
+        // results the user is already looking at.
+        considerSearchModelOffer(for: trimmed)
+        NLQuerySuggest.shared.consider(query: trimmed)
         // search results keep relevance rank; sort modes apply to folder browsing only
         currentFiles = results
         // Chip labels derive from the search result set (tagSourceFiles is
@@ -61,5 +66,17 @@ extension AppState {
         searchQuery = ""
         isSearchActive = false
         reloadCurrentFiles()
+    }
+
+    /// The one-time "Smarter Search" offer: a plain multi-word query that
+    /// resolved to NO tokens is exactly the query semantic search would
+    /// improve, so that's when it's worth asking.
+    private func considerSearchModelOffer(for query: String) {
+        guard ClipModelStore.shared.state == .absent,
+              !UserDefaults.standard.bool(forKey: AppSettings.clipOfferSeenKey) else { return }
+        let parsed = SearchQueryParser.parse(query)
+        guard parsed.tokens.isEmpty,
+              parsed.freeText.split(separator: " ").count >= NLQuerySuggest.minWords else { return }
+        clipOfferShown = true
     }
 }

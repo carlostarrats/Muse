@@ -17,6 +17,7 @@ import SwiftUI
 import AppKit
 
 struct TagChipsRow: View {
+    @ObservedObject private var nlSuggest = NLQuerySuggest.shared
     @EnvironmentObject var appState: AppState
     @State private var hovered: Int? = nil
     @State private var clearAllHovered = false
@@ -129,6 +130,31 @@ struct TagChipsRow: View {
         // query (the single source of truth for tokens) and edits a token by
         // REWRITING that query text, then re-running the search.
         if appState.isSearchActive {
+            // The natural-language suggestion rides AHEAD of the token chips,
+            // styled distinctly (sparkles + "Try:") so it never reads as one of
+            // the filters already applied. Accepting it just rewrites the
+            // query text — the tokens it produces are ordinary removable chips.
+            if let suggestion = nlSuggest.suggestion {
+                HStack(spacing: 4) {
+                    Label("Try: \(suggestion.display)", systemImage: "sparkles")
+                        .font(.callout)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            appState.searchQuery = suggestion.queryText
+                            Task { await appState.runSearch(suggestion.queryText) }
+                            nlSuggest.dismiss()
+                        }
+                        .accessibilityAddTraits(.isButton)
+                    Button { nlSuggest.dismiss() } label: {
+                        Image(systemName: "xmark.circle.fill")
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(String(localized: "Dismiss suggestion"))
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.thinMaterial, in: Capsule())
+            }
             let parsed = SearchQueryParser.parse(appState.searchQuery)
             if !parsed.tokens.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
