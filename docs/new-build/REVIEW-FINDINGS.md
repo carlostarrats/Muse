@@ -293,3 +293,59 @@ and they touch files three other slices also touch.
 - `BurstClusterer`'s n² bound is real and its tie-break is correct (A4).
 - The `AppState` freeze breach is 5 properties, not 23, and all five are modal
   flags on the existing modal seam (A0, A8).
+
+---
+
+## Resume here — next session
+
+Pass A is complete and committed. Pass B has not started; no code has been
+changed by this review.
+
+Paste this into a clean chat:
+
+> Continue the Specs 01–07 review of `new-product-build-1`.
+>
+> Read `docs/new-build/REVIEW-PROMPT.md` first — it is the binding brief and all
+> its constraints still apply (work SOLO: no subagents, no Workflow, no fan-out;
+> find problems by reading code; verify every finding in the code and say plainly
+> whether you confirmed or inferred it; loop each slice until green, cap 5 rounds).
+>
+> Pass A is DONE. Its output — the ten sweep tables and 15 ranked findings — is
+> `docs/new-build/REVIEW-FINDINGS.md`. Read it before touching anything; do not
+> redo Pass A.
+>
+> Pass A reordered the slices: migrations (old slice 6) are schema-only and O(1),
+> so they drop to LAST, and a new **slice 0 — launch & background scheduling**
+> goes first, because its findings are decided-criteria violations in files that
+> slices 2, 5 and 7 also touch.
+>
+> Start slice 0. In scope, and nothing else: **F1, F4, F5, F10, F12, F15** (see
+> the ranked table in REVIEW-FINDINGS.md § A11). For F1 the intent is already
+> decided — read `muse-photo-foundation.md` §9 and §13 and conform the code to
+> them; don't ask which behaviour is wanted.
+>
+> Explicitly NOT slice 0 — leave them for their own slices: **F2** (EditStackIndex
+> not rebuilt after rename/move) → slice 1, invariants. **F3, F6, F7** (RAW
+> scaleFactor, main-thread LUT read, per-autosave full joins) → slice 2, editing
+> engine.
+>
+> Green for this slice means all of: clean build with a verified-fresh binary
+> (`stat` its mtime); the FULL suite passes — **1,748 tests, 2 skipped, 0 failures**
+> is the verified baseline, and do NOT pipe `xcodebuild` through `tail`; and a
+> fresh re-review surfaces no new confirmed findings two rounds running.
+>
+> Then commit the slice and report what you fixed, what you left, and what you
+> could not verify.
+
+### Two open questions to carry forward
+
+- **F3's non-RAW half is INFERRED, not confirmed.** Whether
+  `CIImage(contentsOf:)` followed by a scale transform actually forces a
+  full-resolution decode is a Core Image internal. Instrument it in Pass C;
+  do not "fix" it by reasoning. The RAW half (`CIRAWFilter.scaleFactor` never
+  set) IS confirmed by reading the code.
+- **F11's sandbox question is UNVERIFIED.** `ClipModelStore.unzip` shells out to
+  `/usr/bin/unzip` via `Process` from a sandboxed app. If the sandbox denies the
+  exec, the CLIP model can never install at all and every Spec 03 semantic-search
+  feature is dead on arrival behind a fail-closed error message. This needs a
+  runtime check before any effort goes into tuning that path.
