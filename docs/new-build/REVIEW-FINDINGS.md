@@ -408,6 +408,51 @@ Suite after this slice: **1,763 tests, 2 skipped, 0 failures.**
 
 ---
 
+### Slice 3 — import (06) — DONE
+
+**The claim verifies literally.** Every DB write in `Import/` goes through
+`ImportSupplement` (the one writer for external GPS + capture date),
+`MetadataImportApply` (insert-or-promote keywords, scope resolution),
+`NoteStore`, `TagStore.setRating` or `EditStore.save`. No importer writes
+`files`, `photo_meta`, `tags` or `edits` itself. Re-run idempotency holds at
+every leg: keywords insert-or-promote, notes fill gaps only, ratings are gated
+on `hasRating`, Lightroom edits are skipped when a stack already exists (the
+stack written last run IS that stack), and Apple Photos albums reuse an
+existing collection by name. Cancellation is checked per file in all five
+models.
+
+Two findings, both **confirmed**:
+
+- **F19 (high, whole-app) — the database ran in rollback-journal mode with
+  `synchronous = FULL`.** `Configuration` set only `foreignKeysEnabled`, so
+  every write transaction was a journal create + fsync + delete — and this app
+  commits in small transactions constantly (per index batch, per analyzed file,
+  per tag edit, per backfill chunk, and once per file during an import, which
+  is unavoidable since each file's write depends on its own header read). Now
+  `journal_mode = WAL` + `synchronous = NORMAL` via `prepareDatabase`. Durability:
+  NORMAL can cost the last few committed transactions on power loss but cannot
+  corrupt the file, and what those carry is derived metadata the next
+  analyze/index pass regenerates — the library's truth is the files on disk.
+  Verified safe on the two things that could have made it wrong: nothing else
+  in the tree opens `muse.sqlite` (backup builds its own archive by content
+  hash), and the share extension does not touch the database. **This changes a
+  persistent file-header setting on every existing library** — flagged loudly
+  here and in the durable constraints.
+- **F20 (med, security/resource) — five unbounded `Data(contentsOf:)` reads of
+  user-chosen metadata files** (XMP sidecar ×1, `.xmp` preset, Takeout JSON,
+  Eagle `metadata.json` ×2). A sidecar is kilobytes by nature, but the file is
+  arbitrary user input and an import walks thousands of them. Now one
+  `BoundedRead.metadata(at:limit:)` helper, 16 MB cap, skip-never-truncate —
+  the import-side twin of `withinDecodeBudget`, and the same rule as DECIDED #25.
+
+Also checked: XMP is parsed by `CGImageMetadataCreateFromXMPData`, Apple's own
+constrained-RDF parser, not a raw `XMLParser` — no external-entity surface to
+close.
+
+Suite after this slice: **1,767 tests, 2 skipped, 0 failures.**
+
+---
+
 ---
 
 ## Resume here — next session

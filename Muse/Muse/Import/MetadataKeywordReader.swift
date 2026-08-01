@@ -113,7 +113,8 @@ enum MetadataKeywordReader {
             url.appendingPathExtension("xmp"),
         ]
         for candidate in candidates {
-            guard let data = try? Data(contentsOf: candidate),
+            // Size-capped before the read — see `BoundedRead`.
+            guard let data = BoundedRead.metadata(at: candidate),
                   let meta = CGImageMetadataCreateFromXMPData(data as CFData)
             else { continue }
             return meta

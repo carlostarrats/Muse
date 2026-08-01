@@ -161,7 +161,7 @@ final class TakeoutImportModel: ObservableObject {
         let directory = url.deletingLastPathComponent()
         for candidate in TakeoutJSON.jsonCandidates(for: url.lastPathComponent) {
             let sidecar = directory.appendingPathComponent(candidate)
-            guard let data = try? Data(contentsOf: sidecar),
+            guard let data = BoundedRead.metadata(at: sidecar),
                   let meta = TakeoutJSON.parse(data), !meta.isEmpty else { continue }
             return meta
         }

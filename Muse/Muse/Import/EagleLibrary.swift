@@ -81,7 +81,7 @@ nonisolated enum EagleLibrary {
 
     private static func readFolders(at libraryURL: URL) -> [EagleFolder] {
         let url = libraryURL.appendingPathComponent("metadata.json")
-        guard let data = try? Data(contentsOf: url),
+        guard let data = BoundedRead.metadata(at: url),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let raw = root["folders"] as? [[String: Any]] else { return [] }
         var out: [EagleFolder] = []
@@ -118,7 +118,7 @@ nonisolated enum EagleLibrary {
     /// nil for a corrupt/unreadable item — counted by the caller, never thrown.
     private static func item(at infoURL: URL) -> EagleItem? {
         let metaURL = infoURL.appendingPathComponent("metadata.json")
-        guard let data = try? Data(contentsOf: metaURL),
+        guard let data = BoundedRead.metadata(at: metaURL),
               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let name = (dict["name"] as? String)?
                 .trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty

@@ -49,6 +49,30 @@ final class Database {
             // dependency explicit rather than implicit in a framework default.
             var config = Configuration()
             config.foreignKeysEnabled = true
+            // WAL + synchronous NORMAL. The default (rollback journal,
+            // synchronous FULL) makes EVERY write transaction a journal
+            // create/fsync/delete, and this app commits in small transactions
+            // constantly: per index batch, per analyzed file, per tag edit,
+            // per backfill chunk, and — unavoidably, since each depends on its
+            // own header read — once per file during an import. WAL is the
+            // configuration SQLite documents for exactly that write pattern.
+            //
+            // Durability: with NORMAL, a power loss can cost the last few
+            // committed transactions but cannot corrupt the database. What
+            // those transactions carry is derived metadata that the next
+            // analyze/index pass regenerates — the library's truth is the
+            // files on disk, and the backup archive is built separately (it
+            // never copies this file).
+            //
+            // Single writer, single process: the share extension does not open
+            // the database.
+            config.prepareDatabase { db in
+                // journal_mode is persistent in the file header, so this is a
+                // no-op after the first open; synchronous is per-connection
+                // and must be set every time.
+                try db.execute(sql: "PRAGMA journal_mode = WAL")
+                try db.execute(sql: "PRAGMA synchronous = NORMAL")
+            }
             let queue = try DatabaseQueue(path: dbURL.path, configuration: config)
             try Self.makeMigrator().migrate(queue)
             self.dbQueue = queue

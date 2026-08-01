@@ -86,7 +86,7 @@ final class LightroomPresetImportModel: ObservableObject {
     }
 
     nonisolated private static func parse(_ url: URL) -> (edits: LightroomEdits, name: String?)? {
-        guard let data = try? Data(contentsOf: url),
+        guard let data = BoundedRead.metadata(at: url),
               let meta = CGImageMetadataCreateFromXMPData(data as CFData) else { return nil }
         let edits = LightroomXMP.read(meta)
         return (edits, edits.presetName)

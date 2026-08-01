@@ -445,3 +445,43 @@ final class EagleLibraryTests: XCTestCase {
         XCTAssertEqual(folders.count, 2)
     }
 }
+
+// MARK: - Bounded metadata reads
+
+/// The import-side twin of the decode budget: a sidecar is user input, and
+/// `Data(contentsOf:)` on a huge one would be read into RAM in full.
+final class BoundedReadTests: XCTestCase {
+
+    private func writeTemp(_ bytes: Int, name: String) throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("bounded-\(name)-\(UUID().uuidString).xmp")
+        try Data(repeating: 0x41, count: bytes).write(to: url)
+        return url
+    }
+
+    func testReadsASmallFile() throws {
+        let url = try writeTemp(1024, name: "small")
+        defer { try? FileManager.default.removeItem(at: url) }
+        XCTAssertEqual(BoundedRead.metadata(at: url)?.count, 1024)
+    }
+
+    func testSkipsAFileOverTheLimit() throws {
+        let url = try writeTemp(4096, name: "big")
+        defer { try? FileManager.default.removeItem(at: url) }
+        XCTAssertNil(BoundedRead.metadata(at: url, limit: 1024))
+    }
+
+    func testAcceptsExactlyTheLimit() throws {
+        let url = try writeTemp(1024, name: "exact")
+        defer { try? FileManager.default.removeItem(at: url) }
+        XCTAssertNotNil(BoundedRead.metadata(at: url, limit: 1024))
+    }
+
+    func testSkipsAnEmptyOrMissingFile() throws {
+        let empty = try writeTemp(0, name: "empty")
+        defer { try? FileManager.default.removeItem(at: empty) }
+        XCTAssertNil(BoundedRead.metadata(at: empty))
+        XCTAssertNil(BoundedRead.metadata(
+            at: URL(fileURLWithPath: "/tmp/definitely-not-there-\(UUID().uuidString).xmp")))
+    }
+}
