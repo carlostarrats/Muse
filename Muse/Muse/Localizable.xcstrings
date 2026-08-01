@@ -52,6 +52,56 @@
         }
       }
     },
+    "%@%% of pixels are clipped in the %@ channel — those areas have lost detail.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %% des pixels sont écrêtés dans le canal %@ — ces zones ont perdu leur détail."
+          }
+        }
+      }
+    },
+    "%@%% of pixels are clipped — those areas have lost detail.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %% des pixels sont écrêtés — ces zones ont perdu leur détail."
+          }
+        }
+      }
+    },
+    "%@%% of pixels are clipped, mostly %@.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %% des pixels sont écrêtés, surtout %@."
+          }
+        }
+      }
+    },
+    "%@%% of pixels are clipping in the %@ channel, mostly %@.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %% des pixels sont écrêtés dans le canal %@, surtout %@."
+          }
+        }
+      }
+    },
+    "%@%% of pixels are clipping in the %@ channel.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %% des pixels sont écrêtés dans le canal %@."
+          }
+        }
+      }
+    },
     "%@, %lld": {
       "localizations": {
         "en": {
@@ -612,6 +662,16 @@
         }
       }
     },
+    "Adjust zones on the photo": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajuster les zones sur la photo"
+          }
+        }
+      }
+    },
     "After": {
       "localizations": {
         "fr": {
@@ -741,6 +801,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "S'applique aux dossiers ajoutés à partir de maintenant. Les étiquettes et collections que vous avez déjà sont conservées. Vous pouvez toujours analyser un dossier ou créer vos propres collections à la main à tout moment."
+          }
+        }
+      }
+    },
+    "Apply": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appliquer"
           }
         }
       }
@@ -1166,6 +1236,16 @@
         }
       }
     },
+    "Choose one or more .cube LUT files.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choisissez un ou plusieurs fichiers LUT .cube."
+          }
+        }
+      }
+    },
     "Choose the Muse backup file you exported on your other Mac.": {
       "localizations": {
         "fr": {
@@ -1242,6 +1322,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cliquez sur une zone grise neutre pour régler la balance des blancs"
+          }
+        }
+      }
+    },
+    "Clipping zebras": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zébrures d’écrêtage"
+          }
+        }
+      }
+    },
+    "Clipping zebras (J)": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zébrures d’écrêtage (J)"
           }
         }
       }
@@ -1794,6 +1894,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Date de modification"
+          }
+        }
+      }
+    },
+    "Deep shadows cover %@%% of the frame — some shadow detail is gone.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les ombres profondes couvrent %@ %% de l’image — du détail dans les ombres est perdu."
+          }
+        }
+      }
+    },
+    "Deep shadows cover %@%% of the frame, mostly %@ — some shadow detail is gone.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les ombres profondes couvrent %@ %% de l’image, surtout %@ — du détail dans les ombres est perdu."
           }
         }
       }
@@ -2654,6 +2774,16 @@
         }
       }
     },
+    "Handheld at 1/%lld s — motion blur is likely.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À main levée au 1/%lld s — un flou de bougé est probable."
+          }
+        }
+      }
+    },
     "Have a code?": {
       "localizations": {
         "fr": {
@@ -2690,6 +2820,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Masquer les couleurs"
+          }
+        }
+      }
+    },
+    "Hide explanation": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Masquer l’explication"
           }
         }
       }
@@ -2750,6 +2890,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Hautes lumières"
+          }
+        }
+      }
+    },
+    "Histogram": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Histogramme"
           }
         }
       }
@@ -2884,12 +3034,32 @@
         }
       }
     },
+    "Import LUTs…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer des LUT…"
+          }
+        }
+      }
+    },
     "Imported keywords or ratings for %lld files.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Mots-clés ou notes importés pour %lld fichiers."
+          }
+        }
+      }
+    },
+    "Import…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer…"
           }
         }
       }
@@ -2991,6 +3161,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "BIBLIOTHÈQUE"
+          }
+        }
+      }
+    },
+    "LUT Strength": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intensité de la LUT"
+          }
+        }
+      }
+    },
+    "LUT name": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nom de la LUT"
+          }
+        }
+      }
+    },
+    "LUTs": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LUT"
           }
         }
       }
@@ -3323,6 +3523,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Moins bonnes d'abord"
+          }
+        }
+      }
+    },
+    "Luminance": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Luminance"
           }
         }
       }
@@ -3854,6 +4064,16 @@
         }
       }
     },
+    "No LUTs imported": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune LUT importée"
+          }
+        }
+      }
+    },
     "No Rating": {
       "localizations": {
         "fr": {
@@ -4032,6 +4252,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Note copiée"
+          }
+        }
+      }
+    },
+    "Nothing is clipping.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun écrêtage."
           }
         }
       }
@@ -4303,6 +4533,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Autre…"
+          }
+        }
+      }
+    },
+    "Over": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hautes lumières"
           }
         }
       }
@@ -4639,6 +4879,26 @@
         }
       }
     },
+    "Process: RAW decoder %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traitement : décodeur RAW %@"
+          }
+        }
+      }
+    },
+    "Process: RAW decoder %@ (this Mac renders with %@)": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traitement : décodeur RAW %@ (ce Mac effectue le rendu avec %@)"
+          }
+        }
+      }
+    },
     "Project Name": {
       "localizations": {
         "fr": {
@@ -4856,6 +5116,16 @@
         }
       }
     },
+    "Reference photo": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photo de référence"
+          }
+        }
+      }
+    },
     "Refresh collection": {
       "localizations": {
         "fr": {
@@ -4943,6 +5213,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Retirer le dossier"
+          }
+        }
+      }
+    },
+    "Remove LUT": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retirer la LUT"
           }
         }
       }
@@ -5107,6 +5387,16 @@
         }
       }
     },
+    "Rename LUT": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renommer la LUT"
+          }
+        }
+      }
+    },
     "Rename Tag": {
       "localizations": {
         "fr": {
@@ -5238,6 +5528,16 @@
         }
       }
     },
+    "Reset all zones": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réinitialiser toutes les zones"
+          }
+        }
+      }
+    },
     "Reset to Default": {
       "localizations": {
         "fr": {
@@ -5284,6 +5584,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Afficher dans le Finder"
+          }
+        }
+      }
+    },
+    "Right-click a photo in the grid → Use as Reference Photo": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clic droit sur une photo de la grille → Utiliser comme photo de référence"
           }
         }
       }
@@ -5648,6 +5958,26 @@
         }
       }
     },
+    "Shadows are noisy because ISO %lld, though noise is well controlled here.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les ombres sont bruitées à cause des ISO %lld, mais le bruit reste bien maîtrisé ici."
+          }
+        }
+      }
+    },
+    "Shadows are noisy because ISO %lld.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les ombres sont bruitées à cause des ISO %lld."
+          }
+        }
+      }
+    },
     "Shape": {
       "localizations": {
         "fr": {
@@ -5748,6 +6078,26 @@
         }
       }
     },
+    "Shot at f/%@ — a thin focus plane.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pris à f/%@ — profondeur de champ très courte."
+          }
+        }
+      }
+    },
+    "Shot at f/%@ — a thin focus plane; check the eyes.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pris à f/%@ — profondeur de champ très courte ; vérifiez les yeux."
+          }
+        }
+      }
+    },
     "Show Collections in the Sidebar": {
       "localizations": {
         "fr": {
@@ -5804,6 +6154,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Affiche le nom de chaque fichier sous sa vignette dans la grille. Les notes en étoiles restent visibles dans une collection et dans la visionneuse. Les coins arrondis sont repris dans la visionneuse : une photo garde sa forme à l'ouverture."
+          }
+        }
+      }
+    },
+    "Show explanation": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher l’explication"
           }
         }
       }
@@ -6034,6 +6394,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Collection intelligente"
+          }
+        }
+      }
+    },
+    "Some LUTs Couldn’t Be Imported": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Certaines LUT n’ont pas pu être importées"
           }
         }
       }
@@ -6481,6 +6851,16 @@
         }
       }
     },
+    "The LUT’s data is unchanged — only its name.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les données de la LUT sont inchangées — seul son nom l’est."
+          }
+        }
+      }
+    },
     "The PDF couldn’t be prepared — some images may be unreadable — or the location couldn’t be written. Check the images and that the location is writable with enough free space.": {
       "localizations": {
         "fr": {
@@ -6601,12 +6981,32 @@
         }
       }
     },
+    "This edit uses a LUT that isn’t on this Mac (%@). The photo shows unedited until it’s imported.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette retouche utilise une LUT absente de ce Mac (%@). La photo reste non retouchée jusqu’à son importation."
+          }
+        }
+      }
+    },
     "This photo has Muse edits": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Cette photo comporte des modifications Muse"
+          }
+        }
+      }
+    },
+    "This photo is soft — focus may have missed.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette photo manque de netteté — la mise au point a peut-être été manquée."
           }
         }
       }
@@ -6652,6 +7052,16 @@
         }
       }
     },
+    "Tone Zones": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zones tonales"
+          }
+        }
+      }
+    },
     "Tone curve": {
       "localizations": {
         "fr": {
@@ -6678,6 +7088,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Essai — %lld jours restants"
+          }
+        }
+      }
+    },
+    "Under": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Basses lumières"
           }
         }
       }
@@ -6792,6 +7212,16 @@
         }
       }
     },
+    "Update from This Photo": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettre à jour depuis cette photo"
+          }
+        }
+      }
+    },
     "Updates": {
       "localizations": {
         "fr": {
@@ -6814,6 +7244,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Téléversement de %lld sur %lld…"
+          }
+        }
+      }
+    },
+    "Use as Reference Photo": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utiliser comme photo de référence"
+          }
+        }
+      }
+    },
+    "Used by %lld stored edits — they’ll show their originals until this LUT is imported again.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utilisée par %lld retouches enregistrées — elles afficheront leurs originaux jusqu’à ce que cette LUT soit réimportée."
           }
         }
       }
@@ -6894,6 +7344,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Visuellement similaire"
+          }
+        }
+      }
+    },
+    "WHY IT LOOKS THIS WAY": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "POURQUOI ELLE REND AINSI"
           }
         }
       }
@@ -7008,6 +7468,46 @@
         }
       }
     },
+    "Zebra Thresholds…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seuils des zébrures…"
+          }
+        }
+      }
+    },
+    "Zone %lld": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zone %lld"
+          }
+        }
+      }
+    },
+    "Zone %lld · %@ EV · %@%% of pixels": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zone %lld · %@ IL · %@ %% des pixels"
+          }
+        }
+      }
+    },
+    "Zone Sliders": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Curseurs de zone"
+          }
+        }
+      }
+    },
     "Zoom in": {
       "localizations": {
         "fr": {
@@ -7035,6 +7535,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "et"
+          }
+        }
+      }
+    },
+    "blue": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bleu"
           }
         }
       }
@@ -7152,6 +7662,16 @@
         }
       }
     },
+    "green": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "vert"
+          }
+        }
+      }
+    },
     "has": {
       "extractionState": "stale",
       "localizations": {
@@ -7200,6 +7720,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "en"
+          }
+        }
+      }
+    },
+    "in the middle of the frame": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "au centre de l’image"
           }
         }
       }
@@ -7264,6 +7794,26 @@
         }
       }
     },
+    "near the bottom of the frame": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "vers le bas de l’image"
+          }
+        }
+      }
+    },
+    "near the top of the frame": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "vers le haut de l’image"
+          }
+        }
+      }
+    },
     "of the following rules": {
       "localizations": {
         "fr": {
@@ -7280,6 +7830,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "règle de rayon"
+          }
+        }
+      }
+    },
+    "red": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "rouge"
           }
         }
       }

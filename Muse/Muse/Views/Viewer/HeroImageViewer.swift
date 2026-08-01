@@ -52,6 +52,9 @@ struct HeroImageViewer: View {
     /// are all untouched by it.
     @State private var editMode = false
     @State private var editSession: EditSession?
+    /// Deterministic capture feedback for the INFO column. Loaded alongside
+    /// the rest of the details — never on its own decode or query pass.
+    @State private var feedbackNotes: [PhotoFeedback.Note] = []
 
     init(file: FileNode) {
         self.file = file
@@ -117,7 +120,15 @@ struct HeroImageViewer: View {
             if !lingering {
                 KeyCaptureView(onLeft: { flip(-1) },
                                onRight: { flip(1) },
-                               onReturn: {})
+                               onReturn: {},
+                               onKey: { keyCode in
+                                   // J toggles clipping zebras — Lightroom's
+                                   // convention, and only while editing.
+                                   guard editMode, keyCode == 38,
+                                         let session = editSession else { return false }
+                                   session.zebrasOn.toggle()
+                                   return true
+                               })
             }
         }
         .onAppear {
@@ -189,6 +200,14 @@ struct HeroImageViewer: View {
             // the editor, a second closes the viewer. The rest of the close
             // sequence never runs for that first press.
             if editMode {
+                // Target mode is a mode INSIDE edit mode, so Escape unwinds it
+                // one layer at a time: targeting, then the editor, then the
+                // viewer.
+                if let session = editSession, session.toneZoneTargeting {
+                    session.toneZoneTargeting = false
+                    session.hoveredZone = nil
+                    return
+                }
                 exitEditMode()
                 return
             }
@@ -232,6 +251,7 @@ struct HeroImageViewer: View {
                          fallbackPalette: computedPalette,
                          paletteLoading: !paletteResolved,
                          metadata: metadata,
+                         feedbackNotes: feedbackNotes,
                          backing: infoBackingColor,
                          backingVisible: zoom > 1.001,
                          refresh: { await loadDetails() },
@@ -606,6 +626,19 @@ struct HeroImageViewer: View {
         let loaded = await detailsTask
         guard url == currentURL else { return }
         details = loaded
+        // Reads precomputed columns only (photo_meta + photo_traits), so this
+        // can't trigger a decode or query-time analysis.
+        if let fileID = loaded?.fileID, let queue = Database.shared.dbQueue {
+            let notes = await Task.detached(priority: .utility) { () -> [PhotoFeedback.Note] in
+                guard let inputs = try? queue.read({ db in
+                    try PhotoStatsQueries.feedbackInputs(fileID: fileID, db: db)
+                }) ?? nil else { return [] }
+                return PhotoFeedback.notes(for: inputs)
+            }.value
+            if url == currentURL { feedbackNotes = notes }
+        } else {
+            feedbackNotes = []
+        }
         // Extra metadata for the INFO card (off-main, no DB). Derive the kind
         // from the live URL (navigation changes currentURL, not `file`). Like
         // `details`/palette above, we deliberately DON'T clear `metadata` first:

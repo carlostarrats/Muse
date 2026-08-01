@@ -136,7 +136,9 @@ nonisolated enum DeepAnalysisBackfill {
                 traits: PhotoTraitsRow(file_id: fileID, traits_scanned_hash: hash,
                                        traits_version: PhotoTraits.currentVersion,
                                        face_count: nil, largest_face_frac: nil,
-                                       face_quality: nil, pet_count: nil, sharpness: nil),
+                                       face_quality: nil, pet_count: nil, sharpness: nil,
+                                       clip_high_r: nil, clip_high_g: nil, clip_high_b: nil,
+                                       clip_low: nil, noise_sigma: nil),
                 clip: clipReady
                     ? ClipEmbeddingRow(file_id: fileID, embedded_hash: hash,
                                        model_generation: ClipModel.current.generation, vector: nil)
@@ -158,7 +160,12 @@ nonisolated enum DeepAnalysisBackfill {
                                    largest_face_frac: result.largestFaceFrac,
                                    face_quality: result.faceQuality,
                                    pet_count: result.petCount,
-                                   sharpness: result.sharpness),
+                                   sharpness: result.sharpness,
+                                   clip_high_r: result.clipHighR,
+                                   clip_high_g: result.clipHighG,
+                                   clip_high_b: result.clipHighB,
+                                   clip_low: result.clipLow,
+                                   noise_sigma: result.noiseSigma),
             clip: clipRow)
     }
 

@@ -26,6 +26,10 @@ struct ViewerInfoColumn<Chrome: View>: View {
     /// Extra file metadata (EXIF / PDF / A/V) shown in the INFO card. Loaded by
     /// the hero viewer on open; nil/empty → the card is omitted.
     var metadata: FileMetadata? = nil
+    /// Deterministic "why it looks this way" notes, computed by the hero's
+    /// existing details load from precomputed columns. Empty → no card at all;
+    /// silence about a well-exposed photo is the correct output.
+    var feedbackNotes: [PhotoFeedback.Note] = []
     /// Near-opaque card drawn behind the whole column while zoomed. It's the
     /// direct background of the content stack, so it resizes in the same
     /// layout pass (and spring) as the Collection/Tags expanders.
@@ -68,6 +72,9 @@ struct ViewerInfoColumn<Chrome: View>: View {
     /// withAnimation transaction can't animate an @AppStorage publish (it lands
     /// outside the transaction; see CLAUDE.md).
     @State private var colorsExpanded = AppSettings.colorsCardExpanded
+    /// Same global-last-choice rule (and the same @State-not-@AppStorage
+    /// reason) as the colors card.
+    @State private var feedbackExpanded = AppSettings.feedbackCardExpanded
 
     var body: some View {
         ScrollView {
@@ -83,6 +90,9 @@ struct ViewerInfoColumn<Chrome: View>: View {
                     colorsCard(palette: displayPalette)
                 } else if paletteLoading {
                     colorsPlaceholderCard
+                }
+                if !feedbackNotes.isEmpty {
+                    feedbackCard
                 }
                 if let metadata, !metadata.rows.isEmpty {
                     infoCard(metadata)
@@ -441,6 +451,42 @@ struct ViewerInfoColumn<Chrome: View>: View {
         // Persist the GLOBAL choice so a new viewer session opens the same way.
         .onChange(of: colorsExpanded) { _, expanded in
             UserDefaults.standard.set(expanded, forKey: AppSettings.colorsCardExpandedKey)
+        }
+    }
+
+    // MARK: - Why it looks this way
+
+    private var feedbackCard: some View {
+        InfoCard {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    CardLabel(text: String(localized: "WHY IT LOOKS THIS WAY"))
+                    Spacer()
+                    PlusCircleButton(size: 18, rotated: feedbackExpanded,
+                                     accessibilityLabel: feedbackExpanded
+                                        ? String(localized: "Hide explanation")
+                                        : String(localized: "Show explanation")) {
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
+                            feedbackExpanded.toggle()
+                        }
+                    }
+                }
+                if feedbackExpanded {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Array(feedbackNotes.enumerated()), id: \.offset) { _, note in
+                            Text(note.displayText)
+                                .font(.system(size: 12))
+                                .foregroundStyle(.white.opacity(0.75))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .onChange(of: feedbackExpanded) { _, expanded in
+            UserDefaults.standard.set(expanded, forKey: AppSettings.feedbackCardExpandedKey)
         }
     }
 

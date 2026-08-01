@@ -1,0 +1,133 @@
+//
+//  CubeLUT.swift
+//  Muse
+//
+//  A pure `.cube` (Adobe/Resolve convention) parser, written against the
+//  format spec.
+//
+//  Two refusals rather than best-effort guesses:
+//  - `LUT_1D_SIZE` is not a 3D look and has no place in this pipeline.
+//  - a non-default DOMAIN_MIN/MAX would need resampling, which silently
+//    misrepresents the look. Refusing is honest; a wrong render is not.
+//
+//  Storage order is R fastest-varying — the spec's order, pinned by an
+//  asymmetric test fixture because an axis mixup produces a plausible-looking
+//  but completely wrong grade.
+//
+
+import Foundation
+import CryptoKit
+
+nonisolated struct CubeLUT: Equatable, Sendable {
+    let size: Int
+    /// size³ × 3 floats, R fastest-varying. Values may exceed 0…1 — some looks
+    /// lift past the domain and `CIColorCube` tolerates it.
+    let data: [Float]
+
+    init(size: Int, data: [Float]) {
+        self.size = size
+        self.data = data
+    }
+
+    /// The bytes the content hash is taken over, and the bytes stored in the
+    /// `edit_luts` blob. Float32 native-endian (Apple silicon + Intel are both
+    /// little-endian; the blob never leaves the device — it isn't in sidecars).
+    var canonicalData: Data {
+        data.withUnsafeBufferPointer { Data(buffer: $0) }
+    }
+
+    static func hash(_ lut: CubeLUT) -> String {
+        SHA256.hash(data: lut.canonicalData).map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+nonisolated enum CubeLUTParser {
+    /// A 128³ text cube is roughly 50 MB; past this it isn't a LUT.
+    static let maxFileBytes = 64 * 1024 * 1024
+    /// CIColorCube's documented ceiling.
+    static let maxSize = 128
+    private static let domainTolerance = 1e-4
+
+    enum ParseError: Error, Equatable {
+        case tooLarge
+        case notA3DLUT
+        case badSize
+        case badValue(line: Int)
+        case wrongCount(expected: Int, got: Int)
+        case unsupportedDomain
+    }
+
+    static func parse(_ text: String) throws -> (lut: CubeLUT, title: String?) {
+        guard text.utf8.count <= maxFileBytes else { throw ParseError.tooLarge }
+
+        var title: String?
+        var size: Int?
+        var domainMin: (Double, Double, Double) = (0, 0, 0)
+        var domainMax: (Double, Double, Double) = (1, 1, 1)
+        var values: [Float] = []
+        var dataRowCount = 0
+
+        for (index, rawLine) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            let lineNumber = index + 1
+            if line.isEmpty || line.hasPrefix("#") { continue }
+
+            if line.hasPrefix("TITLE") {
+                title = line.dropFirst("TITLE".count)
+                    .trimmingCharacters(in: .whitespaces)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+                continue
+            }
+            if line.hasPrefix("LUT_1D_SIZE") { throw ParseError.notA3DLUT }
+            if line.hasPrefix("LUT_3D_SIZE") {
+                let rest = line.dropFirst("LUT_3D_SIZE".count).trimmingCharacters(in: .whitespaces)
+                guard let n = Int(rest), n >= 2, n <= maxSize else { throw ParseError.badSize }
+                size = n
+                continue
+            }
+            if line.hasPrefix("DOMAIN_MIN") {
+                let parts = numbers(after: "DOMAIN_MIN", in: line)
+                guard parts.count == 3 else { throw ParseError.badValue(line: lineNumber) }
+                domainMin = (parts[0], parts[1], parts[2])
+                continue
+            }
+            if line.hasPrefix("DOMAIN_MAX") {
+                let parts = numbers(after: "DOMAIN_MAX", in: line)
+                guard parts.count == 3 else { throw ParseError.badValue(line: lineNumber) }
+                domainMax = (parts[0], parts[1], parts[2])
+                continue
+            }
+            if line.hasPrefix("LUT_1D_INPUT_RANGE") || line.hasPrefix("LUT_3D_INPUT_RANGE") {
+                continue    // recognized, not load-bearing for this importer
+            }
+
+            let parts = line.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
+            guard parts.count == 3,
+                  let r = Float(parts[0]), let g = Float(parts[1]), let b = Float(parts[2])
+            else { throw ParseError.badValue(line: lineNumber) }
+            values.append(r); values.append(g); values.append(b)
+            dataRowCount += 1
+        }
+
+        guard let resolvedSize = size else { throw ParseError.badSize }
+
+        let domainIsDefault =
+            abs(domainMin.0) < domainTolerance && abs(domainMin.1) < domainTolerance
+            && abs(domainMin.2) < domainTolerance
+            && abs(domainMax.0 - 1) < domainTolerance && abs(domainMax.1 - 1) < domainTolerance
+            && abs(domainMax.2 - 1) < domainTolerance
+        guard domainIsDefault else { throw ParseError.unsupportedDomain }
+
+        let expected = resolvedSize * resolvedSize * resolvedSize
+        guard dataRowCount == expected else {
+            throw ParseError.wrongCount(expected: expected, got: dataRowCount)
+        }
+        return (CubeLUT(size: resolvedSize, data: values), title)
+    }
+
+    private static func numbers(after keyword: String, in line: String) -> [Double] {
+        line.dropFirst(keyword.count)
+            .split(whereSeparator: { $0 == " " || $0 == "\t" })
+            .compactMap { Double($0) }
+    }
+}

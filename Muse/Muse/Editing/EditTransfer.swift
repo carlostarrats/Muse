@@ -21,6 +21,9 @@ import Foundation
 
 nonisolated enum AdjustmentGroup: String, CaseIterable, Codable, Sendable {
     case tone, color, presence, curve, geometry, vignette, raw
+    // Spec 05. `raw` stays where it is — it is not an `Adjustment` case, so
+    // its position carries no hashing consequence.
+    case toneZone, lut
 }
 
 nonisolated enum EditTransfer {
@@ -69,6 +72,8 @@ extension Adjustment {
         case .curve: .curve
         case .geometry: .geometry
         case .vignette: .vignette
+        case .toneZone: .toneZone
+        case .lut: .lut
         }
     }
 }

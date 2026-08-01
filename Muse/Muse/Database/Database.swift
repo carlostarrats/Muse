@@ -555,6 +555,40 @@ final class Database {
             }
         }
 
+        migrator.registerMigration("v22_photo_stats") { db in
+            // Capture statistics, on the EXISTING photo_traits table — Spec 03's
+            // version-bump mechanism used as designed. Bumping
+            // PhotoTraits.currentVersion leaves every existing row
+            // version-behind, so DeepAnalysisBackfill re-scans them under its
+            // standing per-launch cap; no new marker, table or index.
+            //
+            // These are computed at FIXED thresholds (ClippingStats.stored*),
+            // never the user's zebra prefs — a stored row must not change
+            // meaning when a slider moves.
+            try db.alter(table: "photo_traits") { t in
+                t.add(column: "clip_high_r", .double)
+                t.add(column: "clip_high_g", .double)
+                t.add(column: "clip_high_b", .double)
+                t.add(column: "clip_low", .double)
+                t.add(column: "noise_sigma", .double)
+            }
+        }
+
+        migrator.registerMigration("v23_edit_luts") { db in
+            // Library-global LUT storage, content-addressed: the PK IS the
+            // SHA-256 of the canonical float bytes, so a `lutHash` in a stack
+            // resolves to byte-identical data or to nothing. Rows are
+            // IMMUTABLE — import is INSERT OR IGNORE, rename touches `name`
+            // only, and there is no update path.
+            try db.create(table: "edit_luts") { t in
+                t.column("id", .text).primaryKey()
+                t.column("name", .text).notNull()
+                t.column("size", .integer).notNull()
+                t.column("data", .blob).notNull()       // float32 RGB, R fastest-varying
+                t.column("created_at", .integer).notNull()
+            }
+        }
+
         return migrator
     }
 

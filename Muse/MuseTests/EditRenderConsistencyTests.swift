@@ -19,6 +19,25 @@ final class EditRenderConsistencyTests: XCTestCase {
     /// equality. A pixel-radius regression moves it far past this.
     let tolerance = 6.0 / 255.0
 
+    /// A tiny fixture LUT, resolvable without touching the user's library:
+    /// `LutRegistry`'s cache is the render path's own lookup, so preloading it
+    /// is exactly what an import does.
+    private static let fixtureLut: (id: String, size: Int, rgb: [Float]) = {
+        let size = 2
+        var rgb: [Float] = []
+        for b in 0..<size { for g in 0..<size { for r in 0..<size {
+            rgb.append(Float(r) * 0.9); rgb.append(Float(g) * 0.85); rgb.append(Float(b) * 0.95)
+        }}}
+        let lut = CubeLUT(size: size, data: rgb)
+        return (CubeLUT.hash(lut), size, rgb)
+    }()
+
+    override func setUp() {
+        super.setUp()
+        LutRegistry.preload(id: Self.fixtureLut.id, size: Self.fixtureLut.size,
+                            rgb: Self.fixtureLut.rgb)
+    }
+
     func allGroupsStack() -> EditStack {
         var stack = EditStack.fresh()
         var tone = ToneParams.neutral
@@ -34,8 +53,17 @@ final class EditRenderConsistencyTests: XCTestCase {
                      CurveParams.Point(x: 1, y: 0.95)]
         var vignette = VignetteParams.neutral
         vignette.amount = -0.3
+        // Spec 05: EVERY renderable group belongs in this fixture, current and
+        // future — a new chain stage lands inside this 3-resolution gate in
+        // the same commit that adds it, or a scale-dependent radius ships
+        // unnoticed. (`lut` joins via `lutFixtureStack()`, which needs a
+        // registered LUT row and so can't live in the shared fixture.)
+        var toneZone = ToneZoneParams.neutral
+        toneZone.gains[1] = -0.4      // pull the deep shadows
+        toneZone.gains[7] = 0.3       // lift the highlights
+        let lut = LutParams(lutHash: Self.fixtureLut.id, name: "Fixture", strength: 0.6)
         stack.adjustments = [.tone(tone), .color(color), .presence(presence),
-                             .curve(curve), .vignette(vignette)]
+                             .curve(curve), .vignette(vignette), .toneZone(toneZone), .lut(lut)]
         return stack
     }
 

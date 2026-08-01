@@ -7303,3 +7303,92 @@ Tests: new suites `CoordinateMigrationTests`, `CoordinateReaderTests`,
 `SearchCancellationTests`, `PerfBaselineTests`. `ImageMetadataStripperTests` was updated
 to obtain a `RenderedOutput` — which is itself the compile-time proof the choke point
 can't be bypassed. Full suite green.
+
+---
+
+## 2026-07-31 — Spec 05: editing readouts, learning layer, looks & LUTs (`new-product-build-1`)
+
+Plan: `docs/superpowers/plans/2026-07-30-spec-05-editing-readouts-learning.md`.
+The distinctive layer on top of Spec 04's engine — everything here is an extension of
+the existing editor, with no new render contexts, no second render loop, and zero new
+`@Published` properties on `AppState`.
+
+**The stats tap is a passenger, not a driver.** The editor already renders the draft on
+every change through `RenderCoalescer`; the readouts ride that completed render rather
+than starting anything. `EditSession.renderDraft` ends by handing the finished image to
+a detached tap that downsamples to 256 px, reads it back as RGBA8, and computes the
+histogram and clipping fractions in one pass — gated on `statsVisible`, which is true
+only for the Light or Scopes tab in Edit mode. `stats` and `zoneEVMap` are written
+together so a panel can never draw a histogram from one frame beside zone mass from
+another, and `zoneEVMap` is deliberately unpublished: it changes every render and only
+hover reads it.
+
+**The tone zone is the flagship, and it needed a seam Spec 04 didn't have.** The zone
+strip, the canvas hatch and the render stage all have to agree about which pixels are
+in which zone, which means they must all read the SAME mask. `EditRenderer.apply` was
+refactored to expose `applyThroughTone` — the chain's state at position 2b, i.e. the
+tone-zone stage's own input — and both the stats tap and the overlay sample that,
+through the same `ToneZoneFilter.smoothedEVMap` the render uses. One mask, by
+construction, rather than three approximations that drift.
+
+The math is a raised-cosine partition of unity over EV, which buys a property worth
+stating as a test: equal gains across all nine zones is EXACTLY a plain exposure shift.
+That turned out to matter for the golden, too. The first neutrality test set a single
+zone's gain on a grey fixture and asserted the pixels moved — and it failed, because
+`CIColor` interprets its components as sRGB, so "0.5 grey" is ~0.21 linear ≈ −2.2 EV,
+two zones away from where the test assumed. Rather than hard-code the fixture's zone,
+the test now asserts the equal-gains property against a plain `exposureEV` render,
+which doesn't depend on knowing where a fixture's pixels land. (The kernel-level test
+hit the neighbouring trap: `CIColor` clamps to 0…1, so a negative-EV guide fixture
+silently becomes 0. It probes zone 8 — 0 EV — which is a perfectly good zone and needs
+no clamped value.)
+
+**LUTs are referenced, never embedded, and that decision does all the work.** A 64³
+table is ~3 MB and the stack rides iCloud sidecars and is hashed on every edit, so
+`LutParams` carries a content hash into `edit_luts` (v23). Content addressing makes the
+row immutable by construction: import is `INSERT OR IGNORE`, rename touches `name`
+only, and a `lutHash` therefore resolves to byte-identical data or to nothing. The
+"nothing" case is the interesting one — `EditRenderer.canRender` gates on resolvability,
+so a stack whose LUT is missing on this device renders the ORIGINAL everywhere rather
+than a partial look, the blob is never rewritten, and importing the same `.cube`
+anywhere heals every referencing photo at once, filename-independent. `LutRegistry`
+gained a `preload` alongside `invalidate`: the import path has just parsed the cube, so
+making the first render read it back off disk is pure waste — and it's what lets the
+consistency golden register a fixture LUT without touching the user's library.
+
+The parser refuses rather than guesses. A non-default `DOMAIN_MIN/MAX` would need
+resampling, and a resampled look is a different look under the original's name; a
+`LUT_1D_SIZE` file isn't a 3D look at all. R-fastest-varying order is pinned by an
+asymmetric fixture, because an axis mixup produces a plausible-looking grade that is
+simply wrong.
+
+**"Why it looks this way" is a threshold table, not a model.** Every input is a
+precomputed column, so the card can't trigger a decode; v22 adds the four clipping
+fractions and a noise sigma to `photo_traits` and bumps `PhotoTraits.currentVersion`,
+which is all it takes to get existing rows re-scanned — Spec 03's version-bump
+mechanism used as designed, no new marker or table. Both compute sites (live analyze
+and the backfill) ride the raster already decoded. Two suppressions carry the design:
+flash suppresses the motion-blur note (the flash IS the exposure), and motion blur
+suppresses the soft-focus note — one blur gets one explanation. An empty result renders
+no card, which is the correct output for a well-exposed photo rather than a fallback
+state.
+
+**Two thresholds, deliberately not three.** The zebra kernel, the live clipping
+percentages and the Scopes sentences all read `AppSettings.editorZebraHigh/Low`, so
+their agreement is structural rather than maintained. The capture statistics stored in
+`photo_traits` read fixed constants instead, because a stored row must not change
+meaning when a slider moves. The zebra TOGGLE is session state (J, Lightroom's key);
+only the thresholds persist.
+
+Smaller things: the Looks tab's name rows became `LooksBrowserView`, which decodes the
+base proxy once and runs one `EditRenderer.apply` per look (a name in a list tells you
+nothing about what a look does to YOUR picture); `EditPresetsTab` is gone and its file
+now holds only `WBEyedropperButton`. `KeyCaptureView` gained an `onKey` passthrough.
+The reference pane is fed from the GRID's context menu rather than a picker inside the
+editor — choosing a reference is a browsing act — and renders the reference through its
+own edit stack, because a reference carrying Muse edits has to look the way it looks
+everywhere else.
+
+Localization was written straight into `Localizable.xcstrings` (56 new keys with French
+values): `-exportLocalizations` still can't build this project, the pre-existing
+Spec-03 `Float16`/x86_64 breakage Spec 04 recorded.

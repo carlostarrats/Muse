@@ -83,3 +83,81 @@ final class EditRenderNeutralityTests: XCTestCase {
         XCTAssertEqual(result.ciImage.extent.height, 40, accuracy: 1)
     }
 }
+
+// MARK: - Spec 05
+
+extension EditRenderNeutralityTests {
+
+    private func grayImage(_ value: Double, size: CGFloat = 16) -> LinearImage {
+        let ci = CIImage(color: CIColor(red: value, green: value, blue: value))
+            .cropped(to: CGRect(x: 0, y: 0, width: size, height: size))
+        return LinearImage.alreadyDecodedFromFile(ci)
+    }
+
+    /// Zero gains must be an EXACT identity — the tone-zone stage runs on every
+    /// photo that has ever had the strip touched, so "close enough" would drift
+    /// a picture every save.
+    func testZeroGainToneZoneIsPixelIdentity() throws {
+        var stack = EditStack.fresh()
+        stack.adjustments = [.toneZone(.neutral)]
+        let source = grayImage(0.5)
+        let result = EditRenderer.apply(stack, to: source, sourceLongEdge: 16)
+        let before = try XCTUnwrap(EditRenderTestSupport.render(source.ciImage))
+        let after = try XCTUnwrap(EditRenderTestSupport.render(result.ciImage))
+        XCTAssertEqual(try EditRenderTestSupport.meanChannelError(before, after), 0,
+                       accuracy: 0.0001)
+    }
+
+    /// Strength 0 never even looks the LUT up, so an unresolvable reference at
+    /// zero strength can't make a stack unrenderable.
+    func testStrengthZeroLutIsPixelIdentityAndStillRenderable() throws {
+        var stack = EditStack.fresh()
+        stack.setLut(LutParams(lutHash: "not-a-real-lut", name: "x", strength: 0))
+        XCTAssertTrue(EditRenderer.canRender(stack))
+        let source = grayImage(0.5)
+        let result = EditRenderer.apply(stack, to: source, sourceLongEdge: 16)
+        let before = try XCTUnwrap(EditRenderTestSupport.render(source.ciImage))
+        let after = try XCTUnwrap(EditRenderTestSupport.render(result.ciImage))
+        XCTAssertEqual(try EditRenderTestSupport.meanChannelError(before, after), 0,
+                       accuracy: 0.0001)
+    }
+
+    /// An unresolvable LUT renders the ORIGINAL everywhere, never a partial
+    /// stack: the look IS the LUT, and applying everything except it would be
+    /// a different photo presented as the user's edit.
+    func testUnresolvableLutMakesTheStackUnrenderable() {
+        var stack = EditStack.fresh()
+        stack.setTone { $0.exposureEV = 1 }
+        stack.setLut(LutParams(lutHash: "definitely-not-imported", name: "Missing", strength: 1))
+        XCTAssertFalse(EditRenderer.canRender(stack))
+
+        let source = grayImage(0.5)
+        let result = EditRenderer.apply(stack, to: source, sourceLongEdge: 16)
+        // `apply` bails on !canRender, so the exposure lift never lands either.
+        XCTAssertEqual(result.ciImage.extent, source.ciImage.extent)
+    }
+
+    /// A non-neutral zone gain must actually DO something — every identity
+    /// test above would pass on a stage that silently skipped itself.
+    ///
+    /// EQUAL gains across all nine zones is the case that doesn't depend on
+    /// knowing which zone a fixture's pixels land in: the weights are a
+    /// partition of unity, so this is exactly a +1 EV exposure shift.
+    func testEqualZoneGainsBrightenLikeAPlainExposureShift() throws {
+        var stack = EditStack.fresh()
+        stack.adjustments = [.toneZone(ToneZoneParams(gains: Array(repeating: 0.5, count: 9)))]
+        let source = grayImage(0.35)
+        let result = EditRenderer.apply(stack, to: source, sourceLongEdge: 16)
+
+        var exposureOnly = EditStack.fresh()
+        exposureOnly.setTone { $0.exposureEV = 0.5 * ToneZoneMath.maxZoneEV }
+        let expected = EditRenderer.apply(exposureOnly, to: source, sourceLongEdge: 16)
+
+        let before = try XCTUnwrap(EditRenderTestSupport.render(source.ciImage))
+        let zoned = try XCTUnwrap(EditRenderTestSupport.render(result.ciImage))
+        let exposed = try XCTUnwrap(EditRenderTestSupport.render(expected.ciImage))
+        XCTAssertGreaterThan(try EditRenderTestSupport.meanChannelError(before, zoned), 0.05)
+        XCTAssertEqual(try EditRenderTestSupport.meanChannelError(zoned, exposed), 0,
+                       accuracy: 0.02)
+    }
+}

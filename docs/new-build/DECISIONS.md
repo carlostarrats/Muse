@@ -2492,3 +2492,150 @@ this section wins.
   x86_64, and the extractor builds universal. Pre-existing Spec-03 breakage; Spec 04's
   French strings were written into `Localizable.xcstrings` directly (all 728 keys have
   an `fr` value). Fix `ClipVectors` before relying on the export workflow again.
+
+## Spec 05 as-built (editing readouts, learning layer, looks & LUTs)
+
+*2026-07-31, `new-product-build-1`. Where this disagrees with the pre-build
+"Spec 05" sections above, this section wins.*
+
+### Scope
+
+- Built: v22 `photo_stats` + v23 `edit_luts`; `toneZone`/`lut` appended to `Adjustment`;
+  the shared statistics tap; `ScopesPanel`/`HistogramView` + `ClippingMessages`; zebras;
+  the tone-zone control (math, guided filter, render stage 2b, strip, target mode) and
+  the zone hatch overlay; `NoiseEstimate` + the capture-stat wiring; `PhotoFeedback` +
+  `PhotoStatsQueries` + both surfaces; `.cube` import (parser, registry, store, render
+  stage 4b, missing-LUT notice); `LooksBrowserView`; the reference pane.
+- **NOT built:** the `PerfBaseline` rows for this spec's measurements (the same harness
+  gap Specs 03 and 04 left).
+- Future specs continue at **v24**.
+
+### Model — as built
+
+- `Adjustment.toneZone` is `canonicalIndex` 6, `.lut` is 7 — appended after `.vignette`.
+  `EditStack` gained `toneZoneParams`/`lutParams` accessors, a `setToneZone` mutator in
+  the existing find-or-insert family, and `setLut(_:)`, which takes an OPTIONAL: a stack
+  carries at most one LUT and "no LUT" is the ABSENCE of the case, never a
+  zero-strength one left for the codec to encode.
+- `ToneZoneParams.clamped()` pads/truncates as well as bounding. Decoding does NOT
+  normalize (the blob round-trips byte-identical); the renderer calls `clamped()`.
+- `AdjustmentGroup` gained `toneZone` and `lut` AFTER `raw`. `raw` is not an
+  `Adjustment` case, so its position carries no hashing consequence.
+- `currentSchemaVersion`/`currentProcessVersion` both stay 1, and the Spec 04 pinned
+  fixture hash is unchanged (asserted).
+
+### Render chain — as built
+
+- Order: `1 geometry → 2 tone/WB → 2b toneZone → 3 curve → 4 color → 4b lut →
+  5 presence → 6 vignette`. Stage 2b sits after WB because WB already lived between
+  tone and curve in Spec 04's code; the spec's "after tone, before curve" is satisfied.
+- **`EditRenderer.applyThroughTone` is a new private seam** returning the chain state at
+  position 2b plus the radius scale, used by `apply` AND by the new
+  `EditRenderer.toneStageImage(url:stack:maxPixel:)`. That entry point is what lets the
+  stats tap and the zone overlay sample the SAME pixels the gains act on rather than a
+  second approximation. `EditRenderer.decodedProxy(url:stack:maxPixel:)` exposes the
+  existing private decode for the Looks browser's one-decode-many-looks sweep.
+- Kernel loading follows Spec 04's lazy/non-fatal rule (`CIColorKernel?`, nil skips the
+  stage). New kernels: `zebraStripes`, `tzLog2Luma`, `tzSquare`, `tzLinearCoeffs`,
+  `tzApplyCoeffs`, `toneZoneGain`, `zoneHatch`, `lutMix` — all covered by
+  `EditKernelLoadTests`.
+- `tzLog2Luma` is a kernel the plan did not name (it called out the gap): the guide MUST
+  be log-domain, because the zone weights are defined over EV and a linear-luminance
+  guide bunches eight of nine zones into the bottom stop.
+- `ToneZoneFilter.smoothedEVMap(for:longEdge:)` takes a CGFloat long edge (not an Int),
+  and `evBuffer(for:longEdge:context:)` is the CPU readback (RGBAf, row-flipped
+  top-down so callers index it like a screen buffer).
+- `EditRenderer.canRender` now also requires every non-neutral `lut` reference to
+  resolve. **Consequence: `canRender` may do a synchronous DB read** — never call it on
+  the main thread for a LUT-bearing stack.
+
+### Statistics & readouts — as built
+
+- The tap lives in `EditSession.renderDraft` (not `EditCanvasView`): the session is
+  where the completed render already lands, so the tap is a passenger on it rather than
+  a second call site. `EditSession.refreshStats()` exists for the case where a panel
+  APPEARS without a render coming (opening the Scopes tab).
+- `EditSession.statsSampleLongEdge = 256`. `statsVisible` is driven from `EditorView`'s
+  `updateStatsVisibility()` — true when the right tab is Light or the left tab is
+  Scopes — and is cleared on disappear along with `hoveredZone`/`toneZoneTargeting`.
+- `CurveHistogram` MOVED from `Views/Editor/CurveEditorView.swift` to
+  `Editing/HistogramCompute.swift` (it needs to be `nonisolated`/`Sendable` for
+  `EditStats`, and it belongs beside the code that produces it). `EditStats` and
+  `ZoneEVMap` live there too.
+- `HistogramData.empty` / `ClippingStats.none` are declared constants — degenerate input
+  returns them rather than crashing.
+- The Scopes panel says "Nothing is clipping." when the message list is empty: silence
+  is the good outcome, but a blank panel reads as broken.
+
+### LUTs — as built
+
+- `LutRegistry.preload(id:size:rgb:)` was added beside `invalidate`: the import path has
+  the parsed cube in hand, so the first render must not read it back off disk. It is
+  also how `EditRenderConsistencyTests` registers its fixture LUT WITHOUT writing to the
+  user's library.
+- `LutStore.init(queue:)` is injectable (defaults to `Database.shared.dbQueue`) so its
+  tests run against an isolated in-memory database. `importCubes` reloads the listing
+  itself; callers don't have to remember to.
+- `CubeLUT.canonicalData` is float32 NATIVE-endian. The blob never leaves the device
+  (LUTs don't ride sidecars), so byte order is not a portability concern.
+- The missing-LUT notice lives at the TOP of `LooksBrowserView`, not in `EditorView`'s
+  right card generally — that is where a user goes to fix it.
+
+### Feedback — as built
+
+- `PhotoStatsQueries` has TWO entry points: `feedbackInputs(fileID:db:)` (the hero, which
+  already has the id from `ViewerFileDetails`) and `feedbackInputs(path:db:)` (the
+  editor, which has only a URL). The data is content-derived, so resolving through the
+  alive path needs no `parent_dir` scoping.
+- `photo_meta.focal_length_35mm` is an INTEGER column; `PhotoFeedback.Inputs`
+  `focalLength35` is a Double, converted at the query seam.
+- The editor's Info tab shows the notes AND the RAW process line; the line compares the
+  pinned `RawParams.decoderVersion` against `RawSource.currentDecoderVersion(for:)` and
+  states the substitution rather than hiding it.
+
+### UI — as built
+
+- `EditCanvasView` gained `zebrasOn` / `zoneMask` / `hoveredZone` / `onScrollWhileTargeting`
+  and a `CanvasMTKView` subclass whose only job is intercepting `scrollWheel` during
+  target mode. Overlays composite AFTER the fit, so they are screen-space patterns at
+  canvas resolution — a zebra scaled with the image moirés on a downscaled proxy.
+- The zone hatch's mask is built LAZILY in `EditorView` on first hover and dropped on
+  every draft change (a stale mask would hatch pixels the gains no longer act on).
+- Zebra + reference toggles live in the existing compare chrome capsule, not a new row.
+  The thresholds popover hangs off the zebra button's context menu.
+- `EditPresetsTab` was DELETED; its file is now `Views/Editor/WBEyedropperButton.swift`
+  (the eyedropper was the only other thing in it). `LooksBrowserView` carries the
+  copy/paste buttons the old tab had.
+- `KeyCaptureView` gained an `onKey: ((UInt16) -> Bool)?` passthrough (return true to
+  consume); the three hardcoded arrow/return handlers stay.
+- The Escape order inside the hero's edit-mode branch is now: target mode → editor →
+  viewer. `EscapeResolver` is untouched.
+- `EditReferenceStore.url` is set from `SelectionMenu` for a single editable-kind
+  selection; there is no toast (the app has no general toast seam at that call site) —
+  the editor's reference button enabling is the feedback.
+
+### Tests & tooling
+
+- New pure-logic suites: `ToneZoneMathTests`, `HistogramComputeTests`,
+  `ClippingMessagesTests`, `CubeLUTParserTests`, `LutRegistryTests`, `LutStoreTests`,
+  `PhotoFeedbackTests`, `NoiseEstimateTests`, `PhotoStatsMigrationTests`,
+  `EditLutMigrationTests`, `PhotoStatsQueriesTests`; extensions to
+  `EditStackNormalizeTests`, `EditStackCodecTests`, `EditTransferTests`,
+  `EditSessionTests`, `EditKernelLoadTests`, `EditRenderConsistencyTests`,
+  `EditRenderNeutralityTests`.
+- **`CIColor` interprets its components as sRGB AND clamps them to 0…1** — both bite
+  tone-zone fixtures. A "0.5 grey" `CIImage(color:)` is ≈ −2.2 EV, not −1, so a test
+  that sets one zone's gain on it tests nothing; and a negative-EV guide fixture
+  silently becomes 0. The neutrality golden therefore asserts the EQUAL-GAINS property
+  (equal gains everywhere == a plain `exposureEV` shift, which the partition of unity
+  guarantees), and the kernel test probes zone 8 (0 EV). Don't "improve" either back to
+  a single-zone fixture.
+- `paths` has NO `parent_dir` column (it is derived from `absolute_path`); a test
+  inserting a path row needs `id`, `file_id`, `absolute_path`, `is_alive`.
+- Localization: `-exportLocalizations` still cannot build this project (the Spec-03
+  `Float16`/x86_64 breakage). Spec 05's 56 new keys were written into
+  `Localizable.xcstrings` directly with French values; the catalog is now 784 keys.
+  **Interpolated keys were hand-written in `%@`/`%lld` form and have NOT been verified
+  against extractor output** — a key that doesn't match falls back to the English source
+  at runtime, so this degrades gracefully, but fix `ClipVectors` before trusting the
+  French build.

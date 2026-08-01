@@ -34,8 +34,20 @@ nonisolated enum EditRenderer {
     /// must NOT be rendered — a partial application of parameters we only half
     /// understand would look like a bug the user can't undo. The original
     /// renders instead, and the blob is left byte-identical.
+    /// A stack referencing a LUT this device doesn't have is also
+    /// unrenderable: the look IS the LUT, and applying everything except it
+    /// would be a different photo presented as the user's edit. The original
+    /// renders instead and the blob is preserved, so importing the matching
+    /// `.cube` heals every referencing photo.
+    ///
+    /// NOTE: the LUT branch does a synchronous DB read on a miss — never call
+    /// `canRender` on the main thread for a LUT-bearing stack.
     static func canRender(_ stack: EditStack) -> Bool {
-        stack.processVersion <= EditStack.currentProcessVersion
+        guard stack.processVersion <= EditStack.currentProcessVersion else { return false }
+        if let lut = stack.lutParams, !lut.isNeutral {
+            guard LutRegistry.rgbaCube(for: lut.lutHash) != nil else { return false }
+        }
+        return true
     }
 
     // MARK: - The chain
@@ -45,8 +57,45 @@ nonisolated enum EditRenderer {
     static func apply(_ stack: EditStack, to image: LinearImage,
                       sourceLongEdge: CGFloat) -> LinearImage {
         guard canRender(stack) else { return image }
-        var current = image.ciImage
+        let toned = applyThroughTone(stack, to: image.ciImage, sourceLongEdge: sourceLongEdge)
+        var current = toned.image
+        let radiusScale = toned.radiusScale
+        // 2b. Tone zones: edge-aware per-zone exposure, still scene-referred
+        // (before the curve's display-referred pocket) so it works on real
+        // headroom rather than flat white.
+        if let toneZone = stack.toneZoneParams, !toneZone.isNeutral {
+            current = ToneZoneFilter.apply(toneZone, to: current, sourceLongEdge: radiusScale)
+        }
+        if let curve = stack.curveParams, !curve.isNeutral {
+            current = applyCurve(curve.clamped(), to: current)
+        }
+        if let color = stack.colorParams, color.vibrance != 0 || color.saturation != 0 {
+            current = applyColor(color.clamped(), to: current)
+        }
+        // 4b. LUT: the second display-referred pocket, and for the same reason
+        // as the curve — `.cube` packs are authored against display encoding,
+        // so applying one to linear data would not be the look on the tin.
+        if let lut = stack.lutParams, !lut.isNeutral {
+            current = applyLut(lut.clamped(), to: current)
+        }
+        if let presence = stack.presenceParams, !presence.isNeutral {
+            current = applyPresence(presence.clamped(), to: current,
+                                    radiusScale: radiusScale, isRaw: stack.rawParams != nil)
+        }
+        if let vignette = stack.vignetteParams, !vignette.isNeutral {
+            current = applyVignette(vignette.clamped(), to: current)
+        }
+        return LinearImage(current)
+    }
 
+    /// The chain up to and including tone/WB — i.e. exactly the image the
+    /// tone-zone stage sees at chain position 2b. Factored out so the editor's
+    /// zone readouts can sample the SAME pixels the gains act on rather than a
+    /// second, subtly different approximation of them.
+    private static func applyThroughTone(_ stack: EditStack, to image: CIImage,
+                                         sourceLongEdge: CGFloat)
+        -> (image: CIImage, radiusScale: CGFloat) {
+        var current = image
         if let geo = stack.geometryParams, !geo.isNeutral {
             current = applyGeometry(geo, to: current)
         }
@@ -66,20 +115,26 @@ nonisolated enum EditRenderer {
            color.temperature != 0 || color.tint != 0 {
             current = applyWhiteBalance(color.clamped(), to: current)
         }
-        if let curve = stack.curveParams, !curve.isNeutral {
-            current = applyCurve(curve.clamped(), to: current)
-        }
-        if let color = stack.colorParams, color.vibrance != 0 || color.saturation != 0 {
-            current = applyColor(color.clamped(), to: current)
-        }
-        if let presence = stack.presenceParams, !presence.isNeutral {
-            current = applyPresence(presence.clamped(), to: current,
-                                    radiusScale: radiusScale, isRaw: stack.rawParams != nil)
-        }
-        if let vignette = stack.vignetteParams, !vignette.isNeutral {
-            current = applyVignette(vignette.clamped(), to: current)
-        }
-        return LinearImage(current)
+        return (current, radiusScale)
+    }
+
+    /// A bounded decode with NOTHING applied — the Looks browser's shared base.
+    /// Thirty looks over one photo decode the file ONCE and differ only in the
+    /// chain applied to it; decoding per look would make the grid quadratic in
+    /// nothing useful.
+    static func decodedProxy(url: URL, stack: EditStack, maxPixel: Int)
+        -> (image: LinearImage, longEdge: CGFloat)? {
+        guard let source = decode(url: url, stack: stack, maxPixel: maxPixel) else { return nil }
+        return (source.image, source.longEdge)
+    }
+
+    /// Decode bounded to `maxPixel` and run the chain to position 2b — the
+    /// tone-zone stage's input. The editor's zone-mass tap and hover readout
+    /// sample this, so the strip, the hatch and the render always agree.
+    static func toneStageImage(url: URL, stack: EditStack, maxPixel: Int) -> CIImage? {
+        guard let source = decode(url: url, stack: stack, maxPixel: maxPixel) else { return nil }
+        return applyThroughTone(stack, to: source.image.ciImage,
+                                sourceLongEdge: source.longEdge).image
     }
 
     // MARK: - Stages
@@ -190,6 +245,24 @@ nonisolated enum EditRenderer {
             "inputCurvesDomain": CIVector(x: 0, y: 1),
             "inputColorSpace": CGColorSpace(name: CGColorSpace.sRGB) as Any,
         ])
+    }
+
+    /// `CIColorCubeWithColorSpace` with an EXPLICIT sRGB space — the bare
+    /// `CIColorCube` interprets the table in the working space, which on a P3
+    /// display shifts every look. `extrapolate` keeps HDR headroom above 1
+    /// mapped instead of clamped at the cube's edge.
+    private static func applyLut(_ lut: LutParams, to image: CIImage) -> CIImage {
+        guard let cube = LutRegistry.rgbaCube(for: lut.lutHash) else { return image }
+        let lutted = image.applyingFilter("CIColorCubeWithColorSpace", parameters: [
+            "inputCubeDimension": cube.size,
+            "inputCubeData": cube.data,
+            "inputColorSpace": CGColorSpace(name: CGColorSpace.sRGB) as Any,
+            "inputExtrapolate": true,
+        ])
+        guard lut.strength < 1, let kernel = EditKernels.lutMix else { return lutted }
+        return kernel.apply(extent: image.extent,
+                            roiCallback: { _, rect in rect },
+                            arguments: [image, lutted, Float(lut.strength)]) ?? lutted
     }
 
     private static func applyColor(_ color: ColorParams, to image: CIImage) -> CIImage {

@@ -238,6 +238,14 @@ struct PhotoTraitsRow: Codable, FetchableRecord, MutablePersistableRecord {
     var face_quality: Double?
     var pet_count: Int?
     var sharpness: Double?
+    // v22 capture statistics. Fractions of the frame at the FIXED
+    // ClippingStats.stored* thresholds — never the user's zebra prefs.
+    var clip_high_r: Double?
+    var clip_high_g: Double?
+    var clip_high_b: Double?
+    var clip_low: Double?
+    /// MAD-of-Laplacian noise estimate, normalized at 1024 px.
+    var noise_sigma: Double?
 
     enum Columns {
         static let file_id = Column("file_id")
@@ -252,7 +260,21 @@ struct PhotoTraitsRow: Codable, FetchableRecord, MutablePersistableRecord {
 /// every row whose `traits_version` is behind, so a new trait needs no new
 /// marker column and no parallel table.
 nonisolated enum PhotoTraits {
-    static let currentVersion = 1
+    /// 2 as of v22 (clipping fractions + noise sigma).
+    static let currentVersion = 2
+}
+
+/// An imported 3D LUT (v23). IMMUTABLE except for `name`: the id is the
+/// content hash of `data`, so a row can only ever be created or deleted.
+struct EditLutRow: Codable, FetchableRecord, MutablePersistableRecord {
+    static let databaseTableName = "edit_luts"
+
+    var id: String
+    var name: String
+    var size: Int
+    /// float32 RGB, R fastest-varying — `CubeLUT.canonicalData` verbatim.
+    var data: Data
+    var created_at: Int64
 }
 
 /// A CLIP image embedding (v18). fp16, L2-normalized, content-keyed.

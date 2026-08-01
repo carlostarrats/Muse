@@ -101,6 +101,14 @@ extension EditStack {
         for case .vignette(let p) in adjustments { return p }
         return nil
     }
+    var toneZoneParams: ToneZoneParams? {
+        for case .toneZone(let p) in adjustments { return p }
+        return nil
+    }
+    var lutParams: LutParams? {
+        for case .lut(let p) in adjustments { return p }
+        return nil
+    }
 
     /// Find-or-insert the matching case, mutate it, write it back. The editor
     /// binds sliders through these, so a first non-neutral write creates the
@@ -136,6 +144,21 @@ extension EditStack {
         mutate(&p)
         replace(.vignette(p))
     }
+    mutating func setToneZone(_ mutate: (inout ToneZoneParams) -> Void) {
+        var p = toneZoneParams ?? .neutral
+        mutate(&p)
+        replace(.toneZone(p))
+    }
+    /// Writes (or clears) the single `lut` case. Passing nil REMOVES it —
+    /// a stack carries at most one LUT and "no LUT" is the absence of the case,
+    /// not a zero-strength one left behind for the codec to encode.
+    mutating func setLut(_ params: LutParams?) {
+        adjustments.removeAll { if case .lut = $0 { true } else { false } }
+        if let params {
+            adjustments.append(.lut(params))
+            adjustments.sort { $0.canonicalIndex < $1.canonicalIndex }
+        }
+    }
     mutating func setRaw(_ mutate: (inout RawParams) -> Void) {
         var p = rawParams ?? .neutral
         mutate(&p)
@@ -169,6 +192,10 @@ nonisolated enum Adjustment: Equatable, Sendable {
     case curve(CurveParams)
     case geometry(GeometryParams)
     case vignette(VignetteParams)
+    // Spec 05 — APPENDED after vignette. Inserting either of these mid-list
+    // would re-key every pre-existing edited thumbnail's `stack_hash`.
+    case toneZone(ToneZoneParams)
+    case lut(LutParams)
 
     /// Declaration order. NEW CASES APPEND — never insert.
     var canonicalIndex: Int {
@@ -179,6 +206,8 @@ nonisolated enum Adjustment: Equatable, Sendable {
         case .curve: 3
         case .geometry: 4
         case .vignette: 5
+        case .toneZone: 6
+        case .lut: 7
         }
     }
 
@@ -190,6 +219,8 @@ nonisolated enum Adjustment: Equatable, Sendable {
         case .curve(let p): p.isNeutral
         case .geometry(let p): p.isNeutral
         case .vignette(let p): p.isNeutral
+        case .toneZone(let p): p.isNeutral
+        case .lut(let p): p.isNeutral
         }
     }
 }
@@ -197,7 +228,7 @@ nonisolated enum Adjustment: Equatable, Sendable {
 extension Adjustment: Codable {
     private enum CodingKeys: String, CodingKey { case type, params }
     private enum Kind: String, Codable {
-        case tone, color, presence, curve, geometry, vignette
+        case tone, color, presence, curve, geometry, vignette, toneZone, lut
     }
 
     init(from decoder: Decoder) throws {
@@ -214,6 +245,8 @@ extension Adjustment: Codable {
         case .curve: self = .curve(try c.decode(CurveParams.self, forKey: .params))
         case .geometry: self = .geometry(try c.decode(GeometryParams.self, forKey: .params))
         case .vignette: self = .vignette(try c.decode(VignetteParams.self, forKey: .params))
+        case .toneZone: self = .toneZone(try c.decode(ToneZoneParams.self, forKey: .params))
+        case .lut: self = .lut(try c.decode(LutParams.self, forKey: .params))
         }
     }
 
@@ -232,6 +265,10 @@ extension Adjustment: Codable {
             try c.encode(Kind.geometry, forKey: .type); try c.encode(p, forKey: .params)
         case .vignette(let p):
             try c.encode(Kind.vignette, forKey: .type); try c.encode(p, forKey: .params)
+        case .toneZone(let p):
+            try c.encode(Kind.toneZone, forKey: .type); try c.encode(p, forKey: .params)
+        case .lut(let p):
+            try c.encode(Kind.lut, forKey: .type); try c.encode(p, forKey: .params)
         }
     }
 }
@@ -391,6 +428,59 @@ nonisolated struct VignetteParams: Codable, Equatable, Sendable {
         VignetteParams(amount: unitClamp(amount),
                        midpoint: min(max(midpoint, 0), 1),
                        feather: min(max(feather, 0), 1))
+    }
+}
+
+/// Nine zones, one photographic stop each, covering −8…0 EV relative to
+/// diffuse white (darktable's tone-equalizer range). `gains[0]` is the deepest
+/// shadows, `gains[8]` the highlights. The EV mapping is renderer-side
+/// (`ToneZoneMath.maxZoneEV`), so this struct stores only the −1…+1 slider
+/// value — the same shape every other params type uses.
+nonisolated struct ToneZoneParams: Codable, Equatable, Sendable {
+    static let zoneCount = 9
+
+    var gains: [Double]
+
+    init(gains: [Double]) { self.gains = gains }
+
+    static let neutral = ToneZoneParams(gains: .init(repeating: 0, count: zoneCount))
+
+    var isNeutral: Bool { gains.allSatisfy { $0 == 0 } }
+
+    /// Clamps each gain to −1…+1 and normalizes the array LENGTH: short pads
+    /// with 0, long truncates. Decoding deliberately does NOT do this (the
+    /// blob round-trips byte-identical); the renderer calls it before use, so
+    /// a hand-edited or future-shaped sidecar can't index out of bounds.
+    func clamped() -> ToneZoneParams {
+        var padded = gains
+        if padded.count < Self.zoneCount {
+            padded += Array(repeating: 0, count: Self.zoneCount - padded.count)
+        } else if padded.count > Self.zoneCount {
+            padded = Array(padded.prefix(Self.zoneCount))
+        }
+        return ToneZoneParams(gains: padded.map { min(max($0, -1), 1) })
+    }
+}
+
+/// References an `edit_luts` row by CONTENT HASH — never embedded data. A 64³
+/// table is ~3 MB, and the stack rides iCloud sidecars and is hashed on every
+/// edit. `name` exists only as the display fallback when the row is missing on
+/// this device.
+nonisolated struct LutParams: Codable, Equatable, Sendable {
+    var lutHash: String
+    var name: String
+    var strength: Double        // 0…1; the UI shows 0–100
+
+    init(lutHash: String, name: String, strength: Double = 1) {
+        self.lutHash = lutHash
+        self.name = name
+        self.strength = strength
+    }
+
+    var isNeutral: Bool { strength == 0 }
+
+    func clamped() -> LutParams {
+        LutParams(lutHash: lutHash, name: name, strength: min(max(strength, 0), 1))
     }
 }
 

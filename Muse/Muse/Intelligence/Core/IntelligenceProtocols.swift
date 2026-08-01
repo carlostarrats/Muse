@@ -16,6 +16,11 @@ struct TraitFields {
     var faceQuality: Double?
     var petCount: Int
     var sharpness: Double?
+    var clipHighR: Double?
+    var clipHighG: Double?
+    var clipHighB: Double?
+    var clipLow: Double?
+    var noiseSigma: Double?
 
     init(from result: VisionResult) {
         faceCount = result.faceCount
@@ -23,6 +28,11 @@ struct TraitFields {
         faceQuality = result.faceQuality
         petCount = result.petCount
         sharpness = result.sharpness
+        clipHighR = result.clipHighR
+        clipHighG = result.clipHighG
+        clipHighB = result.clipHighB
+        clipLow = result.clipLow
+        noiseSigma = result.noiseSigma
     }
 }
 

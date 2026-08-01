@@ -30,6 +30,29 @@ nonisolated enum EditKernels {
     static let toneBands: CIColorKernel? = load("toneBands")
     static let clarityTexture: CIKernel? = loadGeneral("clarityTexture")
 
+    // MARK: - Spec 05
+
+    /// Clipping zebras. `zebraPeriodPx` is mirrored in the kernel source — it
+    /// is a screen-space pattern, deliberately NOT a long-edge fraction: the
+    /// stripes exist to be seen at canvas resolution, not to survive a rescale.
+    static let zebraStripes: CIColorKernel? = load("zebraStripes")
+    static let zebraPeriodPx: CGFloat = 8
+
+    /// Tone-zone guided filter + application.
+    static let tzLog2Luma: CIColorKernel? = load("tzLog2Luma")
+    static let tzSquare: CIColorKernel? = load("tzSquare")
+    static let tzLinearCoeffs: CIColorKernel? = load("tzLinearCoeffs")
+    static let tzApplyCoeffs: CIColorKernel? = load("tzApplyCoeffs")
+    static let toneZoneGain: CIColorKernel? = load("toneZoneGain")
+
+    /// Zone overlay. The floor is mirrored in the kernel source.
+    static let zoneHatch: CIColorKernel? = load("zoneHatch")
+    static let overlayWeightFloor: Float = 0.5
+    static let hatchPeriodPx: CGFloat = 10
+
+    /// LUT strength mix.
+    static let lutMix: CIColorKernel? = load("lutMix")
+
     private static var libraryData: Data? = {
         guard let url = Bundle.main.url(forResource: "default", withExtension: "metallib")
         else { return nil }

@@ -77,3 +77,72 @@ final class EditStackCodecTests: XCTestCase {
         XCTAssertEqual(decoded.masks, [])
     }
 }
+
+// MARK: - Spec 05: toneZone + lut
+
+extension EditStackCodecTests {
+
+    private func fixtureStackWithToneZoneAndLut() -> EditStack {
+        var stack = EditStack.fresh()
+        var tz = ToneZoneParams.neutral
+        tz.gains[0] = -0.6; tz.gains[8] = 0.3
+        stack.adjustments = [
+            .tone(.neutral), .toneZone(tz),
+            .lut(LutParams(lutHash: String(repeating: "ab", count: 32),
+                           name: "Kodak 2383", strength: 0.75)),
+        ]
+        return stack
+    }
+
+    func testToneZoneAndLutRoundTrip() throws {
+        let json = try EditStackCodec.encode(fixtureStackWithToneZoneAndLut())
+        let decoded = try XCTUnwrap(EditStackCodec.decode(json))
+        XCTAssertEqual(decoded.toneZoneParams?.gains[0], -0.6)
+        XCTAssertEqual(decoded.toneZoneParams?.gains[8], 0.3)
+        XCTAssertEqual(decoded.lutParams?.strength, 0.75)
+        XCTAssertEqual(decoded.lutParams?.name, "Kodak 2383")
+    }
+
+    /// Appending the two cases at the END of the enum must not perturb ANY
+    /// pre-existing stack's bytes — the Spec 04 pinned hash above is the real
+    /// gate; this re-confirms determinism survived the extension.
+    func testPreExistingFixtureHashIsUnchangedByAppendedCases() {
+        XCTAssertEqual(EditStackCodec.hash(fixtureStack()), EditStackCodec.hash(fixtureStack()))
+    }
+
+    /// Decode does NOT normalize the array — the blob must round-trip
+    /// byte-identical. `.clamped()` is the renderer's job, pinned here so a
+    /// future refactor can't silently move the responsibility.
+    func testWrongLengthGainsDecodeUnchangedAndClampOnDemand() throws {
+        let json = """
+        {"schemaVersion":\(EditStack.currentSchemaVersion),\
+        "processVersion":\(EditStack.currentProcessVersion),\
+        "adjustments":[{"type":"toneZone","params":{"gains":[0.2,-0.2]}}],\
+        "masks":[]}
+        """
+        let decoded = try XCTUnwrap(EditStackCodec.decode(json))
+        XCTAssertEqual(decoded.toneZoneParams?.gains.count, 2)
+        XCTAssertEqual(decoded.toneZoneParams?.clamped().gains.count, ToneZoneParams.zoneCount)
+    }
+
+    /// Still the forward-compat mechanism: an unknown type fails the WHOLE
+    /// decode so an older build renders the original rather than a partial
+    /// stack it only half understands.
+    func testUnknownAdjustmentTypeStillFailsWholeStackDecode() {
+        let json = """
+        {"schemaVersion":\(EditStack.currentSchemaVersion),\
+        "processVersion":\(EditStack.currentProcessVersion),\
+        "adjustments":[{"type":"futureCase","params":{}}],\
+        "masks":[]}
+        """
+        XCTAssertNil(EditStackCodec.decode(json))
+    }
+
+    func testSchemaAndProcessVersionsAreUnchangedBySpec05() {
+        // A new enum case is the wrapper's DESIGNED evolution path, not a
+        // schema break: bumping either constant would make every older build
+        // refuse stacks it can read perfectly well.
+        XCTAssertEqual(EditStack.currentSchemaVersion, 1)
+        XCTAssertEqual(EditStack.currentProcessVersion, 1)
+    }
+}

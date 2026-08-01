@@ -125,6 +125,14 @@ struct SelectionActionsMenu: View {
             if EditClipboard.shared.hasContent, !editableURLs.isEmpty {
                 Button("Paste Adjustments") { pasteAdjustments() }
             }
+            // The editor's reference pane is fed from HERE rather than from a
+            // picker inside the editor: choosing a reference is a browsing act,
+            // and the grid is where you can actually see the candidates.
+            if editableURLs.count == 1, fileURLs.count == 1 {
+                Button("Use as Reference Photo") {
+                    EditReferenceStore.shared.url = editableURLs[0]
+                }
+            }
         }
         // Remove from the tag/collection you're currently viewing. Shown only
         // in that context (a tag filter or an open collection); acts on the

@@ -62,3 +62,112 @@ final class EditStackNormalizeTests: XCTestCase {
         XCTAssertEqual(stack.toneParams?.contrast, 0.2)
     }
 }
+
+// MARK: - Spec 05: toneZone + lut
+
+extension EditStackNormalizeTests {
+
+    func testToneZoneParamsNeutralIsAllZeroGains() {
+        XCTAssertTrue(ToneZoneParams.neutral.isNeutral)
+        XCTAssertEqual(ToneZoneParams.neutral.gains.count, ToneZoneParams.zoneCount)
+        XCTAssertTrue(ToneZoneParams.neutral.gains.allSatisfy { $0 == 0 })
+    }
+
+    /// A hand-edited or future-shaped sidecar must not index out of bounds in
+    /// the renderer — hence pad/truncate rather than trust the array.
+    func testToneZoneParamsClampedPadsShortArray() {
+        let clamped = ToneZoneParams(gains: [0.5, -0.5]).clamped()
+        XCTAssertEqual(clamped.gains.count, ToneZoneParams.zoneCount)
+        XCTAssertEqual(clamped.gains[0], 0.5)
+        XCTAssertEqual(clamped.gains[1], -0.5)
+        XCTAssertEqual(clamped.gains[2], 0)
+    }
+
+    func testToneZoneParamsClampedTruncatesLongArray() {
+        XCTAssertEqual(ToneZoneParams(gains: Array(repeating: 0.3, count: 20)).clamped()
+            .gains.count, ToneZoneParams.zoneCount)
+    }
+
+    func testToneZoneParamsClampedBoundsEachGain() {
+        var p = ToneZoneParams.neutral
+        p.gains[0] = 99
+        p.gains[1] = -99
+        let clamped = p.clamped()
+        XCTAssertEqual(clamped.gains[0], 1)
+        XCTAssertEqual(clamped.gains[1], -1)
+    }
+
+    func testLutParamsNeutralAtZeroStrength() {
+        XCTAssertTrue(LutParams(lutHash: "abc", name: "Kodak 2383", strength: 0).isNeutral)
+    }
+
+    func testLutParamsNonNeutralAtNonZeroStrength() {
+        XCTAssertFalse(LutParams(lutHash: "abc", name: "Kodak 2383", strength: 0.5).isNeutral)
+    }
+
+    func testLutParamsClampedBoundsStrength() {
+        XCTAssertLessThanOrEqual(LutParams(lutHash: "a", name: "x", strength: 5).clamped().strength, 1)
+        XCTAssertGreaterThanOrEqual(LutParams(lutHash: "a", name: "x", strength: -5).clamped().strength, 0)
+    }
+
+    /// The canonical order is DECLARATION order and the two new cases APPEND —
+    /// inserting either mid-list would re-key every pre-existing edited
+    /// thumbnail's `stack_hash` in every library.
+    func testToneZoneAndLutSortAfterVignetteInNormalizedOrder() {
+        var stack = EditStack.fresh()
+        var tz = ToneZoneParams.neutral; tz.gains[0] = 0.4
+        stack.adjustments = [.lut(LutParams(lutHash: "deadbeef", name: "Look", strength: 0.8)),
+                             .vignette(.neutral), .toneZone(tz), .tone(.neutral)]
+        let order = stack.normalized().adjustments.map(\.canonicalIndex)
+        XCTAssertEqual(order, order.sorted())
+        XCTAssertEqual(order, [0, 5, 6, 7])
+    }
+
+    func testStackToneZoneParamsAccessorExtractsCase() {
+        var stack = EditStack.fresh()
+        var tz = ToneZoneParams.neutral; tz.gains[3] = -0.2
+        stack.adjustments = [.toneZone(tz)]
+        XCTAssertEqual(stack.toneZoneParams?.gains[3], -0.2)
+    }
+
+    func testStackLutParamsAccessorExtractsCase() {
+        var stack = EditStack.fresh()
+        stack.adjustments = [.lut(LutParams(lutHash: "hash1", name: "Warm Film", strength: 0.6))]
+        XCTAssertEqual(stack.lutParams?.lutHash, "hash1")
+    }
+
+    func testSetToneZoneCreatesTheCaseOnFirstWrite() {
+        var stack = EditStack.fresh()
+        XCTAssertNil(stack.toneZoneParams)
+        stack.setToneZone { $0 = ToneZoneParams(gains: [0.5] + Array(repeating: 0, count: 8)) }
+        XCTAssertEqual(stack.toneZoneParams?.gains[0], 0.5)
+    }
+
+    /// A stack carries at most ONE LUT, and "no LUT" is the ABSENCE of the
+    /// case — never a zero-strength one left behind for the codec to encode.
+    func testSetLutNilRemovesTheCaseEntirely() {
+        var stack = EditStack.fresh()
+        stack.setLut(LutParams(lutHash: "a", name: "x", strength: 1))
+        stack.setLut(nil)
+        XCTAssertNil(stack.lutParams)
+        XCTAssertTrue(stack.adjustments.allSatisfy { if case .lut = $0 { false } else { true } })
+    }
+
+    func testSetLutReplacesRatherThanStacking() {
+        var stack = EditStack.fresh()
+        stack.setLut(LutParams(lutHash: "a", name: "A", strength: 1))
+        stack.setLut(LutParams(lutHash: "b", name: "B", strength: 0.5))
+        XCTAssertEqual(stack.adjustments.filter { if case .lut = $0 { true } else { false } }.count, 1)
+        XCTAssertEqual(stack.lutParams?.lutHash, "b")
+    }
+
+    /// Present-but-neutral must still leave the stack neutral: the editor
+    /// creates a case the moment a control is touched, and returning it to
+    /// zero has to delete the row rather than store a no-op.
+    func testNeutralToneZoneAndLutLeaveTheStackNeutral() {
+        var stack = EditStack.fresh()
+        stack.adjustments = [.toneZone(.neutral),
+                             .lut(LutParams(lutHash: "a", name: "x", strength: 0))]
+        XCTAssertTrue(stack.isNeutral)
+    }
+}

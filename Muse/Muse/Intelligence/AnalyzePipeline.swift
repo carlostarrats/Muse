@@ -691,7 +691,10 @@ final class AnalyzePipeline: ObservableObject {
                         traits_version: PhotoTraits.currentVersion,
                         face_count: traits.faceCount, largest_face_frac: traits.largestFaceFrac,
                         face_quality: traits.faceQuality, pet_count: traits.petCount,
-                        sharpness: traits.sharpness)
+                        sharpness: traits.sharpness,
+                        clip_high_r: traits.clipHighR, clip_high_g: traits.clipHighG,
+                        clip_high_b: traits.clipHighB, clip_low: traits.clipLow,
+                        noise_sigma: traits.noiseSigma)
                     try traitsRow.save(db)
                 }
 

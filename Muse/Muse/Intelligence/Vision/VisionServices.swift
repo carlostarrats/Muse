@@ -27,6 +27,15 @@ struct VisionResult {
     var petCount: Int = 0
     /// log10(variance of Laplacian) — see SharpnessScore.
     var sharpness: Double?
+    /// Capture statistics (v22). Fractions of the frame at the FIXED
+    /// ClippingStats.stored* thresholds — never the user's zebra prefs, so a
+    /// stored row can't change meaning when a slider moves.
+    var clipHighR: Double?
+    var clipHighG: Double?
+    var clipHighB: Double?
+    var clipLow: Double?
+    /// MAD-of-Laplacian noise estimate, normalized at 1024 px.
+    var noiseSigma: Double?
     var dominantColor: String?                   // hex like "#aabbcc"
     var featurePrint: Data?                      // VNFeaturePrintObservation.data
     var width: Int?
@@ -90,7 +99,43 @@ enum VisionServices {
         result.dominantColor = color
         result.petCount = petCount
         result.sharpness = SharpnessScore.score(cgImage)
+        // Both ride the raster the caller already decoded — never a second
+        // decode. The bounded analyze raster is what every other trait is
+        // measured on, so these agree with them by construction.
+        result.noiseSigma = NoiseEstimate.sigma(cgImage)
+        if let sample = rgba8Bytes(cgImage) {
+            let (_, clipping) = HistogramCompute.compute(
+                rgba8: sample.bytes, width: sample.width, height: sample.height,
+                highThreshold: ClippingStats.storedHighThreshold,
+                lowThreshold: ClippingStats.storedLowThreshold)
+            result.clipHighR = clipping.highR
+            result.clipHighG = clipping.highG
+            result.clipHighB = clipping.highB
+            result.clipLow = clipping.low
+        }
         return result
+    }
+
+    /// A plain RGBA8 readback of an already-decoded raster — the clipping
+    /// statistics' input.
+    private static func rgba8Bytes(_ cgImage: CGImage)
+        -> (bytes: [UInt8], width: Int, height: Int)? {
+        let width = cgImage.width, height = cgImage.height
+        guard width > 0, height > 0,
+              let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        let drawn: Bool = bytes.withUnsafeMutableBytes { raw in
+            guard let base = raw.baseAddress,
+                  let ctx = CGContext(data: base, width: width, height: height,
+                                      bitsPerComponent: 8, bytesPerRow: width * 4,
+                                      space: colorSpace,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+            else { return false }
+            ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard drawn else { return nil }
+        return (bytes, width, height)
     }
 
     // MARK: - CGImage loader

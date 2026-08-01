@@ -16,10 +16,9 @@
 
 import SwiftUI
 
-struct CurveHistogram: Equatable {
-    /// 64 luminance bins, each 0…1, drawn as a silent backdrop.
-    let bins: [Float]
-}
+// `CurveHistogram` now lives in Editing/HistogramCompute.swift — Spec 05
+// fills this seam from the shared statistics pass, and the type belongs beside
+// the code that produces it rather than the one view that draws it.
 
 struct CurveEditorView: View {
     @Binding var points: [CurveParams.Point]

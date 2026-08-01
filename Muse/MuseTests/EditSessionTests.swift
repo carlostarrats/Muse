@@ -92,3 +92,56 @@ final class EditSessionTests: XCTestCase {
         XCTAssertEqual(EditSession.proxyMaxPixel(canvasLongEdge: 500, scale: 2), 2500)
     }
 }
+
+// MARK: - Spec 05 readouts
+
+extension EditSessionTests {
+
+    private func session() -> EditSession {
+        EditSession(url: URL(fileURLWithPath: "/tmp/x.jpg"), stack: nil)
+    }
+
+    /// Statistics cost something, so nothing computes until a panel is showing
+    /// them — never in Preview.
+    func testStatsVisibleDefaultsFalseAndStatsStartEmpty() {
+        let s = session()
+        XCTAssertFalse(s.statsVisible)
+        XCTAssertNil(s.stats)
+        XCTAssertNil(s.zoneEVMap)
+    }
+
+    /// Zebras are a check you switch on, not a preference — a fresh session
+    /// never inherits another's toggle, and nothing is persisted.
+    func testZebrasOnIsSessionScoped() {
+        let a = session()
+        a.zebrasOn = true
+        XCTAssertFalse(session().zebrasOn)
+    }
+
+    func testToneZoneTargetingAndHoveredZoneDefaults() {
+        let s = session()
+        XCTAssertFalse(s.toneZoneTargeting)
+        XCTAssertNil(s.hoveredZone)
+    }
+
+    /// One write for both fields: a panel must never draw a histogram from one
+    /// frame beside zone mass from another.
+    func testApplyStatsStoresHistogramClippingAndZoneMapTogether() {
+        let s = session()
+        let hist = HistogramData(r: [1, 0], g: [1, 0], b: [1, 0], luma: [1, 0])
+        var clip = ClippingStats.none
+        clip.highR = 0.1
+        let stats = EditStats(histogram: hist, clipping: clip, zoneMass: [0.5],
+                              curveHistogram: CurveHistogram(bins: [1, 0]))
+        let map = ZoneEVMap(width: 1, height: 1, values: [-4])
+        s.applyStats(stats, zoneEVMap: map)
+        XCTAssertEqual(s.stats, stats)
+        XCTAssertEqual(s.zoneEVMap?.values, [-4])
+    }
+
+    func testStatsSampleLongEdgeIsSmallOnPurpose() {
+        // A 256px sample's histogram is indistinguishable from the full frame's,
+        // and the difference in cost per slider tick is the whole feature.
+        XCTAssertEqual(EditSession.statsSampleLongEdge, 256)
+    }
+}

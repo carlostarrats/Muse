@@ -1,0 +1,158 @@
+//
+//  ToneZoneStrip.swift
+//  Muse
+//
+//  The tone-zone control: nine cells shaded black→white, each showing how much
+//  of the photo lives in that zone, each draggable vertically to lift or pull
+//  it. Hovering a cell hatches the matching pixels on the canvas.
+//
+//  The disclosure of nine ordinary `EditSlider`s below is not a fallback bolted
+//  on for compliance — it IS the VoiceOver path, which is why the strip's drag
+//  needs no parallel accessibility action.
+//
+
+import SwiftUI
+
+struct ToneZoneStrip: View {
+    @ObservedObject var session: EditSession
+    @Environment(\.theme) private var theme
+
+    @State private var slidersExpanded = false
+
+    private static let gainPerPoint = 0.008
+    private static let cellHeight: CGFloat = 56
+    /// Mass rarely exceeds a quarter of the frame in one zone, so the bars are
+    /// amplified to stay readable — they compare zones to each other, they are
+    /// not a measurement anyone reads a number off.
+    private static let massAmplification = 4.0
+
+    private static let zoneLabels = ["−8", "−7", "−6", "−5", "−4", "−3", "−2", "−1", "0"]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: theme.spacingS) {
+            HStack(spacing: theme.spacingS) {
+                Text("Tone Zones")
+                    .font(theme.labelFont)
+                    .foregroundStyle(theme.textSecondary)
+                Spacer()
+                Button {
+                    session.toneZoneTargeting.toggle()
+                    if !session.toneZoneTargeting { session.hoveredZone = nil }
+                } label: {
+                    Image(systemName: "dot.viewfinder")
+                        .foregroundStyle(session.toneZoneTargeting
+                                         ? theme.controlAccent : theme.textPrimary)
+                }
+                .buttonStyle(.plain)
+                .help(Text("Adjust zones on the photo"))
+                .accessibilityLabel(Text("Adjust zones on the photo"))
+
+                Button {
+                    session.draft.setToneZone { $0 = .neutral }
+                    session.commitGesture()
+                } label: { Text("Reset") }
+                    .buttonStyle(.plain)
+                    .font(theme.labelFont)
+                    .foregroundStyle(theme.textSecondary)
+                    .help(Text("Reset all zones"))
+            }
+
+            HStack(spacing: 2) {
+                ForEach(0..<ToneZoneParams.zoneCount, id: \.self) { index in
+                    zoneCell(index: index)
+                }
+            }
+
+            readout
+
+            DisclosureGroup(isExpanded: $slidersExpanded) {
+                VStack(spacing: 2) {
+                    ForEach(0..<ToneZoneParams.zoneCount, id: \.self) { index in
+                        EditSlider(label: "\(Self.zoneLabels[index]) EV",
+                                   value: Binding(get: { gain(index) },
+                                                  set: { setGain(index, to: $0) }),
+                                   onCommit: session.commitGesture)
+                    }
+                }
+                .padding(.top, theme.spacingS)
+            } label: {
+                Text("Zone Sliders")
+                    .font(theme.labelFont)
+                    .foregroundStyle(theme.textSecondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var readout: some View {
+        if let hovered = session.hoveredZone, hovered < ToneZoneParams.zoneCount {
+            let mass = (session.stats?.zoneMass.count ?? 0) > hovered
+                ? session.stats!.zoneMass[hovered] * 100 : 0
+            Text("Zone \(hovered + 1) · \(Self.zoneLabels[hovered]) EV · \(String(format: "%.0f", mass))% of pixels")
+                .font(theme.valueFont)
+                .foregroundStyle(theme.textSecondary)
+        } else {
+            // Reserved so the panel doesn't jump as the cursor crosses cells.
+            Text(" ").font(theme.valueFont)
+        }
+    }
+
+    private func zoneCell(index: Int) -> some View {
+        let shade = Double(index) / Double(ToneZoneParams.zoneCount - 1)
+        let mass = (session.stats?.zoneMass.count ?? 0) > index
+            ? session.stats!.zoneMass[index] : 0
+        let gainValue = gain(index)
+        return GeometryReader { geo in
+            ZStack(alignment: .bottom) {
+                Rectangle().fill(Color(white: shade))
+                Rectangle().fill(theme.controlAccent.opacity(0.55))
+                    .frame(height: geo.size.height * CGFloat(min(mass * Self.massAmplification, 1)))
+                // The gain is drawn as an offset from the cell's middle, so a
+                // glance reads which zones were lifted and which were pulled.
+                Rectangle().fill(theme.textPrimary)
+                    .frame(height: 2)
+                    .offset(y: -geo.size.height * (0.5 + CGFloat(gainValue) * 0.5) + 1)
+            }
+            .overlay {
+                if session.hoveredZone == index {
+                    Rectangle().stroke(theme.controlAccent, lineWidth: 1.5)
+                }
+            }
+        }
+        .frame(height: Self.cellHeight)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { value in
+                    setGain(index, to: min(max(gain(index)
+                        + Double(-value.translation.height) * Self.gainPerPoint, -1), 1))
+                }
+                .onEnded { _ in session.commitGesture() }
+        )
+        .onHover { inside in
+            if inside {
+                session.hoveredZone = index
+            } else if session.hoveredZone == index {
+                session.hoveredZone = nil
+            }
+        }
+        .onTapGesture(count: 2) {
+            setGain(index, to: 0)
+            session.commitGesture()
+        }
+        .accessibilityHidden(true)   // the disclosed sliders are the VoiceOver path
+    }
+
+    private func gain(_ index: Int) -> Double {
+        let gains = (session.draft.toneZoneParams ?? .neutral).clamped().gains
+        return gains[index]
+    }
+
+    private func setGain(_ index: Int, to value: Double) {
+        session.draft.setToneZone { params in
+            var gains = params.clamped().gains
+            gains[index] = min(max(value, -1), 1)
+            params = ToneZoneParams(gains: gains)
+        }
+    }
+}

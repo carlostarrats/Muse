@@ -16,6 +16,7 @@
 
 import SwiftUI
 import MetalKit
+import AppKit
 import CoreImage
 
 struct EditCanvasView: NSViewRepresentable {
@@ -24,9 +25,20 @@ struct EditCanvasView: NSViewRepresentable {
     /// Optional second image + divider for split-wipe compare.
     var wipeAgainst: CIImage?
     var wipeFraction: Double?
+    /// Spec 05 overlays, both composited AFTER the fit so they are screen-space
+    /// patterns at canvas resolution — a zebra scaled with the image would
+    /// moiré on a downscaled proxy.
+    var zebrasOn = false
+    /// The smoothed-EV mask + hovered zone for the hatch overlay. nil hides it.
+    var zoneMask: CIImage?
+    var hoveredZone: Int?
+    /// Forwarded to the backing view so target mode can consume scroll before
+    /// the canvas zooms. Returns true when it consumed the event.
+    var onScrollWhileTargeting: ((NSEvent) -> Bool)?
 
     func makeNSView(context: Context) -> MTKView {
-        let view = MTKView()
+        let view = CanvasMTKView()
+        view.onScroll = { event in onScrollWhileTargeting?(event) ?? false }
         view.device = context.coordinator.device
         view.isPaused = true
         view.enableSetNeedsDisplay = true
@@ -43,7 +55,24 @@ struct EditCanvasView: NSViewRepresentable {
         context.coordinator.image = image
         context.coordinator.wipeAgainst = wipeAgainst
         context.coordinator.wipeFraction = wipeFraction
+        context.coordinator.zebrasOn = zebrasOn
+        context.coordinator.zoneMask = zoneMask
+        context.coordinator.hoveredZone = hoveredZone
+        (nsView as? CanvasMTKView)?.onScroll = { event in
+            onScrollWhileTargeting?(event) ?? false
+        }
         nsView.setNeedsDisplay(nsView.bounds)
+    }
+
+    /// The canvas's own NSView subclass, purely so target mode can intercept
+    /// scroll: SwiftUI has no scroll gesture, and letting the event through
+    /// would zoom the canvas while the user is adjusting a zone.
+    final class CanvasMTKView: MTKView {
+        var onScroll: ((NSEvent) -> Bool)?
+        override func scrollWheel(with event: NSEvent) {
+            if onScroll?(event) == true { return }
+            super.scrollWheel(with: event)
+        }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -57,6 +86,9 @@ struct EditCanvasView: NSViewRepresentable {
         var image: CIImage?
         var wipeAgainst: CIImage?
         var wipeFraction: Double?
+        var zebrasOn = false
+        var zoneMask: CIImage?
+        var hoveredZone: Int?
 
         func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
@@ -67,7 +99,7 @@ struct EditCanvasView: NSViewRepresentable {
 
             let drawableSize = view.drawableSize
             guard drawableSize.width >= 1, drawableSize.height >= 1 else { return }
-            let composited = composite(image, in: drawableSize)
+            let composited = overlays(on: composite(image, in: drawableSize), size: drawableSize)
 
             let destination = CIRenderDestination(
                 width: Int(drawableSize.width), height: Int(drawableSize.height),
@@ -90,6 +122,25 @@ struct EditCanvasView: NSViewRepresentable {
             let leftHalf = other.cropped(to: CGRect(x: 0, y: 0, width: splitX,
                                                      height: drawableSize.height))
             return leftHalf.composited(over: fitted)
+        }
+
+        /// Zebras first, then the zone hatch — the hatch is a hover-scoped
+        /// inspection tool and should win where both apply.
+        private func overlays(on image: CIImage, size: CGSize) -> CIImage {
+            var out = image
+            if zebrasOn, let kernel = EditKernels.zebraStripes {
+                out = kernel.apply(extent: out.extent,
+                                   roiCallback: { _, rect in rect },
+                                   arguments: [out, Float(AppSettings.editorZebraHigh),
+                                               Float(AppSettings.editorZebraLow), Float(0)]) ?? out
+            }
+            if let hoveredZone, let zoneMask, let kernel = EditKernels.zoneHatch {
+                let mask = fit(zoneMask, in: size)
+                out = kernel.apply(extent: out.extent,
+                                   roiCallback: { _, rect in rect },
+                                   arguments: [out, mask, Float(hoveredZone)]) ?? out
+            }
+            return out
         }
 
         private func fit(_ image: CIImage, in size: CGSize) -> CIImage {

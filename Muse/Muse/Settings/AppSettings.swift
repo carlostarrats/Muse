@@ -24,6 +24,9 @@ enum AppSettings {
     static let editorBackdropKey = "editorBackdrop"
     static let showStarsOnGridKey = "showStarsOnGrid"
     static let colorsCardExpandedKey = "heroColorsCardExpanded"
+    static let feedbackCardExpandedKey = "heroFeedbackCardExpanded"
+    static let editorZebraHighKey = "editorZebraHigh"
+    static let editorZebraLowKey = "editorZebraLow"
     /// The one-time "Smarter Search" offer has been shown. Set on ANY dismissal
     /// — declining once must never nag again.
     static let clipOfferSeenKey = "clipOfferSeen"
@@ -66,6 +69,31 @@ enum AppSettings {
     /// true (open). Unset → treated as open.
     static var colorsCardExpanded: Bool {
         UserDefaults.standard.object(forKey: colorsCardExpandedKey) as? Bool ?? true
+    }
+
+    /// "Why it looks this way" card — same global last-choice rule as the
+    /// colors card, and @State-seeded for the same reason (an @AppStorage
+    /// publish lands outside a withAnimation transaction).
+    static var feedbackCardExpanded: Bool {
+        UserDefaults.standard.object(forKey: feedbackCardExpandedKey) as? Bool ?? true
+    }
+
+    /// Highlight-clipping threshold, 0…1 of full scale. Default 0.98.
+    ///
+    /// The zebra kernel, the editor's live clipping percentages and the Scopes
+    /// messages ALL read this one value — their agreement is structural, not a
+    /// coincidence to be maintained. Never fork it. (The capture statistics
+    /// stored in `photo_traits` deliberately do NOT read it: a stored row must
+    /// not change meaning when a slider moves.)
+    static var editorZebraHigh: Double {
+        let v = UserDefaults.standard.object(forKey: editorZebraHighKey) as? Double ?? 0.98
+        return min(max(v, 0.90), 1.00)
+    }
+
+    /// Shadow-crush threshold, 0…1 of full scale. Default 0.02.
+    static var editorZebraLow: Double {
+        let v = UserDefaults.standard.object(forKey: editorZebraLowKey) as? Double ?? 0.02
+        return min(max(v, 0.00), 0.10)
     }
 
     // Google Drive share — remembered Muse-root folder id + last form text.

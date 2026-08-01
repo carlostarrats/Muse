@@ -74,3 +74,64 @@ final class EditTransferTests: XCTestCase {
         XCTAssertEqual(order, order.sorted())
     }
 }
+
+// MARK: - Spec 05: toneZone + lut ride the same generic paths
+
+extension EditTransferTests {
+
+    private func nonNeutralToneZone() -> EditStack {
+        var s = EditStack.fresh()
+        var tz = ToneZoneParams.neutral; tz.gains[4] = 0.5
+        s.adjustments = [.toneZone(tz)]
+        return s
+    }
+
+    private func nonNeutralLut() -> EditStack {
+        var s = EditStack.fresh()
+        s.adjustments = [.lut(LutParams(lutHash: "abc123", name: "Kodak", strength: 0.7))]
+        return s
+    }
+
+    func testAdjustedGroupsIncludesToneZone() {
+        XCTAssertEqual(EditTransfer.adjustedGroups(of: nonNeutralToneZone()), [.toneZone])
+    }
+
+    func testAdjustedGroupsIncludesLut() {
+        XCTAssertEqual(EditTransfer.adjustedGroups(of: nonNeutralLut()), [.lut])
+    }
+
+    func testApplyCopiesToneZoneGainsWholesale() {
+        let result = EditTransfer.apply(groups: [.toneZone], from: nonNeutralToneZone(),
+                                        onto: .fresh())
+        XCTAssertEqual(result.toneZoneParams?.gains[4], 0.5)
+    }
+
+    func testApplyCopiesLutReferenceAndStrength() {
+        let result = EditTransfer.apply(groups: [.lut], from: nonNeutralLut(), onto: .fresh())
+        XCTAssertEqual(result.lutParams?.lutHash, "abc123")
+        XCTAssertEqual(result.lutParams?.strength, 0.7)
+    }
+
+    /// Absent-in-source CLEARS in target, for the new groups exactly as for
+    /// the old ones — otherwise pasting a neutral look appears to do nothing.
+    func testApplyClearsALutTheSourceDoesNotHave() {
+        var target = EditStack.fresh()
+        target.setLut(LutParams(lutHash: "old", name: "Old", strength: 1))
+        let result = EditTransfer.apply(groups: [.lut], from: .fresh(), onto: target)
+        XCTAssertNil(result.lutParams)
+    }
+
+    /// Geometry remains the ONLY preset exclusion — a look is very often a LUT
+    /// plus tweaks, so excluding it would gut the feature.
+    func testPresetsMayCarryLutAndToneZone() throws {
+        var stack = EditStack.fresh()
+        stack.setLut(LutParams(lutHash: "abc", name: "Look", strength: 0.8))
+        stack.setToneZone { $0 = ToneZoneParams(gains: [0.4] + Array(repeating: 0, count: 8)) }
+        stack.setGeometry { $0.crop = CropRect(x: 0, y: 0, w: 0.5, h: 0.5) }
+        let decoded = try XCTUnwrap(EditStackCodec.decode(EditPresetStore.presetJSON(from: stack)))
+        let groups = EditTransfer.adjustedGroups(of: decoded)
+        XCTAssertTrue(groups.contains(.lut))
+        XCTAssertTrue(groups.contains(.toneZone))
+        XCTAssertFalse(groups.contains(.geometry))
+    }
+}

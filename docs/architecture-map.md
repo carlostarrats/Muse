@@ -592,11 +592,42 @@ Performance:
 - **`Views/Editor/`** — `EditSession` (per-file state, autosave, coalesced render),
   `EditorView` (the two-card shell + tabs + eyedropper), `EditCanvasView` (MTKView +
   `CIRenderDestination`), `EditorBackdrop`, `EditSlider` (+ `EditToggleRow`),
-  `CurveEditorView` (+ the `CurveHistogram` seam Spec 05 fills), `EditVersionsList`,
-  `EditPresetsTab` (+ `WBEyedropperButton`), `OpenWithFork` + `OpenWithForkCard`
+  `CurveEditorView` (its `CurveHistogram` seam is filled by Spec 05),
+  `EditVersionsList`, `WBEyedropperButton` (the file that held `EditPresetsTab`
+  until Spec 05's browser replaced it), `OpenWithFork` + `OpenWithForkCard`
   (+ `OpenWithForkRequest`/`EditNamePrompt`).
 - **`Views/Theme/Theme.swift`** — the minimal semantic token layer (role-named colors,
   spacing, radius, fonts), injected once in `ContentView`, read by every NEW
   editor-adjacent surface only.
 - **`Components/CanvasPointMath.swift`** — canvas → unit image point under fit/zoom/pan
   (+ the pure `WBEyedropper.solve`).
+
+### Components added 2026-07-31 (Spec 05, readouts / learning layer / looks)
+
+- **`Editing/HistogramCompute.swift`** — the pure statistics pass over raw buffers:
+  `HistogramData` (64 bins × r/g/b/luma), `ClippingStats` (per-channel high fractions,
+  low fraction, clip-mass row centroids, and the FIXED stored-stat thresholds),
+  `zoneMass`, `CurveHistogram`, plus `EditStats`/`ZoneEVMap` (the per-frame bundle the
+  session publishes) and `RGBChannel`/`FrameRegion`.
+- **`Editing/ClippingMessages.swift`** — deterministic plain-English clipping copy;
+  spatial hints come from the clip-mass centroid, never scene semantics.
+- **`Editing/ToneZoneMath.swift`** — raised-cosine partition-of-unity zone weights,
+  `zoneIndex`, `gainEV`. Mirrored (not shared) by the Metal kernel.
+- **`Editing/Render/ToneZoneFilter.swift`** — chain stage 2b: the shared
+  `smoothedEVMap` guided filter + `evBuffer` CPU readback.
+- **`Editing/PhotoFeedback.swift`** — the "Why it looks this way" rule table
+  (`Inputs`/`Note`, fixed severity order, `maxNotes`).
+- **`Editing/CubeLUT.swift`** — `CubeLUT` (+ content hash) and `CubeLUTParser`.
+  **`Editing/LutRegistry.swift`** — the render-path-only LRU RGB→RGBA decode cache.
+- **`Database/PhotoStatsQueries.swift`** — the `photo_meta` + `photo_traits` join into
+  `PhotoFeedback.Inputs` (by file id or by path).
+- **`Intelligence/Core/NoiseEstimate.swift`** — MAD-of-Laplacian noise sigma over the
+  flattest tiles.
+- **`Models/LutStore.swift`** (Pattern B, queue-injectable) and
+  **`Models/EditReferenceStore.swift`** (memory-only `{ url, paneVisible }`).
+- **`Views/Editor/`** — `ScopesPanel` + `HistogramView` (the teaching histogram and
+  clipping copy), `ToneZoneStrip` (nine cells, mass bars, target-mode toggle,
+  accessible slider disclosure), `LooksBrowserView` (live-on-photo presets + LUTs,
+  strength slider, import/rename/delete).
+- New kernels in `EditKernels.metal`: `zebraStripes`, `tzLog2Luma`, `tzSquare`,
+  `tzLinearCoeffs`, `tzApplyCoeffs`, `toneZoneGain`, `zoneHatch`, `lutMix`.
