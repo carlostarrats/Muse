@@ -20,6 +20,9 @@ nonisolated enum DeepAnalysisBackfill {
     static let maxPerLaunch = 5_000
     static let concurrency = 2
     static let writeChunk = 200
+    /// Candidates per context query. Comfortably under SQLite's bound-variable
+    /// ceiling, and short enough that the serial queue is handed back often.
+    static let contextChunk = 500
     /// The traits pass needs far less resolution than the 4096px Vision pass:
     /// face rectangles, animal detection and a normalized sharpness score are
     /// all stable well below that, and CLIP's own input is 256px.
@@ -64,7 +67,16 @@ nonisolated enum DeepAnalysisBackfill {
         var clip: ClipEmbeddingRow?
     }
 
+    /// Single-flight: this is reachable from the launch chain AND from
+    /// `ClipModelStore` after a model install, and the two select overlapping
+    /// rows. The flush guard is content-hash based, so a concurrent second run
+    /// wouldn't corrupt anything — it would just decode and Vision every file
+    /// twice.
     static func run() async {
+        await BackfillCoordinator.shared.run("deep-analysis") { await work() }
+    }
+
+    private static func work() async {
         guard let queue = Database.shared.dbQueue else { return }
         let clipReady = await MainActor.run { ClipModelStore.shared.isReady }
 
@@ -81,16 +93,26 @@ nonisolated enum DeepAnalysisBackfill {
         }) ?? []
         guard !candidateIDs.isEmpty else { return }
 
+        // One query per 500 candidates, not one per candidate: a DatabaseQueue
+        // is a single serial connection, so 5,000 statements inside one read
+        // hold the queue — and every interactive fetch behind it — for the
+        // whole enumeration.
         let context: [String: (url: URL, hash: String)] = (try? await queue.read { db in
             var map: [String: (url: URL, hash: String)] = [:]
-            for id in candidateIDs {
-                guard let row = try Row.fetchOne(db, sql: """
-                    SELECT f.content_hash AS h, MIN(p.absolute_path) AS p
+            for slice in stride(from: 0, to: candidateIDs.count, by: contextChunk) {
+                let ids = Array(candidateIDs[slice..<min(slice + contextChunk, candidateIDs.count)])
+                let marks = databaseQuestionMarks(count: ids.count)
+                let rows = try Row.fetchAll(db, sql: """
+                    SELECT f.id AS id, f.content_hash AS h, MIN(p.absolute_path) AS p
                     FROM files f JOIN paths p ON p.file_id = f.id AND p.is_alive = 1
-                    WHERE f.id = ?
-                    """, arguments: [id]),
-                    let hash: String = row["h"], let path: String = row["p"] else { continue }
-                map[id] = (URL(fileURLWithPath: path), hash)
+                    WHERE f.id IN (\(marks))
+                    GROUP BY f.id
+                    """, arguments: StatementArguments(ids))
+                for row in rows {
+                    guard let id: String = row["id"], let hash: String = row["h"],
+                          let path: String = row["p"] else { continue }
+                    map[id] = (URL(fileURLWithPath: path), hash)
+                }
             }
             return map
         }) ?? [:]
@@ -99,27 +121,53 @@ nonisolated enum DeepAnalysisBackfill {
 
         await withTaskGroup(of: ScanResult?.self) { group in
             var iterator = candidateIDs.makeIterator()
+            var inFlight = 0
 
-            func spawnNext() {
+            /// Throttle and cancellation are consulted per SPAWN, not per
+            /// 200-row write chunk: gating on the chunk meant Pause (or a
+            /// thermal event) took another ~200 decode+Vision+CLIP scans to
+            /// take effect. Files already in flight still finish normally —
+            /// same rule as AnalyzePipeline, so a pause stays resumable.
+            func spawnNext() async -> Bool {
+                if Task.isCancelled { return false }
+                await WorkThrottleStore.shared.waitUntilRunnable()
                 while let id = iterator.next() {
                     guard let ctx = context[id] else { continue }
                     group.addTask(priority: .utility) {
                         await scanOne(fileID: id, url: ctx.url, hash: ctx.hash, clipReady: clipReady)
                     }
-                    return
+                    return true
                 }
+                return false
             }
-            for _ in 0..<concurrency { spawnNext() }
+
+            /// Re-read per spawn so a machine that goes to battery mid-pass
+            /// narrows without a restart.
+            func width() async -> Int {
+                max(1, await WorkThrottleStore.shared.concurrency(normal: concurrency))
+            }
+
+            var target = await width()
+            while inFlight < target {
+                guard await spawnNext() else { break }
+                inFlight += 1
+            }
 
             for await result in group {
+                inFlight -= 1
                 if let result { pending.append(result) }
                 if pending.count >= writeChunk {
                     await flush(&pending, queue: queue)
-                    // One gate per write chunk — additive scheduling; the
-                    // `.utility` priority is unchanged.
-                    await WorkThrottleStore.shared.waitUntilRunnable()
                 }
-                spawnNext()
+                if Task.isCancelled {
+                    group.cancelAll()
+                    continue
+                }
+                target = await width()
+                while inFlight < target {
+                    guard await spawnNext() else { break }
+                    inFlight += 1
+                }
             }
         }
         if !pending.isEmpty {

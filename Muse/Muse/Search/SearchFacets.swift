@@ -35,11 +35,57 @@ nonisolated struct FacetsSnapshot: Equatable, Sendable {
     /// long-tail facet is never reachable — no reason to hold it.
     static let facetLimit = 50
 
+    /// Distinct capture years, newest first, as a loose index scan rather than
+    /// `SELECT DISTINCT strftime('%Y', capture_date, 'unixepoch')`: strftime in
+    /// the projection forces a full scan of photo_meta, and v14's own schema
+    /// comment forbids exactly that pattern (it is why `capture_md` is
+    /// materialized). Every step here is one indexed `MIN(capture_date)` seek
+    /// on `photo_meta_capture_idx` — O(distinct years · log n), not O(rows) —
+    /// and the answer is still exact, so no empty year is ever offered.
+    ///
+    /// `nonisolated` + internal so the query itself is testable without the
+    /// @MainActor store.
+    nonisolated static func distinctYears(db: GRDB.Database) throws -> [String] {
+        try String.fetchAll(db, sql: """
+            WITH RECURSIVE y(t) AS (
+                SELECT MIN(capture_date) FROM photo_meta WHERE capture_date IS NOT NULL
+                UNION ALL
+                SELECT (SELECT MIN(capture_date) FROM photo_meta
+                        WHERE capture_date >= CAST(strftime('%s',
+                            datetime(y.t, 'unixepoch', 'start of year', '+1 year')) AS INTEGER))
+                FROM y WHERE y.t IS NOT NULL
+            )
+            SELECT strftime('%Y', t, 'unixepoch') AS v FROM y
+            WHERE t IS NOT NULL ORDER BY v DESC
+            """)
+    }
+
     var snapshot: FacetsSnapshot {
         FacetsSnapshot(cameras: cameras, lenses: lenses, places: places, years: years)
     }
 
+    /// Single-flight with one trailing re-run. Three launch backfills, every
+    /// analyze pass and every import all call this, and several of them can
+    /// land at once — running four identical GROUP BY sweeps concurrently on
+    /// the serial queue bought nothing. A caller that arrives mid-refresh is
+    /// still guaranteed a pass that STARTS after its writes.
+    private var refreshing = false
+    private var refreshAgain = false
+
     func refresh() async {
+        if refreshing {
+            refreshAgain = true
+            return
+        }
+        refreshing = true
+        defer { refreshing = false }
+        repeat {
+            refreshAgain = false
+            await performRefresh()
+        } while refreshAgain
+    }
+
+    private func performRefresh() async {
         guard let q = Database.shared.dbQueue else { return }
         let result: FacetsSnapshot? = try? await q.read { db in
             let cameraRows = try Row.fetchAll(db, sql: """
@@ -57,13 +103,10 @@ nonisolated struct FacetsSnapshot: Equatable, Sendable {
                 WHERE place_key IS NOT NULL AND city IS NOT NULL
                 GROUP BY city ORDER BY c DESC LIMIT \(Self.facetLimit)
                 """)
-            let yearRows = try Row.fetchAll(db, sql: """
-                SELECT DISTINCT strftime('%Y', capture_date, 'unixepoch') AS v
-                FROM photo_meta WHERE capture_date IS NOT NULL ORDER BY v DESC
-                """)
             func values(_ rows: [Row]) -> [String] { rows.compactMap { $0["v"] as String? } }
             return FacetsSnapshot(cameras: values(cameraRows), lenses: values(lensRows),
-                                  places: values(placeRows), years: values(yearRows))
+                                  places: values(placeRows),
+                                  years: try Self.distinctYears(db: db))
         }
         guard let result else { return }
         cameras = result.cameras

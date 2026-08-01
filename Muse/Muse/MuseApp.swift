@@ -122,7 +122,7 @@ struct MuseApp: App {
                     AnalysisStatusStore.shared.installHost(appState)
                     AnalysisStatusStore.shared.refresh(force: true)
                     PhaseTrace.mark("edit-index.start")
-                    Task {
+                    let editIndexWarm = Task {
                         await EditStore.shared.rebuildIndex()
                         PhaseTrace.mark("edit-index.end")
                     }
@@ -152,25 +152,16 @@ struct MuseApp: App {
                                                                 icloudRoot: icloud)
                         }
                     }
-                    PhaseTrace.mark("intent-backfill.start")
-                    Task { await IntentBackfill.run(); PhaseTrace.mark("intent-backfill.end") }
-                    // Independent fire-and-forget pass — one header-only read
-                    // per file for GPS + EXIF, for libraries indexed before
-                    // v13/v14. Self-limiting per launch; chains geocoding and
-                    // the search-facet refresh when it writes anything.
-                    PhaseTrace.mark("photo-header-backfill.start")
-                    Task { await PhotoHeaderBackfill.run(); PhaseTrace.mark("photo-header-backfill.end") }
-                    // Faces/pets/sharpness (and CLIP vectors once the model is
-                    // installed) for files whose analyzed_hash is already
-                    // current — analyzePending would never revisit those.
-                    PhaseTrace.mark("deep-analysis-backfill.start")
-                    Task { await DeepAnalysisBackfill.run(); PhaseTrace.mark("deep-analysis-backfill.end") }
-                    // Also run geocoding independently: coordinates may already
-                    // exist (a v13 library, or a GeoNamesDataset.version bump)
-                    // with no fresh header pass to chain from. Both paths are
-                    // idempotent — selection is stale-by-marker.
-                    PhaseTrace.mark("geocode-backfill.start")
-                    Task { await GeocodeBackfill.run(); PhaseTrace.mark("geocode-backfill.end") }
+                    // ONE chain for every launch backfill, at `.utility`, after
+                    // the edit index is warm. They used to be four independent
+                    // `Task {}`s that started together and contended for the
+                    // single GRDB serial queue — the same queue the first
+                    // folder open needs. See LaunchBackfills for the ordering
+                    // rationale; foundation §9 is what decides the shape.
+                    Task(priority: .utility) {
+                        await editIndexWarm.value
+                        await LaunchBackfills.run()
+                    }
                     // Developer perf harness. Env-gated like PhaseTrace, so a
                     // shipped run never reaches it.
                     if PerfBaseline.enabled {

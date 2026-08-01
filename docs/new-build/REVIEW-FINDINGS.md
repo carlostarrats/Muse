@@ -296,6 +296,49 @@ and they touch files three other slices also touch.
 
 ---
 
+## Pass B — slice results
+
+### Slice 0 — launch & background scheduling (F1, F4, F5, F10, F12, F15) — DONE
+
+Authority: foundation §9 ("analysis is background, throttled, pausable, photos
+browsable immediately, cold start budgeted"), §13 #22 (analysis always on —
+scheduling only, never an off switch) and #25 (never assume RAM-residency).
+
+| Finding | Fix | Where |
+|---|---|---|
+| F1 | The four launch backfills are ONE serial chain (`LaunchBackfills.run`), at `.utility`, started after the edit-index warm-up rather than alongside it. Order: intent → header → geocode → deep analysis (cheap → expensive, dependency-first). Nothing else changed about what they do. | `Intelligence/LaunchBackfills.swift` (new), `MuseApp.swift` |
+| F4 | `ThrottlePolicy.scaled(_:normal:)` + `WorkThrottleStore.concurrency(normal:)`: a pass with its own full-speed width narrows to 1 on battery/LPM and 0 on pause, instead of honouring only the pause gate. Used by both concurrent passes. | `ThrottlePolicy.swift`, `WorkThrottleStore.swift`, both backfills |
+| F5 | `DeepAnalysisBackfill` now consults the throttle and `Task.isCancelled` **per spawn** instead of per 200-row write chunk, and re-reads its width per spawn. In-flight scans still finish (pause stays resumable — same rule as `AnalyzePipeline`). | `DeepAnalysisBackfill.swift` |
+| F10 | `BackfillCoordinator` — single-flight with one trailing re-run, keyed per pass; geocode, deep-analysis, header and intent all route through it, so the launch copy and the import/model-install copy can no longer overlap. `GeocodeBackfill` is now keyset-paged (`ORDER BY f.id`, `id > ?`) instead of fetching every candidate into RAM, with a cheap first page probed before the 7 MB dataset is parsed. `IntentBackfill` gained a 5,000/launch cap and writes one transaction per 200 files instead of one per file. | `LaunchBackfills.swift`, `GeocodeBackfill.swift`, `IntentBackfill.swift` |
+| F12 | The years facet is a **loose index scan** (recursive `MIN(capture_date)` seeks on `photo_meta_capture_idx`) instead of `SELECT DISTINCT strftime(...)` over all of `photo_meta` — exact answer, O(distinct years · log n). `SearchFacets.refresh()` is single-flight with a trailing re-run, so three concurrent callers no longer run three identical sweeps. | `SearchFacets.swift` |
+| F15 | `PhotoHeaderBackfill` reads the chunk's hashes in ONE query instead of one `queue.read` per candidate (5,000 serial-queue round trips per launch). | `PhotoHeaderBackfill.swift` |
+
+Two further defects of the same class, found in round 2 and **confirmed** by
+reading the code, fixed here rather than deferred:
+
+- `DeepAnalysisBackfill`'s context fetch ran one `Row.fetchOne` per candidate
+  inside a single `queue.read`. A GRDB `DatabaseQueue` is one serial
+  connection, so 5,000 statements in one read hold the queue — and every
+  interactive fetch behind it. Now 500 ids per query.
+- `IntentBackfill` built its candidate list with two queries **per file** and
+  held every candidate's full OCR text in RAM. Now two queries per 200-file
+  chunk, ids-only up front.
+
+**Residual, recorded not fixed:** `files_fts` declares `file_id UNINDEXED`, so
+any `WHERE file_id = ?` against it is a full FTS scan. The chunking above cuts
+IntentBackfill's cost by ~200×, but the shape is inherent to the v1 schema and
+fixing it properly means rebuilding the FTS table in a migration — out of
+proportion to a capped one-time pass. Also observed: `AnalysisStatusStore.refresh`
+runs two `COUNT(*) … EXISTS` scans of `files`, rate-limited to one per 5 s and
+off-main; fine at the design centre, a graceful-degradation cost at 800k.
+
+Tests: +9 (`ThrottlePolicy.scaled` table, `BackfillCoordinator` single-flight and
+key independence, distinct-years exactness incl. gap years and NULLs, geocode
+keyset advance / already-geocoded skip / dataset-version bump).
+Suite after this slice: **1,757 tests, 0 failures**.
+
+---
+
 ## Resume here — next session
 
 Pass A is complete and committed. Pass B has not started; no code has been

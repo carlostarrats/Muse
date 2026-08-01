@@ -48,7 +48,15 @@ enum PhotoHeaderBackfill {
         }
     }
 
+    /// Single-flight — see `BackfillCoordinator`. Only the launch chain calls
+    /// this today, but the pass is expensive enough that a second concurrent
+    /// copy must be impossible by construction rather than by call-site
+    /// discipline.
     static func run() async {
+        await BackfillCoordinator.shared.run("photo-header") { await work() }
+    }
+
+    private static func work() async {
         guard let q = Database.shared.dbQueue else { return }
 
         // Stale by EITHER marker — a library upgraded from v13 already has
@@ -85,32 +93,55 @@ enum PhotoHeaderBackfill {
             let chunk = Array(candidates[index..<end])
             index = end
 
+            // Re-read the hashes rather than carrying them from the selection
+            // query: a file may have been re-indexed since, and the write
+            // below guards on this value. ONE query for the chunk — this was
+            // a `queue.read` per candidate, i.e. 5,000 round trips on the
+            // serial queue per launch, all of them ahead of whatever the UI
+            // wanted from that same queue.
+            let hashes: [String: String] = (try? await q.read { db in
+                let ids = chunk.map(\.id)
+                let marks = databaseQuestionMarks(count: ids.count)
+                var map: [String: String] = [:]
+                let rows = try Row.fetchAll(
+                    db, sql: "SELECT id, content_hash FROM files WHERE id IN (\(marks))",
+                    arguments: StatementArguments(ids))
+                for row in rows {
+                    guard let id: String = row["id"],
+                          let hash: String = row["content_hash"] else { continue }
+                    map[id] = hash
+                }
+                return map
+            }) ?? [:]
+
+            // Header reads narrow with the throttle, like every other
+            // background pass — `waitUntilRunnable` above only covers `.paused`.
+            let width = max(1, await WorkThrottleStore.shared.concurrency(normal: concurrency))
+
             var results: [(id: String, hash: String, header: PhotoHeader)] = []
             await withTaskGroup(of: (String, String, PhotoHeader)?.self) { group in
                 var iterator = chunk.makeIterator()
                 var spawned = 0
 
-                @Sendable func work(_ c: Candidate) async -> (String, String, PhotoHeader)? {
-                    // Re-read the hash rather than carrying it from the
-                    // selection query: the file may have been re-indexed since,
-                    // and the write below guards on this value.
-                    let hash: String? = (try? await q.read { db in
-                        try FileRow.filter(FileRow.Columns.id == c.id).fetchOne(db)?.content_hash
-                    }) ?? nil
-                    guard let hash else { return nil }
+                @Sendable func work(_ c: Candidate, _ hash: String) async
+                    -> (String, String, PhotoHeader)? {
                     let header = await PhotoHeaderReader.read(url: c.url, kind: c.kind)
                     return (c.id, hash, header)
                 }
 
-                while spawned < concurrency, let c = iterator.next() {
-                    spawned += 1
-                    group.addTask { await work(c) }
+                func spawnNext() -> Bool {
+                    while let c = iterator.next() {
+                        guard let hash = hashes[c.id] else { continue }
+                        group.addTask { await work(c, hash) }
+                        return true
+                    }
+                    return false
                 }
+
+                while spawned < width, spawnNext() { spawned += 1 }
                 for await result in group {
                     if let result { results.append(result) }
-                    if let c = iterator.next() {
-                        group.addTask { await work(c) }
-                    }
+                    _ = spawnNext()
                 }
             }
 

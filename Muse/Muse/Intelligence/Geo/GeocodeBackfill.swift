@@ -50,30 +50,54 @@ nonisolated enum ReverseGeocoder {
 nonisolated enum GeocodeBackfill {
     static let writeChunk = 200
 
+    /// Single-flight — reachable from the launch chain, from
+    /// `PhotoHeaderBackfill` when it writes, and from all three importers.
+    /// Two concurrent copies each parse the ~7 MB dataset and build their own
+    /// k-d tree over the same rows.
     static func run() async {
+        await BackfillCoordinator.shared.run("geocode") { await work() }
+    }
+
+    struct Candidate { let fileID: String; let hash: String; let lat: Double; let lon: Double }
+
+    /// One page of stale rows, keyset-paged past `afterID`. Keyset rather than
+    /// a whole-library fetch: a 800k-geotagged library materialized every
+    /// candidate at once, against "never write code that assumes everything
+    /// fits in RAM"; and keyset rather than OFFSET so the scan can't be
+    /// quadratic. `id` ordering also guarantees forward progress even when a
+    /// row is skipped by the content-identity guard below (an OFFSET-free
+    /// "re-query the predicate" loop would re-fetch those forever).
+    static func page(db: GRDB.Database, version: Int, afterID: String?,
+                     limit: Int) throws -> [Candidate] {
+        let rows = try Row.fetchAll(db, sql: """
+            SELECT f.id AS id, f.content_hash AS content_hash, f.lat AS lat, f.lon AS lon
+            FROM files f
+            LEFT JOIN places p ON p.file_id = f.id
+            WHERE f.lat IS NOT NULL AND f.content_hash IS NOT NULL
+              AND (p.file_id IS NULL
+                   OR p.geocoded_hash != f.content_hash
+                   OR p.dataset_version != ?)
+              AND (? IS NULL OR f.id > ?)
+            ORDER BY f.id
+            LIMIT ?
+            """, arguments: [version, afterID, afterID, limit])
+        return rows.compactMap { row -> Candidate? in
+            guard let id: String = row["id"], let hash: String = row["content_hash"],
+                  let lat: Double = row["lat"], let lon: Double = row["lon"] else { return nil }
+            return Candidate(fileID: id, hash: hash, lat: lat, lon: lon)
+        }
+    }
+
+    private static func work() async {
         guard let q = Database.shared.dbQueue else { return }
         let version = GeoNamesDataset.version
 
-        struct Candidate { let fileID: String; let hash: String; let lat: Double; let lon: Double }
-        // Re-geocode when the row is missing, the bytes changed, or the
-        // bundled dataset was regenerated.
-        let candidates: [Candidate] = (try? await q.read { db in
-            let rows = try Row.fetchAll(db, sql: """
-                SELECT f.id AS id, f.content_hash AS content_hash, f.lat AS lat, f.lon AS lon
-                FROM files f
-                LEFT JOIN places p ON p.file_id = f.id
-                WHERE f.lat IS NOT NULL AND f.content_hash IS NOT NULL
-                  AND (p.file_id IS NULL
-                       OR p.geocoded_hash != f.content_hash
-                       OR p.dataset_version != ?)
-                """, arguments: [version])
-            return rows.compactMap { row -> Candidate? in
-                guard let id: String = row["id"], let hash: String = row["content_hash"],
-                      let lat: Double = row["lat"], let lon: Double = row["lon"] else { return nil }
-                return Candidate(fileID: id, hash: hash, lat: lat, lon: lon)
-            }
+        // Probe before paying for the dataset: the common launch case is that
+        // the chained copy already drained the queue and this finds nothing.
+        let first: [Candidate] = (try? await q.read { db in
+            try page(db: db, version: version, afterID: nil, limit: writeChunk)
         }) ?? []
-        guard !candidates.isEmpty else { return }
+        guard !first.isEmpty else { return }
 
         // The dataset (~7 MB parsed) is loaded only now that there is work,
         // and released when this function returns.
@@ -81,13 +105,11 @@ nonisolated enum GeocodeBackfill {
         let tree = GeoKDTree(points: cities.map { ($0.lat, $0.lon) })
 
         var wroteAny = false
-        var index = 0
-        while index < candidates.count {
+        var chunk = first
+        while !chunk.isEmpty {
             if Task.isCancelled { return }
             await WorkThrottleStore.shared.waitUntilRunnable()
-            let end = min(index + writeChunk, candidates.count)
-            let chunk = Array(candidates[index..<end])
-            index = end
+            let lastID = chunk[chunk.count - 1].fileID
 
             let wrote: Bool = (try? await q.write { db -> Bool in
                 var any = false
@@ -109,6 +131,10 @@ nonisolated enum GeocodeBackfill {
                 return any
             }) ?? false
             if wrote { wroteAny = true }
+
+            chunk = (try? await q.read { db in
+                try page(db: db, version: version, afterID: lastID, limit: writeChunk)
+            }) ?? []
         }
 
         if wroteAny {

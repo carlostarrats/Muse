@@ -208,6 +208,59 @@ final class ThrottlePolicyTests: XCTestCase {
         XCTAssertEqual(ThrottlePolicy.concurrency(.reduced), 1)
         XCTAssertEqual(ThrottlePolicy.concurrency(.paused), 0)
     }
+
+    /// A backfill with its own full-speed width narrows under the same rules —
+    /// it must not stay 2- or 4-wide on battery while analysis is down to 1.
+    func testScaledKeepsTheCallersWidthOnlyWhenNormal() {
+        XCTAssertEqual(ThrottlePolicy.scaled(.normal, normal: 4), 4)
+        XCTAssertEqual(ThrottlePolicy.scaled(.reduced, normal: 4), 1)
+        XCTAssertEqual(ThrottlePolicy.scaled(.paused, normal: 4), 0)
+        XCTAssertEqual(ThrottlePolicy.scaled(.normal, normal: 2), 2)
+        XCTAssertEqual(ThrottlePolicy.scaled(.reduced, normal: 2), 1)
+    }
+}
+
+/// Single-flight with one trailing re-run — the launch chain, imports and the
+/// CLIP model install all reach the same passes.
+final class BackfillCoordinatorTests: XCTestCase {
+
+    func testSecondCallerDoesNotStartASecondPass() async {
+        let coordinator = BackfillCoordinator()
+        let counter = Counter()
+
+        let first = Task {
+            await coordinator.run("k") {
+                await counter.bump()
+                try? await Task.sleep(nanoseconds: 400_000_000)
+            }
+        }
+        // Let the first pass get inside the gate.
+        try? await Task.sleep(nanoseconds: 80_000_000)
+
+        // Arrives mid-pass: must not run concurrently, must not block.
+        await coordinator.run("k") { await counter.bump() }
+        let midCount = await counter.value
+        XCTAssertEqual(midCount, 1)
+
+        await first.value
+        // …but it IS guaranteed a pass that starts after it asked.
+        let finalCount = await counter.value
+        XCTAssertEqual(finalCount, 2)
+    }
+
+    func testDistinctKeysDoNotBlockEachOther() async {
+        let coordinator = BackfillCoordinator()
+        let counter = Counter()
+        await coordinator.run("a") { await counter.bump() }
+        await coordinator.run("b") { await counter.bump() }
+        let count = await counter.value
+        XCTAssertEqual(count, 2)
+    }
+
+    private actor Counter {
+        private(set) var value = 0
+        func bump() { value += 1 }
+    }
 }
 
 final class AnalysisEstimatorTests: XCTestCase {

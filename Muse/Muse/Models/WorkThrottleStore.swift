@@ -72,6 +72,12 @@ final class WorkThrottleStore: ObservableObject {
     /// spawn so a machine that heats up mid-pass narrows without a restart.
     var currentConcurrency: Int { ThrottlePolicy.concurrency(mode) }
 
+    /// Same, for a pass with its own full-speed width. Re-read per spawn: a
+    /// backfill that honours only the pause gate keeps running 2–4 wide on
+    /// battery / Low Power Mode while the analyze pass has narrowed to 1,
+    /// which is the opposite of what §9 decided.
+    func concurrency(normal: Int) -> Int { ThrottlePolicy.scaled(mode, normal: normal) }
+
     private func recompute() {
         onBattery = Self.isOnBattery()
         let next = ThrottlePolicy.mode(thermal: ProcessInfo.processInfo.thermalState,
