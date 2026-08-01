@@ -120,14 +120,14 @@ final class EditStore: ObservableObject {
                                  parent_dir: scope.parentDir, kind: kind, name: name,
                                  stack: json, created_at: Int64(Date().timeIntervalSince1970))
         try? await queue.write { db in try EditRecordStore.addVersion(row, db: db) }
-        await refreshVersionCounts()
+        await refreshVersionCounts(paths: [url.standardizedFileURL.path])
         generation += 1
     }
 
     func deleteVersion(id: String, for url: URL) async {
         guard let queue = Database.shared.dbQueue else { return }
         try? await queue.write { db in try EditRecordStore.deleteVersion(id: id, db: db) }
-        await refreshVersionCounts()
+        await refreshVersionCounts(paths: [url.standardizedFileURL.path])
         generation += 1
     }
 
@@ -168,7 +168,16 @@ final class EditStore: ObservableObject {
         let entries = (try? await queue.read { db in
             try EditRecordStore.allWithAlivePaths(db: db)
         }) ?? []
-        EditStackIndex.rebuild(entries: entries)
+        // Building the index decodes every stack's JSON and, for a LUT-bearing
+        // stack, does a synchronous multi-MB `queue.read` inside
+        // `EditRenderer.canRender` → `LutRegistry.rgbaCube` — both of whose
+        // headers say in as many words that they must never run on the main
+        // thread. This store is @MainActor, so the work has to be handed off
+        // explicitly. The index itself is lock-guarded, so it is safe to write
+        // from anywhere.
+        await Task.detached(priority: .userInitiated) {
+            EditStackIndex.rebuild(entries: entries)
+        }.value
         await refreshVersionCounts()
     }
 
@@ -177,18 +186,35 @@ final class EditStore: ObservableObject {
     /// to be REMOVED, not merely not-re-added.
     func warmIndex(paths: [String]) async {
         guard !paths.isEmpty, let queue = Database.shared.dbQueue else { return }
-        let wanted = Set(paths.map { URL(fileURLWithPath: $0).standardizedFileURL.path })
+        let wanted = paths.map { URL(fileURLWithPath: $0).standardizedFileURL.path }
+        // Scoped query, not "load every edit in the library and filter in
+        // Swift": this runs on every save, i.e. every 400 ms of slider
+        // movement once autosave fires.
         let entries = (try? await queue.read { db in
-            try EditRecordStore.allWithAlivePaths(db: db).filter { wanted.contains($0.path) }
+            try EditRecordStore.withAlivePaths(wanted, db: db)
         }) ?? []
-        EditStackIndex.merge(entries: entries, clearingScope: Array(wanted))
+        // Off-main for the same reason as `rebuildIndex` — see there.
+        await Task.detached(priority: .userInitiated) {
+            EditStackIndex.merge(entries: entries, clearingScope: wanted)
+        }.value
     }
 
+    /// Full refresh — launch and wholesale path rewrites only.
     private func refreshVersionCounts() async {
         guard let queue = Database.shared.dbQueue else { return }
         versionCounts = (try? await queue.read { db in
             try EditRecordStore.versionCounts(db: db)
         }) ?? [:]
+    }
+
+    /// Scoped refresh — the per-save case. A missing count REMOVES the key,
+    /// which is what makes deleting the last version drop the badge.
+    private func refreshVersionCounts(paths: [String]) async {
+        guard !paths.isEmpty, let queue = Database.shared.dbQueue else { return }
+        let counts = (try? await queue.read { db in
+            try EditRecordStore.versionCounts(forPaths: paths, db: db)
+        }) ?? [:]
+        for path in paths { versionCounts[path] = counts[path] }
     }
 
     // MARK: - Save consequences
@@ -199,7 +225,7 @@ final class EditStore: ObservableObject {
         // cache-key variant from the index, so the other order clears the old
         // pair and leaves the new stack's PNGs live.
         await warmIndex(paths: paths)
-        await refreshVersionCounts()
+        await refreshVersionCounts(paths: paths)
         host?.markContentChanged(paths)
         generation += 1
         await AnalyzePipeline.shared.exportSidecarsAfterEditChange(for: urls)
@@ -211,7 +237,7 @@ final class EditStore: ObservableObject {
     func applyHydratedConsequences(for urls: [URL]) async {
         let paths = urls.map { $0.standardizedFileURL.path }
         await warmIndex(paths: paths)
-        await refreshVersionCounts()
+        await refreshVersionCounts(paths: paths)
         host?.markContentChanged(paths)
         generation += 1
     }

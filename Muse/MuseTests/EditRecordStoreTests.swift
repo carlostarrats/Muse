@@ -307,4 +307,91 @@ final class EditRecordStoreTests: XCTestCase {
         let entries = try queue.read { db in try EditRecordStore.allWithAlivePaths(db: db) }
         XCTAssertEqual(entries.map(\.path), ["/a/x.jpg"])
     }
+
+    // MARK: - Scoped variants (the per-save path)
+
+    /// `withAlivePaths` must agree with the bulk load on the rows it covers —
+    /// including the per-folder filter, which is the whole reason a copy in
+    /// another folder doesn't inherit the edit.
+    func testWithAlivePathsMatchesTheBulkLoadForItsScope() throws {
+        let queue = try makeQueue()
+        try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO paths (id, file_id, absolute_path, is_alive)
+                VALUES ('p1', 'f1', '/a/x.jpg', 1)
+                """)
+            try db.execute(sql: """
+                INSERT INTO paths (id, file_id, absolute_path, is_alive)
+                VALUES ('p2', 'f1', '/b/x.jpg', 1)
+                """)
+            try db.execute(sql: """
+                INSERT INTO paths (id, file_id, absolute_path, is_alive)
+                VALUES ('p3', 'f2', '/a/y.jpg', 1)
+                """)
+            try EditRecordStore.write(stackJSON: "{\"e\":1}", hash: "e", processVersion: 1,
+                                      fileID: "f1", parentDir: "/a", updatedAt: 1, db: db)
+            try EditRecordStore.write(stackJSON: "{\"e\":2}", hash: "e2", processVersion: 1,
+                                      fileID: "f2", parentDir: "/a", updatedAt: 1, db: db)
+        }
+        let scoped = try queue.read { db in
+            try EditRecordStore.withAlivePaths(["/a/x.jpg", "/b/x.jpg"], db: db)
+        }
+        XCTAssertEqual(scoped.map(\.path), ["/a/x.jpg"])
+        XCTAssertEqual(scoped.first?.hash, "e")
+
+        let all = try queue.read { db in try EditRecordStore.allWithAlivePaths(db: db) }
+        XCTAssertEqual(Set(all.map(\.path)), ["/a/x.jpg", "/a/y.jpg"])
+    }
+
+    func testWithAlivePathsIsEmptyForNoPaths() throws {
+        let queue = try makeQueue()
+        let scoped = try queue.read { db in try EditRecordStore.withAlivePaths([], db: db) }
+        XCTAssertTrue(scoped.isEmpty)
+    }
+
+    func testScopedVersionCountsMatchTheFullMap() throws {
+        let queue = try makeQueue()
+        try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO paths (id, file_id, absolute_path, is_alive)
+                VALUES ('p1', 'f1', '/a/x.jpg', 1)
+                """)
+            try db.execute(sql: """
+                INSERT INTO paths (id, file_id, absolute_path, is_alive)
+                VALUES ('p3', 'f2', '/a/y.jpg', 1)
+                """)
+            for i in 0..<3 {
+                try EditRecordStore.addVersion(
+                    EditVersionRow(id: "v\(i)", file_id: "f1", parent_dir: "/a",
+                                   kind: "version", name: "n\(i)", stack: "{}",
+                                   created_at: Int64(i)), db: db)
+            }
+            try EditRecordStore.addVersion(
+                EditVersionRow(id: "v9", file_id: "f2", parent_dir: "/a",
+                               kind: "version", name: "n", stack: "{}", created_at: 0), db: db)
+        }
+        let full = try queue.read { db in try EditRecordStore.versionCounts(db: db) }
+        let scoped = try queue.read { db in
+            try EditRecordStore.versionCounts(forPaths: ["/a/x.jpg"], db: db)
+        }
+        XCTAssertEqual(full["/a/x.jpg"], 3)
+        XCTAssertEqual(scoped, ["/a/x.jpg": 3])
+        XCTAssertNil(scoped["/a/y.jpg"], "the scoped query must not leak other paths")
+    }
+
+    /// A path with no versions yields no entry — that absence is what removes
+    /// the grid badge when the last version is deleted.
+    func testScopedVersionCountsOmitsPathsWithNoVersions() throws {
+        let queue = try makeQueue()
+        try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO paths (id, file_id, absolute_path, is_alive)
+                VALUES ('p1', 'f1', '/a/x.jpg', 1)
+                """)
+        }
+        let scoped = try queue.read { db in
+            try EditRecordStore.versionCounts(forPaths: ["/a/x.jpg"], db: db)
+        }
+        XCTAssertTrue(scoped.isEmpty)
+    }
 }

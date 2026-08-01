@@ -388,7 +388,11 @@ nonisolated enum EditRenderer {
         if isRawURL(url) {
             guard let raw = RawSource.decode(url: url, params: stack.rawParams,
                                              color: stack.colorParams ?? .neutral,
-                                             presence: stack.presenceParams ?? .neutral)
+                                             presence: stack.presenceParams ?? .neutral,
+                                             // Demosaic AT proxy scale; the
+                                             // transform below can only shrink
+                                             // an already-decoded full frame.
+                                             maxPixel: maxPixel)
             else { return nil }
             linear = raw
         } else {

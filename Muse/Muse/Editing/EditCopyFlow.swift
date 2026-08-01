@@ -107,6 +107,13 @@ nonisolated enum EditCopyMetadata {
             try? FileManager.default.removeItem(at: tempURL)
             throw MetadataError.unwritable
         }
-        _ = try? FileManager.default.replaceItemAt(dest, withItemAt: tempURL)
+        do {
+            _ = try FileManager.default.replaceItemAt(dest, withItemAt: tempURL)
+        } catch {
+            // The swap has to happen on the same volume as `dest`, so this
+            // temp sits beside it; a silent failure would strand it there.
+            try? FileManager.default.removeItem(at: tempURL)
+            throw MetadataError.unwritable
+        }
     }
 }

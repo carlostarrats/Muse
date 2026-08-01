@@ -48,6 +48,40 @@ nonisolated enum EditRecordStore {
         }
     }
 
+    /// The same rows as `allWithAlivePaths`, restricted to the given alive
+    /// paths. The unrestricted join is O(library edits) and `warmIndex` ran it
+    /// — then discarded all but a handful of rows in Swift — on EVERY save,
+    /// i.e. every 400 ms of slider movement once autosave fires.
+    static func withAlivePaths(_ paths: [String], db: GRDB.Database)
+    throws -> [(path: String, stackJSON: String, hash: String)] {
+        guard !paths.isEmpty else { return [] }
+        var out: [(path: String, stackJSON: String, hash: String)] = []
+        for slice in stride(from: 0, to: paths.count, by: pathChunk) {
+            let chunk = Array(paths[slice..<min(slice + pathChunk, paths.count)])
+            let marks = databaseQuestionMarks(count: chunk.count)
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT p.absolute_path AS path, e.parent_dir AS dir,
+                       e.stack AS stack, e.stack_hash AS hash
+                FROM edits e
+                JOIN paths p ON p.file_id = e.file_id AND p.is_alive = 1
+                WHERE p.absolute_path IN (\(marks))
+                """, arguments: StatementArguments(chunk))
+            for row in rows {
+                guard let path: String = row["path"], let dir: String = row["dir"],
+                      let stack: String = row["stack"], let hash: String = row["hash"],
+                      // Same per-folder filter, same reason, as the bulk load.
+                      TagScope.parentDir(ofPath: path) == dir
+                else { continue }
+                out.append((path, stack, hash))
+            }
+        }
+        return out
+    }
+
+    /// Paths per `IN (…)` chunk — comfortably under SQLite's bound-variable
+    /// ceiling.
+    static let pathChunk = 500
+
     /// Upsert the CURRENT stack. Callers must delete instead of writing a
     /// neutral stack (`EditStore.save` owns that branch) — this function
     /// deliberately doesn't second-guess the blob it's handed, because a
@@ -123,6 +157,32 @@ nonisolated enum EditRecordStore {
                   let n: Int = row["n"], TagScope.parentDir(ofPath: path) == dir
             else { continue }
             out[path, default: 0] += n
+        }
+        return out
+    }
+
+    /// Version counts for a handful of paths — the per-save case. Same reason
+    /// as `withAlivePaths`: the unrestricted GROUP BY is O(library versions)
+    /// and ran on every autosave.
+    static func versionCounts(forPaths paths: [String], db: GRDB.Database)
+    throws -> [String: Int] {
+        guard !paths.isEmpty else { return [:] }
+        var out: [String: Int] = [:]
+        for slice in stride(from: 0, to: paths.count, by: pathChunk) {
+            let chunk = Array(paths[slice..<min(slice + pathChunk, paths.count)])
+            let marks = databaseQuestionMarks(count: chunk.count)
+            for row in try Row.fetchAll(db, sql: """
+                SELECT p.absolute_path AS path, v.parent_dir AS dir, COUNT(*) AS n
+                FROM edit_versions v
+                JOIN paths p ON p.file_id = v.file_id AND p.is_alive = 1
+                WHERE p.absolute_path IN (\(marks))
+                GROUP BY p.absolute_path, v.parent_dir
+                """, arguments: StatementArguments(chunk)) {
+                guard let path: String = row["path"], let dir: String = row["dir"],
+                      let n: Int = row["n"], TagScope.parentDir(ofPath: path) == dir
+                else { continue }
+                out[path, default: 0] += n
+            }
         }
         return out
     }

@@ -377,6 +377,37 @@ consumers in grid, hero, aspect cache and the Info card; `modalPresented` and
 
 Suite after this slice: **1,759 tests, 2 skipped, 0 failures.**
 
+### Slice 2 — editing engine + readouts (04, 05) (+ F3, F6, F7) — DONE
+
+| Finding | Fix |
+|---|---|
+| F3 (RAW half — the confirmed one) | `RawSource.decode` takes a `maxPixel` and sets `CIRAWFilter.scaleFactor` from `nativeSize` BEFORE reading `outputImage`. Every proxy render — i.e. every slider tick — was demosaicing the full 24–60 MP frame and then throwing most of it away in a downstream `CIImage` scale transform. Exports still pass `maxPixel: 0` and demosaic at full size. This is the "edit preview renders at screen resolution, never full-res" budget (foundation §9). |
+| F6 | `EditStore.rebuildIndex`/`warmIndex` build the index inside `Task.detached` instead of on `@MainActor`. Building an entry decodes each stack's JSON and, for a LUT-bearing stack, does a synchronous multi-MB `queue.read` in `EditRenderer.canRender` → `LutRegistry.rgbaCube` — both headers say those must never run on the main thread, and `warmIndex` runs on every 400 ms autosave. The index is lock-guarded, so writing it off-main is safe. |
+| F7 | `EditRecordStore.withAlivePaths(_:db:)` and `versionCounts(forPaths:db:)` — chunked `IN (…)` variants of the two full-table joins. `warmIndex` no longer loads every edit in the library and filters in Swift, and the per-save version-count refresh is scoped to the saved paths (a missing count removes the key, which is what drops the badge when the last version goes). The unscoped versions remain for launch and wholesale path rewrites. |
+
+Also fixed: `EditCopyMetadata.copyMetadata` swallowed a `replaceItemAt` failure
+with `try?`, stranding its temp; it now cleans up and throws (the caller
+already treats metadata carry as best-effort, so an Edit-a-Copy still lands).
+
+Checked and clean: `EditStackCodec` canonical `.sortedKeys` encoding over the
+NORMALIZED stack with the hash pinned by a literal fixture; the autosave/history
+split (`commitGesture` is the single push site, on gesture end); `RenderCoalescer`
+latest-wins with one render in flight; the stats tap piggybacked on the completed
+render at 256 px and gated on `statsVisible`; the Looks browser's single decode
+reused across every preset and LUT cell, off-main and cancellable;
+`EditCopyFlow`'s render → metadata → move → index ordering, temp-first at every
+step.
+
+**Observation, not acted on:** the stats tap calls
+`EditRenderer.toneStageImage`, which re-decodes the file a second time per
+render (at 256 px). With the RAW fix above that decode is now genuinely small;
+reusing the canvas render's decoded source instead would mean caching it on the
+session. Left for the Pass C slider-to-render measurement to judge.
+
+Suite after this slice: **1,763 tests, 2 skipped, 0 failures.**
+
+---
+
 ---
 
 ## Resume here — next session

@@ -59,9 +59,27 @@ nonisolated enum RawSource {
     /// Tint slider (−1…+1) → `CIRAWFilter`'s neutral-tint units.
     static let tintScale = 50.0
 
+    /// `maxPixel == 0` means full resolution (the export path). Anything else
+    /// is a PROXY, and the decoder is told so via `scaleFactor` BEFORE
+    /// `outputImage` is read.
+    ///
+    /// This is load-bearing for the "edit preview renders at screen
+    /// resolution, never full-res" budget (foundation §9): without it every
+    /// slider tick demosaiced the full 24–60 MP frame and then threw most of
+    /// it away in a CIImage scale transform downstream. Scaling at demosaic is
+    /// what Apple's own RAW-preview guidance prescribes.
     static func decode(url: URL, params: RawParams?, color: ColorParams,
-                       presence: PresenceParams) -> LinearImage? {
+                       presence: PresenceParams, maxPixel: Int = 0) -> LinearImage? {
         guard let filter = CIRAWFilter(imageURL: url) else { return nil }
+
+        // 0. Proxy scale, first — it changes what everything below decodes.
+        if maxPixel > 0 {
+            let native = filter.nativeSize
+            let longEdge = max(native.width, native.height)
+            if longEdge > 0, CGFloat(maxPixel) < longEdge {
+                filter.scaleFactor = Float(CGFloat(maxPixel) / longEdge)
+            }
+        }
 
         // 1. Neutralize the default look, so the sliders are the only thing
         //    shaping the image and RAW/JPEG agree on what a stack means.
