@@ -6,6 +6,72 @@ the durable rules + a compact index live in `CLAUDE.md`. Nothing here is
 load-bearing for a fresh session beyond what that index already surfaces;
 read an entry when you need the full "why" behind a specific change.
 
+### Specs 01–07 review — 2026-08-01 (on `new-product-build-1`)
+
+A full review, QA and fix pass over everything Specs 01–07 built: 326 files,
+37k insertions, built by seven headless agents that never saw each other's work
+and almost none of it ever run. Brief: `docs/new-build/REVIEW-PROMPT.md`;
+findings and per-slice results: `docs/new-build/REVIEW-FINDINGS.md`. Worked
+solo, sequentially, one slice per commit; the suite went 1,748 → 1,775 tests,
+green at every checkpoint.
+
+Pass A (committed earlier) was ten systematic sweeps — launch work, backfills,
+main-thread work, algorithmic cost, decode sites, network, identity rewrites,
+`AppState` surface, thumbnail cache, error/cancellation paths — producing 15
+ranked findings. Pass B worked them in the order Pass A dictated, and the
+review's own re-review rounds produced eight more (F16–F23). The pattern behind
+most of them is the same: **two specs edited the same seam and neither knew the
+other existed.**
+
+The load-bearing fixes:
+
+- **Launch (F1, F4, F5, F10, F12, F15).** Four uncoordinated `Task {}`s became
+  one serial `LaunchBackfills` chain at `.utility`, behind the edit-index
+  warm-up, single-flighted through a new `BackfillCoordinator`, with every pass
+  narrowing on `ThrottlePolicy.scaled` and consulting the throttle per SPAWN
+  rather than per 200-row flush. Geocode is keyset-paged; intent is capped and
+  batched; the years facet became a loose index scan instead of an unindexable
+  `strftime` sweep of `photo_meta`. Measured after, on the real library:
+  `grid.firstPaint` 0.11s, then one pass at a time.
+- **Invariants (F2, F9, F14, F16, F17, F18).** `EditStore.rebuildIndex()` is
+  called after all three path-rewriting migrations — `EditStackIndex` is
+  path-keyed, so a folder rename made every edited file under it render
+  *unedited* everywhere until relaunch. `OutputRender.discard` collects render
+  temps at their consumers. Escape did nothing for five of the new modals
+  (they were in `modalPresented` but not in `dismissTopModal`, which also
+  killed the arrow keys). The one-time search-model offer re-offered forever.
+  Compare panes and the social-export crop stage previewed the unedited
+  original while the export shipped edited pixels.
+- **Editing (F3, F6, F7).** `CIRAWFilter.scaleFactor` was never set, so every
+  slider tick demosaiced the full frame. The edit index was built on the main
+  actor, doing a synchronous multi-MB LUT read against two functions' written
+  warnings. Every autosave ran two full-table joins.
+- **Whole-app (F19).** The database ran in rollback-journal mode with
+  `synchronous = FULL`, making every one of this app's many small transactions
+  an fsync. Now WAL + NORMAL. `journal_mode` is persistent, so existing
+  libraries convert on first open.
+- **Security/resource (F20, F21, F8, F11, F22).** Bounded reads for
+  user-chosen metadata files; the share page's portfolio fetch bounded BEFORE
+  the body is buffered (its Drive file id comes from the unsigned fragment);
+  keyset paging + a bounded top-K in `ClipIndex`; the CLIP model streamed to
+  disk and hashed incrementally; a reservoir sample instead of materializing
+  every photo id to shuffle 500.
+- **Cross-spec (F23).** The grid's cull badge, specified by Spec 03, was never
+  built — while the grid's key catcher happily accepted K/X/U, so marking was
+  invisible on the surface a cull pass is driven from.
+
+Pass C settled the two questions Pass A deliberately left open, by measurement
+rather than argument: a sandboxed Muse **can** exec `/usr/bin/unzip` (so
+`ClipModelStore` works — now pinned by a test), and `CIImage(contentsOf:)` plus
+a scale transform does **not** force a full-resolution decode (59 ms at 1024 px
+vs 70 ms for a bounded ImageIO decode of the same 24 MP file). The inferred
+half of F3 was wrong and the existing code stands; the RAW half was real and is
+fixed.
+
+Not verified at runtime, and stated plainly: everything needing hands on the
+GUI — hero open/close, the editor, compare/cull, the five import sources,
+social export, Drive share and portfolio, backup/restore.
+
 ### Post-polish session — 2026-06-12 (on `main`)
 
 A long live-review pass. Landed:

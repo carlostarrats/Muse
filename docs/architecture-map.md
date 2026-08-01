@@ -202,7 +202,11 @@ Muse/Muse/
                                    analyzed_hash files; writes FileRow, tags, FTS5; classifies
                                    intent (gated). Passes serialize via acquirePass()/passClaimed
     IntentBackfill.swift           one-time launch pass: classify pre-existing screenshots from
-                                   stored OCR (no re-Vision)
+                                   stored OCR (no re-Vision); capped + chunked
+    LaunchBackfills.swift          THE launch chain: intent → header → geocode → deep
+                                   analysis, serial, .utility, behind the edit-index warm-up.
+                                   Also BackfillCoordinator — single-flight + one trailing
+                                   re-run for passes with more than one trigger
   Agents/
     AppIntents/
       MuseAppIntents.swift         OpenFolder/FindDuplicates/AnalyzeFolder/SearchLibrary intents
@@ -541,8 +545,13 @@ implementation per seam and every consumer is already wired:
 - `Components/EffectiveDimensions.swift` — the crop-aware layer over
   `ImageHeaderSizeCache`. What LAYOUT reads; the header cache stays what decode budgets
   and analysis read.
-- `Export/OutputRender.swift` — `RenderedOutput` (fileprivate init) + `forOutput`. The
-  choke point every export/share/publish path goes through. Backup is the one exclusion.
+- `Export/OutputRender.swift` — `RenderedOutput` (fileprivate init) + `forOutput` +
+  `discard` (collect a rendered temp; a no-op for an unrendered one, which IS the
+  user's file) + the 24 h `sweepRenderTemps` backstop. The choke point every
+  export/share/publish path goes through. Backup is the one exclusion.
+- `Import/BoundedRead.swift` — size-capped reads of user-chosen metadata files (XMP
+  sidecars, `.xmp` presets, Takeout JSON, Eagle `metadata.json`). The import-side twin
+  of `withinDecodeBudget`.
 
 Commerce + announcements (own stores; `AppState` gains no `@Published`):
 

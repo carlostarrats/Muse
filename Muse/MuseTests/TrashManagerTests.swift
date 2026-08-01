@@ -7,6 +7,8 @@ final class TrashManagerTests: XCTestCase {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        // The container's tmp had ~700 of these left behind, one per run.
+        defer { try? FileManager.default.removeItem(at: dir) }
         let file = dir.appendingPathComponent("x.txt")
         try "hello".data(using: .utf8)!.write(to: file)
 

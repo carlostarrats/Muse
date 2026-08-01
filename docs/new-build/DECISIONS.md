@@ -48,6 +48,26 @@ it in its own section.*
   and 06 — Takeout/Lightroom-preset/cull/compare copy). Per CLAUDE.md this makes those
   features unfinished. Any per-spec "all N keys translated" claim below was true only
   when written.
+- **Specs 01–07 have been REVIEWED (2026-08-01) and the review's fixes are on
+  `new-product-build-1`.** Findings, per-slice, are in
+  `docs/new-build/REVIEW-FINDINGS.md`; the durable rules it established are in
+  `docs/durable-constraints.md`. Three things in this block changed as a result:
+  (a) the four launch backfills are now ONE serial chain (`LaunchBackfills`),
+  throttle-aware and single-flighted through `BackfillCoordinator`; (b) the
+  database now runs **WAL + `synchronous = NORMAL`** — `journal_mode` is
+  persistent, so every existing library converts on first open; (c) two of Pass
+  A's open questions are settled by runtime measurement, not reasoning: a
+  sandboxed Muse **can** exec `/usr/bin/unzip` (pinned by
+  `SandboxProcessTests`, so `ClipModelStore` works), and `CIImage(contentsOf:)`
+  + a scale transform does **not** force a full-resolution decode (measured:
+  59 ms at 1024 px vs 70 ms for a bounded ImageIO decode of the same 24 MP
+  file, and 73 ms at 4096 px — Core Image fuses the scale into the graph). The
+  RAW half of that finding was real and is fixed (`CIRAWFilter.scaleFactor`).
+- **What the review could NOT verify at runtime** — everything needing hands on
+  the GUI: hero open/close, the editor's sliders/curve/eyedropper/versions/
+  presets/Edit-a-Copy, compare and cull, all five import sources, social export,
+  Drive share and portfolio, and the backup/restore round trip. Static review
+  and the unit suite cover them; nobody has driven them.
 - **Backup does not carry edit data.** `BackupOccurrence` has no edit fields and
   `BackupArchive.currentSchema` is 1, so edits, versions, presets and LUTs do NOT
   survive a backup round trip. Spec 09's "Backup amendment A2" closes this; until then

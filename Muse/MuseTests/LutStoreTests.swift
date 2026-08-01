@@ -11,13 +11,29 @@ final class LutStoreTests: XCTestCase {
         return (LutStore(queue: q), q)
     }
 
+    /// Fixtures written to the app container's tmp. Tracked and removed in
+    /// tearDown — these ran for months and left a `.cube` per import behind
+    /// each time.
+    private var temporaryFixtures: [URL] = []
+
+    override func tearDown() {
+        for url in temporaryFixtures { try? FileManager.default.removeItem(at: url) }
+        temporaryFixtures = []
+        super.tearDown()
+    }
+
+    private func track(_ url: URL) -> URL {
+        temporaryFixtures.append(url)
+        return url
+    }
+
     private func writeCube(title: String, size: Int = 2, value: Double = 0.5) throws -> URL {
         var lines = ["TITLE \"\(title)\"", "LUT_3D_SIZE \(size)"]
         for _ in 0..<(size * size * size) { lines.append("\(value) \(value) \(value)") }
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + ".cube")
         try lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
-        return url
+        return track(url)
     }
 
     func testImportThenReloadListsTheLut() async throws {
@@ -59,7 +75,8 @@ final class LutStoreTests: XCTestCase {
     /// A bad file fails BY NAME and doesn't take the rest of the batch with it.
     func testImportFailureSurfacesByFilenameWithoutBlockingOthers() async throws {
         let (store, _) = try makeStore()
-        let bad = FileManager.default.temporaryDirectory.appendingPathComponent("bad.cube")
+        let bad = track(FileManager.default.temporaryDirectory
+            .appendingPathComponent("bad.cube"))
         try ("LUT_1D_SIZE 16\n" + String(repeating: "0.0 0.0 0.0\n", count: 16))
             .write(to: bad, atomically: true, encoding: .utf8)
         let good = try writeCube(title: "Good")

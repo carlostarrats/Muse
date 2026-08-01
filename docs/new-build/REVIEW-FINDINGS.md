@@ -584,74 +584,113 @@ Suite after this slice: **1,774 tests, 2 skipped, 0 failures.**
 
 ---
 
+## Pass C — runtime confirmation
+
+Fresh binary verified by `stat` (mtime seconds old, built after deleting the
+`.app` from DerivedData), launched with `MUSE_TRACE=1` against the real 46 MB
+library.
+
+**The launch trace, after slice 0's fix:**
+
+```
+  0.00s  edit-index.start
+  0.11s  grid.firstPaint          ← photos browsable immediately (foundation §9)
+  4.76s  edit-index.end
+  4.77s  intent-backfill.start
+ 10.52s  analyzePending.call urls=1915
+ 10.53s  intent-backfill.end
+ 10.53s  photo-header-backfill.start
+ 12.87s  photo-header-backfill.end
+ 12.87s  geocode-backfill.start
+ 12.88s  geocode-backfill.end     ← drained by the header chain, as predicted
+ 12.88s  deep-analysis-backfill.start
+ 94.00s  deep-analysis-backfill.end
+```
+
+One pass at a time, in the intended order, behind the edit-index warm-up, with
+the 81 seconds of Vision/CLIP work running alone at the end instead of
+contending with four other passes and the first folder open. This is Pass A's
+table A1 replaced by measurement. Migrations v13→v23 replayed against real data
+with no error, and the database converted to WAL on first open.
+
+**The two open questions Pass A left, both settled by measurement:**
+
+- **F11's sandbox half — RESOLVED, it works.** The test host IS the app, signed
+  with `com.apple.security.app-sandbox = true`, and it execs `/usr/bin/unzip`
+  into its container successfully. `ClipModelStore.unzip` is fine, and
+  `SandboxProcessTests` now pins it (with a hand-built stored-entry ZIP, so the
+  fixture needs no dependency and no second exec). If it ever fails, the fix is
+  a built-in ZIP reader — a dependency is not an option (DECIDED #26).
+- **F3's non-RAW half — DISPROVED.** On a 6000×4000 JPEG:
+  `EditRenderer.render` at 1024 px = **59 ms**, a bounded ImageIO decode of the
+  same file at 1024 px = **70 ms**, `EditRenderer.render` at 4096 px =
+  **73 ms**. Cost scales with the REQUESTED size and beats a bounded ImageIO
+  decode — not the signature of an unconditional full-resolution decode. Core
+  Image fuses the downstream scale into its graph. The inference was wrong and
+  the existing non-RAW code stands; the RAW half was real and is fixed. This is
+  exactly why Pass A said to instrument it rather than "fix" it by reasoning.
+
+**Also found at runtime:** the app container's `tmp` held ~700 leftover
+`<UUID>/x.txt` directories and 169 loose `.cube` files — both from TESTS
+(`TrashManagerTests`, `LutStoreTests`) that never cleaned up their fixtures,
+one per run for months. Not an app leak; fixed in both tests.
+
+**Not verified at runtime — everything that needs hands on the GUI:** hero
+open/close, the editor (sliders, curve, eyedropper, before/after, versions,
+presets, Edit-a-Copy), compare and cull, all five import sources, social
+export, Drive share and portfolio, and the backup/restore round trip. Static
+review and the unit suite cover them; nobody has driven them.
+
 ---
 
-## Resume here — next session
+## Final pass — Pass A tables re-verified
 
-Pass A is complete and committed. Pass B has not started; no code has been
-changed by this review.
+- **A1 (launch work)** — replaced by the trace above. `MuseApp.task` now fires
+  ONE backfill chain; the remaining `Task {}`s are the edit-index warm-up, the
+  detached temp sweep, announcements, and the env-gated perf harness.
+- **A3 (main-thread work)** — the two confirmed defects are gone: the LUT read
+  is off-main (F6), and the launch temp sweep is detached. No new
+  `withAnimation`-around-`AppState`-write, no per-keystroke DB work.
+- **A4 (algorithmic cost)** — `ClipIndex` is keyset + bounded top-K;
+  `SearchFacets`' years query is a loose index scan; `RediscoveryQueries.shuffle`
+  is a reservoir sample; the per-file query loops in three backfills are chunked.
+- **A5 (decode sites)** — unchanged and still complete; the two new
+  edit-render call sites (`ComparePane`, the social crop stage) are both
+  budget-gated.
+- **A8 (`AppState` surface)** — still 75 `@Published`, 1,512 LOC. This review
+  added none; the cull badge is passed down as a parameter and `CullStore` is
+  observed once in `GridView`.
+- **A10 (error/cancellation)** — the `OutputRender` temp row is closed (F9);
+  `EditCopyMetadata`'s temp is cleaned up; `DeepAnalysisBackfill` now checks
+  cancellation.
 
-Paste this into a clean chat:
+Final suite: **1,775 tests, 2 skipped, 0 failures** (baseline 1,748 + 27 added by this review). Wall time also dropped from ~68s to ~50s, which is the WAL change (F19) showing up in the test suite's own write pattern.
 
-> Continue the Specs 01–07 review of `new-product-build-1`, and **run it to
-> completion — every remaining slice, then Pass C, then the final pass. Do not
-> stop between slices, do not report progress back, and do not ask me to
-> confirm anything.** The brief and the plan docs were written so you don't have
-> to. Surface ONCE at the very end, short.
->
-> Read `docs/new-build/REVIEW-PROMPT.md` first — it is the binding brief and all
-> its constraints still apply (work SOLO: no subagents, no Workflow, no fan-out;
-> find problems by reading code; verify every finding in the code and say plainly
-> whether you confirmed or inferred it; loop each slice until green, cap 5 rounds;
-> commit each slice as you finish it).
->
-> Pass A is DONE. Its output — the ten sweep tables and 15 ranked findings — is
-> `docs/new-build/REVIEW-FINDINGS.md`. Read it before touching anything; do not
-> redo Pass A.
->
-> Pass A reordered the slices. Work them in THIS order, back to back:
->
-> 0. **Launch & background scheduling** (new — goes first because its findings are
->    decided-criteria violations in files that slices 2, 5 and 7 also touch):
->    **F1, F4, F5, F10, F12, F15**.
-> 1. Invariants — the original slice 1, plus **F2** (`EditStackIndex` not rebuilt
->    after a folder rename or file move) and **F9**, **F14**.
-> 2. Editing engine + readouts (04, 05) — plus **F3, F6, F7**.
-> 3. Import (06).
-> 4. Sharing and social export (07) — plus **F13**.
-> 5. CLIP, culling, search (02, 03) — plus **F8, F11**.
-> 6. Cross-spec seams.
-> 7. Migrations v13–v23 — demoted to last; Pass A found them schema-only and O(1),
->    so this is a confirmation pass, not an investigation.
->
-> **Resolve every behavioural question from the docs, never from me.**
-> `muse-photo-foundation.md` §9 and §13 are the authority, with
-> `docs/new-build/DECISIONS.md` (Current state block first) for build-level
-> specifics and `docs/durable-constraints.md` for must-not-break rules. Decide,
-> act, and record the reasoning in REVIEW-FINDINGS.md and the commit message. If
-> genuinely nothing answers it, make the call yourself from the foundation's
-> stated intent and write down what you concluded and why — don't wait on me.
->
-> Green for a slice means all of: clean build with a verified-fresh binary
-> (`stat` its mtime — an incremental build prints BUILD SUCCEEDED over a stale
-> `.app`); the FULL suite passes — **1,748 tests, 2 skipped, 0 failures** is the
-> verified baseline, and do NOT pipe `xcodebuild` through `tail`; and a fresh
-> re-review surfaces no new confirmed findings two rounds running.
->
-> At the very end: re-run the suite, re-verify the Pass A tables, update
-> `CLAUDE.md` / `DECISIONS.md` Current state / `docs/architecture-map.md` /
-> `docs/session-log.md` per the brief's final pass, commit, and give me ONE
-> summary — what changed, what you left and why, what you couldn't verify.
+---
 
-### Two open questions to carry forward
+---
 
-- **F3's non-RAW half is INFERRED, not confirmed.** Whether
-  `CIImage(contentsOf:)` followed by a scale transform actually forces a
-  full-resolution decode is a Core Image internal. Instrument it in Pass C;
-  do not "fix" it by reasoning. The RAW half (`CIRAWFilter.scaleFactor` never
-  set) IS confirmed by reading the code.
-- **F11's sandbox question is UNVERIFIED.** `ClipModelStore.unzip` shells out to
-  `/usr/bin/unzip` via `Process` from a sandboxed app. If the sandbox denies the
-  exec, the CLIP model can never install at all and every Spec 03 semantic-search
-  feature is dead on arrival behind a fail-closed error message. This needs a
-  runtime check before any effort goes into tuning that path.
+## Review complete — 2026-08-01
+
+Pass A, all eight Pass B slices, Pass C and the final pass are done and
+committed, one commit per slice. Nothing is outstanding from the brief.
+
+**Both of Pass A's carried-forward questions are answered** (see Pass C): F3's
+non-RAW half was DISPROVED by measurement and the existing code stands; F11's
+sandbox question is RESOLVED — the exec works and a test now pins it.
+
+**What a next session should pick up**, in order:
+
+1. **Drive the GUI.** The whole list under "Not verified at runtime" above.
+   That is the only real gap left in this branch's confidence, and it needs
+   hands, not another review.
+2. **The 146 untranslated French keys** (Specs 03, 06) — known-open, flagged
+   not chased, and by CLAUDE.md's own rule those features are unfinished until
+   they're done.
+3. **Backup carries no edit data** — Spec 09's amendment A2 closes it; still
+   open.
+4. Two costs recorded but deliberately not fixed, both needing a migration to
+   do properly: `files_fts.file_id` is UNINDEXED (lookups by file_id are full
+   FTS scans), and `RediscoveryQueries.onThisDay`'s no-`photo_meta` fallback
+   filters on `strftime` over `files.created_at`.
+
