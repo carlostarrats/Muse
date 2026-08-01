@@ -560,6 +560,30 @@ Suite after this slice: **1,770 tests, 2 skipped, 0 failures.**
 
 ---
 
+### Slice 7 — migrations v13–v23 — DONE (confirmation pass)
+
+Pass A's reading holds: **every one of v13–v23 is pure DDL** — `CREATE TABLE`,
+`ALTER TABLE … ADD COLUMN`, `CREATE INDEX`. No row loops, no data rewrites, so
+launch cost is O(1) regardless of library size. (The only data-touching
+migrations in the whole chain are the pre-Spec-01 `v9_fts_basename_backfill`
+and `v8_collection_sort_order`, both already fixed and both idempotent.)
+`v22_photo_stats` ALTERs `photo_traits` rather than creating a table, exactly as
+DECISIONS' Current-state block warns; the re-scan it implies is carried by
+`DeepAnalysisBackfill`'s standing per-launch cap, which slice 0 also made
+serial and throttle-aware.
+
+New: `MigrationChainTests` pins the **chain** rather than any one migration —
+the exact registration order (GRDB replays by name, so a rename or reorder
+silently changes what an existing library becomes on its next launch), the
+endpoint at `v23_edit_luts` (making DECISIONS' "next migration is v24" claim
+executable), a fresh-database run that asserts every Spec 01–07 table exists,
+and a partial migration that stops at `v12` and then completes — the exact shape
+of a real upgrade from a pre-Spec-01 library.
+
+Suite after this slice: **1,774 tests, 2 skipped, 0 failures.**
+
+---
+
 ---
 
 ## Resume here — next session
