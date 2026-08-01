@@ -169,11 +169,23 @@ new code against each and fix what doesn't conform:
   numbers scattered in views.
 - **Edit preview renders at screen resolution, never full-res.**
 
-The one genuine "leave it alone" category — not a question, just don't touch it: code
-that CLAUDE.md's durable constraints or DECISIONS document as deliberate. The asymmetric
-0.3s/0.4s hero backdrop fade, the split branch in `Indexer.reconcile`, the un-animated
-spacing slider, the windowed/full-screen toolbar hybrid all look wrong and are correct.
-If a doc says it's intentional, believe it and move on.
+**Nothing is off limits.** If there is a real problem anywhere, fix it — including in
+code the docs describe as deliberate. What is NOT allowed is changing something because
+it looks wrong to you without first finding out why it is that way.
+
+Some code here is counterintuitive on purpose and the reason is written down: the
+asymmetric 0.3s/0.4s hero backdrop fade (0.4s in, 0.3s out — the out must finish before
+the 0.36s unmount, and symmetrising it reintroduces a visible flash), the split branch in
+`Indexer.reconcile`, the un-animated spacing slider, the windowed/full-screen toolbar
+hybrid. Each was arrived at after several wrong fixes.
+
+So the bar is evidence, not permission. Before changing any of it, find the durable
+constraint or DECISIONS entry that explains it and say what the reason was. Then: if you
+have identified a genuine defect — it actually misbehaves, leaks, races, or contradicts
+the plans — fix it and explain why the documented reasoning no longer holds. If your only
+complaint is that it reads as inconsistent, odd, or asymmetric, that is not a defect and
+the existing code wins. Update the doc alongside any change you do make, or the next
+reviewer re-litigates it from scratch.
 
 Otherwise: fix it. Small, surgical, in the style of the surrounding code — not broad
 refactors. Never delete, weaken or skip a test to make it pass. If a change would alter a
