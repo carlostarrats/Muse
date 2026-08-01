@@ -132,6 +132,38 @@ export function manifestFetchURL(id) {
   return `https://www.googleapis.com/drive/v3/files/${id}?alt=media&key=${DRIVE_API_KEY}`;
 }
 
+/// Read a response body with a HARD byte cap, streaming.
+///
+/// `await resp.text()` buffers the whole body first, so capping its `.length`
+/// afterwards is a check performed on memory already allocated — and the id
+/// being fetched comes from the unsigned fragment, so anyone handing a victim
+/// a link chooses which anyone-readable Drive file this points at, including a
+/// multi-gigabyte one. Content-Length is honoured when declared, and the
+/// stream is cancelled the moment it exceeds the cap when it isn't.
+/// Returns null when the body is over the cap.
+export async function readCapped(resp, limit) {
+  const declared = Number(resp.headers && resp.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > limit) return null;
+  if (!resp.body || typeof resp.body.getReader !== 'function') {
+    const text = await resp.text();          // no streams (old browser): post-hoc cap
+    return text.length > limit ? null : text;
+  }
+  const reader = resp.body.getReader();
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > limit) { reader.cancel(); return null; }
+    chunks.push(value);
+  }
+  const buf = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) { buf.set(c, offset); offset += c.length; }
+  return new TextDecoder().decode(buf);
+}
+
 /// Pure: parse + bound + validate a fetched manifest body. null → the caller
 /// falls back to the inline snapshot. Exported for tests.
 export function acceptFetchedManifest(text) {
@@ -265,7 +297,9 @@ async function resolveManifest(inline) {
   try {
     const resp = await fetch(manifestFetchURL(inline.m), { signal: controller.signal });
     if (!resp.ok) return inline;
-    const fetched = acceptFetchedManifest(await resp.text());
+    const body = await readCapped(resp, MAX_MANIFEST_BYTES);
+    if (body === null) return inline;
+    const fetched = acceptFetchedManifest(body);
     // Keep the pointer so the page still knows it's a portfolio (the fetched
     // copy has had its own `m` stripped — exactly one fetch, no chaining).
     return fetched ? { ...fetched, m: inline.m } : inline;

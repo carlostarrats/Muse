@@ -453,6 +453,45 @@ Suite after this slice: **1,767 tests, 2 skipped, 0 failures.**
 
 ---
 
+### Slice 4 — sharing & social export (07) (+ F13) — DONE
+
+One finding, **confirmed**:
+
+- **F21 (med, security) — the portfolio manifest fetch was bounded only AFTER
+  the body was buffered.** `acceptFetchedManifest` capped `text.length`, but the
+  caller had already done `await resp.text()` on a response whose Drive file id
+  comes from the **unsigned URL fragment** — so anyone handing a victim a link
+  chooses which anyone-readable Drive file that is, including a multi-gigabyte
+  one. Now `readCapped(resp, limit)`: honours a declared `Content-Length` before
+  reading anything, and otherwise reads through the stream reader and
+  `cancel()`s the moment the cap is passed. The post-hoc cap stays as a second
+  gate. +3 page tests (small body, over-declared length, undeclared oversized
+  stream).
+- **F13 (doc)** — `Muse.entitlements`' `network.client` comment and CLAUDE.md's
+  network-policy paragraph both said "two sanctioned paths"; there are four
+  (Sparkle, Drive, `announcements.json`, the on-demand model download). Both
+  now enumerate all four and note that the recipient browser's portfolio
+  `manifest.json` fetch is page traffic, not an app path.
+
+Checked and clean: the page's CSP (`default-src 'none'`, no inline anything)
+plus `_headers` (`frame-ancestors 'none'`, `X-Frame-Options: DENY`, nosniff,
+`Referrer-Policy: no-referrer`, HSTS); `MAX_INFLATED` zip-bomb cap; the 1000-image
+grid cap, `VALID_ID` length bound and per-field caps; `sanitizeText` over every
+attacker-suppliable display string, with `textContent` never `innerHTML`;
+`isExpired`'s strict date-only requirement and its deliberate portfolio branch;
+`DriveSharePublishGuard` mirroring the page's own validator, so the app cannot
+mint a link its page would reject (filenames are bounded by the filesystem's own
+255-byte component limit, well under `MAX_NAME`); the portfolio update's
+upload → atomic manifest swap → sweep ordering with rollback before the swap;
+the X ladder driving quality off X's own byte invariants and failing the FILE
+rather than shipping a recompressible one; and `ImageMetadataStripper`'s
+verify-or-throw with a decode-budget guard before the re-encode.
+
+Suite after this slice: **1,767 tests, 2 skipped, 0 failures**; share page: all
+tests pass.
+
+---
+
 ---
 
 ## Resume here — next session

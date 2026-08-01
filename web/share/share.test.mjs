@@ -2,7 +2,7 @@
 import assert from 'node:assert';
 import { deflateSync, strToU8 } from './fflate.module.js';
 import { decodeManifest, validateManifest, isExpired, thumbURL, VALID_ID, sanitizeText,
-         layoutOf, manifestFetchURL, acceptFetchedManifest, SIZER_BY_LAYOUT } from './share.js';
+         layoutOf, manifestFetchURL, acceptFetchedManifest, readCapped, SIZER_BY_LAYOUT } from './share.js';
 
 // Decompression-bomb guard: the fragment is attacker-suppliable, so a tiny
 // compressed payload that inflates past the cap must NOT allocate unbounded
@@ -172,6 +172,28 @@ assert.match(manifestFetchURL('a'.repeat(20)),
   assert.strictEqual(acceptFetchedManifest(huge), null, 'oversized body rejected (bounded read)');
   const chained = JSON.stringify({ ...sample, e: '', m: 'z'.repeat(20) });
   assert.strictEqual(acceptFetchedManifest(chained).m, undefined, 'fetched m stripped — exactly one fetch');
+}
+
+// readCapped: the byte cap has to bite BEFORE the body is buffered, since the
+// fetched id comes from the unsigned fragment.
+{
+  const capped = await readCapped(new Response('hello'), 1024);
+  assert.strictEqual(capped, 'hello', 'small body read whole');
+
+  const declared = new Response('x'.repeat(100), { headers: { 'content-length': '999999' } });
+  assert.strictEqual(await readCapped(declared, 1024), null,
+                     'declared Content-Length over the cap is refused without reading');
+
+  // No Content-Length: the stream itself has to be cut off.
+  const stream = new ReadableStream({
+    start(controller) {
+      const chunk = new Uint8Array(4096).fill(65);
+      for (let i = 0; i < 4; i++) controller.enqueue(chunk);
+      controller.close();
+    },
+  });
+  assert.strictEqual(await readCapped(new Response(stream), 1024), null,
+                     'undeclared oversized body is cancelled mid-stream');
 }
 
 console.log('share.js: all tests passed');

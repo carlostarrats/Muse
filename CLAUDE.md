@@ -19,15 +19,22 @@ local-first, Apple-Intelligence-native, and free forever.
   it must be a separate target/config with Sparkle compiled out.) Release
   workflow: `docs/RELEASING.md`.
 - Pricing: **Free**, no IAPs, no subscriptions, no ads
-- Network policy: **Update-only, plus one explicit opt-in publish path.** No
-  analytics, no telemetry, no data collection, no remote content fetches. Two
-  sanctioned network code paths, both gated by `com.apple.security.network.client`:
+- Network policy: **Update-only, plus opt-in publish and two static fetches.**
+  No analytics, no telemetry, no data collection. **Four** sanctioned network
+  code paths, all gated by `com.apple.security.network.client`:
   (1) **Sparkle** — fetching its signed appcast feed + downloading the update;
   (2) **Google Drive collection share** (`feat/drive-collection-share`,
   2026-06-25) — when the user signs into Google and presses Publish, the
   selected images + form text upload to **the user's own Drive** (OAuth
   `drive.file`, PKCE). This is opt-in + user-initiated; the developer still
-  receives no data (bytes go user → their Drive). Every Sparkle download is
+  receives no data (bytes go user → their Drive);
+  (3) **`announcements.json`** (Spec 01) — one GET of a static file per launch,
+  ephemeral session, no body sent, off-able in Settings (which disables the
+  fetch itself);
+  (4) **the on-demand search-model download** (Spec 03) — only when the user
+  accepts the offer, SHA-256 verified before unpack, fail-closed.
+  The recipient browser's portfolio `manifest.json` fetch is PAGE traffic, not
+  an app path. Nothing else may open a socket. Every Sparkle download is
   EdDSA-verified against the embedded `SUPublicEDKey`. `SUEnableAutomaticChecks = true` so Sparkle checks
   quietly in the background with no UI unless an update exists (the first-run
   consent prompt was removed 2026-06-15 — it was a confusing first launch and
