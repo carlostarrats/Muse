@@ -15,7 +15,8 @@
 import Foundation
 import GRDB
 
-enum FileMoveMigration {
+// `nonisolated`: takes a DatabaseQueue and runs off the main actor.
+nonisolated enum FileMoveMigration {
 
     /// Apply the DB follow-through for files ALREADY moved on disk.
     /// `moves` are (source, destination) standardized absolute paths of the

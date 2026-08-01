@@ -18,7 +18,9 @@
 
 import Foundation
 
-final class SearchCancellation: @unchecked Sendable {
+// `nonisolated`: read from inside the off-main search read closure — the whole
+// reason this type exists instead of `Task.isCancelled`.
+nonisolated final class SearchCancellation: @unchecked Sendable {
     private let lock = NSLock()
     private var cancelled = false
 

@@ -107,7 +107,9 @@ final class ReconnectModel: ObservableObject {
                                          includingPropertiesForKeys: [.isRegularFileKey],
                                          options: [.skipsHiddenFiles, .skipsPackageDescendants])
             else { return ([], []) }
-            for case let url as URL in en {
+            // `nextObject()` rather than for-in: DirectoryEnumerator's
+            // Sequence conformance is unavailable from an async context.
+            while let url = en.nextObject() as? URL {
                 guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true
                 else { continue }
                 let kind = AssetKind.detect(at: url)
@@ -144,10 +146,17 @@ final class ReconnectModel: ObservableObject {
             byFile[h, default: []].append(m)
         }
         var applyFailed = false
+        // Paths whose occurrence carried edit data, collected so the render
+        // seams can be refreshed once at the end rather than per file.
+        var restoredEditPaths: [String] = []
         for (hash, matches) in byFile {
             guard let file = hashToFile[hash] else { continue }
             do { try await ReconnectApplier.applyMeta(matches: matches, file: file, queue: queue) }
             catch { applyFailed = true }
+            for m in matches where m.occurrence.edit_stack != nil
+                || !(m.occurrence.edit_versions ?? []).isEmpty {
+                restoredEditPaths.append(m.diskPath)
+            }
         }
 
         // Rebuild collections + stars from the current DB and refresh the readout
@@ -159,6 +168,32 @@ final class ReconnectModel: ObservableObject {
                 try await ReconnectApplier.applyCollections(archive, fileIDForHash: map, queue: queue)
             } catch { applyFailed = true }
             try? await ReconnectApplier.applyStars(archive, queue: queue)
+            // Library-global looks. Idempotent (INSERT OR IGNORE on a UUID and
+            // on a content-hash PK), so running it per reconnected folder is
+            // safe and keeps it on the same path as collections and stars.
+            let restoredLutIDs =
+                (try? await ReconnectApplier.applyEditAssets(archive, queue: queue)) ?? []
+            // The edit-save consequences, run ONCE for the restored set. Without
+            // these the rows are in the database and nothing on screen knows:
+            // EditStackIndex is path-keyed and was built at launch, and the
+            // thumbnail cache still holds each file's UNEDITED render under a
+            // key the new stack no longer matches.
+            //
+            // `applyHydratedConsequences` is exactly this list already (index
+            // warm, version counts, `markContentChanged`, generation bump) and
+            // deliberately omits the sidecar re-export — which is also right
+            // here: hydration owns sidecar reconciliation, and a restore must
+            // not stomp a newer on-disk sidecar with archive state.
+            //
+            // LUTs are invalidated FIRST: `EditRenderer.canRender` consults
+            // `LutRegistry` while the index is being warmed, so a stale miss
+            // cached before this point would mark a restored LUT-bearing stack
+            // unrenderable and show the original.
+            if !restoredEditPaths.isEmpty || !restoredLutIDs.isEmpty {
+                for id in restoredLutIDs { LutRegistry.invalidate(id) }
+                await EditStore.shared.applyHydratedConsequences(
+                    for: restoredEditPaths.map { URL(fileURLWithPath: $0) })
+            }
             await CollectionsEngine.shared.reload()
             for j in collectionStatuses.indices {
                 let coll = archive.collections.first { $0.id == collectionStatuses[j].id }

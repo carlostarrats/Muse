@@ -138,9 +138,13 @@ final class FolderStatCache: ObservableObject {
             // option ever becomes user-facing, this must read AppState.showHidden
             // so the sidebar count stays in sync with the grid.
             let stat = FolderStats.compute(folder: root)
+            // Unwrapped BEFORE the MainActor.run closure: a `[weak self]`
+            // binding captured inside that @Sendable closure is a captured-var
+            // reference, which the Swift 6 language mode rejects.
+            guard let strongSelf = self else { return }
             await MainActor.run {
-                guard let self, self.roots.contains(where: { $0.path == key }) else { return }
-                self.stats[key] = stat
+                guard strongSelf.roots.contains(where: { $0.path == key }) else { return }
+                strongSelf.stats[key] = stat
             }
         }
     }

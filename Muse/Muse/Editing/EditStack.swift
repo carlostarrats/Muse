@@ -97,7 +97,10 @@ nonisolated struct EditStack: Codable, Equatable, Sendable {
 
 // MARK: - Typed accessors / mutators
 
-extension EditStack {
+// `nonisolated`: pure reads/writes over the stack's own value storage. The
+// render chain, the thumbnail workers and `EditStackIndex` all reach these
+// off-main, and `EditStack` itself is already nonisolated.
+nonisolated extension EditStack {
     var toneParams: ToneParams? {
         for case .tone(let p) in adjustments { return p }
         return nil
@@ -522,4 +525,6 @@ nonisolated struct RawParams: Codable, Equatable, Sendable {
     var isNeutral: Bool { lensCorrection == true }
 }
 
-private func unitClamp(_ v: Double) -> Double { min(max(v, -1), 1) }
+// Pure arithmetic, called from every `clamped()` on these nonisolated
+// param structs — so it must be nonisolated too.
+nonisolated private func unitClamp(_ v: Double) -> Double { min(max(v, -1), 1) }

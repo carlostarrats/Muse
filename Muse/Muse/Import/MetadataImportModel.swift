@@ -37,6 +37,20 @@ final class MetadataImportModel: ObservableObject {
         case done(report: ImportReport)
     }
 
+    /// Everything one file's write transaction needs to report back.
+    ///
+    /// Returned FROM the `queue.write` closure rather than assigned into
+    /// captured `var`s: the closure is `@Sendable`, so writing to locals across
+    /// that boundary is a data race — a warning today, an error under the
+    /// Swift 6 language mode.
+    nonisolated private struct FileOutcome {
+        var rowMissing = false
+        var ratingToSet: Int?
+        var wroteNote = false
+        var appliedFields = ImportSupplement.AppliedFields()
+        var hasExistingEdit = false
+    }
+
     @Published private(set) var phase: Phase = .options
     /// Bound by the run card before the scan starts; the toggle is only shown
     /// pre-scan because flipping it mid-run would make the report a lie.
@@ -109,12 +123,6 @@ final class MetadataImportModel: ObservableObject {
             if extracted.isEmpty && lightroom == nil { report.filesWithNone += 1; continue }
 
             let absPath = url.standardizedFileURL.path
-            var rowMissing = false
-            var ratingToSet: Int?
-            var wroteNote = false
-            var appliedFields = ImportSupplement.AppliedFields()
-            var hasExistingEdit = false
-
             // One header read per file, shared by the supplement leg. Read
             // OUTSIDE the transaction — it touches the filesystem.
             let coordinate = extracted.coordinate
@@ -122,18 +130,25 @@ final class MetadataImportModel: ObservableObject {
                 ? PhotoHeader()
                 : await PhotoHeaderReader.read(url: url, kind: kind)
 
+            // What the transaction found, RETURNED rather than written back
+            // into captured `var`s. The write closure is `@Sendable`, so
+            // mutating captured locals from inside it is a data race the
+            // compiler can only warn about today and rejects outright under the
+            // Swift 6 language mode.
+            let outcome: FileOutcome
             do {
-                try await queue.write { db in
+                outcome = try await queue.write { db -> FileOutcome in
+                    var out = FileOutcome()
                     guard let scope = try MetadataImportApply.scope(db: db, absPath: absPath) else {
-                        rowMissing = true
-                        return
+                        out.rowMissing = true
+                        return out
                     }
                     if !extracted.keywords.isEmpty {
                         try MetadataImportApply.applyKeywords(
                             db: db, scope: scope, labels: extracted.keywords)
                     }
                     let has = try MetadataImportApply.hasRating(db: db, scope: scope)
-                    ratingToSet = MetadataImportRules.ratingToApply(
+                    out.ratingToSet = MetadataImportRules.ratingToApply(
                         imported: extracted.rating, existingHasRating: has)
 
                     // Note: fill-gaps. An import never overwrites what the user
@@ -148,7 +163,7 @@ final class MetadataImportModel: ObservableObject {
                                                 parentDir: scope.dir,
                                                 updatedAt: Int64(Date().timeIntervalSince1970),
                                                 db: db)
-                            wroteNote = true
+                            out.wroteNote = true
                         }
                     }
 
@@ -157,28 +172,29 @@ final class MetadataImportModel: ObservableObject {
                     if let coordinate,
                        let row = try FileRow.filter(FileRow.Columns.id == scope.fileID).fetchOne(db),
                        let hash = row.content_hash {
-                        appliedFields = try ImportSupplement.apply(
+                        out.appliedFields = try ImportSupplement.apply(
                             db: db, fileID: scope.fileID, contentHash: hash,
                             header: header,
                             external: .init(lat: coordinate.lat, lon: coordinate.lon))
                     }
 
                     if lightroom != nil {
-                        hasExistingEdit = try EditRecordStore.read(
+                        out.hasExistingEdit = try EditRecordStore.read(
                             fileID: scope.fileID, parentDir: scope.dir, db: db) != nil
                     }
+                    return out
                 }
             } catch {
                 report.filesSkipped += 1
                 continue
             }
-            if rowMissing { report.filesSkipped += 1; continue }
+            if outcome.rowMissing { report.filesSkipped += 1; continue }
 
             if !extracted.keywords.isEmpty { report.keywords += extracted.keywords.count }
-            if wroteNote { report.notes += 1 }
-            if appliedFields.coordinates { report.coordinates += 1; appliedSupplement = true }
-            if appliedFields.captureDate { report.captureDates += 1; appliedSupplement = true }
-            if let stars = ratingToSet {
+            if outcome.wroteNote { report.notes += 1 }
+            if outcome.appliedFields.coordinates { report.coordinates += 1; appliedSupplement = true }
+            if outcome.appliedFields.captureDate { report.captureDates += 1; appliedSupplement = true }
+            if let stars = outcome.ratingToSet {
                 // The one rating write seam — mutual exclusion, manual tier and
                 // the sidecar export all come with it.
                 await TagStore.shared.setRating(stars, forURLs: [url])
@@ -193,7 +209,7 @@ final class MetadataImportModel: ObservableObject {
                     report.unsupportedSliders[name, default: 0] += 1
                 }
                 await applyLightroom(lightroom, url: url, isRAW: isRAW,
-                                     hasExistingEdit: hasExistingEdit, report: &report)
+                                     hasExistingEdit: outcome.hasExistingEdit, report: &report)
             }
             report.filesTouched += 1
             touched.append(url)

@@ -51,20 +51,23 @@ nonisolated enum AutoStacker {
         }) ?? []
         guard !clusters.isEmpty else { return 0 }
 
-        var created = 0
-        try? await q.write { db in
+        // Counted INSIDE the write and returned, rather than mutated across
+        // the @Sendable closure boundary.
+        let created: Int = (try? await q.write { db -> Int in
             // Re-check virginity INSIDE the write: a manual stack could have
             // claimed a member between the read above and here.
             let stillClaimed = try StackStore.claimedFileIDs(db: db)
             var claimedNow = stillClaimed
+            var made = 0
             for cluster in clusters {
                 let members = cluster.filter { !claimedNow.contains($0) }
                 guard members.count >= 2 else { continue }
                 try StackStore.createStack(kind: "auto", memberIDs: members, pick: nil, db: db)
                 claimedNow.formUnion(members)
-                created += 1
+                made += 1
             }
-        }
+            return made
+        }) ?? 0
         return created
     }
 }

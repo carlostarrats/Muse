@@ -8,7 +8,8 @@
 
 import Foundation
 
-struct SeededRandom: RandomNumberGenerator {
+// `nonisolated`: the rediscovery reservoir sample runs inside a DB read.
+nonisolated struct SeededRandom: RandomNumberGenerator {
     private var state: UInt64
 
     init(seed: UInt64) { state = seed }

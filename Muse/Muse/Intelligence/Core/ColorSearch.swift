@@ -18,13 +18,14 @@
 import Foundation
 
 /// An sRGB color, components in 0…1.
-struct RGB: Equatable {
+nonisolated struct RGB: Equatable {
     let r, g, b: Double
 }
 
 /// A color in CIE L*a*b* (D65). Perceptually near-uniform, so Euclidean
 /// distance here is a reasonable "how different do these look" metric.
-struct LabColor: Equatable {
+// `nonisolated`: pure colour math over the off-main palette-match pass.
+nonisolated struct LabColor: Equatable {
     let L, a, b: Double
 
     init(L: Double, a: Double, b: Double) {
@@ -56,7 +57,8 @@ struct LabColor: Equatable {
     }
 }
 
-enum ColorDistance {
+// `nonisolated`: pure CIEDE2000 math, run inside the off-main search read.
+nonisolated enum ColorDistance {
     /// 25⁷, the fixed CIEDE2000 chroma-weighting constant. Hoisted so the
     /// hot deltaE loop (thousands of calls per search) doesn't re-`pow` it.
     private static let pow25_7: Double = pow(25.0, 7)
@@ -142,13 +144,13 @@ enum ColorDistance {
 /// `bad`, reads as a color) — accepted because the copy path from the COLORS
 /// card always includes `#`, so the common case is unambiguous, and the
 /// worst case is a wrong axis, never a crash.
-enum ColorQuery {
+nonisolated enum ColorQuery {
     struct Parsed: Equatable {
         let hexes: [RGB]
         let textRemainder: String
     }
 
-    static func parse(_ raw: String) -> Parsed {
+    nonisolated static func parse(_ raw: String) -> Parsed {
         // Split on whitespace AND commas (the card copies ", "-separated).
         let tokens = raw
             .split(whereSeparator: { $0.isWhitespace || $0 == "," })
@@ -185,7 +187,7 @@ enum ColorQuery {
 
 /// Decides whether a file's palette satisfies a color query, and scores how
 /// closely — the matching + ranking core for the color search path.
-enum PaletteMatch {
+nonisolated enum PaletteMatch {
     /// AND semantics: a file matches iff EACH query color has some palette
     /// color within `threshold`. Mirrors the multi-tag filter's AND, and is
     /// what "find images with this palette" means. An empty palette never

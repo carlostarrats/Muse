@@ -29,7 +29,7 @@ final class InMemoryTokenStore: TokenStoring {
     func clear() { tokens = nil }
 }
 
-final class KeychainTokenStore: TokenStoring {
+nonisolated final class KeychainTokenStore: TokenStoring {
     private let service = "com.tarrats.Muse.googleDrive"
     private let account = "oauth-tokens"
 

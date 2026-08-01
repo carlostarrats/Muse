@@ -12,7 +12,9 @@
 import Foundation
 import GRDB
 
-enum MetadataImportApply {
+// `nonisolated`: every member takes a `GRDB.Database` and runs inside a
+// queue.write closure, i.e. never on the main actor.
+nonisolated enum MetadataImportApply {
 
     struct Scope {
         let fileID: String

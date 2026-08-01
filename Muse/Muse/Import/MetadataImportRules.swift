@@ -10,7 +10,9 @@
 
 import Foundation
 
-enum MetadataImportRules {
+// `nonisolated`: pure decision rules over value types, called from the
+// importers' off-main passes.
+nonisolated enum MetadataImportRules {
 
     /// Trim whitespace, drop empties, dedupe case-insensitively (the first
     /// spelling wins), preserving order. Keywords are stored VERBATIM as

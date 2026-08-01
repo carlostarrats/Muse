@@ -80,7 +80,8 @@ nonisolated enum ClippingMessages {
     }
 }
 
-extension RGBChannel {
+// `nonisolated`: read by the deterministic feedback pass, which runs off-main.
+nonisolated extension RGBChannel {
     var clippingName: String {
         switch self {
         case .red: String(localized: "red")
@@ -90,7 +91,7 @@ extension RGBChannel {
     }
 }
 
-extension FrameRegion {
+nonisolated extension FrameRegion {
     var clippingName: String {
         switch self {
         case .top: String(localized: "near the top of the frame")

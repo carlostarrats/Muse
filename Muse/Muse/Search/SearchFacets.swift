@@ -33,7 +33,8 @@ nonisolated struct FacetsSnapshot: Equatable, Sendable {
 
     /// Per-facet cap. Autocomplete offers at most 8 rows, so the tail of a
     /// long-tail facet is never reachable — no reason to hold it.
-    static let facetLimit = 50
+    /// `nonisolated`: interpolated into SQL inside the off-main refresh.
+    nonisolated static let facetLimit = 50
 
     /// Distinct capture years, newest first, as a loose index scan rather than
     /// `SELECT DISTINCT strftime('%Y', capture_date, 'unixepoch')`: strftime in

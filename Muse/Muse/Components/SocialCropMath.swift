@@ -15,7 +15,8 @@ enum SocialFit: String { case crop, matte, blurExtend }
 
 enum MatteShade: String { case white, black }
 
-enum SocialCropMath {
+// `nonisolated`: pure crop geometry, used by the off-main social renderer.
+nonisolated enum SocialCropMath {
     static let zoomRange: ClosedRange<CGFloat> = 1...4
 
     /// The normalized source-crop rect (unit coords, display-oriented) for a

@@ -74,7 +74,7 @@ struct OpenWithForkCard: View {
         Task {
             do {
                 let copyURL = try await EditCopyFlow.run(originalURL: request.fileURL)
-                await appState.reloadCurrentFiles()
+                appState.reloadCurrentFiles()
                 open(copyURL)
             } catch {
                 appState.alertRequest = .message(

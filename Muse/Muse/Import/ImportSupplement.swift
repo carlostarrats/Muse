@@ -40,7 +40,7 @@ nonisolated enum ImportSupplement {
         var isEmpty: Bool { lat == nil && lon == nil && captureDate == nil }
     }
 
-    struct AppliedFields: Equatable {
+    nonisolated struct AppliedFields: Equatable {
         var coordinates: Bool = false
         var captureDate: Bool = false
     }

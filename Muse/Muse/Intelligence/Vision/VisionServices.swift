@@ -14,7 +14,8 @@ import AppKit
 import CoreImage
 import ImageIO
 
-struct VisionResult {
+// `nonisolated`: produced entirely on the off-main Vision path.
+nonisolated struct VisionResult {
     var classifications: [String: Float] = [:]   // label → confidence
     var ocrText: String = ""
     var faceCount: Int = 0
@@ -48,7 +49,10 @@ struct VisionResult {
     var didSucceedFeaturePrint: Bool { featurePrint != nil }
 }
 
-enum VisionServices {
+// `nonisolated`: the whole point of this type is Vision work that runs off the
+// main actor — the analyze pipeline and DeepAnalysisBackfill both call it from
+// detached tasks.
+nonisolated enum VisionServices {
 
     /// Run the full pipeline. Returns whatever succeeded.
     static func analyze(url: URL) async -> VisionResult {

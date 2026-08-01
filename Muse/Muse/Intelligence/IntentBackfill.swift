@@ -8,7 +8,7 @@ enum IntentBackfill {
     /// Cap per launch, like the other backfills — an uncapped pass on a large
     /// screenshot-heavy library holds every candidate's OCR text in RAM at
     /// once and runs its whole classification burst in one launch.
-    static let maxPerLaunch = 5_000
+    nonisolated static let maxPerLaunch = 5_000
     /// Rows per write transaction. This was one transaction PER FILE, i.e. a
     /// full fsync round trip on the serial queue per screenshot, ahead of
     /// whatever the UI wanted from that same queue.

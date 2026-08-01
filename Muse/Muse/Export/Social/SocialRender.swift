@@ -29,7 +29,8 @@ import CoreImage
 import ImageIO
 import UniformTypeIdentifiers
 
-enum SocialRender {
+// `nonisolated`: the social export renders off-main.
+nonisolated enum SocialRender {
     struct Job {
         var sourceURL: URL          // the ORIGINAL library URL — forOutput resolves edits
         var preset: SocialPreset

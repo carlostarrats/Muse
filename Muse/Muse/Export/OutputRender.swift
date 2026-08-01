@@ -24,7 +24,7 @@ import ImageIO
 
 /// Bytes approved for leaving the app. The ONLY way to obtain one is
 /// `OutputRender`.
-struct RenderedOutput: Sendable {
+nonisolated struct RenderedOutput: Sendable {
     /// The file to read. The original today; a rendered temp file once an edit
     /// stack exists.
     let url: URL

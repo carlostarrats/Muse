@@ -12,7 +12,9 @@
 import CoreGraphics
 import Foundation
 
-enum PaperSize: String, CaseIterable {
+// `nonisolated`: a value type of fixed dimensions, read on the off-main export
+// path as well as in the settings UI.
+nonisolated enum PaperSize: String, CaseIterable {
     case elevenByFourteen
     case letter
     case legal

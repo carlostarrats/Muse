@@ -39,7 +39,7 @@ final class ApplePhotosImportModel: ObservableObject {
     /// into a rating would fabricate a judgement the user never made.
     @Published var favoritesAsTag = true
 
-    static let favoriteTag = "Favorite"
+    nonisolated static let favoriteTag = "Favorite"
 
     private var task: Task<Void, Never>?
 
@@ -119,13 +119,20 @@ final class ApplePhotosImportModel: ObservableObject {
             let coordinate = entry.asset.location?.coordinate
             let captureDate = entry.asset.creationDate.map { Int64($0.timeIntervalSince1970) }
             let favorite = favoritesAsTag && entry.asset.isFavorite
-            var applied = ImportSupplement.AppliedFields()
-            try? await queue.write { db in
+            // Returned FROM the @Sendable write closure rather than assigned
+            // into captured `var`s — a data race the Swift 6 language mode
+            // rejects outright.
+            nonisolated struct EntryOutcome {
+                var applied = ImportSupplement.AppliedFields()
+                var fileID: String?
+            }
+            let outcome: EntryOutcome = (try? await queue.write { db -> EntryOutcome in
+                var out = EntryOutcome()
                 guard let scope = try MetadataImportApply.scope(db: db, absPath: absPath),
                       let row = try FileRow.filter(FileRow.Columns.id == scope.fileID)
-                        .fetchOne(db), let hash = row.content_hash else { return }
-                fileIDByLocalID[entry.asset.localIdentifier] = scope.fileID
-                applied = try ImportSupplement.apply(
+                        .fetchOne(db), let hash = row.content_hash else { return out }
+                out.fileID = scope.fileID
+                out.applied = try ImportSupplement.apply(
                     db: db, fileID: scope.fileID, contentHash: hash, header: header,
                     external: .init(lat: coordinate?.latitude, lon: coordinate?.longitude,
                                     captureDate: captureDate))
@@ -133,9 +140,13 @@ final class ApplePhotosImportModel: ObservableObject {
                     try MetadataImportApply.applyKeywords(db: db, scope: scope,
                                                           labels: [Self.favoriteTag])
                 }
+                return out
+            }) ?? EntryOutcome()
+            if let fid = outcome.fileID {
+                fileIDByLocalID[entry.asset.localIdentifier] = fid
             }
-            if applied.coordinates { report.coordinates += 1; appliedSupplement = true }
-            if applied.captureDate { report.captureDates += 1; appliedSupplement = true }
+            if outcome.applied.coordinates { report.coordinates += 1; appliedSupplement = true }
+            if outcome.applied.captureDate { report.captureDates += 1; appliedSupplement = true }
             if favorite { report.keywords += 1 }
             report.filesTouched += 1
         }

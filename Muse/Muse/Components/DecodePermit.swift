@@ -34,17 +34,17 @@ enum DecodePermit {
     /// realistic image — including 65 MP medium-format scans — at full 8-wide
     /// parallelism. Don't lower it again without measuring folder-open
     /// throughput, not just peak memory.
-    static let ordinaryPixels = 100_000_000
+    nonisolated static let ordinaryPixels = 100_000_000
 
     /// Most permits any single image may hold. Caps the worst case at
     /// `limit / maxCost` concurrent giant decodes rather than serialising to 2.
-    static let maxCost = 2
+    nonisolated static let maxCost = 2
 
     /// Permits one image should hold, clamped to `1...limit`.
     ///
     /// `nil`/degenerate pixel counts cost 1: an unreadable header must never
     /// request more than the gate can ever grant, which would deadlock it.
-    static func cost(forDeclaredPixels pixels: Int?, limit: Int) -> Int {
+    nonisolated static func cost(forDeclaredPixels pixels: Int?, limit: Int) -> Int {
         let cap = max(1, limit)
         guard let pixels, pixels > ordinaryPixels else { return 1 }
         // Linear in units of `ordinaryPixels`: 65 MP -> 3, 115 MP -> 4, capped.

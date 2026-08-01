@@ -46,7 +46,8 @@ final class AnalyzePipeline: ObservableObject {
     /// requests WITHIN one image, so this is deliberately modest — it fills the
     /// gaps between those requests rather than trying to saturate the machine,
     /// and keeps peak memory to a few bounded rasters rather than many.
-    static let analyzeConcurrency = 3
+    /// `nonisolated`: read by ThrottlePolicy from off-main backfills.
+    nonisolated static let analyzeConcurrency = 3
 
     /// True when the active pass should stop — either its owning task was
     /// cancelled or `cancelActivePass()` was called.

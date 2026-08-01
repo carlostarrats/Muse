@@ -1335,6 +1335,11 @@ final class AppState: ObservableObject {
                         sortMode: tagSort)
                 }
             }
+            // Frozen before the @Sendable MainActor.run closure captures them —
+            // both are fully computed by this point, and the `let` is what says
+            // so to the compiler (a captured `var` is an error under Swift 6).
+            let resolvedChipRows = chipRows
+            let deadCount = reconciledDead
             await MainActor.run {
                 // A newer selection started while we were loading — drop this.
                 guard token == self.folderLoadToken else { return }
@@ -1352,7 +1357,7 @@ final class AppState: ObservableObject {
                     // already in place below the chips" ordering is preserved;
                     // only the opacity fade is dropped.
                     self.bumpTagChipToken()
-                    self.tagChipRows = chipRows
+                    self.tagChipRows = resolvedChipRows
                     self.tagRowReady = true
                     self.reloadStarRatings()
                 } else {
@@ -1369,7 +1374,7 @@ final class AppState: ObservableObject {
                 // Marking ghosts dead shrinks alive-aware collection counts;
                 // refresh the published cards so a stale count (e.g. "5" for a
                 // collection with 1 real member) corrects immediately.
-                if reconciledDead > 0 {
+                if deadCount > 0 {
                     Task { await CollectionsEngine.shared.reload() }
                 }
             }

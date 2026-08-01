@@ -11,7 +11,8 @@
 
 import Foundation
 
-enum FileMover {
+// `nonisolated`: filesystem moves/renames, run off the main actor.
+nonisolated enum FileMover {
     /// Move `urls` into `destination`. Returns the URLs that could not be moved.
     @discardableResult
     static func move(_ urls: [URL], into destination: URL) -> [URL] {

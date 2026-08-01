@@ -23,7 +23,10 @@
 
 import AVFoundation
 
-extension AVURLAsset {
+// `nonisolated`: thumbnail prewarm, the PDF exporter and the photo header
+// reader all build assets off-main. This is the ONE sanctioned constructor, so
+// it must be reachable from every context the unrestricted initializer is.
+nonisolated extension AVURLAsset {
     /// The ONLY sanctioned way to make an `AVURLAsset` in Muse — pins reference
     /// restrictions to `.forbidAll` so a reference-movie / HLS remote data
     /// reference can't phone home. Use this everywhere instead of
@@ -35,7 +38,7 @@ extension AVURLAsset {
     }
 }
 
-extension AVPlayer {
+nonisolated extension AVPlayer {
     /// Builds a player over a `.noNetwork` asset — `AVPlayer(url:)` would create
     /// an UNRESTRICTED `AVURLAsset` internally, so never use it directly.
     static func noNetwork(url: URL) -> AVPlayer {

@@ -15,14 +15,16 @@
 import Foundation
 
 /// Mean Earth radius (km) — the one place this constant is declared.
-private let earthRadiusKM = 6371.0
+// `nonisolated`: read from inside the nonisolated tree itself, which the
+// geocode backfill walks off-main.
+nonisolated private let earthRadiusKM = 6371.0
 
 private struct SpherePoint {
     let x: Double, y: Double, z: Double
     let index: Int
 }
 
-private func toCartesian(lat: Double, lon: Double) -> (x: Double, y: Double, z: Double) {
+nonisolated private func toCartesian(lat: Double, lon: Double) -> (x: Double, y: Double, z: Double) {
     let latRad = lat * .pi / 180
     let lonRad = lon * .pi / 180
     return (cos(latRad) * cos(lonRad), cos(latRad) * sin(lonRad), sin(latRad))

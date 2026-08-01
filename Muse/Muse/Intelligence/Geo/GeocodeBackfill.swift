@@ -110,10 +110,13 @@ nonisolated enum GeocodeBackfill {
             if Task.isCancelled { return }
             await WorkThrottleStore.shared.waitUntilRunnable()
             let lastID = chunk[chunk.count - 1].fileID
+            // `chunk` is the paging cursor and is reassigned each round; the
+            // @Sendable write closure must capture THIS page, not the variable.
+            let pageRows = chunk
 
             let wrote: Bool = (try? await q.write { db -> Bool in
                 var any = false
-                for c in chunk {
+                for c in pageRows {
                     // Same content-identity guard as every other derived write:
                     // a file re-indexed mid-pass stays pending.
                     guard let current = try FileRow.filter(FileRow.Columns.id == c.fileID).fetchOne(db),

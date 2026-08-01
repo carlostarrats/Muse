@@ -14,7 +14,8 @@ struct PeakingOverlayView: View {
     let source: CGImage
     let accent: Color
 
-    private static let context = CIContext()
+    /// `nonisolated`: the peaking overlay renders off the main actor.
+    nonisolated private static let context = CIContext()
     @State private var rendered: CGImage?
 
     var body: some View {

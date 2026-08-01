@@ -17,7 +17,7 @@ import Foundation
 import GRDB
 
 nonisolated enum DeepAnalysisBackfill {
-    static let maxPerLaunch = 5_000
+    nonisolated static let maxPerLaunch = 5_000
     static let concurrency = 2
     static let writeChunk = 200
     /// Candidates per context query. Comfortably under SQLite's bound-variable

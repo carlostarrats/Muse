@@ -6,6 +6,65 @@ the durable rules + a compact index live in `CLAUDE.md`. Nothing here is
 load-bearing for a fresh session beyond what that index already surfaces;
 read an entry when you need the full "why" behind a specific change.
 
+### Specs 01–07 review, round 3 — 2026-08-01 (on `new-product-build-1`)
+
+Round 2 recorded two things as "accepted, not fixed". This session closed both,
+at the owner's direction. Suite 1,783 → **1,795**, and the Release build went
+from 442 warnings to **zero**.
+
+**Backup now carries edit data (Spec 09 amendment A2).** The discrepancy was
+real and worse than it sounded: Spec 04 §5.3 asserted the `.muselibrary` archive
+"carries the DB, which now contains `edits`/`edit_versions`/`edit_presets`", and
+that is simply false against the shipped code — the archive is a JSON encode of
+the `BackupArchive` struct and the DB file is never copied. Occurrences carried
+tags and a note; everything else about an edit was dropped on the floor. So a
+user restoring onto a new Mac got their photos, tags, ratings, notes and
+collections back and silently lost every adjustment they had ever made.
+
+Implemented as the spec specifies. Edits ride the OCCURRENCE (per
+`(file_id, parent_dir)`, the same grain as the note, because the same bytes in
+two folders can carry two different stacks); presets and LUTs are library-global
+on the archive. LUT BYTES travel deliberately — a stack referencing an absent
+LUT renders as the original, so an archive that restored the edits but dropped
+the looks would be a half-restore that reads as data loss. `currentSchema` stays
+**1**, which is what keeps a pre-A2 archive readable by this build AND a post-A2
+archive readable by an older one; `BackupArchiveCompatTests` pins both
+directions with raw-JSON fixtures rather than struct round trips, since a round
+trip only ever proves the encoder agrees with itself. Restore-wins on apply (no
+timestamp comparison — a restore is an explicit recovery action, matching the
+note and rating lines that were already there), fresh UUIDs for versions,
+`INSERT OR IGNORE` for presets and LUTs — which for LUTs IS the immutability
+rule, since the primary key is the content hash. Absence of edit data is
+deliberately NOT a reset: it means the backup predates the edit, so a local
+stack is left alone. +12 tests.
+
+**The Swift 6 concurrency warnings: 442, not ~60.** Round 2's estimate came from
+a partial build and was wrong by 7×. The root cause is that the project sets
+`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, so every unannotated declaration is
+`@MainActor` — including pure value math and DB helpers that only ever run
+inside GRDB closures and detached tasks. The codebase already knew this (that is
+why `Sidecar`, `EditStackIndex` and friends carry explicit `nonisolated`); the
+keyword had simply not kept up. Fixed at the DECLARATION rather than the call
+sites, which is the difference between removing a warning and moving it.
+
+The more interesting half was ~13 sites that mutated a captured `var` across a
+`@Sendable` closure. GRDB happens to run `queue.write` synchronously, so these
+were benign in practice — but they are data races by the language's rules and
+hard errors under Swift 6. Read-only captures are now frozen into a `let` before
+the closure; the four importers and `AutoStacker` RETURN a result struct from
+the closure instead. That sweep turned up a genuine defect the pattern was
+hiding: `PerfBaseline` did `(try? await queue?.read {…}) as? Int ?? 0`, and an
+`as? Int` on an already-`Int?` is a no-op downcast — "no database" and "empty
+library" were indistinguishable only by accident. Also fixed: a non-Sendable
+`FileManager` captured in a write closure, and a `DirectoryEnumerator` for-in
+loop that is unavailable from async contexts.
+
+The Release build is warning-free now, and that is worth keeping: a real warning
+is worthless once it is one of four hundred.
+
+**G1 — nobody has driven the GUI — is now the only substantive gap left** on
+this branch. Everything else the three review rounds recorded is closed.
+
 ### Specs 01–07 review, round 2 — 2026-08-01 (on `new-product-build-1`)
 
 A second review pass over the same branch, deliberately aimed at what round 1

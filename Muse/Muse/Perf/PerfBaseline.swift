@@ -70,9 +70,16 @@ enum PerfBaseline {
     static func run() async -> PerfReport {
         let machine = ProcessInfo.processInfo.hostName
         let os = ProcessInfo.processInfo.operatingSystemVersionString
-        let librarySize: Int = (try? await Database.shared.dbQueue?.read { db in
-            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM files") ?? 0
-        }) as? Int ?? 0
+        // The optional-chained queue makes this a double optional; `as? Int`
+        // looked like it flattened that but is a no-op downcast, so a nil queue
+        // and a failed read were indistinguishable from a genuinely empty
+        // library only by accident.
+        var librarySize = 0
+        if let queue = Database.shared.dbQueue {
+            librarySize = (try? await queue.read { db in
+                try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM files") ?? 0
+            }) ?? 0
+        }
 
         var measurements: [PerfMeasurement] = []
         measurements.append(measureColdStart())

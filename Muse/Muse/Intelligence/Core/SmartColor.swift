@@ -14,7 +14,9 @@ import Foundation
 /// The curated named-color spectrum offered by the color rule. Token strings
 /// are the persisted identity (in `SmartRule.color(.name(token))`), so treat
 /// them as frozen — renaming one orphans saved rules.
-enum SmartColor {
+// `nonisolated`: a static swatch table, resolved inside the off-main search
+// and smart-rule evaluation.
+nonisolated enum SmartColor {
     /// (token, representative sRGB 0…1), in spectrum order for the picker.
     static let swatches: [(token: String, rgb: RGB)] = [
         ("red",    RGB(r: 0.937, g: 0.267, b: 0.267)),

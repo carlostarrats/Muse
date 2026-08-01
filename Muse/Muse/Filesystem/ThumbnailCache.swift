@@ -121,7 +121,7 @@ final class ThumbnailCache: ObservableObject {
     // ImageIO image decodes are light and thread-safe (an isolated test ran
     // 8-wide over 300 files in 1.7s), so the viewport keeps up with fast deep
     // scrolling instead of draining 4-at-a-time behind the prewarm front.
-    private static let gateLimit = 8
+    nonisolated private static let gateLimit = 8
     private static let gate = ThumbnailGate(limit: gateLimit)
 
     /// Background prewarm work is enqueued at `prewarmOrderBase + index`, which
@@ -147,7 +147,9 @@ final class ThumbnailCache: ObservableObject {
     /// would generate variants no enumeration could ever list. It is quantized
     /// to this ladder instead, so the set stays finite and `invalidate` can
     /// still drop every one.
-    static let heroFallbackSizes: [CGFloat] = [1600, 2048, 3072, 4096]
+    /// `nonisolated` like the function that reads it — the hero's fallback
+    /// quantization happens on the off-main decode path.
+    nonisolated static let heroFallbackSizes: [CGFloat] = [1600, 2048, 3072, 4096]
 
     /// Smallest ladder step at or above `maxDimension` (the top step past it).
     nonisolated static func heroFallbackSize(forMaxDimension d: CGFloat) -> CGFloat {

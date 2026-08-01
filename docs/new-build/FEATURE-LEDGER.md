@@ -23,8 +23,8 @@ not upgrade a row on inference.
 actually produced (the grid cull badge that was specified and never built, the
 five modals with no Escape branch). **A + S is not a substitute for R.**
 
-Last full pass: **2026-08-01** (review round 2). Suite at that point:
-**1,783 tests, 2 skipped, 0 failures**.
+Last full pass: **2026-08-01** (review round 3). Suite at that point:
+**1,795 tests, 2 skipped, 0 failures**; Release build warning-free.
 
 ---
 
@@ -35,14 +35,17 @@ These are true across many rows and are not repeated in each one.
 | # | Gap | Status |
 |---|---|---|
 | G1 | **Almost nothing on `new-product-build-1` has been driven in the running GUI.** Launch, migrations and the backfill chain were confirmed with `MUSE_TRACE=1` against the real library (review round 1, Pass C). The editor, compare/cull, all five import sources, social export, Drive publish/portfolio and backup/restore have not been. | **OPEN** — needs hands, not another review |
-| G2 | **Backup does not carry edit data.** `BackupOccurrence` has no edit fields, so a restore loses every edit stack. Deliberate today (backup restores originals by content hash); Spec 09 amendment A2 closes it. | **OPEN — by design pending Spec 09** |
+| ~~G2~~ | ~~Backup does not carry edit data.~~ | **CLOSED 2026-08-01** — Spec 09 amendment A2 implemented: stacks, versions/snapshots, presets and LUT bytes all ride `.muselibrary`, restore-wins at the new `parent_dir`. |
 | G3 | `files_fts.file_id` is `UNINDEXED`, so any `WHERE file_id = ?` against it is a full FTS scan. Callers are chunked to make it cheap; fixing it properly means rebuilding the FTS table in a migration. | **ACCEPTED** |
 | G4 | `RediscoveryQueries.onThisDay`'s no-`photo_meta` fallback filters on `strftime` over `files.created_at` and cannot use an index. Set shrinks toward zero as the header backfill completes. | **ACCEPTED** |
-| G6 | **~60 Swift 6 strict-concurrency warnings**, mostly `TagScope.parentDir` / `ImageHeaderSizeCache` being `@MainActor` while called from `nonisolated` DB and decode paths. Pre-existing and project-wide, not introduced by this branch. Benign under the Swift 5 language mode the app builds with; every one becomes a hard error if the target ever moves to Swift 6. The genuine race in the set (`SearchService`'s captured `var colorQuery`) was fixed in round 2. | **ACCEPTED** — a Swift 6 migration is its own project |
 | G5 | Distribution is still **direct + Sparkle**. The StoreKit plumbing in `Commerce/` is inert scaffolding; the Mac App Store move is deferred (`docs/superpowers/plans/deferred-mac-app-store-migration.md`). | **DEFERRED** |
+| ~~G6~~ | ~~Swift 6 strict-concurrency warnings.~~ | **CLOSED 2026-08-01** — the count was **442** (221 unique × 2 arches), not ~60 as first estimated. All eliminated; the Release build is now warning-free. |
 
 **Closed since round 1:** the 146 untranslated French keys (G-loc) — the catalog
-is now **1,002 keys, 0 untranslated**.
+is now **1,002 keys, 0 untranslated**. **Closed in round 3:** G2 (backup carries
+edit data) and G6 (the concurrency warnings).
+
+**G1 is now the only substantive gap left.**
 
 ---
 
@@ -74,7 +77,7 @@ question.
 | P16 | Housekeeping prune (fail-closed) | `HousekeepingTests` | 2026-08-01 | ⚠️ G1 | ✅ root-visibility guard + `icloudRoot` param intact |
 | P17 | Path reconcile by existence (fail-closed) | `PathReconcilerTests` | 2026-08-01 | ⚠️ G1 | ✅ `rootReachable` gate intact, still fire-and-forget |
 | P18 | iCloud sidecars + hydration | `SidecarTests`, `SidecarStoreTests`, `EditSidecarTests`, `SidecarHydrateRatingTests` | 2026-08-01 | ⚠️ G1 | ⚠️ **fixed R2-4** — see P2. Sidecars now carry edits (Spec 04) with their own field clock |
-| P19 | Backup / restore / reconnect | `BackupArchiveTests`, `BackupBuilderTests`, `ReconnectMatcherTests`, `ReconnectApplierTests`, `CollectionMaterializerTests` | 2026-08-01 | ⚠️ G1 | ✅ **no schema regression** — every v13–v23 `ADD COLUMN` is nullable, so restore still writes. ❗ G2 stands |
+| P19 | Backup / restore / reconnect | `BackupArchiveTests`, `BackupBuilderTests`, `ReconnectMatcherTests`, `ReconnectApplierTests`, `CollectionMaterializerTests`, **`BackupEditRoundTripTests`**, **`BackupArchiveCompatTests`** | 2026-08-01 | ⚠️ G1 | ✅ **no schema regression** — every v13–v23 `ADD COLUMN` is nullable. ✅ **G2 closed** — edit data now rides the archive (R3-1) |
 | P20 | Collection → PDF export | `CollectionPDFLayoutTests`, `PaperSizeTests` | 2026-08-01 | ⚠️ G1 | ✅ routed through `OutputRender`, renders per-task, `discard`s each temp |
 | P21 | Google Drive collection share | `DriveShare*Tests` ×4, `DriveMultipartTests`, `PKCETests`, `ImageMetadataStripperTests` | 2026-08-01 | ⚠️ G1 | ✅ render→strip→**verify** order preserved; all 3 upload loops `discard` |
 | P22 | Share sheet / Open With | `EditCopyNamingTests`, `EditTransferTests` | 2026-08-01 | ⚠️ G1 | ✅ edited files now fork via `OpenWithFork` instead of silently handing over the original |
@@ -135,6 +138,7 @@ question.
 |---|---|---|---|---|
 | 1 | 2026-08-01 | Specs 01–07, ten sweeps / eight slices (`REVIEW-FINDINGS.md`) | 23 fixed (F1–F23) | 1,775 |
 | 2 | 2026-08-01 | Regression of pre-branch features under this branch's seams, + lenses round 1 didn't run | 4 fixed (R2-1…R2-4) | 1,783 |
+| 3 | 2026-08-01 | The two gaps round 2 recorded rather than closed | G2 + G6 closed | 1,795 |
 
 ### Round 2 findings
 
@@ -144,6 +148,13 @@ question.
 | **R2-2** | low | **A translated string was persisted to the database.** `EditStore.switchToVersion` auto-preserves the outgoing stack under `String(localized: "Previous")`, writing "Précédent" into `edit_versions.name` on a French system — against the app-wide "storage stays canonical-English, localize at display" rule that every other Muse-derived label follows. | `EditVersionName`: canonical `"Previous"` stored, localized at display. User-typed names pass through untouched. |
 | **R2-3** | med | **Compare's two primary actions were unreachable under VoiceOver.** Rating (0–5) and cull marking (K/X/U) are handled by `CompareKeyCatcher`, and VoiceOver swallows plain character keys before an `NSView` sees them. Exactly the gap round 1 fixed for the grid's cull marks — the same reasoning, one surface further on. | Named accessibility actions per pane (rate 1–5, clear rating; keep/reject/clear while a cull session is running). |
 | **R2-4** | **high** | **An edit save could wipe another device's synced tags.** `Sidecar.resolveForWrite`'s non-merge path takes tags from `fresh` wholesale — right for a *tag* edit, wrong for the edit-save export, which uses the same path. A device that hasn't hydrated a sidecar yet has those tags in neither its DB nor `fresh`, so saving an edit rewrote the sidecar's tag list without them. The same hazard is already guarded for `note` and `edit_stack` on that exact write. | `tagsAuthoritative` parameter; the edit export passes `false` and tags UNION instead (single-rating resolution preserved). +4 tests. |
+
+### Round 3 findings
+
+| # | Finding | Fix |
+|---|---|---|
+| **R3-1** | **G2 — a `.muselibrary` restore lost every edit.** Spec 04 §5.3 claimed the archive "carries the DB"; it does not — `.muselibrary` is a JSON encode of `BackupArchive`, and occurrences carried tags + note and nothing else. Restoring a library silently dropped every edit stack, version, preset and LUT. | Spec 09 A2, implemented as specified. `BackupOccurrence` gains `edit_stack` / `edit_updated_at` / `edit_versions`; `BackupArchive` gains library-global `edit_presets` and `edit_luts` (bytes carried — a stack whose LUT is missing renders as the original, so dropping them would be a half-restore). Schema stays **1**: every field is optional-with-nil-default, so pre-A2 archives decode unchanged and post-A2 archives still decode on pre-A2 builds. Restore is **restore-wins** at the new `parent_dir` (matching the note and rating lines), versions get **fresh UUIDs**, presets/LUTs are `INSERT OR IGNORE` (the LUT content-hash PK makes that the immutability rule). Absence is deliberately **not** a reset — it means the backup predates the edit. Post-apply runs `EditStore.applyHydratedConsequences` + `LutRegistry.invalidate`, without a sidecar re-export. +12 tests. |
+| **R3-2** | **G6 — 442 Swift 6 strict-concurrency warnings** (221 unique × two arches; round 2 estimated ~60 from a partial build and was wrong). The project sets `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, so every unannotated declaration is `@MainActor` — including pure value math and DB helpers that only ever run inside GRDB closures and detached tasks. | Marked the declarations `nonisolated` at the type/member level, which is the idiom the codebase already used for `Sidecar`, `EditStackIndex` and friends. Separately, ~13 sites captured a mutable `var` across a `@Sendable` closure — real races the compiler could only warn about. The read-only ones are frozen into a `let` before the closure; the mutated ones (four importers, `AutoStacker`) now **return a result struct from the closure** instead. Also fixed a genuine no-op downcast in `PerfBaseline` that made "no database" and "empty library" indistinguishable, a non-Sendable `FileManager` captured in a write closure, and a `DirectoryEnumerator` for-in that is unavailable from async contexts. **Release build is now warning-free.** |
 
 ### Round 2 — checked and clean
 

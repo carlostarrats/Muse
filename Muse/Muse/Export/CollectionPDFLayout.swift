@@ -12,7 +12,9 @@
 
 import CoreGraphics
 
-enum CollectionPDFLayout {
+// `nonisolated`: pure page geometry and CoreGraphics drawing, driven entirely
+// from the exporter's detached render task.
+nonisolated enum CollectionPDFLayout {
 
     struct Placement: Equatable {
         let index: Int      // index into the input aspects array

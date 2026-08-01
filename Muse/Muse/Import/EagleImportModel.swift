@@ -116,12 +116,19 @@ final class EagleImportModel: ObservableObject {
             if Task.isCancelled { break }
             let absPath = entry.url.standardizedFileURL.path
             let item = entry.item
-            var fileID: String?
-            var wroteNote = false
-            try? await queue.write { db in
+            // Returned FROM the @Sendable write closure rather than assigned
+            // into captured `var`s — writing to locals across that boundary is
+            // a data race, and an error under the Swift 6 language mode.
+            nonisolated struct EntryOutcome {
+                var fileID: String?
+                var wroteNote = false
+                var rating: Int?
+            }
+            let outcome: EntryOutcome = (try? await queue.write { db -> EntryOutcome in
+                var out = EntryOutcome()
                 guard let scope = try MetadataImportApply.scope(db: db, absPath: absPath)
-                else { return }
-                fileID = scope.fileID
+                else { return out }
+                out.fileID = scope.fileID
                 if !item.tags.isEmpty {
                     try MetadataImportApply.applyKeywords(
                         db: db, scope: scope,
@@ -137,7 +144,7 @@ final class EagleImportModel: ObservableObject {
                                             parentDir: scope.dir,
                                             updatedAt: Int64(Date().timeIntervalSince1970),
                                             db: db)
-                        wroteNote = true
+                        out.wroteNote = true
                     }
                 }
                 // Gap-fill, through the shipped rule — an Eagle star never
@@ -146,14 +153,16 @@ final class EagleImportModel: ObservableObject {
                 if let star = MetadataImportRules.ratingToApply(
                     imported: MetadataImportRules.normalizeRating(item.star.map(Double.init)),
                     existingHasRating: has) {
-                    ratings.append((entry.url, star))
+                    out.rating = star
                 }
-            }
+                return out
+            }) ?? EntryOutcome()
+            if let star = outcome.rating { ratings.append((entry.url, star)) }
             if !item.tags.isEmpty { report.keywords += item.tags.count }
-            if wroteNote { report.notes += 1 }
+            if outcome.wroteNote { report.notes += 1 }
 
             // Folder memberships → find-or-create manual collections.
-            guard let fileID else { continue }
+            guard let fileID = outcome.fileID else { continue }
             for folderID in item.folderIDs {
                 guard let name = flattened[folderID] else { continue }
                 if let existing = collectionIDs[name] {

@@ -12,7 +12,9 @@ import GRDB
 /// Default naming for hand-made collections: "Collection 1", "Collection 2", …
 /// The next number is one past the highest existing "Collection N" (across all
 /// collections, so numbers never collide), with gaps ignored.
-enum ManualCollectionName {
+// `nonisolated`: pure string/number parsing, called from the off-main
+// collection materializer as well as the naming UI.
+nonisolated enum ManualCollectionName {
     static let prefix = "Collection "
 
     static func next(existing names: [String]) -> String {
@@ -29,7 +31,9 @@ enum ManualCollectionName {
     }
 }
 
-enum CollectionStore {
+// `nonisolated`: every member takes a live `GRDB.Database` or plain values, so
+// it always runs inside a queue closure, never on the main actor.
+nonisolated enum CollectionStore {
     struct Loaded {
         var collection: CollectionRow
         var memberIDs: [String]

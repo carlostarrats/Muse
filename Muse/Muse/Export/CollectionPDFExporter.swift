@@ -17,7 +17,9 @@ import QuickLookThumbnailing
 import AVFoundation
 import AppKit
 
-enum CollectionPDFExporter {
+// `nonisolated`: the export itself runs off the main actor — a multi-page PDF
+// render must never block the UI.
+nonisolated enum CollectionPDFExporter {
 
     // MARK: - Tag pills (page-1 header)
 

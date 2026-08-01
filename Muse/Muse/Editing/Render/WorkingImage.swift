@@ -40,7 +40,8 @@ struct EncodedImage {
 /// Highlight data above 1.0 survives here, which is what makes highlight
 /// recovery (a negative exposure pulling detail back out of a blown sky)
 /// actually work rather than just darkening flat white.
-struct LinearImage {
+// `nonisolated`: the render chain's working image, built entirely off-main.
+nonisolated struct LinearImage {
     let ciImage: CIImage
 
     init(_ ciImage: CIImage) { self.ciImage = ciImage }
@@ -48,7 +49,7 @@ struct LinearImage {
     /// For sources Core Image already decoded INTO working space —
     /// `CIImage(contentsOf:)` and `CIRAWFilter.outputImage`. Re-deriving these
     /// through `EncodedImage.toLinearWorkingSpace()` would double-transform.
-    static func alreadyDecodedFromFile(_ image: CIImage) -> LinearImage {
+    nonisolated static func alreadyDecodedFromFile(_ image: CIImage) -> LinearImage {
         LinearImage(image)
     }
 

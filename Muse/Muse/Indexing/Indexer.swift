@@ -789,9 +789,11 @@ actor Indexer {
 
         // One batched last_seen touch for every unchanged-but-stale file.
         if !staleFileIDs.isEmpty {
+            // Frozen before the @Sendable write closure captures it.
+            let stale = staleFileIDs
             try? await queue.write { db in
-                for start in stride(from: 0, to: staleFileIDs.count, by: 800) {
-                    let chunk = Array(staleFileIDs[start..<min(start + 800, staleFileIDs.count)])
+                for start in stride(from: 0, to: stale.count, by: 800) {
+                    let chunk = Array(stale[start..<min(start + 800, stale.count)])
                     let marks = databaseQuestionMarks(count: chunk.count)
                     try db.execute(sql: "UPDATE files SET last_seen_at = ? WHERE id IN (\(marks))",
                                    arguments: StatementArguments([now] + chunk))

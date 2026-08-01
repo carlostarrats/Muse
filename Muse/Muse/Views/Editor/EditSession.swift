@@ -239,16 +239,16 @@ final class EditSession: ObservableObject {
             // The zone tap reads the chain at position 2b — the tone-zone
             // stage's own input — so the mass bars and the hover readout
             // describe exactly the pixels the gains act on.
-            var zoneMass: [Double] = []
-            var evMap: ZoneEVMap?
-            if let toneStage = EditRenderer.toneStageImage(url: url, stack: stack,
-                                                           maxPixel: max(sampleEdge, 1)),
-               let buffer = ToneZoneFilter.evBuffer(for: toneStage, longEdge: sampleEdge,
-                                                    context: context) {
-                zoneMass = HistogramCompute.zoneMass(evMap: buffer.values,
-                                                     width: buffer.width, height: buffer.height)
-                evMap = buffer
-            }
+            // Bound as `let`s: the `MainActor.run` closure below is @Sendable,
+            // so capturing mutable locals across it is a data race (an error
+            // under the Swift 6 language mode).
+            let evMap: ZoneEVMap? = EditRenderer
+                .toneStageImage(url: url, stack: stack, maxPixel: max(sampleEdge, 1))
+                .flatMap { ToneZoneFilter.evBuffer(for: $0, longEdge: sampleEdge,
+                                                   context: context) }
+            let zoneMass: [Double] = evMap.map {
+                HistogramCompute.zoneMass(evMap: $0.values, width: $0.width, height: $0.height)
+            } ?? []
 
             let stats = EditStats(histogram: histogram, clipping: clipping, zoneMass: zoneMass,
                                   curveHistogram: HistogramCompute.curveHistogram(from: histogram))

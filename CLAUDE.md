@@ -128,7 +128,7 @@ are the load-bearing reference artifacts.
 | Foundation 6 — **Spec-06 import & migration** (no migrations; one File > Import surface over five sources; `ImportSupplement`; color-label namespace + mapping sheet; Lightroom `crs:` edits + presets; `WorkThrottleStore`/`AnalysisStatusStore`/import-size FYI) | ✅ merged, unreleased | `new-product-build-1` |
 | Foundation 7 — **Spec-07 sharing & social export** (no migrations; manifest v2 `y`/`s`/`m` + three page layouts; portfolio mode — a live `manifest.json` in the user's Drive behind a URL that never changes; `Export/Social/` + the social export card; Google on-ramp copy) | ✅ merged, unreleased | `new-product-build-1` |
 
-| **Review — Specs 01–07** | ✅ reviewed + fixed 2026-08-01 (2 rounds) | `new-product-build-1` |
+| **Review — Specs 01–07** | ✅ reviewed + fixed 2026-08-01 (3 rounds) | `new-product-build-1` |
 
 > Every row through Polish 27 is merged to `main` and shipped in release **`v1.5`**;
 > Polish 28 is merged to `main` but NOT yet in a release (`v1.5` is still the
@@ -139,7 +139,8 @@ are the load-bearing reference artifacts.
 > round 1 (`docs/new-build/REVIEW-FINDINGS.md`) — ten systematic sweeps, eight
 > slices, 23 findings fixed, suite 1,748 → 1,775; round 2
 > (`docs/new-build/FEATURE-LEDGER.md`) — regression of the PRE-branch features
-> under this branch's three new seams, 4 findings fixed, suite → 1,783. Still
+> under this branch's three new seams, 4 findings fixed, suite → 1,783; round 3
+> — closed the two gaps round 2 recorded rather than fixed, suite → 1,795. Still
 > true, though, that almost none of it
 > has been exercised in the RUNNING app — launch, migrations and the backfill
 > chain were confirmed with `MUSE_TRACE=1` against the real library, but the
@@ -147,11 +148,13 @@ are the load-bearing reference artifacts.
 > them. **`docs/new-build/FEATURE-LEDGER.md` is the standing feature × verification
 > ledger** — one row per feature area with separate automated / static / runtime
 > states, and the Runtime column doubles as the written GUI test plan. Read and
-> update it with any feature work. One known open gap carried by that branch:
-> **backup does not carry edit data** (`BackupOccurrence` has no edit fields — Spec 09's
-> amendment A2 closes it). Localization is now COMPLETE (1,002 keys, 0
-> untranslated — the 146 missing French values from Specs 03/06 were filled in
-> round 2). The binding build-level record is
+> update it with any feature work. **The only substantive gap left is that
+> nobody has driven the GUI** (ledger G1). Everything else the reviews recorded
+> is closed: localization is COMPLETE (1,002 keys, 0 untranslated), **backup now
+> carries edit data** (Spec 09 amendment A2 — stacks, versions, presets and LUT
+> bytes ride `.muselibrary`), and the **442 Swift 6 concurrency warnings are
+> gone — the Release build is warning-free, keep it that way**. The binding
+> build-level record is
 > `docs/new-build/DECISIONS.md`; read its "Current state" block first, since the
 > per-spec "as-built" sections are point-in-time and go stale. **Distribution is
 > unchanged** — the Mac App Store move (doctrine revisions, Sparkle excision,

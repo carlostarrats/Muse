@@ -121,15 +121,33 @@ nonisolated enum EditRecordStore {
             try delete(fileID: fileID, parentDir: parentDir, db: db)
             return
         }
-        // The hash/process version are DERIVED from the blob, never trusted
-        // from the wire. An undecodable blob still stores (it must round-trip
-        // untouched), with a hash over its raw bytes so its thumbnail key is
-        // at least stable and distinct from the unedited one.
-        let decoded = EditStackCodec.decode(json)
-        let hash = decoded.map(EditStackCodec.hash) ?? Self.rawHash(json)
-        let processVersion = decoded?.processVersion ?? EditStack.currentProcessVersion
-        try write(stackJSON: json, hash: hash, processVersion: processVersion,
+        let id = derivedIdentity(for: json)
+        try write(stackJSON: json, hash: id.hash, processVersion: id.processVersion,
                   fileID: fileID, parentDir: parentDir, updatedAt: incomingUpdatedAt, db: db)
+    }
+
+    /// Apply an edit arriving from a BACKUP RESTORE.
+    ///
+    /// Unlike `applyHydrated`, the archive wins UNCONDITIONALLY — no timestamp
+    /// comparison. A restore is an explicit recovery action ("put my library
+    /// back"), not a passive background merge, and the note and rating lines in
+    /// `ReconnectApplier` already follow exactly this rule. Deferring to a
+    /// newer local stack here would silently half-restore.
+    static func applyRestored(json: String, updatedAt: Int64, fileID: String,
+                              parentDir: String, db: GRDB.Database) throws {
+        let id = derivedIdentity(for: json)
+        try write(stackJSON: json, hash: id.hash, processVersion: id.processVersion,
+                  fileID: fileID, parentDir: parentDir, updatedAt: updatedAt, db: db)
+    }
+
+    /// The hash and process version are DERIVED from the blob, never trusted
+    /// from the wire. An undecodable blob still stores (it must round-trip
+    /// untouched), with a hash over its raw bytes so its thumbnail key is at
+    /// least stable and distinct from the unedited one.
+    private static func derivedIdentity(for json: String) -> (hash: String, processVersion: Int) {
+        let decoded = EditStackCodec.decode(json)
+        return (decoded.map(EditStackCodec.hash) ?? Self.rawHash(json),
+                decoded?.processVersion ?? EditStack.currentProcessVersion)
     }
 
     // MARK: - Versions & snapshots

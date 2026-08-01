@@ -57,7 +57,9 @@ nonisolated struct Sidecar: Codable, Equatable, Sendable {
     static let currentSchema = 1
 }
 
-extension Sidecar {
+// `nonisolated`: pure value logic over the sidecar, run from the off-main
+// sidecar writer and from BackupBuilder's read closure.
+nonisolated extension Sidecar {
     /// Build a sidecar from a fully-analyzed file row + its tags. Returns
     /// nil if the file has no content hash (its identity isn't established).
     static func build(from file: FileRow, tags: [TagRow], updatedAt: Int64,
@@ -121,7 +123,9 @@ extension Sidecar {
     }
 }
 
-extension Sidecar {
+// `nonisolated`: pure value logic over the sidecar, run from the off-main
+// sidecar writer and from BackupBuilder's read closure.
+nonisolated extension Sidecar {
     /// Deterministically merge two sidecars for the same content hash.
     /// Scalar fields come from whichever has the greater `updated_at`
     /// (ties → `a`). Tags union by label; a "manual" source always wins

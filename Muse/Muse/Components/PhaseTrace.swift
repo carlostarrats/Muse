@@ -19,7 +19,10 @@
 
 import Foundation
 
-enum PhaseTrace {
+// `nonisolated`: this is a tracing hook called from the indexer, the analyze
+// pipeline and the backfills, all off-main, and it is already internally
+// thread-safe (its own DispatchQueue + a lock around the timeline).
+nonisolated enum PhaseTrace {
     static let enabled = ProcessInfo.processInfo.environment["MUSE_TRACE"] == "1"
 
     /// `<container>/tmp/muse-phase-trace.log`, printed once at startup.

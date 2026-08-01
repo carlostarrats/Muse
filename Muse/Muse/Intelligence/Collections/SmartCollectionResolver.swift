@@ -12,7 +12,9 @@
 import Foundation
 import GRDB
 
-enum SmartCollectionResolver {
+// `nonisolated`: every member takes a live `GRDB.Database`, so it always runs
+// inside a queue closure off the main actor.
+nonisolated enum SmartCollectionResolver {
 
     /// Combined matching file_ids (content rows). NOT reachability-filtered.
     /// `now` (epoch seconds) anchors relative date rules ("within N days"); it

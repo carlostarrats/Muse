@@ -22,7 +22,7 @@ enum DriveConfig {
 
     /// Cloudflare Pages deployment serving web/share/index.html. The manifest
     /// rides the URL fragment, so the page link is `<shareBaseURL>#<payload>`.
-    static let shareBaseURL = "https://muse-share.pages.dev"
+    nonisolated static let shareBaseURL = "https://muse-share.pages.dev"
 
     static let scope = "https://www.googleapis.com/auth/drive.file"
 

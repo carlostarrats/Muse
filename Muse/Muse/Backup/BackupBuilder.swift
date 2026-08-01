@@ -52,6 +52,30 @@ enum BackupBuilder {
                 noteByFileDir["\(n.file_id)\u{1}\(n.parent_dir)"] = n.body
             }
 
+            // Edit stacks grouped by (file_id, parent_dir) — the same grain and
+            // the same key shape as tags and notes, because an edit shares
+            // their identity exactly. A file with no row here is unedited and
+            // simply contributes no edit fields to its occurrence.
+            let editRows = try EditRow.fetchAll(db)
+            var editByFileDir: [String: EditRow] = [:]
+            for e in editRows {
+                editByFileDir["\(e.file_id)\u{1}\(e.parent_dir)"] = e
+            }
+            let versionRows = try EditVersionRow.fetchAll(db)
+            var versionsByFileDir: [String: [BackupEditVersion]] = [:]
+            for v in versionRows {
+                versionsByFileDir["\(v.file_id)\u{1}\(v.parent_dir)", default: []].append(
+                    BackupEditVersion(kind: v.kind, name: v.name,
+                                      stack: v.stack, created_at: v.created_at))
+            }
+            // Deterministic order so two backups of the same library produce
+            // byte-identical archives.
+            for key in versionsByFileDir.keys {
+                versionsByFileDir[key]?.sort {
+                    ($0.created_at, $0.stack) < ($1.created_at, $1.stack)
+                }
+            }
+
             // Build BackupFile per content-hashed file that has >=1 alive path.
             var files: [BackupFile] = []
             for (fid, file) in fileByID {
@@ -69,13 +93,21 @@ enum BackupBuilder {
                         .filter { p.absolute_path == $0.path
                             || p.absolute_path.hasPrefix($0.path + "/") }
                         .max(by: { $0.path.count < $1.path.count })?.path
+                    let scopeKey = "\(fid)\u{1}\(parent)"
+                    let edit = editByFileDir[scopeKey]
+                    let versions = versionsByFileDir[scopeKey]
                     return BackupOccurrence(
                         original_path: p.absolute_path,
                         basename: url.lastPathComponent,
                         root_path: rootPath,
                         parent_dir: parent,
-                        tags: tagsByFileDir["\(fid)\u{1}\(parent)"] ?? [],
-                        note: noteByFileDir["\(fid)\u{1}\(parent)"])
+                        tags: tagsByFileDir[scopeKey] ?? [],
+                        note: noteByFileDir[scopeKey],
+                        edit_stack: edit?.stack,
+                        edit_updated_at: edit?.updated_at,
+                        // Empty stays nil rather than `[]` so an unedited
+                        // occurrence encodes exactly as it did pre-A2.
+                        edit_versions: (versions?.isEmpty ?? true) ? nil : versions)
                 }
                 files.append(BackupFile(content_hash: hash, meta: meta, occurrences: occurrences))
             }
@@ -115,10 +147,25 @@ enum BackupBuilder {
             let starRows = try StarredFolderRow.fetchAll(db)
             let stars = starRows.map { BackupStar(path: $0.absolute_path, display_name: $0.display_name) }
 
+            // Library-global edit assets. Sorted for byte-stable archives.
+            // Presets and LUTs are carried WHOLESALE rather than only the ones
+            // a restored stack happens to reference: a preset is the user's own
+            // saved look and a LUT they imported, and a backup that restored
+            // photos but emptied the Looks browser would read as data loss.
+            let presets = try EditPresetRow.fetchAll(db)
+                .map { BackupEditPreset(id: $0.id, name: $0.name, stack: $0.stack,
+                                        created_at: $0.created_at, updated_at: $0.updated_at) }
+                .sorted { $0.id < $1.id }
+            let luts = try EditLutRow.fetchAll(db)
+                .map { BackupLut(id: $0.id, name: $0.name, size: $0.size, data: $0.data) }
+                .sorted { $0.id < $1.id }
+
             return BackupArchive(
                 schema: BackupArchive.currentSchema, created_at: createdAt,
                 app_version: appVersion, roots: roots, files: files,
-                collections: collections, stars: stars)
+                collections: collections, stars: stars,
+                edit_presets: presets.isEmpty ? nil : presets,
+                edit_luts: luts.isEmpty ? nil : luts)
         }
     }
 }

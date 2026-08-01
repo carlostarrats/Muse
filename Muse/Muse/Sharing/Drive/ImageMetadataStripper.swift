@@ -40,7 +40,8 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-enum ImageMetadataStripper {
+// `nonisolated`: strips + re-verifies upload bytes on the Drive publish task.
+nonisolated enum ImageMetadataStripper {
 
     struct Output {
         let data: Data

@@ -364,7 +364,8 @@ struct SocialCropStageView: View {
     let matte: MatteShade
     @Binding var state: SocialExportModel.PerImageState
 
-    static let previewMaxPixel = 2048
+    /// `nonisolated`: read by the card's off-main preview decode.
+    nonisolated static let previewMaxPixel = 2048
 
     @State private var image: NSImage?
     @State private var loadedURL: URL?

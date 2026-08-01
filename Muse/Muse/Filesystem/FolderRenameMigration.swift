@@ -12,7 +12,8 @@
 import Foundation
 import GRDB
 
-enum FolderRenameMigration {
+// `nonisolated`: takes a DatabaseQueue and runs off the main actor.
+nonisolated enum FolderRenameMigration {
     /// New path for `path` when its folder `old` is renamed to `new`.
     /// Returns the rewritten path if `path == old` or lives under `old/`,
     /// otherwise nil (no match — leave the row untouched). A sibling like

@@ -19,7 +19,8 @@
 
 import ImageIO
 
-enum SocialMetadata {
+// `nonisolated`: builds export properties on the off-main render task.
+nonisolated enum SocialMetadata {
     static func outputProperties(source: CFDictionary, includeLocation: Bool) -> CFDictionary {
         var out: [String: Any] = [:]
         let src = source as? [String: Any] ?? [:]

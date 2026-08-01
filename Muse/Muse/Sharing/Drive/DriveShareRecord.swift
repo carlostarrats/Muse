@@ -48,7 +48,9 @@ final class DriveShareStore {
     private let queue = DispatchQueue(label: "com.tarrats.Muse.driveShareStore")
     init(fileURL: URL) { self.fileURL = fileURL }
 
-    static let `default`: DriveShareStore = {
+    /// `nonisolated`: reached from the Drive publish/sweep tasks, which run
+    /// off the main actor.
+    nonisolated static let `default`: DriveShareStore = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
             .appendingPathComponent("Muse", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)

@@ -21,7 +21,9 @@
 import Foundation
 import CoreGraphics
 
-protocol EditStackProviding: Sendable {
+// `nonisolated`: implementations are called synchronously from view bodies and
+// from off-main thumbnail/decode workers — the whole point of the type.
+nonisolated protocol EditStackProviding: Sendable {
     /// Stable digest of the file's edit stack; nil when unedited.
     func stackHash(for url: URL) -> String?
     /// Post-crop dimensions; nil when the stack has no crop (or no stack).
@@ -135,7 +137,7 @@ nonisolated enum EditStackIndex {
 /// against the pre-resolved index, because these are called synchronously from
 /// view bodies (per frame of an animating hero flight) and from the off-main
 /// thumbnail workers.
-struct LiveEditStackProvider: EditStackProviding {
+nonisolated struct LiveEditStackProvider: EditStackProviding {
     /// Returned even for an UNRENDERABLE stack: the thumbnail cache key must
     /// still differ from the unedited one, or a build that later learns to
     /// render the stack would serve the original's cached PNG forever.

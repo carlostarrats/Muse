@@ -33,7 +33,11 @@ import Foundation
 import ImageIO
 import CoreGraphics
 
-enum ImageHeaderSizeCache {
+// `nonisolated`: this table is populated by the off-main thumbnail pass and
+// read from decode workers and layout code alike. It is already internally
+// thread-safe (its own NSLock), and the whole design note above is about being
+// callable from a view body AND from background workers.
+nonisolated enum ImageHeaderSizeCache {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var sizes: [String: CGSize] = [:]
 

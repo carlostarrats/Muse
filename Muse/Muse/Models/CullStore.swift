@@ -16,7 +16,9 @@ import Foundation
 @MainActor final class CullStore: ObservableObject {
     static let shared = CullStore()
 
-    enum Mark: Equatable { case keep, reject }
+    /// `nonisolated`: `CullSummary` counts marks off the main actor, and a
+    /// main-actor-isolated `Equatable` conformance can't be used there.
+    nonisolated enum Mark: Equatable { case keep, reject }
 
     @Published private(set) var active = false
     @Published private(set) var marks: [String: Mark] = [:]

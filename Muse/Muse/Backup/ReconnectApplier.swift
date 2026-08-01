@@ -10,7 +10,9 @@
 import Foundation
 import GRDB
 
-enum ReconnectApplier {
+// `nonisolated`: every member drives a GRDB queue closure — restore work must
+// not run on the main actor.
+nonisolated enum ReconnectApplier {
     /// content_hash -> files.id for every hashed file currently in the DB.
     static func currentFileIDForHash(queue: DatabaseQueue) async throws -> [String: String] {
         try await queue.read { db in
@@ -77,6 +79,31 @@ enum ReconnectApplier {
                     try NoteStore.write(body, fileID: fid, parentDir: parentDir,
                                         updatedAt: Int64(Date().timeIntervalSince1970), db: db)
                 }
+                // Edit stack: same grain, same NEW parent_dir, same
+                // restore-wins rule as the note and the rating above. Absent
+                // means the file was unedited when the backup was taken — and
+                // absence is deliberately NOT a reset: it leaves any local edit
+                // alone rather than deleting work the archive simply predates.
+                if let stack = m.occurrence.edit_stack {
+                    try EditRecordStore.applyRestored(
+                        json: stack,
+                        updatedAt: m.occurrence.edit_updated_at
+                            ?? Int64(Date().timeIntervalSince1970),
+                        fileID: fid, parentDir: parentDir, db: db)
+                }
+                // Versions/snapshots insert with FRESH UUIDs — the same carry
+                // rule the identity seams use, since the archive's ids may
+                // already exist locally. Re-restoring the same archive is
+                // therefore additive, not idempotent, on versions; that is the
+                // conservative direction (a duplicate version is visible and
+                // deletable, a dropped one is gone).
+                for v in m.occurrence.edit_versions ?? [] {
+                    var row = EditVersionRow(
+                        id: UUID().uuidString, file_id: fid, parent_dir: parentDir,
+                        kind: v.kind, name: v.name ?? "", stack: v.stack,
+                        created_at: v.created_at)
+                    try row.insert(db)
+                }
                 // FTS mirror (basename + caption; OCR intentionally empty — same as hydrate).
                 try db.execute(sql: "DELETE FROM files_fts WHERE file_id = ?", arguments: [fid])
                 try db.execute(sql: """
@@ -134,10 +161,49 @@ enum ReconnectApplier {
         }
     }
 
-    static func applyStars(_ archive: BackupArchive, queue: DatabaseQueue) async throws {
-        let fm = FileManager.default
+    /// Library-global edit assets: saved presets and imported LUTs.
+    ///
+    /// Both are `INSERT OR IGNORE`, for different reasons that land in the same
+    /// place. A LUT's primary key IS the SHA-256 of its bytes, so ignoring a
+    /// conflict is the IMMUTABILITY rule doing its job — a re-restore can never
+    /// rewrite LUT data, and a name collision on identical bytes keeps the
+    /// name already in the library. A preset conflicts only on its own UUID,
+    /// i.e. only when this exact preset is already here, so ignoring leaves the
+    /// user's current version of their own look alone.
+    ///
+    /// Returns the LUT ids actually present after the write, so the caller can
+    /// invalidate the render-path cache for them.
+    @discardableResult
+    static func applyEditAssets(_ archive: BackupArchive,
+                                queue: DatabaseQueue) async throws -> [String] {
+        let presets = archive.edit_presets ?? []
+        let luts = archive.edit_luts ?? []
+        guard !presets.isEmpty || !luts.isEmpty else { return [] }
+        let now = Int64(Date().timeIntervalSince1970)
         try await queue.write { db in
-            for s in archive.stars where fm.fileExists(atPath: s.path) {
+            for p in presets {
+                try db.execute(sql: """
+                    INSERT OR IGNORE INTO edit_presets (id, name, stack, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """, arguments: [p.id, p.name, p.stack, p.created_at, p.updated_at])
+            }
+            for l in luts {
+                try db.execute(sql: """
+                    INSERT OR IGNORE INTO edit_luts (id, name, size, data, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """, arguments: [l.id, l.name, l.size, l.data, now])
+            }
+        }
+        return luts.map(\.id)
+    }
+
+    static func applyStars(_ archive: BackupArchive, queue: DatabaseQueue) async throws {
+        // Existence is checked HERE, not inside the write: `FileManager` is
+        // non-Sendable, so capturing it in the @Sendable closure is a data race.
+        let fm = FileManager.default
+        let present = archive.stars.filter { fm.fileExists(atPath: $0.path) }
+        try await queue.write { db in
+            for s in present {
                 try db.execute(sql: """
                     INSERT OR IGNORE INTO starred_folders (id, absolute_path, display_name, added_at)
                     VALUES (?, ?, ?, ?)

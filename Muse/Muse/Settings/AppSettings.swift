@@ -33,7 +33,7 @@ enum AppSettings {
     static let announcementsEnabledKey = "announcementsEnabled"
     /// Remembered color-label mapping choices, keyed by the RAW source value.
     /// A JSON blob of `[String: LabelMapping.Choice]`.
-    static let importLabelChoicesKey = "importLabelChoices"
+    nonisolated static let importLabelChoicesKey = "importLabelChoices"
     /// Also import Lightroom adjustments during a metadata run. Default true.
     static let importLREditsKey = "importLightroomEdits"
     /// The user has paused background analysis. PERSISTS across relaunch — a
@@ -212,11 +212,11 @@ enum AppSettings {
     /// the images to breathe. The grid's side MARGIN tracks this same value
     /// (`GridView.horizontalInset`), so a wide setting spaces the tiles from the
     /// window edges by exactly as much as it spaces them from each other.
-    static let gridSpacingRange: ClosedRange<Double> = 4...40
+    nonisolated static let gridSpacingRange: ClosedRange<Double> = 4...40
 
     /// Bound a stored or slider-supplied gutter to the usable range. A value
     /// outside it doesn't just look wrong — a negative gutter overlaps tiles.
-    static func clampGridSpacing(_ raw: Double) -> Double {
+    nonisolated static func clampGridSpacing(_ raw: Double) -> Double {
         min(gridSpacingRange.upperBound, max(gridSpacingRange.lowerBound, raw))
     }
 
@@ -226,9 +226,9 @@ enum AppSettings {
     /// look). Applies to grid tiles AND the hero viewer, so a photo keeps its
     /// shape when you open it.
     static let defaultGridCornerRadius: Double = 0
-    static let gridCornerRadiusRange: ClosedRange<Double> = 0...20
+    nonisolated static let gridCornerRadiusRange: ClosedRange<Double> = 0...20
 
-    static func clampGridCornerRadius(_ raw: Double) -> Double {
+    nonisolated static func clampGridCornerRadius(_ raw: Double) -> Double {
         min(gridCornerRadiusRange.upperBound, max(gridCornerRadiusRange.lowerBound, raw))
     }
 

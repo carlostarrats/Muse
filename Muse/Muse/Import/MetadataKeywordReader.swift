@@ -14,7 +14,8 @@
 import Foundation
 import ImageIO
 
-enum MetadataKeywordReader {
+// `nonisolated`: reads image metadata from disk, always on a detached task.
+nonisolated enum MetadataKeywordReader {
 
     /// A coordinate as a value type — a `(lat, lon)` tuple would break
     /// `Equatable` synthesis, and this mirrors `ImportSupplement.External`.

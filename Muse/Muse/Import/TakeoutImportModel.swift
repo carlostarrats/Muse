@@ -38,7 +38,15 @@ final class TakeoutImportModel: ObservableObject {
     @Published var people: PeopleChoice = .skip
     @Published var favoritesAsTag = true
 
-    static let favoriteTag = "Favorite"
+    nonisolated static let favoriteTag = "Favorite"
+
+    /// Returned FROM the `queue.write` closure rather than assigned into
+    /// captured `var`s — that closure is `@Sendable`, so writing to locals
+    /// across it is a data race (an error under the Swift 6 language mode).
+    nonisolated private struct FileOutcome {
+        var applied = ImportSupplement.AppliedFields()
+        var wroteNote = false
+    }
 
     private var task: Task<Void, Never>?
 
@@ -91,18 +99,23 @@ final class TakeoutImportModel: ObservableObject {
 
             let header = await PhotoHeaderReader.read(url: url, kind: kind)
             let absPath = url.standardizedFileURL.path
-            var applied = ImportSupplement.AppliedFields()
-            var wroteNote = false
-            var keywords: [String] = []
-            if wantsFavorites, meta.favorited { keywords.append(Self.favoriteTag) }
-            if wantsPeople { keywords.append(contentsOf: meta.people) }
+            // Frozen into a `let` before the @Sendable write closure captures
+            // it — see FileOutcome below for why.
+            let keywords: [String] = {
+                var k: [String] = []
+                if wantsFavorites, meta.favorited { k.append(Self.favoriteTag) }
+                if wantsPeople { k.append(contentsOf: meta.people) }
+                return k
+            }()
 
+            let outcome: FileOutcome
             do {
-                try await queue.write { db in
+                outcome = try await queue.write { db -> FileOutcome in
+                    var out = FileOutcome()
                     guard let scope = try MetadataImportApply.scope(db: db, absPath: absPath),
                           let row = try FileRow.filter(FileRow.Columns.id == scope.fileID)
-                            .fetchOne(db), let hash = row.content_hash else { return }
-                    applied = try ImportSupplement.apply(
+                            .fetchOne(db), let hash = row.content_hash else { return out }
+                    out.applied = try ImportSupplement.apply(
                         db: db, fileID: scope.fileID, contentHash: hash, header: header,
                         external: .init(lat: meta.lat, lon: meta.lon,
                                         captureDate: meta.photoTakenTime))
@@ -115,22 +128,23 @@ final class TakeoutImportModel: ObservableObject {
                                                 parentDir: scope.dir,
                                                 updatedAt: Int64(Date().timeIntervalSince1970),
                                                 db: db)
-                            wroteNote = true
+                            out.wroteNote = true
                         }
                     }
                     if !keywords.isEmpty {
                         try MetadataImportApply.applyKeywords(db: db, scope: scope,
                                                               labels: keywords)
                     }
+                    return out
                 }
             } catch {
                 report.filesSkipped += 1
                 continue
             }
 
-            if applied.coordinates { report.coordinates += 1; appliedSupplement = true }
-            if applied.captureDate { report.captureDates += 1; appliedSupplement = true }
-            if wroteNote { report.notes += 1 }
+            if outcome.applied.coordinates { report.coordinates += 1; appliedSupplement = true }
+            if outcome.applied.captureDate { report.captureDates += 1; appliedSupplement = true }
+            if outcome.wroteNote { report.notes += 1 }
             if !keywords.isEmpty { report.keywords += keywords.count }
             report.filesTouched += 1
             touched.append(url)

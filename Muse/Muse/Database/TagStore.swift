@@ -15,7 +15,9 @@ import GRDB
 /// Resolve standardized absolute paths to their (file_id, parent_dir) tag
 /// scopes via alive paths. Free + nonisolated so it can run inside a GRDB
 /// write/read closure (which is not actor-isolated).
-private func tagScopes(forPaths paths: [String], db: GRDB.Database) throws -> [(fileID: String, dir: String)] {
+// `nonisolated`: takes a live `GRDB.Database`, so by definition it runs inside
+// a queue closure off the main actor.
+nonisolated private func tagScopes(forPaths paths: [String], db: GRDB.Database) throws -> [(fileID: String, dir: String)] {
     guard !paths.isEmpty else { return [] }
     let marks = databaseQuestionMarks(count: paths.count)
     let rows = try Row.fetchAll(db, sql: """
@@ -194,10 +196,13 @@ final class TagStore: ObservableObject {
         // thousands of files, past SQLite's bound-variable limit (every other
         // multi-id site chunks the same way).
         guard !affectedIDs.isEmpty else { return true }
+        // Frozen before the @Sendable read closure captures it — nothing mutates
+        // it past this point, and the `let` is what says so to the compiler.
+        let ids = affectedIDs
         let urls: [URL] = (try? await queue.read { db -> [URL] in
             var paths: [String] = []
-            for chunk in stride(from: 0, to: affectedIDs.count, by: 500)
-                .map({ Array(affectedIDs[$0..<min($0 + 500, affectedIDs.count)]) }) {
+            for chunk in stride(from: 0, to: ids.count, by: 500)
+                .map({ Array(ids[$0..<min($0 + 500, ids.count)]) }) {
                 let marks = databaseQuestionMarks(count: chunk.count)
                 paths += try String.fetchAll(db, sql: """
                     SELECT absolute_path FROM paths

@@ -19,7 +19,7 @@ import GRDB
 
 enum PhotoHeaderBackfill {
     /// Cap per launch — see file header.
-    static let maxPerLaunch = 5_000
+    nonisolated static let maxPerLaunch = 5_000
     /// Rows per write transaction. Batching keeps the serial DB queue free
     /// between chunks so an interactive read isn't stuck behind the whole pass.
     static let chunkSize = 200
@@ -37,7 +37,7 @@ enum PhotoHeaderBackfill {
     /// `PhotoHeaderReader` doesn't handle would be re-selected on every launch
     /// (it never gets a scanned hash), so filtering here is what keeps the
     /// pass bounded.
-    static func candidate(id: String, path: String) -> Candidate? {
+    nonisolated static func candidate(id: String, path: String) -> Candidate? {
         let url = URL(fileURLWithPath: path)
         let kind = AssetKind.detect(at: url)
         switch kind {
@@ -116,7 +116,7 @@ enum PhotoHeaderBackfill {
 
             // Header reads narrow with the throttle, like every other
             // background pass — `waitUntilRunnable` above only covers `.paused`.
-            let width = max(1, await WorkThrottleStore.shared.concurrency(normal: concurrency))
+            let width = max(1, WorkThrottleStore.shared.concurrency(normal: concurrency))
 
             var results: [(id: String, hash: String, header: PhotoHeader)] = []
             await withTaskGroup(of: (String, String, PhotoHeader)?.self) { group in

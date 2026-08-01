@@ -7,7 +7,9 @@ import Foundation
 /// channel noise — naming it "blue"/"purple" is wrong. So before assigning any
 /// hue we first decide whether the color is colorful enough to deserve a hue
 /// name at all; only then do we read the hue band.
-enum NamedColor {
+// `nonisolated`: pure hex/name parsing, used by the off-main colour search
+// and smart-rule evaluation.
+nonisolated enum NamedColor {
     static func name(forHex hex: String) -> String? {
         guard let (r, g, b) = parse(hex) else { return nil }
         let mx = max(r, g, b), mn = min(r, g, b)

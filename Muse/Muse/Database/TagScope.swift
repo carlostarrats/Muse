@@ -16,7 +16,11 @@
 
 import Foundation
 
-enum TagScope {
+/// `nonisolated`: pure string math over a path, no state of any kind. The
+/// module defaults to `@MainActor` isolation, and this is called from the
+/// indexer, the analyze pipeline and half a dozen GRDB read/write closures —
+/// all off-main — so the default isolation was wrong for every caller.
+nonisolated enum TagScope {
     /// Parent-directory key for an already-standardized absolute path
     /// (e.g. a stored `paths.absolute_path`).
     static func parentDir(ofPath path: String) -> String {

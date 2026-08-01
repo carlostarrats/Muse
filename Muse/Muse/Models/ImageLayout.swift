@@ -42,7 +42,8 @@ enum ImageLayout: String, CaseIterable, Identifiable {
     ///
     /// Also read as "is this a uniform lattice?" by the hero parting ripple
     /// (which damps its amplitude on one) and by the PDF exporter.
-    var aspect: CGFloat? {
+    /// `nonisolated`: read by the off-main PDF exporter's page layout.
+    nonisolated var aspect: CGFloat? {
         switch self {
         case .columns, .rows: return nil
         case .grid:           return 1

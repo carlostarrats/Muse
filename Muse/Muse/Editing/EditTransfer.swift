@@ -67,7 +67,9 @@ nonisolated enum EditTransfer {
     }
 }
 
-extension Adjustment {
+// `nonisolated`: a pure switch over the enum's own case, read from the render
+// and import paths off-main.
+nonisolated extension Adjustment {
     var group: AdjustmentGroup {
         switch self {
         case .tone: .tone

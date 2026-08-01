@@ -13,7 +13,9 @@
 
 import CoreGraphics
 
-enum JustifiedRowsGeometry {
+// `nonisolated`: pure row-packing geometry, also used by the off-main PDF
+// exporter.
+nonisolated enum JustifiedRowsGeometry {
 
     /// One item's placement within its row (x is derived when laying out).
     struct Item: Equatable {
