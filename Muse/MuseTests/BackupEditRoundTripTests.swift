@@ -209,6 +209,73 @@ final class BackupEditRoundTripTests: XCTestCase {
         }
     }
 
+    /// Re-running Restore must not multiply the user's versions. Ids are fresh
+    /// per insert (the archive's own ids aren't identity), so idempotency has to
+    /// come from the CONTENT — otherwise a second restore duplicates every
+    /// snapshot.
+    func testRestoringTheSameArchiveTwiceDoesNotDuplicateVersions() async throws {
+        let q = try DatabaseQueue()
+        try Database.makeMigrator().migrate(q)
+        try await q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at) VALUES ('f9', 'h1', 'image', 0)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('p9', 'f9', '/new/P/cat.jpg', 1)")
+        }
+        let json = try stackJSON(exposure: 0.25)
+        let occ = BackupOccurrence(
+            original_path: "/o/cat.jpg", basename: "cat.jpg", root_path: "/o",
+            parent_dir: "/o", tags: [], edit_stack: json, edit_updated_at: 5,
+            edit_versions: [BackupEditVersion(kind: "version", name: "v1",
+                                              stack: json, created_at: 3),
+                            BackupEditVersion(kind: "snapshot", name: "s1",
+                                              stack: json, created_at: 4)])
+        let meta = Sidecar(schema: 1, updated_at: 1, content_hash: "h1", kind: "image", tags: [])
+        let file = BackupFile(content_hash: "h1", meta: meta, occurrences: [occ])
+        let matches = [OccurrenceMatch(occurrence: occ, diskPath: "/new/P/cat.jpg",
+                                       kind: .exact)]
+
+        try await ReconnectApplier.applyMeta(matches: matches, file: file, queue: q)
+        try await ReconnectApplier.applyMeta(matches: matches, file: file, queue: q)
+
+        try await q.read { db in
+            let versions = try EditRecordStore.versions(fileID: "f9",
+                                                        parentDir: "/new/P", db: db)
+            XCTAssertEqual(versions.count, 2)
+            XCTAssertEqual(Set(versions.map(\.name)), ["v1", "s1"])
+        }
+    }
+
+    /// A version that differs in any content field is genuinely new and must
+    /// still be inserted — idempotency must not become "never add anything".
+    func testARestoreStillAddsAGenuinelyNewVersion() async throws {
+        let q = try DatabaseQueue()
+        try Database.makeMigrator().migrate(q)
+        try await q.write { db in
+            try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at) VALUES ('f9', 'h1', 'image', 0)")
+            try db.execute(sql: "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('p9', 'f9', '/new/P/cat.jpg', 1)")
+            var existing = EditVersionRow(id: "local", file_id: "f9", parent_dir: "/new/P",
+                                          kind: "version", name: "mine",
+                                          stack: "{}", created_at: 1)
+            try existing.insert(db)
+        }
+        let json = try stackJSON(exposure: 0.25)
+        let occ = BackupOccurrence(
+            original_path: "/o/cat.jpg", basename: "cat.jpg", root_path: "/o",
+            parent_dir: "/o", tags: [],
+            edit_versions: [BackupEditVersion(kind: "version", name: "archived",
+                                              stack: json, created_at: 7)])
+        let meta = Sidecar(schema: 1, updated_at: 1, content_hash: "h1", kind: "image", tags: [])
+        try await ReconnectApplier.applyMeta(
+            matches: [OccurrenceMatch(occurrence: occ, diskPath: "/new/P/cat.jpg",
+                                      kind: .exact)],
+            file: BackupFile(content_hash: "h1", meta: meta, occurrences: [occ]), queue: q)
+
+        try await q.read { db in
+            let versions = try EditRecordStore.versions(fileID: "f9",
+                                                        parentDir: "/new/P", db: db)
+            XCTAssertEqual(Set(versions.map(\.name)), ["mine", "archived"])
+        }
+    }
+
     // MARK: - Edit assets
 
     /// LUT rows are content-addressed and IMMUTABLE — a re-restore can never

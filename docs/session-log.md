@@ -32,7 +32,8 @@ archive readable by an older one; `BackupArchiveCompatTests` pins both
 directions with raw-JSON fixtures rather than struct round trips, since a round
 trip only ever proves the encoder agrees with itself. Restore-wins on apply (no
 timestamp comparison — a restore is an explicit recovery action, matching the
-note and rating lines that were already there), fresh UUIDs for versions,
+note and rating lines that were already there), fresh UUIDs for versions
+but deduped by content so a second restore doesn't duplicate every snapshot,
 `INSERT OR IGNORE` for presets and LUTs — which for LUTs IS the immutability
 rule, since the primary key is the content hash. Absence of edit data is
 deliberately NOT a reset: it means the backup predates the edit, so a local

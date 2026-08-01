@@ -23,8 +23,8 @@ not upgrade a row on inference.
 actually produced (the grid cull badge that was specified and never built, the
 five modals with no Escape branch). **A + S is not a substitute for R.**
 
-Last full pass: **2026-08-01** (review round 3). Suite at that point:
-**1,795 tests, 2 skipped, 0 failures**; Release build warning-free.
+Last full pass: **2026-08-01** (review round 3, incl. self-QA). Suite at that point:
+**1,797 tests, 2 skipped, 0 failures**; Release build warning-free.
 
 ---
 
@@ -139,6 +139,7 @@ question.
 | 1 | 2026-08-01 | Specs 01–07, ten sweeps / eight slices (`REVIEW-FINDINGS.md`) | 23 fixed (F1–F23) | 1,775 |
 | 2 | 2026-08-01 | Regression of pre-branch features under this branch's seams, + lenses round 1 didn't run | 4 fixed (R2-1…R2-4) | 1,783 |
 | 3 | 2026-08-01 | The two gaps round 2 recorded rather than closed | G2 + G6 closed | 1,795 |
+| 3-QA | 2026-08-01 | Self-review of round 3's own diff | 4 fixed (see below) | 1,797 |
 
 ### Round 2 findings
 
@@ -153,8 +154,21 @@ question.
 
 | # | Finding | Fix |
 |---|---|---|
-| **R3-1** | **G2 — a `.muselibrary` restore lost every edit.** Spec 04 §5.3 claimed the archive "carries the DB"; it does not — `.muselibrary` is a JSON encode of `BackupArchive`, and occurrences carried tags + note and nothing else. Restoring a library silently dropped every edit stack, version, preset and LUT. | Spec 09 A2, implemented as specified. `BackupOccurrence` gains `edit_stack` / `edit_updated_at` / `edit_versions`; `BackupArchive` gains library-global `edit_presets` and `edit_luts` (bytes carried — a stack whose LUT is missing renders as the original, so dropping them would be a half-restore). Schema stays **1**: every field is optional-with-nil-default, so pre-A2 archives decode unchanged and post-A2 archives still decode on pre-A2 builds. Restore is **restore-wins** at the new `parent_dir` (matching the note and rating lines), versions get **fresh UUIDs**, presets/LUTs are `INSERT OR IGNORE` (the LUT content-hash PK makes that the immutability rule). Absence is deliberately **not** a reset — it means the backup predates the edit. Post-apply runs `EditStore.applyHydratedConsequences` + `LutRegistry.invalidate`, without a sidecar re-export. +12 tests. |
+| **R3-1** | **G2 — a `.muselibrary` restore lost every edit.** Spec 04 §5.3 claimed the archive "carries the DB"; it does not — `.muselibrary` is a JSON encode of `BackupArchive`, and occurrences carried tags + note and nothing else. Restoring a library silently dropped every edit stack, version, preset and LUT. | Spec 09 A2, implemented as specified. `BackupOccurrence` gains `edit_stack` / `edit_updated_at` / `edit_versions`; `BackupArchive` gains library-global `edit_presets` and `edit_luts` (bytes carried — a stack whose LUT is missing renders as the original, so dropping them would be a half-restore). Schema stays **1**: every field is optional-with-nil-default, so pre-A2 archives decode unchanged and post-A2 archives still decode on pre-A2 builds. Restore is **restore-wins** at the new `parent_dir` (matching the note and rating lines), versions get **fresh UUIDs but are deduped by CONTENT** so re-running Restore is idempotent, presets/LUTs are `INSERT OR IGNORE` (the LUT content-hash PK makes that the immutability rule) and apply ONCE per restore rather than per folder. Absence is deliberately **not** a reset — it means the backup predates the edit. Post-apply runs `EditStore.applyHydratedConsequences` + `LutRegistry.invalidate`, without a sidecar re-export, and sits OUTSIDE the collection-map branch so a failed hash map can't leave edits in the database with nothing on screen knowing. +14 tests. |
 | **R3-2** | **G6 — 442 Swift 6 strict-concurrency warnings** (221 unique × two arches; round 2 estimated ~60 from a partial build and was wrong). The project sets `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, so every unannotated declaration is `@MainActor` — including pure value math and DB helpers that only ever run inside GRDB closures and detached tasks. | Marked the declarations `nonisolated` at the type/member level, which is the idiom the codebase already used for `Sidecar`, `EditStackIndex` and friends. Separately, ~13 sites captured a mutable `var` across a `@Sendable` closure — real races the compiler could only warn about. The read-only ones are frozen into a `let` before the closure; the mutated ones (four importers, `AutoStacker`) now **return a result struct from the closure** instead. Also fixed a genuine no-op downcast in `PerfBaseline` that made "no database" and "empty library" indistinguishable, a non-Sendable `FileManager` captured in a write closure, and a `DirectoryEnumerator` for-in that is unavailable from async contexts. **Release build is now warning-free.** |
+
+### Round 3 self-QA — defects found in round 3's own work
+
+Reviewing the round-3 diff turned up four defects I had introduced, all in the
+backup leg. Recorded because the pattern is the point: three of the four are the
+SAME classes earlier rounds had already fixed elsewhere, reintroduced by new code.
+
+| # | Severity | Defect | Fix |
+|---|---|---|---|
+| 1 | med | **Restore's folder walk could terminate early.** Converting the enumerator to `nextObject()` (for the async-context warning) as `while let url = en.nextObject() as? URL` reads fine and is wrong — a single non-URL element ENDS the loop instead of skipping it, silently indexing only part of the folder. During a restore that surfaces as unmatched occurrences the user is asked to eyeball. | `while let next = en.nextObject() { guard let url = next as? URL else { continue } … }` |
+| 2 | **high** | **Edit rows could land in the database with nothing on screen knowing.** `applyEditAssets` and the edit-save consequences were nested inside the `if let map = currentFileIDForHash` branch, which neither needs — while `applyMeta` writes the edit rows unconditionally above it. A failed hash map therefore restored the edits but left `EditStackIndex` (path-keyed, built at launch) and the thumbnail cache stale until relaunch. **Exactly the R1-F2 defect class**, in new code. | Both hoisted out of the branch. |
+| 3 | low | **Re-running Restore duplicated every version.** Fresh UUIDs per insert made a second restore of the same archive additive, against Spec 09's own "idempotent re-apply". | Identity is the CONTENT (`kind`+`name`+`stack`+`created_at` at that scope); ids stay fresh. +2 tests. |
+| 4 | low | **Library-global assets rewritten per folder, and a failed write latched.** `applyEditAssets` ran for every reconnected folder — `INSERT OR IGNORE` is correct but SQLite still binds each ≤25 MB LUT blob before detecting the id conflict, so a ten-folder restore pushed hundreds of MB through the writer for nothing. The once-only guard I first wrote then latched even when the call FAILED, silently costing every preset and LUT. Separately, the new versions-dedup query ran per matched occurrence including unedited ones — the R1-F15 per-file-query shape. | Once per restore, latched only on success; the dedup read moved inside the emptiness guard. |
 
 ### Round 2 — checked and clean
 
@@ -168,6 +182,12 @@ Recorded so a later round doesn't re-spend the effort:
 - **Header-size cache records ORIGINAL dimensions**, so the crop is applied exactly once.
 - **Every automatic (no-click) decode site is still budget-guarded.**
 - Two files that read as unreferenced (`SocialExportCard`, `LibraryRows`) are both wired — the entry-point type name simply differs from the filename.
+
+### Round 3 self-QA — checked and clean
+
+- **No class marked `nonisolated` lost real protection.** The only two are `SearchCancellation` (NSLock-guarded, already `@unchecked Sendable`) and `KeychainTokenStore` (two `let` strings; all state lives in the thread-safe Keychain). Everything else marked was a struct, enum, or pure static.
+- **`AppSettings`' mutable UserDefaults-backed vars stayed main-actor** — only pure constants and clamp functions there were marked.
+- **All four importer refactors are semantically faithful** to the `var`-mutation versions they replaced; the one difference is that a thrown transaction now discards its partial outcome instead of leaving an outer array mutated, which is the more correct direction.
 
 ---
 

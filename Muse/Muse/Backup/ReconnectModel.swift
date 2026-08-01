@@ -44,6 +44,13 @@ final class ReconnectModel: ObservableObject {
     @Published var folders: [FolderRow]
     @Published var collectionStatuses: [CollectionStatusRow]
 
+    /// Library-global edit assets are restored ONCE, not per folder. They are
+    /// `INSERT OR IGNORE` so repeating them is harmless correctness-wise, but a
+    /// LUT blob is up to 25 MB and SQLite still binds it into the statement
+    /// before the id conflict is detected — a ten-folder restore would push
+    /// hundreds of megabytes through the writer for nothing.
+    private var didApplyEditAssets = false
+
     private let archive: BackupArchive
     private let hashToFile: [String: BackupFile]
     private let hashForOriginalPath: [String: String]
@@ -109,7 +116,15 @@ final class ReconnectModel: ObservableObject {
             else { return ([], []) }
             // `nextObject()` rather than for-in: DirectoryEnumerator's
             // Sequence conformance is unavailable from an async context.
-            while let url = en.nextObject() as? URL {
+            //
+            // The non-URL case CONTINUES rather than ending the loop. Writing
+            // this as `while let url = en.nextObject() as? URL` reads fine and
+            // is wrong: a single non-URL element would terminate the walk and
+            // silently index only part of the folder — during a RESTORE, where
+            // a short enumeration means unmatched occurrences the user is then
+            // asked to eyeball.
+            while let next = en.nextObject() {
+                guard let url = next as? URL else { continue }
                 guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true
                 else { continue }
                 let kind = AssetKind.detect(at: url)
@@ -168,32 +183,6 @@ final class ReconnectModel: ObservableObject {
                 try await ReconnectApplier.applyCollections(archive, fileIDForHash: map, queue: queue)
             } catch { applyFailed = true }
             try? await ReconnectApplier.applyStars(archive, queue: queue)
-            // Library-global looks. Idempotent (INSERT OR IGNORE on a UUID and
-            // on a content-hash PK), so running it per reconnected folder is
-            // safe and keeps it on the same path as collections and stars.
-            let restoredLutIDs =
-                (try? await ReconnectApplier.applyEditAssets(archive, queue: queue)) ?? []
-            // The edit-save consequences, run ONCE for the restored set. Without
-            // these the rows are in the database and nothing on screen knows:
-            // EditStackIndex is path-keyed and was built at launch, and the
-            // thumbnail cache still holds each file's UNEDITED render under a
-            // key the new stack no longer matches.
-            //
-            // `applyHydratedConsequences` is exactly this list already (index
-            // warm, version counts, `markContentChanged`, generation bump) and
-            // deliberately omits the sidecar re-export — which is also right
-            // here: hydration owns sidecar reconciliation, and a restore must
-            // not stomp a newer on-disk sidecar with archive state.
-            //
-            // LUTs are invalidated FIRST: `EditRenderer.canRender` consults
-            // `LutRegistry` while the index is being warmed, so a stale miss
-            // cached before this point would mark a restored LUT-bearing stack
-            // unrenderable and show the original.
-            if !restoredEditPaths.isEmpty || !restoredLutIDs.isEmpty {
-                for id in restoredLutIDs { LutRegistry.invalidate(id) }
-                await EditStore.shared.applyHydratedConsequences(
-                    for: restoredEditPaths.map { URL(fileURLWithPath: $0) })
-            }
             await CollectionsEngine.shared.reload()
             for j in collectionStatuses.indices {
                 let coll = archive.collections.first { $0.id == collectionStatuses[j].id }
@@ -202,6 +191,41 @@ final class ReconnectModel: ObservableObject {
             }
         } else {
             applyFailed = true
+        }
+
+        // Edit assets and the edit-save consequences sit OUTSIDE the
+        // hash-map branch above, deliberately. Neither needs that map — the
+        // assets are library-global and the consequences key off paths — and
+        // `applyMeta` has already written the edit rows unconditionally. Nested
+        // inside it, a failed `currentFileIDForHash` left the edits in the
+        // database with nothing on screen knowing: `EditStackIndex` is
+        // path-keyed and was built at launch, and the thumbnail cache still
+        // holds each file's UNEDITED render under a key the new stack no longer
+        // matches. That is the same defect class as the folder-rename one.
+        //
+        // `applyHydratedConsequences` is exactly the right list (index warm,
+        // version counts, `markContentChanged`, generation bump) and
+        // deliberately omits the sidecar re-export — also correct here:
+        // hydration owns sidecar reconciliation, and a restore must not stomp a
+        // newer on-disk sidecar with archive state.
+        //
+        // LUTs are invalidated FIRST: `EditRenderer.canRender` consults
+        // `LutRegistry` while the index is being warmed, so a stale miss cached
+        // before this point would mark a restored LUT-bearing stack
+        // unrenderable and show the original.
+        var restoredLutIDs: [String] = []
+        if !didApplyEditAssets,
+           let ids = try? await ReconnectApplier.applyEditAssets(archive, queue: queue) {
+            restoredLutIDs = ids
+            // Latched only on SUCCESS, so a transient write failure on the
+            // first folder retries with the next one instead of silently
+            // costing the user every preset and LUT in the archive.
+            didApplyEditAssets = true
+        }
+        if !restoredEditPaths.isEmpty || !restoredLutIDs.isEmpty {
+            for id in restoredLutIDs { LutRegistry.invalidate(id) }
+            await EditStore.shared.applyHydratedConsequences(
+                for: restoredEditPaths.map { URL(fileURLWithPath: $0) })
         }
 
         // Status: a DB write failure means the folder is NOT safely reconnected,

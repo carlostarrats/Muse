@@ -91,18 +91,35 @@ nonisolated enum ReconnectApplier {
                             ?? Int64(Date().timeIntervalSince1970),
                         fileID: fid, parentDir: parentDir, db: db)
                 }
-                // Versions/snapshots insert with FRESH UUIDs — the same carry
-                // rule the identity seams use, since the archive's ids may
-                // already exist locally. Re-restoring the same archive is
-                // therefore additive, not idempotent, on versions; that is the
-                // conservative direction (a duplicate version is visible and
-                // deletable, a dropped one is gone).
-                for v in m.occurrence.edit_versions ?? [] {
-                    var row = EditVersionRow(
-                        id: UUID().uuidString, file_id: fid, parent_dir: parentDir,
-                        kind: v.kind, name: v.name ?? "", stack: v.stack,
-                        created_at: v.created_at)
-                    try row.insert(db)
+                // Versions/snapshots insert with FRESH UUIDs — the archive's own
+                // ids may already belong to a different local row, so they are
+                // not identity here. But a fresh id per insert would make a
+                // SECOND restore of the same archive duplicate every version,
+                // so identity is the CONTENT: (kind, name, stack, created_at) at
+                // this scope. Re-running Restore is then idempotent, which is
+                // the rule the rest of this file follows.
+                //
+                // The existing-versions read is INSIDE the emptiness guard on
+                // purpose: almost no file in a library carries versions, and
+                // hoisting it out would put one extra query on every single
+                // matched occurrence of a whole-library restore.
+                let incomingVersions = m.occurrence.edit_versions ?? []
+                if !incomingVersions.isEmpty {
+                    let existingVersions = try EditRecordStore.versions(
+                        fileID: fid, parentDir: parentDir, db: db)
+                    for v in incomingVersions {
+                        let name = v.name ?? ""
+                        let alreadyHere = existingVersions.contains {
+                            $0.kind == v.kind && $0.name == name
+                                && $0.stack == v.stack && $0.created_at == v.created_at
+                        }
+                        guard !alreadyHere else { continue }
+                        var row = EditVersionRow(
+                            id: UUID().uuidString, file_id: fid, parent_dir: parentDir,
+                            kind: v.kind, name: name, stack: v.stack,
+                            created_at: v.created_at)
+                        try row.insert(db)
+                    }
                 }
                 // FTS mirror (basename + caption; OCR intentionally empty — same as hydrate).
                 try db.execute(sql: "DELETE FROM files_fts WHERE file_id = ?", arguments: [fid])
