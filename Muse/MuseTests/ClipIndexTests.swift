@@ -90,6 +90,50 @@ final class ClipIndexTests: XCTestCase {
         XCTAssertLessThanOrEqual(results.count, ClipIndex.topK)
     }
 
+    /// The accumulator is trimmed back to `topK` once it passes `trimAt`, so
+    /// the run has to survive more candidates than that and still return
+    /// exactly the same top-K a full sort would.
+    func testTrimmingPreservesTheExactTopK() throws {
+        let q = try makeQueue()
+        let count = ClipIndex.trimAt + 200
+        try q.write { db in
+            for i in 0..<count {
+                try insertVector(db, id: String(format: "v%05d", i),
+                                 vector: unitVector((0..<8).map { _ in Float.random(in: -1...1) }))
+            }
+        }
+        let query = unitVector((0..<8).map { _ in Float.random(in: -1...1) })
+        let streamed = try q.read { db in try ClipIndex.matches(query: query, minScore: -1, db: db) }
+        let all = try q.read { db in try ClipEmbeddingRow.fetchAll(db) }
+        let reference = all.compactMap { row -> (String, Double)? in
+            guard let v = row.vector.flatMap(ClipVectors.fromData) else { return nil }
+            return (row.file_id, Double(zip(v, query).reduce(Float(0)) { $0 + $1.0 * $1.1 }))
+        }.sorted { $0.1 > $1.1 }.prefix(ClipIndex.topK)
+        XCTAssertEqual(streamed.count, ClipIndex.topK)
+        XCTAssertEqual(streamed.map(\.id), reference.map(\.0))
+    }
+
+    /// Keyset paging must visit every row, including the ones past the first
+    /// page — a broken cursor silently returns only the first chunk, which
+    /// looks like a working search on a small library.
+    func testKeysetPagingReachesRowsPastTheFirstChunk() throws {
+        let q = try makeQueue()
+        let total = ClipIndex.chunkRows + 25
+        try q.write { db in
+            for i in 0..<total {
+                // Deliberately weak matches…
+                try insertVector(db, id: String(format: "v%06d", i), vector: unitVector([0.02, 1, 0]))
+            }
+            // …and the single best one LAST in file_id order, so it can only be
+            // found by a cursor that actually advances.
+            try insertVector(db, id: "zzz-best", vector: unitVector([1, 0, 0]))
+        }
+        let results = try q.read { db in
+            try ClipIndex.matches(query: unitVector([1, 0, 0]), minScore: -1, db: db)
+        }
+        XCTAssertEqual(results.first?.id, "zzz-best")
+    }
+
     func testThresholdEdgeExcludesBelowFloor() throws {
         let q = try makeQueue()
         try q.write { db in

@@ -137,6 +137,35 @@ final class RediscoveryQueriesTests: XCTestCase {
         }
     }
 
+    /// The reservoir sample must still cover the whole library — a cursor that
+    /// stops early, or a slot rule that only ever replaces the head, would
+    /// silently sample from a prefix.
+    func testShuffleSamplesFromTheWholeLibrary() throws {
+        let queue = try migrated()
+        try queue.write { db in
+            var files = "INSERT INTO files (id, content_hash, kind, last_seen_at, created_at) VALUES "
+            files += (0..<200).map { "('f\(String(format: "%03d", $0))','h\($0)','image',0,0)" }
+                .joined(separator: ",")
+            try db.execute(sql: files)
+            var paths = "INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES "
+            paths += (0..<200).map {
+                "('p\($0)','f\(String(format: "%03d", $0))','/r/f\($0).jpg',1)"
+            }.joined(separator: ",")
+            try db.execute(sql: paths)
+        }
+        try queue.read { db in
+            var pooled = Set<String>()
+            for seed in UInt64(1)...20 {
+                pooled.formUnion(try RediscoveryQueries.shuffle(db: db, limit: 5, seed: seed))
+            }
+            // With a prefix-only sampler every seed returns from the same few
+            // rows; a correct reservoir reaches deep into the id order.
+            XCTAssertTrue(pooled.contains { $0 > "f150" },
+                          "sampled ids never reached the tail of the library")
+            XCTAssertGreaterThan(pooled.count, 20)
+        }
+    }
+
     func testSurfacesAreCapped() throws {
         let queue = try migrated()
         try queue.write { db in

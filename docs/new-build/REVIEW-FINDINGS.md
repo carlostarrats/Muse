@@ -492,6 +492,42 @@ tests pass.
 
 ---
 
+### Slice 5 — CLIP, culling, search (02, 03) (+ F8, F11) — DONE
+
+| Finding | Fix |
+|---|---|
+| F8 | `ClipIndex.matches` pages by KEYSET (`file_id > ?`) instead of `LIMIT/OFFSET` — SQLite had to walk and discard `offset` rows per page, ~78M discarded row-visits for an 800k library, quadratic in the one file whose header promises graceful degradation. The accumulator is also bounded now: candidates are trimmed back to `topK` whenever they pass `trimAt` (= 2·topK), with the weakest surviving score becoming the running threshold (`>=`, so ties still enter). +2 tests: exact top-K equality against a brute-force reference with more candidates than `trimAt`, and a best-match row placed LAST in id order past the first chunk — which only a cursor that actually advances can find. |
+| F11 (RAM half) | The model archive streams to disk and is hashed incrementally (`SHA256` updated per chunk, `ClipModelManifest.verify(digest:)`) instead of being assembled in a `Data` — a few hundred MB held in RAM on the 8 GB reference machine, and then written out anyway. Cancellation mid-stream leaves state to `cancelDownload()`/`remove()`, as before. |
+| F11 (sandbox half) | **Still UNVERIFIED and deliberately untouched** — `unzip` shells out to `/usr/bin/unzip` via `Process`. Pass A's instruction was to check this at runtime before spending effort on it; that check is Pass C's. If the sandbox denies the exec, the fix is a built-in ZIP reader (a dependency is not an option — DECIDED #26 keeps dependencies minimal). |
+
+One more, **confirmed**, same class as F8:
+
+- **F22 (low/med) — `RediscoveryQueries.shuffle` materialized every alive photo
+  id** to pick 500 of them (~50 MB of strings at the 800k tier). It is now a
+  seeded reservoir sample (Algorithm R) over a cursor: O(limit) memory, one
+  indexed pass, same seed → same set. +1 test that the sample actually reaches
+  the tail of the library rather than a prefix.
+
+Checked and clean: `ClipModelStore`'s fail-closed ladder (manifest cap → chunk
+stream → SHA-256 → unpack → load-test → `.verified` marker, `cleanupPartial()`
+at every failure); the CLIP generation and vector-length guards that stop
+cross-model pairing; trait/embedding markers including the deliberate
+NULL-vector attempted-marker; ephemeral cull state with no persistence surface;
+`is:`/`faces:`/`pets:` reading no tags; offline geocoding with no per-photo
+network.
+
+**Observation, not acted on:** `RediscoveryQueries.onThisDay`'s FALLBACK query
+(for files with no `photo_meta` row) filters on `strftime` over
+`files.created_at` and cannot use an index — a full scan of `files` per
+activation. It is user-initiated, off-main, and the comment is right that the
+set shrinks toward zero as the header backfill completes; fixing it properly
+means materializing a month-day column for `created_at`, i.e. a migration, which
+is out of proportion.
+
+Suite after this slice: **1,770 tests, 2 skipped, 0 failures.**
+
+---
+
 ---
 
 ## Resume here — next session

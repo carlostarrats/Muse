@@ -78,17 +78,39 @@ nonisolated enum RediscoveryQueries {
 
     /// Deterministic under a fixed seed; `RediscoveryStore` passes a fresh seed
     /// on each activation so "Shuffle Again" re-samples.
+    /// Reservoir sample over a CURSOR, not a full fetch + `shuffle`: the
+    /// surface shows 500 photos, and materializing every alive photo id in the
+    /// library to pick them held ~50 MB of strings at the 800k tier for no
+    /// reason (DECIDED #25). Memory is O(limit); the walk is one indexed pass.
     static func shuffle(db: GRDB.Database, limit: Int = defaultLimit, seed: UInt64) throws -> [String] {
-        let rows = try Row.fetchAll(db, sql: """
+        guard limit > 0 else { return [] }
+        var rng = SeededRandom(seed: seed)
+        var reservoir: [String] = []
+        reservoir.reserveCapacity(limit)
+        var seen = 0
+        let cursor = try Row.fetchCursor(db, sql: """
             SELECT f.id AS id FROM files f
             JOIN paths p ON p.file_id = f.id AND p.is_alive = 1
             WHERE f.kind IN (\(photoKinds))
             GROUP BY f.id
             ORDER BY f.id ASC
             """)
-        var ids = rows.compactMap { $0["id"] as String? }
-        var rng = SeededRandom(seed: seed)
-        ids.shuffle(using: &rng)
-        return Array(ids.prefix(limit))
+        while let row = try cursor.next() {
+            guard let id: String = row["id"] else { continue }
+            if reservoir.count < limit {
+                reservoir.append(id)
+            } else {
+                // Algorithm R: each seen row has an equal chance of being in
+                // the sample, and the choice is driven entirely by the seeded
+                // RNG — so the same seed still gives the same set.
+                let slot = Int(rng.next() % UInt64(seen + 1))
+                if slot < limit { reservoir[slot] = id }
+            }
+            seen += 1
+        }
+        // A reservoir fills in scan order, so shuffle what survived — otherwise
+        // a library smaller than `limit` would come back sorted by id.
+        reservoir.shuffle(using: &rng)
+        return reservoir
     }
 }

@@ -41,6 +41,17 @@ nonisolated struct ClipModelManifest: Equatable {
         sha256Hex(assembled) == expectedSHA256
     }
 
+    /// The same check for a download that was streamed to disk rather than
+    /// assembled in memory — the caller feeds each chunk to a running
+    /// `SHA256` and hands over the finished digest.
+    static func hex(_ digest: SHA256Digest) -> String {
+        digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    static func verify(digest: SHA256Digest, expectedSHA256: String) -> Bool {
+        hex(digest) == expectedSHA256
+    }
+
     private struct RawManifest: Codable {
         let version: Int
         let name: String
