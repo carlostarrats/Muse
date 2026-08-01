@@ -159,9 +159,13 @@ new code against each and fix what doesn't conform:
   photos and "must be flawless"; 200k–800k must "degrade gracefully — never crash, never
   corrupt, never beachball."
 - **"Never write code that assumes everything fits in RAM."**
-- **`AppState` is frozen** at ~1380 LOC / ~70 `@Published`. New features get their own
-  state objects. Every new `@Published` on `AppState` invalidates more UI — count what
-  Specs 01–07 added and flag every one that should have been its own store.
+- **`AppState` is frozen** at ~1380 LOC / ~70 `@Published`, per foundation §9 — new
+  features get their own state objects. **This has already been breached and is a
+  confirmed finding, not a hypothesis:** `AppState.swift` measures **1505 LOC and 85
+  `@Published`** (93 across all `AppState*.swift`) as of 2026-07-31. Attribute every
+  addition to its spec, and move the ones that should have been their own store. Note
+  DECISIONS records Spec 06 deliberately holding this line ("net-zero `@Published`
+  count") while other specs did not — so the rule was known and unevenly applied.
 - **The platform-neutral core imports zero AppKit** (edit recipes, search/query, sidecar
   I/O, import mapping).
 - **Dependencies stay minimal**; models are downloaded on demand, never bundled.
