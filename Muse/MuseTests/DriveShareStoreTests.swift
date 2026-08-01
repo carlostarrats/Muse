@@ -60,4 +60,83 @@ final class DriveShareStoreTests: XCTestCase {
         let future = rec("f", folder: "F", expiry: Date(timeIntervalSince1970: 150))
         XCTAssertEqual(DriveExpiry.expired([past, future], now: now).map(\.id), ["p"])
     }
+
+    // MARK: portfolio records (Spec 07)
+
+    private func portfolioRec(_ id: String, folder: String, collectionID: String) -> DriveShareRecord {
+        DriveShareRecord(id: id, collectionName: "Portfolio", folderID: folder,
+                         pageURL: "https://muse-share.pages.dev#xyz", itemCount: 5,
+                         createdAt: Date(timeIntervalSince1970: 0),
+                         expiry: DriveShareRecord.neverExpires,
+                         kind: "portfolio", manifestFileID: "m1", collectionID: collectionID,
+                         layout: "essay", introTitle: "My Work", bodyText: "About this work.")
+    }
+
+    // A driveShares.json written by a build before Spec 07 carries none of the
+    // new keys and must decode unchanged.
+    func testPreSpec07RecordDecodesUnchanged() throws {
+        let legacy = """
+        [{"id":"a","collectionName":"Trip","folderID":"f1",
+          "pageURL":"https://muse-share.pages.dev#abc","itemCount":3,
+          "createdAt":"2026-01-01T00:00:00Z","expiry":"2026-02-01T00:00:00Z"}]
+        """
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("legacy-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data(legacy.utf8).write(to: url)
+        let all = DriveShareStore(fileURL: url).all()
+        XCTAssertEqual(all.count, 1)
+        XCTAssertNil(all.first?.kind)
+        XCTAssertFalse(all.first!.isPortfolio)
+    }
+
+    func testPortfolioRecordRoundTrips() {
+        let (store, url) = tempStore(); defer { try? FileManager.default.removeItem(at: url) }
+        let record = portfolioRec("p1", folder: "F1", collectionID: "col1")
+        store.add(record)
+        let loaded = DriveShareStore(fileURL: url).all().first
+        XCTAssertEqual(loaded, record)
+        XCTAssertTrue(loaded!.isPortfolio)
+    }
+
+    func testPortfolioForCollectionIDFiltersAndSortsNewestFirst() {
+        let (store, url) = tempStore(); defer { try? FileManager.default.removeItem(at: url) }
+        var older = portfolioRec("p1", folder: "F1", collectionID: "col1")
+        older = DriveShareRecord(id: "p1", collectionName: older.collectionName, folderID: "F1",
+                                 pageURL: older.pageURL, itemCount: older.itemCount,
+                                 createdAt: Date(timeIntervalSince1970: 10), expiry: older.expiry,
+                                 kind: "portfolio", collectionID: "col1")
+        let newer = DriveShareRecord(id: "p2", collectionName: "P", folderID: "F2",
+                                     pageURL: "u", itemCount: 1,
+                                     createdAt: Date(timeIntervalSince1970: 20),
+                                     expiry: DriveShareRecord.neverExpires,
+                                     kind: "portfolio", collectionID: "col1")
+        let other = portfolioRec("p3", folder: "F3", collectionID: "col2")
+        let classic = rec("c1", folder: "F4", expiry: Date(timeIntervalSince1970: 99))
+        [older, newer, other, classic].forEach { store.add($0) }
+        XCTAssertEqual(store.portfolio(forCollectionID: "col1").map(\.id), ["p2", "p1"])
+    }
+
+    // The sentinel, not an optional Date: the sweeper needs no portfolio special
+    // case because `expiry < now` is simply never true in any real present.
+    func testTheNeverExpiresSentinelIsNeverSwept() {
+        let record = portfolioRec("p1", folder: "F1", collectionID: "col1")
+        XCTAssertTrue(DriveExpiry.expired([record], now: Date(timeIntervalSince1970: 4_102_444_700)).isEmpty)
+        XCTAssertFalse(DriveExpiry.expired([record], now: Date(timeIntervalSince1970: 4_102_444_900)).isEmpty)
+    }
+
+    func testUpsertByFolderIDReplacesAPortfolioRecordInPlace() {
+        let (store, url) = tempStore(); defer { try? FileManager.default.removeItem(at: url) }
+        let original = portfolioRec("p1", folder: "F1", collectionID: "col1")
+        store.add(original)
+        var updated = original
+        updated.itemCount = 9
+        updated.bodyText = "Updated text."
+        store.add(updated)
+        let all = store.all()
+        XCTAssertEqual(all.count, 1)
+        XCTAssertEqual(all.first?.itemCount, 9)
+        XCTAssertEqual(all.first?.bodyText, "Updated text.")
+        XCTAssertEqual(all.first?.pageURL, original.pageURL)   // the link never changes
+    }
 }

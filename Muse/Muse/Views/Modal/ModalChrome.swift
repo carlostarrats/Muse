@@ -89,7 +89,7 @@ enum ModalChrome {
 enum CollectionModal: Identifiable {
     case customize(CollectionStore.Loaded)
     case rules(RulesRequest)
-    case driveShare(title: String, urls: [URL])
+    case driveShare(DriveShareRequest)
 
     /// Rule-editor payload: nil `collectionID` means "create a new smart
     /// collection" (the Collections page's + button).
@@ -105,7 +105,17 @@ enum CollectionModal: Identifiable {
         switch self {
         case .customize(let loaded):   return "customize-\(loaded.collection.id)"
         case .rules(let request):      return "rules-\(request.collectionID ?? "new")"
-        case .driveShare(let title, _): return "drive-\(title)"
+        case .driveShare(let request):
+            // The mode is part of the identity: without it, a plain share and a
+            // portfolio publish of the same collection read as "the same modal"
+            // and one wouldn't replace the other.
+            let modeTag: String
+            switch request.mode {
+            case .share:                    modeTag = "share"
+            case .portfolioNew:             modeTag = "portfolio-new"
+            case .portfolioUpdate(let rec): modeTag = "portfolio-update-\(rec.id)"
+            }
+            return "drive-\(request.title)-\(modeTag)"
         }
     }
 
@@ -114,7 +124,12 @@ enum CollectionModal: Identifiable {
         switch self {
         case .customize:  return 480
         case .rules:      return 560
-        case .driveShare: return 460
+        case .driveShare(let request):
+            switch request.mode {
+            case .share:                          return 460
+            // Extra fields (Layout + a multi-line Intro, no Expiry).
+            case .portfolioNew, .portfolioUpdate: return 480
+            }
         }
     }
 }

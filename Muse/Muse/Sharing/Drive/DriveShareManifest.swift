@@ -15,15 +15,30 @@ struct DriveShareManifest: Codable, Equatable {
     var label: String
     var name: String
     var date: String
-    var expiry: String      // ISO-8601 yyyy-MM-dd
+    var expiry: String      // ISO-8601 yyyy-MM-dd; "" for portfolio manifests
     var imageIDs: [String]
     var filenames: [String]? = nil   // key "f"; parallel to imageIDs (optional → old links lack it)
     var pdfID: String?
+    // Spec 07 v2 keys. Every one is optional with a nil default, so a manifest
+    // that uses none of these features encodes with NONE of the new keys present
+    // — the wire shape stays byte-identical to the pre-Spec-07 format and legacy
+    // fragments keep decoding forever.
+    var layout: String? = nil        // key "y" — DriveShareLayout.rawValue; absent = grid
+    var bodyText: String? = nil      // key "s" — intro paragraph (essay header / portfolio intro)
+    var manifestID: String? = nil    // key "m" — Drive file id of the live manifest.json (portfolio only)
 
     enum CodingKeys: String, CodingKey {
         case intro = "i", label = "l", name = "n", date = "d",
-             expiry = "e", imageIDs = "g", filenames = "f", pdfID = "p"
+             expiry = "e", imageIDs = "g", filenames = "f", pdfID = "p",
+             layout = "y", bodyText = "s", manifestID = "m"
     }
+
+    /// App-side caps mirroring the page's own validator (share.js MAX_FIELD /
+    /// MAX_NAME / the 1000-image grid cap). Enforced at publish time
+    /// (`DriveSharePublishGuard`) so the app can never mint a link its own page
+    /// rejects as "unavailable".
+    static let maxImages = 1000
+    static let maxFieldLength = 4096
 
     // The payload rides the URL fragment, which grows with the image list (and now
     // the filenames). To keep links small we DEFLATE the JSON and prefix a 0x01
@@ -60,6 +75,13 @@ struct DriveShareManifest: Codable, Equatable {
 
     func pageURL(base: String) -> String { "\(base)#\(encoded())" }
 
+    /// The plain, uncompressed, un-base64'd JSON encoding — the bytes uploaded
+    /// as `manifest.json` for a portfolio share. The fragment keeps using
+    /// `encoded()` (base64url + optional DEFLATE) untouched.
+    func jsonData() -> Data {
+        (try? JSONEncoder().encode(self)) ?? Data()
+    }
+
     // Raw DEFLATE (RFC 1951) via Apple's Compression framework — no zlib/gzip
     // wrapper — to match the page's fflate inflateSync.
     private static func rawDeflate(_ data: Data) -> Data? {
@@ -83,4 +105,12 @@ struct DriveShareManifest: Codable, Equatable {
         }
         return n > 0 ? Data(bytes: dst, count: n) : nil
     }
+}
+
+/// The three share-page layouts. Raw values ARE the manifest wire values — the
+/// page's `layoutOf` must match them exactly (two implementations, one
+/// contract; pinned by tests on both sides). An unknown/absent value renders
+/// grid on the page, never a rejection.
+enum DriveShareLayout: String, CaseIterable, Codable {
+    case grid, sheet, essay
 }

@@ -14,12 +14,26 @@ import SwiftUI
 import AppKit
 
 struct ShareButton: View {
+    @EnvironmentObject private var appState: AppState
     let url: URL
     @State private var hovering = false
+
+    /// Raster kinds only — the social render pipeline re-encodes pixels, so a
+    /// PDF or a video has nothing to export.
+    private var isRasterKind: Bool {
+        switch AssetKind.detect(at: url) {
+        case .image, .raw, .psd: return true
+        default: return false
+        }
+    }
 
     var body: some View {
         Menu {
             Button("Share") { share() }
+            Button("Export for Social…") {
+                appState.socialExportRequest = SocialExportRequest(urls: [url])
+            }
+            .disabled(isRasterKind == false)
             Divider()
             Button("Open") { NSWorkspace.shared.open(url) }
             // Native-style Open With submenu (app icons + default + Other…),

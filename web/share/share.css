@@ -182,6 +182,90 @@ html, body {
   .tile img { transition: none; }
 }
 
+/* ------------------------------------------------ Layouts (Spec 07)
+   Three page layouts off ONE `data-layout` attribute on #app. There is a single
+   tile-builder DOM path in share.js — everything below is presentation only, so
+   captions, the lightbox, the download deterrents and the print flow are shared
+   by all three. `grid` is the pre-Spec-07 rendering and is what a legacy link
+   (no `y` key) resolves to, so those pages are unchanged.
+
+   The optional intro paragraph (manifest `s`) sits above the grid in every
+   layout and collapses when empty. */
+.body {
+  max-width: 860px;
+  margin: 0 auto 28px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--caption);
+  unicode-bidi: isolate;
+  overflow-wrap: anywhere;
+}
+.body:empty { display: none; }
+
+/* Contact sheet — denser, square cells, filename always visible, frame numbers
+   in the corner (the physical contact-sheet convention). */
+#app[data-layout="sheet"] .grid {
+  gap: 16px 8px;
+  counter-reset: frame;
+}
+#app[data-layout="sheet"] .tile {
+  aspect-ratio: 1;
+  counter-increment: frame;
+}
+#app[data-layout="sheet"] .tile::after {
+  content: counter(frame, decimal-leading-zero);
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font: 10px/1.2 ui-monospace, "SF Mono", Menlo, monospace;
+  color: var(--caption);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  padding: 1px 4px;
+  border-radius: 3px;
+  pointer-events: none;
+}
+#app[data-layout="sheet"] .tile-name {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+@media print {
+  #app[data-layout="sheet"] .tile { width: 15.5%; }
+  #app[data-layout="sheet"] .tile:nth-child(3n-1) { margin-left: 0; margin-right: 0; }
+}
+
+/* Essay — one centered column at the image's natural aspect, generous rhythm,
+   no density control (the sizer is hidden here and skipped in share.js). */
+#app[data-layout="essay"] .grid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 860px;
+  margin: 0 auto;
+  gap: 56px;
+}
+#app[data-layout="essay"] .tile {
+  aspect-ratio: auto;
+  width: 100%;
+  overflow: visible;
+}
+#app[data-layout="essay"] .tile img {
+  max-height: none;
+  width: 100%;
+}
+#app[data-layout="essay"] .tile::before { inset: 0; padding-bottom: 66%; }
+#app[data-layout="essay"] .tile-name {
+  font-size: 12px;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+#app[data-layout="essay"] .grid-sizer { display: none !important; }
+@media print {
+  #app[data-layout="essay"] .grid { display: block; }
+  #app[data-layout="essay"] .tile { width: 100%; margin: 0 0 24px; }
+}
+
 /* State machine: show only what matches data-state. */
 .notice {
   display: none;

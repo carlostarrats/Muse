@@ -9,9 +9,9 @@ settled record, written before build. Product-level decisions live in
 `muse-photo-foundation.md` §13 (authoritative decision log); this file is the
 build-level layer future specs must not contradict.*
 
-*Updated 2026-07-31: **Specs 01–06 are built** (branch `new-product-build-1`), so
+*Updated 2026-07-31: **Specs 01–07 are built** (branch `new-product-build-1`), so
 the "no Spec 01–09 code exists" note above no longer holds for them. Migrations
-run through **v23** (Spec 06 added none); future specs continue at v24. The
+run through **v23** (Specs 06 and 07 added none); future specs continue at v24. The
 "as built" / "as-built" sections below record what shipped, including where each
 deviates from the pre-build record; where the two disagree, the as-built section
 wins.*
@@ -1946,6 +1946,127 @@ section wins.*
   4 s · 10-image carousel 15 s · crop-stage preview decode 250 ms · byte-target
   ladder ≤ 3 encodes · portfolio update of 30 images recorded with no target
   (network-bound) · fetched-manifest page render recorded manually, not CI.
+
+## Spec 07 as built (2026-07-31, `new-product-build-1`)
+
+*Where this disagrees with the "Share manifest v2 & page layouts (Spec 07)",
+"Portfolio mode (Spec 07)" or "Social export (Spec 07)" sections above, this section
+wins.*
+
+### Scope actually shipped
+
+- Built: the whole plan. Manifest v2 (`y`/`s`/`m`, `jsonData()`, `DriveShareLayout`,
+  the publish caps) · three page layouts off `data-layout` · `DriveSharePublishGuard` ·
+  the signed-out explainer + `DriveConfig.consentScreenVerified` + Settings copy ·
+  portfolio mode (`uploadManifest`/`updateManifest`/`listChildren`, the record growth,
+  the page fetch + `connect-src`, `publishPortfolio`/`updatePortfolio`, the UI seams,
+  `SharingTier`) · social export (`Export/Social/`, `Components/SocialCropMath.swift`,
+  `Views/Export/SocialExportCard.swift`, three entry points).
+- **No migrations** — as specified. Future specs continue at **v24**.
+- The plan's Phase 0 (`EditStackIndex`, `OutputRender`) was ALREADY in the tree from
+  Spec 01 and made live by Spec 04, so it was consumed rather than built. Spec 04's
+  presence also promoted the plan's Task 4.9 from an absent-until-then seam to real
+  code — see "Save Crop as Version" below.
+
+### Manifest & page — as built
+
+- `validateManifest(m, opts = {})` is the shipped signature; `layoutOf`,
+  `manifestFetchURL`, `acceptFetchedManifest` and `SIZER_BY_LAYOUT` are exported for
+  tests. `share.test.mjs` is a PLAIN assert script (not `node:test`) — new tests follow
+  that shipped style.
+- The page's render glue was refactored into `renderLive(m)` + `buildGrid(m)`; a
+  portfolio re-fetch is a SECOND CALL to those, never a second DOM construction path.
+  `setupGridSizer` is re-entrant: it wires its listeners once (`slider.dataset.wired`)
+  and reads bounds from a module-scoped `sizerBounds`, so a layout change after a
+  re-fetch can't leave the drag/key handlers on the first call's captured range.
+- `SIZER_BY_LAYOUT` is COLUMN COUNTS, matching the shipped sizer (grid 1–6 default 4 —
+  unchanged; sheet 3–10 default 6; essay disabled, `max <= min`), not the tile-size
+  ranges the plan sketched.
+- The page's caption class is `.tile-name` (shipped), and the frame number in the
+  contact-sheet layout is `.tile::after` — `::before` is the shipped loading skeleton.
+- A portfolio page shows no expiry line at all (`#expires` is set empty) rather than a
+  date it doesn't have.
+
+### Portfolio — as built
+
+- The fragment manifest keeps `m`; the Drive-hosted copy carries none. On a successful
+  fetch the page re-attaches the ORIGINAL `m` to the fetched object so it still knows
+  it's a portfolio (the fetched copy's own `m` is deleted first — exactly one fetch,
+  never a chain).
+- The sweep-failure notice is a `Phase` case, `.doneWithSweepWarning(String)` — the
+  plan's own preferred option. `DriveShareService` still holds no `AppState` reference.
+- A failed update rolls back by deleting just-uploaded files via a fresh unstructured
+  `Task` (`DriveShareService.rollback`) — the same reason `cleanupFolder` does: a
+  cancelled task's URLSession throws before reaching the network.
+- Per-file deletes reuse the shipped `DriveClient.deleteFolder(id:)` (Drive's DELETE is
+  id-based and kind-agnostic); no new delete method was added.
+- `SharingTier`'s single call site passes the REAL entitlement
+  (`CommerceStore.entitlements.sharing`) — `CommerceStore` exists in this tree, contrary
+  to the plan's assumption. Behavior is identical while `enforced == false`.
+- `CollectionModal.driveShare(DriveShareRequest)`'s `id` includes a mode tag, so a plain
+  share and a portfolio publish of the same collection are distinct modals.
+
+### Social export — as built
+
+- **The X quality ladder is driven by the INVARIANTS, not by a byte target.** X has no
+  `byteTargetKB`, and stepping down only for `bytes < W×H` left a busy 4096² image over
+  5 MB. The loop now runs until BOTH byte invariants hold or the 0.55 floor is reached.
+- **A source that can't meet the X invariants even at the floor FAILS that file** and
+  writes nothing. Measured: per-pixel random noise at 4096² is ~11 MB at 0.55 — far
+  beyond any real photograph. `XPresetRuleTests` pins both directions (a full-size
+  detailed source lands under 5 MB; a pathological one throws).
+- **Never-upscale applies to FIXED presets too**, via `SocialRender.fixedFrame`: a
+  source that can't fill the frame shrinks the whole frame proportionally (exact preset
+  ASPECT preserved) rather than exporting at the declared size. The card states it
+  (`SocialExportModel.willNotUpscale`).
+- Source dimensions are read from the header and TRANSPOSED for EXIF orientations 5–8
+  before any aspect reasoning — the header reports stored, not display, dimensions.
+- `SocialRender.scale` crops to the integral target after `CILanczosScaleTransform`,
+  because Lanczos alone lands a fraction of a pixel off on some ratios and exact output
+  dims are a requirement for matte AND crop alike.
+- One long-lived `CIContext` per process for export (`cacheIntermediates: false`) — not
+  the editor's live context.
+- `blurExtend` composites the fitted image over an aspect-FILL, Gaussian-blurred copy of
+  the same picture at `blurExtendRadiusFraction = 0.04` × long edge.
+- **"Save Crop as Version" IS implemented** (Spec 04 exists): it composes via
+  `SocialCropMath.composedCrop` into `stack.geometryParams?.crop` and writes ONE
+  `edit_versions` row through `EditStore.saveVersion(name:kind:stack:for:)` with kind
+  `"version"`. The current stack is untouched; no new write path.
+- `SocialPreset` gained two derived conveniences used by the card and the renderer:
+  `isFixed` and `targetAspect` (nil for non-fixed) plus `preset(id:)`.
+- The card is presented by its own `SocialExportModal: ViewModifier`, not inline in
+  `ContentView` — that modifier chain is already at the type-checker's limit and an
+  inline `.museModal` tipped it over.
+- **Test fixtures are GENERATED, not checked in** (`MuseTests/SocialFixtures.swift`,
+  fixed-seed LCG). The app target uses file-system-synchronized groups, so a checked-in
+  binary would enter the test bundle by inference rather than declaration, and a 4096²
+  noise JPEG is a multi-MB blob in git for something ImageIO reproduces exactly.
+
+### Localization & tooling notes
+
+- Every Spec 07 string is translated to French, including the 12 preset display names
+  and the three advisories — those are reached through runtime-variable keys the
+  extractor can't see, so they were added to `Localizable.xcstrings` by hand (the
+  standing rule for `NSLocalizedString(variable)`-reached keys).
+- **`xcodebuild -exportLocalizations` needs `ARCHS=arm64 ONLY_ACTIVE_ARCH=YES`** —
+  without it the extraction build fails in `Intelligence/Core/ClipVectors.swift`
+  (`Float16.bitPattern`) on a non-arm64 slice. Pre-existing since Spec 03; recorded, not
+  fixed here.
+- 162 strings remain untranslated in French, all pre-existing Spec 03/06 debt (Google
+  Takeout / Lightroom-preset import / cull / compare copy). Not Spec 07's.
+- The first `-exportLocalizations` run reformatted `Localizable.xcstrings` into Xcode's
+  canonical `" : "` separator style — a whole-file diff independent of the values added.
+
+### Owner-only steps still outstanding
+
+- Create the Drive-API-restricted, quota-only browser key and paste it over
+  `DRIVE_API_KEY = 'REPLACE_AT_DEPLOY'` at deploy time. **Never committed.**
+- Deploy `web/share/` to Cloudflare Pages (layouts + the `connect-src` CSP + the
+  portfolio fetch).
+- Run the X no-recompress byte-compare protocol once (post → download `?name=orig` →
+  `cmp`) and record the result. Not unit-testable — it verifies X's SERVER behavior.
+- Flip `DriveConfig.consentScreenVerified` when Google's OAuth review completes; flip
+  `SharingTier.enforced` when Spec 09 decides pricing.
 
 ## Domain-tier infrastructure (Spec 08)
 

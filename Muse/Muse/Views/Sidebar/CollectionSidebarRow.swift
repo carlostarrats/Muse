@@ -257,7 +257,9 @@ struct CollectionSidebarRow: View {
         let urls = await exportURLs()
         guard !urls.isEmpty else { appState.alertRequest = .pdfExportFailed; return }
         driveShareURLs = urls
-        appState.collectionModal = .driveShare(title: loaded.collection.name, urls: driveShareURLs)
+        appState.collectionModal = .driveShare(
+            DriveShareRequest(title: loaded.collection.name, urls: driveShareURLs,
+                              collectionID: loaded.collection.id))
     }
 }
 

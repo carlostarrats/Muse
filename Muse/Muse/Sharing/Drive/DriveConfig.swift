@@ -29,4 +29,11 @@ enum DriveConfig {
     static let authEndpoint = "https://accounts.google.com/o/oauth2/v2/auth"
     static let tokenEndpoint = "https://oauth2.googleapis.com/token"
     static let revokeEndpoint = "https://oauth2.googleapis.com/revoke"
+
+    /// Set true by the owner once Google's OAuth verification review completes.
+    /// A compiled constant, not a Settings key — it describes the DEVELOPER's
+    /// console state, not a user preference. While false, the sign-in surfaces
+    /// (the publish-sheet explainer and the Settings Drive section) show a short
+    /// note that Google may present an "unverified app" interstitial.
+    static let consentScreenVerified = false
 }

@@ -13,9 +13,28 @@ struct DriveShareRecord: Codable, Identifiable, Equatable {
     let collectionName: String
     let folderID: String
     let pageURL: String
-    let itemCount: Int
+    /// `var` so a portfolio update can mutate the record in place and re-add it
+    /// (same id/pageURL/folderID/createdAt — the update never mints a new URL).
+    var itemCount: Int
     let createdAt: Date
-    let expiry: Date
+    var expiry: Date                    // `.neverExpires` sentinel for portfolios
+    // Spec 07 — all optional so a pre-existing driveShares.json decodes unchanged.
+    var kind: String? = nil             // "portfolio"; nil/anything else = classic share
+    var manifestFileID: String? = nil   // the stable pointer (files.update target)
+    var collectionID: String? = nil     // binds "Update Portfolio…" to its collection
+    var layout: String? = nil           // prefill for the update form
+    var introTitle: String? = nil       // prefill
+    var bodyText: String? = nil         // prefill
+
+    var isPortfolio: Bool { kind == "portfolio" }
+
+    /// 2100-01-01T00:00:00Z. A SENTINEL, not an optional: an optional expiry
+    /// would make new-format records undecodable by the previous build's
+    /// non-optional field, and that build's failed `load()` silently drops the
+    /// WHOLE share list on its next save. The sentinel keeps older builds fully
+    /// working, and the sweeper needs no portfolio special case — `expiry < now`
+    /// is simply never true.
+    static let neverExpires = Date(timeIntervalSince1970: 4_102_444_800)
 }
 
 enum DriveExpiry {
@@ -37,6 +56,15 @@ final class DriveShareStore {
     }()
 
     func all() -> [DriveShareRecord] { queue.sync { load().sorted { $0.createdAt > $1.createdAt } } }
+
+    /// The lookup seam binding "Update Portfolio…" to its collection, newest
+    /// first (the menu offers the latest).
+    func portfolio(forCollectionID id: String) -> [DriveShareRecord] {
+        queue.sync {
+            load().filter { $0.isPortfolio && $0.collectionID == id }
+                  .sorted { $0.createdAt > $1.createdAt }
+        }
+    }
 
     /// Returns whether the record was persisted. The caller (DriveShareService)
     /// uses this to warn when a live, public share couldn't be saved to the

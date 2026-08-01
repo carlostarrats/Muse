@@ -63,7 +63,19 @@ export function decodeManifest(fragment) {
 
 export const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
-export function validateManifest(m) {
+// Portfolio manifests (Spec 07 §2) live in the user's own Drive so a share can
+// be updated in place without its URL changing. This browser API key is
+// quota-only and API-restricted to the Drive API; it grants access to nothing
+// that isn't already public (the files it reads are anyone-readable by design).
+// It is NOT a secret — the binding invariant is that no secret and no OAuth
+// credential ever ships on this page.
+const DRIVE_API_KEY = 'REPLACE_AT_DEPLOY';
+// Bounded read, same guard class as MAX_INFLATED: the fetched body is remote
+// and attacker-influenceable in the same way the fragment is.
+const MAX_MANIFEST_BYTES = 512 * 1024;
+const MANIFEST_FETCH_TIMEOUT_MS = 6000;
+
+export function validateManifest(m, opts = {}) {
   if (!m || typeof m !== 'object') return false;
   if (!Array.isArray(m.g) || m.g.length === 0) return false;
   // Cap the grid: the manifest rides an unsigned URL fragment, so anyone handing
@@ -81,12 +93,54 @@ export function validateManifest(m) {
     if (!Array.isArray(m.f) || m.f.length !== m.g.length) return false;
     if (!m.f.every(s => typeof s === 'string' && s.length <= MAX_NAME)) return false;
   }
+  // Spec 07 optional keys. Unknown layout VALUES are allowed (forward-compat:
+  // an older page render of a newer link falls back to grid via layoutOf) — but
+  // the key, when present, must be a short string. `s` is display text, so it
+  // takes the field cap.
+  if (m.y != null && (typeof m.y !== 'string' || m.y.length > 16)) return false;
+  if (m.s != null && (typeof m.s !== 'string' || m.s.length > MAX_FIELD)) return false;
+  if (m.m != null && !VALID_ID.test(m.m)) return false;
   // Require a strict date-only `e` (YYYY-MM-DD). isExpired/formatDate append a
   // local time component; a value that already carried a time would yield an
   // Invalid Date and make isExpired fail OPEN (never expire). Reject it here.
-  if (typeof m.e !== 'string' || !DATE_ONLY.test(m.e) || isNaN(Date.parse(m.e))) return false;
+  // A PORTFOLIO manifest (`m` present) is non-expiring by design and carries no
+  // meaningful `e`; opts.portfolio covers manifests fetched from Drive, which
+  // never ride a fragment and so have no `m` of their own. The strict branch is
+  // never loosened for anything else — that's the fail-open guard.
+  const portfolio = opts.portfolio === true || m.m != null;
+  if (!portfolio) {
+    if (typeof m.e !== 'string' || !DATE_ONLY.test(m.e) || isNaN(Date.parse(m.e))) return false;
+  } else if (m.e != null && m.e !== '') {
+    if (typeof m.e !== 'string' || m.e.length > 32) return false;   // tolerated, ignored
+  }
   for (const k of ['i', 'l', 'n', 'd']) if (typeof m[k] !== 'string' || m[k].length > MAX_FIELD) return false;
   return true;
+}
+
+/// Resolve the page layout from a manifest. Wire values must match
+/// DriveShareManifest.swift's DriveShareLayout.rawValue exactly.
+export function layoutOf(m) {
+  return (m && (m.y === 'sheet' || m.y === 'essay')) ? m.y : 'grid';
+}
+
+/// A portfolio's live manifest lives in the owner's Drive; the fragment carries
+/// its file id (`m`) plus a full inline snapshot. This is the ONLY fetch this
+/// page ever makes.
+export function manifestFetchURL(id) {
+  // VALID_ID-gated by the caller; the charset makes interpolation URL-safe
+  // (the thumbURL rule class).
+  return `https://www.googleapis.com/drive/v3/files/${id}?alt=media&key=${DRIVE_API_KEY}`;
+}
+
+/// Pure: parse + bound + validate a fetched manifest body. null → the caller
+/// falls back to the inline snapshot. Exported for tests.
+export function acceptFetchedManifest(text) {
+  if (typeof text !== 'string' || text.length > MAX_MANIFEST_BYTES) return null;
+  try {
+    const obj = JSON.parse(text);
+    if (obj && typeof obj === 'object') delete obj.m;   // exactly one fetch — never chain
+    return validateManifest(obj, { portfolio: true }) ? obj : null;
+  } catch { return null; }
 }
 
 // Inclusive of the whole displayed day, parsed at LOCAL end-of-day so the
@@ -105,25 +159,30 @@ export function formatDate(iso) {
 // Larger size for crisp printing (the page is printed to make the PDF).
 export function thumbURL(id) { return `https://drive.google.com/thumbnail?id=${id}&sz=w2048`; }
 
+// Column-density bounds per layout. Contact sheets want to go denser; the essay
+// column has no density control at all (the sizer is hidden in CSS and skipped
+// here). Re-applied on EVERY render, since a portfolio re-fetch can change the
+// layout in place.
+let sizerBounds = { min: 1, max: 6, default: 4 };
+export const SIZER_BY_LAYOUT = {
+  grid:  { min: 1, max: 6, default: 4 },   // the pre-Spec-07 behavior, made explicit
+  sheet: { min: 3, max: 10, default: 6 },
+  essay: { min: 0, max: 0, default: 0 },   // sizer hidden; values unused
+};
+
 // Browser-only render glue (skipped under node).
 if (typeof document !== 'undefined') {
-  const m = decodeManifest(location.hash.slice(1));
+  const inline = decodeManifest(location.hash.slice(1));
   const root = document.getElementById('app');
   const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = sanitizeText(text); };
-  if (!m || !validateManifest(m)) {
-    root.dataset.state = 'unavailable';
-  } else if (isExpired(m, new Date())) {
-    root.dataset.state = 'expired';
-    set('intro', m.i); set('label', m.l); set('name', m.n);
-  } else {
-    root.dataset.state = 'live';
-    set('intro', m.i); set('label', m.l); set('name', m.n);
-    set('expires', `Expires ${formatDate(m.e)}`);
-    // "Save PDF" = print the page. The recipient's print dialog chooses the
-    // paper size and Save-as-PDF; the print stylesheet lays out just the images.
-    const save = document.getElementById('save');
-    if (save) save.addEventListener('click', () => window.print());
+
+  // One tile-builder DOM path serves all three layouts — the layout itself is
+  // pure CSS off `data-layout`. Clearing and rebuilding is what makes the
+  // portfolio re-fetch a plain second call rather than a second code path.
+  const buildGrid = (m) => {
     const grid = document.getElementById('grid');
+    if (!grid) return;
+    grid.replaceChildren();
     // Filenames ride the manifest (key `f`) only when the app included them, and
     // only used when they pair 1:1 with the images. Each tile is a real <button>
     // so it's keyboard-operable (Enter/Space → click, which the delegated grid
@@ -159,10 +218,61 @@ if (typeof document !== 'undefined') {
       btn.setAttribute('aria-label', name || `Image ${idx + 1}`);
       grid.appendChild(btn);
     });
-    setupBackdropSwitcher();
+  };
+
+  const renderLive = (m) => {
+    root.dataset.state = 'live';
+    root.dataset.layout = layoutOf(m);
+    set('intro', m.i); set('label', m.l); set('name', m.n);
+    set('body', m.s ?? '');
+    // A portfolio never expires, so it says so rather than showing a date.
+    set('expires', m.m != null ? '' : `Expires ${formatDate(m.e)}`);
+    buildGrid(m);
     setupGridSizer();
+  };
+
+  if (!inline || !validateManifest(inline)) {
+    root.dataset.state = 'unavailable';
+  } else if (inline.m == null && isExpired(inline, new Date())) {
+    root.dataset.state = 'expired';
+    set('intro', inline.i); set('label', inline.l); set('name', inline.n);
+  } else {
+    // "Save PDF" = print the page. The recipient's print dialog chooses the
+    // paper size and Save-as-PDF; the print stylesheet lays out just the images.
+    const save = document.getElementById('save');
+    if (save) save.addEventListener('click', () => window.print());
+    // Render the INLINE snapshot immediately — no blank waiting state, ever.
+    renderLive(inline);
+    setupBackdropSwitcher();
     setupLightbox();
     installImageDownloadDeterrents();
+    // Only a portfolio consults Drive, and only to replace what's already on
+    // screen. Any failure (offline, quota, API change) keeps the snapshot.
+    if (inline.m != null && VALID_ID.test(inline.m)) {
+      resolveManifest(inline).then((resolved) => {
+        if (resolved !== inline) renderLive(resolved);
+      });
+    }
+  }
+}
+
+/// Fetch a portfolio's live manifest.json, bounded and time-limited. Returns
+/// the inline snapshot unchanged on ANY failure — the page must never end up
+/// blank because Drive was slow.
+async function resolveManifest(inline) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), MANIFEST_FETCH_TIMEOUT_MS);
+  try {
+    const resp = await fetch(manifestFetchURL(inline.m), { signal: controller.signal });
+    if (!resp.ok) return inline;
+    const fetched = acceptFetchedManifest(await resp.text());
+    // Keep the pointer so the page still knows it's a portfolio (the fetched
+    // copy has had its own `m` stripped — exactly one fetch, no chaining).
+    return fetched ? { ...fetched, m: inline.m } : inline;
+  } catch {
+    return inline;   // offline / API change / quota — degrade to last-published state
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -268,19 +378,30 @@ function setupBackdropSwitcher() {
 // grid itself stays responsive via auto-fill), and remembers the choice across
 // visits. Custom (not <input range>) so click-to-jump works in Safari; supports
 // drag + arrow keys, and exposes ARIA slider state.
+// Re-entrant: a portfolio re-fetch can change the layout in place, so this runs
+// again with different bounds. Listeners are installed once (guarded by
+// `dataset.wired`); the bounds/initial paint are re-derived every call.
 function setupGridSizer() {
   const slider = document.getElementById('cols');
   const grid = document.getElementById('grid');
   if (!slider || !grid) return;
-  const MIN = 1, MAX = 6;
+  const app = document.getElementById('app');
+  const bounds = SIZER_BY_LAYOUT[app ? app.dataset.layout : 'grid'] || SIZER_BY_LAYOUT.grid;
+  if (bounds.max <= bounds.min) return;   // essay: no density control at all
+  // Module-scoped so the once-wired drag/key listeners always read the CURRENT
+  // layout's bounds rather than the ones captured on the first call.
+  sizerBounds = bounds;
+  const MIN = () => sizerBounds.min, MAX = () => sizerBounds.max;
+  slider.setAttribute('aria-valuemin', String(bounds.min));
+  slider.setAttribute('aria-valuemax', String(bounds.max));
   const track = slider.querySelector('.slider-track');
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const clamp = (n) => Math.min(MAX, Math.max(MIN, Math.round(n)));
+  const clamp = (n) => Math.min(MAX(), Math.max(MIN(), Math.round(n)));
   const pctFromX = (x) => {
     const r = track.getBoundingClientRect();
     return Math.min(1, Math.max(0, (x - r.left) / r.width));
   };
-  const pctForCols = (c) => (c - MIN) / (MAX - MIN);
+  const pctForCols = (c) => (c - MIN()) / (MAX() - MIN());
 
   // The grid is responsive (auto-fill on a target tile size). Translate the
   // chosen column density into the tile size that yields exactly c columns at
@@ -296,7 +417,7 @@ function setupGridSizer() {
 
   let saved = null;
   try { saved = localStorage.getItem('museCols'); } catch { /* private mode */ }
-  let curCols = clamp(parseInt(saved, 10) || 4);
+  let curCols = clamp(parseInt(saved, 10) || bounds.default);
 
   // Recolumn with a FLIP morph: capture each near-viewport tile's frame, apply
   // the new column count, then animate the tiles from their old frame to the new
@@ -342,11 +463,15 @@ function setupGridSizer() {
   slider.setAttribute('aria-valuenow', String(curCols));
   setThumb(pctForCols(curCols));
 
+  // Listeners only once — a re-render must not stack a second copy of each.
+  if (slider.dataset.wired === '1') return;
+  slider.dataset.wired = '1';
+
   let dragging = false;
   const dragTo = (x) => {
     const p = pctFromX(x);
     setThumb(p);                          // thumb follows the pointer 1:1 (no hard stops)
-    setCols(clamp(MIN + p * (MAX - MIN))); // grid recolumns live, FLIP-animated
+    setCols(clamp(MIN() + p * (MAX() - MIN()))); // grid recolumns live, FLIP-animated
   };
   slider.addEventListener('pointerdown', (e) => {
     dragging = true;

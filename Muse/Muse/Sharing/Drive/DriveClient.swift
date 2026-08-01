@@ -87,6 +87,66 @@ import Foundation
         return id
     }
 
+    /// Upload a portfolio's `manifest.json`. NEVER for images — image bytes go
+    /// through `uploadFile`'s metadata strip, fail-closed. That's enforced by
+    /// the shape of this signature, not by convention: it takes `Data` the
+    /// caller already JSON-encoded (there is no file to strip) and pins the mime
+    /// internally rather than accepting one.
+    func uploadManifest(_ json: Data, parent: String) async throws -> String {
+        let boundary = "muse-\(UUID().uuidString)"
+        var req = try await authed(uploadEndpoint)
+        req.httpMethod = "POST"
+        req.setValue("multipart/related; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        req.httpBody = Self.multipartBody(
+            metadata: ["name": "manifest.json", "parents": [parent]],
+            fileData: json, mime: "application/json", boundary: boundary)
+        let (respData, resp) = try await URLSession.shared.data(for: req)
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        guard code == 200,
+              let obj = try? JSONSerialization.jsonObject(with: respData) as? [String: Any],
+              let id = obj["id"] as? String
+        else { throw DriveError.http(code) }
+        return id
+    }
+
+    /// Rewrite an existing `manifest.json`'s content in place. The file id — and
+    /// therefore the portfolio's URL — never changes, which is what makes this
+    /// call the ATOMIC cutover of a portfolio update.
+    func updateManifest(id: String, json: Data) async throws {
+        var req = try await authed("https://www.googleapis.com/upload/drive/v3/files/\(id)?uploadType=media")
+        req.httpMethod = "PATCH"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = json
+        let (_, resp) = try await URLSession.shared.data(for: req)
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        guard code == 200 else { throw DriveError.http(code) }
+    }
+
+    /// Children of a folder Muse created (drive.file sees only its own files).
+    /// Used by the portfolio update to sweep replaced images. One page suffices:
+    /// shares are capped at `DriveShareManifest.maxImages` plus the manifest.
+    func listChildren(of folderID: String) async throws -> [(id: String, name: String)] {
+        guard var comps = URLComponents(string: filesEndpoint) else { throw DriveError.badResponse }
+        comps.queryItems = [
+            URLQueryItem(name: "q", value: "'\(folderID)' in parents and trashed=false"),
+            URLQueryItem(name: "fields", value: "files(id,name)"),
+            URLQueryItem(name: "pageSize", value: "1000"),
+        ]
+        guard let url = comps.url else { throw DriveError.badResponse }
+        var req = try await authed(url.absoluteString)
+        req.httpMethod = "GET"
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        guard code == 200,
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let files = obj["files"] as? [[String: Any]]
+        else { throw DriveError.http(code) }
+        return files.compactMap { f in
+            guard let id = f["id"] as? String, let name = f["name"] as? String else { return nil }
+            return (id, name)
+        }
+    }
+
     func setAnyoneReader(fileID: String) async throws {
         var req = try await authed("\(filesEndpoint)/\(fileID)/permissions")
         req.httpMethod = "POST"

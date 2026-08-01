@@ -1,7 +1,8 @@
 // share.test.mjs  — run: node web/share/share.test.mjs
 import assert from 'node:assert';
 import { deflateSync, strToU8 } from './fflate.module.js';
-import { decodeManifest, validateManifest, isExpired, thumbURL, VALID_ID, sanitizeText } from './share.js';
+import { decodeManifest, validateManifest, isExpired, thumbURL, VALID_ID, sanitizeText,
+         layoutOf, manifestFetchURL, acceptFetchedManifest, SIZER_BY_LAYOUT } from './share.js';
 
 // Decompression-bomb guard: the fragment is attacker-suppliable, so a tiny
 // compressed payload that inflates past the cap must NOT allocate unbounded
@@ -106,5 +107,71 @@ assert.ok(!validateManifest({ ...sample, p: 42 }), 'non-string pdf id rejected')
 // (local end-of-day rule) and reads expired the day after.
 assert.ok(!isExpired(sample, new Date('2026-04-04T23:00:00')), 'live through the expiry day');
 assert.ok(isExpired(sample, new Date('2026-04-05T01:00:00')), 'expired the day after');
+
+// ---------------------------------------------------------------- Spec 07 v2
+
+// `y` (layout): absent or any short string is accepted — an UNKNOWN value is
+// forward-compat (layoutOf falls back to grid), not a rejection.
+assert.ok(validateManifest({ ...sample, y: 'sheet' }), 'known layout accepted');
+assert.ok(validateManifest({ ...sample, y: 'essay' }), 'essay layout accepted');
+assert.ok(validateManifest({ ...sample, y: 'future-layout' }), 'unknown layout tolerated (forward-compat)');
+assert.ok(!validateManifest({ ...sample, y: 123 }), 'non-string layout rejected');
+assert.ok(!validateManifest({ ...sample, y: 'x'.repeat(17) }), 'over-long layout rejected');
+
+// `s` (body text) is display text and takes the field cap.
+assert.ok(validateManifest({ ...sample, s: 'An intro paragraph.' }), 'body text accepted');
+assert.ok(validateManifest({ ...sample, s: 'x'.repeat(4096) }), 'body text at the cap accepted');
+assert.ok(!validateManifest({ ...sample, s: 'x'.repeat(4097) }), 'oversized body text rejected');
+
+assert.strictEqual(layoutOf({}), 'grid', 'absent layout → grid');
+assert.strictEqual(layoutOf({ y: 'grid' }), 'grid');
+assert.strictEqual(layoutOf({ y: 'sheet' }), 'sheet');
+assert.strictEqual(layoutOf({ y: 'essay' }), 'essay');
+assert.strictEqual(layoutOf({ y: 'unknown-future-value' }), 'grid', 'unknown layout → grid');
+
+// The essay layout has no density control; grid keeps its shipped 1–6 range.
+assert.strictEqual(SIZER_BY_LAYOUT.grid.min, 1);
+assert.strictEqual(SIZER_BY_LAYOUT.grid.max, 6);
+assert.ok(SIZER_BY_LAYOUT.essay.max <= SIZER_BY_LAYOUT.essay.min, 'essay sizer disabled');
+
+// `e` stays REQUIRED for classic (non-portfolio) manifests — the fail-open guard.
+{
+  const noExpiry = { ...sample }; delete noExpiry.e;
+  assert.ok(!validateManifest(noExpiry), 'classic manifest without e rejected');
+  assert.ok(!validateManifest({ ...sample, e: '' }), 'classic manifest with empty e rejected');
+}
+
+// `m` present ⇒ portfolio ⇒ never expires, `e` ignored.
+{
+  const portfolio = { ...sample, m: 'm'.repeat(20), e: '' };
+  assert.ok(validateManifest(portfolio), 'portfolio manifest with empty e accepted');
+  assert.ok(validateManifest({ ...portfolio, e: 'ignored' }), 'portfolio tolerates a junk e');
+  assert.ok(!validateManifest({ ...sample, m: 'too-short' }), 'malformed manifest id rejected');
+  assert.ok(!validateManifest({ ...sample, m: 123 }), 'non-string manifest id rejected');
+}
+
+// opts.portfolio waives `e` for manifests fetched FROM Drive (they never carry
+// an `m` of their own — that's the app's job).
+{
+  const fetched = { ...sample, e: '' };
+  assert.ok(validateManifest(fetched, { portfolio: true }), 'fetched manifest validates with opts');
+  assert.ok(!validateManifest(fetched), 'same object without opts stays strict');
+}
+
+assert.match(manifestFetchURL('a'.repeat(20)),
+  /^https:\/\/www\.googleapis\.com\/drive\/v3\/files\/a{20}\?alt=media&key=/,
+  'manifest fetch URL shape');
+
+// acceptFetchedManifest: bounded, validated, and never chains.
+{
+  const ok = JSON.stringify({ ...sample, e: '' });
+  assert.strictEqual(acceptFetchedManifest(ok).i, sample.i, 'valid fetched body accepted');
+  assert.strictEqual(acceptFetchedManifest('{not json'), null, 'invalid JSON rejected');
+  assert.strictEqual(acceptFetchedManifest(JSON.stringify({ i: 'x' })), null, 'structurally invalid rejected');
+  const huge = JSON.stringify({ i: 'x'.repeat(600 * 1024) });
+  assert.strictEqual(acceptFetchedManifest(huge), null, 'oversized body rejected (bounded read)');
+  const chained = JSON.stringify({ ...sample, e: '', m: 'z'.repeat(20) });
+  assert.strictEqual(acceptFetchedManifest(chained).m, undefined, 'fetched m stripped — exactly one fetch');
+}
 
 console.log('share.js: all tests passed');

@@ -383,14 +383,19 @@ struct ContentView: View {
                         memberCount: request.memberCount) {
                             appState.collectionModal = nil
                         }
-                case .driveShare(let title, let urls):
-                    DriveShareSheet(auth: googleAuth, title: title, urls: urls) {
+                case .driveShare(let request):
+                    DriveShareSheet(auth: googleAuth, request: request) {
                         appState.collectionModal = nil
                     }
                 case .none:
                     EmptyView()
                 }
             }
+            // Social export — a separate modal family from collectionModal (the
+            // two flags are structurally unrelated), raised from the grid menu,
+            // the hero viewer, or a collection header. Its own modifier because
+            // this chain is already at the type-checker's limit.
+            .modifier(SocialExportModal())
             .modifier(ShellErrorModals())
             .modifier(TagCommandAlerts())
             // Name prompts (rename collection / file / folder, new subfolder,

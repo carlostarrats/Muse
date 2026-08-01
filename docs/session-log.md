@@ -6,6 +6,90 @@ the durable rules + a compact index live in `CLAUDE.md`. Nothing here is
 load-bearing for a fresh session beyond what that index already surfaces;
 read an entry when you need the full "why" behind a specific change.
 
+### Spec 07 — sharing & social export — 2026-07-31 (`new-product-build-1`)
+
+Implemented `docs/superpowers/plans/2026-07-30-spec-07-sharing-social-export.md` end to
+end. No migrations (Spec 07 adds none; future specs continue at v24). Full Swift suite
+green, `node web/share/share.test.mjs` green.
+
+Phase 0 of the plan was already in the tree — Spec 01 shipped `EditStackIndex` and
+`OutputRender`, and Spec 04 made them live — so this pass skipped building them and
+consumed them instead. Spec 04's presence also promoted the plan's Task 4.9 from a
+documented, absent-until-then seam into real code: "Save Crop as Version" is
+implemented, writing one `edit_versions` row through `EditStore.saveVersion`.
+
+- **Share page layouts.** `DriveShareManifest` grew three optional, nil-default wire
+  keys — `y` (layout), `s` (body text), `m` (portfolio manifest id) — plus `jsonData()`
+  and the publish caps. A manifest using none of them encodes none of them, so legacy
+  fragments decode forever (pinned on both sides). The page renders grid / contact sheet
+  / essay off ONE `data-layout` attribute through the same tile-builder DOM path; the
+  render glue was refactored into `renderLive(m)` + `buildGrid(m)` so a portfolio
+  re-fetch is a second call, not a second code path. The grid sizer became
+  layout-parameterized (`SIZER_BY_LAYOUT`) and re-entrant — its listeners wire once and
+  read the current bounds from a module-scoped variable, so a layout change after a
+  re-fetch doesn't leave them on the first call's captured range.
+- **Publish guard.** The app could previously mint a >1000-image link its own page
+  rejects as "unavailable". `DriveSharePublishGuard` is a pure pre-publish check
+  mirroring the page validator, wired into all three publish entry points.
+- **Google on-ramp.** A signed-out explainer above the publish form (additive, never a
+  gate — Publish still handles sign-in mid-run), `DriveConfig.consentScreenVerified` as
+  a compiled constant gating the "unverified app" guidance, and extended Settings copy.
+- **Portfolio mode.** A portfolio is a Drive folder (images + `manifest.json`) plus a
+  page URL whose fragment carries the manifest's file id AND a full inline snapshot.
+  The Drive-hosted manifest is the live truth; the page fetches it (bounded, timed out,
+  re-validated, `m` stripped so it can never chain) and falls back to the snapshot on
+  ANY failure, so it renders instantly and never goes blank. Updates rewrite the
+  manifest via `files.update`, so the file id — and the URL — never changes. Update
+  order is upload-new → swap → sweep, with the sweep's failures non-fatal
+  (`.doneWithSweepWarning`) rather than an `AppState` dependency on the service.
+- **Social export.** New platform-neutral `Export/Social/` (preset table, output
+  metadata policy, render pipeline), pure `Components/SocialCropMath.swift`, and the
+  card in `Views/Export/`. One new `@Published` on AppState (`socialExportRequest`), the
+  sanctioned shell-modal-flag class. Three entry points: grid context menu, hero
+  `ShareButton`, collection header — raster kinds only at each.
+
+Deviations from the plan, all deliberate:
+
+- **D-a — fixtures are generated, not checked in.** The plan wanted four (then five)
+  JPEGs under `MuseTests/Fixtures/Social/`. The app target uses file-system-synchronized
+  groups, so a checked-in binary would land in the test bundle by inference rather than
+  by declaration, and a 4096² noise JPEG is a multi-MB blob in git for something ImageIO
+  produces deterministically. `MuseTests/SocialFixtures.swift` generates them in `setUp`
+  from a fixed-seed LCG.
+- **D-b — the X ladder is driven by the invariants, not by a byte target.** X carries no
+  `byteTargetKB`, and the plan's ladder only stepped down for `bytes < W×H`. Measured:
+  a busy 4096² image exceeds 5 MB at the starting quality, so the ladder now steps down
+  until BOTH byte invariants hold. And the plan's "high-entropy source lands under 5 MB"
+  test was wrong as written — per-pixel random noise at 4096² measures ~11 MB even at the
+  0.55 floor, far beyond any real photograph. That case is the DOCUMENTED fail-the-file
+  behavior, so the test now pins both sides: a full-size detailed source lands under
+  5 MB, and a pathological one throws `xInvariantFailed` and writes nothing.
+- **D-c — the sweep warning is a `Phase` case,** per the plan's own stated preference,
+  keeping `DriveShareService` free of any `AppState` reference.
+- **D-d — `SharingTier`'s call site passes the REAL entitlement** (`CommerceStore` exists
+  in this tree, contrary to the plan's assumption), not a hardcoded `false`. Behavior is
+  identical while `enforced == false`.
+- **D-e — Task 4.9 is implemented, not documented.** See above.
+- **D-f — `Localizable.xcstrings` was reformatted by Xcode** on the first
+  `-exportLocalizations` run (its canonical `" : "` separator style), producing a
+  whole-file diff independent of the 62 French values added.
+
+Two things recorded rather than fixed, both outside this spec's scope:
+
+- `xcodebuild -exportLocalizations` fails on `Intelligence/Core/ClipVectors.swift`
+  (`Float16.bitPattern`) unless pinned with `ARCHS=arm64 ONLY_ACTIVE_ARCH=YES` — it
+  otherwise builds for a non-arm64 slice where `Float16` differs. Pre-existing, from
+  Spec 03.
+- 162 strings remain untranslated in French, all pre-existing Spec 03/06 debt (Google
+  Takeout / Lightroom-preset import / cull / compare copy). Every Spec 07 key is
+  translated, including the preset display names and advisories, which are reached
+  through runtime-variable keys the extractor can't see and so were added by hand.
+
+Owner-only steps still outstanding: create the referrer/API-restricted browser key and
+paste it over `DRIVE_API_KEY = 'REPLACE_AT_DEPLOY'` at deploy time (never committed);
+deploy `web/share/` to Cloudflare Pages; run the X no-recompress byte-compare protocol
+once; flip `DriveConfig.consentScreenVerified` when Google's review completes.
+
 ### Spec 04 — editing engine — 2026-07-31 (`new-product-build-1`)
 
 Implemented `docs/superpowers/plans/2026-07-30-spec-04-editing-engine.md` end to end.

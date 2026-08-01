@@ -126,6 +126,23 @@ enum AppSettings {
         get { UserDefaults.standard.string(forKey: "driveShareName") ?? "" }
         set { UserDefaults.standard.set(newValue, forKey: "driveShareName") }
     }
+    /// Last share-page layout chosen at publish time. The intro paragraph is
+    /// per-collection prose and is deliberately NOT remembered.
+    static var driveShareLayout: String {
+        get { UserDefaults.standard.string(forKey: "driveShareLayout") ?? DriveShareLayout.grid.rawValue }
+        set { UserDefaults.standard.set(newValue, forKey: "driveShareLayout") }
+    }
+    /// Social export: the EXIF choice is remembered per preset id (photography
+    /// platforms default on, everything else off). The location (GPS) sub-toggle
+    /// is deliberately never remembered — it always reverts to OFF.
+    static var socialExifChoices: [String: Bool] {
+        get { (UserDefaults.standard.dictionary(forKey: "socialExifChoices") as? [String: Bool]) ?? [:] }
+        set { UserDefaults.standard.set(newValue, forKey: "socialExifChoices") }
+    }
+    static var socialMatteShade: String {
+        get { UserDefaults.standard.string(forKey: "socialMatteShade") ?? MatteShade.white.rawValue }
+        set { UserDefaults.standard.set(newValue, forKey: "socialMatteShade") }
+    }
     static var driveShareLabel: String {
         get { UserDefaults.standard.string(forKey: "driveShareLabel") ?? String(localized: "Sent by") }
         set { UserDefaults.standard.set(newValue, forKey: "driveShareLabel") }

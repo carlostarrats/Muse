@@ -434,14 +434,39 @@ Muse/Muse/
                                      (single-frame re-encodes from pixels = clean by construction;
                                      multi-frame stays lossless; every output re-verified via isClean;
                                      fail-closed). Adversarial-tested per format (HEIC/PNG/TIFF/GIF/…)
-    DriveShareManifest.swift         base64url URL-FRAGMENT payload (mirrors share.js keys). Unit-tested
-    DriveShareRecord.swift           DriveShareRecord + DriveShareStore (JSON, App Support) + DriveExpiry
-    DriveShareService.swift          @MainActor publish orchestrator (Phase signingIn/uploading/…/done)
+    DriveShareManifest.swift         base64url URL-FRAGMENT payload (mirrors share.js keys) + v2 keys
+                                     y/s/m (layout, body text, portfolio manifest id, all nil-default) +
+                                     jsonData() (the uploaded manifest.json) + DriveShareLayout +
+                                     maxImages/maxFieldLength. Unit-tested
+    DriveShareRecord.swift           DriveShareRecord + DriveShareStore (JSON, App Support) + DriveExpiry;
+                                     portfolio fields (kind/manifestFileID/collectionID/layout/introTitle/
+                                     bodyText, all optional) + the neverExpires sentinel +
+                                     portfolio(forCollectionID:)
+    DriveShareService.swift          @MainActor publish orchestrator (Phase signingIn/uploading/…/done);
+                                     DriveShareForm/Mode/Request, DriveSharePublishGuard (pure caps),
+                                     DriveShareUpdateSteps (the pinned update order), publishPortfolio +
+                                     updatePortfolio (upload → swap manifest → sweep)
     DriveExpirySweeper.swift         launch sweep: delete folders past expiry (only if signed-in + due)
+  Export/Social/                   social export — platform-neutral (no AppKit)
+    SocialPreset.swift               the 12-preset platform table as pure data; pinned by SocialPresetTests
+    SocialMetadata.swift             EXIF-on output properties (drops orientation/maker notes always,
+                                     GPS unless opted in); the default path writes nothing at all
+    SocialRender.swift               the fixed pipeline (OutputRender → decode budget → baked-orientation
+                                     decode → fit compose → Lanczos → unsharp → sRGB → JPEG ladder →
+                                     verify → write) + the five X invariants
+  Components/SocialCropMath.swift  pure crop-rect + composed-crop math (unit-tested)
+  Views/Export/SocialExportCard.swift  the crop/preset/export card + SocialExportModal (shell presenter),
+                                   per-run SocialExportModel, SocialCropStageView (direct ≤2048 decode,
+                                   never a ThumbnailCache entry)
+  Commerce/SharingTier.swift       pure portfolio tier seam; computes, never blocks, until Spec 09
   web/share/                       static Cloudflare page (NOT in the app target)
-    index.html · share.css           shell + styles matching the mockups
-    share.js                         decode/validate/expiry/render (textContent only); + share.test.mjs
-    _headers · README.md             strict CSP/hardening; deploy + OAuth-setup docs
+    index.html · share.css           shell + styles matching the mockups; three layouts off one
+                                     data-layout attribute (grid / contact sheet / essay)
+    share.js                         decode/validate/expiry/render (textContent only) + layoutOf,
+                                     SIZER_BY_LAYOUT, manifestFetchURL/acceptFetchedManifest and the
+                                     bounded portfolio manifest.json fetch; + share.test.mjs
+    _headers · README.md             strict CSP/hardening (connect-src googleapis.com for that one
+                                     fetch); deploy + OAuth-setup docs
   Effects/                         (was Fluid/; water + burn shaders removed — NO Metal shaders remain)
     FadeOutModifier.swift          animatable staggered opacity fade for the delete sequence
   Settings/

@@ -57,4 +57,55 @@ final class DriveShareManifestTests: XCTestCase {
         XCTAssertEqual(legacy.first, "e", "legacy link is uncompressed (base64 of JSON starts with 'e' for '{')")
         XCTAssertEqual(DriveShareManifest.decode(legacy), sample)
     }
+
+    // MARK: v2 (Spec 07) — layout / bodyText / manifestID
+
+    func testV2FieldsRoundTrip() {
+        var m = sample
+        m.layout = DriveShareLayout.essay.rawValue
+        m.bodyText = "An intro paragraph."
+        m.manifestID = "dddddddddddddddddddd"
+        XCTAssertEqual(DriveShareManifest.decode(m.encoded()), m)
+    }
+
+    // A manifest not using a v2 feature must encode with NONE of the new keys —
+    // the wire shape stays byte-identical to the pre-Spec-07 format.
+    func testNilV2FieldsEncodeNoNewKeys() throws {
+        let json = try JSONEncoder().encode(sample)
+        let obj = try XCTUnwrap(JSONSerialization.jsonObject(with: json) as? [String: Any])
+        XCTAssertNil(obj["y"])
+        XCTAssertNil(obj["s"])
+        XCTAssertNil(obj["m"])
+    }
+
+    func testPortfolioManifestWithEmptyExpiryRoundTrips() {
+        var m = sample
+        m.expiry = ""
+        m.manifestID = "eeeeeeeeeeeeeeeeeeee"
+        let decoded = DriveShareManifest.decode(m.encoded())
+        XCTAssertEqual(decoded?.expiry, "")
+        XCTAssertEqual(decoded?.manifestID, "eeeeeeeeeeeeeeeeeeee")
+    }
+
+    func testJSONDataParsesAsSameObject() throws {
+        var m = sample
+        m.layout = DriveShareLayout.sheet.rawValue
+        let data = m.jsonData()
+        XCTAssertEqual(try JSONDecoder().decode(DriveShareManifest.self, from: data), m)
+        // jsonData() is plain (uncompressed, un-base64'd) JSON — first byte '{'.
+        XCTAssertEqual(data.first, UInt8(ascii: "{"))
+    }
+
+    func testMaxImagesAndMaxFieldLengthConstants() {
+        XCTAssertEqual(DriveShareManifest.maxImages, 1000)
+        XCTAssertEqual(DriveShareManifest.maxFieldLength, 4096)
+    }
+
+    // Wire values — share.js's layoutOf must match these exactly.
+    func testDriveShareLayoutRawValues() {
+        XCTAssertEqual(DriveShareLayout.grid.rawValue, "grid")
+        XCTAssertEqual(DriveShareLayout.sheet.rawValue, "sheet")
+        XCTAssertEqual(DriveShareLayout.essay.rawValue, "essay")
+        XCTAssertEqual(DriveShareLayout.allCases.count, 3)
+    }
 }

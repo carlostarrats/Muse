@@ -182,14 +182,26 @@ struct ManageDriveSharesView: View {
     private func row(_ record: DriveShareRecord) -> some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(record.collectionName).font(.system(size: 15, weight: .semibold))
+                HStack(spacing: 6) {
+                    Text(record.collectionName).font(.system(size: 15, weight: .semibold))
+                    if record.isPortfolio {
+                        Text("Portfolio")
+                            .font(.system(size: 10, weight: .semibold))
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(Capsule().fill(Color.secondary.opacity(0.15)))
+                    }
+                }
                 // `.formatted()` (a String) rather than "\(count)": an
                 // interpolated Int in a Text literal becomes a "%lld"
                 // localization key, which is a key nothing should own.
                 metaColumns(pipes: true,
                             Text(record.itemCount.formatted()),
                             Text(record.createdAt.formatted(date: .abbreviated, time: .omitted)),
-                            Text(record.expiry.formatted(date: .abbreviated, time: .omitted)))
+                            // A portfolio uses the `neverExpires` sentinel — show
+                            // what it means, not the year 2100.
+                            Text(record.isPortfolio
+                                 ? String(localized: "Never")
+                                 : record.expiry.formatted(date: .abbreviated, time: .omitted)))
                     .font(.system(size: 13)).foregroundStyle(.secondary)
             }
             // The values are bare now (the words are in the header), so VoiceOver

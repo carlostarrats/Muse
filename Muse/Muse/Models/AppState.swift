@@ -553,6 +553,7 @@ final class AppState: ObservableObject {
             || announcementPresented
             || cullResolveShown || clipOfferShown
             || editPromptRequest != nil || openWithForkRequest != nil
+            || socialExportRequest != nil
     }
 
     /// A name prompt raised from inside the editor (save a version, snapshot
@@ -565,6 +566,12 @@ final class AppState: ObservableObject {
     /// external editor would otherwise open the original and the user's
     /// adjustments would silently not be there.
     @Published var openWithForkRequest: OpenWithForkRequest?
+
+    /// A per-run social export request — the sanctioned shell-modal-flag class
+    /// (`openWithForkRequest`/`collectionModal` precedent). Raised from three
+    /// entry points (grid context menu, hero viewer, collection header) that
+    /// can't present a card themselves.
+    @Published var socialExportRequest: SocialExportRequest?
 
     /// Mirror of `AnnouncementStore.pending != nil`, so the key-catcher gate
     /// and the Escape resolver see the announcement card like any other modal.

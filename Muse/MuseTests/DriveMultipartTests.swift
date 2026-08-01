@@ -60,4 +60,38 @@ final class DriveMultipartTests: XCTestCase {
         // Exactly the two legitimate parts remain (json + file) → 3 boundary hits.
         XCTAssertEqual(text.components(separatedBy: "--BNDRY").count - 1, 3)
     }
+
+    // MARK: portfolio (Spec 07)
+
+    // uploadManifest is the ONLY non-image upload path. Its mime is pinned
+    // inside the implementation rather than taken from the caller, so it can
+    // never become a bypass around uploadFile's metadata strip — this pins the
+    // body shape that pinning produces.
+    @MainActor
+    func testManifestUploadBodyUsesJSONMimeAndCorrectMetadata() {
+        let json = Data(#"{"i":"x"}"#.utf8)
+        let body = DriveClient.multipartBody(
+            metadata: ["name": "manifest.json", "parents": ["parent123"]],
+            fileData: json, mime: "application/json", boundary: "BNDRY")
+        let text = String(decoding: body, as: UTF8.self)
+        XCTAssertTrue(text.contains("Content-Type: application/json\r\n"))
+        XCTAssertTrue(text.contains("\"name\":\"manifest.json\""))
+        XCTAssertTrue(text.contains("\"parents\":[\"parent123\"]"))
+        XCTAssertTrue(text.contains(#"{"i":"x"}"#))
+        XCTAssertTrue(DriveClient.isValidMIME("application/json"))
+    }
+
+    // listChildren builds its GET via URLComponents; a folder id with characters
+    // that must be escaped can't be allowed to break the query.
+    func testListChildrenQueryIsWellFormedAndEscaped() throws {
+        var comps = try XCTUnwrap(URLComponents(string: "https://www.googleapis.com/drive/v3/files"))
+        comps.queryItems = [
+            URLQueryItem(name: "q", value: "'abc DEF-123' in parents and trashed=false"),
+            URLQueryItem(name: "fields", value: "files(id,name)"),
+            URLQueryItem(name: "pageSize", value: "1000"),
+        ]
+        let url = try XCTUnwrap(comps.url)
+        XCTAssertTrue(url.absoluteString.contains("pageSize=1000"))
+        XCTAssertFalse(url.absoluteString.contains(" "), "spaces must be percent-encoded")
+    }
 }

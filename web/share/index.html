@@ -11,7 +11,7 @@
        (which also sets frame-ancestors / Referrer-Policy, not expressible in a
        meta tag). This mirrors it so the page is never left with NO CSP if it's
        ever served somewhere _headers doesn't apply (preview host, renamed file). -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' https://drive.google.com https://*.googleusercontent.com; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' https://drive.google.com https://*.googleusercontent.com; script-src 'self'; style-src 'self'; connect-src https://www.googleapis.com; base-uri 'none'; form-action 'none'">
   <title>Shared Collection</title>
   <!-- Favicons (same set as the marketing site). favicon.ico at the root is
        what link-unfurlers (Slack/iMessage) probe — without it they get the
@@ -62,6 +62,10 @@
         <span id="name" class="name"></span>
       </div>
     </header>
+
+    <!-- Optional intro paragraph (manifest key `s`) — filled via textContent
+         like every other text node. Hidden by CSS when empty. -->
+    <p id="body" class="body"></p>
 
     <main id="grid" class="grid"></main>
 

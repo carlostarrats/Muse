@@ -285,12 +285,22 @@ struct SettingsView: View {
                         }
                     }
                 }
+                if googleAuth.isSignedIn {
+                    Text("Signed in — photos upload to your own Drive.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             } header: {
                 Text("Google Drive")
             } footer: {
-                Text("Sign in to publish a collection as a shareable Drive web page. Sign out to switch to a different Google account.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Sign in to publish a collection as a shareable Drive web page. Sign out to switch to a different Google account. Photos upload to your own Drive — Muse's developer never sees or receives them.")
+                    if DriveConfig.consentScreenVerified == false {
+                        Text("Google may show an “unverified app” step while Muse's verification is in review — choose Advanced → Continue to proceed.")
+                    }
+                }
+                .font(.callout)
+                .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

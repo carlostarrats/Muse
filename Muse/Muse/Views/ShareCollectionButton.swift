@@ -10,10 +10,12 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct ShareCollectionButton: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject private var googleAuth: GoogleOAuth
+    @EnvironmentObject private var commerce: CommerceStore
     let title: String
     let count: Int
 
@@ -37,8 +39,10 @@ struct ShareCollectionButton: View {
     /// ("Save to…") keeps the full visible set including file cards.
     /// Hand the Drive form's payload to the shell — a toolbar button can't
     /// present an in-window card itself (it would be sized against the button).
-    private func presentDriveShare() {
-        appState.collectionModal = .driveShare(title: title, urls: driveShareURLs)
+    private func presentDriveShare(mode: DriveShareMode) {
+        appState.collectionModal = .driveShare(
+            DriveShareRequest(title: title, urls: driveShareURLs, mode: mode,
+                              collectionID: appState.activeCollectionID))
     }
 
     private var driveShareURLs: [URL] {
@@ -50,11 +54,45 @@ struct ShareCollectionButton: View {
         }
     }
 
+    /// The portfolio(s) already published from THIS collection — the menu offers
+    /// Update/Copy Link when one exists and Publish when none does, never both.
+    private var portfolioRecords: [DriveShareRecord] {
+        guard let id = appState.activeCollectionID else { return [] }
+        return DriveShareStore.default.portfolio(forCollectionID: id)
+    }
+
+    /// Computes but never blocks until Spec 09 flips `SharingTier.enforced`.
+    private var canUsePortfolio: Bool {
+        SharingTier.portfolioAvailable(entitledToSharing: commerce.entitlements.sharing)
+    }
+
+    private func copyPortfolioLink(_ record: DriveShareRecord) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(record.pageURL, forType: .string)
+    }
+
+    private func exportForSocial() {
+        appState.socialExportRequest = SocialExportRequest(urls: driveShareURLs)
+    }
+
     var body: some View {
         Menu {
             Button("Save to…") { Task { await save() } }
-            Button("Share Drive Link") { presentDriveShare() }
+            Button("Share Drive Link") { presentDriveShare(mode: .share) }
                 .disabled(driveShareURLs.isEmpty)
+            Button("Export for Social…") { exportForSocial() }
+                .disabled(driveShareURLs.isEmpty)
+            if canUsePortfolio {
+                Divider()
+                if let latest = portfolioRecords.first {
+                    Button("Update Portfolio…") { presentDriveShare(mode: .portfolioUpdate(latest)) }
+                        .disabled(driveShareURLs.isEmpty)
+                    Button("Copy Portfolio Link") { copyPortfolioLink(latest) }
+                } else {
+                    Button("Publish Portfolio…") { presentDriveShare(mode: .portfolioNew) }
+                        .disabled(driveShareURLs.isEmpty)
+                }
+            }
         } label: {
             Group {
                 if preparing {
