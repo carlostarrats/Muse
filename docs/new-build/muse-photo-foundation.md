@@ -292,7 +292,7 @@ Edits are server-side. Import = Takeout JSON metadata merge (photoTakenTime, geo
 ## 9. Architecture, performance & platform requirements
 
 ### Platform (DECIDED)
-- **Apple Silicon only, M1 floor.** (Also what makes the ML stack sane — everything leans on the Neural Engine.)
+- **Tuned for Apple Silicon, M1 as the reference floor — but the app SHIPS UNIVERSAL and must keep building for x86_64** (owner correction, 2026-08-01; the original text here read "Apple Silicon only" and that is what let Spec 03's `Float16` break the Release build entirely). Intel Macs must work; Silicon is where it is optimized (the ML stack leans on the Neural Engine). Arch-specific code needs a portable path — see `ClipVectors`.
 - Two-tier performance envelope:
   - **Design center: ~10k–50k photos on any M1, including M1 Air 8GB.** Everything instant; embeddings RAM-resident (50k ≈ 50MB); brute-force search a few ms. This case must be flawless. **Reference test machine: M1 Air 8GB** with hard budgets (grid scroll, search latency, slider-to-render latency, cold start)
   - **Accommodated edge: ~200k–800k+.** A pro/edge case on pro hardware. Degrade gracefully — never crash, never corrupt, never beachball; indexing may take hours, search may take ~0.5s. Mechanical (not architectural) fixes when needed: embeddings memory-mapped or sqlite-vec; clustering time-bucketed before comparison; search debounced + paged. **Rule now: never write code that assumes everything fits in RAM** — big-library support must be a tuning pass, not a rewrite. (Marketing note: "tested with libraries of 500k+" is credible and cheap to earn.)
@@ -417,7 +417,7 @@ Drive collection share: manifest (signature text, expiry, ordered Drive image id
 | 21 | Social export | Required; ephemeral in-flow crop; matte/border option; preset table in §10; X no-recompress target |
 | 22 | Analysis | Always on; never off, never skippable; background, throttled, pausable |
 | 23 | Import-size notice | FYI only (one button), gated on estimated time > ~20–30 min (not count), estimate measured on-device |
-| 24 | Platform floor | Apple Silicon only, M1 minimum; M1 Air 8GB = reference machine for the 10k–50k design center |
+| 24 | Platform floor | **REVISED 2026-08-01: universal build — Intel must work; Apple Silicon is the TUNING target, M1 minimum for the performance envelope; M1 Air 8GB = reference machine for the 10k–50k design center.** (Was "Apple Silicon only".) |
 | 25 | Scale envelope | Design center 10k–50k flawless; 200k–800k accommodated gracefully (pro edge case, pro hardware); no code may assume RAM-residency |
 | 26 | Architecture | AppState frozen; feature modules with own stores; platform-neutral core package; sidecar-mirrored edit stacks; ≤ minimal dependencies; on-demand model downloads |
 | 27 | UI theming | Semantic token layer + system primitives ("custom layouts, system skin") so future Apple design shifts are cheap |

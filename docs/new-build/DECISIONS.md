@@ -40,14 +40,25 @@ it in its own section.*
 - **Distribution today is DIRECT with Sparkle self-update, not the Mac App Store.**
   The MAS move is deferred to `docs/superpowers/plans/deferred-mac-app-store-migration.md`
   and has NOT run: Sparkle is in the tree, the `temporary-exception.mach-lookup`
-  entitlements are still present, and `VALID_ARCHS` is `arm64 arm64e i386 x86_64` (the
-  x86_64 slice is why `-exportLocalizations` still fails on `ClipVectors.swift`'s
-  `Float16`). The "Platform & distribution" section below describes the POST-migration
+  entitlements are still present, and `VALID_ARCHS` is `arm64 arm64e i386 x86_64`. The "Platform & distribution" section below describes the POST-migration
   target state, not the current one. StoreKit plumbing is inert scaffolding until it runs.
 - **Localization is INCOMPLETE: 992 keys, 146 without an `fr` value** (from Specs 03
   and 06 — Takeout/Lightroom-preset/cull/compare copy). Per CLAUDE.md this makes those
   features unfinished. Any per-spec "all N keys translated" claim below was true only
   when written.
+- **The app SHIPS UNIVERSAL and must keep compiling for x86_64** (owner
+  correction, 2026-08-01). It is tuned for Apple Silicon but has to run on Intel
+  Macs, and it did until Spec 03: `ClipVectors.swift` used `Float16`, which does
+  not exist on x86_64, so **a Release (universal) build of this branch was
+  impossible** — `xcodebuild -configuration Release` failed outright. It went
+  unnoticed for the whole build AND the review because a Debug build compiles
+  only the active arch, so on Apple Silicon everything looked fine. Fixed by
+  giving `ClipVectors` one wire format (IEEE-754 binary16 LE) and two encoders —
+  hardware `Float16` on arm64, a portable bit-twiddle elsewhere — held together
+  bit-for-bit by `ClipVectorsPortabilityTests` across all 65,536 half patterns.
+  **This supersedes foundation §9 / decision #24's "Apple Silicon only, M1
+  floor"**, which is now a TUNING target, not a build target. It also removes
+  the `-exportLocalizations` blocker, which had the same single cause.
 - **Specs 01–07 have been REVIEWED (2026-08-01) and the review's fixes are on
   `new-product-build-1`.** Findings, per-slice, are in
   `docs/new-build/REVIEW-FINDINGS.md`; the durable rules it established are in
@@ -2110,7 +2121,8 @@ wins.*
   and the three advisories — those are reached through runtime-variable keys the
   extractor can't see, so they were added to `Localizable.xcstrings` by hand (the
   standing rule for `NSLocalizedString(variable)`-reached keys).
-- **`xcodebuild -exportLocalizations` needs `ARCHS=arm64 ONLY_ACTIVE_ARCH=YES`** —
+- **RESOLVED 2026-08-01 (was: `-exportLocalizations` needs `ARCHS=arm64 ONLY_ACTIVE_ARCH=YES`)** — the cause was `ClipVectors`' unconditional `Float16`, now portable; the universal build works, so the workaround below is no longer needed. Kept for the record:
+- **`xcodebuild -exportLocalizations` needed `ARCHS=arm64 ONLY_ACTIVE_ARCH=YES`** —
   without it the extraction build fails in `Intelligence/Core/ClipVectors.swift`
   (`Float16.bitPattern`) on a non-arm64 slice. Pre-existing since Spec 03; recorded, not
   fixed here.

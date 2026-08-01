@@ -31,7 +31,7 @@ is data-loss, privacy-egress or permanent-delete class — inline it there too.
 - [SwiftUI patterns, animation & AppState](#swiftui-patterns-animation--appstate) — 13 rules
 - [Filesystem, roots & sandbox](#filesystem-roots--sandbox) — 9 rules
 - [Selection, duplicates, App Intents & accessibility](#selection-duplicates-app-intents--accessibility) — 4 rules
-- [Working practice](#working-practice) — 1 rule
+- [Working practice](#working-practice) — 2 rules
 
 ## Network egress & viewer security
 
@@ -255,5 +255,7 @@ is data-loss, privacy-egress or permanent-delete class — inline it there too.
 - **A mouse-only modifier interaction has NO VoiceOver equivalent — give it a parallel named `.accessibilityAction`.** VO activation can't reproduce a double-click timing window or Cmd/Shift-click. The grid tile's double-click-open + the tag chip's Cmd-click-add were both VO-unreachable until each got an `.accessibilityAction` routing through the same call the mouse makes. Branch by node kind where the mouse path does (tile open = `selectedFile` for a file but `openSubfolder` for a `.folder`). The right-click `contextMenu` is VO-reachable; a bare gesture is not.
 
 ## Working practice
+
+- **A Debug build compiles ONLY the active arch — it proves nothing about the other one (2026-08-01).** `ONLY_ACTIVE_ARCH = YES` in Debug means `xcodebuild build` on an Apple Silicon Mac never compiles x86_64. Spec 03 shipped `Float16` (arm64-only) in `ClipVectors`, and the app kept building and running for months while `xcodebuild -configuration Release` — which builds universal — **failed outright**, so no release build of the branch existed and every build anyone ran was unoptimized Debug. The 2026-08-01 review missed it for the same reason: it verified with Debug builds and the unit suite, and filed the one visible symptom (`-exportLocalizations` failing on `ClipVectors.swift`) as a localization-tooling annoyance instead of proof the app no longer compiled universal. **Any change touching arch-specific types or intrinsics must be verified with `-configuration Release`, and "the app is slow" is a symptom to check a Debug build against before profiling anything.** The app ships UNIVERSAL (owner, 2026-08-01): Intel must work, Silicon is the tuning target.
 
 - **Fix the code, not the dev DB.** The user's library is a disposable fixture; never ship one-off migrations to patch a corrupted local DB — fix forward code, validate by clean re-index. Memory: `muse-fix-code-not-my-data`.

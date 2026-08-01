@@ -67,3 +67,74 @@ final class ClipCentroidTests: XCTestCase {
         assertVectorsEqual(centroid, [1, 0], accuracy: 0.001)
     }
 }
+
+/// The wire format is IEEE-754 binary16 and the SAME bytes must come out of
+/// either encoder — the hardware `Float16` path on Apple Silicon and the
+/// portable bit-twiddle used on Intel. These bytes sit in the database and
+/// travel in backups, so a vector written on one machine has to read back
+/// identically on the other; a drift here silently corrupts every embedding
+/// that crosses architectures.
+///
+/// On arm64 this compares the two implementations directly. On x86_64 the
+/// portable path IS the implementation, so the round-trip assertions still
+/// hold it to the format.
+final class ClipVectorsPortabilityTests: XCTestCase {
+
+    /// Every representable half, both directions.
+    func testPortableAndHardwareAgreeOnEveryHalfBitPattern() {
+        for raw in UInt16.min...UInt16.max {
+            let portable = ClipVectors.portableFloat(fromHalfBits: raw)
+            let live = ClipVectors.float(fromHalfBits: raw)
+            if portable.isNaN {
+                XCTAssertTrue(live.isNaN, "0x\(String(raw, radix: 16)) should decode to NaN")
+            } else {
+                XCTAssertEqual(portable.bitPattern, live.bitPattern,
+                               "half 0x\(String(raw, radix: 16)) decoded differently")
+            }
+        }
+    }
+
+    /// Float → half across the whole exponent range, including the rounding
+    /// boundaries, subnormals, overflow and the fp16 maximum.
+    func testPortableAndHardwareAgreeOnEncoding() {
+        var values: [Float] = [0, -0, 1, -1, 0.5, -0.5,
+                               65504, -65504,        // fp16 max
+                               65519.996,            // rounds to max
+                               65520,                // rounds to infinity
+                               6.103515625e-05,      // smallest normal
+                               5.9604645e-08,        // smallest subnormal
+                               1e-10, -1e-10,        // underflow
+                               1e30, -1e30,          // overflow
+                               .infinity, -.infinity]
+        // A sweep of the exponent range plus rounding-tie candidates.
+        for e in -30...30 {
+            for m in stride(from: 1.0, to: 2.0, by: 0.013) {
+                values.append(Float(m * pow(2.0, Double(e))))
+                values.append(Float(-m * pow(2.0, Double(e))))
+            }
+        }
+        for v in values {
+            XCTAssertEqual(ClipVectors.portableHalfBits(v), ClipVectors.halfBits(v),
+                           "encoding \(v) differed between implementations")
+        }
+    }
+
+    func testNaNStaysNaNRatherThanBecomingInfinity() {
+        let bits = ClipVectors.portableHalfBits(.nan)
+        XCTAssertEqual(bits & 0x7C00, 0x7C00, "exponent must be all-ones")
+        XCTAssertNotEqual(bits & 0x03FF, 0, "mantissa must be non-zero, or it is Infinity")
+        XCTAssertTrue(ClipVectors.portableFloat(fromHalfBits: bits).isNaN)
+    }
+
+    /// Full pipeline through the public API, since that is what writes rows.
+    func testBlobRoundTripIsBitIdenticalAcrossImplementations() {
+        let vector: [Float] = (0..<512).map { Float(sin(Double($0))) }
+        let data = ClipVectors.toData(vector)
+        var portableData = Data(capacity: vector.count * 2)
+        for value in vector {
+            var half = ClipVectors.portableHalfBits(value).littleEndian
+            withUnsafeBytes(of: &half) { portableData.append(contentsOf: $0) }
+        }
+        XCTAssertEqual(data, portableData, "the two encoders produced different bytes")
+    }
+}

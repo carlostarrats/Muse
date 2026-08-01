@@ -44,6 +44,7 @@ local-first, Apple-Intelligence-native, and free forever.
   entitlement. The developer still receives **no data**, so the "Data Not
   Collected" privacy label is unchanged.
 - Data collection: **None**. Privacy nutrition label = "Data Not Collected".
+- Universal build — **Intel Macs must keep working**; Apple Silicon is the tuning target (owner correction 2026-08-01, superseding the foundation's "Apple Silicon only"). A Debug build compiles only the active arch, so arch-specific code must be verified with `-configuration Release`.
 - Min macOS: **14.6** (Vision/PDFKit/AVKit/FSEvents/FTS5 all work).
   Foundation Models is used only to name auto-generated collections,
   capability-gated to Apple Intelligence Macs (macOS 26+); the in-app
@@ -170,7 +171,7 @@ must-not-break rules distilled from those sessions live in
 
 ### Durable constraints & gotchas (DO NOT BREAK)
 
-**The full set of 157 rules lives in `docs/durable-constraints.md`. READ THE
+**The full set of 158 rules lives in `docs/durable-constraints.md`. READ THE
 RELEVANT SECTION BEFORE ANY NON-TRIVIAL CHANGE** — each one is hard-won, and
 re-introducing it re-introduces a shipped bug. Sections there:
 
