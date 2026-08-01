@@ -34,7 +34,7 @@ These are true across many rows and are not repeated in each one.
 
 | # | Gap | Status |
 |---|---|---|
-| G1 | **Almost nothing on `new-product-build-1` has been driven in the running GUI.** Launch, migrations and the backfill chain were confirmed with `MUSE_TRACE=1` against the real library (review round 1, Pass C). The editor, compare/cull, all five import sources, social export, Drive publish/portfolio and backup/restore have not been. | **OPEN** — needs hands, not another review |
+| G1 | **Almost nothing on `new-product-build-1` has been driven in the running GUI.** | **PARTIALLY CLOSED 2026-08-01** (round 7) — `MuseSurfaceDriveTests` drives the app via XCUITest and confirms, by screenshot, that the editor, readouts, compare, cull, duplicates, all five import panels, backup and settings all open and respond, and that every modal honours Escape. **Still open:** feature *correctness* (no slider moved, no render compared), social export, Drive publish, restore/delete, and running an import to completion. See the G1 section at the end of this file. |
 | ~~G2~~ | ~~Backup does not carry edit data.~~ | **CLOSED 2026-08-01** — Spec 09 amendment A2 implemented: stacks, versions/snapshots, presets and LUT bytes all ride `.muselibrary`, restore-wins at the new `parent_dir`. |
 | G3 | `files_fts.file_id` is `UNINDEXED`, so any `WHERE file_id = ?` against it is a full FTS scan. Callers are chunked to make it cheap; fixing it properly means rebuilding the FTS table in a migration. | **ACCEPTED** |
 | G4 | `RediscoveryQueries.onThisDay`'s no-`photo_meta` fallback filters on `strftime` over `files.created_at` and cannot use an index. Set shrinks toward zero as the header backfill completes. | **ACCEPTED** |
@@ -353,3 +353,56 @@ Release build **0 warnings, 0 errors**, universal (`x86_64 arm64`).
 > whole symbol list to `grep` as one multi-line pattern, which matched
 > everything. A sweep that returns "all clean" on the first run deserves a
 > deliberate negative control before it is believed. That is how R7-1 surfaced.
+
+---
+
+## G1 — the GUI pass (2026-08-01, round 7)
+
+**G1 is now PARTIALLY CLOSED, and the boundary matters more than the headline.**
+`MuseUITests/MuseSurfaceDriveTests.swift` drives the real app through XCUITest —
+10 tests, all green — and every surface below was confirmed by *looking at the
+screenshot*, not by the test going green.
+
+Two things made this possible after it looked blocked. XCUITest gets automation
+rights through the test runner, so it does **not** need the terminal to hold
+Automation/Accessibility TCC permission (osascript does, and is refused). And
+`MuseUITests` was three Xcode template stubs asserting nothing — "6 UI tests
+passing" had meant nothing at all.
+
+### Confirmed by screenshot
+
+| Surface | What was actually seen |
+|---|---|
+| Launch / DB / migrations | Sidebar populated from real rows: folders with counts, 1,915-file folder, 10 collections |
+| Rediscovery (Spec 02) | Places, On This Day, Rarely Seen, Shuffle all switch the grid without collapsing |
+| Hero viewer | Opens on **double-click**, closes on Escape (asserted on "Zoom out", a hero-only control) |
+| **Editor (Spec 04)** | Full panel: Exposure→Noise Reduction sliders, Light/Color/Looks tabs, undo/redo, before/after, Reset |
+| **Readouts (Spec 05)** | Tone Zones strip, Zone Sliders, **Curve with a live histogram**, and the teaching copy computing a real value: "1.2% of pixels are clipped — those areas have lost detail" |
+| **Compare (Spec 03)** | Two panes, per-pane file tabs, Fit/1.0× zoom, focus indicators, active pane outlined |
+| **Cull (Spec 03)** | HUD live: "Culling — 0 kept · 0 rejected · K keep · X reject · U clear" + Cancel/Finish |
+| Duplicates (P8) | Modal opened and listed a **real** duplicate pair from the library |
+| Import ×5 (Spec 06) | All five entries open their panel with correct, localized prompts |
+| Backup (P19/Spec 09) | Save panel with correct default `Muse Backup 2026-08-01.muselibrary` + guidance copy |
+| Settings | Opens with real controls ("Automatic organization", "Corner Radius") |
+| Escape handling | Every modal above closes on Escape — a standing regression test for round 1's F16 |
+
+### Still NOT verified — do not read the table above as more than it says
+
+- **Feature correctness.** These prove surfaces OPEN and RESPOND. No slider was
+  moved and no render output was compared; the editor was opened, not *used*.
+- **Social export, Drive publish/portfolio.** Need network and an OAuth session.
+- **Restore from backup, delete.** Deliberately excluded — they mutate user data.
+- **Import execution.** The panels open; no import was actually run to completion.
+
+### Two method lessons, both from this suite's own bugs
+
+1. **The first hero test PASSED while doing nothing.** It pressed Return (which
+   only selects — `handleTileTap` opens on double-click) and asserted "the window
+   exists", which is true whether or not anything opened. It now asserts on a
+   hero-only control. A UI test whose assertion cannot fail is the same defect
+   class as the grid cull badge that this branch shipped unbuilt.
+2. **The first compare test blamed the app for a driving bug — twice.** It
+   reported "Compare stayed disabled after selecting two tiles" when the real
+   cause was first cmd-clicking the already-selected tile (toggling it off), and
+   then clicking a masonry *gap* (clearing the selection). Screenshots settled
+   both. On a ragged grid, click tile CENTRES measured from a real screenshot.

@@ -172,9 +172,21 @@ are the load-bearing reference artifacts.
 > them. **`docs/new-build/FEATURE-LEDGER.md` is the standing feature × verification
 > ledger** — one row per feature area with separate automated / static / runtime
 > states, and the Runtime column doubles as the written GUI test plan. Read and
-> update it with any feature work. **The only substantive gap left is that
-> nobody has driven the GUI** (ledger G1) — and **quit all but one Muse instance
-> before doing it**, since GRDB's `busyMode` is `.immediateError` and two
+> update it with any feature work. **G1 (nobody has driven the GUI) is now
+> PARTIALLY CLOSED** — `MuseUITests/MuseSurfaceDriveTests.swift` drives the real
+> app and confirms by screenshot that the editor, Spec 05 readouts, compare,
+> cull, duplicates, all five import panels, backup and settings open and respond,
+> and that every modal honours Escape. **Drive the GUI with XCUITest, not
+> osascript**: the test runner carries automation rights, while a terminal needs
+> Automation/Accessibility TCC permission and is otherwise refused (-1743). Two
+> traps it caught in its own tests: a UI test asserting only "the window exists"
+> passes while doing nothing (the hero test pressed Return, which merely selects
+> — `handleTileTap` opens on DOUBLE-click), and on the ragged masonry grid a
+> click between tiles clears the selection, so click tile CENTRES measured from a
+> real screenshot. **Still open:** feature correctness (no slider moved, no render
+> compared), social export, Drive publish, restore/delete, and running an import
+> to completion. Also **quit all but one Muse instance
+> before driving it**, since GRDB's `busyMode` is `.immediateError` and two
 > instances against one DB manufacture phantom "my edit didn't save" bugs.
 > Everything else the reviews recorded
 > is closed: localization is COMPLETE (1,002 keys, 0 untranslated), **backup now
