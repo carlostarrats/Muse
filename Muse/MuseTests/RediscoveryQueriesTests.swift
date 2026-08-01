@@ -103,6 +103,8 @@ final class RediscoveryQueriesTests: XCTestCase {
     func testOnThisDayFallsBackToCreatedAtWhenNoPhotoMetaRow() throws {
         let queue = try migrated()
         try queue.write { db in
+            // 2020-06-21 15:00 UTC == 08:00 PDT — the same calendar day either way,
+            // so this test is about the fallback JOIN, not about the zone.
             try db.execute(sql: """
                 INSERT INTO files (id, content_hash, kind, last_seen_at, created_at)
                 VALUES ('f3','h3','image',0,1592742000)
@@ -111,9 +113,69 @@ final class RediscoveryQueriesTests: XCTestCase {
                 INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('p3','f3','/r/f3.jpg',1)
                 """)
         }
-        try queue.read { db in
-            XCTAssertTrue(try RediscoveryQueries.onThisDay(db: db, todayMD: "06-21",
-                                                           currentYear: 2026).contains("f3"))
+        try withTimeZone("America/Los_Angeles") {
+            try queue.read { db in
+                XCTAssertTrue(try RediscoveryQueries.onThisDay(db: db, todayMD: "06-21",
+                                                               currentYear: 2026).contains("f3"))
+            }
+        }
+    }
+
+    /// The `created_at` fallback must test the month-day in LOCAL time, because
+    /// `todayMD` is built from a local `Calendar` and `capture_md` is materialized
+    /// in the local zone. Bare `'unixepoch'` is UTC, so an evening photo in the
+    /// Americas landed on the next day's anniversary and was absent from its own.
+    ///
+    /// `1592802000` is 2020-06-21 **22:00 PDT** == 2020-06-22 **05:00 UTC**: the
+    /// two readings disagree, which is the whole point of the fixture.
+    func testOnThisDayFallbackUsesLocalNotUTCMonthDay() throws {
+        let queue = try migrated()
+        try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO files (id, content_hash, kind, last_seen_at, created_at)
+                VALUES ('f4','h4','image',0,1592802000)
+                """)
+            try db.execute(sql: """
+                INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('p4','f4','/r/f4.jpg',1)
+                """)
+        }
+        try withTimeZone("America/Los_Angeles") {
+            try queue.read { db in
+                // Surfaces on the day it was actually taken…
+                XCTAssertTrue(try RediscoveryQueries.onThisDay(db: db, todayMD: "06-21",
+                                                               currentYear: 2026).contains("f4"))
+                // …and NOT on the following day, which is what the UTC reading gave.
+                XCTAssertFalse(try RediscoveryQueries.onThisDay(db: db, todayMD: "06-22",
+                                                                currentYear: 2026).contains("f4"))
+            }
+        }
+    }
+
+    /// The year exclusion is the same class: `currentYear` is a local
+    /// `Calendar` year, so the column it is compared against must be read local
+    /// too. 2019-12-31 20:00 PST is already 2020 in UTC.
+    func testOnThisDayYearExclusionUsesLocalYear() throws {
+        let queue = try migrated()
+        try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO files (id, content_hash, kind, last_seen_at, created_at)
+                VALUES ('f5','h5','image',0,0)
+                """)
+            try db.execute(sql: """
+                INSERT INTO paths (id, file_id, absolute_path, is_alive) VALUES ('p5','f5','/r/f5.jpg',1)
+                """)
+            // 2019-12-31 20:00 PST == 2020-01-01 04:00 UTC.
+            try db.execute(sql: """
+                INSERT INTO photo_meta (file_id, capture_date, capture_md)
+                VALUES ('f5', 1577851200, '12-31')
+                """)
+        }
+        try withTimeZone("America/Los_Angeles") {
+            try queue.read { db in
+                // Local year is 2019, so a 2020 "today" must still show it.
+                XCTAssertTrue(try RediscoveryQueries.onThisDay(db: db, todayMD: "12-31",
+                                                               currentYear: 2020).contains("f5"))
+            }
         }
     }
 

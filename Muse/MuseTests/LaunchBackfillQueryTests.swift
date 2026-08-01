@@ -77,6 +77,41 @@ final class LaunchBackfillQueryTests: XCTestCase {
         XCTAssertEqual(years, ["2020", "2010"])
     }
 
+    /// The years offered here feed `in:<year>`, which resolves its bounds with a
+    /// local `Calendar`. So the label must be the LOCAL year: 2019-12-31 20:00 PST
+    /// is 2020 in UTC, and labelling it "2020" offers a facet that `in:2020`
+    /// then matches nothing for — the exact "no empty year is ever offered"
+    /// promise this query documents.
+    func testDistinctYearsLabelsTheLocalYearNotTheUTCYear() throws {
+        let q = try makeQueue()
+        try q.write { db in
+            try insertFile(db, id: "a", hash: "ha")
+            try insertMeta(db, fileID: "a", capture: 1_577_851_200)  // 2019-12-31 20:00 PST
+        }
+        try withTimeZone("America/Los_Angeles") {
+            let years = try q.read { db in try SearchFacets.distinctYears(db: db) }
+            XCTAssertEqual(years, ["2019"])
+        }
+    }
+
+    /// The year *step* has to be local for the same reason. Stepping by a UTC
+    /// year from a capture whose UTC year already ran ahead jumps clean over the
+    /// following local year — so 2020 below used to vanish from the list
+    /// entirely, which is a miss rather than a mislabel.
+    func testDistinctYearsStepsByLocalYearSoNoYearIsSkipped() throws {
+        let q = try makeQueue()
+        try q.write { db in
+            try insertFile(db, id: "a", hash: "ha")
+            try insertMeta(db, fileID: "a", capture: 1_577_851_200)  // 2019-12-31 20:00 PST
+            try insertFile(db, id: "b", hash: "hb")
+            try insertMeta(db, fileID: "b", capture: 1_591_038_000)  // 2020-06-01 12:00 PDT
+        }
+        try withTimeZone("America/Los_Angeles") {
+            let years = try q.read { db in try SearchFacets.distinctYears(db: db) }
+            XCTAssertEqual(years, ["2020", "2019"])
+        }
+    }
+
     func testDistinctYearsIgnoresNullCaptureDates() throws {
         let q = try makeQueue()
         try q.write { db in

@@ -46,6 +46,19 @@ nonisolated struct FacetsSnapshot: Equatable, Sendable {
     ///
     /// `nonisolated` + internal so the query itself is testable without the
     /// @MainActor store.
+    ///
+    /// **Both the label and the year step are LOCAL** (`'localtime'`), because the
+    /// token these years feed — `in:<year>` — resolves its bounds through a
+    /// `Calendar` in the current zone (`PhotoSearch.dateIDs`). Reading the column
+    /// as UTC broke this function's own "no empty year is ever offered" promise
+    /// in both directions for a capture within the zone offset of a year boundary:
+    /// 2019-12-31 20:00 PST is 2020 in UTC, so the facet offered **2020** while
+    /// `in:2020` matched nothing — and, because the *step* was a UTC year too, a
+    /// following June 2020 photo was jumped clean over and **2019 was never
+    /// offered at all**. `'utc'` closes the step back to an epoch after
+    /// `'localtime'` opens it, so the arithmetic happens on local wall-clock
+    /// years and the comparison still happens on the stored epoch — the loose
+    /// index scan is unchanged.
     nonisolated static func distinctYears(db: GRDB.Database) throws -> [String] {
         try String.fetchAll(db, sql: """
             WITH RECURSIVE y(t) AS (
@@ -53,10 +66,11 @@ nonisolated struct FacetsSnapshot: Equatable, Sendable {
                 UNION ALL
                 SELECT (SELECT MIN(capture_date) FROM photo_meta
                         WHERE capture_date >= CAST(strftime('%s',
-                            datetime(y.t, 'unixepoch', 'start of year', '+1 year')) AS INTEGER))
+                            datetime(y.t, 'unixepoch', 'localtime',
+                                     'start of year', '+1 year', 'utc')) AS INTEGER))
                 FROM y WHERE y.t IS NOT NULL
             )
-            SELECT strftime('%Y', t, 'unixepoch') AS v FROM y
+            SELECT strftime('%Y', t, 'unixepoch', 'localtime') AS v FROM y
             WHERE t IS NOT NULL ORDER BY v DESC
             """)
     }

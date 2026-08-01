@@ -42,6 +42,17 @@ nonisolated enum RediscoveryQueries {
     ///
     /// Feb 29 shows on Feb 29 only (no Mar 1 remap): that falls out of the
     /// exact string match, it isn't a branch.
+    ///
+    /// **Every date part here is evaluated in LOCAL time (`'localtime'`), because
+    /// both inputs are local**: `todayMD`/`currentYear` come from a
+    /// `Calendar`/`Date` in the current zone, and `capture_md` is materialized by
+    /// `PhotoHeaderReader.monthDay` with a default-zone `DateFormatter`. Bare
+    /// `'unixepoch'` is UTC, so the fallback leg used to compare a UTC month-day
+    /// against a local one — a photo taken at 22:00 in the Americas reports the
+    /// NEXT day in UTC and so surfaced on the wrong anniversary (and was missing
+    /// from the right one). That leg is not the vanishing set the backfill note
+    /// suggests: `photoKinds` includes video and psd, which rarely carry an EXIF
+    /// capture date and so live on `created_at` permanently.
     static func onThisDay(db: GRDB.Database, todayMD: String, currentYear: Int,
                           limit: Int = defaultLimit) throws -> [String] {
         let withMeta = try Row.fetchAll(db, sql: """
@@ -49,7 +60,7 @@ nonisolated enum RediscoveryQueries {
             JOIN paths p ON p.file_id = f.id AND p.is_alive = 1
             JOIN photo_meta m ON m.file_id = f.id
             WHERE f.kind IN (\(photoKinds)) AND m.capture_md = ?
-              AND CAST(strftime('%Y', m.capture_date, 'unixepoch') AS INTEGER) < ?
+              AND CAST(strftime('%Y', m.capture_date, 'unixepoch', 'localtime') AS INTEGER) < ?
             GROUP BY f.id
             """, arguments: [todayMD, currentYear])
         let fallback = try Row.fetchAll(db, sql: """
@@ -58,8 +69,8 @@ nonisolated enum RediscoveryQueries {
             LEFT JOIN photo_meta m ON m.file_id = f.id
             WHERE f.kind IN (\(photoKinds))
               AND (m.file_id IS NULL OR m.capture_md IS NULL)
-              AND strftime('%m-%d', f.created_at, 'unixepoch') = ?
-              AND CAST(strftime('%Y', f.created_at, 'unixepoch') AS INTEGER) < ?
+              AND strftime('%m-%d', f.created_at, 'unixepoch', 'localtime') = ?
+              AND CAST(strftime('%Y', f.created_at, 'unixepoch', 'localtime') AS INTEGER) < ?
             GROUP BY f.id
             """, arguments: [todayMD, currentYear])
 

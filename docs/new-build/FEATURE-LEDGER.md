@@ -23,8 +23,8 @@ not upgrade a row on inference.
 actually produced (the grid cull badge that was specified and never built, the
 five modals with no Escape branch). **A + S is not a substitute for R.**
 
-Last full pass: **2026-08-01** (review round 4). Suite at that point:
-**1,802 tests, 2 skipped, 0 failures**; Release build warning-free.
+Last full pass: **2026-08-01** (review round 5). Suite at that point:
+**1,806 tests, 2 skipped, 0 failures**; Release build warning-free.
 
 ---
 
@@ -102,7 +102,7 @@ question.
 | S01.5 | Search cancellation + `PerfBaseline` | `SearchCancellationTests`, `PerfBaselineTests` | 2026-08-01 | ✅ trace | |
 | S02.1 | `PhotoHeaderReader` (one-pass GPS + EXIF) | `PhotoHeaderReaderTests`, `PhotoHeaderBackfillTests`, `PhotoMetaMigrationTests` | 2026-08-01 | ✅ trace | Uses the reference-restricted AV helper |
 | S02.2 | Offline reverse geocoding + Places page | `ReverseGeocoderTests`, `GeoKDTreeTests`, `GeoNamesDatasetTests`, `PlaceQueriesTests` | 2026-08-01 | partial | No per-photo network — verified |
-| S02.3 | Rediscovery (On This Day / Rarely Seen / Shuffle) | `RediscoveryQueriesTests`, `SeededRandomTests` | 2026-08-01 | ❌ G1 | G4 |
+| S02.3 | Rediscovery (On This Day / Rarely Seen / Shuffle) | `RediscoveryQueriesTests`, `SeededRandomTests` | 2026-08-01 | ❌ G1 | G4. ⚠️ **fixed R5-1** — the `created_at` fallback tested the month-day in UTC against a local `todayMD` |
 | S02.4 | Near-duplicate stacks + bursts | `AutoStackerTests`, `BurstClustererTests`, `StackStoreTests`, `StackDisplayTests`, `StackScatterTests` | 2026-08-01 | ❌ G1 | Distinct from P8 duplicates |
 | S02.5 | Phase-1 token search + `.location` rule | `SearchTokenFacesTests`, `SmartRuleLocationTests`, `NLTokenComposerTests` | 2026-08-01 | ❌ G1 | |
 | S03.1 | CLIP engine / index / model store | `ClipIndexTests`, `ClipVectorsTests`, `ClipPreprocessTests`, `ClipModelManifestTests`, `EmbedderTests`, `ClipMigrationTests` | 2026-08-01 | partial | Keyset-paged + bounded top-K (R1-F8) |
@@ -110,7 +110,7 @@ question.
 | S03.3 | `is:` / `faces:` / `pets:` / `similar:` tokens | `SearchTokenFacesTests`, `PhotoSearchTraitsTests`, `PhotoSearchSimilarTests`, `SimilarTermTests` | 2026-08-01 | ❌ G1 | |
 | S03.4 | Compare workbench + focus peaking | `CompareCullTests`, `PeakingOverlayTests`, `SharpnessScoreTests`, `PortraitHeuristicTests` | 2026-08-01 | ❌ G1 | ⚠️ **fixed R2-3** (VoiceOver) |
 | S03.5 | Ephemeral cull + grid badge | `CompareCullTests` | 2026-08-01 | ❌ G1 | ⚠️ badge **was never built**, added R1-F23 |
-| S03.6 | NL suggestions | `SearchSuggestTests`, `SearchSuggestTraitsTests`, `NLTokenComposerTests` | 2026-08-01 | ❌ G1 | |
+| S03.6 | NL suggestions | `SearchSuggestTests`, `SearchSuggestTraitsTests`, `NLTokenComposerTests`, `LaunchBackfillQueryTests` | 2026-08-01 | ❌ G1 | ⚠️ **fixed R5-2** — the `in:` year facet labelled and stepped in UTC while `in:` itself resolves local |
 | S04.1 | Edit model + codec + history | `EditStackCodecTests`, `EditStackNormalizeTests`, `EditHistoryTests`, `EditMigrationTests`, `GeometryParamsTests` | 2026-08-01 | ❌ G1 | Canonical hash pinned by literal fixture |
 | S04.2 | Render chain (Core Image / Metal) | `EditRenderConsistencyTests`, `EditRenderNeutralityTests`, `EditKernelLoadTests`, `RenderCoalescerTests`, `CurveLUTTests`, `HighlightRecoveryTests` | 2026-08-01 | partial | RAW `scaleFactor` fixed R1-F3; non-RAW half **disproved** by measurement |
 | S04.3 | `EditStore` + live provider + consumer sweep | `EditRecordStoreTests`, `EditStackIndexTests`, `EditSessionTests` | 2026-08-01 | ❌ G1 | ⚠️ **fixed R2-2** — persisted a translated version name |
@@ -141,6 +141,7 @@ question.
 | 3 | 2026-08-01 | The two gaps round 2 recorded rather than closed | G2 + G6 closed | 1,795 |
 | 3-QA | 2026-08-01 | Self-review of round 3's own diff | 4 fixed (see below) | 1,797 |
 | 4 | 2026-08-01 | Lenses rounds 1–3 did not run: SQL construction, crash-on-user-data, resource lifecycle, remote-body bounds; + a third check of the twice-recurring index-staleness class | 4 fixed (R4-1…R4-4) | 1,802 |
+| 5 | 2026-08-01 | Lenses rounds 1–4 did not run: **time-zone correctness of SQL date parts**, path-prefix boundaries, Unicode path normalization, comparator ordering, transaction atomicity, task-group concurrency bounds | 2 fixed (R5-1, R5-2) | 1,806 |
 
 ### Round 2 findings
 
@@ -185,6 +186,40 @@ resource meant to be shared being rebuilt per item.
 | **R4-2** | low | **`LutRegistry`'s LRU could evict a live entry.** The miss path released the lock to hit the database, then appended the id to `lruOrder` blind. Two threads missing the same id therefore appended it twice; the eviction loop then dropped the live cache entry on the first copy while the second lingered as a phantom. `preload` already deduped — the read path was just inconsistent with it. | `lruOrder.removeAll { $0 == id }` before the append, matching `preload`. |
 | **R4-3** | med | **The announcements feed's size cap was applied after the bytes were already in memory.** `AnnouncementFeed.parse` guards `data.count <= maxPayloadBytes`, but `URLSession.data(for:)` buffers the whole body before returning — so the response chose the allocation and the "cap" only decided whether to parse it. This is the app's ONLY automatic, non-user-initiated fetch, and it runs at every launch. The share page's `readCapped` documents this exact reasoning on the JS side ("a check performed on memory already allocated"); the Swift side hadn't applied it. | `BoundedBody.data(for:session:limit:)` — rejects on a declared oversize Content-Length before reading a byte, and enforces a streaming tally when the header is absent or lies. Wired into the announcements fetch and the CLIP manifest fetch (which likewise declared a 16 KB ceiling it couldn't enforce). +5 tests, incl. the two cases a post-hoc check passes: an understated Content-Length and no Content-Length at all. |
 | **R4-4** | — | **Structure:** `BoundedBody` first landed in `Commerce/`, which made `Intelligence/Clip/` depend on a commerce folder for a cross-cutting network utility. | Moved to its own `Networking/`. |
+
+### Round 5 findings
+
+Round 5 picked lenses the first four hadn't: **time-zone correctness of SQL date
+parts**, path-prefix boundaries, Unicode path normalization, comparator ordering
+(strict weak), transaction atomicity, and concurrency bounds on task groups. Both
+findings are the same defect class — an epoch column read as UTC by SQL while
+every Swift input to the same comparison was built in the local zone — and both
+were invisible to the existing tests because their fixtures happened to use
+midday-UTC epochs that read as the same calendar day either way.
+
+| # | Severity | Finding | Fix |
+|---|---|---|---|
+| **R5-1** | med | **On This Day showed evening photos on the wrong day.** `RediscoveryQueries.onThisDay` compares against two local-zone inputs (`todayMD`/`currentYear` from a `Calendar`, and `capture_md`, which `PhotoHeaderReader.monthDay` materializes with a default-zone `DateFormatter`) — but its `created_at` fallback leg tested `strftime('%m-%d', …, 'unixepoch')`, which is **UTC**. Verified in SQLite: a photo at 2020-06-21 22:00 PDT reports `06-22`. So in the Americas every evening file surfaced on the *following* day's anniversary and was missing from its own. The function's own comment calls the fallback "a set that shrinks toward zero as the header backfill completes", which is not true: `photoKinds` includes **video and psd**, which rarely carry an EXIF capture date and therefore live on `created_at` permanently. The year exclusion had the same UTC-vs-local mismatch at New Year. | `'localtime'` on all three date parts, plus a comment recording why local is the correct zone here rather than an arbitrary choice. +2 tests, both pinned to `America/Los_Angeles` and both verified to FAIL against the old SQL. |
+| **R5-2** | med | **A search facet offered a year that matched nothing, and hid one that would have.** `SearchFacets.distinctYears` labelled years with a UTC `strftime`, but the token it feeds (`in:<year>`) resolves its bounds through a local `Calendar` in `PhotoSearch.dateIDs`. A single 2019-12-31 20:00 PST photo was therefore offered as **2020**, which `in:2020` then matched nothing for — breaking the "no empty year is ever offered" promise the function documents. Worse, the recursive CTE *stepped* by a UTC year too, so from that same photo the step jumped clean over a following June-2020 capture and **2019 never appeared in the list at all**. Both halves reproduced in raw SQLite before fixing. | Local label + local step, via `datetime(t,'unixepoch','localtime','start of year','+1 year','utc')` — `'utc'` closes the arithmetic back to an epoch, so the comparison still runs against the stored integer and the loose index scan is unchanged. Verified the step is still strictly increasing (so the CTE cannot fail to terminate). +2 tests, both verified to fail against the old SQL. |
+
+The class is now closed: the only two `Calendar` sites in the app target are
+`RediscoveryStore` and `PhotoSearch.dateIDs`, and after these fixes every SQL
+date part they meet is evaluated in the same zone they are. The rule is recorded
+in `docs/durable-constraints.md` § Photo metadata, and
+`MuseTests/TestTimeZone.swift` gives the shared `withTimeZone` helper such a test
+needs — without it these assertions pass vacuously on a UTC machine.
+
+### Round 5 — checked and clean
+
+Recorded so a later round doesn't re-spend the effort:
+
+- **Path-prefix boundaries are sound.** Every one of the 19 `hasPrefix` path tests either appends `"/"` explicitly or is a non-path domain (a filename prefix, a URL prefix). `PathReconciler.excludingProtected` normalizes the trailing slash before testing, so an unreadable `/a/Inspo` cannot protect `/a/Inspo Extra/x.jpg`.
+- **No Unicode-normalization hazard.** There is no NFC/NFD normalization anywhere in the tree, which is safe *because* every path in the DB originates from filesystem enumeration and is compared against paths from the same source — there is no user-typed or archive-supplied path joining that comparison.
+- **No LIKE-metacharacter correctness bug.** Distinct from round 4's injection sweep. `SmartCollectionResolver`'s `.filename` rule uses LIKE only to pre-narrow and then re-tests the basename literally in Swift, so a `%` or `_` in the term over-matches the cheap leg and is rejected by the exact one. `NoteStore` escapes explicitly with `ESCAPE`.
+- **Transaction atomicity is correct by construction.** There are no `inTransaction`/`savepoint` calls because GRDB already wraps every `write { }` closure in a transaction — which is why all 76 write sites are atomic without saying so.
+- **Comparators are valid strict weak orderings.** No multi-key `||` comparator exists; the one tuple comparator (`onThisDay`'s ordering) tests inequality before falling through to a total tiebreak on `id`.
+- **Task groups are concurrency-bounded.** Six of the seven use an explicit in-flight window (`Indexer`, `AnalyzePipeline`, `DeepAnalysisBackfill`, `PhotoHeaderBackfill`, `ThumbnailCache.prewarmToDisk`, `CollectionPDFExporter`). **`AspectRatioCache.load` is the one exception** and is left as-is deliberately: it is fed `visibleFiles` (the whole filtered set, not a viewport window), so `gaps` can be folder-sized, but real parallelism is bounded by Swift's cooperative pool and the unwindowed spawn is a documented choice for layout convergence speed. Worth knowing rather than fixing: it is the only background pass that does **not** narrow under `WorkThrottleStore`, and its `Task.detached` work is not cancellable — a superseded folder's reads run to completion and are discarded by `loadToken`.
+- **GPS is validated on both ingest paths** — `PhotoHeaderReader` guards `isFinite` plus per-axis bounds, `XMPGPS` guards the same, so corrupt EXIF cannot reach the KD-tree.
 
 ### Round 4 — checked and clean
 
