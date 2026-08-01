@@ -347,8 +347,12 @@ final class AppState: ObservableObject {
 
     /// Drives the View-menu "Manage Drive Shares…" sheet.
     @Published var driveSharesShown = false
-    /// Non-nil while the Import Keywords & Ratings sheet is up (File menu).
-    @Published var metadataImportRequest: MetadataImportRequest?
+    /// Non-nil while any File > Import card is up. ONE flag for all five
+    /// sources: it replaced `metadataImportRequest` 1-for-1, so the frozen-
+    /// AppState rule holds at net-zero `@Published` count, and a run's card
+    /// swaps (run → label mapping → report) are phase changes of this flag
+    /// rather than stacked modals.
+    @Published var importModal: ImportModal?
 
     // Collection filtering (toggleCollectionsPage / visibleFiles /
     // tagSourceFiles / setActiveCollection / setCollectionCover) and the tag
@@ -535,7 +539,7 @@ final class AppState: ObservableObject {
     var modalPresented: Bool {
         infoShown || imageLayoutShown || settingsShown || driveSharesShown
             || duplicatesSheetVisible || reconnectShown
-            || metadataImportRequest != nil || collectionModal != nil
+            || importModal != nil || collectionModal != nil
             || addTagRequest != nil || newCollectionRequest
             // Confirms, errors and name prompts were system alerts (their own
             // window, so the grid couldn't get keys). As in-window cards they

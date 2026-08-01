@@ -42,6 +42,39 @@ final class EditPresetStore: ObservableObject {
         await load()
     }
 
+    /// Import path (Spec 06): geometry is still excluded, but the Lightroom
+    /// ORIGIN is kept — this preset genuinely did come from a `.xmp`, and the
+    /// badge is how the user knows the values are approximations. Returns the
+    /// name actually used (a ` 2` ladder resolves collisions; `edit_presets`
+    /// has no UNIQUE constraint, so this is courtesy, not correctness).
+    @discardableResult
+    func createImported(name: String, stack: EditStack) async -> String? {
+        guard let queue = Database.shared.dbQueue else { return nil }
+        var forPreset = stack
+        forPreset.adjustments.removeAll { if case .geometry = $0 { true } else { false } }
+        guard let json = try? EditStackCodec.encode(forPreset.normalized()) else { return nil }
+        let existing = Set(presets.map { $0.name.lowercased() })
+        let unique = Self.uniqueName(name, existing: existing)
+        let now = Int64(Date().timeIntervalSince1970)
+        let row = EditPresetRow(id: UUID().uuidString, name: unique, stack: json,
+                                created_at: now, updated_at: now)
+        do {
+            try await queue.write { db in var r = row; try r.insert(db) }
+        } catch {
+            return nil
+        }
+        await load()
+        return unique
+    }
+
+    /// "Name" → "Name 2" → "Name 3"…, case-insensitively.
+    nonisolated static func uniqueName(_ base: String, existing: Set<String>) -> String {
+        guard existing.contains(base.lowercased()) else { return base }
+        var index = 2
+        while existing.contains("\(base) \(index)".lowercased()) { index += 1 }
+        return "\(base) \(index)"
+    }
+
     func update(id: String, from stack: EditStack) async {
         guard let queue = Database.shared.dbQueue else { return }
         try? await queue.write { db in
@@ -70,9 +103,12 @@ final class EditPresetStore: ObservableObject {
     }
 
     /// The geometry exclusion, in one place — both write paths go through it.
+    /// Origin is stripped here too: a preset is a look you now own, not a claim
+    /// that every photo you apply it to came from Lightroom.
     nonisolated static func presetJSON(from stack: EditStack) -> String {
         var forPreset = stack
         forPreset.adjustments.removeAll { if case .geometry = $0 { true } else { false } }
+        forPreset.origin = nil
         return (try? EditStackCodec.encode(forPreset.normalized())) ?? "{}"
     }
 }

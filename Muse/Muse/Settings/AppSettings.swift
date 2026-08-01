@@ -31,6 +31,15 @@ enum AppSettings {
     /// — declining once must never nag again.
     static let clipOfferSeenKey = "clipOfferSeen"
     static let announcementsEnabledKey = "announcementsEnabled"
+    /// Remembered color-label mapping choices, keyed by the RAW source value.
+    /// A JSON blob of `[String: LabelMapping.Choice]`.
+    static let importLabelChoicesKey = "importLabelChoices"
+    /// Also import Lightroom adjustments during a metadata run. Default true.
+    static let importLREditsKey = "importLightroomEdits"
+    /// The user has paused background analysis. PERSISTS across relaunch — a
+    /// pause that silently clears itself reads as broken. This is SCHEDULING,
+    /// not an off switch (DECIDED #22): markers and data paths are untouched.
+    static let analysisPausedKey = "analysisPaused"
 
     /// Automatically run the Vision pass (tags/caption/colors/OCR) on newly
     /// indexed images. Default true. Unset → treated as on.
@@ -61,6 +70,18 @@ enum AppSettings {
     /// Unset → treated as on.
     static var announcementsEnabled: Bool {
         UserDefaults.standard.object(forKey: announcementsEnabledKey) as? Bool ?? true
+    }
+
+    /// Import Lightroom adjustments alongside keywords/ratings. Default true.
+    static var importLREdits: Bool {
+        get { UserDefaults.standard.object(forKey: importLREditsKey) as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: importLREditsKey) }
+    }
+
+    /// Background analysis paused by the user. Default false.
+    static var analysisPaused: Bool {
+        get { UserDefaults.standard.object(forKey: analysisPausedKey) as? Bool ?? false }
+        set { UserDefaults.standard.set(newValue, forKey: analysisPausedKey) }
     }
 
     /// Hero viewer COLORS card: expanded (swatches visible) vs collapsed. This

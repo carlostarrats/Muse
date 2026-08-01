@@ -65,6 +65,29 @@ struct ContentView: View {
         }
     }
 
+    /// The one place that maps an `ImportModal` case to its card. Every source
+    /// shares the presenter, the width, and the report card — a new source adds
+    /// a case here and nothing else at the shell.
+    @ViewBuilder
+    private func importCard(_ modal: ImportModal) -> some View {
+        switch modal {
+        case .metadata(let request):
+            ImportRunCard(request: request)
+        case .labelMapping(let request):
+            LabelMappingCard(request: request) { appState.importModal = nil }
+        case .lightroomPresets(let request):
+            LightroomPresetImportCard(request: request)
+        case .applePhotos(let request):
+            ApplePhotosImportCard(request: request)
+        case .takeout(let request):
+            TakeoutImportCard(request: request)
+        case .eagle(let request):
+            EagleImportCard(request: request)
+        case .report(let report):
+            ImportReportCard(report: report) { appState.importModal = nil }
+        }
+    }
+
     private func dismissTopModal() {
         // Confirms/errors first: they're presented outermost, so one raised
         // from inside another card (a delete confirm over Duplicates) is the
@@ -84,7 +107,7 @@ struct ContentView: View {
         if appState.collectionModal != nil { appState.collectionModal = nil; return }
         if appState.addTagRequest != nil { appState.addTagRequest = nil; return }
         if appState.newCollectionRequest { appState.cancelNewCollection(); return }
-        if appState.metadataImportRequest != nil { appState.metadataImportRequest = nil; return }
+        if appState.importModal != nil { appState.importModal = nil; return }
         if appState.reconnectShown { appState.reconnectShown = false; return }
         if appState.duplicatesSheetVisible { appState.duplicatesSheetVisible = false; return }
         if appState.driveSharesShown { appState.driveSharesShown = false; return }
@@ -272,12 +295,16 @@ struct ContentView: View {
                        width: 520, palette: appState.moodPalette) {
                 ManageDriveSharesView()
             }
+            // One shell modal for every File > Import card. The run → label
+            // mapping → report progression is a PHASE CHANGE of this one flag,
+            // never a card stacked over a card (a card is sized from its host's
+            // geometry, and a card has no honest host).
             .museModal(isPresented: Binding(
-                get: { appState.metadataImportRequest != nil },
-                set: { if !$0 { appState.metadataImportRequest = nil } }),
-                       width: 360, palette: appState.moodPalette) {
-                if let request = appState.metadataImportRequest {
-                    MetadataImportSheet(request: request)
+                get: { appState.importModal != nil },
+                set: { if !$0 { appState.importModal = nil } }),
+                       width: 420, palette: appState.moodPalette) {
+                if let modal = appState.importModal {
+                    importCard(modal)
                         .environmentObject(appState)
                 }
             }

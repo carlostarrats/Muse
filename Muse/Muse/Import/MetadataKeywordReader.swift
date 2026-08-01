@@ -16,11 +16,37 @@ import ImageIO
 
 enum MetadataKeywordReader {
 
-    struct Extracted: Equatable {
+    /// A coordinate as a value type — a `(lat, lon)` tuple would break
+    /// `Equatable` synthesis, and this mirrors `ImportSupplement.External`.
+    struct Coordinate: Equatable, Sendable {
+        var lat: Double
+        var lon: Double
+    }
+
+    struct Extracted: Equatable, Sendable {
         var keywords: [String] = []
         var rating: Int? = nil
-        var isEmpty: Bool { keywords.isEmpty && rating == nil }
-        fileprivate var complete: Bool { !keywords.isEmpty && rating != nil }
+        /// `xmp:Label` — the raw source string, verbatim. Never mapped here;
+        /// the user decides what a label means (DECIDED #12).
+        var label: String? = nil
+        /// `dc:title` [Alt, first] → IPTC ObjectName.
+        var title: String? = nil
+        /// `dc:description` [Alt, first] → IPTC CaptionAbstract.
+        var caption: String? = nil
+        /// `dc:creator` [Seq, first] → IPTC Byline.
+        var creator: String? = nil
+        /// XMP-format GPS — the one coordinate source the image header can't
+        /// reach (a sidecar-only RAW workflow).
+        var coordinate: Coordinate? = nil
+
+        var isEmpty: Bool {
+            keywords.isEmpty && rating == nil && label == nil && title == nil
+                && caption == nil && creator == nil && coordinate == nil
+        }
+        var complete: Bool {
+            !keywords.isEmpty && rating != nil && label != nil && title != nil
+                && caption != nil && creator != nil && coordinate != nil
+        }
     }
 
     enum ReadError: Error {
@@ -34,6 +60,14 @@ enum MetadataKeywordReader {
     /// counts "had none"); dataless placeholders and unopenable files throw
     /// (counted "skipped"). Call off-main.
     static func read(url: URL) throws -> Extracted {
+        try readFull(url: url, includingLightroom: false).extracted
+    }
+
+    /// The same single metadata resolve, optionally also parsing Adobe's `crs:`
+    /// development settings out of it. One pass, zero extra I/O — the Lightroom
+    /// edit import rides the metadata the keyword reader already opened.
+    static func readFull(url: URL, includingLightroom: Bool)
+        throws -> (extracted: Extracted, lightroom: LightroomEdits?) {
         if (try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]))?
             .ubiquitousItemDownloadingStatus == .notDownloaded {
             throw ReadError.dataless
@@ -51,14 +85,21 @@ enum MetadataKeywordReader {
         guard sidecar != nil || hasImages else { throw ReadError.unreadable }
 
         var out = Extracted()
-        if let sidecar { merge(from: sidecar, into: &out) }
-        if hasImages, let source, !out.complete {
+        var lightroom: LightroomEdits?
+        if let sidecar {
+            merge(from: sidecar, into: &out)
+            if includingLightroom { lightroom = LightroomXMP.read(sidecar) }
+        }
+        if hasImages, let source, !out.complete || (includingLightroom && lightroom == nil) {
             if let meta = CGImageSourceCopyMetadataAtIndex(source, 0, nil) {
                 merge(from: meta, into: &out)
+                // Sidecar wins: Lightroom writes the CURRENT develop settings
+                // there, and an embedded block can be an older export.
+                if includingLightroom, lightroom == nil { lightroom = LightroomXMP.read(meta) }
             }
             if !out.complete { mergeIPTC(from: source, into: &out) }
         }
-        return out
+        return (out, lightroom.flatMap { $0.isEmpty && $0.unsupported.isEmpty ? nil : $0 })
     }
 
     // MARK: - Sidecar
@@ -92,6 +133,42 @@ enum MetadataKeywordReader {
            let tag = CGImageMetadataCopyTagWithPath(meta, nil, "xmp:Rating" as CFString) {
             out.rating = MetadataImportRules.normalizeRating(doubleValue(of: tag))
         }
+        // `xmp:Label` is a plain string tag — no IPTC equivalent exists, so it
+        // is XMP/sidecar-only by nature.
+        if out.label == nil { out.label = xmpString(meta, "xmp:Label") }
+        if out.title == nil { out.title = xmpString(meta, "dc:title") }
+        if out.caption == nil { out.caption = xmpString(meta, "dc:description") }
+        if out.creator == nil { out.creator = xmpString(meta, "dc:creator") }
+        if out.coordinate == nil,
+           let pair = XMPGPS.coordinate(lat: xmpString(meta, "exif:GPSLatitude"),
+                                        lon: xmpString(meta, "exif:GPSLongitude")) {
+            out.coordinate = Coordinate(lat: pair.0, lon: pair.1)
+        }
+    }
+
+    /// One reader for the three XMP container shapes: a bare string, or an
+    /// Alt/Seq/Bag array whose elements are child tags (occasionally raw
+    /// strings — the same tolerance `xmpSubjects` already needs).
+    private static func xmpString(_ meta: CGImageMetadata, _ path: String) -> String? {
+        guard let tag = CGImageMetadataCopyTagWithPath(meta, nil, path as CFString),
+              let value = CGImageMetadataTagCopyValue(tag) else { return nil }
+        func clean(_ s: String?) -> String? {
+            guard let t = s?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty
+            else { return nil }
+            return t
+        }
+        if let single = value as? String { return clean(single) }
+        guard let items = value as? [Any] else { return nil }
+        for item in items {
+            let ref = item as CFTypeRef
+            if CFGetTypeID(ref) == CGImageMetadataTagGetTypeID() {
+                let itemTag = unsafeDowncast(ref as AnyObject, to: CGImageMetadataTag.self)
+                if let s = clean(CGImageMetadataTagCopyValue(itemTag) as? String) { return s }
+            } else if let s = clean(item as? String) {
+                return s
+            }
+        }
+        return nil
     }
 
     /// `dc:subject` is an XMP Bag: its tag value is an array whose elements
@@ -134,5 +211,15 @@ enum MetadataKeywordReader {
         if out.rating == nil, let n = iptc[kCGImagePropertyIPTCStarRating] as? NSNumber {
             out.rating = MetadataImportRules.normalizeRating(n.doubleValue)
         }
+        // Array-or-string tolerant, like Keywords — take the first entry.
+        func first(_ key: CFString) -> String? {
+            let raw = (iptc[key] as? [String])?.first ?? (iptc[key] as? String)
+            guard let t = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty
+            else { return nil }
+            return t
+        }
+        if out.title == nil { out.title = first(kCGImagePropertyIPTCObjectName) }
+        if out.caption == nil { out.caption = first(kCGImagePropertyIPTCCaptionAbstract) }
+        if out.creator == nil { out.creator = first(kCGImagePropertyIPTCByline) }
     }
 }

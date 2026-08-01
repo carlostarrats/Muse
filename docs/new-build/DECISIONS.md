@@ -9,11 +9,12 @@ settled record, written before build. Product-level decisions live in
 `muse-photo-foundation.md` §13 (authoritative decision log); this file is the
 build-level layer future specs must not contradict.*
 
-*Updated 2026-07-31: **Specs 01–04 are built** (branch `new-product-build-1`), so
+*Updated 2026-07-31: **Specs 01–06 are built** (branch `new-product-build-1`), so
 the "no Spec 01–09 code exists" note above no longer holds for them. Migrations
-now run through **v21**; future specs continue at v22. The "as built" /
-"as-built" sections below record what shipped, including where each deviates
-from the pre-build record; where the two disagree, the as-built section wins.*
+run through **v23** (Spec 06 added none); future specs continue at v24. The
+"as built" / "as-built" sections below record what shipped, including where each
+deviates from the pre-build record; where the two disagree, the as-built section
+wins.*
 
 ---
 
@@ -1664,6 +1665,145 @@ and additions:
   only) · Takeout match + parse < 1 ms/file · `AnalysisStatusStore.refresh` at
   100k rows < 30 ms · Apple-export and Eagle-copy throughput recorded with no
   target (PhotoKit/disk-bound).
+
+## Spec 06 as built (2026-07-31, `new-product-build-1`)
+
+*Where this disagrees with the "Import surface (Spec 06)" sections above, this
+section wins.*
+
+### Scope actually shipped
+
+- Built: the whole plan. One `File > Import` submenu over five sources;
+  `ImportModal` replacing `metadataImportRequest`; the extended
+  `MetadataKeywordReader`; `XMPGPS`; `ImportedText`; `ImportSupplement`;
+  `LabelTag`/`LabelMapping` + the search exclusion + the mapping card + chip
+  styling; `ThrottlePolicy`/`WorkThrottleStore` + the four spawn gates;
+  `AnalysisStatusStore`/`AnalysisEstimator` + the Settings/sidebar surfaces and
+  the FYI; `TakeoutJSON` + the Takeout flow; `EagleLibrary` + the Eagle flow;
+  the Apple Photos flow (entitlement + usage string); `LightroomXMP` +
+  `LightroomEditMapper` + `EditStack.origin` + the apply leg +
+  `EmbeddedPreview` and its compare source; LR preset import.
+- **Spec 06 added NO migrations**, as specified. Future specs continue at v24.
+- **NOT done: the French localization pass.** New user-facing strings are
+  localizable (SwiftUI text literals / `String(localized:)`) but the `fr` values
+  are unfilled, so the export does not report 0 untranslated. This is the one
+  outstanding checklist row from the plan's Task 24.
+- Not done (plan steps that require the running app or the owner): the manual
+  runtime verifications (Low Power → `.reduced`, a real Photos library import, a
+  real Eagle/Lightroom round trip).
+
+### Fixtures — deviation from the plan
+
+- The plan asked for owner-produced binary fixtures (a real Eagle scratch
+  library, real Lightroom exports) bundled under `MuseTests/Fixtures/`. **That
+  directory does not exist in this repo and no test in the shipped suite uses a
+  bundled resource** — every fixture is code-generated. Spec 06 follows the
+  house pattern instead: the Lightroom fixtures are XMP authored INLINE in
+  `LightroomImportTests` (XMP is a text format, so the exact `crs:` shape being
+  asserted stays visible in the test), and the Eagle fixture is a miniature
+  `.library` written to a temp directory by the test itself.
+- Consequence, recorded honestly: `LightroomXMP`/`EagleLibrary` are verified
+  against the DOCUMENTED formats, not against output captured from the real
+  apps. Two things in particular are unverified against a real render and should
+  be checked when the owner has the apps to hand: **the `crs:CropAngle` sign**
+  (mapped as `straightenDegrees = −cropAngle`) and the real Eagle
+  `metadata.json` field names.
+- The XMP fixtures must be written in ELEMENT form (`<crs:Exposure2012>…`), not
+  RDF attribute shorthand — `CGImageMetadataCreateFromXMPData` returned nil for
+  the attribute form in this suite.
+
+### Import surface — as built
+
+- `ImportModal` cases carry a request struct each (`MetadataImportRequest`,
+  `LabelMappingRequest`, `LightroomPresetImportRequest`,
+  `ApplePhotosImportRequest`, `TakeoutImportRequest`, `EagleImportRequest`,
+  `ImportReport`); `id` is `<case>-<request.id>`. `ContentView.importCard(_:)` is
+  the single case→card map, one `.museModal` at width 420.
+- **Every run card has an explicit `.options` phase with its own Import button.**
+  The plan's "toggle shown pre-scan" is unreachable under the shipped
+  `.onAppear`-starts contract (the scan begins before the user can touch the
+  toggle), so cards that carry choices — metadata (LR edits), Takeout (people /
+  favorites), Apple Photos (albums / favorites), Eagle (confirm) — start on
+  options and run on the button. `.onDisappear` still cancels; the preset card,
+  which has no choices, still starts on appear.
+- `AppState.coveredFolder(_:)` is the shared "standardize + add as root when
+  uncovered" helper all five pickers use (the shipped trailing-slash rule).
+- The metadata run's report notices name the approximation explicitly; an empty
+  count row is OMITTED from `ImportReportCard` rather than rendered as "0".
+
+### Universal layer — as built
+
+- `MetadataKeywordReader.read(url:)` is unchanged; the new work rides
+  `readFull(url:includingLightroom:)`, which returns `(Extracted,
+  LightroomEdits?)` from the SAME metadata resolve — one pass, zero extra I/O.
+  Sidecar `crs:` wins over embedded (Lightroom writes current develop settings
+  to the sidecar; an embedded block can be an older export).
+- `Extracted.coordinate` is a nested `MetadataKeywordReader.Coordinate` struct,
+  not a tuple (tuples break `Equatable` synthesis) — the plan's own preferred
+  option.
+- `XMPGPS.parse` bounds magnitude at 180 and `coordinate(lat:lon:)` applies the
+  PER-AXIS bound (90 / 180). The plan's test expecting `parse("95,00.000N") ==
+  nil` was internally inconsistent — `parse` cannot know which axis it holds —
+  so the axis rule is asserted through `coordinate` instead.
+- Amendment A1 needed NO new code: `AnalyzePipeline.writePhotoHeader(db:…)`
+  already returns early when both markers equal the content hash (it shipped
+  that way in Spec 02), and `PhotoHeaderBackfill` calls the same function.
+
+### Lightroom — as built
+
+- `LightroomXMP.unsupportedFields` is the closed detection list; a zero-valued
+  slider is NOT reported. `presetName` (`crs:Name`) rides the same struct so the
+  preset importer needs no second parser.
+- The renderer's mired constant was NOT hoisted into a new `TemperatureMap`
+  type — `MiredMapping` already lives in `Editing/Render/RawSource.swift` and is
+  the single declaration site, so the importer reads it directly.
+- Contrast maps to `ToneParams.contrast` (where it lives), not `ColorParams`;
+  curves map to `CurveParams.rgb/red/green/blue` (there is no `.points`). The
+  plan's test snippets named both incorrectly.
+- `RawAsShot.neutral(for:)` (in `MetadataImportModel.swift`) reads
+  `CIRAWFilter.neutralTemperature`/`neutralTint` off-main, gated to RAW files
+  whose sidecar actually moves WB. Missing → WB skipped + a report notice.
+- `EditPresetStore.createImported(name:stack:)` is the preset-import write path:
+  geometry excluded (the shipped rule) but origin KEPT, with a case-insensitive
+  ` 2` name ladder via the pure `EditPresetStore.uniqueName`.
+- The before/after "Lightroom preview" source is `EditSession
+  .compareEmbeddedPreview` + `renderEmbeddedPreview()`, offered in
+  `EditVersionsList` only when `draft.origin == .lightroom` AND
+  `EmbeddedPreview.image` is non-nil, with the base-look caveat rendered under
+  it. The editor Info tab shows an "Approximated from Lightroom" badge.
+
+### Apple Photos / Takeout / Eagle — as built
+
+- Apple Photos: `INFOPLIST_KEY_NSPhotoLibraryUsageDescription` is set on both app
+  build configs (the target uses a GENERATED Info.plist — there is no
+  `Info.plist` file to edit); the entitlement is in both `.entitlements` files.
+  `ApplePhotosImportModel.collisionName` and `.Phase.denied` are the tested
+  pure/observable seams. Videos stream via `PHAssetResourceManager`; images use
+  `requestImageDataAndOrientation(version: .current)` with the returned UTI
+  correcting the extension. Album recreation is user albums only.
+- Takeout is in-place (no copy) and the sidecar match runs through
+  `TakeoutImportModel.sidecarMeta`, which walks `TakeoutJSON.jsonCandidates` and
+  takes the first existing, non-empty sibling.
+- Eagle copies flat with `FileManager.copyItem`, skips a destination filename
+  that already exists (idempotent re-run) and still applies that item's
+  metadata, and uses `EagleImportModel.uniqueName` for distinct-item collisions.
+  Star → gap-fill rating through `hasRating` + `MetadataImportRules
+  .ratingToApply`; annotation → note; folders → find-or-create manual
+  collections by flattened name.
+
+### Throttle & status — as built
+
+- `WorkThrottleStore` parks continuations while `.paused` and releases them all
+  when the mode lifts; `currentConcurrency` is re-read per spawn.
+  `AnalyzePipeline.analyze(folder:)`'s priming loop was restructured into a
+  `while !shouldStop` that gates, then checks width and pulls the next item.
+- `AnalysisStatusStore` takes a weak `host: AppState` installed in `MuseApp`
+  (the `EditStore.installHost` shape) — there is no `AppState.shared` — and
+  raises the FYI through the existing `alertRequest` seam. `secondsPerFile` is
+  fed by a `defer` in `analyzeOne`.
+- Both stores are observed directly by `SettingsView` and `SidebarView`; neither
+  has an AppState cancellable. Spec 06 added zero `@Published` properties to
+  `AppState` (the `importModal` swap is net-zero).
 
 ## Share manifest v2 & page layouts (Spec 07)
 

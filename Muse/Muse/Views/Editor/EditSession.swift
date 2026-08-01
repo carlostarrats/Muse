@@ -47,6 +47,12 @@ final class EditSession: ObservableObject {
     /// What "before" means for the wipe/side-by-side — nil is the original,
     /// otherwise a saved snapshot's stack.
     @Published var wipeAgainst: EditStack?
+    /// Compare against the preview Lightroom baked into the file, rather than
+    /// against Muse's own render of a stack. Offered only for a stack whose
+    /// origin is `.lightroom` and only when the file actually carries one —
+    /// Muse's mapping is directional, and holding it up against Adobe's own
+    /// render is worth more than any amount of reassurance in a report.
+    @Published var compareEmbeddedPreview = false
 
     @Published var canvasZoom: CGFloat = 1
     @Published var canvasPan: CGSize = .zero
@@ -298,6 +304,17 @@ final class EditSession: ObservableObject {
         return await Task.detached(priority: .userInitiated) { () -> CIImage? in
             guard let cg = EditRenderer.render(url: url, stack: stack, maxPixel: maxPixel)
             else { return nil }
+            return CIImage(cgImage: cg)
+        }.value
+    }
+
+    /// The embedded preview at proxy scale, or nil when the file carries none.
+    func renderEmbeddedPreview() async -> CIImage? {
+        let url = self.url
+        let maxPixel = Int(proxyLongEdge)
+        guard maxPixel > 0 else { return nil }
+        return await Task.detached(priority: .userInitiated) { () -> CIImage? in
+            guard let cg = EmbeddedPreview.image(for: url, maxPixel: maxPixel) else { return nil }
             return CIImage(cgImage: cg)
         }.value
     }

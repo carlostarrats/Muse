@@ -675,6 +675,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MuseShareExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Muse;
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Muse reads your Photos library only to copy the photos you choose into a folder you choose.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -714,6 +715,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MuseShareExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Muse;
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Muse reads your Photos library only to copy the photos you choose into a folder you choose.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

@@ -115,6 +115,9 @@ nonisolated enum DeepAnalysisBackfill {
                 if let result { pending.append(result) }
                 if pending.count >= writeChunk {
                     await flush(&pending, queue: queue)
+                    // One gate per write chunk — additive scheduling; the
+                    // `.utility` priority is unchanged.
+                    await WorkThrottleStore.shared.waitUntilRunnable()
                 }
                 spawnNext()
             }

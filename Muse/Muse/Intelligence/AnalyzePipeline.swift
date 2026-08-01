@@ -290,9 +290,17 @@ final class AnalyzePipeline: ObservableObject {
             // Prime the window. `shouldStop` (folder removed / pass cancelled)
             // stops us STARTING new work; files already in flight finish, which
             // matches the old serial loop's `break`.
+            // The throttle gates BOTH spawn sites. Under `.paused` nothing new
+            // starts and in-flight files finish normally — the pass keeps its
+            // claim, so a pause is resumable rather than a cancel. Concurrency
+            // is re-read per spawn, so a machine that heats up mid-pass narrows
+            // without a restart. This is SCHEDULING: no marker, no selection
+            // rule and no data path changes (DECIDED #22).
             var running = 0
-            while running < Self.analyzeConcurrency, !shouldStop,
-                  let pair = iterator.next() {
+            while !shouldStop {
+                await WorkThrottleStore.shared.waitUntilRunnable()
+                guard running < WorkThrottleStore.shared.currentConcurrency,
+                      !shouldStop, let pair = iterator.next() else { break }
                 current = pair.url.lastPathComponent
                 group.addTask { @MainActor in
                     await self.analyzeOne(fileID: pair.id, url: pair.url)
@@ -304,6 +312,9 @@ final class AnalyzePipeline: ObservableObject {
                 let step = tally.complete()
                 completed = step.completed
                 progress = step.fraction
+                if !shouldStop {
+                    await WorkThrottleStore.shared.waitUntilRunnable()
+                }
                 if !shouldStop, let pair = iterator.next() {
                     current = pair.url.lastPathComponent
                     group.addTask { @MainActor in
@@ -317,6 +328,7 @@ final class AnalyzePipeline: ObservableObject {
         // virgin ones, and refresh the search-autocomplete facets (this pass
         // may have written new cameras/lenses/dates).
         let passFileIDs = pairs.map(\.id)
+        AnalysisStatusStore.shared.refresh()
         if !shouldStop && !passFileIDs.isEmpty {
             Task { await AutoStacker.run(fileIDs: passFileIDs) }
             await SearchFacets.shared.refresh()
@@ -525,6 +537,11 @@ final class AnalyzePipeline: ObservableObject {
     }
 
     private func analyzeOne(fileID: String, url: URL) async {
+        // Measured per-file cost feeds the on-device estimate the import-size
+        // FYI extrapolates from — never a hardcoded number.
+        let startedAt = Date()
+        defer { AnalysisStatusStore.shared.recordCompletion(
+            duration: Date().timeIntervalSince(startedAt)) }
         let kind = AssetKind.detect(at: url)
 
         // The header (GPS + EXIF) is read for image AND video kinds. The video

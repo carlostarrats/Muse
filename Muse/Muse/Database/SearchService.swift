@@ -185,7 +185,15 @@ enum SearchService {
             let tagFilter = tagTerms
                 .map { TagRow.Columns.label.like("%" + $0 + "%") }
                 .joined(operator: .or)
-            let tagRows = try TagRow.filter(tagFilter).fetchAll(db)
+            var tagRows = try TagRow.filter(tagFilter).fetchAll(db)
+            // A color LABEL is a workflow marker imported from another app
+            // ("red" = second pass), not a statement about what the photo looks
+            // like. Letting it answer a plain "red" query is exactly the
+            // semantic collision the `Label: ` namespace exists to prevent, so
+            // label rows only participate when the query names them.
+            if !LabelTag.queryTargetsLabels(textQuery) {
+                tagRows.removeAll { LabelTag.isLabel($0.label) }
+            }
             let tagIDs = tagRows.map { $0.file_id }
 
             // 2b) Note substring matches (per (file_id, parent_dir), LIKE — notes

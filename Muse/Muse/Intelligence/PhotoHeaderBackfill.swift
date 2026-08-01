@@ -79,6 +79,8 @@ enum PhotoHeaderBackfill {
         var index = 0
         while index < candidates.count {
             if Task.isCancelled { return }
+            // Additive scheduling only — `.utility` priority is unchanged.
+            await WorkThrottleStore.shared.waitUntilRunnable()
             let end = min(index + chunkSize, candidates.count)
             let chunk = Array(candidates[index..<end])
             index = end

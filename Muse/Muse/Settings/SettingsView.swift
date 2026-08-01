@@ -13,6 +13,8 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject private var clipStore = ClipModelStore.shared
+    @ObservedObject private var analysisStatus = AnalysisStatusStore.shared
+    @ObservedObject private var throttle = WorkThrottleStore.shared
     @Binding var isPresented: Bool
     @EnvironmentObject private var googleAuth: GoogleOAuth
     @EnvironmentObject private var appState: AppState
@@ -210,6 +212,32 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            // Library — how much of the library has been analyzed, and the
+            // pause control. Pause is SCHEDULING, never an off switch: analysis
+            // is always on (DECIDED #22), it just isn't moving right now.
+            Section {
+                HStack {
+                    Text("\(analysisStatus.analyzed) of \(analysisStatus.analyzableTotal) analyzed")
+                        .monospacedDigit()
+                    Spacer()
+                    ModalButton(title: throttle.userPaused
+                                ? String(localized: "Resume")
+                                : String(localized: "Pause")) {
+                        throttle.userPaused.toggle()
+                    }
+                    .disabled(analysisStatus.pending == 0 && !throttle.userPaused)
+                }
+                Text(analysisStateLine)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Library")
+            } footer: {
+                Text("Muse analyzes new photos in the background so search, colors and looks keep getting better. Pausing only changes when that work runs — nothing is skipped.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
             Section {
                 HStack {
                     switch clipStore.state {
@@ -297,10 +325,31 @@ struct SettingsView: View {
         await action()
         authBusy = false
     }
+
+    /// What the throttle is doing, in the user's words. The estimate only
+    /// appears once it is MEASURED on this Mac (never hardcoded).
+    private var analysisStateLine: String {
+        if throttle.userPaused { return String(localized: "Paused") }
+        switch throttle.mode {
+        case .paused:
+            return String(localized: "Paused while your Mac cools down")
+        case .reduced:
+            return String(localized: "Running slowly to save battery")
+        case .normal:
+            if analysisStatus.pending == 0 { return String(localized: "Everything is analyzed") }
+            if let estimate = analysisStatus.estimateSeconds {
+                let duration = AnalysisEstimator.approximateDuration(estimate)
+                return String(localized: "About \(duration) left")
+            }
+            return String(localized: "Analyzing…")
+        }
+    }
 }
 
 #Preview {
     SettingsView(isPresented: .constant(true))
         .environmentObject(GoogleOAuth())
         .environmentObject(AppState())
+
+
 }

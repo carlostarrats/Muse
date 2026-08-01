@@ -117,6 +117,13 @@ struct EditorView: View {
                 wipeImage = await session.renderComparison(stack)
             }
         }
+        .onChange(of: session.compareEmbeddedPreview) { _, on in
+            Task {
+                wipeImage = on
+                    ? await session.renderEmbeddedPreview()
+                    : session.originalImage
+            }
+        }
     }
 
     // MARK: - Canvas
@@ -454,6 +461,14 @@ struct EditorView: View {
                 .foregroundStyle(theme.textPrimary)
                 .lineLimit(2)
                 .truncationMode(.middle)
+            // Provenance, stated where the numbers are: these values came from
+            // someone else's software and are approximations, not a transfer.
+            if session.draft.origin == .lightroom {
+                Label("Approximated from Lightroom", systemImage: "info.circle")
+                    .font(theme.labelFont)
+                    .foregroundStyle(theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             let groups = EditTransfer.adjustedGroups(of: session.draft)
             if groups.isEmpty {
                 Text("No adjustments")

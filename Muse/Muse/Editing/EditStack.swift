@@ -25,6 +25,15 @@
 import Foundation
 import CoreGraphics
 
+// MARK: - Provenance
+
+/// Where a stack came from, when it wasn't the user. Lives here rather than
+/// beside the importer so `Editing/` stays self-contained (the module-import
+/// rule) and an older build can still decode the key away.
+nonisolated enum EditOrigin: String, Codable, Sendable {
+    case lightroom
+}
+
 // MARK: - Stack
 
 nonisolated struct EditStack: Codable, Equatable, Sendable {
@@ -43,6 +52,18 @@ nonisolated struct EditStack: Codable, Equatable, Sendable {
     /// Always `[]` in v1 — a reserved slot that round-trips in the JSON shape
     /// from day one, so adding masks later isn't a schema break.
     var masks: [Mask]
+    /// Where this stack came from, when it wasn't the user (Spec 06). It is
+    /// PROVENANCE, not data:
+    ///
+    ///  - nil-omitted by synthesized `Codable`, so every pre-existing stack's
+    ///    canonical bytes — and therefore `stack_hash` — are byte-identical.
+    ///    `EditStackCodecTests`' pinned hash is the tripwire.
+    ///  - never copied by `EditTransfer.apply` (the target keeps its own),
+    ///  - stripped at preset save,
+    ///  - gone on Reset (a reset writes a fresh neutral stack, which deletes
+    ///    the row entirely).
+    ///  - an older build decodes it away harmlessly (unknown keys are ignored).
+    var origin: EditOrigin?
 
     static let currentSchemaVersion = 1
     static let currentProcessVersion = 1
@@ -52,7 +73,7 @@ nonisolated struct EditStack: Codable, Equatable, Sendable {
     static func fresh() -> EditStack {
         EditStack(schemaVersion: currentSchemaVersion,
                   processVersion: currentProcessVersion,
-                  rawParams: nil, adjustments: [], masks: [])
+                  rawParams: nil, adjustments: [], masks: [], origin: nil)
     }
 
     /// True when this stack would render the original pixels. A neutral stack

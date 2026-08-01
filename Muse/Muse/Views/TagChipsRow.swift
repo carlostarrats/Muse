@@ -422,6 +422,8 @@ private struct TagChip: View {
     var toggleAction: (() -> Void)? = nil
     var action: () -> Void
 
+    private var isImportedLabel: Bool { LabelTag.isLabel(label) }
+
     var body: some View {
         if let toggleAction {
             chip.accessibilityAction(
@@ -437,7 +439,15 @@ private struct TagChip: View {
 
     private var chip: some View {
         Button(action: action) {
-            HStack(spacing: 0) {
+            HStack(spacing: 4) {
+                // An imported color LABEL is a workflow marker from another
+                // app, not a content tag — it reads differently because it
+                // MEANS something different, and it is excluded from plain
+                // content search for the same reason.
+                if isImportedLabel {
+                    Image(systemName: "tag")
+                        .font(.system(size: 11, weight: .medium))
+                }
                 Text(label)
                     .font(.system(size: 13, weight: .medium))
                     .lineLimit(1)
@@ -450,10 +460,19 @@ private struct TagChip: View {
                              ? AnyShapeStyle(.background)
                              : AnyShapeStyle(isHovered ? .primary : .secondary))
             // Every chip is a pill; unselected ones in quiet dark gray.
+            // A label chip is OUTLINED rather than filled.
             .background(Capsule(style: .continuous)
                 .fill(isSelected
                       ? AnyShapeStyle(.primary)
-                      : AnyShapeStyle(.primary.opacity(isHovered ? 0.16 : 0.08))))
+                      : AnyShapeStyle(.primary.opacity(
+                          isImportedLabel ? 0 : (isHovered ? 0.16 : 0.08)))))
+            .overlay {
+                if isImportedLabel && !isSelected {
+                    Capsule(style: .continuous)
+                        .strokeBorder(.primary.opacity(isHovered ? 0.45 : 0.28),
+                                      lineWidth: 1)
+                }
+            }
             .overlay(alignment: .trailing) {
                 if isHovered, let count {
                     Text("\(count)")

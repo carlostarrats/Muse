@@ -119,6 +119,8 @@ struct MuseApp: App {
                     // it's installed would be cached under the unedited key.
                     EditStackIndex.installProvider(LiveEditStackProvider())
                     EditStore.shared.installHost(appState)
+                    AnalysisStatusStore.shared.installHost(appState)
+                    AnalysisStatusStore.shared.refresh(force: true)
                     PhaseTrace.mark("edit-index.start")
                     Task {
                         await EditStore.shared.rebuildIndex()
@@ -354,12 +356,39 @@ struct MuseApp: App {
                 // other folder-scoped commands.
                 .disabled(appState.isSearchActive)
 
-                Button {
-                    appState.importKeywordsAndRatings()
+                // One Import surface over every source. An item whose
+                // dependency isn't built is ABSENT, never disabled — a
+                // greyed-out row promises something that isn't coming.
+                Menu {
+                    Button {
+                        appState.importMetadataAndEdits()
+                    } label: {
+                        Label("Metadata & Lightroom Edits…", systemImage: "square.and.arrow.down")
+                    }
+                    .keyboardShortcut("i", modifiers: [.command, .shift])
+                    Button {
+                        appState.importLightroomPresets()
+                    } label: {
+                        Label("Lightroom Presets…", systemImage: "slider.horizontal.3")
+                    }
+                    Button {
+                        appState.importApplePhotos()
+                    } label: {
+                        Label("From Apple Photos…", systemImage: "photo.on.rectangle")
+                    }
+                    Button {
+                        appState.importGoogleTakeout()
+                    } label: {
+                        Label("From Google Takeout…", systemImage: "shippingbox")
+                    }
+                    Button {
+                        appState.importEagleLibrary()
+                    } label: {
+                        Label("From Eagle Library…", systemImage: "tray.full")
+                    }
                 } label: {
-                    Label("Import Keywords & Ratings…", systemImage: "square.and.arrow.down")
+                    Label("Import", systemImage: "square.and.arrow.down")
                 }
-                .keyboardShortcut("i", modifiers: [.command, .shift])
 
                 Divider()
 

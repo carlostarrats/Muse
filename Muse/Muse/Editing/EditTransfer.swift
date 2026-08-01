@@ -59,6 +59,10 @@ nonisolated enum EditTransfer {
         }
         result.schemaVersion = target.schemaVersion
         result.processVersion = target.processVersion
+        // Origin is PROVENANCE, not an adjustment: pasting a Lightroom-imported
+        // look onto your own photo doesn't make your photo's edits Lightroom's.
+        // The target keeps whatever it already claimed.
+        result.origin = target.origin
         return result.normalized()
     }
 }

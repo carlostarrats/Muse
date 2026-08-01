@@ -19,6 +19,7 @@ struct EditVersionsList: View {
     @StateObject private var store = EditStore.shared
 
     @State private var rows: [EditVersionRow] = []
+    @State private var hasLightroomPreview = false
     @State private var hovered: String?
 
     var body: some View {
@@ -48,13 +49,33 @@ struct EditVersionsList: View {
                 }
             }
 
-            if !rows.filter({ $0.kind == "snapshot" }).isEmpty {
+            if !rows.filter({ $0.kind == "snapshot" }).isEmpty || hasLightroomPreview {
                 Divider()
                 Text("Compare against").font(theme.labelFont)
                     .foregroundStyle(theme.textSecondary)
-                Button("Original") { session.wipeAgainst = nil }
+                Button("Original") {
+                    session.compareEmbeddedPreview = false
+                    session.wipeAgainst = nil
+                }
                     .font(theme.labelFont)
                     .buttonStyle(.plain)
+                if hasLightroomPreview {
+                    Button("Lightroom preview") {
+                        session.wipeAgainst = nil
+                        session.compareEmbeddedPreview = true
+                    }
+                    .font(theme.labelFont)
+                    .buttonStyle(.plain)
+                    if session.compareEmbeddedPreview {
+                        // Lightroom applies its own base render under every
+                        // slider; Muse doesn't reproduce it, so the two will
+                        // differ even where the numbers match.
+                        Text("Lightroom's base look is not applied — results shift.")
+                            .font(theme.labelFont)
+                            .foregroundStyle(theme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
                 ForEach(rows.filter { $0.kind == "snapshot" }, id: \.id) { row in
                     Button(row.name) {
                         session.wipeAgainst = EditStackCodec.decode(row.stack)
@@ -65,6 +86,21 @@ struct EditVersionsList: View {
             }
         }
         .task(id: store.generation) { rows = await store.versions(for: session.url) }
+        .task(id: session.url) { await resolveLightroomPreview() }
+    }
+
+    /// Offered only for a Lightroom-imported stack that actually carries an
+    /// embedded preview — `EmbeddedPreview` reads embedded bytes only, so a
+    /// plain JPEG legitimately returns nil and the option simply isn't there.
+    private func resolveLightroomPreview() async {
+        guard session.draft.origin == .lightroom else {
+            hasLightroomPreview = false
+            return
+        }
+        let url = session.url
+        hasLightroomPreview = await Task.detached(priority: .userInitiated) {
+            EmbeddedPreview.image(for: url, maxPixel: 512) != nil
+        }.value
     }
 
     private func versionRow(_ row: EditVersionRow) -> some View {

@@ -84,6 +84,7 @@ nonisolated enum GeocodeBackfill {
         var index = 0
         while index < candidates.count {
             if Task.isCancelled { return }
+            await WorkThrottleStore.shared.waitUntilRunnable()
             let end = min(index + writeChunk, candidates.count)
             let chunk = Array(candidates[index..<end])
             index = end
