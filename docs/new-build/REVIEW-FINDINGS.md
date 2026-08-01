@@ -528,6 +528,38 @@ Suite after this slice: **1,770 tests, 2 skipped, 0 failures.**
 
 ---
 
+### Slice 6 — cross-spec seams — DONE
+
+This slice's whole class had already produced three findings in earlier slices
+(**F16** modal peel, **F18** the edit-render sweep, and slice 0's four
+uncoordinated launch passes) — each one a case of "two specs edited the same
+seam and neither knew". One more of exactly that shape:
+
+- **F23 (med) — the grid's cull badge was never built.** DECISIONS (Spec 03,
+  "Ephemeral cull state") specifies a **bottom-leading** tile badge while a
+  session is active; `GridView` has no such badge and never reads
+  `CullStore.mark`. The grid's key catcher DOES accept K/X/U, so a user could
+  mark files from the grid — the surface a cull pass is actually driven from —
+  and see no feedback at all. Spec 04's badge comment even lists
+  "bottom-leading cull" among the assigned corners as though it existed. Now
+  built: `CullStore` is observed ONCE in `GridView` and the mark is passed down
+  like `rating` (a virtualized grid must not mount a store observer per tile),
+  the badge is display-only in the free corner, the mark is announced in the
+  tile's accessibility value, and a running session exposes named
+  Keep/Reject/Clear actions — VoiceOver swallows the K/X/U keys, so without
+  them cull marking was mouse-and-keyboard-only.
+
+Checked and clean: `SearchService`'s merge of Spec 02 tokens with Spec 03 CLIP
+— folder-grain (`file_id`, `parent_dir`) restrictions survive the semantic leg,
+content-derived tiers correctly un-restrict, tokens AND after the relaxation
+loop, and the expensive leg is skipped on a superseded pass;
+`AnalyzePipeline`'s header/traits/CLIP/sidecar additions; the tile-corner
+assignment now genuinely complete (stack · star · cull · edited).
+
+Suite after this slice: **1,770 tests, 2 skipped, 0 failures.**
+
+---
+
 ---
 
 ## Resume here — next session

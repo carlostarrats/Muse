@@ -18,6 +18,10 @@ struct GridView: View {
     // (e.g. the last images going away leaves an empty library that needs the
     // "add a folder" guidance, even while the always-present iCloud root remains).
     @ObservedObject private var collectionsEngine = CollectionsEngine.shared
+    /// Observed HERE, once, so a keep/reject mark repaints the tiles. Marks
+    /// are then passed DOWN like `rating` — a virtualized grid must not mount
+    /// one store observer per live tile.
+    @ObservedObject private var cull = CullStore.shared
 
     /// User-set gutter between tiles, persisted; the Settings → Grid slider
     /// drives it. Its floor is a real gap, never 0 — flush-packed images read
@@ -417,7 +421,9 @@ struct GridView: View {
                          imageAspect: aspects.aspect(for: file),
                          cornerRadius: cornerRadius,
                          slotSize: rect.size,
-                         editedVersionCount: editedVersionCount(for: file))
+                         editedVersionCount: editedVersionCount(for: file),
+                         cullMark: cull.active
+                             ? cull.mark(for: file.url.standardizedFileURL.path) : nil)
                     .frame(width: rect.width, height: rect.height)
                     // The photo no longer paints the whole slot, so without an
                     // explicit shape the empty part of a Grid slot isn't
@@ -513,6 +519,18 @@ struct GridView: View {
                     // folder navigates IN (`openSubfolder`, what its double-click
                     // does) — applying the file path to a folder would wrongly
                     // route it to a viewer.
+                    // Cull marking is K/X/U on the grid's key catcher, which
+                    // VoiceOver swallows — so a running session also exposes
+                    // named actions. Session-gated, so they never clutter the
+                    // rotor outside a cull pass.
+                    .accessibilityActions {
+                        if cull.active, file.kind != .folder {
+                            let path = file.url.standardizedFileURL.path
+                            Button("Keep") { cull.setMark(.keep, path: path) }
+                            Button("Reject") { cull.setMark(.reject, path: path) }
+                            Button("Clear Cull Mark") { cull.setMark(nil, path: path) }
+                        }
+                    }
                     .accessibilityAction {
                         if file.kind == .folder {
                             appState.openSubfolder(file.url)
@@ -806,6 +824,11 @@ struct GridView: View {
                     comment: "VoiceOver: photo has Muse edits and saved versions"), versions)
                 : String(localized: "Edited"))
         }
+        if cull.active,
+           let mark = cull.mark(for: file.url.standardizedFileURL.path) {
+            parts.append(mark == .keep ? String(localized: "Kept")
+                                       : String(localized: "Rejected"))
+        }
         return Text(parts.joined(separator: ", "))
     }
 
@@ -960,6 +983,9 @@ private struct TileView: View {
     /// unedited. Passed DOWN like `rating` rather than read per tile, so a
     /// virtualized grid doesn't mount one store observer per live tile.
     var editedVersionCount: Int? = nil
+    /// Keep/reject mark for this file while a cull session is running; nil
+    /// when unmarked or when no session is active. Passed DOWN like `rating`.
+    var cullMark: CullStore.Mark? = nil
 
 
     @State private var thumbnail: NSImage?
@@ -1232,6 +1258,24 @@ private struct TileView: View {
                 .accessibilityAction(named: Text(isExpanded ? "Collapse Stack" : "Expand Stack")) {
                     if let stackID { StacksStore.shared.toggleExpanded(stackID) }
                 }
+            }
+            // Cull mark — bottom-LEADING (Spec 03). The grid already accepts
+            // K/X/U to mark files; without this badge that marking was
+            // completely invisible on the grid, which is where a cull pass is
+            // actually driven from. Display-only; the session's own HUD and
+            // the resolve card own every state change.
+            if let cullMark {
+                Image(systemName: cullMark == .keep ? "checkmark" : "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Capsule(style: .continuous).fill(Color.black.opacity(0.6)))
+                    .padding(Self.badgeInset)
+                    .padding(isSelected ? Self.selectionInset : 0)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
             // Edited badge — bottom-TRAILING. The four tile corners are fully
             // assigned: top-leading stack · top-trailing star · bottom-leading
