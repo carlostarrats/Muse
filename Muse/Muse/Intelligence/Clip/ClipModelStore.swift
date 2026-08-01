@@ -161,17 +161,68 @@ import Foundation
 
         var hasher = SHA256()
         let base = ClipModel.current.manifestURL.deletingLastPathComponent()
+        // The manifest's `totalBytes` is the ALLOWANCE, not a promise. `parse`
+        // has already refused a manifest declaring more than `maxArtifactBytes`,
+        // so what is left of it here is a ceiling the app chose, and a chunk
+        // that overruns it aborts the download. Previously nothing bounded this
+        // leg at all: the size cap existed only in the manifest we were handed.
+        //
+        // `download(for:)`, NOT `data(for:)` — it spools the response to a temp
+        // file, so RAM stays flat no matter what the server sends. That matters
+        // more here than anywhere else in the app: this is the one response
+        // measured in hundreds of MB, and it is the reason the surrounding
+        // function streams to disk at all. (`BoundedBody`, used for the manifest
+        // above, walks the body a BYTE at a time to enforce its ceiling exactly
+        // — right for 16 KB, and it would spend minutes of CPU on an artifact
+        // this size.)
+        var remaining = manifest.totalBytes
         for (index, chunkName) in manifest.chunks.enumerated() {
             guard !Task.isCancelled else { return nil }
-            guard let (chunkData, _) = try? await session.data(
-                    from: base.appendingPathComponent(chunkName)),
-                  (try? handle.write(contentsOf: chunkData)) != nil
+            // Allowance already spent with chunks still listed: the manifest
+            // contradicts itself, so stop rather than fetch on credit.
+            guard remaining > 0 else { return nil }
+            let request = URLRequest(url: base.appendingPathComponent(chunkName))
+            guard let (tempURL, response) = try? await session.download(for: request) else { return nil }
+            defer { try? fm.removeItem(at: tempURL) }
+            // Declared oversize: refuse without reading the spooled file.
+            if response.expectedContentLength > 0, response.expectedContentLength > remaining {
+                return nil
+            }
+            guard let size = (try? fm.attributesOfItem(atPath: tempURL.path)[.size]) as? NSNumber,
+                  size.int64Value <= remaining,
+                  appendAndHash(tempURL, to: handle, hasher: &hasher)
             else { return nil }
-            hasher.update(data: chunkData)
+            remaining -= size.int64Value
             state = .downloading(progress: Double(index + 1) / Double(max(manifest.chunks.count, 1)))
         }
+        // Short of the declaration is a truncated artifact — the digest check
+        // would catch it, but failing here keeps the reason legible.
+        guard remaining == 0 else { return nil }
         try? handle.synchronize()
         return hasher.finalize()
+    }
+
+    /// Copy a spooled chunk onto the end of the artifact, hashing as it goes,
+    /// in bounded slices — reading the whole chunk into a `Data` to hash it
+    /// would undo the point of spooling it to disk.
+    private func appendAndHash(_ source: URL, to handle: FileHandle,
+                               hasher: inout SHA256) -> Bool {
+        guard let reader = try? FileHandle(forReadingFrom: source) else { return false }
+        defer { try? reader.close() }
+        let sliceBytes = 4 * 1024 * 1024
+        do {
+            // do/catch, not `try?`: `read(upToCount:)` returns a throwing
+            // `Data?`, so `try?` would flatten a read ERROR and a clean
+            // end-of-file into the same nil and report a truncated copy as a
+            // success. The digest would then fail with a misleading reason.
+            while let slice = try reader.read(upToCount: sliceBytes), !slice.isEmpty {
+                try handle.write(contentsOf: slice)
+                hasher.update(data: slice)
+            }
+        } catch {
+            return false
+        }
+        return true
     }
 
     /// Unpacks the verified archive. Throws on any corruption rather than
@@ -187,5 +238,31 @@ import Foundation
         guard process.terminationStatus == 0 else {
             throw NSError(domain: "ClipModelStore", code: 1)
         }
+        // A matching SHA-256 proves the archive is the one the manifest named.
+        // It says nothing about what is INSIDE it — and a model artifact has no
+        // reason to contain a symlink, which is the one entry kind that can
+        // point outside the directory the app just created. Refusing here means
+        // an archive carrying one never gets a ".verified" marker and the whole
+        // directory is deleted by the caller, rather than being trusted by
+        // every future launch.
+        guard try containsOnlyPlainEntries(dir) else {
+            throw NSError(domain: "ClipModelStore", code: 2)
+        }
+    }
+
+    /// True when every entry under `dir` is an ordinary file or directory.
+    private func containsOnlyPlainEntries(_ dir: URL) throws -> Bool {
+        guard let walker = FileManager.default.enumerator(
+            at: dir, includingPropertiesForKeys: [.isSymbolicLinkKey],
+            options: []) else { return false }
+        // `nextObject()` with a guard/continue, not `while let … as? URL`: a
+        // single non-URL element would END the loop and pass a partially
+        // checked tree (the defect fixed in the restore walk, same shape).
+        while let entry = walker.nextObject() {
+            guard let url = entry as? URL else { continue }
+            let values = try url.resourceValues(forKeys: [.isSymbolicLinkKey])
+            if values.isSymbolicLink == true { return false }
+        }
+        return true
     }
 }

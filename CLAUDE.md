@@ -128,14 +128,14 @@ are the load-bearing reference artifacts.
 | Foundation 6 — **Spec-06 import & migration** (no migrations; one File > Import surface over five sources; `ImportSupplement`; color-label namespace + mapping sheet; Lightroom `crs:` edits + presets; `WorkThrottleStore`/`AnalysisStatusStore`/import-size FYI) | ✅ merged, unreleased | `new-product-build-1` |
 | Foundation 7 — **Spec-07 sharing & social export** (no migrations; manifest v2 `y`/`s`/`m` + three page layouts; portfolio mode — a live `manifest.json` in the user's Drive behind a URL that never changes; `Export/Social/` + the social export card; Google on-ramp copy) | ✅ merged, unreleased | `new-product-build-1` |
 
-| **Review — Specs 01–07** | ✅ reviewed + fixed 2026-08-01 (5 rounds) | `new-product-build-1` |
+| **Review — Specs 01–07** | ✅ reviewed + fixed 2026-08-01 (6 rounds) | `new-product-build-1` |
 
 > Every row through Polish 27 is merged to `main` and shipped in release **`v1.5`**;
 > Polish 28 is merged to `main` but NOT yet in a release (`v1.5` is still the
 > current released build; Polish 25–27 landed in it after `v1.4`). **Foundation 1–7
 > (Specs 01–07) live on `new-product-build-1` and are not on `main` yet** — all seven
 > were built 2026-07-31; migrations run through **v23**, so the next spec starts at
-> v24. **They have since been reviewed in five rounds** (all 2026-08-01):
+> v24. **They have since been reviewed in six rounds** (all 2026-08-01):
 > round 1 (`docs/new-build/REVIEW-FINDINGS.md`) — ten systematic sweeps, eight
 > slices, 23 findings fixed, suite 1,748 → 1,775; round 2
 > (`docs/new-build/FEATURE-LEDGER.md`) — regression of the PRE-branch features
@@ -145,7 +145,10 @@ are the load-bearing reference artifacts.
 > lifecycle, remote-body bounds), 4 findings fixed, suite → 1,802; round 5
 > — lenses rounds 1–4 hadn't run (time-zone correctness of SQL date parts, path
 > prefixes, Unicode normalization, comparator ordering, transaction atomicity,
-> task-group bounds), 2 findings fixed, suite → 1,806. Still
+> task-group bounds), 2 findings fixed, suite → 1,806; round 6
+> — lenses rounds 1–5 hadn't run (arithmetic traps on file-declared numbers,
+> untrusted metadata → filesystem path, bounds on the model download's PAYLOAD
+> leg, local log leakage), 4 findings fixed, suite → 1,818. Still
 > true, though, that almost none of it
 > has been exercised in the RUNNING app — launch, migrations and the backfill
 > chain were confirmed with `MUSE_TRACE=1` against the real library, but the
@@ -186,7 +189,7 @@ must-not-break rules distilled from those sessions live in
 
 ### Durable constraints & gotchas (DO NOT BREAK)
 
-**The full set of 158 rules lives in `docs/durable-constraints.md`. READ THE
+**The full set of 170 rules lives in `docs/durable-constraints.md`. READ THE
 RELEVANT SECTION BEFORE ANY NON-TRIVIAL CHANGE** — each one is hard-won, and
 re-introducing it re-introduces a shipped bug. Sections there:
 

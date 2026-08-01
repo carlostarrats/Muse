@@ -273,4 +273,35 @@ final class FileMetadataTests: XCTestCase {
                                              dimensions: (width: 0, height: 400))
         XCTAssertTrue(out.isEmpty, "expected no rows, got \(labels(out))")
     }
+
+    // MARK: - Numbers declared by the file
+
+    // Every value below is read straight out of a container or EXIF header, and
+    // `Int(_:)` TRAPS on a non-finite or out-of-range Double. Each of these
+    // crashed the process before the fix — the Info card loads on hero open, so
+    // a crafted movie or photo took the app down on selection alone.
+
+    func testDurationRejectsNonFiniteSeconds() {
+        XCTAssertNil(FileMetadata.formatDuration(.infinity))
+        XCTAssertNil(FileMetadata.formatDuration(.nan))
+        XCTAssertNil(FileMetadata.formatDuration(1e300))
+        XCTAssertEqual(FileMetadata.formatDuration(90), "1:30")
+    }
+
+    func testFrameRateRejectsNonFiniteAndUnrepresentable() {
+        XCTAssertNil(FileMetadata.formatFrameRate(.infinity))
+        XCTAssertNil(FileMetadata.formatFrameRate(.nan))
+        // Finite but far past Int: falls back to the decimal form rather than
+        // trapping on the tidy-integer path.
+        XCTAssertEqual(FileMetadata.formatFrameRate(1e30), String(format: "%.2f fps", Float(1e30)))
+        XCTAssertEqual(FileMetadata.formatFrameRate(29.97), "30 fps")
+    }
+
+    func testExposureRejectsSubnormalShutterSpeed() {
+        // 1/t overflows Int for a small enough t.
+        let out = FileMetadata.formatExposure(fNumber: 2, exposureTime: 1e-300, iso: 100)
+        XCTAssertEqual(out, "\u{192}2 \u{b7} ISO 100", "expected the unrepresentable term dropped")
+        XCTAssertNil(FileMetadata.formatExposure(fNumber: nil, exposureTime: .infinity, iso: nil))
+        XCTAssertEqual(FileMetadata.formatExposure(fNumber: nil, exposureTime: 0.005, iso: nil), "1/200")
+    }
 }

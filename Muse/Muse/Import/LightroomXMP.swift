@@ -168,13 +168,30 @@ nonisolated enum LightroomXMP {
     private static func double(_ meta: CGImageMetadata, _ path: String) -> Double? {
         switch value(meta, path) {
         case let s as String: return parseNumber(s)
-        case let n as NSNumber: return n.doubleValue
+        // Same finiteness rule as the String branch. ImageIO hands back a
+        // CFNumber for some packets, and a NaN/infinite one reaching the edit
+        // mapper would poison crop and tone arithmetic downstream.
+        case let n as NSNumber: return n.doubleValue.isFinite ? n.doubleValue : nil
         default: return nil
         }
     }
 
+    /// `Int(exactly:)`, NOT `Int(_:)` — the latter TRAPS on a value outside
+    /// Int's range, and every number here comes from a file: an XMP sidecar or
+    /// an embedded packet, neither of which the app wrote. "Import Keywords &
+    /// Ratings" runs this over the whole library, so one corrupt or hostile
+    /// packet declaring `tiff:Orientation="1e30"` would have taken the app down
+    /// mid-import. Out of range reads as absent, which every caller already
+    /// handles.
     private static func int(_ meta: CGImageMetadata, _ path: String) -> Int? {
-        double(meta, path).map { Int($0.rounded()) }
+        double(meta, path).flatMap(representableInt)
+    }
+
+    /// The conversion itself, split out so it can be tested without building a
+    /// `CGImageMetadata` fixture.
+    static func representableInt(_ value: Double) -> Int? {
+        guard value.isFinite else { return nil }
+        return Int(exactly: value.rounded())
     }
 
     private static func bool(_ meta: CGImageMetadata, _ path: String) -> Bool? {

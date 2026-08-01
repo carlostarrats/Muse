@@ -133,6 +133,27 @@ final class LightroomXMPTests: XCTestCase {
         """))
         XCTAssertEqual(edits.presetName, "My Look")
     }
+
+    // MARK: - Hostile / corrupt XMP numbers
+
+    /// XMP is text the app did not write — a sidecar or an embedded packet.
+    /// `Int(_:)` traps on anything Int can't hold, and "Import Keywords &
+    /// Ratings" runs this over the whole library, so one bad packet would have
+    /// crashed the import mid-run.
+    func testOutOfRangeXMPNumberReadsAsAbsentNotACrash() {
+        XCTAssertNil(LightroomXMP.representableInt(1e30))
+        XCTAssertNil(LightroomXMP.representableInt(-1e30))
+        XCTAssertNil(LightroomXMP.representableInt(.infinity))
+        XCTAssertNil(LightroomXMP.representableInt(.nan))
+        XCTAssertEqual(LightroomXMP.representableInt(6.4), 6)
+        XCTAssertEqual(LightroomXMP.representableInt(-1), -1)
+    }
+
+    func testParseNumberStillRefusesNonFiniteText() {
+        XCTAssertNil(LightroomXMP.parseNumber("1e400"))   // overflows to inf
+        XCTAssertNil(LightroomXMP.parseNumber("nan"))
+        XCTAssertEqual(LightroomXMP.parseNumber(" +0.85 "), 0.85)
+    }
 }
 
 final class LightroomEditMapperTests: XCTestCase {

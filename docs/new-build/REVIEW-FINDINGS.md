@@ -711,3 +711,28 @@ verification ledger going forward — read and update that rather than this file
 Four findings (R2-1…R2-4), suite 1,775 → **1,783**. The 146 untranslated French
 keys are closed (catalog now 1,002 keys, 0 untranslated). G1 — nobody has driven
 the GUI — is unchanged and is the branch's remaining confidence gap.
+
+---
+
+## Round 6 — 2026-08-01
+
+Lenses rounds 1–5 had not run. Rounds 4 and 5 each picked their lenses by
+asking what the previous rounds had *not* looked at; this one continues that,
+and the four it picked were: **arithmetic traps on file-declared numbers**,
+**untrusted metadata turned into a filesystem path**, **bounds on the payload
+leg of the model download** (round 4 bounded the manifest and stopped there),
+and **local log/trace leakage**.
+
+Four findings, plus one defect in this round's own diff caught by self-QA.
+Full detail and the checked-and-clean list live in `FEATURE-LEDGER.md`.
+
+The two crash findings share a root the earlier rounds' crash lens missed by
+construction: round 4 swept for `try!`, `fatalError` and unchecked subscripts
+and found none — a genuinely clean result — but `Int(someDouble)` is none of
+those and traps just as hard. It is the only remaining way a *value* (rather
+than a control-flow mistake) takes the process down, and every number that
+reaches it here was written by a file the app didn't create.
+
+Suite 1,806 → **1,818**, 2 skipped, 0 failures; UI tests 6/6; Release build
+warning-free. G1 — nobody has driven the GUI — is untouched and remains the
+branch's only substantive gap.

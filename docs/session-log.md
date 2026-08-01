@@ -7765,3 +7765,69 @@ Owner-only steps still outstanding: create the referrer/API-restricted browser k
 paste it over `DRIVE_API_KEY = 'REPLACE_AT_DEPLOY'` at deploy time (never committed);
 deploy `web/share/` to Cloudflare Pages; run the X no-recompress byte-compare protocol
 once; flip `DriveConfig.consentScreenVerified` when Google's review completes.
+
+---
+
+## 2026-08-01 — review round 6: the values that trap, and the names that escape
+
+`new-product-build-1`. A sixth pass, picked the same way rounds 4 and 5 were:
+by asking what the previous rounds had *not* looked at. Four lenses — arithmetic
+traps on numbers a file declared, untrusted metadata turned into a filesystem
+path, bounds on the model download's payload leg, and local log/trace leakage.
+
+**Why round 4's crash sweep missed the crash class.** Round 4 swept for `try!`,
+`fatalError` and unchecked subscripts and found none — a genuinely clean result,
+and it closed the wrong door. `Int(someDouble)` is none of those and traps just
+as hard: SIGTRAP on NaN, on infinity, and past `Int.max`. It is the only
+remaining way a *value*, rather than a control-flow mistake, takes the process
+down, and every number reaching it in these five sites was written by a file the
+app didn't create. Reproduced at runtime before fixing — exit 133, "Double value
+cannot be converted to Int because the result would be greater than Int.max".
+Most of the sites are in the Info card, which loads on hero open, so they
+crashed the app on *selecting* a file; the `LightroomXMP` one crashed "Import
+Keywords & Ratings" mid-run, across the whole library, on a single bad packet.
+`SmartCollectionRulesView` already clamped before an `Int64()` and explained
+why in a comment — the reasoning existed in exactly one place and had never
+been generalized, which is the same shape as the QuickLook rule before it
+became `mayUseQuickLook`.
+
+**The model download.** Round 4 gave the CLIP manifest a streaming byte ceiling
+on the reasoning that a cap applied after the bytes are in memory bounds
+nothing — and then left the payload leg, the one measured in hundreds of MB,
+with no ceiling at all. `totalBytes` was parsed and never read; that was the
+tell. Chunk names were unvalidated too, while being appended to the manifest's
+own directory URL. The SHA-256 that follows is a real check but not this one:
+it proves the assembled bytes are the ones the manifest named, and says nothing
+about how many were transferred to find that out, or from where.
+
+**The Eagle importer** turned `metadata.json`'s `name` into a path twice — once
+to locate the source file inside the library, once as the name the copy lands
+under in the destination the user picked — and a `../…` escaped both. The check
+rejects rather than sanitizes, and sits at the parse seam so both uses inherit
+it. Filenames the app derives from a real enumerated URL are not this case; the
+hazard is specifically a name that arrived as *data*.
+
+**Self-QA found a defect in this round's own diff**, continuing the pattern
+round 3-QA established. The first cut routed each model chunk through
+`BoundedBody`, which walks a body one BYTE at a time to enforce its ceiling
+exactly. Correct for a 16 KB manifest; minutes of CPU on a hundreds-of-MB
+artifact — a severe throughput regression introduced by the fix itself. Now
+`session.download(for:)`, which spools to a temp file, so RAM stays flat
+whatever the server sends and the bound doesn't cost throughput to enforce.
+
+Checked and found clean, recorded in the ledger so a later round doesn't
+re-spend it: the rest of the numeric-conversion surface (safe by provenance —
+`CGImage` integers, `UInt8` pixels, a fixed-size LUT index, a guarded divisor);
+locks and reentrancy (no `await` inside any of the seven `NSLock` sections);
+unbounded in-memory growth; file-write atomicity; local leakage; the other
+importers' path construction; and the deliberate decision NOT to size-bound the
+`.muselibrary` archive, which the user picks explicitly and which now legitimately
+carries LUT bytes.
+
+Three durable rules added (`docs/durable-constraints.md`, now 170 — the per-section
+counts in its Contents block had drifted and were resynced from the content).
+No new user-facing strings, so localization is unchanged at 1,002 keys.
+
+Suite 1,806 → **1,818**, 2 skipped, 0 failures; UI tests 6/6; Release build
+warning-free. G1 — nobody has driven the GUI — is untouched and remains the
+branch's only substantive gap.

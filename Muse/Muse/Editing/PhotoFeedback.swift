@@ -55,7 +55,10 @@ nonisolated enum PhotoFeedback {
                 let pct = String(format: "%.0f", percent * 100)
                 return String(localized: "Deep shadows cover \(pct)% of the frame — some shadow detail is gone.")
             case .motionBlurRisk(let shutterSeconds):
-                let fraction = shutterSeconds > 0 ? Int((1.0 / shutterSeconds).rounded()) : 0
+                // `Int(exactly:)`: shutterSeconds comes from the file's EXIF, and
+                // `Int(_:)` traps on the overflow a subnormal value produces.
+                let fraction = shutterSeconds > 0 && shutterSeconds.isFinite
+                    ? (Int(exactly: (1.0 / shutterSeconds).rounded()) ?? 0) : 0
                 return String(localized: "Handheld at 1/\(fraction) s — motion blur is likely.")
             case .highISONoise(let iso, let wellControlled):
                 if wellControlled {

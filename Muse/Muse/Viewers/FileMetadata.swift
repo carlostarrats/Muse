@@ -109,11 +109,14 @@ nonisolated struct FileMetadata: Equatable {
             let s = f == f.rounded() ? String(format: "ƒ%.0f", f) : String(format: "ƒ%.1f", f)
             parts.append(s)
         }
-        if let t = exposureTime, t > 0 {
+        if let t = exposureTime, t > 0, t.isFinite {
             if t >= 1 {
                 parts.append(String(format: "%gs", t))
-            } else {
-                parts.append("1/\(Int((1.0 / t).rounded()))")
+            } else if let denominator = Int(exactly: (1.0 / t).rounded()) {
+                // Denominator only when it's representable — a header declaring
+                // a subnormal exposure time makes `1/t` overflow Int, and
+                // `Int(_:)` traps rather than saturating.
+                parts.append("1/\(denominator)")
             }
         }
         if let iso { parts.append("ISO \(iso)") }
@@ -145,9 +148,16 @@ nonisolated struct FileMetadata: Equatable {
 
     // MARK: - Pure media formatting
 
+    /// `Int(exactly:)` throughout this section, never `Int(_:)`: every number
+    /// here is DECLARED BY THE FILE (a container's duration, a track's frame
+    /// rate and natural size), and `Int(_:)` traps on a value outside Int's
+    /// range or on a non-finite one. A crafted or merely corrupt movie could
+    /// therefore crash the app on nothing more than selecting it — the Info
+    /// card loads on hero open. Unrepresentable reads as "no value", which is
+    /// what a garbage header means anyway.
     static func formatDuration(_ seconds: Double?) -> String? {
-        guard let seconds, seconds > 0 else { return nil }
-        let total = Int(seconds.rounded())
+        guard let seconds, seconds > 0, seconds.isFinite else { return nil }
+        guard let total = Int(exactly: seconds.rounded()) else { return nil }
         let h = total / 3600, m = (total % 3600) / 60, s = total % 60
         return h > 0
             ? String(format: "%d:%02d:%02d", h, m, s)
@@ -162,9 +172,11 @@ nonisolated struct FileMetadata: Equatable {
     /// Frame rate as a tidy integer when close to one (29.97 → "30 fps"),
     /// else two decimals. nil for missing/zero.
     static func formatFrameRate(_ fps: Float?) -> String? {
-        guard let fps, fps > 0 else { return nil }
+        guard let fps, fps > 0, fps.isFinite else { return nil }
         let rounded = fps.rounded()
-        if abs(fps - rounded) < 0.1 { return "\(Int(rounded)) fps" }
+        if abs(fps - rounded) < 0.1, let whole = Int(exactly: rounded) {
+            return "\(whole) fps"
+        }
         return String(format: "%.2f fps", fps)
     }
 
@@ -407,8 +419,11 @@ nonisolated struct FileMetadata: Equatable {
             if let size = try? await track.load(.naturalSize),
                let transform = try? await track.load(.preferredTransform) {
                 let applied = size.applying(transform)
-                let w = Int(abs(applied.width).rounded()), h = Int(abs(applied.height).rounded())
-                if w > 0, h > 0 { dimensions = (w, h) }
+                if let w = Int(exactly: abs(applied.width).rounded()),
+                   let h = Int(exactly: abs(applied.height).rounded()),
+                   w > 0, h > 0 {
+                    dimensions = (w, h)
+                }
             }
             if let fps = try? await track.load(.nominalFrameRate) { frameRate = fps }
         }

@@ -115,6 +115,21 @@ nonisolated enum EagleLibrary {
             .compactMap { item(at: $0) }
     }
 
+    /// The name as a SINGLE path component, or nil if it isn't one.
+    ///
+    /// Rejects rather than rewrites: a sanitized name would still be copied
+    /// under a name the library didn't ask for, and one unreadable row is a
+    /// better outcome than a silently renamed file. `..` is the traversal case;
+    /// a separator or a NUL makes the string not a component at all; a leading
+    /// `.` would import a file the grid then hides.
+    nonisolated static func safeComponent(_ raw: String) -> String? {
+        guard !raw.isEmpty, raw.count <= 255 else { return nil }
+        guard raw != ".", raw != ".." else { return nil }
+        guard !raw.hasPrefix(".") else { return nil }
+        guard !raw.contains("/"), !raw.contains(":"), !raw.contains("\0") else { return nil }
+        return raw
+    }
+
     /// nil for a corrupt/unreadable item — counted by the caller, never thrown.
     private static func item(at infoURL: URL) -> EagleItem? {
         let metaURL = infoURL.appendingPathComponent("metadata.json")
@@ -128,7 +143,15 @@ nonisolated enum EagleLibrary {
         let id = (dict["id"] as? String)
             ?? (infoURL.deletingPathExtension().lastPathComponent)
         let ext = (dict["ext"] as? String) ?? ""
-        let fileName = ext.isEmpty ? name : "\(name).\(ext)"
+        let composed = ext.isEmpty ? name : "\(name).\(ext)"
+        // `name` and `ext` come from a third-party `metadata.json` — an Eagle
+        // library can be downloaded or shared, so this is untrusted input being
+        // turned into a PATH. Unsanitized it escapes twice: `appendingPathComponent`
+        // resolves a `../…` name to a file OUTSIDE the library the user picked,
+        // and the same string is later appended to the import DESTINATION, so
+        // the copy lands outside the folder they chose. A file name is one
+        // component, so anything that isn't is a corrupt row, not a file.
+        guard let fileName = safeComponent(composed) else { return nil }
         let fileURL = infoURL.appendingPathComponent(fileName)
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
 
