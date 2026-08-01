@@ -374,9 +374,11 @@ Muse/Muse/
                                    toggleDisabled). One source of truth shared by SidebarView's render
                                    gate + SettingsView's "Show iCloud Folder in the Sidebar" toggle.
                                    Unit-tested
-  Import/                          File > Import Keywords & Ratings… — read-only import of
-                                   IPTC/XMP keywords + star ratings (Lightroom/Bridge/Capture One)
-                                   into existing files as Muse manual tags + ratings.
+  Import/                          File > Import — read-only import into EXISTING files.
+                                   Originally IPTC/XMP keywords + star ratings
+                                   (Lightroom/Bridge/Capture One); Spec 06 grew it into a
+                                   five-source surface — see "Components added 2026-07-31
+                                   (Spec 06)" below for everything past the first two files.
     MetadataImportRules.swift      pure: keyword trim/dedupe, rating clamp, fill-gaps-only decision.
                                    Unit-tested
     MetadataKeywordReader.swift    ImageIO read, per-field priority sidecar→embedded-XMP→IPTC;
@@ -591,6 +593,35 @@ Performance:
 - **`Views/PlacesPage.swift`, `RediscoveryHeader.swift`, `Sidebar/LibraryRows.swift`** —
   the Places page, the rediscovery header, and the four shared LIBRARY sidebar rows.
 
+### Components added 2026-07-31 (Spec 03, culling & search phase 2)
+
+- **`Intelligence/Clip/`** — the CLIP semantic engine: `ClipEngine` (the entry point),
+  `ClipModel`, `ClipPreprocess`, `ClipTokenizer`, and `ClipModelStore` (on-demand
+  download from a pinned host, manifest SHA-256-verified, generation directories,
+  encoders compiled BEFORE the `.verified` marker, fail-closed). The model is NEVER
+  bundled — this is the fourth app-initiated network path and is user-initiated only.
+- **`Intelligence/Core/ClipVectors.swift`** — vector storage/packing. Uses `Float16`,
+  which does not exist on x86_64; this is why `-exportLocalizations` (which builds
+  universal) cannot currently build the project.
+- **`Intelligence/Core/SharpnessScore.swift`**, **`Components/SharpnessRank.swift`** —
+  sharpness metric + the relative-within-group badge ranking.
+- **`Intelligence/DeepAnalysisBackfill.swift`** — the trait/embedding backfill pass,
+  bounded per launch, driven by `PhotoTraits.currentVersion` bumps.
+- **`Search/ClipIndex.swift`**, **`SimilarityRegistry.swift`** — the embedding index and
+  the lock-based, session-scoped `similar:` handle registry (handles are generated, so
+  `similar` is deliberately absent from `SearchQueryParser.keys`).
+- **`Search/NaturalLanguageQuery.swift`, `NLQuerySuggest.swift`** — the `@Generable`
+  intent (macOS 26 gated) + pure token composer behind the suggestion pill.
+- **`Models/CompareStore.swift`, `CullStore.swift`** + **`Components/CompareGeometry.swift`,
+  `CullSummary.swift`, `RegionMath.swift`** — compare/cull state and their pure math.
+- **`Views/Compare/`** — `CompareView`, `ComparePane`, `CompareKeyCatcher` (the
+  side-by-side workbench), with **`Views/CullHUD.swift`** and
+  **`Views/Modal/CullResolveCard.swift`** for the ephemeral K/X/U cull pass.
+- **`Viewers/PeakingOverlay.swift`, `PeakingOverlayView.swift`** — focus peaking, ported
+  from Surface Camera (display-referred input, 1080px working size).
+- **`Models/AppState+Similarity.swift`** — the Find Similar / New Smart Collection
+  entry points (methods-only extension, Pattern B).
+
 ### Components added 2026-07-31 (Spec 04, editing engine)
 
 - **`Editing/`** — the platform-neutral core (Foundation/CoreGraphics/CoreImage/Metal
@@ -656,3 +687,40 @@ Performance:
   strength slider, import/rename/delete).
 - New kernels in `EditKernels.metal`: `zebraStripes`, `tzLog2Luma`, `tzSquare`,
   `tzLinearCoeffs`, `tzApplyCoeffs`, `toneZoneGain`, `zoneHatch`, `lutMix`.
+
+### Components added 2026-07-31 (Spec 06, import & migration)
+
+*One File > Import surface over five sources. The load-bearing rule: **a new source is
+a READER and a MAPPER, never a new writer** — everything lands through seams Specs
+01–05 already built (`MetadataImportApply.applyKeywords`, `TagStore.setRating`,
+`NoteStore`, `EditStore.save`, `CollectionStore`). No migrations.*
+
+- **`Import/ImportSupplement.swift`** — the SINGLE writer for externally-sourced GPS and
+  dates (XMP sidecar GPS, Takeout JSON, `PHAsset` all route through it). Header-wins,
+  external-fills-gaps, and it stamps BOTH Spec 02 scan markers so the next analyze pass
+  can't clobber an imported coordinate with the header's NULL. `(0,0)` is always absent.
+- **`Import/LightroomXMP.swift`, `LightroomEditMapper.swift`,
+  `LightroomPresetImportModel.swift`** — the `crs:` reader and the industry-envelope
+  mapper: geometry exact; WB/exposure/contrast/vibrance/saturation/curves directional;
+  everything adaptive DETECTED AND DISCLOSED, never translated.
+- **`Import/ApplePhotosImportModel.swift`, `TakeoutImportModel.swift`, `TakeoutJSON.swift`,
+  `EagleImportModel.swift`, `EagleLibrary.swift`** — the other three sources.
+- **`Import/LabelMapping.swift`, `LabelTag.swift`** — the color-label namespace.
+  Labels land as `"Label: "`-prefixed manual tags and are EXCLUDED from the free-text
+  tag-search leg unless the query names them, so a workflow marker can't answer a
+  content-colour query.
+- **`Import/MetadataImportModel.swift`, `MetadataImportSheet.swift`, `ImportReport.swift`,
+  `ImportedText.swift`, `EmbeddedPreview.swift`, `XMPGPS.swift`** — the shared model,
+  the card, and the readers' support types.
+- **`Models/AnalysisStatusStore.swift`, `WorkThrottleStore.swift`** +
+  **`Components/ThrottlePolicy.swift`, `AnalysisEstimator.swift`** — analysis throttling
+  and the import-size FYI, so a large import doesn't saturate the pipeline unannounced.
+- `AppState.importModal` REPLACED `metadataImportRequest` 1-for-1 (net-zero `@Published`
+  count); run → label mapping → report are PHASE CHANGES of that one flag, never a card
+  stacked over a card.
+
+### Spec 07 (sharing & social export)
+
+*Documented inline in the tree listing above rather than as a section — see
+`Export/Social/`, `Components/SocialCropMath.swift`, `Views/Export/SocialExportCard.swift`,
+and the `Sharing/Drive/` entries (`DriveSharePublishGuard`, portfolio manifest handling).*

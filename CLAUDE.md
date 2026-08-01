@@ -115,15 +115,24 @@ are the load-bearing reference artifacts.
 | Foundation 1 — **Spec-01 foundation & plumbing** (v13 coordinates + backfill; the three edit-aware seams `EditStackIndex`/`EffectiveDimensions`/`OutputRender`, all identity functions today; StoreKit 2 plumbing with an UNENFORCED trial gate; announcements channel; semantic-search cancellation + `PerfBaseline`) | ✅ merged, unreleased | `new-product-build-1` |
 | Foundation 2 — **Spec-02 photo library core** (v14–v17; `PhotoHeaderReader` one-pass GPS+EXIF; offline GeoNames reverse geocoding + Places page; rediscovery surfaces; near-duplicate stacks; phase-1 token search; `.location` smart rule; dead visual-duplicate fix) | ✅ merged, unreleased | `new-product-build-1` |
 | Foundation 3 — **Spec-03 culling & search phase 2** (v18–v19; CLIP engine/index/model-store; faces/pets/`is:`/`similar:` tokens; compare workbench + focus peaking; ephemeral cull; `.similar` smart rule; NL suggestions) | ✅ merged, unreleased | `new-product-build-1` |
+| Foundation 4 — **Spec-04 editing engine** (v20–v21; platform-neutral `Editing/` model + codec + history + transfer; Core Image/Metal render chain; `EditStore` + live provider + consumer sweep; (Preview \| Edit) editor in the hero viewer; curve, WB eyedropper, before/after, versions, presets, copy/paste, Edit-a-Copy) | ✅ merged, unreleased | `new-product-build-1` |
 | Foundation 5 — **Spec-05 editing readouts & learning layer** (v22–v23; live stats tap → teaching histogram + plain-English clipping copy; zebras; the tone-zone control + zone overlay; deterministic "Why it looks this way"; `.cube` LUT import; live-thumbnail Looks browser; reference pane) | ✅ merged, unreleased | `new-product-build-1` |
 | Foundation 6 — **Spec-06 import & migration** (no migrations; one File > Import surface over five sources; `ImportSupplement`; color-label namespace + mapping sheet; Lightroom `crs:` edits + presets; `WorkThrottleStore`/`AnalysisStatusStore`/import-size FYI) | ✅ merged, unreleased | `new-product-build-1` |
 | Foundation 7 — **Spec-07 sharing & social export** (no migrations; manifest v2 `y`/`s`/`m` + three page layouts; portfolio mode — a live `manifest.json` in the user's Drive behind a URL that never changes; `Export/Social/` + the social export card; Google on-ramp copy) | ✅ merged, unreleased | `new-product-build-1` |
-| Foundation 4 — **Spec-04 editing engine** (v20–v21; platform-neutral `Editing/` model + codec + history + transfer; Core Image/Metal render chain; `EditStore` + live provider + consumer sweep; (Preview \| Edit) editor in the hero viewer; curve, WB eyedropper, before/after, versions, presets, copy/paste, Edit-a-Copy) | ✅ merged, unreleased | `new-product-build-1` |
 
 > Every row through Polish 27 is merged to `main` and shipped in release **`v1.5`**;
 > Polish 28 is merged to `main` but NOT yet in a release (`v1.5` is still the
-> current released build; Polish 25–27 landed in it after `v1.4`). Foundation 1
-> lives on `new-product-build-1` and is not on `main` yet. **Distribution is
+> current released build; Polish 25–27 landed in it after `v1.4`). **Foundation 1–7
+> (Specs 01–07) live on `new-product-build-1` and are not on `main` yet** — all seven
+> were built 2026-07-31; migrations run through **v23**, so the next spec starts at
+> v24. None of it has been exercised in the running app: every spec was verified by
+> build + unit tests only, so treat the editor, import and share surfaces as
+> unreviewed until someone drives them. Two known open gaps carried by that branch:
+> **backup does not carry edit data** (`BackupOccurrence` has no edit fields — Spec 09's
+> amendment A2 closes it) and **146 of 992 localization keys have no French value**
+> (from Specs 03 and 06). The binding build-level record is
+> `docs/new-build/DECISIONS.md`; read its "Current state" block first, since the
+> per-spec "as-built" sections are point-in-time and go stale. **Distribution is
 > unchanged** — the Mac App Store move (doctrine revisions, Sparkle excision,
 > Apple-Silicon-only build settings) was split out of Spec 01 at the owner's
 > request into `docs/superpowers/plans/deferred-mac-app-store-migration.md` and

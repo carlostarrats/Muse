@@ -6,195 +6,6 @@ the durable rules + a compact index live in `CLAUDE.md`. Nothing here is
 load-bearing for a fresh session beyond what that index already surfaces;
 read an entry when you need the full "why" behind a specific change.
 
-### Spec 07 — sharing & social export — 2026-07-31 (`new-product-build-1`)
-
-Implemented `docs/superpowers/plans/2026-07-30-spec-07-sharing-social-export.md` end to
-end. No migrations (Spec 07 adds none; future specs continue at v24). Full Swift suite
-green, `node web/share/share.test.mjs` green.
-
-Phase 0 of the plan was already in the tree — Spec 01 shipped `EditStackIndex` and
-`OutputRender`, and Spec 04 made them live — so this pass skipped building them and
-consumed them instead. Spec 04's presence also promoted the plan's Task 4.9 from a
-documented, absent-until-then seam into real code: "Save Crop as Version" is
-implemented, writing one `edit_versions` row through `EditStore.saveVersion`.
-
-- **Share page layouts.** `DriveShareManifest` grew three optional, nil-default wire
-  keys — `y` (layout), `s` (body text), `m` (portfolio manifest id) — plus `jsonData()`
-  and the publish caps. A manifest using none of them encodes none of them, so legacy
-  fragments decode forever (pinned on both sides). The page renders grid / contact sheet
-  / essay off ONE `data-layout` attribute through the same tile-builder DOM path; the
-  render glue was refactored into `renderLive(m)` + `buildGrid(m)` so a portfolio
-  re-fetch is a second call, not a second code path. The grid sizer became
-  layout-parameterized (`SIZER_BY_LAYOUT`) and re-entrant — its listeners wire once and
-  read the current bounds from a module-scoped variable, so a layout change after a
-  re-fetch doesn't leave them on the first call's captured range.
-- **Publish guard.** The app could previously mint a >1000-image link its own page
-  rejects as "unavailable". `DriveSharePublishGuard` is a pure pre-publish check
-  mirroring the page validator, wired into all three publish entry points.
-- **Google on-ramp.** A signed-out explainer above the publish form (additive, never a
-  gate — Publish still handles sign-in mid-run), `DriveConfig.consentScreenVerified` as
-  a compiled constant gating the "unverified app" guidance, and extended Settings copy.
-- **Portfolio mode.** A portfolio is a Drive folder (images + `manifest.json`) plus a
-  page URL whose fragment carries the manifest's file id AND a full inline snapshot.
-  The Drive-hosted manifest is the live truth; the page fetches it (bounded, timed out,
-  re-validated, `m` stripped so it can never chain) and falls back to the snapshot on
-  ANY failure, so it renders instantly and never goes blank. Updates rewrite the
-  manifest via `files.update`, so the file id — and the URL — never changes. Update
-  order is upload-new → swap → sweep, with the sweep's failures non-fatal
-  (`.doneWithSweepWarning`) rather than an `AppState` dependency on the service.
-- **Social export.** New platform-neutral `Export/Social/` (preset table, output
-  metadata policy, render pipeline), pure `Components/SocialCropMath.swift`, and the
-  card in `Views/Export/`. One new `@Published` on AppState (`socialExportRequest`), the
-  sanctioned shell-modal-flag class. Three entry points: grid context menu, hero
-  `ShareButton`, collection header — raster kinds only at each.
-
-Deviations from the plan, all deliberate:
-
-- **D-a — fixtures are generated, not checked in.** The plan wanted four (then five)
-  JPEGs under `MuseTests/Fixtures/Social/`. The app target uses file-system-synchronized
-  groups, so a checked-in binary would land in the test bundle by inference rather than
-  by declaration, and a 4096² noise JPEG is a multi-MB blob in git for something ImageIO
-  produces deterministically. `MuseTests/SocialFixtures.swift` generates them in `setUp`
-  from a fixed-seed LCG.
-- **D-b — the X ladder is driven by the invariants, not by a byte target.** X carries no
-  `byteTargetKB`, and the plan's ladder only stepped down for `bytes < W×H`. Measured:
-  a busy 4096² image exceeds 5 MB at the starting quality, so the ladder now steps down
-  until BOTH byte invariants hold. And the plan's "high-entropy source lands under 5 MB"
-  test was wrong as written — per-pixel random noise at 4096² measures ~11 MB even at the
-  0.55 floor, far beyond any real photograph. That case is the DOCUMENTED fail-the-file
-  behavior, so the test now pins both sides: a full-size detailed source lands under
-  5 MB, and a pathological one throws `xInvariantFailed` and writes nothing.
-- **D-c — the sweep warning is a `Phase` case,** per the plan's own stated preference,
-  keeping `DriveShareService` free of any `AppState` reference.
-- **D-d — `SharingTier`'s call site passes the REAL entitlement** (`CommerceStore` exists
-  in this tree, contrary to the plan's assumption), not a hardcoded `false`. Behavior is
-  identical while `enforced == false`.
-- **D-e — Task 4.9 is implemented, not documented.** See above.
-- **D-f — `Localizable.xcstrings` was reformatted by Xcode** on the first
-  `-exportLocalizations` run (its canonical `" : "` separator style), producing a
-  whole-file diff independent of the 62 French values added.
-
-Two things recorded rather than fixed, both outside this spec's scope:
-
-- `xcodebuild -exportLocalizations` fails on `Intelligence/Core/ClipVectors.swift`
-  (`Float16.bitPattern`) unless pinned with `ARCHS=arm64 ONLY_ACTIVE_ARCH=YES` — it
-  otherwise builds for a non-arm64 slice where `Float16` differs. Pre-existing, from
-  Spec 03.
-- 162 strings remain untranslated in French, all pre-existing Spec 03/06 debt (Google
-  Takeout / Lightroom-preset import / cull / compare copy). Every Spec 07 key is
-  translated, including the preset display names and advisories, which are reached
-  through runtime-variable keys the extractor can't see and so were added by hand.
-
-Owner-only steps still outstanding: create the referrer/API-restricted browser key and
-paste it over `DRIVE_API_KEY = 'REPLACE_AT_DEPLOY'` at deploy time (never committed);
-deploy `web/share/` to Cloudflare Pages; run the X no-recompress byte-compare protocol
-once; flip `DriveConfig.consentScreenVerified` when Google's review completes.
-
-### Spec 04 — editing engine — 2026-07-31 (`new-product-build-1`)
-
-Implemented `docs/superpowers/plans/2026-07-30-spec-04-editing-engine.md` end to end.
-Two migrations (v20 `edits` + `edit_versions`, v21 `edit_presets`), a platform-neutral
-`Editing/` core, a Core Image + Metal render pipeline, and the (Preview | Edit) editor
-inside the hero viewer. 1471 tests green.
-
-Phase 0 was already in the tree — Spec 01 had shipped `EditStackIndex`,
-`EffectiveDimensions`, `OutputRender` and the stack-aware `ThumbnailCache` key as
-identity functions, so this pass made them live rather than building them.
-
-- **Model.** `EditStack` is enum-tagged adjustments in canonical declaration order with
-  one typed params struct each. Two decisions do the heavy lifting: new cases must
-  APPEND (canonical order is declaration order, so a mid-list insertion re-keys every
-  edited thumbnail — the pinned fixture hash in `EditStackCodecTests` is the tripwire),
-  and an unknown adjustment `type` fails the WHOLE decode rather than dropping the case,
-  which is what lets an older build render the original instead of a partial stack.
-
-- **Schema + carry.** `edits`/`edit_versions` sit at the `(file_id, parent_dir)` grain
-  beside tags and notes, and `EditRecordStore` is called beside the existing `NoteStore`
-  call at all five rewrite seams. Carried version rows get fresh UUIDs — reusing the PK
-  drops every version but the first when two scopes merge. The sidecar's edit field got
-  its OWN clock: resolving it by the sidecar-wide `updated_at` would let a newer
-  analyze-export from a device that never saw the edit roll it back.
-
-- **Renderer.** The chain's order is code, not data. Scene-referred throughout except
-  the curve. Two things only showed up by running it: stitchable kernels need
-  `extern "C" [[stitchable]] float4 name(...)` with the attribute before the RETURN type
-  (after it the compiler says "cannot be applied to types", and the kernels silently
-  failed to load), and `HighlightRecoveryTests` initially passed vacuously because
-  `CIImage(color:)` CLAMPS its components — both "hot" fixtures collapsed to white
-  before the render started, so of course they came out equal. Rebuilt on float bitmaps.
-  `MiredMapping`'s range is derived from the mired floor rather than from a chosen warm
-  target Kelvin: picking the target independently ran the cool side past the floor,
-  clamped, and reproduced exactly the warm/cool asymmetry the mired mapping exists to
-  avoid.
-
-- **Provider + consumers.** The live index pre-resolves everything the hot paths need
-  (hash, decoded stack, geometry, renderable) because the provider is consulted from
-  view bodies and off-main thumbnail workers. The first version DEADLOCKED: `NSLock`
-  isn't recursive and `EditStackIndex.stackHash` held the lock across a provider call
-  that reads the same index — it hung the test run, and would have hung the main thread
-  on the first edited tile. Only the provider reference read needs the lock.
-
-- **Editor.** A stage swap inside the hero viewer, not a new viewer: the open/close
-  flight and every guard in `loadFullRes` are untouched, and Edit-mode Escape is the
-  FIRST branch of the `viewerClosing` onChange and returns before the close runs.
-  Autosave with no Done/Cancel, because the grid updates live and Cancel couldn't
-  honestly promise to put it back.
-
-Two deviations worth knowing: `EditingModuleImportTests` SKIPS rather than passing
-vacuously when the sandbox denies reading the source tree (the test host is the
-sandboxed app, and this checkout lives under `~/Documents`), and the French
-localization was written into `Localizable.xcstrings` directly because
-`-exportLocalizations` cannot build this project — `Intelligence/Core/ClipVectors.swift`
-uses `Float16`, which doesn't exist on x86_64, and the extractor builds universal. That
-is a pre-existing Spec-03 breakage, unrelated to this work, but it blocks the standard
-localization workflow until it's fixed.
-
-### Spec 02 — photo library core — 2026-07-31 (`new-product-build-1`)
-
-Implemented `docs/superpowers/plans/2026-07-30-spec-02-photo-library-core.md` end to
-end. Five migrations (v14 `photo_meta`, v15 `places`, v16 `last_viewed_at`, v17
-stacks — v13 already existed from Spec 01), one shared header reader, offline
-geocoding, three rediscovery surfaces, near-duplicate stacks, phase-1 token search,
-and the `.location` smart rule. 1162 tests green.
-
-Notable decisions and deviations from the plan, in build order:
-
-- **Section A** found exactly the bug it predicted: `files.feature_print` holds the raw
-  `VNFeaturePrintObservation.data` element buffer, so the `NSKeyedUnarchiver` at both
-  call sites returned nil for every row. `FeaturePrints` replaces it; the grouping pass
-  was extracted as `DuplicateFinder.visualGroupIndices` so a test can pin it without a
-  Vision run.
-- **`CoordinateReader`/`CoordinateBackfill` were DELETED**, not left beside the new
-  reader — Spec 01 shipped them knowing Spec 02 supersedes them. `writeCoordinates` is
-  gone too; `writePhotoHeader` is the one write seam, and it deliberately does NOT
-  stamp the EXIF marker on a coordinate-only write (there is no such call any more).
-- **`writePhotoHeader` has two forms** — one taking a queue, one taking a `db` inside a
-  caller's transaction. The analyze pass uses the second so the header lands atomically
-  with the rest of the analysis; the backfill uses it to batch 200 rows per write.
-- **`GeoNamesDataset` does not cache the parsed cities.** The plan sketched a weak-boxed
-  cache; a weak box whose only strong reference is the returned array dies immediately,
-  so the caching was illusory. Not caching is the honest version of the same intent
-  (hold it for one pass, free it after) and a geocode pass parses it exactly once.
-- **`PlaceQueries.groups` groups in Swift**, not with the plan's
-  `HAVING coverPath = (correlated subquery)` — the subquery form is quadratic per group
-  and the Swift reduction is one pass over rows a place library never makes large.
-- **`GeoBounds.boxes` gained a whole-globe case**: a radius wide enough to wrap returns
-  ONE `-180...180` box rather than two overlapping ones.
-- **`BurstClusterer`'s oversized-session split breaks ties toward the midpoint.** With
-  every gap identical (an evenly-spaced burst), "largest gap" is index 1 and the
-  splitter peels one item at a time — bounding nothing. Caught by the test the plan
-  itself sketched.
-- **Stacks resolve from `AppState.currentFiles.didSet`**, which is the lazy per-folder
-  trigger the plan describes; the analyze pass triggers `AutoStacker` over exactly its
-  own file ids alongside the `SearchFacets` refresh.
-- **Task 15 (the token-search `PerfBaseline` metric) was skipped** — see the plan's own
-  conditional. `PerfBaseline` exists, but the metric needs a 50k synthetic
-  `photo_meta` fixture whose seeding cost belongs with the harness work, not here.
-- **The bundled GeoNames artifacts are 9-city placeholders.** They are byte-format
-  correct (the bounded-inflate tests run against them), but Places stays near-empty for
-  a real library until the owner runs `scripts/make-geonames.sh` and bumps
-  `GeoNamesDataset.version`.
-
 ### Post-polish session — 2026-06-12 (on `main`)
 
 A long live-review pass. Landed:
@@ -7275,7 +7086,7 @@ open delay; stagger + response inside the 0.34s landing; fade shorter than the
 motion). `GridSpacingTests`' two ceiling assertions moved 28 → 40. Full suite 934
 passing.
 
-### Spec 01 — foundation & plumbing — 2026-07-31 (on `new-product-build-1`)
+## Spec 01 — foundation & plumbing — 2026-07-31 (`new-product-build-1`)
 
 The non-visible groundwork for the photo repositioning. Nothing user-facing changed
 except a new Settings section; the point was to land the seams that make later specs
@@ -7390,7 +7201,157 @@ can't be bypassed. Full suite green.
 
 ---
 
-## 2026-07-31 — Spec 05: editing readouts, learning layer, looks & LUTs (`new-product-build-1`)
+## Spec 02 — photo library core — 2026-07-31 (`new-product-build-1`)
+
+Implemented `docs/superpowers/plans/2026-07-30-spec-02-photo-library-core.md` end to
+end. Five migrations (v14 `photo_meta`, v15 `places`, v16 `last_viewed_at`, v17
+stacks — v13 already existed from Spec 01), one shared header reader, offline
+geocoding, three rediscovery surfaces, near-duplicate stacks, phase-1 token search,
+and the `.location` smart rule. 1162 tests green.
+
+Notable decisions and deviations from the plan, in build order:
+
+- **Section A** found exactly the bug it predicted: `files.feature_print` holds the raw
+  `VNFeaturePrintObservation.data` element buffer, so the `NSKeyedUnarchiver` at both
+  call sites returned nil for every row. `FeaturePrints` replaces it; the grouping pass
+  was extracted as `DuplicateFinder.visualGroupIndices` so a test can pin it without a
+  Vision run.
+- **`CoordinateReader`/`CoordinateBackfill` were DELETED**, not left beside the new
+  reader — Spec 01 shipped them knowing Spec 02 supersedes them. `writeCoordinates` is
+  gone too; `writePhotoHeader` is the one write seam, and it deliberately does NOT
+  stamp the EXIF marker on a coordinate-only write (there is no such call any more).
+- **`writePhotoHeader` has two forms** — one taking a queue, one taking a `db` inside a
+  caller's transaction. The analyze pass uses the second so the header lands atomically
+  with the rest of the analysis; the backfill uses it to batch 200 rows per write.
+- **`GeoNamesDataset` does not cache the parsed cities.** The plan sketched a weak-boxed
+  cache; a weak box whose only strong reference is the returned array dies immediately,
+  so the caching was illusory. Not caching is the honest version of the same intent
+  (hold it for one pass, free it after) and a geocode pass parses it exactly once.
+- **`PlaceQueries.groups` groups in Swift**, not with the plan's
+  `HAVING coverPath = (correlated subquery)` — the subquery form is quadratic per group
+  and the Swift reduction is one pass over rows a place library never makes large.
+- **`GeoBounds.boxes` gained a whole-globe case**: a radius wide enough to wrap returns
+  ONE `-180...180` box rather than two overlapping ones.
+- **`BurstClusterer`'s oversized-session split breaks ties toward the midpoint.** With
+  every gap identical (an evenly-spaced burst), "largest gap" is index 1 and the
+  splitter peels one item at a time — bounding nothing. Caught by the test the plan
+  itself sketched.
+- **Stacks resolve from `AppState.currentFiles.didSet`**, which is the lazy per-folder
+  trigger the plan describes; the analyze pass triggers `AutoStacker` over exactly its
+  own file ids alongside the `SearchFacets` refresh.
+- **Task 15 (the token-search `PerfBaseline` metric) was skipped** — see the plan's own
+  conditional. `PerfBaseline` exists, but the metric needs a 50k synthetic
+  `photo_meta` fixture whose seeding cost belongs with the harness work, not here.
+- **The bundled GeoNames artifacts are 9-city placeholders.** They are byte-format
+  correct (the bounded-inflate tests run against them), but Places stays near-empty for
+  a real library until the owner runs `scripts/make-geonames.sh` and bumps
+  `GeoNamesDataset.version`.
+
+## Spec 03 — culling & search phase 2 — 2026-07-31 (`new-product-build-1`)
+
+Implemented `docs/superpowers/plans/2026-07-30-spec-03-culling-and-search-phase2.md`
+end to end across three commits (`7728ab9`, `0616749`, `bb75801`). Two migrations
+(v18 `clip_embeddings`, v19 `photo_traits`), the CLIP semantic engine and its
+on-demand model store, faces/pets/`is:`/`similar:` tokens, the compare workbench with
+focus peaking, ephemeral cull state, the `.similar` smart rule, and the
+natural-language suggestion layer. Full record in `docs/new-build/DECISIONS.md`
+("Spec 03 as-built").
+
+Notable decisions and deviations from the plan:
+
+- **The search model is downloaded, never bundled.** `ClipModelStore` fetches from a
+  pinned host, verifies the manifest SHA-256, and fails closed. This is the fourth
+  app-initiated network path and is strictly user-initiated — Settings > Search, or a
+  one-time offer card triggered by a multi-word search that produced zero tokens. It
+  writes into a generation directory, compiles the encoders BEFORE writing the
+  `.verified` marker, and deletes the directory on any failure; the previous
+  generation is removed only after the new one verifies.
+- **`photo_traits` is content-keyed, not `(file_id, parent_dir)`.** Traits are derived
+  from pixels, so they follow the same rule as palette/caption/dims — unlike tags and
+  notes. A row with NULL trait fields is an ATTEMPTED marker (file reached, undecodable),
+  which is what stops the backfill re-scanning a file that can never succeed — the same
+  class of fix as the `analyzed_hash` stamping rule for undecodable images.
+- **`similar:` is deliberately NOT in `SearchQueryParser.keys`.** Its handles are
+  generated at runtime by `SimilarityRegistry` (lock-based, session-scoped), so
+  autocompleting it would offer the user handles that mean nothing. `faces:`/`pets:`/
+  `is:` are in `keys` and do autocomplete. An unresolvable handle matches nothing rather
+  than falling back to an unfiltered result set.
+- **The semantic leg is engine-selected with ONE threaded floor.** CLIP first,
+  `NLEmbedding` as fallback, and a single `semanticFloor` threaded through both the
+  merge and `matchedDirs` — two independently-chosen thresholds would let a hit clear
+  the merge but not the directory narrowing, surfacing a file the per-location grain
+  says shouldn't match.
+- **When `similar:` is present, similarity score DESC replaces capture DESC** as the
+  sort. A similarity query sorted by date is not a similarity query.
+- **`PeakingOverlay` was ported from Surface Camera** — display-referred input at a
+  1080px working size, not a fresh implementation.
+- **Deliberately not built in this pass:** the `PerfBaseline` rows for this spec's
+  measurements (a harness gap Specs 04 and 05 inherited), and the items DECISIONS records
+  as needing a pass that can exercise the running app. `HybridClusterer` time-bucketing
+  was NOT done — it would change clustering semantics and break the
+  `SimilarityMatrixTests` equivalence guarantee; time-bucketing landed in
+  `BurstClusterer` instead.
+
+## Spec 04 — editing engine — 2026-07-31 (`new-product-build-1`)
+
+Implemented `docs/superpowers/plans/2026-07-30-spec-04-editing-engine.md` end to end.
+Two migrations (v20 `edits` + `edit_versions`, v21 `edit_presets`), a platform-neutral
+`Editing/` core, a Core Image + Metal render pipeline, and the (Preview | Edit) editor
+inside the hero viewer. 1471 tests green.
+
+Phase 0 was already in the tree — Spec 01 had shipped `EditStackIndex`,
+`EffectiveDimensions`, `OutputRender` and the stack-aware `ThumbnailCache` key as
+identity functions, so this pass made them live rather than building them.
+
+- **Model.** `EditStack` is enum-tagged adjustments in canonical declaration order with
+  one typed params struct each. Two decisions do the heavy lifting: new cases must
+  APPEND (canonical order is declaration order, so a mid-list insertion re-keys every
+  edited thumbnail — the pinned fixture hash in `EditStackCodecTests` is the tripwire),
+  and an unknown adjustment `type` fails the WHOLE decode rather than dropping the case,
+  which is what lets an older build render the original instead of a partial stack.
+
+- **Schema + carry.** `edits`/`edit_versions` sit at the `(file_id, parent_dir)` grain
+  beside tags and notes, and `EditRecordStore` is called beside the existing `NoteStore`
+  call at all five rewrite seams. Carried version rows get fresh UUIDs — reusing the PK
+  drops every version but the first when two scopes merge. The sidecar's edit field got
+  its OWN clock: resolving it by the sidecar-wide `updated_at` would let a newer
+  analyze-export from a device that never saw the edit roll it back.
+
+- **Renderer.** The chain's order is code, not data. Scene-referred throughout except
+  the curve. Two things only showed up by running it: stitchable kernels need
+  `extern "C" [[stitchable]] float4 name(...)` with the attribute before the RETURN type
+  (after it the compiler says "cannot be applied to types", and the kernels silently
+  failed to load), and `HighlightRecoveryTests` initially passed vacuously because
+  `CIImage(color:)` CLAMPS its components — both "hot" fixtures collapsed to white
+  before the render started, so of course they came out equal. Rebuilt on float bitmaps.
+  `MiredMapping`'s range is derived from the mired floor rather than from a chosen warm
+  target Kelvin: picking the target independently ran the cool side past the floor,
+  clamped, and reproduced exactly the warm/cool asymmetry the mired mapping exists to
+  avoid.
+
+- **Provider + consumers.** The live index pre-resolves everything the hot paths need
+  (hash, decoded stack, geometry, renderable) because the provider is consulted from
+  view bodies and off-main thumbnail workers. The first version DEADLOCKED: `NSLock`
+  isn't recursive and `EditStackIndex.stackHash` held the lock across a provider call
+  that reads the same index — it hung the test run, and would have hung the main thread
+  on the first edited tile. Only the provider reference read needs the lock.
+
+- **Editor.** A stage swap inside the hero viewer, not a new viewer: the open/close
+  flight and every guard in `loadFullRes` are untouched, and Edit-mode Escape is the
+  FIRST branch of the `viewerClosing` onChange and returns before the close runs.
+  Autosave with no Done/Cancel, because the grid updates live and Cancel couldn't
+  honestly promise to put it back.
+
+Two deviations worth knowing: `EditingModuleImportTests` SKIPS rather than passing
+vacuously when the sandbox denies reading the source tree (the test host is the
+sandboxed app, and this checkout lives under `~/Documents`), and the French
+localization was written into `Localizable.xcstrings` directly because
+`-exportLocalizations` cannot build this project — `Intelligence/Core/ClipVectors.swift`
+uses `Float16`, which doesn't exist on x86_64, and the extractor builds universal. That
+is a pre-existing Spec-03 breakage, unrelated to this work, but it blocks the standard
+localization workflow until it's fixed.
+
+## Spec 05 — editing readouts, learning layer, looks & LUTs — 2026-07-31 (`new-product-build-1`)
 
 Plan: `docs/superpowers/plans/2026-07-30-spec-05-editing-readouts-learning.md`.
 The distinctive layer on top of Spec 04's engine — everything here is an extension of
@@ -7476,3 +7437,130 @@ everywhere else.
 Localization was written straight into `Localizable.xcstrings` (56 new keys with French
 values): `-exportLocalizations` still can't build this project, the pre-existing
 Spec-03 `Float16`/x86_64 breakage Spec 04 recorded.
+
+## Spec 06 — import & migration — 2026-07-31 (`new-product-build-1`)
+
+Implemented `docs/superpowers/plans/2026-07-30-spec-06-import-migration.md` end to end
+(`3202630`). No migrations — everything lands in tables Specs 01–05 already created.
+One File > Import surface over five sources: metadata sidecars, Lightroom edits,
+Lightroom presets, Apple Photos, Google Takeout and Eagle. Full record in
+`docs/new-build/DECISIONS.md` ("Spec 06 as built").
+
+Notable decisions and deviations from the plan:
+
+- **Every import writes through EXISTING seams only — a new source is a reader and a
+  mapper, never a new writer.** Tags via `MetadataImportApply.applyKeywords`, ratings
+  via `TagStore.setRating` behind `MetadataImportRules.ratingToApply` (gap-fill), notes
+  via `NoteStore` (fill-gaps — an import never overwrites what the user typed), edits
+  via `EditStore.save` (never clobbers an existing stack, which is also what makes
+  re-runs idempotent), collections via `CollectionStore.createManual`/`addFile`. This is
+  now a durable constraint in `CLAUDE.md`.
+- **`AppState.importModal` REPLACED `metadataImportRequest` 1-for-1** (net-zero
+  `@Published` count). Run, label mapping and report are PHASE CHANGES of that one flag,
+  never a card stacked over a card — the in-window modal rule from the 2026-07-28 pass.
+- **`ImportSupplement` is the single writer for externally-sourced GPS and dates.**
+  XMP sidecar GPS, Takeout JSON and `PHAsset` all route through it: header-wins,
+  external-fills-gaps, stamping BOTH Spec 02 scan markers (`coords_scanned_hash` and
+  `photo_meta.exif_scanned_hash`). Stamping both is what makes Spec 02's amendment A1
+  stop the next analyze pass clobbering an imported coordinate with the header's NULL.
+  `(0,0)` is always treated as absent, never null island.
+  Recorded limitation: an edit-in-place stales the markers, the header is re-read, and
+  supplement-only values drop until re-import.
+- **Color labels land as `"Label: "`-prefixed manual tags** and are excluded from the
+  free-text tag-search leg unless the query names them — so a Lightroom workflow marker
+  can never answer a Muse content-colour query.
+- **Lightroom `crs:` import is the industry envelope only.** Geometry is exact; WB,
+  exposure, contrast, vibrance, saturation and curves are directional. Everything
+  adaptive (masks, local adjustments) is detected and DISCLOSED, never translated —
+  a silently wrong translation is worse than a declared gap. `EditStack.origin` is
+  nil-omitted, so every pre-existing `stack_hash` stays byte-identical and no edited
+  thumbnail re-keys.
+- **Fixtures are generated, not checked in** — the app uses file-system-synchronized
+  groups, so a checked-in binary fixture would enter the test bundle by inference.
+  (Spec 07 hit the same constraint independently and made the same call.)
+- **Throttling:** `WorkThrottleStore` + `AnalysisStatusStore` + an import-size FYI, so a
+  large import doesn't saturate the analyze pipeline behind the user's back.
+
+## Spec 07 — sharing & social export — 2026-07-31 (`new-product-build-1`)
+
+Implemented `docs/superpowers/plans/2026-07-30-spec-07-sharing-social-export.md` end to
+end. No migrations (Spec 07 adds none; future specs continue at v24). Full Swift suite
+green, `node web/share/share.test.mjs` green.
+
+Phase 0 of the plan was already in the tree — Spec 01 shipped `EditStackIndex` and
+`OutputRender`, and Spec 04 made them live — so this pass skipped building them and
+consumed them instead. Spec 04's presence also promoted the plan's Task 4.9 from a
+documented, absent-until-then seam into real code: "Save Crop as Version" is
+implemented, writing one `edit_versions` row through `EditStore.saveVersion`.
+
+- **Share page layouts.** `DriveShareManifest` grew three optional, nil-default wire
+  keys — `y` (layout), `s` (body text), `m` (portfolio manifest id) — plus `jsonData()`
+  and the publish caps. A manifest using none of them encodes none of them, so legacy
+  fragments decode forever (pinned on both sides). The page renders grid / contact sheet
+  / essay off ONE `data-layout` attribute through the same tile-builder DOM path; the
+  render glue was refactored into `renderLive(m)` + `buildGrid(m)` so a portfolio
+  re-fetch is a second call, not a second code path. The grid sizer became
+  layout-parameterized (`SIZER_BY_LAYOUT`) and re-entrant — its listeners wire once and
+  read the current bounds from a module-scoped variable, so a layout change after a
+  re-fetch doesn't leave them on the first call's captured range.
+- **Publish guard.** The app could previously mint a >1000-image link its own page
+  rejects as "unavailable". `DriveSharePublishGuard` is a pure pre-publish check
+  mirroring the page validator, wired into all three publish entry points.
+- **Google on-ramp.** A signed-out explainer above the publish form (additive, never a
+  gate — Publish still handles sign-in mid-run), `DriveConfig.consentScreenVerified` as
+  a compiled constant gating the "unverified app" guidance, and extended Settings copy.
+- **Portfolio mode.** A portfolio is a Drive folder (images + `manifest.json`) plus a
+  page URL whose fragment carries the manifest's file id AND a full inline snapshot.
+  The Drive-hosted manifest is the live truth; the page fetches it (bounded, timed out,
+  re-validated, `m` stripped so it can never chain) and falls back to the snapshot on
+  ANY failure, so it renders instantly and never goes blank. Updates rewrite the
+  manifest via `files.update`, so the file id — and the URL — never changes. Update
+  order is upload-new → swap → sweep, with the sweep's failures non-fatal
+  (`.doneWithSweepWarning`) rather than an `AppState` dependency on the service.
+- **Social export.** New platform-neutral `Export/Social/` (preset table, output
+  metadata policy, render pipeline), pure `Components/SocialCropMath.swift`, and the
+  card in `Views/Export/`. One new `@Published` on AppState (`socialExportRequest`), the
+  sanctioned shell-modal-flag class. Three entry points: grid context menu, hero
+  `ShareButton`, collection header — raster kinds only at each.
+
+Deviations from the plan, all deliberate:
+
+- **D-a — fixtures are generated, not checked in.** The plan wanted four (then five)
+  JPEGs under `MuseTests/Fixtures/Social/`. The app target uses file-system-synchronized
+  groups, so a checked-in binary would land in the test bundle by inference rather than
+  by declaration, and a 4096² noise JPEG is a multi-MB blob in git for something ImageIO
+  produces deterministically. `MuseTests/SocialFixtures.swift` generates them in `setUp`
+  from a fixed-seed LCG.
+- **D-b — the X ladder is driven by the invariants, not by a byte target.** X carries no
+  `byteTargetKB`, and the plan's ladder only stepped down for `bytes < W×H`. Measured:
+  a busy 4096² image exceeds 5 MB at the starting quality, so the ladder now steps down
+  until BOTH byte invariants hold. And the plan's "high-entropy source lands under 5 MB"
+  test was wrong as written — per-pixel random noise at 4096² measures ~11 MB even at the
+  0.55 floor, far beyond any real photograph. That case is the DOCUMENTED fail-the-file
+  behavior, so the test now pins both sides: a full-size detailed source lands under
+  5 MB, and a pathological one throws `xInvariantFailed` and writes nothing.
+- **D-c — the sweep warning is a `Phase` case,** per the plan's own stated preference,
+  keeping `DriveShareService` free of any `AppState` reference.
+- **D-d — `SharingTier`'s call site passes the REAL entitlement** (`CommerceStore` exists
+  in this tree, contrary to the plan's assumption), not a hardcoded `false`. Behavior is
+  identical while `enforced == false`.
+- **D-e — Task 4.9 is implemented, not documented.** See above.
+- **D-f — `Localizable.xcstrings` was reformatted by Xcode** on the first
+  `-exportLocalizations` run (its canonical `" : "` separator style), producing a
+  whole-file diff independent of the 62 French values added.
+
+Two things recorded rather than fixed, both outside this spec's scope:
+
+- `xcodebuild -exportLocalizations` fails on `Intelligence/Core/ClipVectors.swift`
+  (`Float16.bitPattern`) unless pinned with `ARCHS=arm64 ONLY_ACTIVE_ARCH=YES` — it
+  otherwise builds for a non-arm64 slice where `Float16` differs. Pre-existing, from
+  Spec 03.
+- 162 strings remain untranslated in French, all pre-existing Spec 03/06 debt (Google
+  Takeout / Lightroom-preset import / cull / compare copy). Every Spec 07 key is
+  translated, including the preset display names and advisories, which are reached
+  through runtime-variable keys the extractor can't see and so were added by hand.
+
+Owner-only steps still outstanding: create the referrer/API-restricted browser key and
+paste it over `DRIVE_API_KEY = 'REPLACE_AT_DEPLOY'` at deploy time (never committed);
+deploy `web/share/` to Cloudflare Pages; run the X no-recompress byte-compare protocol
+once; flip `DriveConfig.consentScreenVerified` when Google's review completes.
