@@ -69,7 +69,14 @@ import Foundation
         state = .downloading(progress: 0)
         let session = URLSession(configuration: .ephemeral)
 
-        guard let (manifestData, _) = try? await session.data(from: ClipModel.current.manifestURL),
+        // Bounded WHILE reading — `ClipModelManifest.parse` declares a 16 KB
+        // ceiling, but checking `data.count` after `session.data(from:)` has
+        // already buffered the whole body lets the response choose the
+        // allocation. See BoundedBody.
+        guard let (manifestData, _) = try? await BoundedBody.data(
+                for: URLRequest(url: ClipModel.current.manifestURL),
+                session: session,
+                limit: ClipModelManifest.maxResponseBytes),
               let manifest = ClipModelManifest.parse(manifestData)
         else {
             state = .failed(message: String(localized: "Couldn't reach the model server. Try again later."))

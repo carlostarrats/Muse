@@ -306,6 +306,28 @@ nonisolated enum VisionServices {
 
     // MARK: - Dominant color
 
+    /// sRGB, resolved once — `CGColorSpace(name:)` is a lookup per call otherwise.
+    private static let srgbSpace = CGColorSpace(name: CGColorSpace.sRGB)
+
+    /// ONE context for the whole analysis pass, not one per image.
+    ///
+    /// This used to be constructed inside `dominantColorHex`, which
+    /// `analyze` runs for EVERY indexed image — so a first index of a large
+    /// folder built (and tore down) a CIContext per file, each of which
+    /// allocates its own GPU/CPU resources. Same reasoning as
+    /// `SocialRender.context` and `RenderContexts`: contexts are meant to be
+    /// long-lived and shared.
+    ///
+    /// Caching is OFF deliberately. A shared context that cached would be
+    /// strictly worse than the per-image one it replaces — every image is
+    /// area-averaged exactly once and never revisited, so cached intermediates
+    /// off a full-size input could only grow across a bulk index, never hit.
+    private static let colorContext: CIContext = {
+        var options: [CIContextOption: Any] = [.cacheIntermediates: false]
+        if let srgb = srgbSpace { options[.workingColorSpace] = srgb }
+        return CIContext(options: options)
+    }()
+
     /// Average colour as `#rrggbb`, computed **in sRGB**.
     ///
     /// This used to render with `workingColorSpace: NSNull()` and
@@ -316,20 +338,19 @@ nonisolated enum VisionServices {
     /// Pinning both ends of the render to sRGB makes the result correct AND
     /// consistent across formats. Don't set either back to nil/NSNull.
     static func dominantColorHex(cgImage: CGImage) -> String? {
-        guard let srgb = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        guard let srgb = srgbSpace else { return nil }
         let ci = CIImage(cgImage: cgImage)
         guard let filter = CIFilter(name: "CIAreaAverage") else { return nil }
         filter.setValue(ci, forKey: kCIInputImageKey)
         filter.setValue(CIVector(cgRect: ci.extent), forKey: kCIInputExtentKey)
         guard let out = filter.outputImage else { return nil }
         var bitmap = [UInt8](repeating: 0, count: 4)
-        let context = CIContext(options: [.workingColorSpace: srgb])
-        context.render(out,
-                       toBitmap: &bitmap,
-                       rowBytes: 4,
-                       bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
-                       format: .RGBA8,
-                       colorSpace: srgb)
+        colorContext.render(out,
+                            toBitmap: &bitmap,
+                            rowBytes: 4,
+                            bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                            format: .RGBA8,
+                            colorSpace: srgb)
         return String(format: "#%02x%02x%02x", bitmap[0], bitmap[1], bitmap[2])
     }
 

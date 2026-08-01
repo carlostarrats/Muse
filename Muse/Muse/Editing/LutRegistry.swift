@@ -54,6 +54,12 @@ nonisolated enum LutRegistry {
 
         lock.lock()
         cache[id] = entry
+        // Dedupe before appending, exactly as `preload` does. The read above
+        // releases the lock while it hits the database, so two threads can miss
+        // on the same id and both land here — appending blind would put the id
+        // in `lruOrder` twice, and the eviction below would then drop the live
+        // cache entry on the first copy while the second lingered as a phantom.
+        lruOrder.removeAll { $0 == id }
         lruOrder.append(id)
         while lruOrder.count > cacheLimit {
             let evicted = lruOrder.removeFirst()

@@ -564,6 +564,11 @@ Commerce + announcements (own stores; `AppState` gains no `@Published`):
 - `Commerce/AnnouncementFeed.swift` — pure parse/selection + `AnnouncementSanitizer`.
 - `Commerce/AnnouncementStore.swift` — the once-per-launch fetch; `Views/Modal/
   AnnouncementCard.swift` presents it.
+- `Networking/BoundedBody.swift` — reads a remote body under a hard byte ceiling
+  enforced *while* streaming (declared Content-Length rejected up front, plus a
+  running tally for when the header is absent or lies). Used by the announcements
+  fetch and the CLIP manifest fetch. Swift counterpart of `readCapped` in
+  `web/share/share.js`.
 
 Performance:
 

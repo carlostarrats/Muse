@@ -39,7 +39,14 @@ final class AnnouncementStore: ObservableObject {
         // Every failure is silent by design: no feed deployed yet, offline, a
         // 404, a malformed payload — none of them are the user's problem and
         // none of them may produce error UI at launch.
-        guard let (data, response) = try? await session.data(for: request),
+        // Bounded WHILE reading, not after. `AnnouncementFeed.parse` also caps
+        // at `maxPayloadBytes`, but that check only runs once the bytes are
+        // already in memory — which is no bound at all against a host serving a
+        // multi-gigabyte body to the one fetch that happens automatically at
+        // every launch. See BoundedBody.
+        guard let (data, response) = try? await BoundedBody.data(
+                for: request, session: session,
+                limit: AnnouncementFeed.maxPayloadBytes),
               let http = response as? HTTPURLResponse, http.statusCode == 200,
               let feed = AnnouncementFeed.parse(data) else { return }
 

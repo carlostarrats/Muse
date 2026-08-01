@@ -23,8 +23,8 @@ not upgrade a row on inference.
 actually produced (the grid cull badge that was specified and never built, the
 five modals with no Escape branch). **A + S is not a substitute for R.**
 
-Last full pass: **2026-08-01** (review round 3, incl. self-QA). Suite at that point:
-**1,797 tests, 2 skipped, 0 failures**; Release build warning-free.
+Last full pass: **2026-08-01** (review round 4). Suite at that point:
+**1,802 tests, 2 skipped, 0 failures**; Release build warning-free.
 
 ---
 
@@ -140,6 +140,7 @@ question.
 | 2 | 2026-08-01 | Regression of pre-branch features under this branch's seams, + lenses round 1 didn't run | 4 fixed (R2-1…R2-4) | 1,783 |
 | 3 | 2026-08-01 | The two gaps round 2 recorded rather than closed | G2 + G6 closed | 1,795 |
 | 3-QA | 2026-08-01 | Self-review of round 3's own diff | 4 fixed (see below) | 1,797 |
+| 4 | 2026-08-01 | Lenses rounds 1–3 did not run: SQL construction, crash-on-user-data, resource lifecycle, remote-body bounds; + a third check of the twice-recurring index-staleness class | 4 fixed (R4-1…R4-4) | 1,802 |
 
 ### Round 2 findings
 
@@ -169,6 +170,32 @@ SAME classes earlier rounds had already fixed elsewhere, reintroduced by new cod
 | 2 | **high** | **Edit rows could land in the database with nothing on screen knowing.** `applyEditAssets` and the edit-save consequences were nested inside the `if let map = currentFileIDForHash` branch, which neither needs — while `applyMeta` writes the edit rows unconditionally above it. A failed hash map therefore restored the edits but left `EditStackIndex` (path-keyed, built at launch) and the thumbnail cache stale until relaunch. **Exactly the R1-F2 defect class**, in new code. | Both hoisted out of the branch. |
 | 3 | low | **Re-running Restore duplicated every version.** Fresh UUIDs per insert made a second restore of the same archive additive, against Spec 09's own "idempotent re-apply". | Identity is the CONTENT (`kind`+`name`+`stack`+`created_at` at that scope); ids stay fresh. +2 tests. |
 | 4 | low | **Library-global assets rewritten per folder, and a failed write latched.** `applyEditAssets` ran for every reconnected folder — `INSERT OR IGNORE` is correct but SQLite still binds each ≤25 MB LUT blob before detecting the id conflict, so a ten-folder restore pushed hundreds of MB through the writer for nothing. The once-only guard I first wrote then latched even when the call FAILED, silently costing every preset and LUT. Separately, the new versions-dedup query ran per matched occurrence including unedited ones — the R1-F15 per-file-query shape. | Once per restore, latched only on success; the dedup read moved inside the emptiness guard. |
+
+### Round 4 findings
+
+Round 4 deliberately avoided re-running rounds 1–3's lenses and picked ones
+they hadn't: how SQL is *constructed*, crash-on-user-data, resource lifecycle
+(contexts, caches, observers, scopes), and whether remote bodies are bounded
+while being read. Two of the four are the same defect expressed twice — a
+resource meant to be shared being rebuilt per item.
+
+| # | Severity | Finding | Fix |
+|---|---|---|---|
+| **R4-1** | med | **A `CIContext` was constructed per image on the automatic analysis path.** `VisionServices.dominantColorHex` built its own context per call, and `analyze` runs it for EVERY indexed image — so a first index of a large folder created and tore down one GPU-backed context per file. The editing side already treats contexts as long-lived shared resources (`RenderContexts`, `SocialRender.context`, `PeakingOverlayView.context`); this site was simply missed. | One `static let` context for the whole pass, with `.cacheIntermediates: false` — deliberately, since a *caching* shared context would be strictly worse than the per-image one: every image is area-averaged exactly once and never revisited, so intermediates off a full-size input could only grow across a bulk index, never hit. sRGB working space unchanged, so `dominant_color` values are byte-identical. |
+| **R4-2** | low | **`LutRegistry`'s LRU could evict a live entry.** The miss path released the lock to hit the database, then appended the id to `lruOrder` blind. Two threads missing the same id therefore appended it twice; the eviction loop then dropped the live cache entry on the first copy while the second lingered as a phantom. `preload` already deduped — the read path was just inconsistent with it. | `lruOrder.removeAll { $0 == id }` before the append, matching `preload`. |
+| **R4-3** | med | **The announcements feed's size cap was applied after the bytes were already in memory.** `AnnouncementFeed.parse` guards `data.count <= maxPayloadBytes`, but `URLSession.data(for:)` buffers the whole body before returning — so the response chose the allocation and the "cap" only decided whether to parse it. This is the app's ONLY automatic, non-user-initiated fetch, and it runs at every launch. The share page's `readCapped` documents this exact reasoning on the JS side ("a check performed on memory already allocated"); the Swift side hadn't applied it. | `BoundedBody.data(for:session:limit:)` — rejects on a declared oversize Content-Length before reading a byte, and enforces a streaming tally when the header is absent or lies. Wired into the announcements fetch and the CLIP manifest fetch (which likewise declared a 16 KB ceiling it couldn't enforce). +5 tests, incl. the two cases a post-hoc check passes: an understated Content-Length and no Content-Length at all. |
+| **R4-4** | — | **Structure:** `BoundedBody` first landed in `Commerce/`, which made `Intelligence/Clip/` depend on a commerce folder for a cross-cutting network utility. | Moved to its own `Networking/`. |
+
+### Round 4 — checked and clean
+
+Recorded so a later round doesn't re-spend the effort:
+
+- **No SQL injection surface.** Every interpolated SQL fragment in the tree is either placeholder-generated (`qmarks`/`placeholders`/`marks`) or a compile-time literal / enum-derived column name; every value is bound. The two `column:`-parameterized helpers in `PhotoSearch` are called only with literals.
+- **No crash-on-user-data found.** Zero `try!` and zero `fatalError`/`preconditionFailure` in the app target. Every unchecked-looking subscript is guarded first — notably `CubeLUT.parse`, which is the one parser fed a user-supplied file, and which `guard`s `parts.count == 3` before every triple access and bounds both file size and LUT size.
+- **A third pass over the index-staleness class found no third instance.** R1-F2 (rename) and R3-QA-2 (restore) were both "edit rows changed, `EditStackIndex` didn't". Enumerated every mutation of an edit row or a path and confirmed each refreshes: `save` → `applySaveConsequences` (this also covers the **Lightroom `crs:` importer**, which routes through `EditStore.save` rather than writing rows directly), `applyHydrated` → `SidecarHydrator`, `applyRestored` → `ReconnectModel`, `rewriteParentDirPrefix` + file move + file rename → `rebuildIndex`. `Indexer`'s `carry`/`carryAll` leave the path→stack mapping unchanged by construction.
+- **Observers and timers are balanced.** The only `addObserver` sites without a matching `removeObserver` are `ToolbarFade`'s two, both `static` behind install-once guards (app-lifetime, intentional), and `AppState`'s three (singleton). The one repeating `Timer` is `[weak self]`.
+- **Security-scoped resource starts are accounted for.** The one unbalanced `start` (`openStarred`) is deliberate and documented — a pin is meant to stay reachable — and is deduped per path so re-opening can't leak a scope per open.
+- **The share page holds up.** `web/share/share.js` renders every attacker-suppliable field via `textContent`, sanitizes bidi/zero-width/control characters, caps inflate output against a zip bomb, byte-caps the portfolio fetch *while streaming*, and refuses to chain fetches. No `innerHTML`, no `href` built from the manifest.
 
 ### Round 2 — checked and clean
 
