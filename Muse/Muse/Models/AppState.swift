@@ -548,7 +548,19 @@ final class AppState: ObservableObject {
             || tagRenameRequest != nil
             || announcementPresented
             || cullResolveShown || clipOfferShown
+            || editPromptRequest != nil || openWithForkRequest != nil
     }
+
+    /// A name prompt raised from inside the editor (save a version, snapshot
+    /// or preset). Same hoisting rule as `alertRequest`: an in-window card is
+    /// sized from its host's geometry, and the editor's 260pt card would size
+    /// it to 260pt.
+    @Published var editPromptRequest: EditNamePrompt?
+
+    /// Handing a file with Muse edits to an external app always FORKS — the
+    /// external editor would otherwise open the original and the user's
+    /// adjustments would silently not be there.
+    @Published var openWithForkRequest: OpenWithForkRequest?
 
     /// Mirror of `AnnouncementStore.pending != nil`, so the key-catcher gate
     /// and the Escape resolver see the announcement card like any other modal.

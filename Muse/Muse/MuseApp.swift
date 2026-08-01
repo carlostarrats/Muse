@@ -110,6 +110,20 @@ struct MuseApp: App {
                 .task {
                     PhaseTrace.begin()
                     ThumbnailCache.shared.enforceDiskCap()
+                    // Rendered export temps: bounded by age, not size. A
+                    // publish or share that was interrupted leaves its temp
+                    // behind, and nothing else ever collects them.
+                    OutputRender.sweepRenderTemps()
+                    // BEFORE the backfills: every pixel consumer consults the
+                    // index, and a thumbnail generated in the window before
+                    // it's installed would be cached under the unedited key.
+                    EditStackIndex.installProvider(LiveEditStackProvider())
+                    EditStore.shared.installHost(appState)
+                    PhaseTrace.mark("edit-index.start")
+                    Task {
+                        await EditStore.shared.rebuildIndex()
+                        PhaseTrace.mark("edit-index.end")
+                    }
                     // 180-day retention for data of removed folders.
                     if let queue = Database.shared.dbQueue {
                         let persisted = appState.bookmarks.roots
@@ -207,6 +221,30 @@ struct MuseApp: App {
                 }
                 .keyboardShortcut("a", modifiers: [.command, .shift])
                 .disabled(appState.selectedFiles.isEmpty)
+            }
+
+            // Edit-stack copy/paste. The menu items exist so the shortcuts are
+            // discoverable and so the actions have a keyboard path outside the
+            // editor's own chrome; Paste applies to the grid selection, which
+            // is the same batch sync the context menu offers.
+            CommandGroup(after: .pasteboard) {
+                Divider()
+                Button("Paste Adjustments") {
+                    guard let source = EditClipboard.shared.stack else { return }
+                    let groups = EditClipboard.shared.groups
+                    let targets = appState.effectiveSelectionURLs(fallback: "")
+                        .filter {
+                            let kind = AssetKind.detect(at: $0)
+                            return kind == .image || kind == .raw
+                        }
+                    Task {
+                        await EditStore.shared.applyToAll(
+                            { EditTransfer.apply(groups: groups, from: source, onto: $0) },
+                            urls: targets)
+                    }
+                }
+                .keyboardShortcut("v", modifiers: [.command, .option])
+                .disabled(!EditClipboard.shared.hasContent || appState.selectedFiles.isEmpty)
             }
 
             CommandGroup(after: .pasteboard) {

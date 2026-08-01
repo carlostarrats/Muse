@@ -130,12 +130,32 @@
         }
       }
     },
+    "%lld adjustment groups": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld groupes de réglages"
+          }
+        }
+      }
+    },
     "%lld by name — check": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "%lld par nom — à vérifier"
+          }
+        }
+      }
+    },
+    "%lld curve points": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld points de courbe"
           }
         }
       }
@@ -392,6 +412,26 @@
         }
       }
     },
+    "A snapshot is something to compare against later.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un instantané sert de point de comparaison ultérieur."
+          }
+        }
+      }
+    },
+    "A version is a saved stack you can switch back to.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une version est un ensemble de réglages enregistré auquel vous pouvez revenir."
+          }
+        }
+      }
+    },
     "A → Z": {
       "localizations": {
         "fr": {
@@ -568,6 +608,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ajouté à %@"
+          }
+        }
+      }
+    },
+    "After": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Après"
           }
         }
       }
@@ -756,6 +806,16 @@
         }
       }
     },
+    "Auto Lens Correction": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Correction d’objectif automatique"
+          }
+        }
+      }
+    },
     "Automatic organization": {
       "localizations": {
         "fr": {
@@ -866,12 +926,32 @@
         }
       }
     },
+    "Before": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avant"
+          }
+        }
+      }
+    },
     "Black": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Noir"
+          }
+        }
+      }
+    },
+    "Blacks": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noirs"
           }
         }
       }
@@ -1096,6 +1176,16 @@
         }
       }
     },
+    "Clarity": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clarté"
+          }
+        }
+      }
+    },
     "Clear All": {
       "localizations": {
         "fr": {
@@ -1142,6 +1232,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Effacer le filtre d'étiquettes"
+          }
+        }
+      }
+    },
+    "Click a neutral gray area to set white balance": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cliquez sur une zone grise neutre pour régler la balance des blancs"
           }
         }
       }
@@ -1267,12 +1367,32 @@
         }
       }
     },
+    "Compare against": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comparer avec"
+          }
+        }
+      }
+    },
     "Comparison": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Comparaison"
+          }
+        }
+      }
+    },
+    "Contrast": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contraste"
           }
         }
       }
@@ -1303,6 +1423,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld couleurs copiées"
+          }
+        }
+      }
+    },
+    "Copy Adjustments": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copier les réglages"
           }
         }
       }
@@ -1363,6 +1493,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Impossible de charger : %@"
+          }
+        }
+      }
+    },
+    "Couldn't create the copy": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de créer la copie"
           }
         }
       }
@@ -1578,6 +1718,16 @@
         }
       }
     },
+    "Curve": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Courbe"
+          }
+        }
+      }
+    },
     "Custom": {
       "localizations": {
         "fr": {
@@ -1604,6 +1754,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sombre"
+          }
+        }
+      }
+    },
+    "Dark Gray": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gris foncé"
           }
         }
       }
@@ -1698,6 +1858,16 @@
         }
       }
     },
+    "Delete Preset": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer le préréglage"
+          }
+        }
+      }
+    },
     "Delete Selected to Trash": {
       "localizations": {
         "fr": {
@@ -1714,6 +1884,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Supprimer l'étiquette…"
+          }
+        }
+      }
+    },
+    "Delete Version": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer la version"
           }
         }
       }
@@ -1901,6 +2081,16 @@
         }
       }
     },
+    "Edit Original": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifier l’original"
+          }
+        }
+      }
+    },
     "Edit Rules": {
       "localizations": {
         "fr": {
@@ -1917,6 +2107,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "Modifier les règles…"
+          }
+        }
+      }
+    },
+    "Edit a Copy": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifier une copie"
+          }
+        }
+      }
+    },
+    "Edited": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifiée"
+          }
+        }
+      }
+    },
+    "Edited, %lld versions": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifiée, %lld versions"
+          }
+        }
+      }
+    },
+    "Editor backdrop": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrière-plan de l’éditeur"
           }
         }
       }
@@ -2514,6 +2744,36 @@
         }
       }
     },
+    "Highlights": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hautes lumières"
+          }
+        }
+      }
+    },
+    "History": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historique"
+          }
+        }
+      }
+    },
+    "Hold to see the original": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maintenir pour voir l’original"
+          }
+        }
+      }
+    },
     "House": {
       "localizations": {
         "fr": {
@@ -2651,6 +2911,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Indigo"
+          }
+        }
+      }
+    },
+    "Info": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Infos"
           }
         }
       }
@@ -2926,6 +3196,16 @@
         }
       }
     },
+    "Light Gray": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gris clair"
+          }
+        }
+      }
+    },
     "Lightbulb": {
       "localizations": {
         "fr": {
@@ -3013,6 +3293,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Lieu"
+          }
+        }
+      }
+    },
+    "Looks": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Styles"
           }
         }
       }
@@ -3143,6 +3433,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Correspondance"
+          }
+        }
+      }
+    },
+    "Mid Gray": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gris moyen"
           }
         }
       }
@@ -3340,6 +3640,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Muse n’a pas pu ajouter ce partage à votre liste — copiez le lien maintenant, sinon vous ne pourrez plus le gérer ni le dépublier depuis Muse."
+          }
+        }
+      }
+    },
+    "Muse couldn't render an edited copy of this photo. The original is unchanged.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muse n’a pas pu générer une copie modifiée de cette photo. L’original est inchangé."
+          }
+        }
+      }
+    },
+    "Muse edits are not part of the file itself. Open a copy with the adjustments applied, or open the original untouched.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les modifications Muse ne font pas partie du fichier lui-même. Ouvrez une copie avec les réglages appliqués, ou ouvrez l’original intact."
           }
         }
       }
@@ -3544,6 +3864,16 @@
         }
       }
     },
+    "No adjustments": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun réglage"
+          }
+        }
+      }
+    },
     "No collections": {
       "localizations": {
         "fr": {
@@ -3604,6 +3934,26 @@
         }
       }
     },
+    "No presets yet": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun préréglage"
+          }
+        }
+      }
+    },
+    "No saved versions": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune version enregistrée"
+          }
+        }
+      }
+    },
     "No tags": {
       "extractionState": "stale",
       "localizations": {
@@ -3611,6 +3961,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Aucune étiquette"
+          }
+        }
+      }
+    },
+    "Noise Reduction": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réduction du bruit"
           }
         }
       }
@@ -3907,6 +4267,16 @@
         }
       }
     },
+    "Original": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Original"
+          }
+        }
+      }
+    },
     "Other": {
       "localizations": {
         "fr": {
@@ -4035,6 +4405,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Format du papier :"
+          }
+        }
+      }
+    },
+    "Paste Adjustments": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coller les réglages"
           }
         }
       }
@@ -4199,12 +4579,52 @@
         }
       }
     },
+    "Preset name": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nom du préréglage"
+          }
+        }
+      }
+    },
+    "Presets": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Préréglages"
+          }
+        }
+      }
+    },
+    "Preview": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aperçu"
+          }
+        }
+      }
+    },
     "Preview: %@": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Aperçu : %@"
+          }
+        }
+      }
+    },
+    "Previous": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Précédent"
           }
         }
       }
@@ -4422,6 +4842,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Utiliser un code…"
+          }
+        }
+      }
+    },
+    "Redo": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rétablir"
           }
         }
       }
@@ -4778,6 +5208,36 @@
         }
       }
     },
+    "Reset": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réinitialiser"
+          }
+        }
+      }
+    },
+    "Reset Curve": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réinitialiser la courbe"
+          }
+        }
+      }
+    },
+    "Reset all adjustments": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réinitialiser tous les réglages"
+          }
+        }
+      }
+    },
     "Reset to Default": {
       "localizations": {
         "fr": {
@@ -4898,12 +5358,82 @@
         }
       }
     },
+    "Saturation": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saturation"
+          }
+        }
+      }
+    },
     "Save": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Enregistrer"
+          }
+        }
+      }
+    },
+    "Save Snapshot": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrer un instantané"
+          }
+        }
+      }
+    },
+    "Save Snapshot…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrer un instantané…"
+          }
+        }
+      }
+    },
+    "Save a version": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrer une version"
+          }
+        }
+      }
+    },
+    "Save as New Preset": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrer comme nouveau préréglage"
+          }
+        }
+      }
+    },
+    "Save as Version": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrer comme version"
+          }
+        }
+      }
+    },
+    "Save as Version…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrer comme version…"
           }
         }
       }
@@ -4934,6 +5464,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ciseaux"
+          }
+        }
+      }
+    },
+    "Scopes": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analyseurs"
+          }
+        }
+      }
+    },
+    "Scopes arrive in a later update.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les analyseurs arriveront dans une prochaine mise à jour."
           }
         }
       }
@@ -5088,6 +5638,16 @@
         }
       }
     },
+    "Shadows": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ombres"
+          }
+        }
+      }
+    },
     "Shape": {
       "localizations": {
         "fr": {
@@ -5164,6 +5724,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Partager une collection"
+          }
+        }
+      }
+    },
+    "Sharpen": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Netteté"
           }
         }
       }
@@ -5308,6 +5878,16 @@
         }
       }
     },
+    "Show original": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher l’original"
+          }
+        }
+      }
+    },
     "Show star ratings": {
       "localizations": {
         "fr": {
@@ -5344,6 +5924,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mélanger à nouveau"
+          }
+        }
+      }
+    },
+    "Side by side": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Côte à côte"
           }
         }
       }
@@ -5574,6 +6164,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Étincelles"
+          }
+        }
+      }
+    },
+    "Split compare": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comparaison divisée"
+          }
+        }
+      }
+    },
+    "Split position": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Position de la séparation"
           }
         }
       }
@@ -5821,6 +6431,26 @@
         }
       }
     },
+    "Temperature": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Température"
+          }
+        }
+      }
+    },
+    "Texture": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texture"
+          }
+        }
+      }
+    },
     "That file couldn’t be opened as a Muse backup. It may be the wrong file, or damaged.": {
       "localizations": {
         "fr": {
@@ -5887,6 +6517,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "La collection est supprimée partout. Vos images restent sur le disque."
+          }
+        }
+      }
+    },
+    "The crop and rotation are not saved with a preset.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le recadrage et la rotation ne sont pas enregistrés dans un préréglage."
           }
         }
       }
@@ -5961,12 +6601,32 @@
         }
       }
     },
+    "This photo has Muse edits": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette photo comporte des modifications Muse"
+          }
+        }
+      }
+    },
     "This removes every tag on the images in this view — both automatic tags and ones you've added yourself. Tags you added by hand can't be recovered. Your images stay on disk.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Cela retire toutes les étiquettes des images de cette vue — à la fois les étiquettes automatiques et celles que vous avez ajoutées vous-même. Les étiquettes ajoutées à la main ne peuvent pas être récupérées. Vos images restent sur le disque."
+          }
+        }
+      }
+    },
+    "Tint": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teinte"
           }
         }
       }
@@ -5988,6 +6648,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pour renommer ce dossier, autorisez Muse à accéder au dossier qui le contient."
+          }
+        }
+      }
+    },
+    "Tone curve": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Courbe des tons"
           }
         }
       }
@@ -6112,6 +6782,16 @@
         }
       }
     },
+    "Update Preset from This Photo": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettre à jour le préréglage depuis cette photo"
+          }
+        }
+      }
+    },
     "Updates": {
       "localizations": {
         "fr": {
@@ -6134,6 +6814,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Téléversement de %lld sur %lld…"
+          }
+        }
+      }
+    },
+    "Versions": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versions"
+          }
+        }
+      }
+    },
+    "Vibrance": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibrance"
           }
         }
       }
@@ -6224,6 +6924,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Blanc"
+          }
+        }
+      }
+    },
+    "White balance eyedropper": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pipette de balance des blancs"
+          }
+        }
+      }
+    },
+    "Whites": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blancs"
           }
         }
       }

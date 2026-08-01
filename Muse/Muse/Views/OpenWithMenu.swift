@@ -16,9 +16,13 @@ import UniformTypeIdentifiers
 
 struct OpenWithMenu: View {
     let url: URL
+    @EnvironmentObject private var appState: AppState
 
     var body: some View {
-        Button("Open") { NSWorkspace.shared.open(url) }
+        // Every external hand-off routes through the fork check — a file with
+        // Muse edits opened externally would otherwise silently be the
+        // unedited original.
+        Button("Open") { OpenWithFork.open(url: url, appURL: nil, appState: appState) }
         Button("Reveal in Finder") {
             NSWorkspace.shared.activateFileViewerSelecting([url])
         }
@@ -44,6 +48,7 @@ struct OpenWithMenu: View {
 /// like Finder's native submenu.
 struct OpenWithItems: View {
     let url: URL
+    @EnvironmentObject private var appState: AppState
 
     var body: some View {
         let apps = OpenWithMenu.applications(for: url)
@@ -83,8 +88,7 @@ struct OpenWithItems: View {
     }
 
     private func open(with appURL: URL) {
-        NSWorkspace.shared.open([url], withApplicationAt: appURL,
-                               configuration: NSWorkspace.OpenConfiguration()) { _, _ in }
+        OpenWithFork.open(url: url, appURL: appURL, appState: appState)
     }
 
     /// Pick an app not in the registered list, like Finder's "Other…".

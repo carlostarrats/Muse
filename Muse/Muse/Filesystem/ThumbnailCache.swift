@@ -520,6 +520,16 @@ final class ThumbnailCache: ObservableObject {
         guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
               withinDecodeBudget(src) else { return nil }
         let maxPixel = Int(max(size.width, size.height) * scale)
+        // An edited file's tile shows the EDIT. The decode-budget guard above
+        // still runs first (it's a property of the original bytes, which the
+        // renderer has to read either way), and a render failure falls through
+        // to the original rather than leaving a grey tile.
+        if let stack = EditStackIndex.resolvedStack(for: url),
+           let rendered = EditRenderer.render(url: url, stack: stack, maxPixel: maxPixel) {
+            return NSImage(cgImage: rendered,
+                           size: NSSize(width: CGFloat(rendered.width) / scale,
+                                        height: CGFloat(rendered.height) / scale))
+        }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,

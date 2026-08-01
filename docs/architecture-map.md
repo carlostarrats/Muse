@@ -565,3 +565,38 @@ Performance:
   `AutoStacker` (virgin-files-only writer).
 - **`Views/PlacesPage.swift`, `RediscoveryHeader.swift`, `Sidebar/LibraryRows.swift`** —
   the Places page, the rediscovery header, and the four shared LIBRARY sidebar rows.
+
+### Components added 2026-07-31 (Spec 04, editing engine)
+
+- **`Editing/`** — the platform-neutral core (Foundation/CoreGraphics/CoreImage/Metal
+  only, never AppKit; `EditingModuleImportTests` guards it). `EditStack` (the model:
+  enum-tagged `Adjustment` cases in canonical declaration order, one typed params
+  struct each, `normalized()`/`isNeutral`/typed accessors + find-or-insert mutators),
+  `EditStackCodec` (canonical `.sortedKeys` JSON + SHA-256 `stack_hash`), `EditHistory`
+  (session-only undo/redo, Surface Camera port), `EditTransfer` (`AdjustmentGroup`,
+  `adjustedGroups`, copy-by-value `apply`), `CurveLUT` (Fritsch–Carlson monotone cubic
+  → 1024-entry LUT), `EditCopyNaming` + `EditCopyFlow` (+ `EditCopyMetadata`).
+- **`Editing/Render/`** — `WorkingImage` (`EncodedImage`/`LinearImage`, the single
+  linear crossing), `EditKernels.metal` + `.swift` (two `[[stitchable]]` Core Image
+  kernels: `toneBands`, `clarityTexture`, plus the long-edge radius fractions),
+  `RawSource` (+ `MiredMapping`, the `CIRAWFilter` hybrid), `EditRenderer` (the fixed
+  chain, `render`/`exportFile`, `OutputFormat`), `RenderContexts` (preview + per-export
+  `CIContext`), `RenderCoalescer` (latest-wins actor).
+- **`Database/EditRecordStore.swift`** — nonisolated `db`-taking enum (the `NoteStore`
+  shape): read/write/delete/`applyHydrated`/versions/`carry`/`carryAll`/
+  `rewriteParentDirPrefix`, plus `allWithAlivePaths`/`versionCounts` for the index.
+- **`Models/EditStore.swift`** — Pattern B store owning the save sequence, the provider
+  index rebuild/warm, and version CRUD. **`Models/EditPresetStore.swift`** — library
+  presets (+ `EditClipboard`, in-memory only). `Models/EditStackIndex.swift` gains the
+  live index + `LiveEditStackProvider`.
+- **`Views/Editor/`** — `EditSession` (per-file state, autosave, coalesced render),
+  `EditorView` (the two-card shell + tabs + eyedropper), `EditCanvasView` (MTKView +
+  `CIRenderDestination`), `EditorBackdrop`, `EditSlider` (+ `EditToggleRow`),
+  `CurveEditorView` (+ the `CurveHistogram` seam Spec 05 fills), `EditVersionsList`,
+  `EditPresetsTab` (+ `WBEyedropperButton`), `OpenWithFork` + `OpenWithForkCard`
+  (+ `OpenWithForkRequest`/`EditNamePrompt`).
+- **`Views/Theme/Theme.swift`** — the minimal semantic token layer (role-named colors,
+  spacing, radius, fonts), injected once in `ContentView`, read by every NEW
+  editor-adjacent surface only.
+- **`Components/CanvasPointMath.swift`** — canvas → unit image point under fit/zoom/pan
+  (+ the pure `WBEyedropper.solve`).

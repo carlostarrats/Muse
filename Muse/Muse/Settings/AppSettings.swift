@@ -18,6 +18,10 @@ enum AppSettings {
     static let autoTagKey = "autoTagNewImages"
     static let autoCollectionsKey = "autoOrganizeCollections"
     static let showFileNamesKey = "showFileNames"
+    /// Editor backdrop level (`EditorBackdropLevel.rawValue`). A working
+    /// preference, not a per-photo one — the surround you judge colour against
+    /// should not change as you move between photos.
+    static let editorBackdropKey = "editorBackdrop"
     static let showStarsOnGridKey = "showStarsOnGrid"
     static let colorsCardExpandedKey = "heroColorsCardExpanded"
     /// The one-time "Smarter Search" offer has been shown. Set on ANY dismissal

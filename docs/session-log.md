@@ -6,6 +6,65 @@ the durable rules + a compact index live in `CLAUDE.md`. Nothing here is
 load-bearing for a fresh session beyond what that index already surfaces;
 read an entry when you need the full "why" behind a specific change.
 
+### Spec 04 — editing engine — 2026-07-31 (`new-product-build-1`)
+
+Implemented `docs/superpowers/plans/2026-07-30-spec-04-editing-engine.md` end to end.
+Two migrations (v20 `edits` + `edit_versions`, v21 `edit_presets`), a platform-neutral
+`Editing/` core, a Core Image + Metal render pipeline, and the (Preview | Edit) editor
+inside the hero viewer. 1471 tests green.
+
+Phase 0 was already in the tree — Spec 01 had shipped `EditStackIndex`,
+`EffectiveDimensions`, `OutputRender` and the stack-aware `ThumbnailCache` key as
+identity functions, so this pass made them live rather than building them.
+
+- **Model.** `EditStack` is enum-tagged adjustments in canonical declaration order with
+  one typed params struct each. Two decisions do the heavy lifting: new cases must
+  APPEND (canonical order is declaration order, so a mid-list insertion re-keys every
+  edited thumbnail — the pinned fixture hash in `EditStackCodecTests` is the tripwire),
+  and an unknown adjustment `type` fails the WHOLE decode rather than dropping the case,
+  which is what lets an older build render the original instead of a partial stack.
+
+- **Schema + carry.** `edits`/`edit_versions` sit at the `(file_id, parent_dir)` grain
+  beside tags and notes, and `EditRecordStore` is called beside the existing `NoteStore`
+  call at all five rewrite seams. Carried version rows get fresh UUIDs — reusing the PK
+  drops every version but the first when two scopes merge. The sidecar's edit field got
+  its OWN clock: resolving it by the sidecar-wide `updated_at` would let a newer
+  analyze-export from a device that never saw the edit roll it back.
+
+- **Renderer.** The chain's order is code, not data. Scene-referred throughout except
+  the curve. Two things only showed up by running it: stitchable kernels need
+  `extern "C" [[stitchable]] float4 name(...)` with the attribute before the RETURN type
+  (after it the compiler says "cannot be applied to types", and the kernels silently
+  failed to load), and `HighlightRecoveryTests` initially passed vacuously because
+  `CIImage(color:)` CLAMPS its components — both "hot" fixtures collapsed to white
+  before the render started, so of course they came out equal. Rebuilt on float bitmaps.
+  `MiredMapping`'s range is derived from the mired floor rather than from a chosen warm
+  target Kelvin: picking the target independently ran the cool side past the floor,
+  clamped, and reproduced exactly the warm/cool asymmetry the mired mapping exists to
+  avoid.
+
+- **Provider + consumers.** The live index pre-resolves everything the hot paths need
+  (hash, decoded stack, geometry, renderable) because the provider is consulted from
+  view bodies and off-main thumbnail workers. The first version DEADLOCKED: `NSLock`
+  isn't recursive and `EditStackIndex.stackHash` held the lock across a provider call
+  that reads the same index — it hung the test run, and would have hung the main thread
+  on the first edited tile. Only the provider reference read needs the lock.
+
+- **Editor.** A stage swap inside the hero viewer, not a new viewer: the open/close
+  flight and every guard in `loadFullRes` are untouched, and Edit-mode Escape is the
+  FIRST branch of the `viewerClosing` onChange and returns before the close runs.
+  Autosave with no Done/Cancel, because the grid updates live and Cancel couldn't
+  honestly promise to put it back.
+
+Two deviations worth knowing: `EditingModuleImportTests` SKIPS rather than passing
+vacuously when the sandbox denies reading the source tree (the test host is the
+sandboxed app, and this checkout lives under `~/Documents`), and the French
+localization was written into `Localizable.xcstrings` directly because
+`-exportLocalizations` cannot build this project — `Intelligence/Core/ClipVectors.swift`
+uses `Float16`, which doesn't exist on x86_64, and the extractor builds universal. That
+is a pre-existing Spec-03 breakage, unrelated to this work, but it blocks the standard
+localization workflow until it's fixed.
+
 ### Spec 02 — photo library core — 2026-07-31 (`new-product-build-1`)
 
 Implemented `docs/superpowers/plans/2026-07-30-spec-02-photo-library-core.md` end to

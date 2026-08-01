@@ -9,10 +9,11 @@ settled record, written before build. Product-level decisions live in
 `muse-photo-foundation.md` §13 (authoritative decision log); this file is the
 build-level layer future specs must not contradict.*
 
-*Updated 2026-07-31: **Spec 01 is built** (branch `new-product-build-1`), so the
-"no Spec 01–09 code exists" note above no longer holds for Spec 01. The section
-"Spec 01 as built" below records what shipped, including where it deviates from
-the pre-build record; where the two disagree, the as-built section wins.*
+*Updated 2026-07-31: **Specs 01–04 are built** (branch `new-product-build-1`), so
+the "no Spec 01–09 code exists" note above no longer holds for them. Migrations
+now run through **v21**; future specs continue at v22. The "as built" /
+"as-built" sections below record what shipped, including where each deviates
+from the pre-build record; where the two disagree, the as-built section wins.*
 
 ---
 
@@ -2317,3 +2318,177 @@ this section wins.
   `ClipTokenizer` is written and compiles; it is unexercised until they exist.
 - `PerfBaseline` rows for the seven spec-03 measurements.
 - The French localization export pass for this spec's new strings.
+
+---
+
+## Spec 04 as-built (editing engine)
+
+*2026-07-31, `new-product-build-1`. Where this disagrees with the pre-build
+"Spec 04" sections above, this section wins.*
+
+### Scope
+
+- Built: v20 `edits`/`edit_versions` + v21 `edit_presets`; the platform-neutral
+  `Editing/` core; the Core Image + Metal render pipeline; `EditStore` +
+  `LiveEditStackProvider` + the consumer sweep; the (Preview | Edit) editor inside
+  the hero viewer; curve editor, WB eyedropper, before/after suite, versions and
+  snapshots, presets, copy/paste + batch sync, Edit-a-Copy.
+- **Phase 0 was already in the tree** — Spec 01 shipped `EditStackIndex`,
+  `EffectiveDimensions`, `OutputRender` and the stack-aware `ThumbnailCache` key as
+  identity functions. This spec made them live; it did not build them.
+- **NOT built:** the `PerfBaseline` rows for this spec's five measurements (the
+  harness gap Spec 03 also left).
+- Future specs still continue at **v22**.
+
+### Model — as built
+
+- `Adjustment`'s canonical order is its DECLARATION order and new cases must APPEND;
+  `EditStack.normalized()` sorts/dedupes by `canonicalIndex` (last occurrence wins).
+- `EditStack` exposes typed accessors (`toneParams`/`colorParams`/…) plus
+  find-or-insert mutators (`setTone`/`setColor`/`setPresence`/`setCurve`/
+  `setGeometry`/`setVignette`/`setRaw`). Editor bindings go through these, so a first
+  non-neutral write creates the case and nothing else knows the stack's shape.
+- A case that is PRESENT but neutral still leaves `EditStack.isNeutral` true — the
+  editor creates cases the moment a slider is touched, and returning it to zero must
+  delete the row, not store a no-op.
+- `EditStackCodec.hashOfRawBytes(_:)` exists alongside `hash(_:)`: an UNDECODABLE
+  blob (a stack from a newer schema, arriving by sidecar) still needs a stable,
+  distinct-from-unedited cache key and must round-trip byte-identical.
+- `CurveParams` carries four channels (`rgb`/`red`/`green`/`blue`), `maxPoints = 16`.
+  `RawParams` is `lensCorrection` + `decoderVersion`. `CropRect` is a top-level type.
+- Pinned fixture hash (tone `exposureEV 0.5`, `contrast 0.2`):
+  `349a57c39e0aa139dc06baef4dc690d00d8d6d47b17bb6abb3e565242280356a`.
+
+### Storage & carry — as built
+
+- `EditRecordStore` adds three functions beyond the plan's list:
+  `allWithAlivePaths(db:)` and `versionCounts(db:)` (the index + grid-badge bulk
+  loads, each filtered to the alive path whose `parent_dir` matches the edit's — a
+  file alive at two paths must not render the other copy's stack), and
+  `rewriteParentDirPrefix(oldPrefix:newPrefix:db:)`, which owns BOTH tables' folder
+  rename so `FolderRenameMigration` gains one call rather than four SQL statements.
+- `applyHydrated` takes `json: String?`; **nil is a synced RESET** (delete the row).
+- `carryAll` sweeps `edit_versions` in scopes the `edits` table no longer mentions —
+  a reset clears the stack but keeps its versions.
+
+### Sidecars — as built
+
+- `SidecarHydrator` SKIPS the edit apply entirely when `edit_updated_at` is nil: a
+  sidecar with no edit clock says nothing about edits, and treating it as a synced
+  reset would delete them. Only a non-nil clock reaches `EditRecordStore.applyHydrated`.
+- After a hydrated edit lands, `EditStore.applyHydratedConsequences(for:)` runs the
+  save consequences MINUS the sidecar re-export (which would bounce the edit back at
+  the device that sent it).
+
+### Render pipeline — as built
+
+- Stitchable Core Image kernels are declared `extern "C" [[stitchable]] float4 name(…)`
+  — the attribute goes before the RETURN TYPE. After it, the Metal compiler reports
+  "'stitchable' attribute cannot be applied to types" and the kernels silently fail to
+  load at runtime.
+- Kernel loading is LAZY and NON-fatal (`CIColorKernel?`/`CIKernel?`): a nil kernel
+  SKIPS its stage rather than crashing the app on first slider drag.
+  `EditKernelLoadTests` is what makes a broken Metal build phase fail in CI.
+- `MiredMapping.maxMiredOffset = d65Mired - miredFloor` (≈129 mired) and slider ±1 maps
+  linearly onto it. The warm target Kelvin (~3540 K) is DERIVED from that, not chosen:
+  choosing it independently (the spec's 3000 K) runs the cool side past the floor,
+  clamps, and reproduces the warm/cool asymmetry mired space exists to remove.
+- `EditRenderer` skips its own temperature/tint, noise-reduction and sharpen stages
+  when `stack.rawParams != nil` — `RawSource` already routed those sliders into the
+  decoder, and applying them again doubles them.
+- Radii scale with the POST-geometry frame, not the source: a crop changes what "1% of
+  the long edge" means on screen, and the user tunes clarity against what they see.
+- `OutputFormat` (JPEG q0.92 / PNG / TIFF / HEIC q0.9 / `tiff16`) lives on
+  `EditRenderer`, with `matchingSource(_:)` and `fileExtension`.
+- `RenderCoalescer` drains its pending slot in a LOOP, not by recursing — a long drag
+  hands off hundreds of times.
+
+### Provider & consumers — as built
+
+- **`EditStackIndex` reads its provider OUTSIDE the lock.** `NSLock` is not recursive
+  and `LiveEditStackProvider` reads the same index, so holding the lock across the
+  provider call deadlocks on the first edited tile (main thread). Only the provider
+  REFERENCE read is guarded.
+- Index entries are pre-resolved at rebuild (`hash`, decoded stack, geometry,
+  `renderable`). `stackHash` is returned even for an UNRENDERABLE stack so its
+  thumbnail key stays distinct; `resolvedStack` returns nil for it, so the original
+  renders.
+- `EditStackIndex.merge(entries:clearingScope:)` is the incremental path — the scope
+  clear is what makes a RESET take effect; without it the entry lingers until the next
+  full rebuild.
+- `EditStore` holds a **weak `host: AppState`** installed at launch
+  (`installHost(_:)`), used solely to call `markContentChanged`. `AppState.shared`
+  does not exist. This is a one-way reference, not an integration: no forwarded
+  `objectWillChange`, and the two AppState additions are shell modal-request flags
+  (`editPromptRequest`, `openWithForkRequest`) following the `alertRequest` precedent.
+- `OutputRender` gains `renderedImage(url:maxPixel:)` (pixels without a temp file),
+  `sweepRenderTemps()` (age-based, `tempMaxAge` 1 day, `tempDirectoryName`
+  `muse-render`), and falls back to the ORIGINAL when a render fails rather than
+  aborting the share.
+- The grid badge is passed DOWN as `TileView.editedVersionCount: Int?` (nil =
+  unedited, 0 = edited with no versions), like `rating` — a virtualized grid must not
+  mount one store observer per tile. Rating + edit state are announced together via
+  `tileAccessibilityValue(for:)`.
+
+### Editor — as built
+
+- `EditSession` is the per-file, non-singleton state object: `draft`, `history`,
+  compare state, `eyedropperArmed`, the coalescer, and both cached renders
+  (`canvasImage`, `originalImage`). `reseed(from:)` replaces the draft AND clears
+  history — after switching versions the old history is about a stack the file no
+  longer has. `proxyMaxPixel(canvasLongEdge:scale:)` is the hero ladder's formula,
+  floored at 1600 and capped at 4096; preview never decodes full-res.
+- Autosave debounce is `EditSession.autosaveDelay` (400 ms); exiting Edit mode saves
+  immediately. There is no Done/Cancel.
+- Editor tabs shipped as specified: right Light / Color / Looks, left Info / History /
+  Scopes (Scopes is an empty scaffold). `CurveEditorView(histogram:)` always receives
+  nil — the seam Spec 05 fills.
+- Curve monotonicity is enforced BY CONSTRUCTION: a point's x is clamped between its
+  neighbours, so points cannot cross.
+- `WBEyedropper.solve` (in `Components/CanvasPointMath.swift`) is the pure encoded-path
+  solve: green is the reference channel, offsets are log2 ratios halved and clamped to
+  ±1. The eyedropper is a one-shot MODE — it disarms after the click it consumes.
+- `Theme` ships `panelFill`/`panelStroke`/`controlAccent`/`textPrimary`/`textSecondary`
+  + spacing/radius/fonts, with `controlAccent = NSColor.systemBlue` (NOT
+  `Color.accentColor`, which doesn't adapt between appearances).
+- `EditorBackdropLevel.default` is `.mid`; the setting key is
+  `AppSettings.editorBackdropKey`.
+
+### Edit-a-Copy — as built
+
+- `OpenWithFork.open(url:appURL:appState:)` is the single seam; `appURL: nil` means
+  the default app. Both `OpenWithMenu`'s "Open" and `OpenWithItems`' per-app rows go
+  through it, and both views now take `@EnvironmentObject var appState`.
+- `EditCopyFlow.run(originalURL:)` renders to a TEMP first, forwards metadata, moves,
+  then calls `Indexer.shared.indexFile(at:kind:)`. Stacking with the parent
+  (`StackStore`, v17) is **not wired** — recorded, not stubbed.
+- `EditCopyMetadata.copyMetadata(from:to:)` forwards EXIF/IPTC minus the orientation
+  keys (top-level and TIFF) via `CGImageDestinationAddImageFromSource`.
+- `EditCopyNaming.targetExtension(for:isRaw:)` is the RAW → `tif` mapping seam.
+
+### Presets & clipboard — as built
+
+- `EditPresetStore.presetJSON(from:)` is the single geometry-exclusion seam (both
+  create and update go through it) and is `nonisolated`.
+- `EditClipboard` lives in `Models/EditPresetStore.swift` beside the preset store.
+- The batch sweep SNAPSHOTS the clipboard's stack + groups before starting, so a
+  clipboard change mid-run can't apply two different looks. It runs through
+  `EditStore.applyToAll(_:urls:)`, which executes the full save sequence per file.
+
+### Tests & tooling
+
+- `EditingModuleImportTests` SKIPS (via `XCTSkip`) when the sandbox denies reading the
+  source tree — the test host is the sandboxed app, so the grep only runs on a
+  checkout OUTSIDE `~/Documents`/`~/Desktop`/`~/Downloads`. It also bans `SwiftUI`,
+  not just `AppKit` (SwiftUI pulls AppKit in transitively on macOS).
+- `EditRenderConsistencyTests` GENERATES its fixtures into the temp directory rather
+  than bundling them (same sandbox constraint), compares on an exact square grid
+  (aspect-preserving rounding at three decode scales lands on off-by-one heights), and
+  runs at a 6/255 tolerance.
+- `HighlightRecoveryTests` fixtures must be FLOAT bitmaps: `CIImage(color:)` clamps its
+  components to 0…1, which makes the whole file pass vacuously.
+- **`-exportLocalizations` cannot build this project.**
+  `Intelligence/Core/ClipVectors.swift` uses `Float16`, which does not exist on
+  x86_64, and the extractor builds universal. Pre-existing Spec-03 breakage; Spec 04's
+  French strings were written into `Localizable.xcstrings` directly (all 728 keys have
+  an `fr` value). Fix `ClipVectors` before relying on the export workflow again.

@@ -39,17 +39,70 @@ final class OutputRenderTests: XCTestCase {
         XCTAssertTrue(try OutputRender.forOutput([URL]()).isEmpty)
     }
 
-    func testForOutputCarriesStackHashWhenProviderInstalled() throws {
+    /// A hash alone is NOT enough to render: `forOutput` also needs a
+    /// decodable, renderable stack. A stub reporting a hash for a file the
+    /// index knows nothing about must fall through to the original rather
+    /// than produce an empty temp file.
+    func testHashWithoutARenderableStackShipsTheOriginal() throws {
         EditStackIndex.installProvider(StubEditStackProvider(hash: "zzz", cropped: nil))
         let url = URL(fileURLWithPath: "/tmp/output-test.jpg")
-        XCTAssertEqual(try OutputRender.forOutput(url).stackHash, "zzz")
+        let out = try OutputRender.forOutput(url)
+        XCTAssertEqual(out.url, url)
+        XCTAssertNil(out.stackHash)
     }
 
-    /// Every export must carry the same stack identity — an array path that
-    /// dropped it would ship edited and unedited pixels from one publish.
-    func testArrayPathCarriesStackHashToo() throws {
-        EditStackIndex.installProvider(StubEditStackProvider(hash: "zzz", cropped: nil))
-        let outs = try OutputRender.forOutput([URL(fileURLWithPath: "/tmp/a.jpg")])
-        XCTAssertEqual(outs.first?.stackHash, "zzz")
+    /// The real thing: an indexed, renderable stack produces a RENDERED temp,
+    /// not the original bytes — this is what stops a share shipping unedited
+    /// pixels.
+    func testForOutputRendersATempWhenAnEditExists() throws {
+        let url = try EditRenderTestSupport.writeFixture(width: 256, height: 128,
+                                                         orientation: 1, named: "output-render")
+        var stack = EditStack.fresh()
+        stack.setTone { $0.exposureEV = 1.5 }
+        let json = try EditStackCodec.encode(stack)
+        let hash = EditStackCodec.hash(stack)
+        EditStackIndex.rebuild(entries: [(path: url.standardizedFileURL.path,
+                                          stackJSON: json, hash: hash)])
+        EditStackIndex.installProvider(LiveEditStackProvider())
+
+        let out = try OutputRender.forOutput(url)
+        XCTAssertNotEqual(out.url, url, "an edited file must leave as rendered bytes")
+        XCTAssertEqual(out.stackHash, hash)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: out.url.path))
+        XCTAssertTrue(out.url.path.contains(OutputRender.tempDirectoryName))
+    }
+
+    /// A stack from a NEWER renderer must ship the ORIGINAL, never a partial
+    /// application of the half this build understands.
+    func testUnrenderableStackShipsTheOriginal() throws {
+        let url = try EditRenderTestSupport.writeFixture(width: 128, height: 128,
+                                                         orientation: 1, named: "output-future")
+        var stack = EditStack.fresh()
+        stack.setTone { $0.exposureEV = 1.5 }
+        stack.processVersion = EditStack.currentProcessVersion + 1
+        let json = try EditStackCodec.encode(stack)
+        EditStackIndex.rebuild(entries: [(path: url.standardizedFileURL.path,
+                                          stackJSON: json,
+                                          hash: EditStackCodec.hash(stack))])
+        EditStackIndex.installProvider(LiveEditStackProvider())
+
+        let out = try OutputRender.forOutput(url)
+        XCTAssertEqual(out.url, url)
+        XCTAssertNil(out.stackHash)
+    }
+
+    func testSweepLeavesFreshTempsAlone() throws {
+        let url = try EditRenderTestSupport.writeFixture(width: 64, height: 64,
+                                                         orientation: 1, named: "output-sweep")
+        var stack = EditStack.fresh()
+        stack.setTone { $0.exposureEV = 1 }
+        EditStackIndex.rebuild(entries: [(path: url.standardizedFileURL.path,
+                                          stackJSON: try EditStackCodec.encode(stack),
+                                          hash: EditStackCodec.hash(stack))])
+        EditStackIndex.installProvider(LiveEditStackProvider())
+        let out = try OutputRender.forOutput(url)
+        OutputRender.sweepRenderTemps()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: out.url.path),
+                      "a temp minutes old is still in use — the sweep is age-based")
     }
 }

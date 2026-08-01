@@ -25,6 +25,33 @@ struct SelectionActionsMenu: View {
         }
     }
 
+    /// Editable kinds only (`.image`/`.raw`) — the same Path A rule the hero's
+    /// Edit toggle uses. Pasting onto a PDF or a video would write a stack
+    /// nothing renders.
+    private var editableURLs: [URL] {
+        fileURLs.filter {
+            let kind = AssetKind.detect(at: $0)
+            return kind == .image || kind == .raw
+        }
+    }
+
+    /// Each file runs the FULL save sequence, so tiles refresh as the sweep
+    /// progresses. No progress UI on purpose — the status pill means
+    /// BACKGROUND work, and this is a direct response to a click.
+    private func pasteAdjustments() {
+        let targets = editableURLs
+        // Snapshot the clipboard NOW rather than reading it per file: it's a
+        // copy-by-value transfer, and a sweep that re-read a clipboard the
+        // user changed mid-run would apply two different looks.
+        guard let source = EditClipboard.shared.stack else { return }
+        let groups = EditClipboard.shared.groups
+        Task {
+            await EditStore.shared.applyToAll(
+                { EditTransfer.apply(groups: groups, from: source, onto: $0) },
+                urls: targets)
+        }
+    }
+
     /// The rating shared by the effective selection (the checkmark target), or
     /// nil if mixed / unrated.
     private var currentRating: Int? {
@@ -92,6 +119,11 @@ struct SelectionActionsMenu: View {
                     }
                     .accessibilityLabel(Text(ratingA11yLabel(n)))
                 }
+            }
+            // Batch sync. Offered only when something has been copied AND the
+            // selection contains files that can actually take an edit.
+            if EditClipboard.shared.hasContent, !editableURLs.isEmpty {
+                Button("Paste Adjustments") { pasteAdjustments() }
             }
         }
         // Remove from the tag/collection you're currently viewing. Shown only

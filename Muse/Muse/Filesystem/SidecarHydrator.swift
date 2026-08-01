@@ -37,6 +37,14 @@ enum SidecarHydrator {
                   sidecar.analyzed_hash == info.hash else { continue }
             await apply(sidecar, fileID: info.id, parentDir: TagScope.parentDir(of: url),
                         basename: url.lastPathComponent, queue: queue)
+            // A hydrated edit has to reach the provider index and the
+            // thumbnail cache, or the file keeps rendering as it was until the
+            // next launch. Same consequences as a local save, minus the
+            // sidecar re-export — that would bounce the edit straight back at
+            // the device that sent it.
+            if sidecar.edit_updated_at != nil {
+                await EditStore.shared.applyHydratedConsequences(for: [url])
+            }
         }
     }
 

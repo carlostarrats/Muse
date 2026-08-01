@@ -47,6 +47,11 @@ struct HeroImageViewer: View {
     /// Overlay's frame in SwiftUI .global coords; the scroll monitor uses
     /// minX to ignore scrolls over the sidebar.
     @State private var overlayGlobalFrame: CGRect = .zero
+    /// Edit mode swaps the STAGE's content. It deliberately touches nothing
+    /// else: the open/close flight, the parting ripple and the backdrop fade
+    /// are all untouched by it.
+    @State private var editMode = false
+    @State private var editSession: EditSession?
 
     init(file: FileNode) {
         self.file = file
@@ -69,17 +74,26 @@ struct HeroImageViewer: View {
                         .contentShape(Rectangle())
                         .onTapGesture { startClose() }
 
-                    HeroStage(url: currentURL,
-                              sourceFrame: localSourceFrame(overlayGlobal: overlayGlobal,
-                                                            viewport: geo.size),
-                              viewport: geo.size,
-                              burnProgress: burnProgress,
-                              onCloseFinished: finishClose,
-                              zoom: $zoom,
-                              pan: $pan,
-                              isClosing: $isClosing)
+                    if let editSession, editMode {
+                        EditorView(session: editSession)
+                            // The stage's own scale, so entering Edit reads as
+                            // the photo settling back to make room for the
+                            // panels rather than as a new screen.
+                            .transition(.opacity)
+                    } else {
+                        HeroStage(url: currentURL,
+                                  sourceFrame: localSourceFrame(overlayGlobal: overlayGlobal,
+                                                                viewport: geo.size),
+                                  viewport: geo.size,
+                                  burnProgress: burnProgress,
+                                  onCloseFinished: finishClose,
+                                  zoom: $zoom,
+                                  pan: $pan,
+                                  isClosing: $isClosing)
 
-                    rightRail
+                        rightRail
+                    }
+                    if editModeAvailable { editModeToggle }
                 }
                 ViewerToast(toast: $toast)
             }
@@ -171,6 +185,13 @@ struct HeroImageViewer: View {
             // idempotent; `isClosing` remains the real state.
             appState.viewerClosing = false
             guard !isClosing else { return }
+            // Edit mode consumes Escape FIRST and returns: one press leaves
+            // the editor, a second closes the viewer. The rest of the close
+            // sequence never runs for that first press.
+            if editMode {
+                exitEditMode()
+                return
+            }
             if lingering || burnProgress > 0 {
                 // Mid-burn or lingering after a delete: never run the return
                 // flight on a burned image; Esc just dismisses the toast.
@@ -349,6 +370,10 @@ struct HeroImageViewer: View {
     // MARK: - Arrow-key flipping
 
     private func flip(_ delta: Int) {
+        // Arrow keys are INERT in Edit mode: they'd swap the file out from
+        // under an in-flight edit, and the arrow keys are wanted for nudging
+        // values there anyway.
+        guard !editMode else { return }
         guard !isClosing, !lingering, !burning, burnProgress <= 0 else { return }
         let images = appState.visibleFiles.filter { isImageKind($0.kind) }
         guard !images.isEmpty,
@@ -362,6 +387,75 @@ struct HeroImageViewer: View {
 
     private func isImageKind(_ kind: AssetKind) -> Bool {
         kind == .image || kind == .raw || kind == .psd
+    }
+
+    // MARK: - Edit mode
+
+    /// Path A (in-app editing) is `.image` and `.raw` ONLY. `.psd` is
+    /// excluded: what Muse can decode is its flat composite, which is a
+    /// PREVIEW of a layered document — editing that and writing it back would
+    /// discard the layers. Editing a PSD is Edit-a-Copy's job.
+    private var editModeAvailable: Bool {
+        guard !isClosing, !burning, burnProgress <= 0, !lingering else { return false }
+        let kind = AssetKind.detect(at: currentURL)
+        return kind == .image || kind == .raw
+    }
+
+    private var editModeToggle: some View {
+        HStack(spacing: 0) {
+            segment(String(localized: "Preview"), active: !editMode) {
+                if editMode { exitEditMode() }
+            }
+            segment(String(localized: "Edit"), active: editMode) {
+                if !editMode { enterEditMode() }
+            }
+        }
+        .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
+        .overlay(Capsule(style: .continuous).stroke(Color.white.opacity(0.15)))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.top, 14)
+        .opacity(chromeVisible ? 1 : 0)
+        .animation(.easeOut(duration: 0.2), value: chromeVisible)
+        .allowsHitTesting(chromeVisible && !isClosing)
+    }
+
+    private func segment(_ title: String, active: Bool, action: @escaping () -> Void)
+    -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(active ? Color.primary : Color.secondary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 5)
+                .background {
+                    if active {
+                        Capsule(style: .continuous).fill(Color.white.opacity(0.22))
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(active ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private func enterEditMode() {
+        let url = currentURL
+        let isRaw = AssetKind.detect(at: url) == .raw
+        Task {
+            let stack = await EditStore.shared.stack(for: url)
+            guard currentURL == url else { return }
+            editSession = EditSession(url: url, stack: stack, isRaw: isRaw)
+            withAnimation(.easeOut(duration: 0.25)) { editMode = true }
+        }
+    }
+
+    private func exitEditMode() {
+        let session = editSession
+        withAnimation(.easeOut(duration: 0.25)) { editMode = false }
+        editSession = nil
+        // Save on exit as well as on the debounce: leaving the editor is the
+        // moment a user expects their work to be safe, and the pending
+        // autosave may not have fired yet.
+        if let session { Task { await session.save() } }
     }
 
     // MARK: - Close flight

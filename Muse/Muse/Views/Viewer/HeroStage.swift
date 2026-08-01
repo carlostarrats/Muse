@@ -466,10 +466,19 @@ struct HeroStage: View {
         // and skip the mid-res pass on exactly the files that need it.
         if ImageHeaderSizeCache.cached(u)
             .map({ $0.width * $0.height > 40_000_000 }) == true {
+            let midStack = EditStackIndex.resolvedStack(for: u)
             let mid = await Task.detached(priority: .userInitiated) { () -> NSImage? in
                 guard let src = CGImageSourceCreateWithURL(u as CFURL, nil),
-                      ThumbnailCache.withinDecodeBudget(src),
-                      let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, [
+                      ThumbnailCache.withinDecodeBudget(src) else { return nil }
+                // The hero shows the EDIT, at both decode rungs. Only the
+                // decode closure changes — every guard, curve and settle
+                // window in this function stays exactly as it was.
+                if let midStack,
+                   let rendered = EditRenderer.render(url: u, stack: midStack, maxPixel: 1600) {
+                    return NSImage(cgImage: rendered,
+                                   size: NSSize(width: rendered.width, height: rendered.height))
+                }
+                guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, [
                           kCGImageSourceCreateThumbnailFromImageAlways: true,
                           kCGImageSourceCreateThumbnailWithTransform: true,
                           kCGImageSourceShouldCacheImmediately: true,
@@ -487,12 +496,18 @@ struct HeroStage: View {
             }
         }
 
+        let sharpStack = EditStackIndex.resolvedStack(for: u)
         let img = await Task.detached(priority: .userInitiated) { () -> NSImage? in
             // Same decompression-bomb guard as the grid thumbnail path — refuse
             // to decode a header that declares an absurd pixel count (falls
             // through to the QuickLook path below, which downsamples safely).
             guard let src = CGImageSourceCreateWithURL(u as CFURL, nil),
                   ThumbnailCache.withinDecodeBudget(src) else { return nil }
+            if let sharpStack,
+               let rendered = EditRenderer.render(url: u, stack: sharpStack, maxPixel: target) {
+                return NSImage(cgImage: rendered,
+                               size: NSSize(width: rendered.width, height: rendered.height))
+            }
             let opts: [CFString: Any] = [
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
                 kCGImageSourceCreateThumbnailWithTransform: true,

@@ -130,6 +130,9 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
+        // The semantic token layer, resolved ONCE here from the current mood
+        // and read by every new editor-adjacent surface. Pre-existing surfaces
+        // are deliberately not migrated.
         NavigationSplitView {
             SidebarView()
         } detail: {
@@ -382,6 +385,42 @@ struct ContentView: View {
                         .id(alert.id)
                 }
             }
+            // Editor-raised name prompts (version / snapshot / preset). Hoisted
+            // here like every other prompt: an in-window card is sized from its
+            // host's geometry, and the editor's 260pt panel would size it to
+            // 260pt.
+            .museModal(isPresented: Binding(
+                get: { appState.editPromptRequest != nil },
+                set: { if !$0 { appState.editPromptRequest = nil } }),
+                       width: ModalMessageCardWidth.standard,
+                       palette: appState.moodPalette) {
+                if let prompt = appState.editPromptRequest {
+                    ModalPromptCard(title: prompt.title, message: prompt.message,
+                                    placeholder: prompt.placeholder,
+                                    confirmTitle: prompt.confirmTitle,
+                                    initialText: prompt.initialText) { name in
+                        appState.editPromptRequest = nil
+                        prompt.onCommit(name)
+                    } onCancel: {
+                        appState.editPromptRequest = nil
+                    }
+                    .id(prompt.id)
+                }
+            }
+            // The Open-With fork. Reached from any external hand-off of a file
+            // that carries Muse edits.
+            .museModal(isPresented: Binding(
+                get: { appState.openWithForkRequest != nil },
+                set: { if !$0 { appState.openWithForkRequest = nil } }),
+                       width: ModalMessageCardWidth.standard,
+                       palette: appState.moodPalette) {
+                if let request = appState.openWithForkRequest {
+                    OpenWithForkCard(request: request) {
+                        appState.openWithForkRequest = nil
+                    }
+                    .id(request.id)
+                }
+            }
             // Announcements (DECIDED #28). Presented at the shell like every
             // other modal, and mirrored into AppState.announcementPresented so
             // the grid's key catcher and the Escape resolver treat it as one.
@@ -398,6 +437,7 @@ struct ContentView: View {
             .onChange(of: announcementStore.pending) { _, pending in
                 appState.announcementPresented = pending != nil
             }
+            .environment(\.theme, Theme.resolve(palette: appState.moodPalette))
             // Transparent title bar so the sidebar card flows continuously up
             // to the top and curves with the window corner (Lineform-style).
             .toolbarBackground(.hidden, for: .windowToolbar)

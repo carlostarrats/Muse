@@ -416,7 +416,8 @@ struct GridView: View {
                          },
                          imageAspect: aspects.aspect(for: file),
                          cornerRadius: cornerRadius,
-                         slotSize: rect.size)
+                         slotSize: rect.size,
+                         editedVersionCount: editedVersionCount(for: file))
                     .frame(width: rect.width, height: rect.height)
                     // The photo no longer paints the whole slot, so without an
                     // explicit shape the empty part of a Grid slot isn't
@@ -501,15 +502,9 @@ struct GridView: View {
                     .accessibilityAddTraits(
                         appState.selectedFiles.contains(file.url.standardizedFileURL.path)
                             ? [.isButton, .isSelected] : .isButton)
-                    // The rating badge is a11y-hidden (display-only overlay), so
-                    // announce the rating here as the tile's value.
-                    .accessibilityValue(
-                        (showsRatingBadges
-                            ? appState.starRatings[file.url.standardizedFileURL.path] : nil).map {
-                            Text(String(format: NSLocalizedString(
-                                "%lld-star rating",
-                                comment: "VoiceOver: star rating of a photo"), $0))
-                        } ?? Text(""))
+                    // The rating and edited badges are a11y-hidden (display-only
+                    // overlays), so announce both here as the tile's value.
+                    .accessibilityValue(tileAccessibilityValue(for: file))
                     // Primary VoiceOver action = OPEN. The mouse opens via the
                     // double-click timing window, which VoiceOver can't reproduce,
                     // so activating a tile only SELECTED it before — there was no
@@ -787,6 +782,33 @@ struct GridView: View {
     /// Cheap signature of everything that changes the *set* of files shown
     /// (folder, sort, collection/tag filters, search). Avoids mapping 1700
     /// ids on every render just to drive an onChange.
+    /// nil when unedited; otherwise the number of saved versions (0 when the
+    /// file has an edit but no versions). Read from the index rather than the
+    /// database — this runs per mounted tile, per layout pass.
+    private func editedVersionCount(for file: FileNode) -> Int? {
+        guard EditStackIndex.stackHash(for: file.url) != nil else { return nil }
+        return EditStore.shared.versionCounts[file.url.standardizedFileURL.path] ?? 0
+    }
+
+    /// Rating and edit state, combined — both badges are display-only, so
+    /// VoiceOver needs them announced on the tile itself.
+    private func tileAccessibilityValue(for file: FileNode) -> Text {
+        var parts: [String] = []
+        if showsRatingBadges,
+           let rating = appState.starRatings[file.url.standardizedFileURL.path] {
+            parts.append(String(format: NSLocalizedString(
+                "%lld-star rating", comment: "VoiceOver: star rating of a photo"), rating))
+        }
+        if let versions = editedVersionCount(for: file) {
+            parts.append(versions > 0
+                ? String(format: NSLocalizedString(
+                    "Edited, %lld versions",
+                    comment: "VoiceOver: photo has Muse edits and saved versions"), versions)
+                : String(localized: "Edited"))
+        }
+        return Text(parts.joined(separator: ", "))
+    }
+
     private var gridSignature: String {
         let files = appState.visibleFiles
         return [
@@ -800,6 +822,10 @@ struct GridView: View {
             // Collapsing/expanding a stack changes the SET of tiles, so the
             // geometry has to recompute.
             String(StacksStore.shared.generation),
+            // An edit save can change a tile's ASPECT (a crop), so the
+            // geometry has to recompute — this is the store's ONLY connection
+            // to the grid, by design (zero AppState integration).
+            String(EditStore.shared.generation),
             files.first?.url.path ?? "",
             files.last?.url.path ?? ""
         ].joined(separator: "|")
@@ -930,6 +956,11 @@ private struct TileView: View {
     /// whether the star badge's full ★-run fits — the tile is otherwise sized
     /// entirely by the `.frame` the caller applies, so it never had to know.
     var slotSize: CGSize = .zero
+    /// Number of saved versions when this file carries an edit; nil when
+    /// unedited. Passed DOWN like `rating` rather than read per tile, so a
+    /// virtualized grid doesn't mount one store observer per live tile.
+    var editedVersionCount: Int? = nil
+
 
     @State private var thumbnail: NSImage?
     @State private var hovering = false
@@ -1201,6 +1232,25 @@ private struct TileView: View {
                 .accessibilityAction(named: Text(isExpanded ? "Collapse Stack" : "Expand Stack")) {
                     if let stackID { StacksStore.shared.toggleExpanded(stackID) }
                 }
+            }
+            // Edited badge — bottom-TRAILING. The four tile corners are fully
+            // assigned: top-leading stack · top-trailing star · bottom-leading
+            // cull · bottom-trailing edited. Display-only, never a click
+            // target (a tap would fight tile select/open).
+            if let editedVersionCount {
+                HStack(spacing: 2) {
+                    Image(systemName: "slider.horizontal.3")
+                    if editedVersionCount > 0 { Text("\(editedVersionCount)") }
+                }
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Capsule(style: .continuous).fill(Color.black.opacity(0.6)))
+                    .padding(Self.badgeInset)
+                    .padding(isSelected ? Self.selectionInset : 0)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .accessibilityHidden(true)
             }
             if let rating,
                let label = StarRating.badgeLabel(
