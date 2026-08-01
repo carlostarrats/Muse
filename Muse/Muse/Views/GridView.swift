@@ -714,13 +714,22 @@ struct GridView: View {
     /// disabled. `.folder` and non-image kinds never see this section.
     /// The photo URLs the current right-click actually targets: the whole
     /// selection when this tile is part of it, otherwise just this tile.
+    ///
+    /// O(selection), not O(library): this is called from a `contextMenu`
+    /// builder, and SwiftUI evaluates those EAGERLY for every visible tile on
+    /// every render. Building a `[path: FileNode]` map here meant one
+    /// `standardizedFileURL` — which is a filesystem STAT — per visible file
+    /// per tile per frame, and that alone was ~27% of main-thread time on a
+    /// 1,900-file folder (profiled 2026-08-01). The map is memoized on
+    /// AppState now, and the un-selected case needs no lookup at all: the tile
+    /// already knows its own kind.
     private func photoTargets(for file: FileNode, path: String) -> [URL] {
-        let byPath = Dictionary(appState.visibleFiles.map {
-            ($0.url.standardizedFileURL.path, $0)
-        }, uniquingKeysWith: { a, _ in a })
-        let paths = appState.selectedFiles.contains(path)
-            ? Array(appState.selectedFiles) : [path]
-        return paths.compactMap { byPath[$0] }.filter { $0.kind.isPhotoKind }.map(\.url)
+        guard appState.selectedFiles.contains(path) else {
+            return file.kind.isPhotoKind ? [file.url] : []
+        }
+        let byPath = appState.visibleFilesByPath
+        return appState.selectedFiles.compactMap { byPath[$0] }
+            .filter { $0.kind.isPhotoKind }.map(\.url)
     }
 
     /// Compare + cull entry points. Compare needs 2–4 photos; culling needs a
@@ -734,8 +743,10 @@ struct GridView: View {
                 CompareStore.shared.open(urls: targets)
             }
         }
+        // `prefix(2)` not `count`: this runs per tile per render and only the
+        // "are there at least two" answer is needed.
         if !CullStore.shared.active,
-           appState.visibleFiles.filter({ $0.kind.isPhotoKind }).count >= 2 {
+           appState.visibleFiles.lazy.filter({ $0.kind.isPhotoKind }).prefix(2).count >= 2 {
             Button("Start Culling") { CullStore.shared.begin() }
         }
     }
@@ -759,18 +770,31 @@ struct GridView: View {
         }
     }
 
-    @ViewBuilder
-    private func stackMenuSection(for file: FileNode, path: String) -> some View {
-        let imageKinds: Set<AssetKind> = [.image, .raw, .psd]
-        let selected = appState.selectedFiles.contains(path)
-            ? Array(appState.selectedFiles) : [path]
-        let byPath = Dictionary(appState.visibleFiles.map {
-            ($0.url.standardizedFileURL.path, $0)
-        }, uniquingKeysWith: { a, _ in a })
-        let stackablePaths = selected.filter { p in
+    /// Which of the right-click's targets can be stacked. Pulled out of the
+    /// `@ViewBuilder` so it can use statements — a ViewBuilder body only takes
+    /// expressions.
+    private static func stackablePaths(selected: Set<String>, byPath: [String: FileNode],
+                                       file: FileNode, path: String,
+                                       imageKinds: Set<AssetKind>) -> [String] {
+        guard selected.contains(path) else {
+            return imageKinds.contains(file.kind) ? [path] : []
+        }
+        return selected.filter { p in
             guard let node = byPath[p] else { return false }
             return imageKinds.contains(node.kind)
         }
+    }
+
+    @ViewBuilder
+    private func stackMenuSection(for file: FileNode, path: String) -> some View {
+        let imageKinds: Set<AssetKind> = [.image, .raw, .psd]
+        // Same rule as photoTargets: the memoized map, and no lookup at all
+        // for the un-selected case. Rebuilding a whole-library dictionary here
+        // cost a filesystem stat per visible file, per tile, per render.
+        let stackablePaths = Self.stackablePaths(selected: appState.selectedFiles,
+                                                 byPath: appState.visibleFilesByPath,
+                                                 file: file, path: path,
+                                                 imageKinds: imageKinds)
         let anyAlreadyStacked = stackablePaths.contains { StacksStore.shared.entries[$0] != nil }
         let entry = StacksStore.shared.entries[path]
 

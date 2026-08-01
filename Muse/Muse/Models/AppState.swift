@@ -474,6 +474,17 @@ final class AppState: ObservableObject {
     var _visibleFilesCache: [FileNode] = []
     var _visibleFilesValid = false
 
+    /// `visibleFiles` keyed by STANDARDIZED path, built with the same memo and
+    /// invalidated by the same `didSet`s.
+    ///
+    /// `URL.standardizedFileURL` performs a filesystem stat
+    /// (`URLByStandardizingPath` → `checkResourceIsReachableAndReturnError:`),
+    /// so a per-render map over every visible file is a stat per file per
+    /// render — and built inside a per-tile `contextMenu` builder, which
+    /// SwiftUI evaluates eagerly for every tile, it was tiles × files stats per
+    /// frame. Built ONCE per file-set change instead.
+    var _visibleByPathCache: [String: FileNode] = [:]
+
     /// Drop the memo when an input that ISN'T an AppState property changes —
     /// the Pattern B stores that participate in `visibleFiles`.
     func invalidateVisibleFiles() {

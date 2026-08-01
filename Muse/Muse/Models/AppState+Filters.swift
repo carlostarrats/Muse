@@ -32,6 +32,14 @@ extension AppState {
     /// Files the grid should show: the active collection's members when
     /// inside a collection, else the current folder's files; the tag chip
     /// filter narrows either.
+    /// `visibleFiles` indexed by standardized path — O(1) lookups for the
+    /// context menus, which run per tile per render. Reading this warms the
+    /// same memo `visibleFiles` uses.
+    var visibleFilesByPath: [String: FileNode] {
+        if !_visibleFilesValid { _ = visibleFiles }
+        return _visibleByPathCache
+    }
+
     var visibleFiles: [FileNode] {
         // Memoized: recomputed only after one of the inputs changes (they
         // invalidate the cache via didSet in AppState: currentFiles,
@@ -97,6 +105,8 @@ extension AppState {
             StacksStore.shared.badges = [:]
         }
         _visibleFilesCache = result
+        _visibleByPathCache = Dictionary(result.map { ($0.url.standardizedFileURL.path, $0) },
+                                         uniquingKeysWith: { a, _ in a })
         _visibleFilesValid = true
         return result
     }
