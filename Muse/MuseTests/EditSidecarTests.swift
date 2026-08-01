@@ -91,6 +91,66 @@ final class EditSidecarTests: XCTestCase {
         XCTAssertEqual(resolved.edit_stack, "{\"A\":1}")
     }
 
+    // MARK: - tagsAuthoritative (the mirror of the case above)
+
+    private func tag(_ label: String, _ source: String = "manual") -> SidecarTag {
+        SidecarTag(label: label, source: source, confidence: nil, model_version: nil)
+    }
+
+    /// The mirror image of `testTagEditExportDoesNotWipeAnUnhydratedEdit`: an
+    /// EDIT save on device B re-exports the sidecar, and B has never hydrated
+    /// A's tags — so `fresh` carries none. Taking the tag list from `fresh`
+    /// wholesale would delete A's tags from the synced record.
+    func testEditExportDoesNotWipeUnhydratedTags() {
+        var existing = empty(); existing.tags = [tag("beach"), tag("sunset")]
+        var fresh = empty(updatedAt: 99); fresh.tags = []
+        fresh.edit_stack = "{\"B\":1}"; fresh.edit_updated_at = 99
+        let resolved = Sidecar.resolveForWrite(fresh: fresh, existing: existing,
+                                               mergeExisting: false, noteAuthoritative: false,
+                                               editAuthoritative: true,
+                                               tagsAuthoritative: false)
+        XCTAssertEqual(resolved.tags.map(\.label).sorted(), ["beach", "sunset"])
+        // The edit still publishes — that is what this write is FOR.
+        XCTAssertEqual(resolved.edit_stack, "{\"B\":1}")
+    }
+
+    /// A tag edit stays authoritative, deletions included — otherwise a
+    /// just-removed tag would be resurrected from the old sidecar.
+    func testTagEditRemainsAuthoritativeForTags() {
+        var existing = empty(); existing.tags = [tag("beach"), tag("sunset")]
+        var fresh = empty(updatedAt: 99); fresh.tags = [tag("beach")]
+        let resolved = Sidecar.resolveForWrite(fresh: fresh, existing: existing,
+                                               mergeExisting: false, noteAuthoritative: false)
+        XCTAssertEqual(resolved.tags.map(\.label), ["beach"])
+    }
+
+    /// Union must not leave the photo carrying two ratings — a rating is a
+    /// scalar everywhere else in the app.
+    func testUnionedTagsKeepsExactlyOneRating() {
+        var existing = empty(); existing.tags = [tag("★★"), tag("beach")]
+        var fresh = empty(); fresh.tags = [tag("★★★★")]
+        let resolved = Sidecar.resolveForWrite(fresh: fresh, existing: existing,
+                                               mergeExisting: false, noteAuthoritative: false,
+                                               editAuthoritative: true,
+                                               tagsAuthoritative: false)
+        let ratings = resolved.tags.filter { StarRating.isRating($0.label) }
+        XCTAssertEqual(ratings.count, 1)
+        XCTAssertEqual(ratings.first?.label, "★★★★")   // the fresh side wins
+        XCTAssertTrue(resolved.tags.contains { $0.label == "beach" })
+    }
+
+    /// With no rating on the fresh side the on-disk one stands — union never
+    /// deletes.
+    func testUnionedTagsKeepsOnDiskRatingWhenFreshHasNone() {
+        var existing = empty(); existing.tags = [tag("★★★")]
+        var fresh = empty(); fresh.tags = [tag("beach")]
+        let resolved = Sidecar.resolveForWrite(fresh: fresh, existing: existing,
+                                               mergeExisting: false, noteAuthoritative: false,
+                                               editAuthoritative: true,
+                                               tagsAuthoritative: false)
+        XCTAssertEqual(resolved.tags.map(\.label).sorted(), ["beach", "★★★"].sorted())
+    }
+
     // MARK: - build
 
     func testBuildCarriesEditWhenSupplied() {

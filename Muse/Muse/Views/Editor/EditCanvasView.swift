@@ -105,7 +105,9 @@ struct EditCanvasView: NSViewRepresentable {
                 width: Int(drawableSize.width), height: Int(drawableSize.height),
                 pixelFormat: view.colorPixelFormat, commandBuffer: commandBuffer,
                 mtlTextureProvider: { drawable.texture })
-            try? RenderContexts.preview.startTask(toRender: composited, to: destination)
+            // Returns a CIRenderTask for callers that want to await timing; the
+            // canvas just presents the drawable, so discard it explicitly.
+            _ = try? RenderContexts.preview.startTask(toRender: composited, to: destination)
             commandBuffer.present(drawable)
             commandBuffer.commit()
         }

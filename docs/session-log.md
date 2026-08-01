@@ -6,6 +6,81 @@ the durable rules + a compact index live in `CLAUDE.md`. Nothing here is
 load-bearing for a fresh session beyond what that index already surfaces;
 read an entry when you need the full "why" behind a specific change.
 
+### Specs 01–07 review, round 2 — 2026-08-01 (on `new-product-build-1`)
+
+A second review pass over the same branch, deliberately aimed at what round 1
+did **not** cover. Round 1 reviewed the new code against its specs; the question
+left open was whether the features that already worked in v1.5 still work now
+that Specs 01–07 inserted three new seams (`EditStackIndex`,
+`EffectiveDimensions`, `OutputRender`) into their code paths and flipped a
+database-wide setting (WAL). The standing artifact is
+`docs/new-build/FEATURE-LEDGER.md` — a feature × verification ledger with
+separate automated / static / runtime states, which is what a future round
+checks itself against instead of re-deriving the surface area. Suite 1,775 →
+**1,783**, green throughout.
+
+Round 1's own findings were treated as directional rather than settled, and
+re-checked against the code rather than trusted; every claim spot-checked held
+(`modalPresented`/`dismissTopModal` agree entry-for-entry, the `OutputRender`
+choke point is intact at all six call sites, `rebuildIndex` is now called from
+all three path-rewriting migrations).
+
+Four findings, all confirmed by reading the code:
+
+- **R2-4 (high) — an edit save could wipe another device's synced tags.**
+  `Sidecar.resolveForWrite`'s non-merge path took tags from `fresh` wholesale.
+  That is correct for a *tag* edit, where the local DB owns them including
+  deletions — but `exportSidecarsAfterEditChange` travels the same path, and a
+  device that hasn't hydrated a sidecar yet has the other device's tags in
+  neither its DB nor `fresh`. So merely saving an edit rewrote the sidecar's tag
+  list without them. The striking part is that this is exactly the hazard
+  `noteAuthoritative` and `editAuthoritative` already existed to prevent, on the
+  very same write — tags were simply never given the same treatment. Fixed with
+  a third flag, `tagsAuthoritative`, and a `Sidecar.unionedTags` that keeps the
+  one-rating-per-photo rule a naive union would have broken. +4 tests.
+- **R2-1 (med) — cropped photos measured and laid out at their ORIGINAL size on
+  a cold header cache.** `EffectiveDimensions.resolve` asked for the crop first,
+  but the crop is scaled against `ImageHeaderSizeCache.cached`, a no-I/O lookup
+  that answers nil until something warms it — so the fallback to the uncropped
+  header read won. Both callers document that they want the post-crop size (the
+  Info card's dimensions row, the hero flight's take-off rect). `AspectRatioCache`
+  had the same shape and marked the path `resolved` afterwards, so the masonry
+  never revisited it. Reordered; in the grid the warm-up is gated on the file
+  actually carrying an edit so the cost stays bounded.
+- **R2-3 (med) — Compare's two primary actions were unreachable under
+  VoiceOver.** Rating (0–5) and cull marking (K/X/U) are handled by
+  `CompareKeyCatcher`, and VoiceOver swallows plain character keys before an
+  `NSView` sees them. Round 1 fixed precisely this for the grid's cull marks;
+  the same gap sat one surface further on, while peaking, zoom, close and pane
+  focus all already had buttons. Named per-pane actions added.
+- **R2-2 (low) — a translated string was persisted.** `EditStore.switchToVersion`
+  wrote `String(localized: "Previous")` into `edit_versions.name`, against the
+  app-wide "storage stays canonical-English, localize at display" rule.
+  `EditVersionName` now stores the canonical form and localizes on the way out,
+  passing user-typed names through untouched.
+
+**Localization closed.** The 146 untranslated French keys carried from Specs 03
+and 06 were the one item CLAUDE.md's own rule calls a feature-completeness
+failure rather than a nice-to-have. All filled, plus the ten new keys the
+Compare accessibility actions introduced (written back via
+`-exportLocalizations`, since a plain build does not). The catalog is **1,002
+keys, 0 untranslated**. Whitespace-only spacer keys are marked
+`shouldTranslate: false` rather than given a bogus value.
+
+Also swept and clean, recorded so a later round doesn't re-spend it: no bare
+`AVURLAsset(url:)`/`AVPlayer(url:)` anywhere in the tree (Spec 02's new
+`PhotoHeaderReader` uses the restricted helper); no unextracted user-facing
+strings in the branch; no backup/restore regression from v13–v23 (every added
+column is nullable); the header-size cache still records ORIGINAL dimensions, so
+a crop is applied exactly once. Two build warnings silenced so a real one can't
+hide in the noise.
+
+The one thing still genuinely open is unchanged and is now G1 in the ledger:
+**nobody has driven the GUI.** The editor, compare/cull, the five import
+sources, social export, Drive publish and backup/restore have static review and
+unit tests behind them and nothing else. The ledger's Runtime column is that
+test plan, already enumerated.
+
 ### Specs 01–07 review — 2026-08-01 (on `new-product-build-1`)
 
 A full review, QA and fix pass over everything Specs 01–07 built: 326 files,

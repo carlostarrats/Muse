@@ -106,9 +106,22 @@ final class AspectRatioCache: ObservableObject {
             // files.width/height describe the ORIGINAL bytes, so a cropped
             // file would pack at the wrong shape. The crop wins here exactly as
             // it does in EffectiveDimensions — same rule, applied before the DB
-            // value is published. (No-op today: no edit-stack provider exists.)
+            // value is published.
+            //
+            // `croppedSize` scales the crop against ImageHeaderSizeCache's
+            // no-I/O lookup, so on a COLD folder open (the cache is warmed by
+            // the thumbnail pass, which races this) it answers nil and the
+            // original aspect would be published — and then marked `resolved`,
+            // so this pass would never revisit it and only the visible-tile
+            // `report` backstop could correct it. Warming the header first is
+            // what makes the crop visible. It costs a header read, so it is
+            // gated on the file actually carrying an edit (a pure dictionary
+            // lookup, and an edited file is rare even in a large library).
             for path in paths {
-                guard let crop = EditStackIndex.croppedSize(for: URL(fileURLWithPath: path)),
+                let url = URL(fileURLWithPath: path)
+                guard EditStackIndex.stackHash(for: url) != nil else { continue }
+                _ = ImageHeaderSizeCache.resolve(url)
+                guard let crop = EditStackIndex.croppedSize(for: url),
                       crop.width > 0, crop.height > 0 else { continue }
                 fromDB[path] = crop.height / crop.width
             }

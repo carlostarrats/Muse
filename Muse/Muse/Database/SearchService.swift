@@ -70,14 +70,22 @@ enum SearchService {
         // A `color:` token routes into this SAME leg rather than a parallel
         // matcher: a hex value joins the hex list, a named swatch resolves
         // through SmartColor exactly as the smart-rule path does.
-        var colorQuery: [LabColor] = cq.hexes.map { LabColor(rgb: $0) }
-        for value in tokenColors {
-            if let rgb = SmartRule.parsedHex(value) {
-                colorQuery.append(LabColor(rgb: rgb))
-            } else if let rgb = SmartColor.rgb(for: value.lowercased()) {
-                colorQuery.append(LabColor(rgb: rgb))
+        // Built mutably, then frozen into a `let` BEFORE the `queue.read`
+        // below captures it. The closure runs on GRDB's thread, so capturing
+        // the `var` was a data race the compiler could only warn about (and a
+        // hard error under the Swift 6 language mode). Nothing mutates it past
+        // this point — the `let` is what says so.
+        let colorQuery: [LabColor] = {
+            var built: [LabColor] = cq.hexes.map { LabColor(rgb: $0) }
+            for value in tokenColors {
+                if let rgb = SmartRule.parsedHex(value) {
+                    built.append(LabColor(rgb: rgb))
+                } else if let rgb = SmartColor.rgb(for: value.lowercased()) {
+                    built.append(LabColor(rgb: rgb))
+                }
             }
-        }
+            return built
+        }()
         let textQuery = cq.hexes.isEmpty ? effectiveQuery : cq.textRemainder
         let hasText = !textQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 

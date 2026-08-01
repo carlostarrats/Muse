@@ -198,12 +198,25 @@ extension Sidecar {
     /// rating edit can't wipe an edit stack this device hasn't hydrated. When
     /// it IS authoritative, `fresh` wins INCLUDING a clear — that's how a
     /// Reset propagates rather than being read as "nothing to say".
+    /// `tagsAuthoritative` completes the set. The non-merge path takes tags
+    /// from `fresh` wholesale, which is right for a TAG edit (the local DB owns
+    /// them, deletions included) and wrong for every other non-merge write: an
+    /// EDIT save on a device that hasn't hydrated this sidecar yet would
+    /// rewrite the tag list from a DB that doesn't have the other device's tags
+    /// in it, wiping them from the synced record. Exactly the hazard the two
+    /// fields above already guard, through the third field they share a write
+    /// with. When false, tags UNION instead — a genuine tag deletion still
+    /// travels the tag-edit path, which is authoritative and bypasses this.
     static func resolveForWrite(fresh: Sidecar, existing: Sidecar?,
                                 mergeExisting: Bool, noteAuthoritative: Bool,
-                                editAuthoritative: Bool = false) -> Sidecar {
+                                editAuthoritative: Bool = false,
+                                tagsAuthoritative: Bool = true) -> Sidecar {
         guard let existing else { return fresh }
         if mergeExisting { return merge(existing, fresh) }
         var out = fresh
+        if !tagsAuthoritative {
+            out.tags = unionedTags(onDisk: existing.tags, fresh: fresh.tags)
+        }
         if !noteAuthoritative {
             // Non-note edit: never change the synced note (preserve on-disk;
             // fall back to the fresh value only when the disk has none).
@@ -213,6 +226,26 @@ extension Sidecar {
             out.edit_stack = existing.edit_stack ?? fresh.edit_stack
             out.edit_updated_at = existing.edit_updated_at ?? fresh.edit_updated_at
         }
+        return out
+    }
+
+    /// Union two tag lists under the same rules `merge` applies — label union
+    /// with manual-beats-vision, then EXACTLY ONE surviving rating, because a
+    /// rating is a scalar and a plain union would leave a photo carrying "★★"
+    /// and "★★★" at once (the invariant `StarRating.resolution` keeps
+    /// everywhere else).
+    ///
+    /// No timestamps are consulted: this is used only where `fresh` is this
+    /// device's current DB state for a field it is NOT authoritative over, so
+    /// the fresh rating wins when there is one and the on-disk rating stands
+    /// when there isn't. Union never deletes.
+    static func unionedTags(onDisk: [SidecarTag], fresh: [SidecarTag]) -> [SidecarTag] {
+        var out = mergeTags(onDisk, fresh)
+        let surviving = fresh.first { StarRating.isRating($0.label) }
+            ?? onDisk.first { StarRating.isRating($0.label) }
+        out = out.filter { !StarRating.isRating($0.label) }
+        if let surviving { out.append(surviving) }
+        out.sort { $0.label < $1.label }
         return out
     }
 

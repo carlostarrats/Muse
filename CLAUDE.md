@@ -128,23 +128,30 @@ are the load-bearing reference artifacts.
 | Foundation 6 — **Spec-06 import & migration** (no migrations; one File > Import surface over five sources; `ImportSupplement`; color-label namespace + mapping sheet; Lightroom `crs:` edits + presets; `WorkThrottleStore`/`AnalysisStatusStore`/import-size FYI) | ✅ merged, unreleased | `new-product-build-1` |
 | Foundation 7 — **Spec-07 sharing & social export** (no migrations; manifest v2 `y`/`s`/`m` + three page layouts; portfolio mode — a live `manifest.json` in the user's Drive behind a URL that never changes; `Export/Social/` + the social export card; Google on-ramp copy) | ✅ merged, unreleased | `new-product-build-1` |
 
-| **Review — Specs 01–07** | ✅ reviewed + fixed 2026-08-01 | `new-product-build-1` |
+| **Review — Specs 01–07** | ✅ reviewed + fixed 2026-08-01 (2 rounds) | `new-product-build-1` |
 
 > Every row through Polish 27 is merged to `main` and shipped in release **`v1.5`**;
 > Polish 28 is merged to `main` but NOT yet in a release (`v1.5` is still the
 > current released build; Polish 25–27 landed in it after `v1.4`). **Foundation 1–7
 > (Specs 01–07) live on `new-product-build-1` and are not on `main` yet** — all seven
 > were built 2026-07-31; migrations run through **v23**, so the next spec starts at
-> v24. **They have since been reviewed** (2026-08-01,
-> `docs/new-build/REVIEW-FINDINGS.md`): ten systematic sweeps, eight slices, 23
-> findings fixed, suite 1,748 → 1,775. Still true, though, that almost none of it
+> v24. **They have since been reviewed in two rounds** (both 2026-08-01):
+> round 1 (`docs/new-build/REVIEW-FINDINGS.md`) — ten systematic sweeps, eight
+> slices, 23 findings fixed, suite 1,748 → 1,775; round 2
+> (`docs/new-build/FEATURE-LEDGER.md`) — regression of the PRE-branch features
+> under this branch's three new seams, 4 findings fixed, suite → 1,783. Still
+> true, though, that almost none of it
 > has been exercised in the RUNNING app — launch, migrations and the backfill
 > chain were confirmed with `MUSE_TRACE=1` against the real library, but the
 > editor, compare/cull, import, share and backup surfaces need someone to drive
-> them. Two known open gaps carried by that branch:
+> them. **`docs/new-build/FEATURE-LEDGER.md` is the standing feature × verification
+> ledger** — one row per feature area with separate automated / static / runtime
+> states, and the Runtime column doubles as the written GUI test plan. Read and
+> update it with any feature work. One known open gap carried by that branch:
 > **backup does not carry edit data** (`BackupOccurrence` has no edit fields — Spec 09's
-> amendment A2 closes it) and **146 of 992 localization keys have no French value**
-> (from Specs 03 and 06). The binding build-level record is
+> amendment A2 closes it). Localization is now COMPLETE (1,002 keys, 0
+> untranslated — the 146 missing French values from Specs 03/06 were filled in
+> round 2). The binding build-level record is
 > `docs/new-build/DECISIONS.md`; read its "Current state" block first, since the
 > per-spec "as-built" sections are point-in-time and go stale. **Distribution is
 > unchanged** — the Mac App Store move (doctrine revisions, Sparkle excision,

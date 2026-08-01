@@ -67,7 +67,9 @@ import GRDB
         // Preserve the caller's order so the first selected file is the pick.
         let fileIDs = paths.compactMap { map[URL(fileURLWithPath: $0).standardizedFileURL.path] }
         guard fileIDs.count >= 2 else { return }
-        try? await q.write { db in
+        // `createStack` returns the new id; nothing here needs it, and the
+        // explicit discard is what keeps the build warning-free.
+        _ = try? await q.write { db in
             try StackStore.createStack(kind: "manual", memberIDs: fileIDs,
                                        pick: fileIDs.first, db: db)
         }

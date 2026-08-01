@@ -143,7 +143,14 @@ final class EditStore: ObservableObject {
         if !current.isNeutral, !versionsList.contains(where: {
             EditStackCodec.decode($0.stack) == current
         }) {
-            await saveVersion(name: String(localized: "Previous"), kind: "version",
+            // CANONICAL ENGLISH, not String(localized:). This name is generated
+            // by Muse, not typed by the user, and it is persisted — so the
+            // app-wide rule applies: storage stays canonical, localization
+            // happens at display time (`EditVersionName.display`). Persisting
+            // the translation would leave a French library holding "Précédent"
+            // rows that an English relaunch shows untranslated, and would mix
+            // languages for anyone who ever switches.
+            await saveVersion(name: EditVersionName.autoPreserved, kind: "version",
                               stack: current, for: url)
         }
         await save(targetStack, for: url)

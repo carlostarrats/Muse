@@ -694,3 +694,20 @@ sandbox question is RESOLVED — the exec works and a test now pins it.
    FTS scans), and `RediscoveryQueries.onThisDay`'s no-`photo_meta` fallback
    filters on `strftime` over `files.created_at`.
 
+
+---
+
+## Round 2 — 2026-08-01
+
+A second pass, aimed at what this document did **not** cover: whether the
+features that already shipped in v1.5 still work now that Specs 01–07 inserted
+`EditStackIndex` / `EffectiveDimensions` / `OutputRender` into their code paths
+and flipped the database to WAL.
+
+Findings, fixes and the checked-and-clean list live in
+**`docs/new-build/FEATURE-LEDGER.md`**, which is also the standing feature ×
+verification ledger going forward — read and update that rather than this file.
+
+Four findings (R2-1…R2-4), suite 1,775 → **1,783**. The 146 untranslated French
+keys are closed (catalog now 1,002 keys, 0 untranslated). G1 — nobody has driven
+the GUI — is unchanged and is the branch's remaining confidence gap.

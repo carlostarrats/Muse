@@ -108,7 +108,7 @@ struct EditVersionsList: View {
             Image(systemName: row.kind == "snapshot" ? "camera" : "clock.arrow.circlepath")
                 .font(.system(size: 10))
                 .foregroundStyle(theme.textSecondary)
-            Text(row.name)
+            Text(EditVersionName.display(row.name))
                 .font(theme.labelFont)
                 .foregroundStyle(theme.textPrimary)
                 .lineLimit(1)
@@ -135,7 +135,7 @@ struct EditVersionsList: View {
             }
         }
         .accessibilityAddTraits(.isButton)
-        .accessibilityLabel(Text(row.name))
+        .accessibilityLabel(Text(EditVersionName.display(row.name)))
         .accessibilityAction(named: Text("Delete Version")) {
             Task { await store.deleteVersion(id: row.id, for: session.url) }
         }

@@ -38,6 +38,9 @@ struct CompareView: View {
                                 .accessibilityAction(named: Text("Focus this pane")) {
                                     store.focus(index)
                                 }
+                                .compareVoiceOverActions(url: url, index: index,
+                                                         store: store, cull: cull,
+                                                         appState: appState)
                         }
                     }
                     .gesture(panGesture)
@@ -192,5 +195,73 @@ struct CompareView: View {
             return out
         }) ?? [:]
         traits = fetched.mapValues { (sharpness: $0.0, faceQuality: $0.1, faceCount: $0.2) }
+    }
+}
+
+/// VoiceOver equivalents for the compare workbench's KEY-ONLY actions.
+///
+/// Rating (0–5) and cull marking (K/X/U) are driven from `CompareKeyCatcher`,
+/// and VoiceOver swallows plain character keys before an `NSView` ever sees
+/// them — so with the screen reader on, the two primary things this workbench
+/// exists to do were unreachable. Peaking, zoom, close and pane focus already
+/// had buttons or actions; these are the ones that didn't.
+///
+/// Same fix, same reasoning as the grid's cull actions — a keyboard shortcut is
+/// not an accessible affordance on its own.
+private struct CompareVoiceOverActions: ViewModifier {
+    let url: URL
+    let index: Int
+    @ObservedObject var store: CompareStore
+    @ObservedObject var cull: CullStore
+    let appState: AppState
+
+    private func setRating(_ stars: Int?) {
+        store.focus(index)
+        Task {
+            await TagStore.shared.setRating(stars, forURLs: [url])
+            appState.tagsVersion += 1
+        }
+    }
+
+    private func setMark(_ mark: CullStore.Mark?) {
+        store.focus(index)
+        cull.setMark(mark, path: url.standardizedFileURL.path)
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .accessibilityAction(named: Text("Rate 1 Star")) { setRating(1) }
+            .accessibilityAction(named: Text("Rate 2 Stars")) { setRating(2) }
+            .accessibilityAction(named: Text("Rate 3 Stars")) { setRating(3) }
+            .accessibilityAction(named: Text("Rate 4 Stars")) { setRating(4) }
+            .accessibilityAction(named: Text("Rate 5 Stars")) { setRating(5) }
+            .accessibilityAction(named: Text("Clear Rating")) { setRating(nil) }
+            .cullActions(active: cull.active, keep: { setMark(.keep) },
+                         reject: { setMark(.reject) }, clear: { setMark(nil) })
+    }
+}
+
+private extension View {
+    /// Cull marking only exists while a session is running, so the actions only
+    /// appear then — matching the key catcher's own `guard cull.active`.
+    @ViewBuilder
+    func cullActions(active: Bool, keep: @escaping () -> Void,
+                     reject: @escaping () -> Void, clear: @escaping () -> Void) -> some View {
+        if active {
+            self
+                .accessibilityAction(named: Text("Keep")) { keep() }
+                .accessibilityAction(named: Text("Reject")) { reject() }
+                .accessibilityAction(named: Text("Clear Cull Mark")) { clear() }
+        } else {
+            self
+        }
+    }
+}
+
+extension View {
+    func compareVoiceOverActions(url: URL, index: Int, store: CompareStore,
+                                 cull: CullStore, appState: AppState) -> some View {
+        modifier(CompareVoiceOverActions(url: url, index: index, store: store,
+                                         cull: cull, appState: appState))
     }
 }

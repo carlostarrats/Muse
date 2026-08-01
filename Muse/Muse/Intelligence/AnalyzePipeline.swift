@@ -359,7 +359,8 @@ final class AnalyzePipeline: ObservableObject {
     /// resurrect a just-deleted tag from the old sidecar.
     private func writeSidecarIfICloud(fileID: String, url: URL, mergeExisting: Bool,
                                       noteAuthoritative: Bool = false,
-                                      editAuthoritative: Bool = false) async {
+                                      editAuthoritative: Bool = false,
+                                      tagsAuthoritative: Bool = true) async {
         guard ICloudZone.contains(url, folder: iCloudFolder) else { return }
         guard let queue = Database.shared.dbQueue else { return }
         let now = Int64(Date().timeIntervalSince1970)
@@ -393,7 +394,8 @@ final class AnalyzePipeline: ObservableObject {
                 let out = Sidecar.resolveForWrite(fresh: sidecar, existing: existing,
                                                   mergeExisting: mergeExisting,
                                                   noteAuthoritative: noteAuthoritative,
-                                                  editAuthoritative: editAuthoritative)
+                                                  editAuthoritative: editAuthoritative,
+                                                  tagsAuthoritative: tagsAuthoritative)
                 try SidecarStore.write(out, forAsset: url)
             }
             catch { print("[AnalyzePipeline] sidecar write failed for \(url.lastPathComponent): \(error)") }
@@ -435,8 +437,14 @@ final class AnalyzePipeline: ObservableObject {
                                                absPaths: inZone.map { $0.standardizedFileURL.path })
         for url in inZone {
             guard let fid = idByPath[url.standardizedFileURL.path] else { continue }
+            // NOT authoritative for tags: this write exists to publish the edit
+            // stack. Taking the tag list from this device's DB wholesale would
+            // wipe tags that only exist in the sidecar because this device
+            // hasn't hydrated them yet — the same reason `note` is preserved
+            // here rather than overwritten.
             await writeSidecarIfICloud(fileID: fid, url: url, mergeExisting: false,
-                                       editAuthoritative: true)
+                                       editAuthoritative: true,
+                                       tagsAuthoritative: false)
         }
     }
 

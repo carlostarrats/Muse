@@ -28,8 +28,18 @@ nonisolated enum EffectiveDimensions {
     }
 
     /// May perform a header read on a cache miss — off-main only.
+    ///
+    /// The header read comes FIRST, and the crop is asked for afterwards. That
+    /// order is load-bearing: `EditStackIndex.croppedSize` scales the crop
+    /// against `ImageHeaderSizeCache.cached`, a no-I/O lookup, so on a cold
+    /// cache it answers nil and this would fall through to the ORIGINAL
+    /// dimensions of a cropped file. Resolving first warms the very table the
+    /// crop needs, so the second call can succeed. Both callers — the Info
+    /// card's dimensions row and the hero flight's take-off rect — say in as
+    /// many words that they want the post-crop size.
     static func resolve(_ url: URL) -> CGSize? {
-        EditStackIndex.croppedSize(for: url) ?? ImageHeaderSizeCache.resolve(url)
+        let original = ImageHeaderSizeCache.resolve(url)
+        return EditStackIndex.croppedSize(for: url) ?? original
     }
 
     /// Width ÷ height of the drawn image. Prefers the no-I/O path and only
