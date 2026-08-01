@@ -303,39 +303,55 @@ changed by this review.
 
 Paste this into a clean chat:
 
-> Continue the Specs 01–07 review of `new-product-build-1`.
+> Continue the Specs 01–07 review of `new-product-build-1`, and **run it to
+> completion — every remaining slice, then Pass C, then the final pass. Do not
+> stop between slices, do not report progress back, and do not ask me to
+> confirm anything.** The brief and the plan docs were written so you don't have
+> to. Surface ONCE at the very end, short.
 >
 > Read `docs/new-build/REVIEW-PROMPT.md` first — it is the binding brief and all
 > its constraints still apply (work SOLO: no subagents, no Workflow, no fan-out;
 > find problems by reading code; verify every finding in the code and say plainly
-> whether you confirmed or inferred it; loop each slice until green, cap 5 rounds).
+> whether you confirmed or inferred it; loop each slice until green, cap 5 rounds;
+> commit each slice as you finish it).
 >
 > Pass A is DONE. Its output — the ten sweep tables and 15 ranked findings — is
 > `docs/new-build/REVIEW-FINDINGS.md`. Read it before touching anything; do not
 > redo Pass A.
 >
-> Pass A reordered the slices: migrations (old slice 6) are schema-only and O(1),
-> so they drop to LAST, and a new **slice 0 — launch & background scheduling**
-> goes first, because its findings are decided-criteria violations in files that
-> slices 2, 5 and 7 also touch.
+> Pass A reordered the slices. Work them in THIS order, back to back:
 >
-> Start slice 0. In scope, and nothing else: **F1, F4, F5, F10, F12, F15** (see
-> the ranked table in REVIEW-FINDINGS.md § A11). For F1 the intent is already
-> decided — read `muse-photo-foundation.md` §9 and §13 and conform the code to
-> them; don't ask which behaviour is wanted.
+> 0. **Launch & background scheduling** (new — goes first because its findings are
+>    decided-criteria violations in files that slices 2, 5 and 7 also touch):
+>    **F1, F4, F5, F10, F12, F15**.
+> 1. Invariants — the original slice 1, plus **F2** (`EditStackIndex` not rebuilt
+>    after a folder rename or file move) and **F9**, **F14**.
+> 2. Editing engine + readouts (04, 05) — plus **F3, F6, F7**.
+> 3. Import (06).
+> 4. Sharing and social export (07) — plus **F13**.
+> 5. CLIP, culling, search (02, 03) — plus **F8, F11**.
+> 6. Cross-spec seams.
+> 7. Migrations v13–v23 — demoted to last; Pass A found them schema-only and O(1),
+>    so this is a confirmation pass, not an investigation.
 >
-> Explicitly NOT slice 0 — leave them for their own slices: **F2** (EditStackIndex
-> not rebuilt after rename/move) → slice 1, invariants. **F3, F6, F7** (RAW
-> scaleFactor, main-thread LUT read, per-autosave full joins) → slice 2, editing
-> engine.
+> **Resolve every behavioural question from the docs, never from me.**
+> `muse-photo-foundation.md` §9 and §13 are the authority, with
+> `docs/new-build/DECISIONS.md` (Current state block first) for build-level
+> specifics and `docs/durable-constraints.md` for must-not-break rules. Decide,
+> act, and record the reasoning in REVIEW-FINDINGS.md and the commit message. If
+> genuinely nothing answers it, make the call yourself from the foundation's
+> stated intent and write down what you concluded and why — don't wait on me.
 >
-> Green for this slice means all of: clean build with a verified-fresh binary
-> (`stat` its mtime); the FULL suite passes — **1,748 tests, 2 skipped, 0 failures**
-> is the verified baseline, and do NOT pipe `xcodebuild` through `tail`; and a
-> fresh re-review surfaces no new confirmed findings two rounds running.
+> Green for a slice means all of: clean build with a verified-fresh binary
+> (`stat` its mtime — an incremental build prints BUILD SUCCEEDED over a stale
+> `.app`); the FULL suite passes — **1,748 tests, 2 skipped, 0 failures** is the
+> verified baseline, and do NOT pipe `xcodebuild` through `tail`; and a fresh
+> re-review surfaces no new confirmed findings two rounds running.
 >
-> Then commit the slice and report what you fixed, what you left, and what you
-> could not verify.
+> At the very end: re-run the suite, re-verify the Pass A tables, update
+> `CLAUDE.md` / `DECISIONS.md` Current state / `docs/architecture-map.md` /
+> `docs/session-log.md` per the brief's final pass, commit, and give me ONE
+> summary — what changed, what you left and why, what you couldn't verify.
 
 ### Two open questions to carry forward
 
