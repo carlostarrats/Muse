@@ -337,6 +337,46 @@ key independence, distinct-years exactness incl. gap years and NULLs, geocode
 keyset advance / already-geocoded skip / dataset-version bump).
 Suite after this slice: **1,757 tests, 0 failures**.
 
+### Slice 1 — invariants (+ F2, F9, F14) — DONE
+
+| Finding | Fix |
+|---|---|
+| F2 | `EditStore.rebuildIndex()` is now called after all three path-rewriting migrations — `moveFiles`, file rename, folder rename. `EditStackIndex` is path-keyed, so without it every edited file under a renamed folder rendered UNEDITED everywhere until relaunch. Its own doc-comment already prescribed this; nothing called it. |
+| F9 | `OutputRender.discard(_:)` — collects a rendered temp and its per-render directory as soon as the consumer is done. Wired into all three Drive upload loops, `SocialRender.export` and the PDF exporter. The PDF exporter also now renders **inside** each task instead of mapping all N up front, so an N-image edited export no longer puts N full-resolution temps on disk at once. `discard` is a deliberate NO-OP for an unrendered output (that URL is the user's own file) — two independent guards, both tested. The two share-sheet paths keep relying on the launch sweep, documented at both call sites: `NSSharingServicePicker` reads its files lazily after the user picks a service. The launch sweep itself moved off the main thread. |
+| F14 | `OutputRender.renderedImage(url:maxPixel:)` deleted — no call sites, and it duplicated the render decision outside the `RenderedOutput` choke point without a decode-budget guard. |
+
+Three further defects, all **confirmed** by reading the code:
+
+- **F16 (high) — Escape did nothing for five of the new modals.** Specs 03/04/07
+  added `cullResolveShown`, `clipOfferShown`, `editPromptRequest`,
+  `openWithForkRequest` and `socialExportRequest` to `AppState.modalPresented`
+  but gave none of them a branch in `ContentView.dismissTopModal()`.
+  `modalPresented` also gates the grid key catcher, so while any of those cards
+  was open Escape *and* the arrow keys were dead. All five now peel, in the
+  card-class order the rest of the list uses.
+- **F17 (med) — the one-time search-model offer re-offered forever.** Its
+  "Not Now"/"Download" dismissal wrote `clipOfferShown = false` directly, and
+  `museModal`'s `onDismiss` (which records `clipOfferSeenKey`) fires only on a
+  scrim click. Both routes now go through one `dismissClipOffer()`.
+- **F18 (high) — compare panes and the social-export crop stage previewed the
+  UNEDITED original.** DECISIONS' Spec-04 forward note says in as many words
+  that compare panes MUST join the edit-render sweep; they didn't. For the
+  social crop stage it was worse than cosmetic: the export ships edited pixels
+  through `OutputRender`, so with a crop or straighten in the stack the user
+  positioned the crop against a differently-framed picture and `decodedSize`
+  fed the crop math the wrong geometry. Both now render the stack, budget-gated,
+  with the same branch `HeroStage` uses.
+
+Checked and clean: all three Drive upload paths (publish, portfolio, portfolio
+update) go through `OutputRender` → `ImageMetadataStripper.strip`, fail-closed;
+`uploadManifest` takes `Data` and pins its own mime, so it structurally cannot
+be an image path; rating writes from both importers go through
+`TagStore.setRating`, the single exclusivity seam; `EffectiveDimensions` has
+consumers in grid, hero, aspect cache and the Info card; `modalPresented` and
+`dismissTopModal` now agree entry-for-entry.
+
+Suite after this slice: **1,759 tests, 2 skipped, 0 failures.**
+
 ---
 
 ## Resume here — next session

@@ -145,6 +145,10 @@ extension AppState {
             try await queue.write { db in
                 try FolderRenameMigration.apply(db, old: old, new: new, newName: newName)
             }
+            // Path-keyed edit index — a folder rename moves EVERY edited file
+            // under it to a new key, so without this they all render unedited
+            // (tile, hero, export, share) until the next launch.
+            await EditStore.shared.rebuildIndex()
             return true
         } catch {
             return false

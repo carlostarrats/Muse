@@ -471,9 +471,22 @@ struct SocialCropStageView: View {
     private func load() async {
         guard loadedURL != url else { return }
         let target = url
+        // The export ships EDITED pixels (SocialRender goes through
+        // OutputRender), so the crop stage has to show them: previewing the
+        // original meant the user positioned the crop against a picture that
+        // wasn't what came out — and with a crop or straighten in the stack
+        // the two didn't even share a frame, so `decodedSize` fed the crop
+        // math the wrong geometry.
+        let stack = EditStackIndex.resolvedStack(for: target)
         let decoded = await Task.detached(priority: .userInitiated) { () -> (NSImage, CGSize)? in
             guard let src = CGImageSourceCreateWithURL(target as CFURL, nil),
                   ThumbnailCache.withinDecodeBudget(src) else { return nil }
+            if let stack,
+               let rendered = EditRenderer.render(url: target, stack: stack,
+                                                  maxPixel: Self.previewMaxPixel) {
+                let size = CGSize(width: rendered.width, height: rendered.height)
+                return (NSImage(cgImage: rendered, size: size), size)
+            }
             let options: [CFString: Any] = [
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
                 kCGImageSourceThumbnailMaxPixelSize: Self.previewMaxPixel,

@@ -88,6 +88,19 @@ struct ContentView: View {
         }
     }
 
+    /// Dismiss the one-time search-model offer AND record that it was seen.
+    /// Both dismissal routes (scrim/Escape and the card's Not Now) go through
+    /// here — the offer must never reappear once shown.
+    private func dismissClipOffer() {
+        appState.clipOfferShown = false
+        UserDefaults.standard.set(true, forKey: AppSettings.clipOfferSeenKey)
+    }
+
+    /// Escape's modal peel. EVERY flag in `AppState.modalPresented` needs a
+    /// branch here: `modalPresented` also gates the grid's key catcher, so a
+    /// modal that is registered there but missing here leaves Escape (and the
+    /// arrow keys) doing nothing at all while it is open. Specs 03/04/07 added
+    /// five flags to `modalPresented` and none of them here.
     private func dismissTopModal() {
         // Confirms/errors first: they're presented outermost, so one raised
         // from inside another card (a delete confirm over Duplicates) is the
@@ -98,7 +111,10 @@ struct ContentView: View {
         if appState.folderOpError != nil { appState.folderOpError = nil; return }
         if appState.backupError != nil { appState.backupError = nil; return }
         if appState.fileRenameError != nil { appState.fileRenameError = nil; return }
+        // Spec 04's fork confirm is a confirm card like the ones above.
+        if appState.openWithForkRequest != nil { appState.openWithForkRequest = nil; return }
         // Name prompts.
+        if appState.editPromptRequest != nil { appState.editPromptRequest = nil; return }
         if appState.collectionRenameAlertRequest != nil { appState.collectionRenameAlertRequest = nil; return }
         if appState.fileRenameRequest != nil { appState.fileRenameRequest = nil; return }
         if appState.newSubfolderRequest != nil { appState.newSubfolderRequest = nil; return }
@@ -108,6 +124,13 @@ struct ContentView: View {
         if appState.addTagRequest != nil { appState.addTagRequest = nil; return }
         if appState.newCollectionRequest { appState.cancelNewCollection(); return }
         if appState.importModal != nil { appState.importModal = nil; return }
+        if appState.socialExportRequest != nil { appState.socialExportRequest = nil; return }
+        // Cancel returns to the LIVE cull session with nothing applied — same
+        // as the card's own Cancel button.
+        if appState.cullResolveShown { appState.cullResolveShown = false; return }
+        // Escape counts as declining the one-time offer, exactly like a scrim
+        // click; without the seen-key write it would come back next launch.
+        if appState.clipOfferShown { dismissClipOffer(); return }
         if appState.reconnectShown { appState.reconnectShown = false; return }
         if appState.duplicatesSheetVisible { appState.duplicatesSheetVisible = false; return }
         if appState.driveSharesShown { appState.driveSharesShown = false; return }
@@ -278,7 +301,7 @@ struct ContentView: View {
                        onDismiss: {
                            // Whichever way it's dismissed, the offer is
                            // one-time — never nag again.
-                           UserDefaults.standard.set(true, forKey: AppSettings.clipOfferSeenKey)
+                           dismissClipOffer()
                        }) {
                 ModalMessageCard(
                     alert: MuseAlert(
@@ -287,7 +310,11 @@ struct ContentView: View {
                         confirmTitle: String(localized: "Download"),
                         cancelTitle: String(localized: "Not Now"),
                         onConfirm: { ClipModelStore.shared.download() })) {
-                    appState.clipOfferShown = false
+                    // The card's own dismiss (Download / Not Now) has to mark
+                    // the offer seen too — `onDismiss` above fires only on a
+                    // scrim click, so clearing the flag directly here meant
+                    // "Not Now" re-offered on the next launch, forever.
+                    dismissClipOffer()
                 }
             }
             // A list of share rows: name, date, two buttons.

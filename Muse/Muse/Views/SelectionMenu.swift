@@ -225,6 +225,10 @@ struct SelectionActionsMenu: View {
         guard let contentView = NSApp.keyWindow?.contentView, !fileURLs.isEmpty else { return }
         // Pixels leaving the app render through OutputRender (identity today).
         guard let rendered = try? OutputRender.forOutput(fileURLs) else { return }
+        // Deliberately NOT `OutputRender.discard`ed here: the picker reads the
+        // files lazily, after the user chooses a service — possibly minutes
+        // later — so deleting on return would break the share. These are the
+        // one case the 24 h launch sweep is genuinely the collector for.
         let picker = NSSharingServicePicker(items: rendered.map(\.url))
         picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
     }

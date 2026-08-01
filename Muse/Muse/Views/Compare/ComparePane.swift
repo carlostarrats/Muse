@@ -115,8 +115,23 @@ struct ComparePane: View {
         // Decodes the ORIGINAL directly rather than going through
         // ThumbnailCache — a pane-sized variant would have to be enumerated in
         // `renderedVariants` or it would survive an in-place edit forever.
+        //
+        // An edited file renders its stack here, exactly as the grid tile and
+        // the hero do (DECISIONS' Spec-04 forward note: compare panes MUST
+        // join the edit-render sweep). Without it, comparing two edited photos
+        // showed the unedited originals — the one surface where that matters
+        // most, since compare exists to judge them against each other.
+        // `boundedDecode` is the budget gate for the fallback; the render path
+        // gets the same gate below.
+        let stack = EditStackIndex.resolvedStack(for: fileURL)
         let decoded = await Task.detached(priority: .userInitiated) { () -> CGImage? in
-            VisionServices.boundedDecode(url: fileURL, maxPixel: target)
+            if let stack,
+               let src = CGImageSourceCreateWithURL(fileURL as CFURL, nil),
+               ThumbnailCache.withinDecodeBudget(src),
+               let rendered = EditRenderer.render(url: fileURL, stack: stack, maxPixel: target) {
+                return rendered
+            }
+            return VisionServices.boundedDecode(url: fileURL, maxPixel: target)
         }.value
         guard !Task.isCancelled, fileURL == url, let decoded else { return }
         imageSize = CGSize(width: decoded.width, height: decoded.height)

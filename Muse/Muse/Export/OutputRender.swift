@@ -95,20 +95,30 @@ nonisolated enum OutputRender {
         return CGImageSourceCreateThumbnailAtIndex(src, 0, options as CFDictionary)
     }
 
-    /// Render directly, without a temp file, for consumers that want pixels
-    /// rather than a file (the PDF exporter). Falls back to the bounded
-    /// ImageIO decode when the file carries no renderable stack.
-    static func renderedImage(url: URL, maxPixel: Int) -> CGImage? {
-        if let stack = EditStackIndex.resolvedStack(for: url),
-           let rendered = EditRenderer.render(url: url, stack: stack, maxPixel: maxPixel) {
-            return rendered
-        }
-        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
-        return CGImageSourceCreateThumbnailAtIndex(src, 0, [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
-        ] as CFDictionary)
+    /// Delete a rendered temp as soon as its consumer is done with it.
+    ///
+    /// The launch sweep below is the backstop for an INTERRUPTED export, not
+    /// the collector for a successful one: a 1,000-image edited publish used
+    /// to leave 1,000 full-resolution renders in `tmp` for a day, and a
+    /// session that never relaunches never collected them at all.
+    ///
+    /// Deliberately a NO-OP for an unrendered output — `out.url` is then the
+    /// user's own file, and this must never be able to delete that. BOTH
+    /// guards (a non-nil stackHash, and the path living under our own temp
+    /// root) are load-bearing; keep both.
+    static func discard(_ out: RenderedOutput) {
+        guard out.stackHash != nil else { return }
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(tempDirectoryName, isDirectory: true)
+            .standardizedFileURL.path
+        // The per-render UUID directory, not just the file inside it.
+        let dir = out.url.standardizedFileURL.deletingLastPathComponent()
+        guard dir.path.hasPrefix(root + "/") else { return }
+        try? FileManager.default.removeItem(at: dir)
+    }
+
+    static func discard(_ outs: [RenderedOutput]) {
+        for out in outs { discard(out) }
     }
 
     /// Launch sweep for abandoned render temps. Age-based, not size-based: a

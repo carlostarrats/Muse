@@ -59,6 +59,8 @@ struct ShareButton: View {
         guard let contentView = NSApp.keyWindow?.contentView else { return }
         // Pixels leaving the app render through OutputRender (identity today).
         guard let rendered = try? OutputRender.forOutput(url) else { return }
+        // Not discarded here — the picker reads the file lazily once the user
+        // picks a service. Same rule as SelectionMenu.share().
         let picker = NSSharingServicePicker(items: [rendered.url])
         picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
     }

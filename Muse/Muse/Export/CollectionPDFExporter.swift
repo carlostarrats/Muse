@@ -86,15 +86,21 @@ enum CollectionPDFExporter {
             // QuickLook fallback is a per-file XPC round-trip; serial would make
             // a file-card-heavy export feel hung) and reassemble in input order.
             let maxConcurrent = 8
-            // Everything that leaves the app renders through OutputRender —
-            // mapped once, up front, index-aligned with `urls`. Identity today.
-            guard let rendered = try? OutputRender.forOutput(urls) else { return nil }
             var slots = [CGImage?](repeating: nil, count: urls.count)
             await withTaskGroup(of: (Int, CGImage?).self) { group in
                 var next = 0
                 func schedule(_ i: Int) {
-                    let out = rendered[i]
+                    let url = urls[i]
                     group.addTask {
+                        // Everything that leaves the app renders through
+                        // OutputRender. Rendered INSIDE the task and discarded
+                        // as soon as it is decoded: mapping all N up front put
+                        // one full-resolution temp per edited image on disk
+                        // simultaneously, for a collection of any size.
+                        guard let out = try? OutputRender.forOutput(url) else {
+                            return (i, await fallbackThumbnail(url, maxPixel: maxPixel))
+                        }
+                        defer { OutputRender.discard(out) }
                         if let cg = imageIOThumbnail(out, maxPixel: maxPixel) { return (i, cg) }
                         // The fallback paths (video frame extraction, QuickLook
                         // type icons) are not RENDERING paths — a type icon

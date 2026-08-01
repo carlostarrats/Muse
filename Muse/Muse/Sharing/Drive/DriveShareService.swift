@@ -161,6 +161,10 @@ enum DriveShareUpdateSteps {
                         // Everything that leaves the app renders through
                         // OutputRender first (identity today).
                         let out = try OutputRender.forOutput(url)
+                        // Collect the render as soon as it is uploaded — a
+                        // large edited publish otherwise leaves one full-res
+                        // temp per image for the 24h launch sweep to find.
+                        defer { OutputRender.discard(out) }
                         id = try await client.uploadFile(out, name: url.lastPathComponent,
                                                          mime: mime, parent: folderID)
                     } catch is ImageMetadataStripper.StripError {
@@ -300,6 +304,10 @@ extension DriveShareService {
                     let id: String
                     do {
                         let out = try OutputRender.forOutput(url)
+                        // Collect the render as soon as it is uploaded — a
+                        // large edited publish otherwise leaves one full-res
+                        // temp per image for the 24h launch sweep to find.
+                        defer { OutputRender.discard(out) }
                         id = try await client.uploadFile(out, name: url.lastPathComponent,
                                                          mime: mime, parent: folderID)
                     } catch is ImageMetadataStripper.StripError {
@@ -408,6 +416,7 @@ extension DriveShareService {
                 let mime = Self.mimeType(for: url)
                 do {
                     let out = try OutputRender.forOutput(url)
+                    defer { OutputRender.discard(out) }
                     let id = try await client.uploadFile(out, name: url.lastPathComponent,
                                                          mime: mime, parent: record.folderID)
                     imageIDs.append(id)

@@ -110,10 +110,15 @@ struct MuseApp: App {
                 .task {
                     PhaseTrace.begin()
                     ThumbnailCache.shared.enforceDiskCap()
-                    // Rendered export temps: bounded by age, not size. A
-                    // publish or share that was interrupted leaves its temp
-                    // behind, and nothing else ever collects them.
-                    OutputRender.sweepRenderTemps()
+                    // Rendered export temps: bounded by age, not size. The
+                    // consumers collect their own temps now, so this is the
+                    // backstop for an INTERRUPTED publish or share (and for
+                    // the share sheet, which reads its files lazily). Detached
+                    // — it enumerates and deletes a directory, which has no
+                    // business on the main thread during launch.
+                    Task.detached(priority: .background) {
+                        OutputRender.sweepRenderTemps()
+                    }
                     // BEFORE the backfills: every pixel consumer consults the
                     // index, and a thumbnail generated in the window before
                     // it's installed would be cached under the unedited key.

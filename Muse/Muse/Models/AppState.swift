@@ -1149,6 +1149,13 @@ final class AppState: ObservableObject {
                     // after reconcile) — log it, don't fail the move.
                     print("[AppState] move DB migration failed: \(error)")
                 }
+                // EditStackIndex is keyed by PATH, so a wholesale path rewrite
+                // strands every edited file under the old key and it renders
+                // UNEDITED everywhere (tile, hero, export, share) until the
+                // next launch. `rebuildIndex`'s own doc-comment already says
+                // "launch, and after anything that rewrites paths wholesale";
+                // nothing was calling it.
+                await EditStore.shared.rebuildIndex()
                 // A move into/within the iCloud zone re-scoped tag rows — keep
                 // the synced sidecar current (no-op for non-iCloud targets;
                 // same rule as every TagStore mutation).

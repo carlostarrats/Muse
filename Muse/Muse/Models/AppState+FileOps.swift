@@ -72,6 +72,9 @@ extension AppState {
                     // after reconcile) — log it, don't fail the rename.
                     print("[AppState] rename DB migration failed: \(error)")
                 }
+                // Path-keyed edit index — see moveFiles. Without this the
+                // renamed file renders unedited until the next launch.
+                await EditStore.shared.rebuildIndex()
                 // Keep the iCloud sidecar current if the file lives in the zone
                 // (no-op otherwise; same rule as moveFiles / every TagStore edit).
                 AnalyzePipeline.shared.exportSidecarsAfterTagEdit(for: [newURL])

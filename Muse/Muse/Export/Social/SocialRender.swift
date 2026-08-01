@@ -75,6 +75,10 @@ enum SocialRender {
     static func export(_ job: Job, to directory: URL) throws -> Result {
         // 1. Choke point — edited pixels ride here.
         let out = try OutputRender.forOutput(job.sourceURL)
+        // The render temp exists only to be decoded below; collect it here
+        // rather than leaving it for the 24 h launch sweep. No-op for an
+        // unedited source (nothing was rendered).
+        defer { OutputRender.discard(out) }
 
         // 2. Budget gate.
         guard let cgSource = CGImageSourceCreateWithURL(out.url as CFURL, nil) else {

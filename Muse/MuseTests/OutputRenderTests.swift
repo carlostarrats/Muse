@@ -91,6 +91,40 @@ final class OutputRenderTests: XCTestCase {
         XCTAssertNil(out.stackHash)
     }
 
+    /// `discard` collects a rendered temp AND its per-render directory as soon
+    /// as the consumer is done — a large edited publish used to leave one
+    /// full-resolution render per image for the 24 h sweep.
+    func testDiscardRemovesARenderedTempAndItsDirectory() throws {
+        let url = try EditRenderTestSupport.writeFixture(width: 64, height: 64,
+                                                         orientation: 1, named: "output-discard")
+        var stack = EditStack.fresh()
+        stack.setTone { $0.exposureEV = 1 }
+        EditStackIndex.rebuild(entries: [(path: url.standardizedFileURL.path,
+                                          stackJSON: try EditStackCodec.encode(stack),
+                                          hash: EditStackCodec.hash(stack))])
+        EditStackIndex.installProvider(LiveEditStackProvider())
+
+        let out = try OutputRender.forOutput(url)
+        let dir = out.url.deletingLastPathComponent()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: out.url.path))
+        OutputRender.discard(out)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: out.url.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dir.path))
+    }
+
+    /// THE safety property: for an unedited file `out.url` IS the user's own
+    /// file. `discard` must never touch it — a regression here deletes
+    /// originals on every share.
+    func testDiscardNeverTouchesAnUneditedOriginal() throws {
+        let url = try EditRenderTestSupport.writeFixture(width: 32, height: 32,
+                                                         orientation: 1, named: "output-keep")
+        let out = try OutputRender.forOutput(url)
+        XCTAssertNil(out.stackHash)
+        OutputRender.discard(out)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path),
+                      "discard must be a no-op for an unrendered output")
+    }
+
     func testSweepLeavesFreshTempsAlone() throws {
         let url = try EditRenderTestSupport.writeFixture(width: 64, height: 64,
                                                          orientation: 1, named: "output-sweep")
