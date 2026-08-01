@@ -319,9 +319,7 @@ Muse/Muse/
                                    Folder rows with per-row Locate… + ✓/flagged/failed status; renders
                                    ReconnectModel (matching/applying live in the pure Backup/ cores)
     KeyCaptureView.swift           NSView arrow/return capture (hero flips)
-    BreadcrumbView.swift           path breadcrumb (kept; not in toolbar)
     OpenWithMenu.swift             NSWorkspace registered apps via LaunchServices
-    ImageDetailPanel.swift         fit/100% preview overlay
     QuickLookFallback.swift        QLPreviewView wrapper
     ViewerRouter.swift             AssetKind → viewer dispatch (image/raw/psd → HeroImageViewer;
                                    .video → HeroVideoViewer; rest → ViewerChrome-wrapped)
@@ -628,6 +626,11 @@ Performance:
   intent (macOS 26 gated) + pure token composer behind the suggestion pill.
 - **`Models/CompareStore.swift`, `CullStore.swift`** + **`Components/CompareGeometry.swift`,
   `CullSummary.swift`, `RegionMath.swift`** — compare/cull state and their pure math.
+  **`RegionMath` is ORPHANED and deliberately kept** (review round 7): it is the
+  pure helper of Spec 03 §5 "region similarity", a feature that was specified and
+  never built — no `regionMode`, no `RegionSearch`, no marquee anywhere. Do not
+  delete it as dead code; it is the evidence of the gap. See
+  `docs/new-build/REVIEW-LENSES.md` R7-1.
 - **`Views/Compare/`** — `CompareView`, `ComparePane`, `CompareKeyCatcher` (the
   side-by-side workbench), with **`Views/CullHUD.swift`** and
   **`Views/Modal/CullResolveCard.swift`** for the ephemeral K/X/U cull pass.

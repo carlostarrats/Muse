@@ -281,3 +281,75 @@ Recorded so a later round doesn't re-spend the effort:
 - **Local leakage.** `PhaseTrace` is env-gated behind `MUSE_TRACE`/`MUSE_PERF` and stores nothing when off. The 21 non-DEBUG `print` calls are all error-path diagnostics; exactly one (`Indexer`, on a write failure) includes a user path, as do three `NSLog` error paths in `FolderOps`/`FileMover`. These go to the local system log, not off the machine — acceptable, and noted so it isn't re-derived.
 - **The other importers' path construction.** Takeout builds its sidecar ladder from `url.lastPathComponent` of an enumerated file; the share extension's `uniqueDestination` and `OutputRender`/`SocialRender`'s temp stems likewise come from real enumerated URLs. Only Eagle took a name that arrived as *data*.
 - **The `.muselibrary` archive is deliberately NOT size-bounded on read.** It is a file the user explicitly picked, and a legitimate archive of a large library now carries LUT bytes, so a cap would refuse real backups to defend against a file the user chose to open. Deliberate, unlike the import sidecars, which are walked in bulk without the user seeing them (`BoundedRead`).
+
+---
+
+## Round 7 (2026-08-01) — mechanization, and the lens that found the gap
+
+Round 7 changed the method rather than adding a seventh set of angles. Rounds
+1–6 each found real bugs by running lenses the previous rounds hadn't, which
+works but never terminates — the lens space is unbounded, so "review until
+green" had no exit criterion. Two artifacts now supply one:
+
+- **`scripts/audit-invariants.sh`** — 12 checks, each a rule that was broken
+  once, shipped, and cost a session. A shell script rather than an XCTest on
+  purpose: `EditingModuleImportTests` already tries this as a grep test and
+  **skips** here, because the test host is the sandboxed app and the checkout
+  lives in `~/Documents`. A source-tree check inside the suite passes vacuously
+  exactly where it is needed.
+- **`docs/new-build/REVIEW-LENSES.md`** — every lens ever run, plus the ones
+  not yet run. A round is now "run the registry", not "invent angles", and
+  static review is *done* when the unrun list is empty and the audit is green.
+
+**Every audit check was negative-tested** — verified green on a clean tree, then
+verified to FAIL when its violation is injected. Two were wrong on first
+writing, both in the same way: they matched a rule being *discussed in a comment*
+as the rule being *broken*. `ENT-1` flagged the very comment explaining that
+iCloud is deliberately omitted, and a draft `NET-1` flagged `ViewerInfoColumn`
+for a comment stating the app never uses `URLSession` there. A checker that cries
+wolf gets ignored, so both now strip comments. `ARCH-1` was also rewritten from
+file-level to line-level: a "does this file mention `#if arch(arm64)`" test would
+have passed the exact regression it exists to catch, since `ClipVectors` has two
+correctly-guarded uses that would alibi a third bad one.
+
+### Round 7 findings
+
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| **R7-1** | med | **Spec 03 §5 "Region similarity" was specified and never built.** The spec describes crosshair, marquee drag, `RegionSearch.minSide = 24`, crop embedding, a "region"-labelled similar search, and an Escape branch that exits region mode rather than the viewer. Only `Components/RegionMath.swift` — the pure geometry helper — exists. No `regionMode`, no `RegionSearch`, no marquee. Found by a spec→code symbol sweep across `Muse/`. **Third instance of this branch's signature failure**, after the grid cull badge and the five missing Escape branches: the pure, testable half of a feature lands and gets tests, the UI that makes it reachable does not, and the suite stays green. | **Owner's call** — building it is new product work with UX judgment, not a bug fix. `RegionMath.swift` kept deliberately, as the evidence. |
+| **R7-2** | low | **Two dead view files.** `BreadcrumbView.swift` (53 lines, phase 0.5, zero references, doc comment promising clickable navigation its plain `Text` segments never implemented) and `ImageDetailPanel.swift` (15 lines, self-described "Phase 0 placeholder", superseded by `ViewerInfoColumn`). | **Removed.** Xcode 16 `fileSystemSynchronized` groups, so no `pbxproj` edit needed. Release build green. |
+| **R7-3** | note | **Multi-instance is a dev hazard and was live during this review.** `Database.swift` states the assumption — *"Single writer, single process"* — and it holds for shipping: the share extension genuinely does not open the database (verified: no GRDB reference in `MuseShareExtension/`), and LaunchServices won't start a second instance normally. But GRDB's `busyMode` defaults to `.immediateError`, never overridden, so a cross-process write throws `SQLITE_BUSY` with no retry — into a lot of `try?`. Two instances were running here via `open -n`/Xcode. | **No code change** (unreachable for a shipping user). **Quit all but one instance before the G1 GUI pass**, or phantom "my edit didn't save" bugs will be chased. |
+
+### Round 7 — checked and clean
+
+- **Schema downgrade** (an older build opens a v23 DB, e.g. after a Sparkle
+  rollback). GRDB's `runMigrations` computes applied migrations from *known*
+  identifiers only, so the unknown newer ones are ignored and it no-ops rather
+  than erroring or erasing. Every v13–v23 addition is a nullable `ADD COLUMN` or
+  a new table, so an old build writing rows leaves them NULL, and the
+  hash-gated backfills re-run and self-heal on the next upgrade. Survivable.
+- **Nil `dbQueue` fallout.** When migration fails, `Database.shared.dbQueue` is
+  nil and the app continues. Every consumer `guard let … else { return }`s and
+  no-ops; `Housekeeping.pruneUnreachable` — the permanent delete — takes a
+  non-optional `DatabaseQueue` and is called under `if let`, so it cannot run at
+  all. Fails safe, no destructive path reachable.
+- **Observer and resource lifetimes.** The only `NotificationCenter` observers
+  are three in `AppState` (a singleton, so app-lifetime by construction) and two
+  in `ToolbarFade`, both `static`, both install-once guarded, both capturing no
+  `self`. No `removeObserver` is needed anywhere; nothing leaks.
+- **Accessibility on the surfaces this branch added.** `Views/Editor`,
+  `Views/Compare` and `Views/Export` all carry labels. The single file using SF
+  icons with no accessibility treatment at all was `BreadcrumbView` — dead code,
+  now removed.
+
+### Suite and build state after round 7
+
+**1,818 tests, 2 skipped, 0 failures** in `MuseTests`, plus **6** `MuseUITests`.
+Release build **0 warnings, 0 errors**, universal (`x86_64 arm64`).
+
+> Method note worth keeping: the first attempt at the spec→code sweep reported
+> nothing, twice, and the clean result was false. The shell here is **zsh**,
+> which splits `$(command)` but *not* `$var` — so `for s in $syms` passed the
+> whole symbol list to `grep` as one multi-line pattern, which matched
+> everything. A sweep that returns "all clean" on the first run deserves a
+> deliberate negative control before it is believed. That is how R7-1 surfaced.

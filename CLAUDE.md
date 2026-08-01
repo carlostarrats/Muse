@@ -128,7 +128,7 @@ are the load-bearing reference artifacts.
 | Foundation 6 — **Spec-06 import & migration** (no migrations; one File > Import surface over five sources; `ImportSupplement`; color-label namespace + mapping sheet; Lightroom `crs:` edits + presets; `WorkThrottleStore`/`AnalysisStatusStore`/import-size FYI) | ✅ merged, unreleased | `new-product-build-1` |
 | Foundation 7 — **Spec-07 sharing & social export** (no migrations; manifest v2 `y`/`s`/`m` + three page layouts; portfolio mode — a live `manifest.json` in the user's Drive behind a URL that never changes; `Export/Social/` + the social export card; Google on-ramp copy) | ✅ merged, unreleased | `new-product-build-1` |
 
-| **Review — Specs 01–07** | ✅ reviewed + fixed 2026-08-01 (6 rounds) | `new-product-build-1` |
+| **Review — Specs 01–07** | ✅ reviewed + fixed 2026-08-01 (7 rounds) | `new-product-build-1` |
 
 > Every row through Polish 27 is merged to `main` and shipped in release **`v1.5`**;
 > Polish 28 is merged to `main` but NOT yet in a release (`v1.5` is still the
@@ -148,7 +148,23 @@ are the load-bearing reference artifacts.
 > task-group bounds), 2 findings fixed, suite → 1,806; round 6
 > — lenses rounds 1–5 hadn't run (arithmetic traps on file-declared numbers,
 > untrusted metadata → filesystem path, bounds on the model download's PAYLOAD
-> leg, local log leakage), 4 findings fixed, suite → 1,818. Still
+> leg, local log leakage), 4 findings fixed, suite → 1,818; round 7
+> — changed the METHOD instead of adding a seventh set of angles, because six
+> rounds of inventing fresh lenses had no exit criterion. **Read
+> `docs/new-build/REVIEW-LENSES.md` before starting any review**: it lists every
+> lens ever run plus the ones not yet run, so a round means "run the registry",
+> and static review is DONE when the unrun list is empty and the audit is green.
+> **Run `./scripts/audit-invariants.sh` (12 checks, all negative-tested) before
+> any commit** — it mechanizes the durable rules a grep can enforce (AV
+> no-network, QuickLook exclusion, the four network paths, remote-body bounds,
+> `Int(exactly:)`, trash-not-unlink, the `OutputRender` choke point, decode
+> budgets, Debug entitlements, `Editing/` neutrality, `Float16` arch guard). It
+> is a shell script, NOT an XCTest, on purpose: an in-suite grep test SKIPS here,
+> since the test host is the sandboxed app and this checkout is in `~/Documents`.
+> Round 7's one real finding: **Spec 03 §5 "region similarity" was specified and
+> never built** — only its tested pure helper `RegionMath` exists, which is the
+> branch's third "testable half lands, UI never does" gap (after the grid cull
+> badge and the missing Escape branches). Still
 > true, though, that almost none of it
 > has been exercised in the RUNNING app — launch, migrations and the backfill
 > chain were confirmed with `MUSE_TRACE=1` against the real library, but the
@@ -157,7 +173,10 @@ are the load-bearing reference artifacts.
 > ledger** — one row per feature area with separate automated / static / runtime
 > states, and the Runtime column doubles as the written GUI test plan. Read and
 > update it with any feature work. **The only substantive gap left is that
-> nobody has driven the GUI** (ledger G1). Everything else the reviews recorded
+> nobody has driven the GUI** (ledger G1) — and **quit all but one Muse instance
+> before doing it**, since GRDB's `busyMode` is `.immediateError` and two
+> instances against one DB manufacture phantom "my edit didn't save" bugs.
+> Everything else the reviews recorded
 > is closed: localization is COMPLETE (1,002 keys, 0 untranslated), **backup now
 > carries edit data** (Spec 09 amendment A2 — stacks, versions, presets and LUT
 > bytes ride `.muselibrary`), and the **442 Swift 6 concurrency warnings are
