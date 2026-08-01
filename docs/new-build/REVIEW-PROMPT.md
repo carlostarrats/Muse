@@ -32,8 +32,9 @@ Constraints:
 **Precedence trap:** CLAUDE.md's durable constraints describe the app as it was BEFORE
 these specs. Where new code appears to violate one, it may be a deliberate, recorded
 supersession (Spec 02 legitimately deleted `CoordinateReader`, which Spec 01 had just
-shipped). Check DECISIONS before calling a violation a bug; if neither doc resolves it,
-ask me.
+shipped). Check DECISIONS before calling a violation a bug. If neither doc resolves it,
+make the call yourself from the foundation's stated intent and record the reasoning in
+your findings — don't stall on it.
 
 The diff is `git diff $(git merge-base main HEAD)..HEAD`.
 
@@ -69,8 +70,8 @@ cell rather than as something nobody thought to look for. Write each table into
    (`MuseApp.swift` currently fires eight unstructured `Task {}` blocks including four
    independent backfills, and `PhotoTraits.currentVersion` is now 2, which invalidates
    every existing traits row. Each spec added its own and none coordinated. Whether that
-   is acceptable on upgrade is a design question — bring me the table and your
-   recommendation rather than unilaterally restructuring launch.)
+   is acceptable is already decided — foundation §9: analysis is background, throttled
+   and pausable, photos browsable immediately, cold start budgeted. Conform to that.)
 2. **Full-library scans and backfills.** Every one, its trigger, its cap, what
    invalidates it, and whether two can run concurrently over the same rows.
 3. **Main-thread work.** Every synchronous DB read on main, every `withAnimation` around
@@ -107,8 +108,9 @@ and a fresh re-review surfaces **no new confirmed findings two rounds running.**
 clean round is not green — a first fix is usually not the whole fix, which is the entire
 reason for the loop.
 
-Cap each slice at 5 rounds. Still finding things at round 5 means the area needs a
-decision from me, not more rounds: stop, commit what is green, report. Also stop early
+Cap each slice at 5 rounds. Still finding things at round 5 means the area is deeper
+than a loop can settle: stop, commit what is green, and write up what remains with your
+recommendation — then carry on to the next slice rather than waiting on me. Also stop early
 if the only remaining items are speculative. **Verify every finding in the code before
 acting on it** and say plainly whether you confirmed it or inferred it — an unverified
 fix to this codebase is a regression.
@@ -135,23 +137,49 @@ Slices, in default order (Pass A may reorder them):
    `AnalyzePipeline`); later specs depending on earlier half-built work; duplicated logic
    that should be shared; shared logic one spec changed under another.
 
-## Stop and ask me — do not fix these unilaterally
+## Don't ask me — the intent is in the plans
 
-This codebase contains deliberate decisions that look like bugs; "fixing" one regresses a
-shipped bug back in. Ask first if a fix would:
+Do not stop to ask which behaviour I want. The product intent is already decided and
+written down; go read it and conform the code to it. `muse-photo-foundation.md` §9
+(architecture & performance) and its §13 decision table are the authority, with
+DECISIONS.md for build-level specifics. Decide, act, and record what you concluded and
+where you got it.
 
-- change anything documented in CLAUDE.md's durable constraints (the asymmetric
-  0.3s/0.4s hero backdrop fade, the deliberate split branch in `Indexer.reconcile`, the
-  un-animated spacing slider, the windowed/full-screen toolbar hybrid — all look wrong,
-  all are correct);
-- change a migration, the schema, or anything feeding `stack_hash` or a thumbnail cache
-  key (it silently re-keys every edited thumbnail in every existing library);
-- restructure launch sequencing, the network doctrine, the sandbox entitlements, or the
-  metadata-strip path;
-- delete, weaken or skip a test to make it pass;
-- refactor broadly rather than fix narrowly.
+These are DECIDED and are therefore acceptance criteria, not open questions — audit the
+new code against each and fix what doesn't conform:
 
-Otherwise: small, surgical, in the style of the surrounding code.
+- **"Everything expensive happens once, at analyze time, in the background."** Query time
+  touches only precomputed data.
+- **Analysis is background, throttled (battery / Low Power Mode), pausable under thermal
+  pressure, "finishes overnight-style." Photos are browsable immediately.** This settles
+  the launch-backfill question: four uncoordinated passes that make first launch crawl
+  violate a decided rule. Fix it to conform; don't ask me which I'd prefer.
+- **Cold start is a budgeted metric** on the reference machine (M1 Air 8GB), alongside
+  grid scroll, search latency and slider-to-render latency. Design centre is 10k–50k
+  photos and "must be flawless"; 200k–800k must "degrade gracefully — never crash, never
+  corrupt, never beachball."
+- **"Never write code that assumes everything fits in RAM."**
+- **`AppState` is frozen** at ~1380 LOC / ~70 `@Published`. New features get their own
+  state objects. Every new `@Published` on `AppState` invalidates more UI — count what
+  Specs 01–07 added and flag every one that should have been its own store.
+- **The platform-neutral core imports zero AppKit** (edit recipes, search/query, sidecar
+  I/O, import mapping).
+- **Dependencies stay minimal**; models are downloaded on demand, never bundled.
+- **Theming is tokenized** — one `Theme` via Environment, by role. No raw hex or magic
+  numbers scattered in views.
+- **Edit preview renders at screen resolution, never full-res.**
+
+The one genuine "leave it alone" category — not a question, just don't touch it: code
+that CLAUDE.md's durable constraints or DECISIONS document as deliberate. The asymmetric
+0.3s/0.4s hero backdrop fade, the split branch in `Indexer.reconcile`, the un-animated
+spacing slider, the windowed/full-screen toolbar hybrid all look wrong and are correct.
+If a doc says it's intentional, believe it and move on.
+
+Otherwise: fix it. Small, surgical, in the style of the surrounding code — not broad
+refactors. Never delete, weaken or skip a test to make it pass. If a change would alter a
+migration, `stack_hash`, or a thumbnail cache key, that silently re-keys every edited
+thumbnail in every existing library — so do it only if the plans require it, and say so
+loudly in your report.
 
 ## Pass C — runtime confirmation
 
