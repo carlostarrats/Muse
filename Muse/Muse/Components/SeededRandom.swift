@@ -2,13 +2,13 @@
 //  SeededRandom.swift
 //  Muse
 //
-//  Deterministic RNG (SplitMix64) + stable string hashing (FNV-1a 64)
-//  so spatial layouts are identical across launches for the same files.
+//  Deterministic RNG (SplitMix64) + stable string hashing (FNV-1a 64), so a
+//  seeded sample or layout is identical across launches for the same files.
 //
 
 import Foundation
 
-// `nonisolated`: the rediscovery reservoir sample runs inside a DB read.
+// `nonisolated`: callers may seed it from inside a DB read.
 nonisolated struct SeededRandom: RandomNumberGenerator {
     private var state: UInt64
 

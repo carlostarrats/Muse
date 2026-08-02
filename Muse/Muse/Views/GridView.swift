@@ -220,14 +220,7 @@ struct GridView: View {
                     // can use tags within a collection). Returns nothing when
                     // no collection is active.
                     if !appState.isSearchActive {
-                        // A rediscovery surface takes the header slot the
-                        // in-collection header would otherwise occupy — the two
-                        // are mutually exclusive contexts.
-                        if RediscoveryStore.shared.active != nil {
-                            RediscoveryHeader()
-                        } else {
-                            CollectionsRow()
-                        }
+                        CollectionsRow()
                     }
                     if appState.visibleFiles.isEmpty {
                         if appState.isLoadingFolder {
@@ -568,7 +561,6 @@ struct GridView: View {
                             let single = !appState.selectedFiles.contains(p)
                                 || appState.selectedFiles.count <= 1
                             SelectionActionsMenu(path: p)
-                            stackMenuSection(for: file, path: p)
                             compareMenuSection(for: file, path: p)
                             similarityMenuSection(for: file, path: p, single: single)
                             Divider()
@@ -708,10 +700,6 @@ struct GridView: View {
         layoutWidth = width
     }
 
-    /// Manual stacking, v1. "Stack Selection" is offered only when ≥2
-    /// image-kind files are selected and NONE is already stacked — there is no
-    /// merging into an existing stack, and the item is HIDDEN rather than shown
-    /// disabled. `.folder` and non-image kinds never see this section.
     /// The photo URLs the current right-click actually targets: the whole
     /// selection when this tile is part of it, otherwise just this tile.
     ///
@@ -770,57 +758,6 @@ struct GridView: View {
         }
     }
 
-    /// Which of the right-click's targets can be stacked. Pulled out of the
-    /// `@ViewBuilder` so it can use statements — a ViewBuilder body only takes
-    /// expressions.
-    private static func stackablePaths(selected: Set<String>, byPath: [String: FileNode],
-                                       file: FileNode, path: String,
-                                       imageKinds: Set<AssetKind>) -> [String] {
-        guard selected.contains(path) else {
-            return imageKinds.contains(file.kind) ? [path] : []
-        }
-        return selected.filter { p in
-            guard let node = byPath[p] else { return false }
-            return imageKinds.contains(node.kind)
-        }
-    }
-
-    @ViewBuilder
-    private func stackMenuSection(for file: FileNode, path: String) -> some View {
-        let imageKinds: Set<AssetKind> = [.image, .raw, .psd]
-        // Same rule as photoTargets: the memoized map, and no lookup at all
-        // for the un-selected case. Rebuilding a whole-library dictionary here
-        // cost a filesystem stat per visible file, per tile, per render.
-        let stackablePaths = Self.stackablePaths(selected: appState.selectedFiles,
-                                                 byPath: appState.visibleFilesByPath,
-                                                 file: file, path: path,
-                                                 imageKinds: imageKinds)
-        let anyAlreadyStacked = stackablePaths.contains { StacksStore.shared.entries[$0] != nil }
-        let entry = StacksStore.shared.entries[path]
-
-        if imageKinds.contains(file.kind), stackablePaths.count >= 2, !anyAlreadyStacked {
-            Divider()
-            Button("Stack Selection") {
-                let paths = stackablePaths
-                Task { await StacksStore.shared.stackSelection(paths: paths) }
-            }
-        }
-        if let entry {
-            Divider()
-            Button("Unstack") {
-                Task { await StacksStore.shared.unstack(entry.stackID) }
-            }
-            if !entry.isPick {
-                Button("Set as Stack Pick") {
-                    Task { await StacksStore.shared.setPick(stackID: entry.stackID, path: path) }
-                }
-            }
-            Button("Remove from Stack") {
-                Task { await StacksStore.shared.removeFromStack(path: path) }
-            }
-        }
-    }
-
     /// Cheap signature of everything that changes the *set* of files shown
     /// (folder, sort, collection/tag filters, search). Avoids mapping 1700
     /// ids on every render just to drive an onChange.
@@ -866,9 +803,6 @@ struct GridView: View {
             appState.isSearchActive ? "s" : "",
             appState.searchQuery,
             String(describing: appState.sortMode),
-            // Collapsing/expanding a stack changes the SET of tiles, so the
-            // geometry has to recompute.
-            String(StacksStore.shared.generation),
             // An edit save can change a tile's ASPECT (a crop), so the
             // geometry has to recompute — this is the store's ONLY connection
             // to the grid, by design (zero AppState integration).
@@ -1251,38 +1185,6 @@ private struct TileView: View {
             // therefore never used). lineLimit is a backstop: if a future font
             // change breaks the measured constants, the badge truncates rather
             // than silently reintroducing the wrap this exists to prevent.
-            // Stack badge — top-LEADING (the star badge owns top-trailing).
-            // Unlike the star badge this one IS a click target (expand /
-            // collapse), so it carries a named accessibility action too: a
-            // mouse-only affordance with no VoiceOver equivalent is unreachable.
-            if let stackCount = StacksStore.shared.badges[file.url.standardizedFileURL.path],
-               stackCount > 1 {
-                let stackID = StacksStore.shared.entries[file.url.standardizedFileURL.path]?.stackID
-                let isExpanded = stackID.map { StacksStore.shared.expanded.contains($0) } ?? false
-                Button {
-                    if let stackID { StacksStore.shared.toggleExpanded(stackID) }
-                } label: {
-                    HStack(spacing: 2) {
-                        Image(systemName: isExpanded ? "square.stack.fill" : "square.stack")
-                        Text("\(stackCount)")
-                    }
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(Capsule(style: .continuous).fill(Color.black.opacity(0.6)))
-                }
-                .buttonStyle(.plain)
-                .contentShape(Capsule(style: .continuous))
-                .padding(Self.badgeInset)
-                .padding(isSelected ? Self.selectionInset : 0)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .accessibilityLabel(String(format: NSLocalizedString(
-                    "Stack of %lld photos", comment: "stack badge VoiceOver label"), stackCount))
-                .accessibilityAction(named: Text(isExpanded ? "Collapse Stack" : "Expand Stack")) {
-                    if let stackID { StacksStore.shared.toggleExpanded(stackID) }
-                }
-            }
             // Cull mark — bottom-LEADING (Spec 03). The grid already accepts
             // K/X/U to mark files; without this badge that marking was
             // completely invisible on the grid, which is where a cull pass is
@@ -1301,10 +1203,10 @@ private struct TileView: View {
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
-            // Edited badge — bottom-TRAILING. The four tile corners are fully
-            // assigned: top-leading stack · top-trailing star · bottom-leading
-            // cull · bottom-trailing edited. Display-only, never a click
-            // target (a tap would fight tile select/open).
+            // Edited badge — bottom-TRAILING. The tile corners are assigned:
+            // top-trailing star · bottom-leading cull · bottom-trailing edited
+            // (top-leading is free). Display-only, never a click target (a tap
+            // would fight tile select/open).
             if let editedVersionCount {
                 HStack(spacing: 2) {
                     Image(systemName: "slider.horizontal.3")

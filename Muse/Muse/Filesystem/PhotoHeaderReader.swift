@@ -120,7 +120,7 @@ nonisolated enum PhotoHeaderReader {
         return (Int64(date.timeIntervalSince1970), monthDay(date))
     }
 
-    /// The materialized "MM-DD" On This Day key.
+    /// The materialized "MM-DD" capture-day key.
     static func monthDay(_ date: Date) -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")

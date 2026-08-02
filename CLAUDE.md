@@ -170,7 +170,13 @@ are the load-bearing reference artifacts.
 > the feature 2026-08-01** and its orphaned helper `RegionMath` was deleted:
 > whole-photo Find Similar already ships and named things are reachable by
 > typing them, so region mode only covered visual qualities with no word. Spec 03
-> §5 is cancelled — don't re-file it as a gap. Still
+> §5 is cancelled — don't re-file it as a gap. **Two more Spec 02 features were
+> dropped 2026-08-01 on owner review of the running app**: the LIBRARY sidebar
+> section (Places / On This Day / Rarely Seen / Shuffle — never approved, not in
+> the spec) and near-duplicate stacks (the tile badge was unwanted). Both are
+> fully deleted, tests and strings included; the geocoding under Places stays for
+> `near:`/`in:`/`.location`, and migrations v15–v17 stay in the append-only chain
+> with their tables unused. Cancelled, not gaps. Still
 > true, though, that almost none of it
 > has been exercised in the RUNNING app — launch, migrations and the backfill
 > chain were confirmed with `MUSE_TRACE=1` against the real library, but the
@@ -450,7 +456,13 @@ before implementation.
   pure logic, schema migrations, and store/model behaviors (e.g. tag scoping +
   the `v7` migration, collection identity/membership, manual-collection naming,
   sort/selection/page-scroll math, palette/color/intent). UI views aren't
-  unit-tested. Run with `xcodebuild -scheme Muse test`; keep it green.
+  unit-tested. Run with `xcodebuild -scheme Muse test -only-testing:MuseTests`
+  (~40 s); keep it green. **Scope the run to the change** — while iterating use
+  `-only-testing:MuseTests/<TheAffectedTests>`, take the whole unit target at a
+  checkpoint, and reach for `MuseUITests` only when the claim needs the running
+  app (each of those launches Muse and costs minutes). Plain
+  `xcodebuild -scheme Muse test` runs BOTH targets. See the test-tier rule in
+  `docs/durable-constraints.md` § Working practice.
 - Current by-design behaviors (NOT bugs, NOT pending work — documented so a
   future session doesn't mistake them for defects):
   - iCloud Drive: dataless (not-yet-downloaded) files are skipped on

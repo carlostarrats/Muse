@@ -32,6 +32,10 @@ struct ManageDriveSharesView: View {
     // the top every time (not persisted — resets on each open).
     @State private var sortKey: DriveShareSortKey = .expires
     @State private var sortOrder: DriveShareSortOrder = .soonest
+    /// "Now" for the expired test, stamped once when the card opens — a `Date()`
+    /// read in the body would change on every unrelated re-render (and a modal is
+    /// never open long enough for a row to cross its expiry mid-session).
+    @State private var openedAt = Date()
 
     /// Records ordered by the chosen key/direction. "Soonest" = earliest date
     /// first (ascending); "Latest" = newest first (descending).
@@ -78,6 +82,7 @@ struct ManageDriveSharesView: View {
         // card, and a card presented from inside another card would be sized
         // by it. See MuseAlert.
         .onAppear {
+            openedAt = Date()          // the card can be reopened in one session
             records = store.all()      // show what we have immediately…
             guard didPrune == false else { return }
             didPrune = true
@@ -198,16 +203,21 @@ struct ManageDriveSharesView: View {
                             Text(record.itemCount.formatted()),
                             Text(record.createdAt.formatted(date: .abbreviated, time: .omitted)),
                             // A portfolio uses the `neverExpires` sentinel — show
-                            // what it means, not the year 2100.
-                            Text(record.isPortfolio
-                                 ? String(localized: "Never")
-                                 : record.expiry.formatted(date: .abbreviated, time: .omitted)))
+                            // what it means, not the year 2100. A share that is
+                            // already past its expiry says so in red: the launch
+                            // sweeper hard-deletes it, but until the next launch
+                            // (or while signed out/offline) the row is still here,
+                            // and a bare past date read as "expires then", not
+                            // "gone".
+                            expiryCell(record))
                     .font(.system(size: 13)).foregroundStyle(.secondary)
             }
             // The values are bare now (the words are in the header), so VoiceOver
             // gets an explicit sentence instead of "Shopping 10 Jun 29 Jun 29".
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text("\(record.collectionName), \(record.itemCount) images, created \(record.createdAt.formatted(date: .abbreviated, time: .omitted)), expires \(record.expiry.formatted(date: .abbreviated, time: .omitted))"))
+            .accessibilityLabel(isExpired(record)
+                ? Text("\(record.collectionName), \(record.itemCount) images, created \(record.createdAt.formatted(date: .abbreviated, time: .omitted)), expired")
+                : Text("\(record.collectionName), \(record.itemCount) images, created \(record.createdAt.formatted(date: .abbreviated, time: .omitted)), expires \(record.expiry.formatted(date: .abbreviated, time: .omitted))"))
             Spacer()
             OpenLinkButton(shareName: record.collectionName) {
                 // driveShares.json is plaintext in App Support — don't hand an
@@ -221,6 +231,25 @@ struct ManageDriveSharesView: View {
             } else {
                 TrashButton(shareName: record.collectionName) { Task { await delete(record) } }
             }
+        }
+    }
+
+    /// Past its expiry. Portfolios are excluded explicitly rather than relying on
+    /// the 2100 sentinel outliving the app.
+    private func isExpired(_ record: DriveShareRecord) -> Bool {
+        !record.isPortfolio && record.expiry < openedAt
+    }
+
+    /// The Expires column: "Never" for a portfolio, a red "Expired" once the date
+    /// has passed, otherwise the date.
+    @ViewBuilder
+    private func expiryCell(_ record: DriveShareRecord) -> some View {
+        if record.isPortfolio {
+            Text("Never")
+        } else if isExpired(record) {
+            Text("Expired").foregroundStyle(.red)
+        } else {
+            Text(record.expiry.formatted(date: .abbreviated, time: .omitted))
         }
     }
 

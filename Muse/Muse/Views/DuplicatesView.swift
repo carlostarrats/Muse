@@ -358,8 +358,10 @@ private struct DuplicateImageTile: View {
     }
 }
 
-/// Small reveal-in-Finder control on a tile — a frosted circle that brightens on
+/// Small reveal-in-Finder control on a tile — a frosted pill that names itself on
 /// hover. Opens Finder with the file selected so it can be inspected full-size.
+/// The glyph is a folder, not a magnifier: at rest a magnifier reads as
+/// zoom/search-this-image, which is the wrong promise for a Finder hand-off.
 private struct RevealInFinderButton: View {
     let url: URL
     @State private var hovering = false
@@ -368,14 +370,25 @@ private struct RevealInFinderButton: View {
         Button {
             NSWorkspace.shared.activateFileViewerSelecting([url])
         } label: {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(hovering ? .primary : .secondary)
-                .frame(width: 22, height: 22)
-                .background(Circle().fill(.thinMaterial))
+            HStack(spacing: 4) {
+                Image(systemName: "folder")
+                    .font(.system(size: 10, weight: .semibold))
+                if hovering {
+                    Text("Reveal in Finder")
+                        .font(.system(size: 10, weight: .semibold))
+                        .lineLimit(1)
+                        .fixedSize()
+                        .transition(.opacity)
+                }
+            }
+            .foregroundStyle(hovering ? .primary : .secondary)
+            .padding(.horizontal, hovering ? 8 : 0)
+            .frame(minWidth: 22, minHeight: 22)
+            .background(Capsule().fill(.thinMaterial))
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: hovering)
         .help("Reveal in Finder")
         .accessibilityLabel("Reveal in Finder")
     }

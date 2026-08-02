@@ -3,7 +3,7 @@
 //  Muse
 //
 //  Small sidebar subviews: StarRow, AddFolderPillButton, SectionHeader,
-//  CreateNewMenuButton, SectionSortMenu, SidebarSortGlyph.
+//  AddNewMenuButton, SectionSortMenu, SidebarSortGlyph.
 //  Extracted verbatim from SidebarView.swift in the 2026-06-20 code-health
 //  refactor (file moves only; `private` types became internal so they can live
 //  in their own files). Behavior unchanged.
@@ -176,9 +176,9 @@ struct SectionHeader<Accessory: View>: View {
 
 
 
-// MARK: - Create New menu pill
+// MARK: - Add New menu pill
 
-/// The sidebar's single bottom action: one "+ Create New" pill that opens a
+/// The sidebar's single bottom action: one "+ Add New" pill that opens a
 /// menu offering Add Folder / Add Collection (owner call, 2026-07-29).
 ///
 /// Replaces the two side-by-side add pills (now deleted). At the sidebar's 220pt
@@ -192,7 +192,7 @@ struct SectionHeader<Accessory: View>: View {
 /// discarded. They go on the `Menu`. The capsule background is applied to the
 /// Menu too, mirroring how `AddFolderPillButton` puts its background outside
 /// the Button.
-struct CreateNewMenuButton: View {
+struct AddNewMenuButton: View {
     let addFolder: () -> Void
     let addCollection: () -> Void
 
@@ -216,7 +216,7 @@ struct CreateNewMenuButton: View {
                 // kind glyphs, so it sits a size down rather than competing.
                 Image(systemName: "plus")
                     .font(.system(size: 10, weight: .medium))
-                Text(String(localized: "Create New"))
+                Text(String(localized: "Add New"))
                     .font(.system(size: 11, weight: .medium))
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -255,8 +255,8 @@ struct CreateNewMenuButton: View {
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.12)) { isHovered = hovering }
         }
-        .help(String(localized: "Create New"))
-        .accessibilityLabel(String(localized: "Create New"))
+        .help(String(localized: "Add New"))
+        .accessibilityLabel(String(localized: "Add New"))
     }
 
     /// The same soft neutral wash the two pills used — a secondary action at the

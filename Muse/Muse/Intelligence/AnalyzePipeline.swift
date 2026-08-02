@@ -325,13 +325,12 @@ final class AnalyzePipeline: ObservableObject {
             }
         }
         isRunning = false; current = ""; progress = 0; completed = 0; total = 0
-        // End-of-pass work over exactly THIS pass's file ids: auto-stack the
-        // virgin ones, and refresh the search-autocomplete facets (this pass
-        // may have written new cameras/lenses/dates).
+        // End-of-pass work over exactly THIS pass's file ids: refresh the
+        // search-autocomplete facets (this pass may have written new
+        // cameras/lenses/dates).
         let passFileIDs = pairs.map(\.id)
         AnalysisStatusStore.shared.refresh()
         if !shouldStop && !passFileIDs.isEmpty {
-            Task { await AutoStacker.run(fileIDs: passFileIDs) }
             await SearchFacets.shared.refresh()
         }
         // Skip the (non-trivial) recluster if the pass was cancelled — e.g. the
@@ -525,7 +524,7 @@ final class AnalyzePipeline: ObservableObject {
 
     /// Video kinds skip the Vision pipeline entirely but still need their
     /// coordinate + capture date written — a geotagged or dated video must not
-    /// be invisible to `near:`/`in:`/On This Day just because Vision doesn't
+    /// be invisible to `near:`/`in:` just because Vision doesn't
     /// tag videos. A separate, smaller guarded transaction mirroring the main
     /// one's content_hash re-check.
     ///

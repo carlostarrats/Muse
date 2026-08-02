@@ -754,6 +754,16 @@
         }
       }
     },
+    "Add New" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter"
+          }
+        }
+      }
+    },
     "Add Rule" : {
       "localizations" : {
         "fr" : {
@@ -2205,16 +2215,6 @@
       }
     },
     "Create" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Créer"
-          }
-        }
-      }
-    },
-    "Create New" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {

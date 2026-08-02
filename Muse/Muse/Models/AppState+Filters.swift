@@ -63,11 +63,9 @@ extension AppState {
                 base = base.filter { tagPaths.contains($0.url.standardizedFileURL.path) }
             }
         } else {
-            // One seam, three sources: a collection wins when set, then an
-            // active rediscovery surface, then the plain folder. The two are
-            // mutually exclusive by orchestration; the ordering here is
-            // defensive.
-            base = activeCollectionFiles ?? RediscoveryStore.shared.files ?? currentFiles
+            // One seam, two sources: a collection wins when set, otherwise the
+            // plain folder.
+            base = activeCollectionFiles ?? currentFiles
             if let tagPaths = activeTagPaths {
                 base = base.filter { tagPaths.contains($0.url.standardizedFileURL.path) }
             }
@@ -88,21 +86,6 @@ extension AppState {
             }
         } else {
             result = base
-        }
-        // Near-duplicate stacks collapse LAST, and ONLY in plain folder
-        // browsing — never in search (a matching burst frame must not hide
-        // under a non-matching representative), a collection, or a rediscovery
-        // surface. After the facet filter, so a narrowed view collapses on
-        // what's actually shown.
-        if !isSearchActive && activeCollectionFiles == nil && RediscoveryStore.shared.files == nil {
-            let collapsed = StackDisplay.collapse(result,
-                                                  entries: StacksStore.shared.entries,
-                                                  expanded: StacksStore.shared.expanded)
-            // Plain var: writing a @Published here would re-enter this memo.
-            StacksStore.shared.badges = collapsed.badges
-            result = collapsed.visible
-        } else {
-            StacksStore.shared.badges = [:]
         }
         _visibleFilesCache = result
         _visibleByPathCache = Dictionary(result.map { ($0.url.standardizedFileURL.path, $0) },
@@ -437,9 +420,6 @@ extension AppState {
     /// Drive Link" (both read `visibleFiles`). Call alongside every
     /// currentFiles removal. `path` must be a standardized path.
     func dropFromActiveCollection(path: String) {
-        // A rediscovery surface renders through the same seam, so a
-        // burn-deleted tile must drop out of it too or it ghosts back.
-        RediscoveryStore.shared.drop(path: path)
         activeCollectionPaths?.remove(path)
         activeCollectionFiles?.removeAll { $0.url.standardizedFileURL.path == path }
     }

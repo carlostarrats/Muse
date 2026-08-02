@@ -35,15 +35,9 @@ enum EscapeAction: Equatable {
     case clearTags
     /// Inside a collection — pop to the Collections page (setActiveCollection(nil)).
     case exitCollection
-    /// A rediscovery surface (Rarely Seen / On This Day / Shuffle) is showing —
-    /// dismiss it (closeRediscovery()). A surface is a content scope like a
-    /// collection, so it peels at the same depth, just after one.
-    case exitRediscovery
     /// On the Collections card page — return to the grid (toggleCollectionsPage()).
+    /// Pages are outermost, peeled last.
     case exitCollectionsPage
-    /// On the Places card page — return to the grid (closePlacesPage()). Pages
-    /// are outermost, peeled last.
-    case exitPlacesPage
     /// Plain grid — Escape does nothing.
     case none
 }
@@ -70,9 +64,7 @@ enum EscapeResolver {
                        searchActive: Bool,
                        tagsActive: Bool,
                        insideCollection: Bool,
-                       rediscoveryActive: Bool = false,
                        showingCollectionsPage: Bool,
-                       showingPlacesPage: Bool = false,
                        compareActive: Bool = false) -> EscapeAction {
         // Above the viewer: a modal card sits on top of everything, and since
         // modals became in-window cards (not sheets) nothing else consumes
@@ -88,9 +80,7 @@ enum EscapeResolver {
         if searchActive { return .clearSearch }
         if tagsActive { return .clearTags }
         if insideCollection { return .exitCollection }
-        if rediscoveryActive { return .exitRediscovery }
         if showingCollectionsPage { return .exitCollectionsPage }
-        if showingPlacesPage { return .exitPlacesPage }
         return .none
     }
 

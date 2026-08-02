@@ -9,7 +9,7 @@
 //  SQLite reads the zone from the C library, not from Foundation, so this is
 //  `setenv` + `tzset` rather than anything on `TimeZone`. Queries that mix a
 //  Swift-side `Calendar` with a SQL-side date part are the ones that need it:
-//  `RediscoveryQueries.onThisDay` and `SearchFacets.distinctYears`.
+//  `SearchFacets.distinctYears` is the standing case.
 //
 //  `setenv` is process-global, which would be a hazard if tests ran concurrently
 //  in one process. They do not: the scheme sets no `parallelizable` attribute

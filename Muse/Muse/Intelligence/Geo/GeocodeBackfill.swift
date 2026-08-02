@@ -141,7 +141,6 @@ nonisolated enum GeocodeBackfill {
         }
 
         if wroteAny {
-            await PlacesStore.shared.reload()
             await SearchFacets.shared.refresh()
         }
     }

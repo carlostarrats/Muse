@@ -70,7 +70,7 @@ question.
 | P5 | Collections (manual, smart, living) | `Collection*Tests` ×12, `SmartCollection*Tests`, `SmartRule*Tests` | 2026-08-01 | ⚠️ G1 | ✅ `.location` + `.similar` rules added without disturbing existing resolvers |
 | P6 | FTS5 search + scope toggle | `PhotoSearchTests`, `SearchBridgeTests`, `FtsEscapeTests`, `SearchQueryParserTests` | 2026-08-01 | ⚠️ G1 | ✅ `SearchMergeTests` pins folder-grain survival through the new semantic leg |
 | P7 | Color search (CIEDE2000) | `ColorQueryTests`, `ColorDistanceTests`, `PaletteMatchTests`, `NamedColorTests` | 2026-08-01 | ⚠️ G1 | ✅ untouched |
-| P8 | Duplicate finder + delete-to-trash | `DuplicateDeleteRulesTests`, `DeleteCoordinatorTests`, `TrashManagerTests` | 2026-08-01 | ✅ R7 modal opened, real dup pair listed (delete NOT run) | ✅ distinct from Spec 02 near-dup **stacks**; no shared state |
+| P8 | Duplicate finder + delete-to-trash | `DuplicateDeleteRulesTests`, `DuplicateKeeperTests`, `DeleteCoordinatorTests`, `TrashManagerTests` | 2026-08-01 | ✅ R7 modal opened, real dup pair listed (delete NOT run) | **Changed 2026-08-01:** every group now gets exactly one suggested keeper (`DuplicateFinder.keeperIndex`) — the old no-suggestion case showed KEEP on every tile and read as broken. Runtime re-check of the pre-marked default still owed |
 | P9 | Grid virtualization + masonry | `MasonryGeometryTests`, `UniformGridLayoutTests`, `JustifiedRowsGeometryTests`, `GridSpacingTests` | 2026-08-01 | ⚠️ G1 | ✅ still virtualized — cull badge passed as a parameter, `CullStore` observed **once** |
 | P10 | Grid selection, keyboard nav, page scroll | `GridSelectionTests`, `GridKeyboardNavTests`, `PageScrollTests`, `GridScrollRevealTests` | 2026-08-01 | ⚠️ G1 | ⚠️ **was broken, fixed R1-F16** — 5 new modals gated the key catcher with no Escape branch |
 | P11 | Hero viewer (flight, zoom/pan, wash) | `ViewerGeometryTests`, `HeroPaletteTests`, `ImageHeaderSizeCacheTests` | 2026-08-01 | ✅ R7 opens on double-click, Escape closes | ⚠️ **fixed R2-1** — flight take-off rect used uncropped dims on a cold header cache |
@@ -105,9 +105,9 @@ question.
 | S01.4 | Announcements channel | `AnnouncementFeedTests` | 2026-08-01 | ❌ | Off-able; ephemeral session; no body sent |
 | S01.5 | Search cancellation + `PerfBaseline` | `SearchCancellationTests`, `PerfBaselineTests` | 2026-08-01 | ✅ trace | |
 | S02.1 | `PhotoHeaderReader` (one-pass GPS + EXIF) | `PhotoHeaderReaderTests`, `PhotoHeaderBackfillTests`, `PhotoMetaMigrationTests` | 2026-08-01 | ✅ trace | Uses the reference-restricted AV helper |
-| S02.2 | Offline reverse geocoding + Places page | `ReverseGeocoderTests`, `GeoKDTreeTests`, `GeoNamesDatasetTests`, `PlaceQueriesTests` | 2026-08-01 | partial | No per-photo network — verified |
-| S02.3 | Rediscovery (On This Day / Rarely Seen / Shuffle) | `RediscoveryQueriesTests`, `SeededRandomTests` | 2026-08-01 | ❌ G1 | G4. ⚠️ **fixed R5-1** — the `created_at` fallback tested the month-day in UTC against a local `todayMD` |
-| S02.4 | Near-duplicate stacks + bursts | `AutoStackerTests`, `BurstClustererTests`, `StackStoreTests`, `StackDisplayTests`, `StackScatterTests` | 2026-08-01 | ❌ G1 | Distinct from P8 duplicates |
+| S02.2 | Offline reverse geocoding (`near:`/`in:`, `.location` rule, Info card) | `ReverseGeocoderTests`, `GeoKDTreeTests`, `GeoNamesDatasetTests` | 2026-08-01 | partial | No per-photo network — verified. **The Places PAGE was removed 2026-08-01** (owner) with the LIBRARY sidebar section; the geocoding underneath stays, `PlaceQueries`/`PlacesStore`/`PlacesPage` are gone |
+| ~~S02.3~~ | ~~Rediscovery (On This Day / Rarely Seen / Shuffle)~~ | — | — | — | **REMOVED 2026-08-01** (owner: never approved, not in the spec). Whole LIBRARY sidebar section deleted with its stores, queries, views, tests and strings; the v16 `views` table stays in the append-only chain, unused |
+| ~~S02.4~~ | ~~Near-duplicate stacks + bursts~~ | — | — | — | **REMOVED 2026-08-01** (owner: unwanted tile badge). Auto-stacker, manual stack menu, badge and the `visibleFiles` collapse seam all deleted; v17 `stacks`/`stack_members` stay in the chain, unused |
 | S02.5 | Phase-1 token search + `.location` rule | `SearchTokenFacesTests`, `SmartRuleLocationTests`, `NLTokenComposerTests` | 2026-08-01 | ❌ G1 | |
 | S03.1 | CLIP engine / index / model store | `ClipIndexTests`, `ClipVectorsTests`, `ClipPreprocessTests`, `ClipModelManifestTests`, `EmbedderTests`, `ClipMigrationTests` | 2026-08-01 | partial | Keyset-paged + bounded top-K (R1-F8) |
 | S03.2 | On-demand model download | `SandboxProcessTests`, `ClipModelManifestTests` | 2026-08-01 | ✅ exec pinned | Fail-closed ladder; SHA-256 before unpack |
@@ -380,7 +380,6 @@ passing" had meant nothing at all.
 | Surface | What was actually seen |
 |---|---|
 | Launch / DB / migrations | Sidebar populated from real rows: folders with counts, 1,915-file folder, 10 collections |
-| Rediscovery (Spec 02) | Places, On This Day, Rarely Seen, Shuffle all switch the grid without collapsing |
 | Hero viewer | Opens on **double-click**, closes on Escape (asserted on "Zoom out", a hero-only control) |
 | **Editor (Spec 04)** | Full panel: Exposure→Noise Reduction sliders, Light/Color/Looks tabs, undo/redo, before/after, Reset |
 | **Readouts (Spec 05)** | Tone Zones strip, Zone Sliders, **Curve with a live histogram**, and the teaching copy computing a real value: "1.2% of pixels are clipped — those areas have lost detail" |

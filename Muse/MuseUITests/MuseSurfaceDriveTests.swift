@@ -128,35 +128,15 @@ final class MuseSurfaceDriveTests: XCTestCase {
     // MARK: - The library shell
 
     func testAppLaunchesWithPopulatedSidebar() throws {
-        // The sidebar's library rows are the cheapest proof the DB opened, the
-        // migrations ran, and AppState published: they are rendered from real
-        // rows, not placeholders.
-        for label in ["Places", "On This Day", "Rarely Seen", "Shuffle"] {
-            XCTAssertTrue(app.buttons[label].waitForExistence(timeout: uiTimeout),
-                          "sidebar row '\(label)' missing — DB or AppState did not publish")
-        }
+        // The sidebar's FOLDERS header is the cheapest proof the shell came up:
+        // it renders only once AppState has published root nodes, which means
+        // the DB opened and the migrations ran. (A bare "the window exists"
+        // assertion would pass while the app did nothing.)
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
+        XCTAssertTrue(app.staticTexts["FOLDERS"].waitForExistence(timeout: uiTimeout),
+                      "sidebar did not render — DB or AppState did not publish")
         snap("01-launch")
-    }
-
-    func testRediscoverySurfacesOpen() throws {
-        // Spec 02's rediscovery surfaces. Each replaces the grid content, so the
-        // proof is that the app survives the switch and the row stays hittable.
-        for label in ["Places", "On This Day", "Rarely Seen", "Shuffle"] {
-            let row = app.buttons[label]
-            guard row.waitForExistence(timeout: uiTimeout) else {
-                XCTFail("row '\(label)' missing"); continue
-            }
-            row.click()
-            Thread.sleep(forTimeInterval: 3)
-            // A LIVENESS check, labelled honestly: it proves the switch didn't
-            // crash or wedge the UI behind a modal, not that the surface shows
-            // the right content. The screenshot is the record of the latter.
-            XCTAssertTrue(app.windows.firstMatch.exists,
-                          "window gone after opening '\(label)'")
-            XCTAssertTrue(app.buttons["Shuffle"].isHittable,
-                          "UI unresponsive after opening '\(label)'")
-            snap("02-rediscovery-\(label)")
-        }
     }
 
     // MARK: - Hero viewer + editor (Spec 04)

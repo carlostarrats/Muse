@@ -21,11 +21,11 @@ import Foundation
 enum DuplicateDeleteRules {
 
     /// Non-keeper copies of ONE group to pre-mark for delete the first time it
-    /// appears — only when the finder is confident about a keeper (byte-exact, or
-    /// visual with a clear resolution gap). Filename-only / low-confidence visual
-    /// groups carry no keeper and seed nothing, so they open fully kept.
-    /// Cross-group conflicts (a keeper here that's a non-keeper there) are
-    /// reconciled separately by `rescued`.
+    /// appears. `DuplicateFinder.keeperIndex` gives EVERY group a keeper, so in
+    /// practice every group seeds; the no-keeper branch stays as a defensive
+    /// guard (a group with no suggestion opens fully kept rather than fully
+    /// marked). Cross-group conflicts (a keeper here that's a non-keeper there)
+    /// are reconciled separately by `rescued`.
     static func seed(members: [(url: URL, isSuggestedKeeper: Bool)]) -> [URL] {
         guard members.contains(where: { $0.isSuggestedKeeper }) else { return [] }
         return members.filter { !$0.isSuggestedKeeper }.map(\.url)

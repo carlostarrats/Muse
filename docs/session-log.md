@@ -6,6 +6,64 @@ the durable rules + a compact index live in `CLAUDE.md`. Nothing here is
 load-bearing for a fresh session beyond what that index already surfaces;
 read an entry when you need the full "why" behind a specific change.
 
+### Feature removals + duplicates keeper fix — 2026-08-01 (on `testing-new-features`)
+
+Owner review of the running app, three decisions.
+
+**1. The LIBRARY sidebar section is gone** (Places / On This Day / Rarely Seen /
+Shuffle). The owner's words: "it was added and I never approved it and I just
+did not see it in the spec." Removed outright rather than defaulted off — the
+Settings toggle went too. Deleted: `RediscoveryQueries`, `PlaceQueries`,
+`RediscoveryStore`, `PlacesStore`, `AppState+Rediscovery`, `AppState+Places`,
+`RediscoveryHeader`, `PlacesPage`, `Sidebar/LibraryRows` and their tests, plus
+the two `AppState` cancellables, the `visibleFiles` third source, the two Escape
+cases, the `markViewed` hooks in `ContentView` and both hero viewers, and 12
+localization keys.
+
+What deliberately STAYED: the geocoding underneath Places (`places` table,
+`GeoNamesDataset`, `GeoKDTree`, `ReverseGeocoder`) — `near:`/`in:` search, the
+`.location` smart rule, the search facets and the Info card's location line all
+read it, and none of that was part of the sidebar section. `SeededRandom` moved
+from the deleted `Views/Spatial/` to `Components/` because `GeoKDTreeTests`
+seeds its random-point sweep with it. Migrations v15–v17 stay (the chain is
+append-only); the `views` table is simply unwritten now.
+
+**2. Near-duplicate stacks are gone.** The trigger was the tile badge ("40" with
+a tray glyph) that expands a stack on click — "I don't like this feature."
+Removed the whole feature, not just the badge: `AutoStacker`, `BurstClusterer`,
+`StackStore`, `StacksStore`, `StackDisplay`, the manual Stack/Unstack/Set as
+Pick/Remove context-menu section, the `visibleFiles` collapse seam, the
+`AnalyzePipeline` end-of-pass auto-stack call and the grid signature's
+`generation` term. The v17 tables stay in the chain, unused.
+
+**3. Duplicates: every group now gets exactly one suggested keeper.** The owner
+hit a group where two copies of the same image both showed a green KEEP and
+nothing was pre-marked, and said plainly that "it's working as specified" is not
+a reasonable answer when the modal looks broken. He is right. The old behaviour
+came from Q12: only byte-exact groups (path quality) and visual groups with a
+>10% resolution gap suggested a keeper; a filename group, or a visual group at
+equal resolution, suggested nothing — so `DuplicateDeleteRules.seed` seeded
+nothing and every tile drew KEEP. Replaced the three separate scorers with one
+`DuplicateFinder.keeperIndex`: more pixels → more bytes → path quality (clean
+basename, shallower, not Downloads/Desktop/Trash, older) → the path itself, so a
+rescan picks the same file. Byte-exact behaviour is unchanged in practice
+(identical bytes tie on the first two keys and fall through to path quality).
+The suggestion stays a default the user can flip, and the never-delete-a-whole-
+group guarantee is untouched. `DuplicateKeeperTests` (9 cases) pins it.
+
+The owner also declined showing each group's detection reason ("Byte-exact" /
+"Visually similar" / "Same filename") in the modal — size and pixel dimensions
+are already there, and a long list of reasons would be noise.
+
+**Also this session:** an expired Drive share now reads a red **Expired** in the
+Manage list instead of a past date (the launch sweeper hard-deletes expired
+shares, but a row survives until the next launch, or indefinitely while signed
+out — a bare past date read as "expires then").
+
+Suite 1,818 → **1,776** (the removals took ~50 tests with them, `DuplicateKeeperTests`
+adds 9). Release build warning-free, `scripts/audit-invariants.sh` green, French
+at 0 untranslated (985 keys, down from 1,004).
+
 ### Specs 01–07 review, round 3 — 2026-08-01 (on `new-product-build-1`)
 
 Round 2 recorded two things as "accepted, not fixed". This session closed both,

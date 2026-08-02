@@ -2,13 +2,14 @@
 //  DuplicateFinder.swift
 //  Muse
 //
-//  Three clusterers run in parallel. Smart suggestions only where
-//  signal is rock solid (Q12):
-//  - Byte-exact: smart-suggest a keeper based on path quality, name
-//    cleanliness, age.
-//  - Visual: smart-suggest only when resolution gap exceeds 10% (keep
-//    higher-res). Otherwise no suggestion.
-//  - Filename-only: no suggestion.
+//  Three clusterers run in parallel. EVERY group gets exactly one suggested
+//  keeper — see `keeperIndex`. The original Q12 rule (suggest only where the
+//  signal is rock solid, so a filename group or a same-resolution visual group
+//  got no suggestion) was reversed by the owner 2026-08-01: with no keeper the
+//  review modal drew a green KEEP badge on every copy and pre-marked nothing,
+//  which reads as "the finder didn't work", not as "you decide". The
+//  suggestion is a default the user can freely override, and
+//  DuplicateDeleteRules still guarantees a group can never be fully deleted.
 //
 //  Visual scope defaults to current folder per the §4 vector index
 //  scaling rules. "Everywhere" mode runs in the background with
@@ -115,51 +116,82 @@ final class DuplicateFinder: ObservableObject {
             }
     }
 
-    /// Pick the highest-confidence keeper — shorter path, cleaner basename,
-    /// older creation date, not in Downloads/Desktop/Trash. Q12 rock-solid.
+    /// One copy of a duplicate group, reduced to what the keeper choice needs —
+    /// so all three clusterers pick a keeper by the same rule regardless of what
+    /// they happen to know about their members.
+    nonisolated struct KeeperCandidate {
+        let path: String
+        /// Pixel count, or 0 when the dimensions aren't known (the filename
+        /// clusterer reads nothing from the DB). Unknown compares as a tie, so
+        /// the decision falls through to bytes and then path quality.
+        let pixels: Int
+        let sizeBytes: Int64
+        let createdAt: Int64?
+    }
+
+    /// Which copy to keep. TOTAL and deterministic: every non-empty group gets
+    /// exactly one keeper, so the review modal never shows a group where every
+    /// tile says KEEP and nothing is pre-marked.
+    ///
+    /// Ordered by decreasing confidence: more pixels (never throw away
+    /// resolution), then more bytes (the less-recompressed copy at equal
+    /// resolution), then path quality, then the path itself so the result is
+    /// stable across scans rather than dependent on row order.
+    nonisolated static func keeperIndex(_ candidates: [KeeperCandidate]) -> Int? {
+        guard !candidates.isEmpty else { return nil }
+        return candidates.indices.max { a, b in
+            let (x, y) = (candidates[a], candidates[b])
+            if x.pixels != y.pixels { return x.pixels < y.pixels }
+            if x.sizeBytes != y.sizeBytes { return x.sizeBytes < y.sizeBytes }
+            let (sx, sy) = (pathScore(x), pathScore(y))
+            if sx != sy { return sx < sy }
+            return x.path > y.path      // ascending path wins the final tie
+        }
+    }
+
+    /// Path-quality heuristic: cleaner basename, shorter path, not in
+    /// Downloads/Desktop/Trash, older creation date (usually the original).
+    private nonisolated static func pathScore(_ c: KeeperCandidate) -> Double {
+        var score = 0.0
+        let abs = c.path
+        // Prefer cleaner basenames
+        let base = (abs as NSString).lastPathComponent
+        if base.contains(" copy") || base.contains("(") || base.contains("(1)") {
+            score -= 5
+        }
+        // Prefer shorter paths
+        let depth = (abs as NSString).pathComponents.count
+        score -= Double(depth) * 0.1
+        // Penalize Downloads/Desktop/Trash
+        let lower = abs.lowercased()
+        if lower.contains("/downloads/") { score -= 3 }
+        if lower.contains("/desktop/") { score -= 1 }
+        if lower.contains(".trash/") { score -= 50 }
+        // Older creation date is usually the original
+        if let created = c.createdAt {
+            score -= Double(created) / 1e10
+        }
+        return score
+    }
+
+    /// Byte-exact members. Every copy is the same bytes, so pixels and size tie
+    /// and the keeper comes down to path quality.
     private func scoreByteExactKeepers(items: [(PathRow, FileRow)]) -> [DuplicateGroup.Member] {
-        let scored = items.map { (path, file) -> (PathRow, FileRow, Double) in
-            var score = 0.0
-            let abs = path.absolute_path
-            // Prefer cleaner basenames
-            let base = (abs as NSString).lastPathComponent
-            if base.contains(" copy") || base.contains("(") || base.contains("(1)") {
-                score -= 5
-            }
-            // Prefer shorter paths
-            let depth = (abs as NSString).pathComponents.count
-            score -= Double(depth) * 0.1
-            // Penalize Downloads/Desktop/Trash
-            let lower = abs.lowercased()
-            if lower.contains("/downloads/") { score -= 3 }
-            if lower.contains("/desktop/") { score -= 1 }
-            if lower.contains(".trash/") { score -= 50 }
-            // Older creation date is usually the original
-            if let created = file.created_at {
-                score -= Double(created) / 1e10
-            }
-            return (path, file, score)
-        }
-        guard let best = scored.max(by: { $0.2 < $1.2 }) else {
-            return items.map {
-                DuplicateGroup.Member(
-                    url: URL(fileURLWithPath: $0.0.absolute_path),
-                    fileID: $0.0.file_id,
-                    sizeBytes: $0.1.size_bytes ?? 0,
-                    width: $0.1.width,
-                    height: $0.1.height,
-                    isSuggestedKeeper: false
-                )
-            }
-        }
-        return scored.map { (path, file, _) in
-            DuplicateGroup.Member(
+        let best = Self.keeperIndex(items.map { (path, file) in
+            KeeperCandidate(path: path.absolute_path,
+                            pixels: (file.width ?? 0) * (file.height ?? 0),
+                            sizeBytes: file.size_bytes ?? 0,
+                            createdAt: file.created_at)
+        })
+        return items.enumerated().map { (i, item) in
+            let (path, file) = item
+            return DuplicateGroup.Member(
                 url: URL(fileURLWithPath: path.absolute_path),
                 fileID: path.file_id,
                 sizeBytes: file.size_bytes ?? 0,
                 width: file.width,
                 height: file.height,
-                isSuggestedKeeper: path.id == best.0.id
+                isSuggestedKeeper: i == best
             )
         }
     }
@@ -171,15 +203,24 @@ final class DuplicateFinder: ObservableObject {
         return groups.values
             .filter { $0.count > 1 }
             .map { urls in
-                // No suggestion per Q12
-                let members = urls.map { url in
+                // Dimensions aren't loaded here (no DB read), so the keeper
+                // comes down to bytes then path quality.
+                let sizes = urls.map { url in
+                    (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize)
+                        .flatMap { Int64($0) } ?? 0
+                }
+                let best = Self.keeperIndex(zip(urls, sizes).map { url, size in
+                    KeeperCandidate(path: url.standardizedFileURL.path, pixels: 0,
+                                    sizeBytes: size, createdAt: nil)
+                })
+                let members = zip(urls, sizes).enumerated().map { i, pair in
                     DuplicateGroup.Member(
-                        url: url,
+                        url: pair.0,
                         fileID: nil,
-                        sizeBytes: (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).flatMap { Int64($0) } ?? 0,
+                        sizeBytes: pair.1,
                         width: nil,
                         height: nil,
-                        isSuggestedKeeper: false
+                        isSuggestedKeeper: i == best
                     )
                 }
                 return DuplicateGroup(id: UUID(), reason: .filename, members: members)
@@ -293,16 +334,16 @@ final class DuplicateFinder: ObservableObject {
         return clusters
     }
 
-    /// Visual smart suggest: keep highest resolution, but only if gap is >10%.
+    /// Visually-similar members: highest resolution wins, and at equal
+    /// resolution (the common near-identical-export case) the larger file, then
+    /// path quality — rather than the old "no gap → no suggestion at all".
     private func scoreVisualKeepers(items: [(PathRow, FileRow, [Float])]) -> [DuplicateGroup.Member] {
-        let pixels: [(idx: Int, px: Int)] = items.enumerated().map { (i, item) in
-            (i, (item.1.width ?? 0) * (item.1.height ?? 0))
-        }
-        let maxPx = pixels.map { $0.px }.max() ?? 0
-        let secondMax = pixels.map { $0.px }.sorted(by: >).dropFirst().first ?? 0
-        let suggestKeeper = maxPx > 0 && Double(secondMax) / Double(maxPx) < 0.9
-        let bestIdx = pixels.max(by: { $0.px < $1.px })?.idx
-
+        let best = Self.keeperIndex(items.map { (path, file, _) in
+            KeeperCandidate(path: path.absolute_path,
+                            pixels: (file.width ?? 0) * (file.height ?? 0),
+                            sizeBytes: file.size_bytes ?? 0,
+                            createdAt: file.created_at)
+        })
         return items.enumerated().map { (i, item) in
             let (path, file, _) = item
             return DuplicateGroup.Member(
@@ -311,7 +352,7 @@ final class DuplicateFinder: ObservableObject {
                 sizeBytes: file.size_bytes ?? 0,
                 width: file.width,
                 height: file.height,
-                isSuggestedKeeper: suggestKeeper && i == bestIdx
+                isSuggestedKeeper: i == best
             )
         }
     }

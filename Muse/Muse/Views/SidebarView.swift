@@ -42,9 +42,6 @@ struct SidebarView: View {
     /// Off = the sidebar is exactly the original folders-only experience.
     @AppStorage(AppSettings.showCollectionsInSidebarKey) private var showCollectionsInSidebar = true
     @AppStorage(AppSettings.showICloudFolderInSidebarKey) private var showICloudFolder = true
-    /// When on, a LIBRARY section (Places / On This Day / Rarely Seen /
-    /// Shuffle) sits between FOLDERS and COLLECTIONS.
-    @AppStorage(AppSettings.showLibraryInSidebarKey) private var showLibraryInSidebar = true
     @ObservedObject private var collectionsEngine = CollectionsEngine.shared
     /// Observed directly — these stores have zero AppState integration.
     @ObservedObject private var analysisStatus = AnalysisStatusStore.shared
@@ -56,13 +53,10 @@ struct SidebarView: View {
     // made the section open/close instant. Keys persist the choice across launches.
     private static let foldersCollapsedKey = "sidebarFoldersCollapsed"
     private static let collectionsCollapsedKey = "sidebarCollectionsCollapsed"
-    private static let libraryCollapsedKey = "sidebarLibraryCollapsed"
     @State private var foldersCollapsed =
         UserDefaults.standard.bool(forKey: SidebarView.foldersCollapsedKey)
     @State private var collectionsCollapsed =
         UserDefaults.standard.bool(forKey: SidebarView.collectionsCollapsedKey)
-    @State private var libraryCollapsed =
-        UserDefaults.standard.bool(forKey: SidebarView.libraryCollapsedKey)
 
     // Collection reorder drag — a flat-list mirror of the folder reorder above.
     @State private var draggingCollectionID: String?
@@ -403,22 +397,6 @@ struct SidebarView: View {
                 // alone would show ghost collections at zero roots (the reachable
                 // sentinel reads "unknown → true" before roots are pushed). Reappears
                 // the moment reachable images exist under a root again.
-                // LIBRARY sits between FOLDERS and COLLECTIONS, gated
-                // identically (a real root AND reachable content) plus its own
-                // Settings toggle — with no photos there is nothing to
-                // rediscover or place.
-                if !appState.rootNodes.isEmpty && collectionsEngine.hasReachableContent
-                    && showLibraryInSidebar {
-                    Color.clear.frame(height: 14)
-                    SectionHeader(title: String(localized: "LIBRARY"),
-                                  collapsed: $libraryCollapsed)
-                    if !libraryCollapsed {
-                        PlacesSidebarRow()
-                        OnThisDaySidebarRow()
-                        RarelySeenSidebarRow()
-                        ShuffleSidebarRow()
-                    }
-                }
                 if !appState.rootNodes.isEmpty && collectionsEngine.hasReachableContent {
                     // Fixed inter-section spacer (drives the COLLAPSED-state gap
                     // between the two headers — kept at the original 14). The
@@ -444,9 +422,6 @@ struct SidebarView: View {
         }
         .onChange(of: collectionsCollapsed) { _, v in
             UserDefaults.standard.set(v, forKey: Self.collectionsCollapsedKey)
-        }
-        .onChange(of: libraryCollapsed) { _, v in
-            UserDefaults.standard.set(v, forKey: Self.libraryCollapsedKey)
         }
         .scrollContentBackground(.hidden)
         .coordinateSpace(name: Self.reorderSpace)
@@ -641,7 +616,7 @@ struct SidebarView: View {
 
     /// One "Add Folder" pill when off (or on first run, before any folder
     /// exists — a collection with nothing behind it is a dead end, so Add
-    /// Collection isn't offered yet); a single "+ Create New" MENU pill (Add
+    /// Collection isn't offered yet); a single "+ Add New" MENU pill (Add
     /// Folder / Add Collection) once the Collections section is shown AND a
     /// folder exists. The menu replaced two side-by-side pills, which had to
     /// split the sidebar's 220pt minimum and truncate both labels.
@@ -657,7 +632,7 @@ struct SidebarView: View {
         // content-gated COLLECTIONS section above (both a root AND content).
         if showCollectionsInSidebar && !appState.rootNodes.isEmpty
             && collectionsEngine.hasReachableContent {
-            CreateNewMenuButton(
+            AddNewMenuButton(
                 addFolder: { appState.pickAndAddRoot() },
                 addCollection: { appState.requestNewCollection() })
                 .padding(.horizontal, 16)
