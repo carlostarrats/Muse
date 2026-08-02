@@ -123,11 +123,43 @@ nonisolated enum ImageExportRender {
                       bytes: data.count)
     }
 
+    /// A MEASURED size estimate for the current settings.
+    ///
+    /// It encodes the card's already-decoded preview at exactly the settings
+    /// the export will use, then scales the result by the pixel-count ratio.
+    /// That's a real measurement of a real encode rather than a
+    /// bits-per-pixel guess — which matters, because a number in an interface
+    /// gets believed, and the whole point of showing it is to let someone
+    /// trade quality against size before committing.
+    ///
+    /// Scaling by pixel count is where the approximation lives: compressed
+    /// size is very nearly linear in pixels at a fixed quality for photographic
+    /// content, and the readout is prefixed "≈" because "very nearly" isn't
+    /// "exactly". Returns nil rather than a bad guess if the encode fails.
+    static func estimatedBytes(preview: CGImage, settings: ExportSettings,
+                               for sourceURL: URL, outputPixelCount: Double) -> Int? {
+        let format = settings.format.resolved(for: sourceURL)
+        let previewPixels = Double(preview.width * preview.height)
+        guard previewPixels > 0, outputPixelCount > 0 else { return nil }
+
+        // TIFF is the one format that needs no encode: ImageIO writes it
+        // uncompressed, so the size is arithmetic and exact.
+        if format == .tiff {
+            let bytesPerPixel = settings.tiff16 ? 8.0 : 4.0
+            return Int(outputPixelCount * bytesPerPixel)
+        }
+        let job = Job(sourceURL: sourceURL, settings: settings)
+        guard let data = try? encode(preview, format: format, job: job,
+                                     sourceProperties: [:]) else { return nil }
+        return Int(Double(data.count) * (outputPixelCount / previewPixels))
+    }
+
     /// WebP goes through our own encoder; everything else through ImageIO.
     private static func encode(_ image: CGImage, format: ExportFormat, job: Job,
                                sourceProperties: [String: Any]) throws -> Data {
         if format == .webp {
-            return try WebPEncoder.encode(image, quality: job.settings.quality)
+            return try WebPEncoder.encode(image, quality: job.settings.quality,
+                                          lossless: job.settings.webpLossless)
         }
         let type = format.utType(for: job.sourceURL).identifier as CFString
         guard let mutable = CFDataCreateMutable(nil, 0),

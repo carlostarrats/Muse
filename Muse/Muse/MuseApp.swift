@@ -340,6 +340,22 @@ struct MuseApp: App {
                 .disabled(appState.visibleFiles.filter { $0.kind.isPhotoKind }.count < 2)
 
                 Divider()
+                // Export from the keyboard, wherever you are. The open photo
+                // wins when the viewer or editor is up; otherwise it's the grid
+                // selection. Without this the only way in was a context menu or
+                // the viewer's share button, which is a poor showing for the
+                // one action that gets a file out of the app.
+                Button {
+                    let urls = appState.exportableSelectionURLs()
+                    guard !urls.isEmpty else { return }
+                    appState.exportRequest = ExportRequest(urls: urls)
+                } label: {
+                    Label("Export…", systemImage: "square.and.arrow.up.on.square")
+                }
+                .keyboardShortcut("e", modifiers: .command)
+                .disabled(appState.exportableSelectionURLs().isEmpty)
+
+                Divider()
                 Button {
                     appState.findDuplicatesInCurrentFolder()
                 } label: {

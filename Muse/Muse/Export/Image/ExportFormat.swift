@@ -152,6 +152,38 @@ nonisolated enum ExportResize: Equatable, Codable, Sendable {
     }
 }
 
+/// The named quality steps people expect from an export dialog. They set the
+/// slider rather than replacing it — the tiers are for choosing quickly, the
+/// slider for landing on a specific size once the estimate is on screen.
+nonisolated enum QualityTier: String, CaseIterable, Sendable {
+    case low, medium, high, best
+
+    var value: Double {
+        switch self {
+        case .low: 0.5
+        case .medium: 0.7
+        case .high: 0.85
+        case .best: 0.95
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .low: String(localized: "Low")
+        case .medium: String(localized: "Medium")
+        case .high: String(localized: "High")
+        case .best: String(localized: "Best")
+        }
+    }
+
+    /// The tier a slider value counts as, so the control can show which one
+    /// you're on after dragging. Nil between tiers rather than snapping to the
+    /// nearest — claiming "High" at 0.78 would be a lie the number contradicts.
+    static func matching(_ value: Double) -> QualityTier? {
+        allCases.first { abs($0.value - value) < 0.001 }
+    }
+}
+
 /// What a transparent pixel becomes. `.transparent` is only honoured by a
 /// container that can carry alpha — see `ExportSettings.flattens(for:)`.
 nonisolated enum ExportBackground: String, Codable, CaseIterable, Sendable {
@@ -172,17 +204,22 @@ nonisolated struct ExportSettings: Equatable, Codable, Sendable {
     var format: ExportFormat
     var quality: Double
     var tiff16: Bool
+    /// WebP only. Lossless is a different ENCODER, not quality = 100 — see
+    /// `WebPEncoder.encode`.
+    var webpLossless: Bool
     var resize: ExportResize
     var background: ExportBackground
     var includeEXIF: Bool
     var includeLocation: Bool
 
     init(format: ExportFormat = .jpeg, quality: Double = 0.9, tiff16: Bool = false,
-         resize: ExportResize = .original, background: ExportBackground = .transparent,
+         webpLossless: Bool = false, resize: ExportResize = .original,
+         background: ExportBackground = .transparent,
          includeEXIF: Bool = false, includeLocation: Bool = false) {
         self.format = format
         self.quality = quality
         self.tiff16 = tiff16
+        self.webpLossless = webpLossless
         self.resize = resize
         self.background = background
         self.includeEXIF = includeEXIF
@@ -197,6 +234,7 @@ nonisolated struct ExportSettings: Equatable, Codable, Sendable {
         format = try c.decodeIfPresent(ExportFormat.self, forKey: .format) ?? .jpeg
         quality = try c.decodeIfPresent(Double.self, forKey: .quality) ?? 0.9
         tiff16 = try c.decodeIfPresent(Bool.self, forKey: .tiff16) ?? false
+        webpLossless = try c.decodeIfPresent(Bool.self, forKey: .webpLossless) ?? false
         resize = try c.decodeIfPresent(ExportResize.self, forKey: .resize) ?? .original
         background = try c.decodeIfPresent(ExportBackground.self, forKey: .background) ?? .transparent
         includeEXIF = try c.decodeIfPresent(Bool.self, forKey: .includeEXIF) ?? false

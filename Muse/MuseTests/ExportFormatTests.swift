@@ -157,6 +157,41 @@ final class ExportFormatTests: XCTestCase {
         }
     }
 
+    // MARK: - Quality tiers
+
+    func testTierValuesAscend() {
+        let values = QualityTier.allCases.map(\.value)
+        XCTAssertEqual(values, values.sorted())
+        XCTAssertEqual(Set(values).count, values.count)
+        XCTAssertTrue(values.allSatisfy { $0 > 0 && $0 <= 1 })
+    }
+
+    func testATierIsRecognisedFromItsOwnValue() {
+        for tier in QualityTier.allCases {
+            XCTAssertEqual(QualityTier.matching(tier.value), tier)
+        }
+    }
+
+    /// Between tiers the control says Custom rather than rounding — claiming
+    /// "High" at 0.78 would be a label the number on screen contradicts.
+    func testAValueBetweenTiersMatchesNothing() {
+        XCTAssertNil(QualityTier.matching(0.78))
+        XCTAssertNil(QualityTier.matching(0.60))
+    }
+
+    // MARK: - WebP lossless
+
+    /// Lossless is a separate encoder, not quality = 100, so it has to survive
+    /// a round trip independently of the quality value.
+    func testLosslessRoundTripsAndDefaultsOff() throws {
+        XCTAssertFalse(ExportSettings().webpLossless)
+        let s = ExportSettings(format: .webp, quality: 0.4, webpLossless: true)
+        let back = try JSONDecoder().decode(ExportSettings.self,
+                                            from: try JSONEncoder().encode(s))
+        XCTAssertTrue(back.webpLossless)
+        XCTAssertEqual(back.quality, 0.4)
+    }
+
     func testSettingsRoundTripThroughCodable() throws {
         let s = ExportSettings(format: .tiff, quality: 0.8, tiff16: true,
                                resize: .fitWithin(width: 1200, height: 900),

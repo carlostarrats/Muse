@@ -76,6 +76,24 @@ extension AppState {
         return paths.map { byPath[$0] ?? URL(fileURLWithPath: $0) }
     }
 
+    /// What File ▸ Export… acts on, from wherever you happen to be.
+    ///
+    /// The OPEN photo wins: with the viewer or the editor up, that's the one
+    /// you mean, and the grid selection behind it is stale context. Otherwise
+    /// it's the grid selection. Filtered to raster kinds by the same rule the
+    /// context menu uses — the render pipeline re-encodes pixels, so a PDF or a
+    /// video has nothing to export.
+    func exportableSelectionURLs() -> [URL] {
+        let candidates = selectedFile.map { [$0.url] }
+            ?? effectiveSelectionURLs(fallback: "")
+        return candidates.filter {
+            switch AssetKind.detect(at: $0) {
+            case .image, .raw, .psd: return true
+            default: return false
+            }
+        }
+    }
+
     /// The index of the current highlighted tile within `files` (the grid
     /// order), derived from the selection anchor — the "current tile" for
     /// keyboard nav, deliberately distinct from the multi-select Set and already

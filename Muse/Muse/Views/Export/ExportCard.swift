@@ -99,15 +99,51 @@ struct ExportRequest: Identifiable, Equatable {
     /// it actually exports at rather than the sensor's.
     @Published private(set) var naturalSize: CGSize?
 
+    /// Whether the current photo carries an alpha channel at all.
+    ///
+    /// The Background control is shown ONLY when this is true. An ordinary
+    /// photograph has no transparency to place, so offering White / Black /
+    /// Transparent for one is a control that does nothing — which is exactly
+    /// how it read on review.
+    @Published private(set) var sourceHasAlpha = false
+
+    /// The card's decoded preview, handed up by the stage. Reused for the size
+    /// estimate rather than decoding a second time.
+    @Published var previewImage: CGImage?
+    /// Result of the last estimate run. Nil while it's in flight or if the
+    /// trial encode failed — better no number than a wrong one.
+    @Published var estimatedBytes: Int?
+
     /// A header read on a cache miss, so never from a view body.
     func loadNaturalSize() async {
-        guard let url = currentURL else { naturalSize = nil; return }
-        if let cached = EffectiveDimensions.cached(url) { naturalSize = cached; return }
-        let resolved = await Task.detached(priority: .userInitiated) {
-            EffectiveDimensions.resolve(url)
+        guard let url = currentURL else { naturalSize = nil; sourceHasAlpha = false; return }
+        let facts = await Task.detached(priority: .userInitiated) { () -> (CGSize?, Bool) in
+            let size = EffectiveDimensions.cached(url) ?? EffectiveDimensions.resolve(url)
+            guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+                  let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any]
+            else { return (size, false) }
+            return (size, (props[kCGImagePropertyHasAlpha as String] as? Bool) ?? false)
         }.value
         guard url == currentURL else { return }   // pager moved while we read
-        naturalSize = resolved
+        naturalSize = facts.0
+        sourceHasAlpha = facts.1
+    }
+
+    /// Re-measures the output size for the current settings. Cheap enough to
+    /// run on every control change because it encodes the ≤2048px PREVIEW, not
+    /// the full image, and scales the result.
+    func refreshEstimate(outputPixelCount: Double) async {
+        guard !isSocial, let url = currentURL, let preview = previewImage else {
+            estimatedBytes = nil
+            return
+        }
+        let settings = self.settings
+        let bytes = await Task.detached(priority: .utility) {
+            ImageExportRender.estimatedBytes(preview: preview, settings: settings,
+                                             for: url, outputPixelCount: outputPixelCount)
+        }.value
+        guard url == currentURL else { return }
+        estimatedBytes = bytes
     }
 
     /// The concrete format the current file will be written in — what the
@@ -324,6 +360,12 @@ struct ExportCard: View {
         // is I/O — so it happens here, off the view body, and again whenever
         // the pager moves.
         .task(id: model.currentURL) { await model.loadNaturalSize(); resetSizeFields() }
+        // Re-measure on any change that moves the output: the settings, the
+        // photo, or the preview finishing its decode.
+        .task(id: estimateKey) {
+            await model.refreshEstimate(
+                outputPixelCount: outputPixelSize.map { Double($0.width * $0.height) } ?? 0)
+        }
     }
 
     private var stage: some View {
@@ -338,7 +380,8 @@ struct ExportCard: View {
                     fit: model.fit,
                     matte: model.matte,
                     state: Binding(get: { model.state(for: url) },
-                                   set: { model.setState($0, for: url) }))
+                                   set: { model.setState($0, for: url) }),
+                    onDecoded: { model.previewImage = $0 })
             } else {
                 Text("Nothing to export.").foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -388,6 +431,19 @@ struct ExportCard: View {
         }
     }
 
+    /// Everything the estimate depends on, so `.task(id:)` reruns when any of
+    /// it moves and not otherwise.
+    private var estimateKey: String {
+        let px = outputPixelSize.map { "\(Int($0.width))x\(Int($0.height))" } ?? "-"
+        return [model.currentURL?.path ?? "-", px,
+                model.settings.format.rawValue,
+                String(model.settings.quality),
+                String(model.settings.tiff16), String(model.settings.webpLossless),
+                model.settings.background.rawValue,
+                model.previewImage == nil ? "0" : "1",
+                model.isSocial ? "s" : "f"].joined(separator: "|")
+    }
+
     /// What you are about to get, in one line. The old card said nothing about
     /// the output at all — you set a size and found out what it meant by
     /// opening the file afterwards. Every number here is EXACT rather than
@@ -414,8 +470,22 @@ struct ExportCard: View {
             ? String(localized: "JPEG")
             : model.resolvedFormat.displayName
         guard let size = outputPixelSize else { return name }
-        return "\(name)  ·  \(Int(size.width)) × \(Int(size.height)) px"
+        var line = "\(name)  ·  \(Int(size.width)) × \(Int(size.height)) px"
+        // "≈" is load-bearing. The number comes from encoding the preview at
+        // these exact settings and scaling by pixel count — a real measurement,
+        // but of a smaller image, so it is close rather than exact.
+        if let bytes = model.estimatedBytes {
+            line += "  ·  ≈\(Self.byteFormatter.string(fromByteCount: Int64(bytes)))"
+        }
+        return line
     }
+
+    private static let byteFormatter: ByteCountFormatter = {
+        let f = ByteCountFormatter()
+        f.countStyle = .file
+        f.allowedUnits = [.useKB, .useMB]
+        return f
+    }()
 
     private var fileCountLine: String {
         String(format: NSLocalizedString("%lld photos", comment: "Export: how many files this run writes"),
@@ -465,8 +535,16 @@ struct ExportCard: View {
                     .accessibilityLabel(Text("Bit depth"))
                 }
             }
+            if model.resolvedFormat == .webp {
+                Toggle("Lossless", isOn: $model.settings.webpLossless)
+                    .font(.system(size: 12))
+                    .help("Reproduces every pixel exactly. Larger files, and worth it for graphics rather than photographs.")
+            }
             sizeControl
-            backgroundControl
+            // Only when there IS transparency to place. An opaque photograph
+            // has none, and offering the choice for one is a control that
+            // does nothing.
+            if model.sourceHasAlpha { backgroundControl }
             Divider()
             exifToggle
             savePresetRow
@@ -504,7 +582,24 @@ struct ExportCard: View {
                 .controlSize(.small)
                 .accessibilityLabel(Text("Quality"))
                 .accessibilityValue(Text(qualityPercent))
+            Picker("", selection: qualityTierBinding) {
+                ForEach(QualityTier.allCases, id: \.self) { tier in
+                    Text(tier.displayName).tag(Optional(tier))
+                }
+                // Only reachable by dragging the slider off a tier; picking it
+                // is a no-op rather than a jump to some arbitrary value.
+                Text("Custom").tag(Optional<QualityTier>.none)
+            }
+            .pickerStyle(.segmented).labelsHidden()
+            .accessibilityLabel(Text("Quality preset"))
         }
+    }
+
+    /// The tiers SET the slider; the slider reports which tier it's on, or
+    /// Custom when it's between them.
+    private var qualityTierBinding: Binding<QualityTier?> {
+        Binding(get: { QualityTier.matching(model.settings.quality) },
+                set: { if let tier = $0 { model.settings.quality = tier.value } })
     }
 
     /// Interpolated, so it needs an explicit format string rather than a
@@ -577,7 +672,26 @@ struct ExportCard: View {
             .multilineTextAlignment(.trailing)
             .frame(width: 62)
             .onSubmit(commit)
+            // Arrow keys nudge the number, Shift by ten. A numeric field you
+            // can only retype is a numeric field you can't dial in — and
+            // dialling in is the whole job once the size estimate is on screen.
+            // `keys:` rather than the single-key overload — that one hands the
+            // action no argument, and the modifiers are the point here.
+            // `.repeat` is included so holding the key keeps stepping.
+            .onKeyPress(keys: [.upArrow, .downArrow], phases: [.down, .repeat]) { press in
+                let magnitude = press.modifiers.contains(.shift) ? 10 : 1
+                let sign = press.key == .upArrow ? 1 : -1
+                return step(value, by: magnitude * sign, commit: commit)
+            }
             .accessibilityLabel(Text(label))
+    }
+
+    private func step(_ value: Binding<String>, by delta: Int,
+                      commit: () -> Void) -> KeyPress.Result {
+        let current = Int(value.wrappedValue.filter(\.isNumber)) ?? 0
+        value.wrappedValue = String(max(1, current + delta))
+        commit()
+        return .handled
     }
 
     /// Reads the fields back into `settings.resize`. Clamped to the natural
@@ -874,6 +988,9 @@ struct ExportStageView: View {
     let fit: SocialFit
     let matte: MatteShade
     @Binding var state: ExportModel.PerImageState
+    /// Handed up so the size estimate can encode THIS image rather than
+    /// decoding the file a second time.
+    var onDecoded: ((CGImage) -> Void)?
 
     /// `nonisolated`: read by the card's off-main preview decode.
     nonisolated static let previewMaxPixel = 2048
@@ -1004,14 +1121,14 @@ struct ExportStageView: View {
         // the two didn't even share a frame, so `decodedSize` fed the crop
         // math the wrong geometry.
         let stack = EditStackIndex.resolvedStack(for: target)
-        let decoded = await Task.detached(priority: .userInitiated) { () -> (NSImage, CGSize)? in
+        let decoded = await Task.detached(priority: .userInitiated) { () -> (NSImage, CGSize, CGImage)? in
             guard let src = CGImageSourceCreateWithURL(target as CFURL, nil),
                   ThumbnailCache.withinDecodeBudget(src) else { return nil }
             if let stack,
                let rendered = EditRenderer.render(url: target, stack: stack,
                                                   maxPixel: Self.previewMaxPixel) {
                 let size = CGSize(width: rendered.width, height: rendered.height)
-                return (NSImage(cgImage: rendered, size: size), size)
+                return (NSImage(cgImage: rendered, size: size), size, rendered)
             }
             let options: [CFString: Any] = [
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -1020,9 +1137,10 @@ struct ExportStageView: View {
             ]
             guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, options as CFDictionary) else { return nil }
             let size = CGSize(width: cg.width, height: cg.height)
-            return (NSImage(cgImage: cg, size: size), size)
+            return (NSImage(cgImage: cg, size: size), size, cg)
         }.value
         guard let decoded, target == url else { return }
+        onDecoded?(decoded.2)
         image = decoded.0
         var s = state
         s.decodedSize = decoded.1

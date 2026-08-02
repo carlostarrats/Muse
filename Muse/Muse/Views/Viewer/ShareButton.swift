@@ -53,8 +53,11 @@ struct ShareButton: View {
         .buttonStyle(.plain)
         .fixedSize()
         .onHover { hovering = $0 }
-        .help("Share")
-        .accessibilityLabel("Share")
+        // "Share" was wrong for a menu whose most-used item writes a file to
+        // disk — exporting isn't sharing. The tooltip names what the menu
+        // contains rather than one of the things in it.
+        .help("Share, export, or open this photo")
+        .accessibilityLabel("Share, export, or open this photo")
     }
 
     private func share() {

@@ -283,6 +283,25 @@ final class ImageExportRenderTests: XCTestCase {
         XCTAssertEqual(head.suffix(4), Data("WEBP".utf8))
     }
 
+    /// Lossless is a DIFFERENT encoder, not quality = 100 — so it must beat
+    /// quality-100 lossy at reproducing the pixels, and cost more bytes on
+    /// photographic content to prove it isn't silently the same path.
+    func testWebPLosslessDiffersFromMaximumQualityLossy() throws {
+        try XCTSkipUnless(WebPEncoder.isAvailable)
+        let src = try SocialFixtures.makeJPEG(width: 600, height: 400, content: .noise,
+                                              name: "webplossless", in: dir)
+        let lossy = try ImageExportRender.export(
+            .init(sourceURL: src, settings: ExportSettings(format: .webp, quality: 1.0)), to: dir)
+        let lossless = try ImageExportRender.export(
+            .init(sourceURL: src,
+                  settings: ExportSettings(format: .webp, quality: 1.0, webpLossless: true)),
+            to: dir)
+        XCTAssertNotEqual(lossy.bytes, lossless.bytes)
+        XCTAssertGreaterThan(lossless.bytes, lossy.bytes)
+        let head = try Data(contentsOf: lossless.url).prefix(12)
+        XCTAssertEqual(head.suffix(4), Data("WEBP".utf8))
+    }
+
     func testWebPRespectsQuality() throws {
         try XCTSkipUnless(WebPEncoder.isAvailable)
         let src = try SocialFixtures.makeJPEG(width: 1200, height: 900, content: .noise,
@@ -307,6 +326,63 @@ final class ImageExportRenderTests: XCTestCase {
         let image = try XCTUnwrap(CGImageSourceCreateImageAtIndex(read, 0, nil))
         XCTAssertEqual(image.width, 500)
         XCTAssertEqual(image.height, 250)
+    }
+
+    // MARK: - Size estimate
+
+    /// The estimate is a real encode of the preview scaled by pixel count, so
+    /// it should land near the real file. "Near" is generous on purpose —
+    /// that's what the ≈ in the readout is for — but a factor-of-two miss
+    /// would make the number worse than useless.
+    func testEstimateIsWithinRangeOfTheRealFile() throws {
+        let src = try SocialFixtures.makeJPEG(width: 2400, height: 1800, name: "est", in: dir)
+        let settings = ExportSettings(format: .jpeg, quality: 0.8)
+        let real = try ImageExportRender.export(.init(sourceURL: src, settings: settings), to: dir)
+
+        // A half-size stand-in for the card's ≤2048px preview.
+        let previewSrc = try XCTUnwrap(CGImageSourceCreateWithURL(src as CFURL, nil))
+        let preview = try XCTUnwrap(CGImageSourceCreateThumbnailAtIndex(previewSrc, 0, [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: 1200,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+        ] as CFDictionary))
+
+        let estimate = try XCTUnwrap(ImageExportRender.estimatedBytes(
+            preview: preview, settings: settings, for: src,
+            outputPixelCount: Double(2400 * 1800)))
+        let ratio = Double(estimate) / Double(real.bytes)
+        XCTAssertGreaterThan(ratio, 0.5, "estimate \(estimate) vs real \(real.bytes)")
+        XCTAssertLessThan(ratio, 2.0, "estimate \(estimate) vs real \(real.bytes)")
+    }
+
+    /// TIFF needs no trial encode — ImageIO writes it uncompressed, so the
+    /// size is arithmetic, and 16-bit is exactly twice 8-bit.
+    func testTIFFEstimateIsArithmeticAndDoublesWithDepth() throws {
+        let src = try SocialFixtures.makeJPEG(width: 100, height: 100, name: "esttiff", in: dir)
+        let preview = try XCTUnwrap(CGImageSourceCreateImageAtIndex(
+            try XCTUnwrap(CGImageSourceCreateWithURL(src as CFURL, nil)), 0, nil))
+        let eight = ImageExportRender.estimatedBytes(
+            preview: preview, settings: ExportSettings(format: .tiff, tiff16: false),
+            for: src, outputPixelCount: 1000)
+        let sixteen = ImageExportRender.estimatedBytes(
+            preview: preview, settings: ExportSettings(format: .tiff, tiff16: true),
+            for: src, outputPixelCount: 1000)
+        XCTAssertEqual(eight, 4000)
+        XCTAssertEqual(sixteen, 8000)
+    }
+
+    func testLowerQualityEstimatesSmaller() throws {
+        let src = try SocialFixtures.makeJPEG(width: 1200, height: 900, content: .noise,
+                                              name: "estq", in: dir)
+        let preview = try XCTUnwrap(CGImageSourceCreateImageAtIndex(
+            try XCTUnwrap(CGImageSourceCreateWithURL(src as CFURL, nil)), 0, nil))
+        let low = try XCTUnwrap(ImageExportRender.estimatedBytes(
+            preview: preview, settings: ExportSettings(format: .jpeg, quality: 0.3),
+            for: src, outputPixelCount: Double(1200 * 900)))
+        let high = try XCTUnwrap(ImageExportRender.estimatedBytes(
+            preview: preview, settings: ExportSettings(format: .jpeg, quality: 0.95),
+            for: src, outputPixelCount: Double(1200 * 900)))
+        XCTAssertLessThan(low, high)
     }
 
     // MARK: - Quality

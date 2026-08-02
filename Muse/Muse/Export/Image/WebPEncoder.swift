@@ -38,7 +38,7 @@ nonisolated enum WebPEncoder {
     /// component order or premultiplication, and libwebp needs tightly-packed
     /// RGBA. Copying is the only way to be sure, and at export time one pass
     /// per file is not the cost that matters.
-    static func encode(_ image: CGImage, quality: Double) throws -> Data {
+    static func encode(_ image: CGImage, quality: Double, lossless: Bool = false) throws -> Data {
         let w = image.width, h = image.height
         guard w > 0, h > 0, w <= maxDimension, h <= maxDimension else {
             throw ExportPipeline.RenderError.encodeFailed
@@ -66,8 +66,15 @@ nonisolated enum WebPEncoder {
 
         var output: UnsafeMutablePointer<UInt8>?
         let size = buffer.withUnsafeBufferPointer { src -> Int in
-            WebPEncodeRGBA(src.baseAddress, Int32(w), Int32(h), Int32(bytesPerRow),
-                           Float(min(1, max(0, quality)) * 100), &output)
+            // Lossless is a DIFFERENT entry point, not quality = 100. WebP's
+            // lossy encoder at 100 still transforms the image; only this one
+            // reproduces the pixels exactly, which is the whole reason to
+            // choose WebP over JPEG for graphics rather than photographs.
+            lossless
+                ? WebPEncodeLosslessRGBA(src.baseAddress, Int32(w), Int32(h),
+                                         Int32(bytesPerRow), &output)
+                : WebPEncodeRGBA(src.baseAddress, Int32(w), Int32(h), Int32(bytesPerRow),
+                                 Float(min(1, max(0, quality)) * 100), &output)
         }
         guard size > 0, let output else { throw ExportPipeline.RenderError.encodeFailed }
         defer { WebPFree(output) }
