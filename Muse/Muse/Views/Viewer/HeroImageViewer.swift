@@ -36,6 +36,7 @@ struct HeroImageViewer: View {
     /// once the toast dismisses.
     @State private var lingering = false
     @State private var scrollMonitor: Any?
+    @State private var keyMonitor: Any?
     /// Palette computed on open when the DB has none (file not yet analyzed).
     /// The prototype always tints the backdrop and shows color swatches —
     /// that can't wait for an explicit Analyze run.
@@ -52,6 +53,7 @@ struct HeroImageViewer: View {
     /// are all untouched by it.
     @State private var editMode = false
     @State private var editSession: EditSession?
+
     /// Read only so the Preview | Edit switch can stay legible over whichever
     /// editor backdrop is set — the editor owns this preference.
     @AppStorage(AppSettings.editorBackdropKey) private var editorBackdropRaw =
@@ -79,10 +81,7 @@ struct HeroImageViewer: View {
                         .onTapGesture { startClose() }
 
                     if let editSession, editMode {
-                        EditorView(session: editSession, onClose: {
-                            exitEditMode()
-                            startClose()
-                        })
+                        EditorView(session: editSession, onClose: closeFromEditor)
                             // The stage's own scale, so entering Edit reads as
                             // the photo settling back to make room for the
                             // panels rather than as a new screen.
@@ -147,6 +146,7 @@ struct HeroImageViewer: View {
         }
         .onAppear {
             installScrollMonitor()
+            installKeyMonitor()
             // The wash is at full strength from frame one — there is no
             // fade-in state to set here any more.
             //
@@ -162,7 +162,9 @@ struct HeroImageViewer: View {
             withAnimation(.easeOut(duration: 0.4).delay(0.15)) { chromeVisible = true }
         }
         .onDisappear {
+            appState.editorActive = false
             removeScrollMonitor()
+            removeKeyMonitor()
             appState.viewerClosing = false
             appState.viewerDismissing = false
             deleteTask?.cancel()
@@ -505,11 +507,58 @@ struct HeroImageViewer: View {
             let stack = await EditStore.shared.stack(for: url)
             guard currentURL == url else { return }
             editSession = EditSession(url: url, stack: stack, isRaw: isRaw)
+            // Let the grid come back together while it's hidden.
+            appState.editorActive = true
             withAnimation(.easeOut(duration: 0.25)) { editMode = true }
         }
     }
 
+    /// Closing the viewer from EDIT mode: an INSTANT CUT. No flight, no fade,
+    /// no shrink. This is the owner's decision (2026-08-02) after four animated
+    /// versions were built and rejected — leave it alone:
+    ///
+    ///  1. Leave the editor, then run the normal close: the Preview page is on
+    ///     screen for the whole flight, and the stage plays its OPEN flight
+    ///     from the tile before shrinking back.
+    ///  2. Cross-fade the whole surface: jagged, because the canvas is an
+    ///     MTKView and animating opacity over it re-composites Metal every
+    ///     frame — the same trap as the material fade documented above.
+    ///  3. Fly a copy of the photo over the still-mounted editor.
+    ///  4. Mount the stage for the return leg only, over the editor's grey.
+    ///
+    /// Edit is not the Preview page and does not fly home from it.
+    private func closeFromEditor() {
+        guard !isClosing else { return }
+        // Save first: leaving is the moment work has to be safe, and the
+        // session is about to be dropped.
+        if let session = editSession { Task { await session.save() } }
+        appState.clearSelection()
+        // NOT viewerDismissing: that flag and the `selectedFile == nil` change
+        // BOTH call ToolbarFade.show(), and firing them in one transaction
+        // starts two overlapping opacity animations on the toolbar — the
+        // flicker on the way out. Clearing selectedFile alone brings it back.
+        // The grid parted (tiles pushed aside, dimmed to 15%) when this opened,
+        // and normally converges back across the return flight. There is no
+        // flight here, so that converge and its stagger are exactly the delay
+        // and the wash of dimmed neighbours that made the cut feel wrong.
+        appState.viewerCutOut = true
+        appState.editorActive = false
+        chromeVisible = false
+        // NOTE: editMode/editSession are deliberately left alone. Clearing them
+        // here flips the body to the Preview branch — mounting the stage and
+        // the info column — for the frame before `selectedFile` clears, which
+        // is the flicker. The whole subtree is about to be torn down anyway.
+        reallyFinish()
+        Task { @MainActor in
+            // One frame is enough for the tiles to land un-animated; clearing
+            // it restores the normal open/close motion for the next time.
+            try? await Task.sleep(for: .milliseconds(80))
+            appState.viewerCutOut = false
+        }
+    }
+
     private func exitEditMode() {
+        appState.editorActive = false
         let session = editSession
         // Preview comes back FITTED. The two modes keep their own zoom, and a
         // trip through the editor leaving the Preview stage silently zoomed —
@@ -713,6 +762,29 @@ struct HeroImageViewer: View {
     /// Local monitor active while the viewer is mounted. Scrolls over the
     /// info column pass through (column keeps scrolling normally); scrolls
     /// over the stage zoom and are consumed.
+    /// ESCAPE, taken before SwiftUI sees it.
+    ///
+    /// The shell's `.keyboardShortcut(.cancelAction)` button wins over an
+    /// in-view key handler, so Escape was still routing through AppState's
+    /// `viewerClosing` — a @Published write that re-evaluates the whole shell
+    /// before the close begins, which is why it didn't move like ✕ does. A
+    /// local keyDown monitor runs ahead of both, so Escape can make the exact
+    /// same call the button makes.
+    private func installKeyMonitor() {
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard event.keyCode == 53, !lingering, !burning, burnProgress <= 0,
+                  let window = event.window, window.isKeyWindow,
+                  // A card over the viewer owns Escape first.
+                  !appState.modalPresented else { return event }
+            if editMode { closeFromEditor() } else { startClose() }
+            return nil
+        }
+    }
+
+    private func removeKeyMonitor() {
+        if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
+    }
+
     private func installScrollMonitor() {
         scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
             // Edit mode has its own scrollable panels on BOTH sides. This

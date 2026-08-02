@@ -39,6 +39,9 @@ struct EditorView: View {
 
     // Spec 05
     @ObservedObject private var referenceStore = EditReferenceStore.shared
+    /// Read only to name what's applied in the collapsed STYLES heading.
+    @ObservedObject private var presetStore = EditPresetStore.shared
+    @ObservedObject private var lutStore = LutStore.shared
     @State private var showZebraThresholds = false
     /// The smoothed-EV mask the zone hatch draws through. Built lazily on first
     /// hover and dropped whenever the draft changes — it's a per-render mask,
@@ -58,12 +61,16 @@ struct EditorView: View {
     @State private var isHoverPushed = false
     /// The zoom a pinch started from — see `magnifyGesture`.
     @State private var magnifyStartZoom: CGFloat?
+    /// 1 = panels shown, 0 = hidden. Stepped, so the canvas re-fits smoothly.
+    @State private var chromeProgress: Double = 1
+    @State private var chromeAnimation: Task<Void, Never>?
+    private static let chromeFade: Double = 0.22
     /// Styles browser: grid or list. A global working preference.
     @AppStorage(AppSettings.editorStylesListModeKey) private var stylesListMode = false
 
     /// Section ids. Stable strings, because they're persisted.
     private enum Section {
-        static let tools = "tools", histogram = "histogram", info = "info"
+        static let tools = "tools", histogram = "histogram"
         static let insights = "insights", history = "history"
         static let looks = "looks", light = "light", zones = "zones", color = "color"
     }
@@ -73,7 +80,7 @@ struct EditorView: View {
     /// first. Looks is a PRESET browser — closed until asked for, like the
     /// Preview page's cards — and Tone Zones is a deliberate detour.
     private static let defaultExpanded: Set<String> =
-        [Section.tools, Section.histogram, Section.info, Section.light, Section.color]
+        [Section.tools, Section.histogram, Section.insights, Section.light, Section.color]
 
     /// The left column's first card: level with the RIGHT column's first card,
     /// which sits below its chrome row. Also clear of the window's traffic
@@ -81,6 +88,28 @@ struct EditorView: View {
     /// = 32 chrome top + 38 chrome + 12 chrome bottom pad + 14 stack spacing.
     static let panelTop: CGFloat = ViewerGeometry.chromeTop
         + ViewerGeometry.chromeHeight + 12 + 14
+
+    /// The preset and/or LUT currently on the photo, for the collapsed STYLES
+    /// heading — otherwise a closed card looks identical whether you're on
+    /// Original or three looks deep.
+    private var stylesSummary: String? {
+        let preset = presetStore.presets.first { row in
+            guard let stack = EditStackCodec.decode(row.stack) else { return false }
+            return EditTransfer.isApplied(stack, onto: session.draft)
+        }
+        let lut = session.draft.lutParams.flatMap { applied -> String? in
+            guard !applied.isNeutral else { return nil }
+            return lutStore.luts.first { $0.id == applied.lutHash }?.name ?? applied.name
+        }
+        let names = [preset?.name, lut].compactMap { $0 }
+        return names.isEmpty ? nil : names.joined(separator: " · ")
+    }
+
+    private var hasInsights: Bool {
+        !feedbackNotes.isEmpty
+            || session.draft.origin == .lightroom
+            || session.draft.rawParams?.decoderVersion != nil
+    }
 
     private func expansion(_ id: String) -> Binding<Bool> {
         Binding(get: { expanded.contains(id) },
@@ -125,6 +154,7 @@ struct EditorView: View {
                                 backingVisible: isZoomed, chrome: { EmptyView() }) {
                         leftPanelContent
                     }
+                    .transition(.move(edge: .leading).combined(with: .opacity))
                 }
                 Spacer(minLength: 0)
                 if !session.uiHidden {
@@ -132,6 +162,7 @@ struct EditorView: View {
                                 backingVisible: isZoomed, chrome: { chromeRow }) {
                         rightPanelContent
                     }
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
             // The Preview column's margin exactly: its cards sit
@@ -161,6 +192,8 @@ struct EditorView: View {
         }
         .onAppear { updateStatsVisibility() }
         .onDisappear {
+            chromeAnimation?.cancel()
+            session.cancelCanvasAnimation()
             resetCursorState()
             session.statsVisible = false
             session.hoveredZone = nil
@@ -206,6 +239,7 @@ struct EditorView: View {
                 else { return }
                 if dragStartPan == nil {
                     isDraggingPan = true
+                    session.cancelCanvasAnimation()
                     NSCursor.closedHand.push()
                 }
                 let start = dragStartPan ?? session.canvasPan
@@ -228,14 +262,19 @@ struct EditorView: View {
     /// photo grows past it and under the panels, like Preview's does under the
     /// info column. Hiding the controls gives the whole window back.
     private var fitInsets: EdgeInsets {
-        guard !session.uiHidden else {
-            return EdgeInsets(top: ViewerGeometry.sidePad, leading: ViewerGeometry.sidePad,
-                              bottom: ViewerGeometry.sidePad, trailing: ViewerGeometry.sidePad)
-        }
         let column = ViewerGeometry.columnWidth + 24
             + (ViewerGeometry.columnMargin - 12) + theme.spacingL
-        return EdgeInsets(top: ViewerGeometry.topPad, leading: column,
-                          bottom: ViewerGeometry.bottomPad, trailing: column)
+        let bare = ViewerGeometry.sidePad
+        // Interpolated, so hiding the controls GROWS the photo into the space
+        // instead of snapping it there a frame later.
+        let p = chromeProgress
+        func lerp(_ hidden: CGFloat, _ shown: CGFloat) -> CGFloat {
+            hidden + (shown - hidden) * p
+        }
+        return EdgeInsets(top: lerp(bare, ViewerGeometry.topPad),
+                          leading: lerp(bare, column),
+                          bottom: lerp(bare, ViewerGeometry.bottomPad),
+                          trailing: lerp(bare, column))
     }
 
     /// Trackpad pinch, the same contract as the Preview page's: the gesture
@@ -246,6 +285,7 @@ struct EditorView: View {
             .onChanged { value in
                 guard !session.eyedropperArmed, !session.toneZoneTargeting else { return }
                 let start = magnifyStartZoom ?? session.canvasZoom
+                if magnifyStartZoom == nil { session.cancelCanvasAnimation() }
                 magnifyStartZoom = start
                 let next = ViewerGeometry.clampZoom(start * value.magnification)
                 session.canvasZoom = next
@@ -304,10 +344,7 @@ struct EditorView: View {
             // buttons after the spacer slide right into the freed space.
             if isZoomed {
                 ChromeTextButton(label: String(localized: "Fit"), ink: ink) {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        session.canvasZoom = 1
-                        session.canvasPan = .zero
-                    }
+                    session.animateCanvas(zoom: 1, pan: .zero)
                 }
             }
             Spacer(minLength: 0)
@@ -330,9 +367,33 @@ struct EditorView: View {
                            accessibilityLabel: session.uiHidden
                                 ? String(localized: "Show controls")
                                 : String(localized: "Hide controls")) {
-            withAnimation(.easeOut(duration: 0.2)) { session.uiHidden.toggle() }
+            toggleChrome()
         }
         .help(Text(session.uiHidden ? "Show controls" : "Hide controls"))
+    }
+
+    /// The panels slide out and the photo grows into the space they leave.
+    ///
+    /// Two halves, because they animate by different means: SwiftUI moves the
+    /// panels (a transition), while the canvas re-fit is a value the MTKView
+    /// only reads once per render — so `chromeProgress` is stepped frame by
+    /// frame, exactly like the zoom, and `fitInsets` interpolates through it.
+    private func toggleChrome() {
+        let hiding = !session.uiHidden
+        withAnimation(.easeOut(duration: Self.chromeFade)) { session.uiHidden = hiding }
+        chromeAnimation?.cancel()
+        let from = chromeProgress
+        let to: Double = hiding ? 0 : 1
+        let frames = max(1, Int(Self.chromeFade * 60))
+        chromeAnimation = Task { @MainActor in
+            for frame in 1...frames {
+                if Task.isCancelled { return }
+                let t = Double(frame) / Double(frames)
+                chromeProgress = from + (to - from) * (1 - pow(1 - t, 3))
+                try? await Task.sleep(for: .milliseconds(16))
+            }
+            chromeProgress = to
+        }
     }
 
     private var zoomPill: some View {
@@ -360,10 +421,8 @@ struct EditorView: View {
     private var isZoomed: Bool { abs(session.canvasZoom - 1) > 0.001 }
 
     private func setZoom(_ value: CGFloat) {
-        withAnimation(.easeOut(duration: 0.15)) {
-            session.canvasZoom = ViewerGeometry.clampZoom(value)
-            if abs(session.canvasZoom - 1) <= 0.001 { session.canvasPan = .zero }
-        }
+        let next = ViewerGeometry.clampZoom(value)
+        session.animateCanvas(zoom: next, pan: abs(next - 1) <= 0.001 ? .zero : nil)
     }
 
     // MARK: - Canvas
@@ -664,6 +723,7 @@ struct EditorView: View {
         EditorSection(title: String(localized: "STYLES"),
                       ink: ink,
                       accessory: stylesModeButtons,
+                      summary: stylesSummary,
                       isExpanded: expansion(Section.looks)) { looksTab }
         EditorSection(title: String(localized: "LIGHT"),
                       ink: ink,
@@ -818,14 +878,11 @@ struct EditorView: View {
                       isExpanded: expansion(Section.histogram)) {
             ScopesPanel(session: session)
         }
-        EditorSection(title: String(localized: "INFO"),
-                      ink: ink,
-                      isExpanded: expansion(Section.info)) { infoTab }
-        if !feedbackNotes.isEmpty {
-            // Moved here from the Preview column: it's feedback about how the
-            // photo was exposed, which only becomes useful once you're holding
-            // the sliders that answer it. Called INSIGHTS rather than the old
-            // "Why it looks this way", which read like an apology.
+        // Moved here from the Preview column: it's feedback about how the photo
+        // was exposed, which only becomes useful once you're holding the
+        // sliders that answer it. Called INSIGHTS rather than the old "Why it
+        // looks this way", which read like an apology.
+        if hasInsights {
             EditorSection(title: String(localized: "INSIGHTS"),
                           ink: ink,
                           isExpanded: expansion(Section.insights)) { insightsSection }
@@ -837,62 +894,31 @@ struct EditorView: View {
         }
     }
 
+    /// What this card says about the photo. The INFO card that used to sit
+    /// beside it was the filename (already above the panel), a count of
+    /// adjustment groups (the sliders say that), and these same notes — so it
+    /// went, and the two lines that were only ever there moved here.
     private var insightsSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(feedbackNotes.enumerated()), id: \.offset) { _, note in
-                Text(note.displayText)
-                    .font(panelTheme.labelFont)
-                    .foregroundStyle(panelTheme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var infoTab: some View {
-        VStack(alignment: .leading, spacing: panelTheme.spacingS) {
-            Text(session.url.lastPathComponent)
-                .font(panelTheme.labelFont)
-                .foregroundStyle(panelTheme.textPrimary)
-                .lineLimit(2)
-                .truncationMode(.middle)
-            // Provenance, stated where the numbers are: these values came from
-            // someone else's software and are approximations, not a transfer.
+            // Provenance: these values came from someone else's software and
+            // are approximations, not a transfer.
             if session.draft.origin == .lightroom {
                 Label("Approximated from Lightroom", systemImage: "info.circle")
                     .font(panelTheme.labelFont)
                     .foregroundStyle(panelTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            let groups = EditTransfer.adjustedGroups(of: session.draft)
-            if groups.isEmpty {
-                Text("No adjustments")
+            ForEach(Array(feedbackNotes.enumerated()), id: \.offset) { _, note in
+                Text(note.displayText)
                     .font(panelTheme.labelFont)
                     .foregroundStyle(panelTheme.textSecondary)
-            } else {
-                Text(String(format: NSLocalizedString(
-                    "%lld adjustment groups", comment: "editor Info card summary"),
-                            groups.count))
-                    .font(panelTheme.labelFont)
-                    .foregroundStyle(panelTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-
-            if !feedbackNotes.isEmpty {
-                Divider()
-                ForEach(Array(feedbackNotes.enumerated()), id: \.offset) { _, note in
-                    Text(note.displayText)
-                        .font(panelTheme.labelFont)
-                        .foregroundStyle(panelTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
             // The RAW decoder version is PINNED at first edit so a later OS
             // can't silently re-render the same stack differently. When the
             // pinned one is gone we say what we substituted rather than hide it.
             if let decoderVersion = session.draft.rawParams?.decoderVersion {
                 let live = RawSource.currentDecoderVersion(for: session.url)
-                Divider()
                 Text(live == nil || live == decoderVersion
                      ? String(localized: "Process: RAW decoder \(decoderVersion)")
                      : String(localized: "Process: RAW decoder \(decoderVersion) (this Mac renders with \(live ?? ""))"))

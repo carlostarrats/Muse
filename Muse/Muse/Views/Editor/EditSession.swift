@@ -57,6 +57,42 @@ final class EditSession: ObservableObject {
     @Published var canvasZoom: CGFloat = 1
     @Published var canvasPan: CGSize = .zero
 
+    /// Drives `canvasZoom`/`canvasPan` frame by frame.
+    ///
+    /// SwiftUI can't animate these: the canvas is an MTKView behind an
+    /// NSViewRepresentable, and a `withAnimation` on a published value only
+    /// re-renders it once, at the final value — so zooming jumped while the
+    /// Preview page (a plain Image with `.scaleEffect`) glided. The frames are
+    /// produced here instead.
+    private var zoomAnimation: Task<Void, Never>?
+
+    func animateCanvas(zoom target: CGFloat, pan targetPan: CGSize? = nil,
+                       duration: Double = 0.18) {
+        zoomAnimation?.cancel()
+        let fromZoom = canvasZoom
+        let fromPan = canvasPan
+        let toPan = targetPan ?? canvasPan
+        guard abs(target - fromZoom) > 0.0001 || toPan != fromPan else { return }
+        let frames = max(1, Int(duration * 60))
+        zoomAnimation = Task { @MainActor [weak self] in
+            for frame in 1...frames {
+                if Task.isCancelled { return }
+                let t = Double(frame) / Double(frames)
+                let eased = 1 - pow(1 - t, 3)          // easeOut, the viewer's curve
+                self?.canvasZoom = fromZoom + (target - fromZoom) * eased
+                self?.canvasPan = CGSize(
+                    width: fromPan.width + (toPan.width - fromPan.width) * eased,
+                    height: fromPan.height + (toPan.height - fromPan.height) * eased)
+                try? await Task.sleep(for: .milliseconds(16))
+            }
+            guard !Task.isCancelled else { return }
+            self?.canvasZoom = target
+            self?.canvasPan = toPan
+        }
+    }
+
+    func cancelCanvasAnimation() { zoomAnimation?.cancel() }
+
     /// Everything except the image is hidden. Lives on the session rather than
     /// in EditorView because the Preview | Edit switch belongs to the hero
     /// viewer, and "only see the image" has to mean that one too.

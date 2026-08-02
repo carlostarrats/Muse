@@ -88,6 +88,15 @@ final class EditStore: ObservableObject {
         let normalized = stack.normalized()
         let now = Int64(Date().timeIntervalSince1970)
 
+        // NOTHING CHANGED → do nothing. The save sequence ends in
+        // `generation += 1`, which is in the grid's signature, so an
+        // unconditional save relaid the whole grid and reloaded every visible
+        // tile's aspect — every photo appeared to load in again. Leaving the
+        // editor calls save() whether or not a slider ever moved, so this was
+        // the common case, not the rare one.
+        let current = await self.stack(for: url)
+        if (current ?? .fresh()).normalized() == normalized { return }
+
         if normalized.isNeutral {
             // "No edit" is the ABSENCE of a row, never a stored no-op — which
             // is also what reverts the thumbnail key to its unedited variant.

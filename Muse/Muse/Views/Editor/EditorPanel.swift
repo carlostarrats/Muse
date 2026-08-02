@@ -81,6 +81,9 @@ struct EditorSection<Content: View>: View {
     /// Reset. Type-erased so callers don't need a second generic parameter for
     /// the common case of not having one.
     var accessory: AnyView? = nil
+    /// Shown in the heading while CLOSED — what the card would tell you if you
+    /// opened it. A collapsed card that has something applied must say so.
+    var summary: String? = nil
     @Binding var isExpanded: Bool
     @ViewBuilder var content: () -> Content
 
@@ -89,11 +92,23 @@ struct EditorSection<Content: View>: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     CardLabel(text: title, color: ink.labelText)
-                    Spacer()
+                    if !isExpanded, let summary {
+                        // It TRUNCATES rather than pushing: the title, the
+                        // accessory and the ＋/− all have fixed jobs, and a long
+                        // preset name must not shove them off the card.
+                        Text(summary)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(ink.baseColor.opacity(0.9))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .layoutPriority(-1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
                         // The heading is the hit target, not just the little
                         // ＋/− disc. Buttons inside it are hit-tested first, so
                         // the accessory and the disc keep their own actions.
-                        .contentShape(Rectangle())
+                        Spacer()
+                    }
                     // Only while the card is open: a Reset on a collapsed card
                     // would throw away work the user can't see.
                     if isExpanded, let accessory { accessory }

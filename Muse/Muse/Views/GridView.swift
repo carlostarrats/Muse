@@ -378,6 +378,8 @@ struct GridView: View {
             guard let hero = appState.selectedFile,
                   hero.kind == .image || hero.kind == .raw || hero.kind == .psd,
                   !appState.viewerDismissing,
+                  // Edit covers the grid entirely — see AppState.editorActive.
+                  !appState.editorActive,
                   let i = files.firstIndex(where: { $0.url == hero.url }),
                   i < frames.count else { return nil }
             return frames[i]
@@ -476,7 +478,13 @@ struct GridView: View {
                     // (owner-reported "i see the bounce but it's not smooth").
                     // Only geometry should bounce; brightness has nothing to
                     // overshoot toward.
-                    .animation(partingClicked == nil
+                    // A CUT close (leaving Edit) gets no converge at all: the
+                    // tiles are simply home. The staggered spring belongs to a
+                    // return flight, and without one it reads as the grid
+                    // lagging behind the click.
+                    .animation(appState.viewerCutOut
+                               ? nil
+                               : partingClicked == nil
                                    ? .spring(response: PartingField.convergeResponse,
                                              dampingFraction: PartingField.convergeDamping)
                                        .delay(PartingField.closeDelay(
