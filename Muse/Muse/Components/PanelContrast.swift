@@ -92,8 +92,7 @@ nonisolated enum PanelContrast {
         /// Dark blue on light cards, light blue on dark ones — whichever
         /// stands out further — each with the ink that clears AA on it.
         var selectionIsDarkBlue: Bool {
-            PanelContrast.ratio(PanelContrast.accentGreys[1], cardGrey)
-                >= PanelContrast.ratio(PanelContrast.accentGreys[2], cardGrey)
+            PanelContrast.selectionIsDarkBlue(onSurface: cardGrey)
         }
         var selectionSolidGrey: Double {
             PanelContrast.accentGreys[selectionIsDarkBlue ? 1 : 2]
@@ -165,7 +164,17 @@ nonisolated enum PanelContrast {
     /// almost exactly on the mid-grey card (0.44), so on the Mid Gray backdrop
     /// a systemBlue wash is 1.11:1 against the card it's on — a selection you
     /// cannot see. The darker blue separates there.
-    static let accentGreys: [Double] = [0.51, 0.28, 0.70]
+    ///
+    /// The dark blue is darkened only as far as AA actually requires, no
+    /// further (2026-08-02): at 0.28 it read as navy rather than as the app's
+    /// blue, and white on it was 9.2:1 — twice the target, paid for in hue.
+    /// 0.42 is the same blue at 5.3:1 white, which keeps a real margin over
+    /// 4.5 while staying recognisably systemBlue. Plain systemBlue itself
+    /// cannot be used: white on it is 3.85:1, just under AA. Every surface
+    /// picks the SAME blue at 0.42 as it did at 0.28, so this is a hue change
+    /// only, not a behaviour one — and its worst separation from a card it
+    /// sits on is still 2.9:1.
+    static let accentGreys: [Double] = [0.51, 0.42, 0.70]
     /// systemRed, darkened, lightened — as luminance-matched greys. systemRed
     /// itself (0.53) has the same problem systemBlue does: it sits near the
     /// mid-grey card, and white on it is 3.9:1.
@@ -173,6 +182,17 @@ nonisolated enum PanelContrast {
     /// Plain systemBlue. Referenced only to assert what the selection fill
     /// deliberately ISN'T: white on it is 4.0:1, under AA.
     static let accentGrey = accentGreys[0]
+
+    /// Which of the two blues a SELECTED row should be filled with, for any
+    /// surface — the editor's card (`Ink.selectionIsDarkBlue` calls through
+    /// here) or a plain page like the sidebar's, which has no card at all.
+    ///
+    /// Same rule either way: whichever blue stands furthest off the surface it
+    /// sits on. Shared so the sidebar and the editor can't drift into two
+    /// different ideas of "selected".
+    static func selectionIsDarkBlue(onSurface grey: Double) -> Bool {
+        ratio(accentGreys[1], grey) >= ratio(accentGreys[2], grey)
+    }
 
     /// The smallest opacity ≥ `desired` at which ink on `card` clears `target`.
     static func minimumOpacity(ink: Double, card: Double,

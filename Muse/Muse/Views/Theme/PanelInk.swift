@@ -46,9 +46,12 @@ extension PanelContrast.Ink {
         Color(.sRGB, red: 1.00, green: 0.775, blue: 0.766),
     ]
 
+    /// The darkened blue (index 1) is systemBlue scaled in LINEAR light, not a
+    /// hand-picked navy — every channel × 0.698, which lands its luminance
+    /// exactly on `accentGreys[1]` (0.42) and keeps the hue. #0067DA.
     static let accentColors: [Color] = [
         Color(.sRGB, red: 0.00, green: 0.478, blue: 1.00),
-        Color(.sRGB, red: 0.02, green: 0.263, blue: 0.55),
+        Color(.sRGB, red: 0.00, green: 0.404, blue: 0.853),
         Color(.sRGB, red: 0.45, green: 0.713, blue: 1.00),
     ]
 
@@ -64,4 +67,15 @@ extension PanelContrast.Ink {
 
     var secondaryText: Color { baseColor.opacity(secondaryOpacity) }
     var labelText: Color { baseColor.opacity(labelOpacity) }
+}
+
+extension PanelContrast {
+    /// The selection fill + ink for ANY surface grey, not only an editor card.
+    /// The sidebar draws its rows straight on the page rather than on a card,
+    /// so it has no `Ink` to ask — it passes its page grey here and gets the
+    /// same pair the editor would have picked for a card of that brightness.
+    static func selectionColors(onSurface grey: Double) -> (fill: Color, ink: Color) {
+        let dark = selectionIsDarkBlue(onSurface: grey)
+        return (Ink.accentColors[dark ? 1 : 2], dark ? .white : .black)
+    }
 }

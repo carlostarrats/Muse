@@ -76,58 +76,48 @@ struct SidebarView: View {
     /// Low-opacity fill used behind a hovered row, matching Lineform.
     static let rowHoverFillOpacity = 0.08
 
-    /// Fill behind the SELECTED sidebar row — Apple's own source-list selection
-    /// grey, `unemphasizedSelectedContentBackgroundColor` (R220 light, R70 dark).
+    /// Fill behind the SELECTED sidebar row — the SAME solid blue the editor
+    /// uses (2026-08-02, owner call), resolved through the shared
+    /// `PanelContrast.selectionColors(onSurface:)` rule rather than copied.
     ///
-    /// This sidebar is custom-drawn rather than a native `List`, so no system
-    /// selection was ever in play; the fill was a hand-picked opacity. Measured
-    /// against Muse's card colour, the system grey works out to ~0.13 black on
-    /// light and ~0.115 white on dark — a touch lighter than the 0.14 it
-    /// replaces, and it adapts on its own.
+    /// It used to be a recessed grey with a blue label on it, and the editor's
+    /// pass replaced its own washes with a solid blue: two surfaces in one app
+    /// disagreeing about what "selected" looks like. The rule is the editor's —
+    /// whichever of the two blues stands furthest off the surface the row sits
+    /// on — evaluated against the sidebar's PAGE grey, since these rows are
+    /// drawn straight on the page and not on a card:
     ///
-    /// Grey rather than the blue a focused List would use, because the label and
-    /// icon already carry the blue; a blue wash under blue text puts two blues on
-    /// top of each other and separates poorly, worst on dark.
-    /// LINEFORM'S values (2026-07-29, owner call), lifted from
-    /// `OutlineSidebarView.rowSelectionFillNSColor`:
+    /// • LIGHT — the near-white page (0.988) takes the DARKENED blue, white ink.
+    /// • DARK  — the dark page (0.10) takes the LIGHTENED blue, black ink.
     ///
-    /// • LIGHT — the system grey blended `selectionFillLightening` (0.55) toward
-    ///   the sidebar page (0.988 white, the same page value both apps use). Raw
-    ///   AppKit grey reads heavy against a near-white sidebar.
-    /// • DARK — Lineform's RULE rather than its hex: the fill RECESSES below the
-    ///   nav. Apple's grey (R70) is far lighter than Muse's dark sidebar, so a
-    ///   selected row glowed and the blue label sat on a bright band (~2.8:1);
-    ///   Lineform's own `#282828` can't be copied straight over either, since it
-    ///   recesses below THEIR `#313131` nav but would land 4/255 ABOVE Muse's
-    ///   darker one (0.10 calibrated ≈ `#242424`). So the dark fill is derived
-    ///   from Muse's own nav — that surface darkened by `darkSelectionRecess` —
-    ///   which keeps the recess intact if the nav value ever moves.
+    /// Plain systemBlue is deliberately not in play in either branch: white on
+    /// it is 4.0:1, under AA. See `PanelContrast.accentGreys`.
     ///
     /// Built as a dynamic `NSColor` so each branch resolves against the view's
-    /// OWN appearance — the light and dark system greys differ, and reading a
-    /// dynamic colour outside the drawing appearance picks up the system's
-    /// light/dark rather than this sidebar's.
+    /// OWN appearance — reading a dynamic colour outside the drawing appearance
+    /// picks up the system's light/dark rather than this sidebar's.
     static let selectionFill = Color(nsColor: NSColor(name: "museSidebarSelectionFill") { appearance in
-        if appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua {
-            let nav = NSColor(calibratedWhite: darkPageWhiteComponent, alpha: 1)
-                .usingColorSpace(.sRGB) ?? .black
-            return nav.blended(withFraction: darkSelectionRecess, of: .black) ?? nav
-        }
-        var resolved = NSColor.unemphasizedSelectedContentBackgroundColor
-        appearance.performAsCurrentDrawingAppearance {
-            resolved = NSColor.unemphasizedSelectedContentBackgroundColor
-                .usingColorSpace(.sRGB) ?? resolved
-        }
-        let page = NSColor(calibratedWhite: lightPageWhiteComponent, alpha: 1)
-            .usingColorSpace(.sRGB) ?? .white
-        return resolved.blended(withFraction: selectionFillLightening, of: page) ?? resolved
+        NSColor(PanelContrast.selectionColors(onSurface: pageGrey(for: appearance)).fill)
     })
 
-    /// How far the light selection grey is lifted toward the sidebar page.
-    static let selectionFillLightening: CGFloat = 0.55
+    /// Label, icon and count colour ON `selectionFill` — the ink the same rule
+    /// pairs with that blue, so a selected row clears AA in both appearances.
+    /// This is NOT `selectedLabelColor`: that one tints a glyph sitting on the
+    /// PAGE (the hand-arranged sort menu), where blue is still right.
+    static let selectionInk = Color(nsColor: NSColor(name: "museSidebarSelectionInk") { appearance in
+        NSColor(PanelContrast.selectionColors(onSurface: pageGrey(for: appearance)).ink)
+    })
 
-    /// How far the dark selection fill is darkened BELOW the nav surface.
-    static let darkSelectionRecess: CGFloat = 0.40
+    /// Opacity for SECONDARY content on a selected row (the item count, the pin).
+    /// `.secondary` is a grey that has no idea it's on a blue fill; this keeps
+    /// the same "quieter than the label" reading in the selection's own ink.
+    static let selectionSecondaryOpacity = 0.75
+
+    /// The page brightness a row is drawn on, for the appearance being resolved.
+    private static func pageGrey(for appearance: NSAppearance) -> Double {
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? Double(darkPageWhiteComponent) : Double(lightPageWhiteComponent)
+    }
 
     /// The sidebar page values `cardColor` draws — restated here because the
     /// selection fill is derived from the surface it sits on, and the two must

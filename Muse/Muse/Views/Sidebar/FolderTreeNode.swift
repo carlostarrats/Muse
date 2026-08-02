@@ -110,7 +110,7 @@ struct FolderTreeNode: View {
                     .font(.system(size: node.isRoot ? SidebarView.rootIconSize
                                                     : SidebarView.childIconSize,
                                   weight: .semibold))
-                    .foregroundStyle(isSelected ? AnyShapeStyle(SidebarView.selectedLabelColor)
+                    .foregroundStyle(isSelected ? AnyShapeStyle(SidebarView.selectionInk)
                                                 : AnyShapeStyle(.primary))
                     .frame(width: 18)
                     .padding(.leading, SidebarView.chevronToIconGap)
@@ -118,7 +118,7 @@ struct FolderTreeNode: View {
                 Text(node.displayName)
                     .padding(.leading, SidebarView.iconToTextGap)
                     .font(.system(size: 13, weight: node.isRoot ? .medium : .regular))
-                    .foregroundStyle(isSelected ? AnyShapeStyle(SidebarView.selectedLabelColor)
+                    .foregroundStyle(isSelected ? AnyShapeStyle(SidebarView.selectionInk)
                                                 : AnyShapeStyle(.primary))
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -131,7 +131,7 @@ struct FolderTreeNode: View {
                 if appState.stars.isStarred(node.url) {
                     Image(systemName: "pin.fill")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(secondaryStyle)
                         .padding(.trailing, 8)
                 }
 
@@ -145,14 +145,14 @@ struct FolderTreeNode: View {
                         if let topLevelCount {
                             Text("\(topLevelCount)")
                                 .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(secondaryStyle)
                                 .monospacedDigit()
                                 .opacity(showGrip ? 0 : 1)
                         }
                         if let reorder {
                             Image(systemName: "line.3.horizontal")
                                 .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(secondaryStyle)
                                 .frame(width: 16, height: 22)
                                 .opacity(showGrip ? 1 : 0)
                                 .contentShape(Rectangle())
@@ -274,6 +274,16 @@ struct FolderTreeNode: View {
             appState.moveFiles(selected, into: node.url)
             return true
         }
+    }
+
+    /// Quiet trailing content (count, pin, grip). On a selected row `.secondary`
+    /// is a grey that doesn't know it's sitting on the solid blue fill, so the
+    /// selection's own ink carries it instead.
+    private var secondaryStyle: AnyShapeStyle {
+        isSelected
+            ? AnyShapeStyle(SidebarView.selectionInk
+                .opacity(SidebarView.selectionSecondaryOpacity))
+            : AnyShapeStyle(.secondary)
     }
 
     private var rowFill: Color {
