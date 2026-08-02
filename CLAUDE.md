@@ -133,7 +133,9 @@ are the load-bearing reference artifacts.
 > Every row through Polish 27 is merged to `main` and shipped in release **`v1.5`**;
 > Polish 28 is merged to `main` but NOT yet in a release (`v1.5` is still the
 > current released build; Polish 25–27 landed in it after `v1.4`). **Foundation 1–7
-> (Specs 01–07) live on `new-product-build-1` and are not on `main` yet** — all seven
+> (Specs 01–07) were MERGED TO `main` on 2026-08-01** (fast-forward from
+> `new-product-build-1`, tip `d0f2e52`) and are **not in any release** — `v1.5`
+> predates all of them, so `main` is now well ahead of what ships. All seven
 > were built 2026-07-31; migrations run through **v23**, so the next spec starts at
 > v24. **They have since been reviewed in six rounds** (all 2026-08-01):
 > round 1 (`docs/new-build/REVIEW-FINDINGS.md`) — ten systematic sweeps, eight

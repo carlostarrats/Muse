@@ -366,6 +366,64 @@ report "ARCH-1" "Float16 stays inside an #if arch(arm64) branch (Intel must comp
     "x86_64 has no Float16; keep it in the arm64 branch with a portable #else"
 
 echo
+echo "Documentation vs. git reality"
+echo "----------------------------------------------------------------------"
+
+# ---------------------------------------------------------------------------
+# DOC-1 — CLAUDE.md must not claim work is unmerged when git says it is merged.
+#
+# THE BUG: CLAUDE.md said "Foundation 1–7 live on `new-product-build-1` and are
+# not on `main` yet" for exactly as long as it took to run one `git merge` — and
+# it is the file loaded into context EVERY session, so a stale claim there
+# misinforms every future reader by default. This is the same failure the rest of
+# this script exists for: a fact maintained by memory rather than by a check.
+#
+# Any sentence claiming something is not on main is verified against
+# `git merge-base --is-ancestor`. If the branch is in fact merged, this fails.
+# ---------------------------------------------------------------------------
+v=""
+if git rev-parse --verify main >/dev/null 2>&1; then
+    while IFS= read -r line; do
+        # Branch names in backticks on a line that claims "not on main".
+        for br in $(printf '%s' "$line" | grep -oE '`[A-Za-z0-9._/-]+`' | tr -d '`'); do
+            # `main` is the thing being compared AGAINST — it appears in every
+            # such sentence by construction, and reporting "main is not on main"
+            # is the cry-wolf noise that gets a checker ignored.
+            [ "$br" = "main" ] && continue
+            # Only consider things that are actually refs.
+            if git rev-parse --verify "$br" >/dev/null 2>&1 \
+               || git rev-parse --verify "origin/$br" >/dev/null 2>&1; then
+                ref="$br"
+                git rev-parse --verify "$ref" >/dev/null 2>&1 || ref="origin/$br"
+                if git merge-base --is-ancestor "$ref" main 2>/dev/null; then
+                    v="$v CLAUDE.md claims '$br' is not on main, but it IS merged into main"$'\n'
+                fi
+            fi
+        done
+    done < <(grep -nE "not (yet )?(on|in) \`?main\`?|are not on \`main\` yet" CLAUDE.md 2>/dev/null)
+fi
+report "DOC-1" "CLAUDE.md's unmerged-work claims match git" "$(printf '%s' "$v" | sed '/^$/d')" \
+    "a branch that has been merged must not still be described as pending"
+
+# ---------------------------------------------------------------------------
+# DOC-2 — the release tag CLAUDE.md names must be the newest real release tag.
+#
+# Same class: "The current release tag is `vX`" is a fact that goes stale the
+# moment a release is cut. Pre-release tags (`-pre`, `-rc`, `-beta`) are excluded
+# so tagging a release candidate doesn't trip it.
+# ---------------------------------------------------------------------------
+v=""
+claimed="$(grep -oE 'current release tag is `[^`]+`' CLAUDE.md 2>/dev/null \
+           | head -1 | sed 's/.*`\(.*\)`/\1/')"
+actual="$(git tag --sort=-v:refname 2>/dev/null \
+          | grep -vE -- '-(pre|rc|beta|alpha)' | head -1)"
+if [ -n "$claimed" ] && [ -n "$actual" ] && [ "$claimed" != "$actual" ]; then
+    v="CLAUDE.md says the current release tag is '$claimed'; newest release tag in git is '$actual'"
+fi
+report "DOC-2" "CLAUDE.md's release tag matches the newest git tag" "$v" \
+    "update the release tag in CLAUDE.md when a release is cut"
+
+echo
 echo "======================================================================"
 if [ "$FAILURES" -eq 0 ]; then
     green "$CHECKS checks, all green."

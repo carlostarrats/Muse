@@ -180,7 +180,7 @@ wolf until they are ignored. These stay human:
 
 ## Appendix — the mechanized checks
 
-`scripts/audit-invariants.sh`, 12 checks. Each was a rule broken once, shipped,
+`scripts/audit-invariants.sh`, 14 checks. Each was a rule broken once, shipped,
 and paid for. Run it from the repo root; exit 0 means green.
 
 | ID | Rule |
@@ -197,6 +197,8 @@ and paid for. Run it from the repo root; exit 0 means green.
 | `ENT-1` | `Muse-Debug.entitlements` carries no iCloud keys |
 | `EDIT-1` | `Editing/` imports neither AppKit nor SwiftUI |
 | `ARCH-1` | `Float16` stays inside `#if arch(arm64)` — Intel must compile |
+| `DOC-1` | CLAUDE.md never claims work is unmerged that git says IS merged |
+| `DOC-2` | CLAUDE.md's named release tag is the newest real tag in git |
 
 **Every check has been negative-tested**: verified green on a clean tree, then
 verified to FAIL when its violation is injected. A checker that has never failed
