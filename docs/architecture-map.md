@@ -625,12 +625,12 @@ Performance:
 - **`Search/NaturalLanguageQuery.swift`, `NLQuerySuggest.swift`** — the `@Generable`
   intent (macOS 26 gated) + pure token composer behind the suggestion pill.
 - **`Models/CompareStore.swift`, `CullStore.swift`** + **`Components/CompareGeometry.swift`,
-  `CullSummary.swift`, `RegionMath.swift`** — compare/cull state and their pure math.
-  **`RegionMath` is ORPHANED and deliberately kept** (review round 7): it is the
-  pure helper of Spec 03 §5 "region similarity", a feature that was specified and
-  never built — no `regionMode`, no `RegionSearch`, no marquee anywhere. Do not
-  delete it as dead code; it is the evidence of the gap. See
-  `docs/new-build/REVIEW-LENSES.md` R7-1.
+  `CullSummary.swift`** — compare/cull state and their pure math.
+  (`RegionMath.swift` was here until 2026-08-01. Spec 03 §5 "region similarity"
+  — drag a box inside a photo, search for that CROP — was **dropped by the owner**;
+  only its geometry helper had ever been built. Deleted with its tests. Don't
+  re-add it as "dead code someone forgot": the feature is cancelled, not pending.
+  Whole-photo "Find Similar Photos" and word search both already cover the ground.)
 - **`Views/Compare/`** — `CompareView`, `ComparePane`, `CompareKeyCatcher` (the
   side-by-side workbench), with **`Views/CullHUD.swift`** and
   **`Views/Modal/CullResolveCard.swift`** for the ephemeral K/X/U cull pass.

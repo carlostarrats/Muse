@@ -68,7 +68,7 @@ Rounds 1–3 are recorded in `REVIEW-FINDINGS.md` and `FEATURE-LEDGER.md`; round
 | Locks & reentrancy (`await` inside a lock, nested GRDB) | 6 | clean |
 | Unbounded in-memory growth | 6 | clean |
 | File-write atomicity | 6 | clean |
-| **Spec → code existence** (is every specified symbol real?) | **7** | **1 finding — Spec 03 §5 region similarity never built** |
+| **Spec → code existence** (is every specified symbol real?) | **7** | 1 finding — Spec 03 §5 region similarity never built; **owner dropped it**, code removed |
 | **Unreferenced / dead code** | **7** | 3 files; 2 removed, 1 kept as evidence |
 | Schema **downgrade** (old build opens a newer DB) | 7 | clean — GRDB no-ops, columns nullable, backfills self-heal |
 | Nil-`dbQueue` fallout (what runs when the DB fails to open) | 7 | clean — every consumer `guard`s and no-ops; the delete path can't be called at all |
@@ -119,12 +119,15 @@ F16) were the first two. The pattern is specific and worth naming — the *pure,
 testable* part of a feature lands, gets unit tests, and the UI that would make it
 reachable does not. Tests pass, so nothing complains.
 
-`RegionMath.swift` is **deliberately kept** rather than deleted: it is a correct,
-tested component of an unbuilt feature, and deleting it would erase the evidence
-that the feature is missing. It is unreferenced by the app on purpose.
-
-**Deciding what to do with R7-1 is the owner's call, not a review's** — building
-the feature is new product work with UX judgment in it, not a bug fix.
+**RESOLVED 2026-08-01 — the owner dropped the feature.** `RegionMath.swift` and
+its tests are deleted. The reasoning is worth keeping, because it is the argument
+against building it rather than an oversight: whole-photo "Find Similar Photos"
+already ships (a CLIP `similar:` search off the grid's right-click menu), and
+anything with a NAME is already reachable by typing it, since auto-tagging covers
+a fixed vocabulary. Region mode would only have added "more like this crop" for
+visual qualities that have no word — a narrow refinement of a feature that works.
+**Spec 03 §5 is cancelled, not pending. A future round must not re-file it as a
+gap**, and must not "restore" `RegionMath` as accidentally-deleted dead code.
 
 **R7-2 (low) — two dead view files removed.** `Views/BreadcrumbView.swift` (53
 lines, phase 0.5, unreferenced, and its doc comment promised clickable

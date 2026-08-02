@@ -148,7 +148,8 @@ are the load-bearing reference artifacts.
 > task-group bounds), 2 findings fixed, suite → 1,806; round 6
 > — lenses rounds 1–5 hadn't run (arithmetic traps on file-declared numbers,
 > untrusted metadata → filesystem path, bounds on the model download's PAYLOAD
-> leg, local log leakage), 4 findings fixed, suite → 1,818; round 7
+> leg, local log leakage), 4 findings fixed, suite → 1,818 (now **1,811** — the 7
+> `RegionMathTests` went with the dropped Spec 03 §5 feature, plus **20 UI tests**); round 7
 > — changed the METHOD instead of adding a seventh set of angles, because six
 > rounds of inventing fresh lenses had no exit criterion. **Read
 > `docs/new-build/REVIEW-LENSES.md` before starting any review**: it lists every
@@ -162,9 +163,12 @@ are the load-bearing reference artifacts.
 > is a shell script, NOT an XCTest, on purpose: an in-suite grep test SKIPS here,
 > since the test host is the sandboxed app and this checkout is in `~/Documents`.
 > Round 7's one real finding: **Spec 03 §5 "region similarity" was specified and
-> never built** — only its tested pure helper `RegionMath` exists, which is the
-> branch's third "testable half lands, UI never does" gap (after the grid cull
-> badge and the missing Escape branches). Still
+> never built** — the branch's third "testable half lands, UI never does" gap
+> (after the grid cull badge and the missing Escape branches). **The owner DROPPED
+> the feature 2026-08-01** and its orphaned helper `RegionMath` was deleted:
+> whole-photo Find Similar already ships and named things are reachable by
+> typing them, so region mode only covered visual qualities with no word. Spec 03
+> §5 is cancelled — don't re-file it as a gap. Still
 > true, though, that almost none of it
 > has been exercised in the RUNNING app — launch, migrations and the backfill
 > chain were confirmed with `MUSE_TRACE=1` against the real library, but the
