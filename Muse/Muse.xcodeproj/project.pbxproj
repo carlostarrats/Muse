@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		58392B122F6CE45200289407 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 58392B112F6CE45200289407 /* GRDB */; };
 		5BFA00012F00000000000001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5BFA00022F00000000000002 /* Sparkle */; };
+		5BFA00062F00000000000006 /* libwebp in Frameworks */ = {isa = PBXBuildFile; productRef = 5BFA00052F00000000000005 /* libwebp */; };
 		58D3504D2FDE055B0030BC12 /* MuseShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 58D350412FDE055B0030BC12 /* MuseShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -100,6 +101,7 @@
 			files = (
 				58392B122F6CE45200289407 /* GRDB in Frameworks */,
 				5BFA00012F00000000000001 /* Sparkle in Frameworks */,
+				5BFA00062F00000000000006 /* libwebp in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -173,6 +175,7 @@
 			packageProductDependencies = (
 				58392B112F6CE45200289407 /* GRDB */,
 				5BFA00022F00000000000002 /* Sparkle */,
+				5BFA00052F00000000000005 /* libwebp */,
 			);
 			productName = Muse;
 			productReference = 58392AE62F6CE15400289407 /* Muse.app */;
@@ -285,6 +288,7 @@
 			packageReferences = (
 				58392B102F6CE45200289407 /* XCRemoteSwiftPackageReference "GRDB" */,
 				5BFA00032F00000000000003 /* XCRemoteSwiftPackageReference "Sparkle" */,
+				5BFA00042F00000000000004 /* XCRemoteSwiftPackageReference "libwebp" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 58392AE72F6CE15400289407 /* Products */;
@@ -807,6 +811,14 @@
 				minimumVersion = 2.6.0;
 			};
 		};
+		5BFA00042F00000000000004 /* XCRemoteSwiftPackageReference "libwebp" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/SDWebImage/libwebp-Xcode";
+			requirement = {
+				kind = exactVersion;
+				version = 1.6.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -819,6 +831,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 5BFA00032F00000000000003 /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
+		};
+		5BFA00052F00000000000005 /* libwebp */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5BFA00042F00000000000004 /* XCRemoteSwiftPackageReference "libwebp" */;
+			productName = libwebp;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

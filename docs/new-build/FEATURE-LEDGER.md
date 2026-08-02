@@ -24,7 +24,7 @@ actually produced (the grid cull badge that was specified and never built, the
 five modals with no Escape branch). **A + S is not a substitute for R.**
 
 Last full pass: **2026-08-02** (general image export, P29). Suite:
-**1,840 unit tests, 2 skipped, 0 failures** — 1,791 before export's 49 — plus
+**1,843 unit tests, 2 skipped, 0 failures** — 1,791 before export's 52 — plus
 **20 UI tests** that drive the real app
 (`MuseSurfaceDriveTests`, `MuseTagChipRowTests`).
 *(The previous line here read "1,811 unit tests … plus 20 UI tests". Measured,
@@ -136,7 +136,7 @@ question.
 | S07.1 | Manifest v2 + three page layouts | `DriveShareManifestTests`, `SocialPresetTests` | 2026-08-01 | ❌ G1 | Page tests pass (`web/share/share.test.mjs`) |
 | S07.2 | Portfolio mode (stable URL, live manifest) | `DriveShareStoreTests` | 2026-08-01 | ❌ G1 | Upload → atomic swap → sweep, rollback before swap |
 | S07.3 | Social export card + render ladder | `SocialRenderTests`, `SocialCropMathTests`, `ExportMetadataTests` | 2026-08-02 | ❌ G1 | ⚠️ crop stage previewed the unedited original — fixed R1-F18. Card renamed `ExportCard`; social is now one branch of two |
-| P29 | **General image export** (format · quality · depth · resize · presets) | `ExportFormatTests`, `ExportResizeTests`, `ImageExportRenderTests`, `ExportPresetStoreTests`, `OutputRenderTests` | 2026-08-02 | ❌ **G1** | Renderer and value types are pinned hard (49 tests: exact dimensions, never-upscale, real 16-bit depth, provable metadata cleanliness, collision never overwrites). **The CARD is not runtime-verified** — see the plan below |
+| P29 | **General image export** (format · quality · depth · resize · presets) | `ExportFormatTests`, `ExportResizeTests`, `ImageExportRenderTests`, `ExportPresetStoreTests`, `OutputRenderTests` | 2026-08-02 | ❌ **G1** | Renderer and value types are pinned hard (52 tests: exact dimensions, never-upscale, real 16-bit depth, provable metadata cleanliness, collision never overwrites, WebP is a real RIFF/WEBP container). **The CARD is not runtime-verified** — see the plan below |
 | — | Migration chain v13→v23 | `MigrationChainTests` + 8 per-migration files | 2026-08-01 | ✅ replayed on real data | Pure DDL, O(1) at launch, endpoint pinned at v23. **Export added none** — presets are `AppSettings` JSON |
 
 ---

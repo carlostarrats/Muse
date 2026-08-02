@@ -1,5 +1,5 @@
 {
-  "originHash" : "23611ae21d62ab2ee131c4a9c2cc14b3126c0cd46fd543225a6f4bfe4990eae9",
+  "originHash" : "0745ede601f62e7ad405446404276cefadb6e39a5557cba4f4ce75720c5dc3ce",
   "pins" : [
     {
       "identity" : "grdb.swift",
@@ -8,6 +8,15 @@
       "state" : {
         "revision" : "36e30a6f1ef10e4194f6af0cff90888526f0c115",
         "version" : "7.10.0"
+      }
+    },
+    {
+      "identity" : "libwebp-xcode",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/SDWebImage/libwebp-Xcode",
+      "state" : {
+        "revision" : "2b5256c29ff4e20f2a0d5ee863b62b1a22144434",
+        "version" : "1.6.0"
       }
     },
     {

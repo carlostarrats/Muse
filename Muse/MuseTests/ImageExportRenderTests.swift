@@ -181,6 +181,49 @@ final class ImageExportRenderTests: XCTestCase {
 
     // MARK: - Quality
 
+    // MARK: - WebP
+
+    /// Checks the CONTAINER, not the extension — writing `.webp` onto something
+    /// that isn't a RIFF/WEBP file is exactly the failure worth catching.
+    func testWebPExportProducesARealWebPFile() throws {
+        try XCTSkipUnless(WebPEncoder.isAvailable)
+        let src = try SocialFixtures.makeJPEG(width: 800, height: 600, name: "towebp", in: dir)
+        let result = try ImageExportRender.export(
+            .init(sourceURL: src, settings: ExportSettings(format: .webp)), to: dir)
+        XCTAssertEqual(result.url.pathExtension, "webp")
+        let head = try Data(contentsOf: result.url).prefix(12)
+        XCTAssertEqual(head.prefix(4), Data("RIFF".utf8))
+        XCTAssertEqual(head.suffix(4), Data("WEBP".utf8))
+    }
+
+    func testWebPRespectsQuality() throws {
+        try XCTSkipUnless(WebPEncoder.isAvailable)
+        let src = try SocialFixtures.makeJPEG(width: 1200, height: 900, content: .noise,
+                                              name: "webpq", in: dir)
+        let low = try ImageExportRender.export(
+            .init(sourceURL: src, settings: ExportSettings(format: .webp, quality: 0.3)), to: dir)
+        let high = try ImageExportRender.export(
+            .init(sourceURL: src, settings: ExportSettings(format: .webp, quality: 0.95)), to: dir)
+        XCTAssertLessThan(low.bytes, high.bytes)
+    }
+
+    func testWebPHonoursResize() throws {
+        try XCTSkipUnless(WebPEncoder.isAvailable)
+        let src = try SocialFixtures.makeJPEG(width: 2000, height: 1000, name: "webpsize", in: dir)
+        let result = try ImageExportRender.export(
+            .init(sourceURL: src, settings: ExportSettings(format: .webp, resize: .longEdge(500))),
+            to: dir)
+        XCTAssertEqual(result.pixelSize.width, 500, accuracy: 0.5)
+        // Round-trip through ImageIO, which READS WebP even though it can't
+        // write it — so the file is decodable by something that isn't us.
+        let read = try XCTUnwrap(CGImageSourceCreateWithURL(result.url as CFURL, nil))
+        let image = try XCTUnwrap(CGImageSourceCreateImageAtIndex(read, 0, nil))
+        XCTAssertEqual(image.width, 500)
+        XCTAssertEqual(image.height, 250)
+    }
+
+    // MARK: - Quality
+
     func testLowerQualityProducesASmallerFile() throws {
         let src = try SocialFixtures.makeJPEG(width: 1200, height: 900, content: .noise,
                                               name: "q", in: dir)
