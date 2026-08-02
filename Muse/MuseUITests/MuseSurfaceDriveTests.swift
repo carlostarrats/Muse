@@ -148,8 +148,13 @@ final class MuseSurfaceDriveTests: XCTestCase {
             }
             row.click()
             Thread.sleep(forTimeInterval: 3)
+            // A LIVENESS check, labelled honestly: it proves the switch didn't
+            // crash or wedge the UI behind a modal, not that the surface shows
+            // the right content. The screenshot is the record of the latter.
             XCTAssertTrue(app.windows.firstMatch.exists,
                           "window gone after opening '\(label)'")
+            XCTAssertTrue(app.buttons["Shuffle"].isHittable,
+                          "UI unresponsive after opening '\(label)'")
             snap("02-rediscovery-\(label)")
         }
     }
@@ -248,22 +253,46 @@ final class MuseSurfaceDriveTests: XCTestCase {
         Thread.sleep(forTimeInterval: 4)
         snap("10-compare-open")
         dumpTree("compare")
+        // "Fit" is the compare workbench's own zoom control — absent from the grid.
+        XCTAssertTrue(app.buttons["Fit"].waitForExistence(timeout: 10),
+                      "compare workbench did not open (no Fit control)")
+
         app.typeKey(.escape, modifierFlags: [])
         Thread.sleep(forTimeInterval: 2)
-        XCTAssertTrue(app.windows.firstMatch.exists, "window gone after compare close")
+        XCTAssertFalse(app.buttons["Fit"].exists,
+                       "Escape did not close the compare workbench")
     }
 
-    func testStartCullingOpensAndEscapeExits() throws {
+    func testStartCullingOpensAndSurvivesEscape() throws {
         guard menu("File", "Start Culling") else {
             XCTFail("Start Culling was disabled at launch"); return
         }
         Thread.sleep(forTimeInterval: 3)
         snap("04-cull-open")
         dumpTree("cull")
+        // The HUD's own controls, not "a window exists".
+        XCTAssertTrue(app.buttons["Finish"].exists && app.buttons["Cancel"].exists,
+                      "cull HUD did not appear (no Finish/Cancel)")
+
+        // Escape must NOT end a culling session. That is Spec 03 deviation D8,
+        // and the reasoning is explicit: a cull pass holds keep/reject marks,
+        // so "an accidental Escape/misclick must not silently discard an hour
+        // of marking" — the session ends only through Finish or Cancel. An
+        // earlier version of this test asserted the opposite and reported the
+        // app as broken; this now GUARDS the deviation instead.
         app.typeKey(.escape, modifierFlags: [])
         Thread.sleep(forTimeInterval: 2)
+        snap("04-cull-after-escape")
+        XCTAssertTrue(app.buttons["Finish"].exists,
+                      "Escape ended the culling session — Spec 03 D8 says only "
+                      + "Finish/Cancel may, so marks are never silently discarded")
+
+        // Leave the session the way the design intends.
+        app.buttons["Cancel"].click()
+        Thread.sleep(forTimeInterval: 2)
         snap("04-cull-closed")
-        XCTAssertTrue(app.windows.firstMatch.exists, "window gone after cull exit")
+        XCTAssertFalse(app.buttons["Finish"].exists,
+                       "Cancel did not end the culling session")
     }
 
     // MARK: - Duplicates (pre-branch feature, P8)
@@ -273,9 +302,13 @@ final class MuseSurfaceDriveTests: XCTestCase {
         Thread.sleep(forTimeInterval: 5)
         snap("05-duplicates")
         dumpTree("duplicates")
+        XCTAssertTrue(app.buttons["Close"].waitForExistence(timeout: 10),
+                      "duplicates modal did not open (no Close button)")
+
         app.typeKey(.escape, modifierFlags: [])
         Thread.sleep(forTimeInterval: 2)
-        XCTAssertTrue(app.windows.firstMatch.exists, "window gone after duplicates close")
+        XCTAssertFalse(app.buttons["Close"].exists,
+                       "Escape did not close the duplicates modal")
     }
 
     // MARK: - Import surfaces (Spec 06)
@@ -283,9 +316,18 @@ final class MuseSurfaceDriveTests: XCTestCase {
     /// The two import entries that open an in-app CARD rather than an
     /// NSOpenPanel. A file panel is a separate process and out of scope here.
     func testImportCardsOpenAndEscapeCloses() throws {
-        for item in ["Metadata & Lightroom Edits…", "Lightroom Presets…",
-                     "From Apple Photos…", "From Google Takeout…",
-                     "From Eagle Library…"] {
+        // The five sources do NOT share a panel prompt — asserting a single
+        // "Import" button reported two false failures. `AppState+Import` sets
+        // "Import", "Import Here" or "Choose Library" depending on what the
+        // panel is asking for, so the expectation is per-source.
+        let sources: [(item: String, confirm: String)] = [
+            ("Metadata & Lightroom Edits…", "Import"),
+            ("Lightroom Presets…", "Import"),
+            ("From Google Takeout…", "Import"),
+            ("From Apple Photos…", "Import Here"),
+            ("From Eagle Library…", "Choose Library"),
+        ]
+        for (item, confirm) in sources {
             guard menu("File", item, submenu: "Import") else {
                 // Disabled is a legitimate state for some sources; record it.
                 snap("06-import-disabled-\(item.prefix(12))")
@@ -293,11 +335,13 @@ final class MuseSurfaceDriveTests: XCTestCase {
             }
             Thread.sleep(forTimeInterval: 3)
             snap("06-import-\(item.prefix(12))")
+            XCTAssertTrue(app.buttons[confirm].waitForExistence(timeout: 10),
+                          "import '\(item)' opened no panel (no '\(confirm)' button)")
             dumpTree("import-\(item.prefix(10).replacingOccurrences(of: " ", with: "_"))")
             app.typeKey(.escape, modifierFlags: [])
             Thread.sleep(forTimeInterval: 2)
-            XCTAssertTrue(app.windows.firstMatch.exists,
-                          "window gone after closing import '\(item)'")
+            XCTAssertFalse(app.buttons[confirm].exists,
+                           "Escape did not dismiss import '\(item)'")
         }
     }
 
@@ -310,9 +354,15 @@ final class MuseSurfaceDriveTests: XCTestCase {
         Thread.sleep(forTimeInterval: 3)
         snap("07-backup-wizard")
         dumpTree("backup")
+        // Backup presents an NSSavePanel. It belongs to the app, so its Save
+        // button is reachable; asserting on it proves the panel, not the window.
+        XCTAssertTrue(app.buttons["Save"].waitForExistence(timeout: 10),
+                      "backup save panel did not appear")
+
         app.typeKey(.escape, modifierFlags: [])
         Thread.sleep(forTimeInterval: 2)
-        XCTAssertTrue(app.windows.firstMatch.exists, "window gone after backup close")
+        XCTAssertFalse(app.buttons["Save"].exists,
+                       "Escape did not dismiss the backup save panel")
     }
 
     // MARK: - Settings
@@ -322,8 +372,13 @@ final class MuseSurfaceDriveTests: XCTestCase {
         Thread.sleep(forTimeInterval: 3)
         snap("08-settings")
         dumpTree("settings")
+        XCTAssertTrue(app.staticTexts["Automatic organization"].exists
+                      || app.checkBoxes["Automatic organization"].exists,
+                      "settings did not open (no 'Automatic organization' control)")
+
         app.typeKey(.escape, modifierFlags: [])
         Thread.sleep(forTimeInterval: 2)
-        XCTAssertTrue(app.windows.firstMatch.exists, "window gone after settings close")
+        XCTAssertFalse(app.staticTexts["Automatic organization"].exists,
+                       "Escape did not close Settings")
     }
 }

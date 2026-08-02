@@ -406,3 +406,65 @@ passing" had meant nothing at all.
    cause was first cmd-clicking the already-selected tile (toggling it off), and
    then clicking a masonry *gap* (clearing the selection). Screenshots settled
    both. On a ragged grid, click tile CENTRES measured from a real screenshot.
+
+---
+
+## Round 7b — the tag chip row, and what strengthening the tests found
+
+### R7-4 (perf) — the tag chip row re-measured every chip on every hover frame
+
+`ChipFlow` is a custom SwiftUI `Layout` over the **whole** chip set, and both
+`sizeThatFits` and `placeSubviews` independently called
+`subviews.map { $0.sizeThatFits(.unspecified) }` — a full text-measurement pass
+per chip, twice per layout pass. The row is neither capped (no `LIMIT` in
+`TagChipLoader`, no `prefix` in the view) nor lazy, and `hovered` is animated
+(`.easeOut(duration: 0.18)`), so one hover ran that measurement on the order of
+2 × ~11 frames × n chips. On the dev library n is **196**, laid out to x≈17,500
+in a 1,202pt window; sweeping the mouse along the row made it continuous.
+
+**Fix:** `Layout`'s own `Cache`. Natural widths are hover-INDEPENDENT by design —
+the no-reflow behaviour redistributes growth between neighbours rather than
+remeasuring, and the count that appears on hover is drawn in an `.overlay`,
+which does not affect intrinsic size. So widths are measured once per chip SET
+and reused across hover frames. `updateCache` re-measures only when a
+`ChipIdentityKey` fingerprint (label + count — exactly what changes a chip's
+width) differs, since the default implementation re-runs `makeCache`
+unconditionally and would give back the entire saving.
+
+`ChipIdentityKey` is `nonisolated`: `Layout`'s methods are nonisolated, and a key
+carrying SwiftUI's default main-actor isolation warns today and fails to compile
+under the Swift 6 language mode. The Release build stays warning-free.
+
+**Not done, deliberately:** capping the chip count is a product change (tags
+become unreachable from the row), and `LazyHStack` is incompatible with the
+no-reflow math, which needs every chip's width. The row is still O(n) per
+layout pass — this removes the expensive constant, not the complexity class.
+
+Guarded by `MuseUITests/MuseTagChipRowTests`: chips never overlap, chips
+re-measure after a folder switch (the staleness case a cache introduces), and
+the row's span is stable across hover.
+
+### Two test defects this round, both mine, both instructive
+
+**A test asserted the opposite of a documented deviation.** Strengthening the
+cull test to check that Escape dismisses the HUD failed — and the app was
+right. Spec 03 **deviation D8** deliberately keeps the cull session out of the
+Escape chain: a pass holds keep/reject marks, so "an accidental Escape/misclick
+must not silently discard an hour of marking"; only Finish/Cancel end it. The
+test now GUARDS D8 rather than contradicting it. Check the spec before believing
+a strengthened assertion that suddenly fails.
+
+**A "regression" that was a measurement artifact.** The hover test first
+asserted on the leftmost chip's absolute `minX` and reported a 10pt no-reflow
+regression from the cache. It was the scroll: `hover()` makes XCUITest scroll
+the target into view, translating every chip. Acting on it, an entire
+lazy-cache-fill workaround was written for a bug that did not exist. With a
+translation-invariant assertion (row SPAN), the simple eager `makeCache` passes,
+and the workaround was reverted. **A perf change that appears to alter rendering
+deserves a baseline run on the unmodified code before the cause is theorised** —
+that baseline is what exposed this.
+
+Third, smaller: asserting one shared "Import" button across all five import
+sources produced two false failures. `AppState+Import` sets "Import", "Import
+Here" or "Choose Library" depending on what each panel asks for; the test is now
+per-source.

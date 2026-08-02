@@ -283,6 +283,20 @@ struct TagChipsRow: View {
 /// outward only if a neighbor bottoms out at the floor — so movement stays
 /// local: left neighbor shrinks in place, hovered grows both ways, right
 /// neighbor shrinks against its fixed right edge. Everything else is still.
+/// Identity of a chip's *rendered content*, carried down to the layout so the
+/// measurement cache below can tell "the same chips, one of them hovered" from
+/// "a different set of chips" without measuring anything.
+///
+/// Label and count are exactly the two things that change a chip's natural
+/// width, so they are the whole fingerprint.
+/// `nonisolated` is load-bearing: `Layout`'s `sizeThatFits`/`placeSubviews` are
+/// nonisolated, and a key that picks up SwiftUI's default main-actor isolation
+/// can't have its conformance read from them (a warning today, an error under
+/// the Swift 6 language mode).
+private nonisolated struct ChipIdentityKey: LayoutValueKey {
+    static let defaultValue: String = ""
+}
+
 private struct ChipFlow: Layout {
     var gap: CGFloat
     var hovered: Int?
@@ -290,39 +304,81 @@ private struct ChipFlow: Layout {
     /// Indices that never grow on hover (the "All" chip has no count).
     var noGrow: Set<Int> = []
 
-    private func naturalSize(_ subviews: Subviews) -> CGSize {
-        let widths = subviews.map { $0.sizeThatFits(.unspecified).width }
-        let h = subviews.first?.sizeThatFits(.unspecified).height ?? 30
-        return CGSize(width: widths.reduce(0, +) + gap * CGFloat(max(0, widths.count - 1)),
-                      height: h)
+    /// Measured natural widths, kept across layout passes.
+    ///
+    /// WHY THIS EXISTS. `sizeThatFits` and `placeSubviews` each used to call
+    /// `subviews.map { $0.sizeThatFits(.unspecified) }` — a full text-measurement
+    /// pass over EVERY chip, twice per layout pass. The row is not capped or
+    /// lazy (a real library shows ~200 chips and there is no ceiling), and
+    /// `hovered` is animated, so a single hover ran that measurement on the
+    /// order of a hundred times: 2 passes × ~11 animation frames × n chips.
+    /// Hovering along the row made that continuous.
+    ///
+    /// Natural widths do NOT depend on `hovered` — that is the whole point of
+    /// the no-reflow design, where growth is redistributed between neighbours
+    /// rather than remeasured. So they are measured once per chip SET and
+    /// reused for every hover frame.
+    struct Cache {
+        var identities: [String]
+        var naturals: [CGFloat]
+        var height: CGFloat
     }
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    private func measure(_ subviews: Subviews) -> Cache {
+        Cache(identities: subviews.map { $0[ChipIdentityKey.self] },
+              naturals: subviews.map { $0.sizeThatFits(.unspecified).width },
+              height: subviews.first?.sizeThatFits(.unspecified).height ?? 30)
+    }
+
+    func makeCache(subviews: Subviews) -> Cache { measure(subviews) }
+
+    /// Re-measure only when the chips themselves changed. Comparing n short
+    /// strings is the cheap half of what this replaces; the default
+    /// implementation re-runs `makeCache` unconditionally, which would give
+    /// back everything the cache is here to save.
+    func updateCache(_ cache: inout Cache, subviews: Subviews) {
+        let identities = subviews.map { $0[ChipIdentityKey.self] }
+        if identities != cache.identities { cache = measure(subviews) }
+    }
+
+    /// Safety net, not an optimization: `placeSubviews` indexes `widths[i]` per
+    /// subview, so a cache that ever disagreed with `subviews` on COUNT would be
+    /// an out-of-range crash rather than a cosmetic glitch. `updateCache` should
+    /// always have run first; this makes "should" unnecessary to rely on.
+    private func ensure(_ cache: inout Cache, _ subviews: Subviews) {
+        if cache.naturals.count != subviews.count {
+            cache = measure(subviews)
+        }
+    }
+
+    /// Widths for the current hover state, from cached naturals.
+    private func laidOutWidths(_ cache: Cache) -> [CGFloat] {
+        let effectiveGrow = hovered.map { noGrow.contains($0) ? 0 : grow } ?? 0
+        return Self.widths(naturals: cache.naturals, hovered: hovered,
+                           grow: effectiveGrow, floor: 30)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews,
+                      cache: inout Cache) -> CGSize {
+        ensure(&cache, subviews)
         // Report the ACTUAL laid-out width. Usually this equals the natural row
         // width (the neighbors absorb the hovered chip's growth, so nothing
         // reflows). Only when the neighbors can't free enough room does the row
         // grow by the small remainder — so a hovered chip can ALWAYS reach the
         // width its count needs, with no cap and no overlap.
-        let naturals = subviews.map { $0.sizeThatFits(.unspecified).width }
-        let h = subviews.first?.sizeThatFits(.unspecified).height ?? 30
-        let effectiveGrow = hovered.map { noGrow.contains($0) ? 0 : grow } ?? 0
-        let widths = Self.widths(naturals: naturals, hovered: hovered,
-                                 grow: effectiveGrow, floor: 30)
+        let widths = laidOutWidths(cache)
         return CGSize(width: widths.reduce(0, +) + gap * CGFloat(max(0, widths.count - 1)),
-                      height: h)
+                      height: cache.height)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize,
-                       subviews: Subviews, cache: inout ()) {
-        let naturals = subviews.map { $0.sizeThatFits(.unspecified).width }
-        let h = subviews.first?.sizeThatFits(.unspecified).height ?? 30
-        let effectiveGrow = hovered.map { noGrow.contains($0) ? 0 : grow } ?? 0
-        let widths = Self.widths(naturals: naturals, hovered: hovered,
-                                 grow: effectiveGrow, floor: 30)
+                       subviews: Subviews, cache: inout Cache) {
+        ensure(&cache, subviews)
+        let widths = laidOutWidths(cache)
         var x = bounds.minX
         for (i, sub) in subviews.enumerated() {
             sub.place(at: CGPoint(x: x, y: bounds.minY),
-                      proposal: ProposedViewSize(width: widths[i], height: h))
+                      proposal: ProposedViewSize(width: widths[i], height: cache.height))
             x += widths[i] + gap
         }
     }
@@ -424,17 +480,28 @@ private struct TagChip: View {
 
     private var isImportedLabel: Bool { LabelTag.isLabel(label) }
 
+    /// Everything that changes this chip's natural width, and nothing that
+    /// doesn't — `ChipFlow`'s measurement cache keys on this. Selection and
+    /// hover are deliberately absent: they restyle the chip, they never resize
+    /// it, so including them would defeat the cache on every interaction.
+    private var layoutIdentity: String {
+        count.map { "\(label)\u{1F}\($0)" } ?? label
+    }
+
     var body: some View {
-        if let toggleAction {
-            chip.accessibilityAction(
-                // A ternary of literals binds the non-localizing String overload, so
-                // wrap each branch explicitly so VoiceOver reads the translated action.
-                named: Text(isSelected ? String(localized: "Remove from filter")
-                                       : String(localized: "Add to filter"))
-            ) { toggleAction() }
-        } else {
-            chip
+        Group {
+            if let toggleAction {
+                chip.accessibilityAction(
+                    // A ternary of literals binds the non-localizing String overload, so
+                    // wrap each branch explicitly so VoiceOver reads the translated action.
+                    named: Text(isSelected ? String(localized: "Remove from filter")
+                                           : String(localized: "Add to filter"))
+                ) { toggleAction() }
+            } else {
+                chip
+            }
         }
+        .layoutValue(key: ChipIdentityKey.self, value: layoutIdentity)
     }
 
     private var chip: some View {
