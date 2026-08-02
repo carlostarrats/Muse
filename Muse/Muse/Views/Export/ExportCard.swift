@@ -398,22 +398,37 @@ struct ExportCard: View {
     }
 
     private var pager: some View {
-        HStack(spacing: 12) {
-            Button { model.pageIndex = max(0, model.pageIndex - 1) } label: {
-                Image(systemName: "chevron.left")
+        HStack(spacing: 4) {
+            pagerButton("chevron.left", label: String(localized: "Previous image"),
+                        disabled: model.pageIndex == 0) {
+                model.pageIndex = max(0, model.pageIndex - 1)
             }
-            .buttonStyle(.plain)
-            .disabled(model.pageIndex == 0)
-            .accessibilityLabel(Text("Previous image"))
             Text("\(model.pageIndex + 1) of \(model.urls.count)")
                 .font(.system(size: 12)).foregroundStyle(.secondary)
-            Button { model.pageIndex = min(model.urls.count - 1, model.pageIndex + 1) } label: {
-                Image(systemName: "chevron.right")
+                .monospacedDigit()
+                .frame(minWidth: 56)
+            pagerButton("chevron.right", label: String(localized: "Next image"),
+                        disabled: model.pageIndex >= model.urls.count - 1) {
+                model.pageIndex = min(model.urls.count - 1, model.pageIndex + 1)
             }
-            .buttonStyle(.plain)
-            .disabled(model.pageIndex >= model.urls.count - 1)
-            .accessibilityLabel(Text("Next image"))
         }
+    }
+
+    /// A bare SF Symbol inside a `.plain` button is only clickable on the
+    /// glyph's own ink, which for a chevron is a few points of diagonal stroke.
+    /// The 32pt square and the `contentShape` are what make it a target.
+    private func pagerButton(_ symbol: String, label: String, disabled: Bool,
+                             action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .semibold))
+                .frame(width: 32, height: 32)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? 0.3 : 1)
+        .accessibilityLabel(Text(label))
     }
 
     private var controls: some View {
@@ -426,7 +441,6 @@ struct ExportCard: View {
                 formatControls
             }
             Spacer(minLength: 8)
-            summary
             footer
         }
     }
@@ -444,40 +458,36 @@ struct ExportCard: View {
                 model.isSocial ? "s" : "f"].joined(separator: "|")
     }
 
-    /// What you are about to get, in one line. The old card said nothing about
-    /// the output at all — you set a size and found out what it meant by
-    /// opening the file afterwards. Every number here is EXACT rather than
-    /// estimated: a byte-size guess would be the more impressive readout and
-    /// the wrong call, because a number in an interface gets believed.
-    private var summary: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(summaryLine)
+    /// The one number worth stating outright.
+    ///
+    /// It sits WITH the controls, not down by the buttons where it was: the
+    /// thing it responds to is the quality slider two rows up, and a readout
+    /// you have to hunt for at the far end of the card isn't feedback. It also
+    /// no longer repeats the format or the dimensions — the preset dropdown
+    /// and the size fields already say both, and a card that says everything
+    /// twice reads as noise.
+    private var estimatedSizeRow: some View {
+        HStack {
+            Text("Est. file size")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
+            Spacer()
+            Text(estimatedSizeText)
+                .font(.system(size: 12, weight: .semibold))
                 .monospacedDigit()
-            if model.urls.count > 1 {
-                Text(fileCountLine)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
-            }
+                .foregroundStyle(.primary)
+                .contentTransition(.numericText())
         }
-        .fixedSize(horizontal: false, vertical: true)
+        .animation(.easeOut(duration: 0.15), value: model.estimatedBytes)
         .accessibilityElement(children: .combine)
     }
 
-    private var summaryLine: String {
-        let name = model.isSocial
-            ? String(localized: "JPEG")
-            : model.resolvedFormat.displayName
-        guard let size = outputPixelSize else { return name }
-        var line = "\(name)  ·  \(Int(size.width)) × \(Int(size.height)) px"
-        // "≈" is load-bearing. The number comes from encoding the preview at
-        // these exact settings and scaling by pixel count — a real measurement,
-        // but of a smaller image, so it is close rather than exact.
-        if let bytes = model.estimatedBytes {
-            line += "  ·  ≈\(Self.byteFormatter.string(fromByteCount: Int64(bytes)))"
-        }
-        return line
+    /// "≈" is load-bearing: the number comes from encoding the PREVIEW at these
+    /// exact settings and scaling by pixel count — a real measurement, but of a
+    /// smaller image, so it is close rather than exact.
+    private var estimatedSizeText: String {
+        guard let bytes = model.estimatedBytes else { return "—" }
+        return "≈" + Self.byteFormatter.string(fromByteCount: Int64(bytes))
     }
 
     private static let byteFormatter: ByteCountFormatter = {
@@ -486,11 +496,6 @@ struct ExportCard: View {
         f.allowedUnits = [.useKB, .useMB]
         return f
     }()
-
-    private var fileCountLine: String {
-        String(format: NSLocalizedString("%lld photos", comment: "Export: how many files this run writes"),
-               model.urls.count)
-    }
 
     /// The pixel size the current settings actually produce.
     private var outputPixelSize: CGSize? {
@@ -510,6 +515,7 @@ struct ExportCard: View {
 
     private var socialControls: some View {
         VStack(alignment: .leading, spacing: 12) {
+            socialOutputRow
             if model.preset.isFixed { fitModePicker }
             if let warning = model.preset.warningKey {
                 Text(String(localized: String.LocalizationValue(warning)))
@@ -518,6 +524,65 @@ struct ExportCard: View {
             }
             exifToggle
         }
+    }
+
+    /// What the platform preset actually produces. The format side has had
+    /// editable size fields since the rebuild; the social side had NOTHING —
+    /// you picked "Instagram" and found out the dimensions by opening the
+    /// exported file. These aren't editable (the platform picks them, that's
+    /// the point of a platform preset) but they have to be visible.
+    private var socialOutputRow: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack {
+                Text("Size").font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(socialSizeText)
+                    .font(.system(size: 12, weight: .semibold))
+                    .monospacedDigit()
+            }
+            if let cropped = socialCropText {
+                Text(cropped)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var socialSizeText: String {
+        guard let natural = model.naturalSize else { return "—" }
+        switch model.preset.kind {
+        case .fixed(let w, let h):
+            let frame = SocialRender.fixedFrame(width: w, height: h, decodedSize: natural)
+            return "\(Int(frame.width)) × \(Int(frame.height)) px"
+        case .longEdge(let cap):
+            let t = ExportResize.longEdge(cap).targetSize(for: natural)
+            return "\(Int(t.width)) × \(Int(t.height)) px"
+        case .original:
+            return "\(Int(natural.width)) × \(Int(natural.height)) px"
+        }
+    }
+
+    /// How much of the picture the platform's fixed frame throws away, as a
+    /// percentage of area. Only ever shown for a fixed preset in crop mode —
+    /// Matte and Blur keep the whole image by construction, and a long-edge
+    /// preset never crops at all.
+    private var socialCropText: String? {
+        guard model.preset.isFixed, model.fit == .crop,
+              let natural = model.naturalSize,
+              case .fixed(let w, let h) = model.preset.kind,
+              natural.width > 0, natural.height > 0
+        else { return nil }
+        let frame = SocialRender.fixedFrame(width: w, height: h, decodedSize: natural)
+        let lost = Int((SocialCropMath.croppedAwayFraction(
+            sourceAspect: natural.width / natural.height,
+            targetAspect: frame.width / frame.height) * 100).rounded())
+        guard lost >= 1 else { return nil }
+        return String(format: NSLocalizedString(
+            "Crops about %lld%% of the picture — drag it to choose which part.",
+            comment: "Export: how much a fixed social frame trims"), lost)
     }
 
     // MARK: - Format branch
@@ -545,6 +610,7 @@ struct ExportCard: View {
             // has none, and offering the choice for one is a control that
             // does nothing.
             if model.sourceHasAlpha { backgroundControl }
+            estimatedSizeRow
             Divider()
             exifToggle
             savePresetRow
@@ -586,11 +652,12 @@ struct ExportCard: View {
                 ForEach(QualityTier.allCases, id: \.self) { tier in
                     Text(tier.displayName).tag(Optional(tier))
                 }
-                // Only reachable by dragging the slider off a tier; picking it
-                // is a no-op rather than a jump to some arbitrary value.
+                // Reached by dragging the slider off a tier, never by picking
+                // — selecting it is a no-op rather than a jump to some
+                // arbitrary value.
                 Text("Custom").tag(Optional<QualityTier>.none)
             }
-            .pickerStyle(.segmented).labelsHidden()
+            .pickerStyle(.menu).labelsHidden()
             .accessibilityLabel(Text("Quality preset"))
         }
     }
@@ -842,7 +909,14 @@ struct ExportCard: View {
 
     private var presetPicker: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Preset").font(.system(size: 12)).foregroundStyle(.secondary)
+            HStack(spacing: 4) {
+                Text("Preset").font(.system(size: 12)).foregroundStyle(.secondary)
+                Spacer()
+                // Only for one you MADE. There is no deleting JPEG or Instagram,
+                // and a trash can that's disabled most of the time is worse
+                // than one that appears when it applies.
+                if let saved = activeSavedPreset { deletePresetButton(saved) }
+            }
             Picker("", selection: pickerBinding) {
                 Section("Format") {
                     ForEach(ExportFormat.available, id: \.self) { f in
@@ -869,12 +943,49 @@ struct ExportCard: View {
         }
     }
 
+    private func deletePresetButton(_ saved: SavedExportPreset) -> some View {
+        Button {
+            // Confirmed, and raised through the SHELL's alert — the same path
+            // the editor's "Delete this LUT?" takes, which is presented on the
+            // outer stack and so draws above this card rather than behind it.
+            appState.alertRequest = MuseAlert.confirm(
+                title: String(localized: "Delete this preset?"),
+                message: String(localized: "The files you've already exported are unaffected."),
+                confirmTitle: String(localized: "Delete"),
+                onConfirm: { ExportPresetStore.shared.delete(id: saved.id) })
+        } label: {
+            Image(systemName: "trash")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Delete this preset")
+        .accessibilityLabel(Text("Delete this preset"))
+    }
+
+    /// The saved preset whose settings are EXACTLY what's on screen, if any.
+    /// Derived rather than remembered: pick a preset and it shows as selected;
+    /// nudge any control and it falls back to the plain format by itself, the
+    /// same way the quality tiers fall back to Custom. Nothing to invalidate,
+    /// so nothing can go stale.
+    private var activeSavedPreset: SavedExportPreset? {
+        guard !model.isSocial else { return nil }
+        var current = model.settings
+        current.includeEXIF = model.includeEXIF
+        current.includeLocation = model.includeLocation
+        return presetStore.presets.first { $0.settings == current }
+    }
+
     private var pickerBinding: Binding<PickerTag> {
         Binding(
             get: {
                 switch model.selection {
-                case .format(let f): .format(f)
-                case .social(let p): .social(p.id)
+                case .format(let f):
+                    return activeSavedPreset.map { .saved($0.id) } ?? .format(f)
+                case .social(let p):
+                    return .social(p.id)
                 }
             },
             set: { tag in

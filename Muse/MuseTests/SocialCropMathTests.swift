@@ -95,4 +95,38 @@ final class SocialCropMathTests: XCTestCase {
     func testZoomRangeIsOneToFour() {
         XCTAssertEqual(SocialCropMath.zoomRange, 1...4)
     }
+
+    // MARK: - How much a fixed frame throws away
+
+    func testNothingIsLostWhenTheAspectsMatch() {
+        XCTAssertEqual(SocialCropMath.croppedAwayFraction(sourceAspect: 1.5, targetAspect: 1.5),
+                       0, accuracy: 0.0001)
+    }
+
+    /// A 3:2 landscape into a 4:5 portrait frame: the classic Instagram case.
+    func testLandscapeIntoPortraitLosesMostOfTheWidth() {
+        let lost = SocialCropMath.croppedAwayFraction(sourceAspect: 1.5, targetAspect: 0.8)
+        XCTAssertEqual(lost, 1 - (0.8 / 1.5), accuracy: 0.0001)
+        XCTAssertGreaterThan(lost, 0.4)
+    }
+
+    func testPortraitIntoLandscapeLosesHeight() {
+        let lost = SocialCropMath.croppedAwayFraction(sourceAspect: 0.5, targetAspect: 1.91)
+        XCTAssertEqual(lost, 1 - (0.5 / 1.91), accuracy: 0.0001)
+    }
+
+    /// Symmetric: swapping the two aspects loses the same proportion.
+    func testTheLossIsSymmetric() {
+        XCTAssertEqual(SocialCropMath.croppedAwayFraction(sourceAspect: 2, targetAspect: 1),
+                       SocialCropMath.croppedAwayFraction(sourceAspect: 1, targetAspect: 2),
+                       accuracy: 0.0001)
+    }
+
+    func testDegenerateAspectsLoseNothingRatherThanReturningNaN() {
+        for (s, t) in [(CGFloat(0), CGFloat(1)), (1, 0), (.infinity, 1), (1, .nan)] {
+            let v = SocialCropMath.croppedAwayFraction(sourceAspect: s, targetAspect: t)
+            XCTAssertFalse(v.isNaN)
+            XCTAssertEqual(v, 0, accuracy: 0.0001)
+        }
+    }
 }

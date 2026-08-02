@@ -404,17 +404,6 @@
         }
       }
     },
-    "%lld photos": {
-      "comment": "Export: how many files this run writes",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld photos"
-          }
-        }
-      }
-    },
     "%lld pt": {
       "localizations": {
         "fr": {
@@ -2497,6 +2486,17 @@
         }
       }
     },
+    "Crops about %lld%% of the picture — drag it to choose which part.": {
+      "comment": "Export: how much a fixed social frame trims",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recadre environ %lld %% de l’image — faites-la glisser pour choisir la partie conservée."
+          }
+        }
+      }
+    },
     "Crown": {
       "localizations": {
         "fr": {
@@ -2780,6 +2780,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Supprimer la collection"
+          }
+        }
+      }
+    },
+    "Delete this preset": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer ce préréglage"
+          }
+        }
+      }
+    },
+    "Delete this preset?": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer ce préréglage ?"
           }
         }
       }
@@ -3164,6 +3184,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Essai"
+          }
+        }
+      }
+    },
+    "Est. file size": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taille estimée"
           }
         }
       }
@@ -9675,6 +9705,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "La vérification du modèle téléchargé a échoué."
+          }
+        }
+      }
+    },
+    "The files you've already exported are unaffected.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les fichiers déjà exportés ne sont pas affectés."
           }
         }
       }
