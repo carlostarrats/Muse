@@ -173,6 +173,20 @@ enum AppSettings {
         get { UserDefaults.standard.string(forKey: "socialMatteShade") ?? MatteShade.white.rawValue }
         set { UserDefaults.standard.set(newValue, forKey: "socialMatteShade") }
     }
+    /// Saved export presets, JSON. Defaults rather than a table: a preset is a
+    /// working preference like the editor backdrop, not library data — so it
+    /// needs no migration and doesn't belong in a backup.
+    static var exportPresets: Data? {
+        get { UserDefaults.standard.data(forKey: "exportPresets") }
+        set { UserDefaults.standard.set(newValue, forKey: "exportPresets") }
+    }
+    /// The last settings the export card was used with, so it reopens where you
+    /// left it. Separate from the presets on purpose: this one is implicit and
+    /// always overwritten, those are explicit and never touched behind your back.
+    static var lastExportSettings: Data? {
+        get { UserDefaults.standard.data(forKey: "lastExportSettings") }
+        set { UserDefaults.standard.set(newValue, forKey: "lastExportSettings") }
+    }
     static var driveShareLabel: String {
         get { UserDefaults.standard.string(forKey: "driveShareLabel") ?? String(localized: "Sent by") }
         set { UserDefaults.standard.set(newValue, forKey: "driveShareLabel") }
