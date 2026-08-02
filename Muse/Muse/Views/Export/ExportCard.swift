@@ -137,12 +137,27 @@ struct ExportRequest: Identifiable, Equatable {
             estimatedBytes = nil
             return
         }
-        let settings = self.settings
+        // DEBOUNCE FIRST, and it is load-bearing. This runs from `.task(id:)`
+        // keyed on the settings, and dragging the quality slider changes them
+        // on every frame. `.task(id:)` cancels the previous run — but a
+        // `Task.detached` is detached from that cancellation by definition, so
+        // without the sleep a single drag queued dozens of 2048px encodes that
+        // all ran to completion. Sleeping first means the cancellation lands
+        // here, before any work starts.
+        try? await Task.sleep(for: .milliseconds(180))
+        guard !Task.isCancelled else { return }
+
+        // The live toggles, not the stale copies inside `settings` — the same
+        // merge `export(to:)` does, so the estimate measures what will be
+        // written.
+        var settings = self.settings
+        settings.includeEXIF = includeEXIF
+        settings.includeLocation = includeLocation
         let bytes = await Task.detached(priority: .utility) {
             ImageExportRender.estimatedBytes(preview: preview, settings: settings,
                                              for: url, outputPixelCount: outputPixelCount)
         }.value
-        guard url == currentURL else { return }
+        guard !Task.isCancelled, url == currentURL else { return }
         estimatedBytes = bytes
     }
 
@@ -178,26 +193,6 @@ struct ExportRequest: Identifiable, Equatable {
         includeLocation = false
         // The fit control only exists for fixed-dimension presets.
         if p.isFixed == false { fit = .crop }
-    }
-
-    /// True when the source can't fill what was asked for — the card says so
-    /// rather than silently exporting something smaller. Never-upscale is a
-    /// global rule, so this covers the format branch's resize modes too.
-    var willNotUpscale: Bool {
-        guard let url = currentURL, let size = state(for: url).decodedSize else { return false }
-        guard isSocial else {
-            return settings.resize != .original
-                && settings.resize.targetSize(for: size) == size
-        }
-        switch preset.kind {
-        case .fixed(let w, let h):
-            return SocialRender.fixedFrame(width: w, height: h, decodedSize: size)
-                != CGSize(width: CGFloat(w), height: CGFloat(h))
-        case .longEdge(let cap):
-            return max(size.width, size.height) < CGFloat(cap)
-        case .original:
-            return false
-        }
     }
 
     private func rememberChoices() {
@@ -241,6 +236,11 @@ struct ExportRequest: Identifiable, Equatable {
         formatSettings.includeEXIF = includeEXIF
         formatSettings.includeLocation = includeLocation
         for (i, url) in urls.enumerated() {
+            // Closing the card used to leave this loop running: files kept
+            // landing in the folder with no UI attached to them. The card
+            // cancels its task on disappear and the check lands here, between
+            // files, so a partially-written one is never abandoned.
+            if Task.isCancelled { break }
             let s = state(for: url)
             do {
                 if social {
@@ -332,6 +332,12 @@ struct ExportCard: View {
     @State private var outHeight = ""
     @State private var outPercent = "100"
     @State private var lockAspect = true
+    /// Which size field has the caret. Used to commit on focus LOSS — a
+    /// numeric field that only reads what you typed when you press Return
+    /// silently discards it when you click Export instead.
+    @FocusState private var focusedSizeField: SizeField?
+    /// The running export, so closing the card can stop it.
+    @State private var exportTask: Task<Void, Never>?
 
     init(request: ExportRequest, onClose: @escaping () -> Void) {
         _model = StateObject(wrappedValue: ExportModel(urls: request.urls))
@@ -360,6 +366,15 @@ struct ExportCard: View {
         // is I/O — so it happens here, off the view body, and again whenever
         // the pager moves.
         .task(id: model.currentURL) { await model.loadNaturalSize(); resetSizeFields() }
+        .onDisappear { exportTask?.cancel() }
+        .onChange(of: focusedSizeField) { previous, _ in
+            switch previous {
+            case .width: commitWidth()
+            case .height: commitHeight()
+            case .percent: commitPercent()
+            case nil: break
+            }
+        }
         // Re-measure on any change that moves the output: the settings, the
         // photo, or the preview finishing its decode.
         .task(id: estimateKey) {
@@ -454,6 +469,7 @@ struct ExportCard: View {
                 String(model.settings.quality),
                 String(model.settings.tiff16), String(model.settings.webpLossless),
                 model.settings.background.rawValue,
+                String(model.includeEXIF), String(model.includeLocation),
                 model.previewImage == nil ? "0" : "1",
                 model.isSocial ? "s" : "f"].joined(separator: "|")
     }
@@ -691,20 +707,17 @@ struct ExportCard: View {
         labelled(String(localized: "Size")) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
-                    numberField($outWidth, label: String(localized: "Width")) {
-                        commitWidth()
-                    }
+                    numberField($outWidth, label: String(localized: "Width"),
+                                field: .width) { commitWidth() }
                     Text("×").font(.system(size: 11)).foregroundStyle(.secondary)
-                    numberField($outHeight, label: String(localized: "Height")) {
-                        commitHeight()
-                    }
+                    numberField($outHeight, label: String(localized: "Height"),
+                                field: .height) { commitHeight() }
                     Text("px").font(.system(size: 11)).foregroundStyle(.secondary)
                     lockButton
                 }
                 HStack(spacing: 6) {
-                    numberField($outPercent, label: String(localized: "Scale")) {
-                        commitPercent()
-                    }
+                    numberField($outPercent, label: String(localized: "Scale"),
+                                field: .percent) { commitPercent() }
                     Text("%").font(.system(size: 11)).foregroundStyle(.secondary)
                     Spacer()
                 }
@@ -730,9 +743,13 @@ struct ExportCard: View {
         .accessibilityValue(Text(lockAspect ? String(localized: "On") : String(localized: "Off")))
     }
 
+    private enum SizeField: Hashable { case width, height, percent }
+
     private func numberField(_ value: Binding<String>, label: String,
+                             field: SizeField,
                              commit: @escaping () -> Void) -> some View {
         TextField("", text: value)
+            .focused($focusedSizeField, equals: field)
             .textFieldStyle(.roundedBorder)
             .font(.system(size: 12))
             .monospacedDigit()
@@ -793,14 +810,24 @@ struct ExportCard: View {
     /// One place where the three fields and `settings.resize` are reconciled,
     /// so they can't disagree about what the output is.
     private func applyOutput(width: Int, height: Int, natural: CGSize) {
-        outWidth = String(width)
-        outHeight = String(height)
-        let pct = natural.width > 0 ? (CGFloat(width) / natural.width * 100).rounded() : 100
-        outPercent = String(Int(max(1, min(100, pct))))
+        showOutput(width: width, height: height, natural: natural)
         model.settings.resize =
             (width >= Int(natural.width) && height >= Int(natural.height))
             ? .original
             : .fitWithin(width: width, height: height)
+    }
+
+    /// Fields ONLY. Kept separate from `applyOutput` because showing what the
+    /// current setting means for THIS photo must never be mistaken for the user
+    /// changing that setting — `resetSizeFields` used to write back through
+    /// `applyOutput`, so paging to a photo of a different aspect re-derived the
+    /// box against it and stored the smaller result. The setting ratcheted down
+    /// every time you moved between photos.
+    private func showOutput(width: Int, height: Int, natural: CGSize) {
+        outWidth = String(width)
+        outHeight = String(height)
+        let pct = natural.width > 0 ? (CGFloat(width) / natural.width * 100).rounded() : 100
+        outPercent = String(Int(max(1, min(100, pct))))
     }
 
     /// Fills the fields from the photo's own dimensions. Runs when the card
@@ -814,10 +841,22 @@ struct ExportCard: View {
             outPercent = "100"
         case .longEdge(let cap):
             let t = ExportResize.longEdge(cap).targetSize(for: natural)
-            applyOutput(width: Int(t.width), height: Int(t.height), natural: natural)
+            showOutput(width: Int(t.width), height: Int(t.height), natural: natural)
         case .fitWithin(let w, let h):
             let t = ExportResize.fitWithin(width: w, height: h).targetSize(for: natural)
-            applyOutput(width: Int(t.width), height: Int(t.height), natural: natural)
+            showOutput(width: Int(t.width), height: Int(t.height), natural: natural)
+        }
+    }
+
+    /// Everything typed but not yet committed. Called before an export runs,
+    /// because a value only committed `onSubmit` is a value you can type, click
+    /// Export, and never get — the field showed 800 and the file came out 4000.
+    private func commitPendingSizeEdits() {
+        switch focusedSizeField {
+        case .width: commitWidth()
+        case .height: commitHeight()
+        case .percent: commitPercent()
+        case nil: break
         }
     }
 
@@ -1058,7 +1097,7 @@ struct ExportCard: View {
                     .frame(width: 90)
             } else {
                 ModalButton(title: String(localized: "Export…"), kind: .prominent, isDefault: true) {
-                    Task { await runExport() }
+                    exportTask = Task { await runExport() }
                 }
                 .disabled(model.urls.isEmpty)
             }
@@ -1066,6 +1105,9 @@ struct ExportCard: View {
     }
 
     private func runExport() async {
+        // Belt and braces over the focus-loss commit: SwiftUI does not promise
+        // that focus leaves the field before a button's action runs.
+        commitPendingSizeEdits()
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false

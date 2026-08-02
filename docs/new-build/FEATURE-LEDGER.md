@@ -24,7 +24,7 @@ actually produced (the grid cull badge that was specified and never built, the
 five modals with no Escape branch). **A + S is not a substitute for R.**
 
 Last full pass: **2026-08-02** (general image export, P29). Suite:
-**1,843 unit tests, 2 skipped, 0 failures** — 1,791 before export's 52 — plus
+**1,859 unit tests, 2 skipped, 0 failures** — 1,791 before export's 68 — plus
 **20 UI tests** that drive the real app
 (`MuseSurfaceDriveTests`, `MuseTagChipRowTests`).
 *(The previous line here read "1,811 unit tests … plus 20 UI tests". Measured,
@@ -136,7 +136,7 @@ question.
 | S07.1 | Manifest v2 + three page layouts | `DriveShareManifestTests`, `SocialPresetTests` | 2026-08-01 | ❌ G1 | Page tests pass (`web/share/share.test.mjs`) |
 | S07.2 | Portfolio mode (stable URL, live manifest) | `DriveShareStoreTests` | 2026-08-01 | ❌ G1 | Upload → atomic swap → sweep, rollback before swap |
 | S07.3 | Social export card + render ladder | `SocialRenderTests`, `SocialCropMathTests`, `ExportMetadataTests` | 2026-08-02 | ❌ G1 | ⚠️ crop stage previewed the unedited original — fixed R1-F18. Card renamed `ExportCard`; social is now one branch of two |
-| P29 | **General image export** (format · quality · depth · resize · presets) | `ExportFormatTests`, `ExportResizeTests`, `ImageExportRenderTests`, `ExportPresetStoreTests`, `OutputRenderTests` | 2026-08-02 | ❌ **G1** | Renderer and value types are pinned hard (52 tests: exact dimensions, never-upscale, real 16-bit depth, provable metadata cleanliness, collision never overwrites, WebP is a real RIFF/WEBP container). **The CARD is not runtime-verified** — see the plan below |
+| P29 | **General image export** (format · quality · depth · resize · background · presets) | `ExportFormatTests`, `ExportResizeTests`, `ImageExportRenderTests`, `ExportPresetStoreTests`, `SocialCropMathTests`, `OutputRenderTests` | 2026-08-02 (3 review rounds) | ⚠️ **blocked** | Renderer and value types pinned hard (68 tests: exact dimensions, never-upscale, 16-bit that survives a round trip, alpha kept/flattened per choice, provable metadata cleanliness, collision never overwrites, WebP a real RIFF/WEBP container). `MuseExportDriveTests` is WRITTEN and could not RUN — see below |
 | — | Migration chain v13→v23 | `MigrationChainTests` + 8 per-migration files | 2026-08-01 | ✅ replayed on real data | Pure DDL, O(1) at launch, endpoint pinned at v23. **Export added none** — presets are `AppSettings` JSON |
 
 ---
@@ -403,9 +403,26 @@ passing" had meant nothing at all.
 - **Social export, Drive publish/portfolio.** Need network and an OAuth session.
 - **Restore from backup, delete.** Deliberately excluded — they mutate user data.
 - **Import execution.** The panels open; no import was actually run to completion.
-- **The general export card (P29).** The renderer beneath it is pinned by 49
-  tests against real files, but nobody has driven the card. Written plan, in the
-  order a person would do it:
+- **The general export card (P29).** The renderer beneath it is pinned by 68
+  tests against real files. `MuseUITests/MuseExportDriveTests` now automates the
+  parts a unit test can't see — that the card opens IN FRONT of the hero viewer
+  and the editor (it didn't; that was review finding one), that typing a size
+  commits, that the estimate resolves to a real number, that the dropdown offers
+  the formats and no longer offers the cut platforms, and that a social preset
+  states its output size.
+
+  **It has never been executed.** Every XCUITest on this machine currently fails
+  at runner init with `LocalAuthentication Code=-4 "System authentication is
+  running."` — a system auth dialog is up and blocks UI testing wholesale. This
+  is environmental, not a test defect: the previously-passing
+  `MuseSurfaceDriveTests` fails identically. Run it once the dialog is cleared.
+
+  The card also deliberately stops SHORT of pressing Export: that opens the
+  sandbox powerbox folder panel, which is out-of-process and unreliable to
+  drive. The bytes on the far side of it are covered by
+  `ImageExportRenderTests`, which writes and reads back real files.
+
+  What still wants a human, in the order a person would do it:
   1. Grid, right-click one image ▸ **Export…** — the dropdown shows **Format**
      above **Social**, with `Same as original` first.
   2. Pick **JPEG**, drag Quality, set **Long edge** to 1200, Export, choose a

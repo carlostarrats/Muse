@@ -113,6 +113,62 @@ final class ImageExportRenderTests: XCTestCase {
         XCTAssertEqual(try properties(of: result.url)[kCGImagePropertyDepth as String] as? Int, 16)
     }
 
+    /// The depth has to come from the SOURCE, not be reconstructed from 8-bit
+    /// samples and labelled 16. A 16-bit source round-tripped through a 16-bit
+    /// export must keep values that don't exist in 8 bits — the thumbnail
+    /// decode path quantises them all to multiples of 257.
+    func testSixteenBitTIFFPreservesSubEightBitDetail() throws {
+        let width = 256, height = 8
+        let space = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
+        var pixels = [UInt16](repeating: 0, count: width * height * 4)
+        for y in 0..<height {
+            for x in 0..<width {
+                // Values deliberately BETWEEN 8-bit steps: 8-bit n maps to
+                // n * 257, so n * 257 + 128 cannot survive an 8-bit round trip.
+                let v = UInt16(min(65535, x * 257 + 128))
+                let i = (y * width + x) * 4
+                pixels[i] = v; pixels[i + 1] = v; pixels[i + 2] = v
+                pixels[i + 3] = 65535
+            }
+        }
+        let src16 = dir.appendingPathComponent("deep-source.tif")
+        try pixels.withUnsafeMutableBytes { raw in
+            let ctx = try XCTUnwrap(CGContext(
+                data: raw.baseAddress, width: width, height: height,
+                bitsPerComponent: 16, bytesPerRow: width * 8, space: space,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                    | CGBitmapInfo.byteOrder16Little.rawValue))
+            let image = try XCTUnwrap(ctx.makeImage())
+            let dest = try XCTUnwrap(CGImageDestinationCreateWithURL(
+                src16 as CFURL, UTType.tiff.identifier as CFString, 1, nil))
+            CGImageDestinationAddImage(dest, image, nil)
+            XCTAssertTrue(CGImageDestinationFinalize(dest))
+        }
+        XCTAssertEqual(try properties(of: src16)[kCGImagePropertyDepth as String] as? Int, 16,
+                       "the fixture itself must be 16-bit or the test proves nothing")
+
+        let result = try ImageExportRender.export(
+            .init(sourceURL: src16, settings: ExportSettings(format: .tiff, tiff16: true)),
+            to: dir)
+        XCTAssertEqual(try properties(of: result.url)[kCGImagePropertyDepth as String] as? Int, 16)
+
+        // Read the samples back and look for at least one that isn't a
+        // multiple of 257 — proof the values didn't pass through 8 bits.
+        let out = try XCTUnwrap(CGImageSourceCreateWithURL(result.url as CFURL, nil))
+        let outImage = try XCTUnwrap(CGImageSourceCreateImageAtIndex(out, 0, nil))
+        var read = [UInt16](repeating: 0, count: width * height * 4)
+        try read.withUnsafeMutableBytes { raw in
+            let ctx = try XCTUnwrap(CGContext(
+                data: raw.baseAddress, width: width, height: height,
+                bitsPerComponent: 16, bytesPerRow: width * 8, space: space,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                    | CGBitmapInfo.byteOrder16Little.rawValue))
+            ctx.draw(outImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        }
+        let offGrid = stride(from: 0, to: read.count, by: 4).contains { read[$0] % 257 != 0 }
+        XCTAssertTrue(offGrid, "every sample landed on an 8-bit step — the depth is reconstructed, not real")
+    }
+
     func testEightBitTIFFIsEightBit() throws {
         let src = try SocialFixtures.makeJPEG(width: 600, height: 400, name: "shallow", in: dir)
         let result = try ImageExportRender.export(

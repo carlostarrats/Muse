@@ -61,19 +61,32 @@ nonisolated enum ImageExportRender {
         // 2. Budget gate on the header, then a bounded decode. Reading the
         //    header first is what lets the decode ceiling be chosen from the
         //    OUTPUT size — decoding 40 MP to write 1000px wastes both.
+        //
+        //    This path carries 16-bit correctly, which is worth stating because
+        //    it looks like it shouldn't: `CGImageSourceCreateThumbnailAtIndex`
+        //    is usually an 8-bit API, but it preserves the source's depth —
+        //    verified, a 16-bit TIFF decodes to bitsPerComponent 16 through it,
+        //    and `testSixteenBitTIFFPreservesSubEightBitDetail` pins that.
+        //    Don't "fix" this with a full-depth `CIImage(contentsOf:)`: that
+        //    ignores the decode ceiling and would materialise the whole raster
+        //    no matter how small the export.
         let headerSize = try ExportPipeline.headerSize(url: out.url)
+        let deep = (format == .tiff && job.settings.tiff16)
         let planned = job.settings.resize.targetSize(for: headerSize)
         let source = try ExportPipeline.load(
             url: out.url,
             decodeLongEdgeMax: Int(max(1, max(planned.width, planned.height).rounded())))
+        var image = CIImage(cgImage: source.image)
+        let sourceProperties = source.sourceProperties
+        var decodedSize = source.decodedSize
 
         // 3. Resize. Recomputed against what actually DECODED: the ImageIO
         //    ceiling can land a pixel or two off on odd ratios, and the output
         //    dimensions have to be exact.
-        var image = CIImage(cgImage: source.image)
-        let finalSize = job.settings.resize.targetSize(for: source.decodedSize)
-        if finalSize != source.decodedSize {
+        let finalSize = job.settings.resize.targetSize(for: decodedSize)
+        if finalSize != decodedSize {
             image = ExportPipeline.scale(image, to: finalSize)
+            decodedSize = finalSize
         }
 
         // 4. Background. Transparency survives only when the user asked for it
@@ -94,7 +107,6 @@ nonisolated enum ImageExportRender {
         guard let sRGB = CGColorSpace(name: CGColorSpace.sRGB) else {
             throw ExportPipeline.RenderError.encodeFailed
         }
-        let deep = (format == .tiff && job.settings.tiff16)
         guard let cgImage = ExportPipeline.context.createCGImage(
             image, from: extent,
             format: deep ? .RGBA16 : .RGBA8,
@@ -102,7 +114,7 @@ nonisolated enum ImageExportRender {
         else { throw ExportPipeline.RenderError.encodeFailed }
 
         let data = try encode(cgImage, format: format, job: job,
-                              sourceProperties: source.sourceProperties)
+                              sourceProperties: sourceProperties)
 
         // 6. Verify, then write. A metadata-off output must be PROVABLY clean,
         //    not merely constructed to be — the same rule the social and Drive

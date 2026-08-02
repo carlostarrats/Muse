@@ -86,11 +86,26 @@ extension AppState {
     func exportableSelectionURLs() -> [URL] {
         let candidates = selectedFile.map { [$0.url] }
             ?? effectiveSelectionURLs(fallback: "")
-        return candidates.filter {
-            switch AssetKind.detect(at: $0) {
-            case .image, .raw, .psd: return true
-            default: return false
-            }
+        return candidates.filter(Self.isExportableKind)
+    }
+
+    /// Whether File ▸ Export… should be enabled, WITHOUT building the URL list.
+    ///
+    /// `AssetKind.detect` stats the filesystem, and the menu's `.disabled`
+    /// re-evaluates on every SwiftUI update of the command tree — so asking it
+    /// for the whole array meant one stat per selected file, per update, and a
+    /// 1,900-photo selection turned a menu redraw into a stat storm.
+    /// `contains(where:)` stops at the first exportable file, which for any
+    /// real selection is the first one.
+    var hasExportableSelection: Bool {
+        if let open = selectedFile { return Self.isExportableKind(open.url) }
+        return selectedFiles.contains { Self.isExportableKind(URL(fileURLWithPath: $0)) }
+    }
+
+    private static func isExportableKind(_ url: URL) -> Bool {
+        switch AssetKind.detect(at: url) {
+        case .image, .raw, .psd: return true
+        default: return false
         }
     }
 

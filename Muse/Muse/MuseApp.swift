@@ -353,7 +353,7 @@ struct MuseApp: App {
                     Label("Export…", systemImage: "square.and.arrow.up.on.square")
                 }
                 .keyboardShortcut("e", modifiers: .command)
-                .disabled(appState.exportableSelectionURLs().isEmpty)
+                .disabled(!appState.hasExportableSelection)
 
                 Divider()
                 Button {
