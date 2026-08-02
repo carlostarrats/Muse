@@ -411,11 +411,17 @@ passing" had meant nothing at all.
   the formats and no longer offers the cut platforms, and that a social preset
   states its output size.
 
-  **It has never been executed.** Every XCUITest on this machine currently fails
-  at runner init with `LocalAuthentication Code=-4 "System authentication is
-  running."` — a system auth dialog is up and blocks UI testing wholesale. This
-  is environmental, not a test defect: the previously-passing
-  `MuseSurfaceDriveTests` fails identically. Run it once the dialog is cleared.
+  **It has never been executed — the Mac's SCREEN WAS LOCKED.** Every XCUITest
+  fails at runner init with `LocalAuthentication Code=-4 "System authentication
+  is running."`, which reads like a stray dialog and isn't: it is the login
+  window, and `CGSessionCopyCurrentDictionary()` confirmed
+  `CGSSessionScreenIsLocked = 1`. XCUITest cannot drive a GUI through the lock
+  screen, so this blocks the whole UI target, not just these tests — the
+  previously-passing `MuseSurfaceDriveTests` fails identically. Killing
+  `coreautha` does NOT help; that agent only presents the prompt the lock screen
+  asks for. **Unlock the Mac and re-run — there is nothing to fix in the code.**
+  Worth knowing for any future remote session: a locked screen means no GUI
+  verification, full stop.
 
   The card also deliberately stops SHORT of pressing Export: that opens the
   sandbox powerbox folder panel, which is out-of-process and unreliable to
