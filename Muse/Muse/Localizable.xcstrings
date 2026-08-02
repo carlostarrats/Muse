@@ -334,6 +334,7 @@
     },
     "%lld adjustment groups" : {
       "comment" : "editor Info card summary",
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -707,6 +708,7 @@
       }
     },
     "A snapshot saves this photo's current settings. Restore it later, or compare against it." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -2087,6 +2089,7 @@
       }
     },
     "Comparing" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -6046,6 +6049,7 @@
       }
     },
     "No adjustments" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -7622,6 +7626,16 @@
         }
       }
     },
+    "Remove every edit from this photo" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer toutes les retouches de cette photo"
+          }
+        }
+      }
+    },
     "Remove Folder" : {
       "localizations" : {
         "fr" : {
@@ -8300,6 +8314,17 @@
         }
       }
     },
+    "Save your edits as they are now. Click one to bring it back." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrez vos retouches telles quelles. Cliquez-en une pour la rétablir."
+          }
+        }
+      }
+    },
     "Saved looks you can switch back to." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8312,6 +8337,7 @@
       }
     },
     "Saved settings for this photo. Restore one, or hold it up against what you have now." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -8339,6 +8365,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Réglages enregistrés auxquels vous pouvez revenir. Rien n’est dupliqué — la photo garde un seul jeu de retouches, et changer met les réglages actuels de côté sous « Précédent »."
+          }
+        }
+      }
+    },
+    "Saves your current editing state" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistre l’état actuel de vos retouches"
+          }
+        }
+      }
+    },
+    "Saves your edits as they are now, so you can bring them back later." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistre vos retouches telles quelles, pour les rétablir plus tard."
           }
         }
       }
@@ -10769,46 +10815,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zoom arrière"
-          }
-        }
-      }
-    },
-    "Save your edits as they are now. Click one to bring it back." : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enregistrez vos retouches telles quelles. Cliquez-en une pour la rétablir."
-          }
-        }
-      }
-    },
-    "Saves your edits as they are now, so you can bring them back later." : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enregistre vos retouches telles quelles, pour les rétablir plus tard."
-          }
-        }
-      }
-    },
-    "Remove every edit from this photo" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Supprimer toutes les retouches de cette photo"
-          }
-        }
-      }
-    },
-    "Saves your current editing state" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enregistre l’état actuel de vos retouches"
           }
         }
       }

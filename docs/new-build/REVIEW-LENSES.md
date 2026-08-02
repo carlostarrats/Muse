@@ -78,6 +78,12 @@ Rounds 1–3 are recorded in `REVIEW-FINDINGS.md` and `FEATURE-LEDGER.md`; round
 | **Driving the running GUI** (XCUITest, not osascript) | **7b** | G1 partially closed; 10 surfaces confirmed by screenshot |
 | **Per-hover layout cost in a custom `Layout`** | **7b** | **R7-4 — the tag chip row re-measured every chip per hover frame** |
 | Vacuous test assertions (can this test fail?) | 7b | 7 of 10 UI tests asserted only "a window exists"; all strengthened |
+| **Per-frame work inside a SwiftUI body** | **8** (2026-08-02) | 2 findings — every preset and every snapshot decoded its stored JSON on every render, i.e. every frame of a slider drag |
+| Event-monitor lifetime & event stealing | 8 | clean — the viewer's Escape monitor yields to `modalPresented` and is removed on disappear |
+| Explicit animation-task lifecycle (hand-stepped animators) | 8 | clean after fix — cancelled on re-trigger, on gesture start and on disappear; `[weak self]` |
+| Clamp coverage after moving a value to a new writer | 8 | 1 finding — Edit's zoom-out stopped clamping the pan when `setZoom` moved to the animator |
+| Dead code created by the round's OWN diff | 8 | 4 findings removed |
+| UI tests left stale by a rename | 8 | 2 findings — a card renamed and one deleted while its test still named them |
 
 ## Part 2 — lenses NOT yet run
 
@@ -91,6 +97,8 @@ an unrun lens on the list is worth more than a good idea that evaporates.
 | TOCTOU on user paths | A file swapped between the `fileExists` check and the read. Round 5 covered prefixes, not timing. |
 | Undo/redo coherence across editor + delete-undo | Two independent undo stacks now exist; nobody has checked they don't confuse each other. |
 | Long-session memory growth (retain cycles, not allocation shape) | Round 6 checked allocation *shape*; SwiftUI/Combine retain cycles are a different failure. |
+| Preference-key lifecycle (renamed/removed ids left in a stored set) | `editorExpandedSections2` keeps whatever ids a user has stored; removing a section leaves a dead id there forever. Harmless today, but nothing prunes. |
+| Two-instance runs during GUI testing | The 2026-08-02 round hit a 21-failure suite caused by a developer-launched instance racing the test's own; GRDB's `.immediateError` means the loser gets no window. Worth a mechanical guard rather than a note. |
 
 **Round 7 correction.** An earlier draft of this file recorded "no unrun lenses
 identified" — written before actually looking, and wrong. The five above came

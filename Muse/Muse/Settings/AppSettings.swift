@@ -24,7 +24,6 @@ enum AppSettings {
     static let editorBackdropKey = "editorBackdrop"
     static let showStarsOnGridKey = "showStarsOnGrid"
     static let colorsCardExpandedKey = "heroColorsCardExpanded"
-    static let feedbackCardExpandedKey = "heroFeedbackCardExpanded"
     /// Which of the editor panels' cards are open, by section id. A GLOBAL
     /// working preference like the backdrop: the panel you opened for the last
     /// photo is the one you want for the next.
@@ -33,7 +32,8 @@ enum AppSettings {
     /// cards shut with no way to tell that from a deliberate choice.
     static let editorExpandedSectionsKey = "editorExpandedSections2"
     /// Styles browser: thumbnails as a grid, or a compact list. A working
-    /// preference — a library of fifty LUTs is a list, five is a grid.
+    /// preference — a library of fifty LUTs is a list, five is a grid. Read
+    /// via @AppStorage in EditorView; no accessor, nothing off-view needs it.
     static let editorStylesListModeKey = "editorStylesListMode"
     /// Which Styles sub-sections (presets, luts) are showing their thumbnails.
     static let editorStylesOpenKey = "editorStylesOpen"
@@ -102,19 +102,6 @@ enum AppSettings {
     /// true (open). Unset → treated as open.
     static var colorsCardExpanded: Bool {
         UserDefaults.standard.object(forKey: colorsCardExpandedKey) as? Bool ?? true
-    }
-
-    /// "Why it looks this way" card (now in the EDIT panel) — same global
-    /// last-choice rule as the colors card, and @State-seeded for the same
-    /// reason (an @AppStorage publish lands outside a withAnimation
-    /// transaction).
-    static var feedbackCardExpanded: Bool {
-        UserDefaults.standard.object(forKey: feedbackCardExpandedKey) as? Bool ?? true
-    }
-
-    static var editorStylesListMode: Bool {
-        get { UserDefaults.standard.bool(forKey: editorStylesListModeKey) }
-        set { UserDefaults.standard.set(newValue, forKey: editorStylesListModeKey) }
     }
 
     /// Which Styles sub-sections are expanded. Unset → both open.

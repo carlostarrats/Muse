@@ -395,9 +395,7 @@ struct HeroStage: View {
     }
 
     /// Sync memory-cache peek at the sizes the app already renders.
-    /// The grid's already-decoded thumbnail. Also the editor's exit flight —
-    /// see HeroImageViewer.closeFromEditor.
-    static func quickThumbnail(for url: URL) -> NSImage? {
+    private static func quickThumbnail(for url: URL) -> NSImage? {
         ThumbnailCache.shared.cachedThumbnail(for: url, size: CGSize(width: 320, height: 320))
             ?? ThumbnailCache.shared.cachedThumbnail(for: url, size: CGSize(width: 160, height: 160))
     }

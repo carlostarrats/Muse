@@ -22,6 +22,14 @@ final class EditPresetStore: ObservableObject {
 
     @Published private(set) var presets: [EditPresetRow] = []
 
+    /// Each preset's stack, decoded ONCE per load.
+    ///
+    /// The Styles browser asks "which preset is on this photo?" every time the
+    /// editor re-renders — which is every frame of a slider drag — and the
+    /// answer needs each preset's stack. Decoding the JSON there meant N JSON
+    /// decodes per frame, growing with the user's preset library.
+    @Published private(set) var stacks: [String: EditStack] = [:]
+
     init() {}
 
     func load() async {
@@ -30,6 +38,9 @@ final class EditPresetStore: ObservableObject {
             try EditPresetRow.fetchAll(db, sql:
                 "SELECT * FROM edit_presets ORDER BY name COLLATE NOCASE")
         }) ?? []
+        stacks = presets.reduce(into: [:]) { out, row in
+            out[row.id] = EditStackCodec.decode(row.stack)
+        }
     }
 
     func create(name: String, stack: EditStack) async {

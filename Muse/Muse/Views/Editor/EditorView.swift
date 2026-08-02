@@ -93,8 +93,11 @@ struct EditorView: View {
     /// heading — otherwise a closed card looks identical whether you're on
     /// Original or three looks deep.
     private var stylesSummary: String? {
+        // Only while the card is CLOSED — that's the only time it's drawn, and
+        // computing it otherwise costs a stack comparison per preset per frame.
+        guard !expanded.contains(Section.looks) else { return nil }
         let preset = presetStore.presets.first { row in
-            guard let stack = EditStackCodec.decode(row.stack) else { return false }
+            guard let stack = presetStore.stacks[row.id] else { return false }
             return EditTransfer.isApplied(stack, onto: session.draft)
         }
         let lut = session.draft.lutParams.flatMap { applied -> String? in
@@ -422,7 +425,14 @@ struct EditorView: View {
 
     private func setZoom(_ value: CGFloat) {
         let next = ViewerGeometry.clampZoom(value)
-        session.animateCanvas(zoom: next, pan: abs(next - 1) <= 0.001 ? .zero : nil)
+        // Clamp the pan to the NEW zoom: zooming out with a pan applied would
+        // otherwise leave the photo hanging off its own canvas, since a smaller
+        // zoom allows a smaller offset. The hero's setZoom does the same.
+        let pan = abs(next - 1) <= 0.001
+            ? .zero
+            : ViewerGeometry.clampPan(session.canvasPan,
+                                      fittedSize: fittedSize(in: canvasSize), zoom: next)
+        session.animateCanvas(zoom: next, pan: pan)
     }
 
     // MARK: - Canvas
@@ -580,10 +590,10 @@ struct EditorView: View {
         VStack(alignment: .leading, spacing: 2) {
             EditorToolRow(systemName: "arrow.uturn.backward",
                           label: String(localized: "Undo"),
-                          isEnabled: session.canUndo) { session.undo() }
+                          isEnabled: session.canUndo, action: { session.undo() })
             EditorToolRow(systemName: "arrow.uturn.forward",
                           label: String(localized: "Redo"),
-                          isEnabled: session.canRedo) { session.redo() }
+                          isEnabled: session.canRedo, action: { session.redo() })
 
             Divider().padding(.vertical, 4)
 
@@ -600,19 +610,21 @@ struct EditorView: View {
 
             EditorToolRow(systemName: "rectangle.split.2x1",
                           label: String(localized: "Side by Side"),
-                          isActive: session.compareMode == .sideBySide) {
+                          isActive: session.compareMode == .sideBySide,
+                          action: {
                 session.compareMode = session.compareMode == .sideBySide ? .off : .sideBySide
-            }
+            })
 
             EditorToolRow(systemName: "rectangle.lefthalf.inset.filled",
                           label: String(localized: "Split Compare"),
-                          isActive: isWiping) {
+                          isActive: isWiping,
+                          action: {
                 if case .wipe = session.compareMode {
                     session.compareMode = .off
                 } else {
                     session.compareMode = .wipe(0.5)
                 }
-            }
+            })
 
             if case .wipe(let fraction) = session.compareMode {
                 Slider(value: Binding(get: { fraction },
@@ -629,7 +641,8 @@ struct EditorView: View {
             // thresholds are a preference.
             EditorToolRow(systemName: "circle.lefthalf.striped.horizontal",
                           label: String(localized: "Clipping Zebras (J)"),
-                          isActive: session.zebrasOn) { session.zebrasOn.toggle() }
+                          isActive: session.zebrasOn,
+                          action: { session.zebrasOn.toggle() })
                 .contextMenu {
                     Button { showZebraThresholds = true } label: { Text("Zebra Thresholds…") }
                 }
@@ -638,9 +651,8 @@ struct EditorView: View {
             EditorToolRow(systemName: "photo.on.rectangle",
                           label: String(localized: "Reference Photo"),
                           isActive: referenceStore.paneVisible,
-                          isEnabled: referenceStore.url != nil) {
-                referenceStore.paneVisible.toggle()
-            }
+                          isEnabled: referenceStore.url != nil,
+                          action: { referenceStore.paneVisible.toggle() })
             .help(Text(referenceStore.url == nil
                        ? "Right-click a photo in the grid → Use as Reference Photo"
                        : "Reference photo"))
@@ -648,9 +660,8 @@ struct EditorView: View {
             Divider().padding(.vertical, 4)
 
             EditorToolRow(systemName: "arrow.counterclockwise",
-                          label: String(localized: "Reset All Adjustments")) {
-                session.resetAll()
-            }
+                          label: String(localized: "Reset All Adjustments"),
+                          action: { session.resetAll() })
 
             Divider().padding(.vertical, 4)
 

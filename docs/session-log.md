@@ -6,6 +6,72 @@ the durable rules + a compact index live in `CLAUDE.md`. Nothing here is
 load-bearing for a fresh session beyond what that index already surfaces;
 read an entry when you need the full "why" behind a specific change.
 
+### Editor UX pass — 2026-08-02 (on `testing-new-features`, `504e7a7` + `8694ae1`)
+
+A long owner-driven session on the hero viewer's **Edit** mode. It began as
+styling ("the panels look different from Preview") and turned into a structural
+pass, because several things that read as visual problems were features that had
+never actually been built or wired.
+
+**One design with the Preview page.** The editor's two tabbed panels became
+scrollable columns of the Preview column's own cards (`EditorPanel` /
+`EditorSection` over the shared `InfoCardKit`), at the same 258pt width and 40pt
+margin, with the chrome row (zoom / Fit / hide-UI / Share / close) extracted to
+`ChromeControls` and shared with Preview. Nothing moves when you switch modes —
+verified by comparing edge transitions in two screenshots pixel by pixel.
+
+**Things that were missing, not unstyled.**
+
+- Edit had **no zoom at all**: the canvas was hard-fitted and `canvasZoom`
+  existed only for eyedropper hit-testing. Zoom, drag-pan (hand cursors) and
+  trackpad pinch now work in both modes, and the photo runs UNDER the panels the
+  way it does under the Preview column.
+- **Side by Side never drew.** The mode captioned an unchanged canvas; there was
+  no side-by-side branch in the renderer at all.
+- **Every editor-raised modal opened behind the editor** (see the new durable
+  rule): the version-name prompt, and the LUT delete confirm — which is why
+  deleting a LUT appeared to do nothing.
+- A frame that shrank left the previous, larger frame's pixels around it
+  (recycled Metal drawables + CI writing only what it covers).
+
+**Naming and structure.** Scopes → Histogram, "Why it looks this way" →
+Insights, Looks → Styles, INFO deleted (filename, a count the sliders already
+show, and the notes Insights shows; its two unique lines moved). **Versions and
+Snapshots were the same row in the same table with a different `kind` string** —
+identical storage, identical scope, identical behaviour on click — so they
+collapsed into one concept: snapshots, with Original at the top, a timestamp,
+restore on click and compare in the menu. Styles gained grid/list modes, an
+Original entry, collapsible sub-sections that report their selection when
+closed, and `EditTransfer.isApplied` so the browser can say which preset is on
+the photo; saving an empty preset is refused, since it could never show as
+applied (the owner's "it won't let me select it" was exactly that — confirmed by
+reading the row out of the DB).
+
+**Contrast became arithmetic.** `Components/PanelContrast` resolves ink, card
+fill, selection and destructive colours against the measured WCAG ratio for the
+user's chosen backdrop, because a fixed palette cannot serve white → black. Mid
+Gray is the case every threshold gets wrong.
+
+**Leaving Edit** took five attempts and ended as an instant cut; the three
+separate glitches behind it (Preview flashing, the grid's parting field
+converging afterwards, and a double `ToolbarFade.show()`) are each recorded as
+durable rules.
+
+**Review round (2026-08-02).** Audit 14/14. Release build back to **0 warnings**
+(7 trailing-closure deprecations introduced by `EditorToolRow`'s new optional
+parameter). Findings fixed in the round: two **per-frame JSON decodes** inside
+SwiftUI bodies (every preset, every snapshot, on every drag frame — now decoded
+once per load), a **lost pan clamp** when zooming out in Edit, four pieces of
+dead code the round's own diff created (`PanelContrast`'s wash resolver,
+`AppSettings.editorStylesListMode`, `feedbackCardExpanded`, `HeroStage`'s
+thumbnail helper re-exposed), and two UI tests left stale by the renames. Suite:
+**1,791 unit** (2 skipped) + **13 UI drive tests**, 0 failures. French: 1,059
+keys, 0 untranslated.
+
+New lenses added to `REVIEW-LENSES.md` this round: per-frame work in a SwiftUI
+body, event-monitor lifetime and event stealing, explicit animation-task
+lifecycle, and UI tests left stale by a rename.
+
 ### Feature removals + duplicates keeper fix — 2026-08-01 (on `testing-new-features`)
 
 Owner review of the running app, three decisions.

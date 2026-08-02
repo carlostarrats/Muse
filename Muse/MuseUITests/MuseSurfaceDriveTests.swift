@@ -46,7 +46,7 @@ final class MuseSurfaceDriveTests: XCTestCase {
         // test-only code path in the app, and without touching the developer's
         // real preferences.
         app.launchArguments += [
-            "-editorExpandedSections2", "(tools,histogram,info,light,color)",
+            "-editorExpandedSections2", "(tools,histogram,insights,light,color)",
             "-editorStylesOpen", "(presets,luts)",
             "-editorBackdrop", "mid",
         ]
@@ -315,12 +315,12 @@ final class MuseSurfaceDriveTests: XCTestCase {
         // fold — and an element that exists off-screen still answers `exists`,
         // which is how this test previously clicked into empty space. Collapse
         // the cards above it first so it's really on screen.
-        for card in ["TOOLS", "HISTOGRAM", "INFO"] where app.staticTexts[card].exists {
+        for card in ["TOOLS", "HISTOGRAM", "INSIGHTS"] where app.staticTexts[card].exists {
             hit(app.staticTexts[card])
             Thread.sleep(forTimeInterval: 0.4)
         }
-        let heading = app.staticTexts["HISTORY"]
-        XCTAssertTrue(heading.waitForExistence(timeout: 10), "no HISTORY card")
+        let heading = app.staticTexts["SNAPSHOTS"]
+        XCTAssertTrue(heading.waitForExistence(timeout: 10), "no SNAPSHOTS card")
         // Open/closed PERSISTS, so this can't assume either state.
         if !app.buttons["Save a snapshot"].exists {
             hit(heading)

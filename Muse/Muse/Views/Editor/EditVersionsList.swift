@@ -28,6 +28,10 @@ struct EditVersionsList: View {
     @StateObject private var store = EditStore.shared
 
     @State private var rows: [EditVersionRow] = []
+    /// Each snapshot's stack, decoded once per load. `isCompareTarget` is asked
+    /// per row on every render — which is every frame of a slider drag — and
+    /// decoding the JSON there put N decodes in that path.
+    @State private var decoded: [String: EditStack] = [:]
     @State private var hasLightroomPreview = false
     @State private var hovered: String?
     @State private var saveHovering = false
@@ -74,7 +78,12 @@ struct EditVersionsList: View {
                 comparePicker
             }
         }
-        .task(id: store.generation) { rows = await store.versions(for: session.url) }
+        .task(id: store.generation) {
+            rows = await store.versions(for: session.url)
+            decoded = rows.reduce(into: [:]) { out, row in
+                out[row.id] = EditStackCodec.decode(row.stack)
+            }
+        }
         .task(id: session.url) { await resolveLightroomPreview() }
     }
 
@@ -168,14 +177,14 @@ struct EditVersionsList: View {
     private func isCompareTarget(_ row: EditVersionRow) -> Bool {
         guard !session.compareEmbeddedPreview,
               let against = session.wipeAgainst else { return false }
-        return EditStackCodec.decode(row.stack) == against
+        return decoded[row.id] == against
     }
 
     private func toggleCompare(_ row: EditVersionRow) {
         session.compareEmbeddedPreview = false
         // Choosing the current target again clears it, so this is a toggle
         // rather than a one-way trip.
-        session.wipeAgainst = isCompareTarget(row) ? nil : EditStackCodec.decode(row.stack)
+        session.wipeAgainst = isCompareTarget(row) ? nil : decoded[row.id]
     }
 
     private func restore(_ row: EditVersionRow) {
@@ -191,7 +200,7 @@ struct EditVersionsList: View {
     private var compareLabel: String {
         if session.compareEmbeddedPreview { return String(localized: "Lightroom preview") }
         guard let against = session.wipeAgainst else { return String(localized: "Original") }
-        if let match = rows.first(where: { EditStackCodec.decode($0.stack) == against }) {
+        if let match = rows.first(where: { decoded[$0.id] == against }) {
             return EditVersionName.display(match.name)
         }
         return String(localized: "Original")

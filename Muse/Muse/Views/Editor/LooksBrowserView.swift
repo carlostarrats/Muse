@@ -58,7 +58,7 @@ struct LooksBrowserView: View {
     /// The preset currently ON the photo, if any — see EditTransfer.isApplied.
     private var activePreset: EditPresetRow? {
         presetStore.presets.first {
-            guard let stack = EditStackCodec.decode($0.stack) else { return false }
+            guard let stack = presetStore.stacks[$0.id] else { return false }
             return EditTransfer.isApplied(stack, onto: session.draft)
         }
     }

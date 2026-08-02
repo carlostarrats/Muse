@@ -170,55 +170,9 @@ nonisolated enum PanelContrast {
     /// itself (0.53) has the same problem systemBlue does: it sits near the
     /// mid-grey card, and white on it is 3.9:1.
     static let dangerGreys: [Double] = [0.53, 0.28, 0.83]
+    /// Plain systemBlue. Referenced only to assert what the selection fill
+    /// deliberately ISN'T: white on it is 4.0:1, under AA.
     static let accentGrey = accentGreys[0]
-    static let accentGreysDark = accentGreys[1]
-
-    /// A resolved selection wash: which blue, and how much of it.
-    struct Selection: Equatable {
-        var tintIndex: Int
-        var tintGrey: Double
-        var alpha: Double
-    }
-
-    /// The most VISIBLE selection wash that still leaves the ink at AA.
-    ///
-    /// Two constraints pull opposite ways: the wash sits under text, so it
-    /// can't be loud; and a selection nobody can see is not a selection. So
-    /// each blue is taken at the largest alpha its own AA allows, and the one
-    /// that separates furthest from the card wins.
-    static func selection(over card: Double, ink: Double,
-                          preferred: Double = 0.45,
-                          target: Double = bodyTarget) -> Selection {
-        var best = Selection(tintIndex: 0, tintGrey: accentGreys[0], alpha: 0)
-        var bestSeparation = 0.0
-        for (index, tint) in accentGreys.enumerated() {
-            let alpha = selectionAlpha(over: card, tint: tint, ink: ink,
-                                       preferred: preferred, target: target)
-            guard alpha > 0 else { continue }
-            let separation = ratio(composite(ink: tint, over: card, opacity: alpha), card)
-            if separation > bestSeparation {
-                bestSeparation = separation
-                best = Selection(tintIndex: index, tintGrey: tint, alpha: alpha)
-            }
-        }
-        return best
-    }
-
-    /// `preferred` is the CEILING, not the value: the search takes the largest
-    /// wash the ink can still sit on, so a selected row is as visible as AA
-    /// allows on that backdrop rather than uniformly timid.
-    static func selectionAlpha(over card: Double, tint: Double = accentGreys[0],
-                               ink: Double, preferred: Double = 0.45,
-                               target: Double = bodyTarget) -> Double {
-        var alpha = preferred
-        while alpha > 0 {
-            if ratio(ink, composite(ink: tint, over: card, opacity: alpha)) >= target {
-                return alpha
-            }
-            alpha -= 0.01
-        }
-        return 0
-    }
 
     /// The smallest opacity ≥ `desired` at which ink on `card` clears `target`.
     static func minimumOpacity(ink: Double, card: Double,
