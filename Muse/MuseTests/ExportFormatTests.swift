@@ -106,14 +106,49 @@ final class ExportFormatTests: XCTestCase {
         XCTAssertFalse(ExportFormat.heic.supportsBitDepth)
     }
 
-    /// Flattening a PNG or TIFF would be a silent data loss; JPEG and HEIC have
-    /// no usable alpha and must flatten or they composite against black.
-    func testAlphaIsKeptOnlyWhereTheContainerCanCarryIt() {
-        XCTAssertTrue(ExportFormat.png.keepsAlpha)
-        XCTAssertTrue(ExportFormat.tiff.keepsAlpha)
-        XCTAssertTrue(ExportFormat.webp.keepsAlpha)
-        XCTAssertFalse(ExportFormat.jpeg.keepsAlpha)
-        XCTAssertFalse(ExportFormat.heic.keepsAlpha)
+    /// Container capability, which is not the same question as the user's
+    /// choice — see the `flattens` tests below for where the two meet.
+    func testOnlySomeContainersCanCarryAlpha() {
+        XCTAssertTrue(ExportFormat.png.canCarryAlpha)
+        XCTAssertTrue(ExportFormat.tiff.canCarryAlpha)
+        XCTAssertTrue(ExportFormat.webp.canCarryAlpha)
+        XCTAssertFalse(ExportFormat.jpeg.canCarryAlpha)
+        XCTAssertFalse(ExportFormat.heic.canCarryAlpha)
+    }
+
+    func testTransparentIsHonouredOnlyWhereTheContainerAllowsIt() {
+        let transparent = ExportSettings(background: .transparent)
+        XCTAssertFalse(transparent.flattens(for: .png))
+        XCTAssertFalse(transparent.flattens(for: .tiff))
+        XCTAssertFalse(transparent.flattens(for: .webp))
+        // A JPEG has to land on SOMETHING; an uncomposited alpha channel lands
+        // on black, which is the bug this rule exists to prevent.
+        XCTAssertTrue(transparent.flattens(for: .jpeg))
+        XCTAssertTrue(transparent.flattens(for: .heic))
+        XCTAssertEqual(transparent.flattenColor(for: .jpeg), .white)
+    }
+
+    func testAnExplicitBackgroundAlwaysFlattens() {
+        for background: ExportBackground in [.white, .black] {
+            let s = ExportSettings(background: background)
+            for format: ExportFormat in [.png, .tiff, .webp, .jpeg, .heic] {
+                XCTAssertTrue(s.flattens(for: format), "\(background) on \(format)")
+                XCTAssertEqual(s.flattenColor(for: format), background)
+            }
+        }
+    }
+
+    /// A preset written before backgrounds existed must still load. Losing a
+    /// saved preset because a field was added is worse than the field's absence.
+    func testSettingsFromBeforeBackgroundsStillDecode() throws {
+        let old = """
+        {"format":"png","quality":0.8,"tiff16":false,\
+        "resize":{"original":{}},"includeEXIF":true,"includeLocation":false}
+        """
+        let decoded = try JSONDecoder().decode(ExportSettings.self, from: Data(old.utf8))
+        XCTAssertEqual(decoded.format, .png)
+        XCTAssertEqual(decoded.background, .transparent)
+        XCTAssertTrue(decoded.includeEXIF)
     }
 
     func testDisplayNamesAreNonEmpty() {

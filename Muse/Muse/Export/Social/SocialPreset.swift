@@ -39,38 +39,32 @@ struct SocialPreset: Identifiable, Equatable {
     let storySafeZones: Bool  // 250/1920 top+bottom guides in the crop UI
     let warningKey: String?   // localized advisory shown in the card
 
+    /// FOUR presets, cut down from twelve on 2026-08-02 (owner review).
+    ///
+    /// What went, and why it wasn't a loss:
+    /// · **Threads** carried numbers IDENTICAL to the IG feed row — 1080×1350,
+    ///   q0.88, 800 KB. It was a separate entry for completeness, not because
+    ///   the platform differs. Instagram covers it.
+    /// · **IG Grid / Square / Landscape / Carousel** were four ways to crop for
+    ///   one destination. Instagram accepts anything from 1.91:1 to 4:5, so a
+    ///   plain 1080 long-edge hands it a correctly-sized file at the photo's
+    ///   OWN aspect and no crop step is needed at all — which is what a
+    ///   photographer wants, and strictly more capable than picking a box.
+    /// · **Pinterest, Flickr/500px, Glass** — real platforms, but not ones this
+    ///   app's users asked for. Any of them is served by the Format family now
+    ///   (JPEG at whatever size), which is the general answer.
+    ///
+    /// Story/Reel stays FIXED because it genuinely is a fixed frame with
+    /// platform chrome over it — that's what the safe zones exist for.
     static let all: [SocialPreset] = [
-        .init(id: "ig-feed-portrait", nameKey: "IG Feed Portrait",
-              kind: .fixed(width: 1080, height: 1350), quality: 0.88,
-              byteTargetKB: 800, sharpen: .standard, exifDefaultOn: false,
-              uniformMulti: false, storySafeZones: false,
-              warningKey: "Keep key content centered — grid previews crop to 3:4."),
-        .init(id: "ig-grid", nameKey: "IG Grid-Optimized",
-              kind: .fixed(width: 1080, height: 1440), quality: 0.88,
-              byteTargetKB: 800, sharpen: .standard, exifDefaultOn: false,
-              uniformMulti: false, storySafeZones: false,
-              warningKey: "The feed crops this to 4:5 — grid tiles show the full 3:4."),
-        .init(id: "ig-square", nameKey: "IG Square",
-              kind: .fixed(width: 1080, height: 1080), quality: 0.88,
+        .init(id: "instagram", nameKey: "Instagram",
+              kind: .longEdge(1080), quality: 0.88,
               byteTargetKB: 800, sharpen: .standard, exifDefaultOn: false,
               uniformMulti: false, storySafeZones: false, warningKey: nil),
-        .init(id: "ig-landscape", nameKey: "IG Landscape",
-              kind: .fixed(width: 1080, height: 566), quality: 0.88,
-              byteTargetKB: 800, sharpen: .standard, exifDefaultOn: false,
-              uniformMulti: false, storySafeZones: false, warningKey: nil),
-        .init(id: "ig-story", nameKey: "IG / Threads Story & Reel",
+        .init(id: "ig-story", nameKey: "Instagram Story & Reel",
               kind: .fixed(width: 1080, height: 1920), quality: 0.88,
               byteTargetKB: 800, sharpen: .standard, exifDefaultOn: false,
               uniformMulti: false, storySafeZones: true, warningKey: nil),
-        .init(id: "ig-carousel", nameKey: "IG Carousel",
-              kind: .fixed(width: 1080, height: 1350), quality: 0.88,
-              byteTargetKB: 800, sharpen: .standard, exifDefaultOn: false,
-              uniformMulti: true, storySafeZones: false,
-              warningKey: "The first slide locks the ratio — every slide exports at 4:5."),
-        .init(id: "threads", nameKey: "Threads",
-              kind: .fixed(width: 1080, height: 1350), quality: 0.88,
-              byteTargetKB: 800, sharpen: .standard, exifDefaultOn: false,
-              uniformMulti: false, storySafeZones: false, warningKey: nil),
         .init(id: "x", nameKey: "X",
               kind: .longEdge(4096), quality: 0.90,
               byteTargetKB: nil, sharpen: .light, exifDefaultOn: false,
@@ -79,18 +73,6 @@ struct SocialPreset: Identifiable, Equatable {
         .init(id: "facebook", nameKey: "Facebook",
               kind: .longEdge(2048), quality: 0.85,
               byteTargetKB: 1000, sharpen: .standard, exifDefaultOn: false,
-              uniformMulti: false, storySafeZones: false, warningKey: nil),
-        .init(id: "pinterest", nameKey: "Pinterest",
-              kind: .fixed(width: 1000, height: 1500), quality: 0.90,
-              byteTargetKB: nil, sharpen: .standard, exifDefaultOn: false,
-              uniformMulti: false, storySafeZones: false, warningKey: nil),
-        .init(id: "flickr", nameKey: "Flickr / 500px",
-              kind: .original, quality: 0.95,
-              byteTargetKB: nil, sharpen: .none, exifDefaultOn: true,
-              uniformMulti: false, storySafeZones: false, warningKey: nil),
-        .init(id: "glass", nameKey: "Glass",
-              kind: .longEdge(4096), quality: 0.92,
-              byteTargetKB: nil, sharpen: .light, exifDefaultOn: true,
               uniformMulti: false, storySafeZones: false, warningKey: nil),
     ]
 

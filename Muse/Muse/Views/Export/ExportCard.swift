@@ -59,7 +59,7 @@ struct ExportRequest: Identifiable, Equatable {
     /// The social branch's platform. Kept as its own property, not derived from
     /// `selection`, so the crop stage and `willNotUpscale` keep working
     /// untouched — they were written against a non-optional preset.
-    @Published var preset: SocialPreset = SocialPreset.preset(id: "ig-feed-portrait") ?? SocialPreset.all[0]
+    @Published var preset: SocialPreset = SocialPreset.all[0]
     @Published var fit: SocialFit = .crop
     @Published var matte: MatteShade
     @Published var includeEXIF: Bool
@@ -76,7 +76,7 @@ struct ExportRequest: Identifiable, Equatable {
     init(urls: [URL]) {
         self.urls = urls
         self.matte = MatteShade(rawValue: AppSettings.socialMatteShade) ?? .white
-        self.includeEXIF = AppSettings.socialExifChoices["ig-feed-portrait"] ?? false
+        self.includeEXIF = AppSettings.socialExifChoices[SocialPreset.all[0].id] ?? false
         let restored = AppSettings.lastExportSettings
             .flatMap { try? JSONDecoder().decode(ExportSettings.self, from: $0) }
             ?? ExportSettings()
@@ -93,6 +93,22 @@ struct ExportRequest: Identifiable, Equatable {
     var currentURL: URL? { urls.indices.contains(pageIndex) ? urls[pageIndex] : nil }
 
     var isSocial: Bool { if case .social = selection { true } else { false } }
+
+    /// The current photo's output dimensions — POST-crop, via
+    /// `EffectiveDimensions`, so a cropped photo's size fields show the size
+    /// it actually exports at rather than the sensor's.
+    @Published private(set) var naturalSize: CGSize?
+
+    /// A header read on a cache miss, so never from a view body.
+    func loadNaturalSize() async {
+        guard let url = currentURL else { naturalSize = nil; return }
+        if let cached = EffectiveDimensions.cached(url) { naturalSize = cached; return }
+        let resolved = await Task.detached(priority: .userInitiated) {
+            EffectiveDimensions.resolve(url)
+        }.value
+        guard url == currentURL else { return }   // pager moved while we read
+        naturalSize = resolved
+    }
 
     /// The concrete format the current file will be written in — what the
     /// quality and bit-depth controls key off, since `.sameAsOriginal` is a
@@ -272,13 +288,14 @@ struct ExportCard: View {
     @ObservedObject private var presetStore = ExportPresetStore.shared
     let onClose: () -> Void
 
-    /// The resize fields are text, not Int bindings: a partially-typed number
+    /// The size fields are text, not Int bindings: a partially-typed number
     /// ("20" on the way to "2048") has to be a legal intermediate state, and an
     /// Int-formatted TextField fights the user for the cursor while they type.
-    /// `clampPixels` is what turns the text into something the renderer sees.
-    @State private var longEdge = "2048"
-    @State private var fitWidth = "2000"
-    @State private var fitHeight = "2000"
+    /// `commitWidth`/`commitHeight`/`commitPercent` are what the renderer sees.
+    @State private var outWidth = ""
+    @State private var outHeight = ""
+    @State private var outPercent = "100"
+    @State private var lockAspect = true
 
     init(request: ExportRequest, onClose: @escaping () -> Void) {
         _model = StateObject(wrappedValue: ExportModel(urls: request.urls))
@@ -295,14 +312,18 @@ struct ExportCard: View {
             }
             .padding(.bottom, 16)
 
-            HStack(alignment: .top, spacing: 16) {
+            HStack(alignment: .top, spacing: 20) {
                 stage.frame(maxWidth: .infinity)
                 Divider()
-                controls.frame(width: 240)
+                controls.frame(width: 248)
             }
             .frame(height: 460)
         }
         .padding(28)
+        // The photo's own dimensions drive the size fields, and a header read
+        // is I/O — so it happens here, off the view body, and again whenever
+        // the pager moves.
+        .task(id: model.currentURL) { await model.loadNaturalSize(); resetSizeFields() }
     }
 
     private var stage: some View {
@@ -353,26 +374,68 @@ struct ExportCard: View {
     }
 
     private var controls: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             presetPicker
+            Divider()
             if model.isSocial {
                 socialControls
             } else {
                 formatControls
             }
             Spacer(minLength: 8)
-            if let advisory {
-                Text(advisory)
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if model.willNotUpscale {
-                Text("This photo is smaller than the size you asked for — it exports at its own size rather than being enlarged.")
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            summary
             footer
         }
+    }
+
+    /// What you are about to get, in one line. The old card said nothing about
+    /// the output at all — you set a size and found out what it meant by
+    /// opening the file afterwards. Every number here is EXACT rather than
+    /// estimated: a byte-size guess would be the more impressive readout and
+    /// the wrong call, because a number in an interface gets believed.
+    private var summary: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(summaryLine)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+            if model.urls.count > 1 {
+                Text(fileCountLine)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var summaryLine: String {
+        let name = model.isSocial
+            ? String(localized: "JPEG")
+            : model.resolvedFormat.displayName
+        guard let size = outputPixelSize else { return name }
+        return "\(name)  ·  \(Int(size.width)) × \(Int(size.height)) px"
+    }
+
+    private var fileCountLine: String {
+        String(format: NSLocalizedString("%lld photos", comment: "Export: how many files this run writes"),
+               model.urls.count)
+    }
+
+    /// The pixel size the current settings actually produce.
+    private var outputPixelSize: CGSize? {
+        guard let natural = model.naturalSize else { return nil }
+        guard !model.isSocial else {
+            return model.preset.isFixed
+                ? model.preset.targetAspect.map { _ in
+                    if case .fixed(let w, let h) = model.preset.kind {
+                        return SocialRender.fixedFrame(width: w, height: h, decodedSize: natural)
+                    }
+                    return natural
+                }
+                : nil            // long-edge social sizes are the renderer's call
+        }
+        return model.settings.resize.targetSize(for: natural)
     }
 
     private var socialControls: some View {
@@ -390,18 +453,10 @@ struct ExportCard: View {
     // MARK: - Format branch
 
     private var formatControls: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if model.resolvedFormat.supportsQuality {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Quality").font(.system(size: 12)).foregroundStyle(.secondary)
-                    Slider(value: $model.settings.quality, in: 0.3...1.0)
-                        .accessibilityLabel(Text("Quality"))
-                        .accessibilityValue(Text(qualityPercent))
-                }
-            }
+        VStack(alignment: .leading, spacing: 14) {
+            if model.resolvedFormat.supportsQuality { qualityControl }
             if model.resolvedFormat.supportsBitDepth {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Bit depth").font(.system(size: 12)).foregroundStyle(.secondary)
+                labelled(String(localized: "Bit depth")) {
                     Picker("", selection: $model.settings.tiff16) {
                         Text("8-bit").tag(false)
                         Text("16-bit").tag(true)
@@ -410,9 +465,45 @@ struct ExportCard: View {
                     .accessibilityLabel(Text("Bit depth"))
                 }
             }
-            resizeControls
+            sizeControl
+            backgroundControl
+            Divider()
             exifToggle
             savePresetRow
+        }
+    }
+
+    /// A section label over its control. Every group in this column uses it, so
+    /// the label baseline and gap can't drift between them.
+    private func labelled<Content: View>(_ title: String,
+                                         @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+            content()
+        }
+    }
+
+    /// The slider now says what it's set to. A slider with no readout is a
+    /// control you can only aim, not set — you can't come back tomorrow and
+    /// reproduce yesterday's export.
+    private var qualityControl: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack {
+                Text("Quality")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(qualityPercent)
+                    .font(.system(size: 11, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(.primary)
+            }
+            Slider(value: $model.settings.quality, in: 0.3...1.0)
+                .controlSize(.small)
+                .accessibilityLabel(Text("Quality"))
+                .accessibilityValue(Text(qualityPercent))
         }
     }
 
@@ -423,53 +514,173 @@ struct ExportCard: View {
                Int((model.settings.quality * 100).rounded()))
     }
 
-    private var resizeControls: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Size").font(.system(size: 12)).foregroundStyle(.secondary)
-            Picker("", selection: resizeModeBinding) {
-                Text("Original size").tag(ResizeMode.original)
-                Text("Long edge").tag(ResizeMode.longEdge)
-                Text("Fit within").tag(ResizeMode.fitWithin)
-            }
-            .pickerStyle(.menu).labelsHidden()
-            .accessibilityLabel(Text("Size"))
+    // MARK: - Size
 
-            switch resizeModeBinding.wrappedValue {
-            case .original:
-                EmptyView()
-            case .longEdge:
-                pixelField(String(localized: "Pixels"), value: $longEdge) {
-                    model.settings.resize = .longEdge(clampPixels(longEdge))
+    /// Width, height, and a percentage — all three live, all three the same
+    /// number seen three ways.
+    ///
+    /// The dropdown this replaces made you choose a MODE (long edge / fit
+    /// within) before you could type anything, which is a question about the
+    /// implementation rather than about the picture. Two fields and a percent
+    /// is what every other image app does, and it means the never-upscale rule
+    /// needs no explaining: the fields simply won't go above the original, so
+    /// the advisory line that used to sit above the buttons is gone.
+    private var sizeControl: some View {
+        labelled(String(localized: "Size")) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    numberField($outWidth, label: String(localized: "Width")) {
+                        commitWidth()
+                    }
+                    Text("×").font(.system(size: 11)).foregroundStyle(.secondary)
+                    numberField($outHeight, label: String(localized: "Height")) {
+                        commitHeight()
+                    }
+                    Text("px").font(.system(size: 11)).foregroundStyle(.secondary)
+                    lockButton
                 }
-            case .fitWithin:
-                HStack(spacing: 8) {
-                    pixelField(String(localized: "Width"), value: $fitWidth) {
-                        model.settings.resize = .fitWithin(width: clampPixels(fitWidth),
-                                                           height: clampPixels(fitHeight))
+                HStack(spacing: 6) {
+                    numberField($outPercent, label: String(localized: "Scale")) {
+                        commitPercent()
                     }
-                    pixelField(String(localized: "Height"), value: $fitHeight) {
-                        model.settings.resize = .fitWithin(width: clampPixels(fitWidth),
-                                                           height: clampPixels(fitHeight))
-                    }
+                    Text("%").font(.system(size: 11)).foregroundStyle(.secondary)
+                    Spacer()
                 }
             }
         }
     }
 
-    private func pixelField(_ label: String, value: Binding<String>,
-                            commit: @escaping () -> Void) -> some View {
-        TextField(label, text: value)
+    private var lockButton: some View {
+        Button {
+            lockAspect.toggle()
+            if lockAspect { commitWidth() }
+        } label: {
+            Image(systemName: lockAspect ? "link" : "link.badge.plus")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(lockAspect ? Color.accentColor : Color.secondary)
+                .frame(width: 20, height: 20)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(lockAspect ? String(localized: "Aspect ratio locked")
+                         : String(localized: "Aspect ratio unlocked"))
+        .accessibilityLabel(Text("Lock aspect ratio"))
+        .accessibilityValue(Text(lockAspect ? String(localized: "On") : String(localized: "Off")))
+    }
+
+    private func numberField(_ value: Binding<String>, label: String,
+                             commit: @escaping () -> Void) -> some View {
+        TextField("", text: value)
             .textFieldStyle(.roundedBorder)
             .font(.system(size: 12))
+            .monospacedDigit()
+            .multilineTextAlignment(.trailing)
+            .frame(width: 62)
             .onSubmit(commit)
-            .onChange(of: value.wrappedValue) { _, _ in commit() }
             .accessibilityLabel(Text(label))
+    }
+
+    /// Reads the fields back into `settings.resize`. Clamped to the natural
+    /// size in both directions, which is where never-upscale actually lives now
+    /// — the renderer still refuses to enlarge, but the UI never asks it to.
+    private func commitWidth() {
+        guard let natural = model.naturalSize, natural.width > 0 else { return }
+        let w = min(Int(natural.width), clampPixels(outWidth))
+        let h = lockAspect
+            ? max(1, Int((CGFloat(w) * natural.height / natural.width).rounded()))
+            : min(Int(natural.height), clampPixels(outHeight))
+        applyOutput(width: w, height: h, natural: natural)
+    }
+
+    private func commitHeight() {
+        guard let natural = model.naturalSize, natural.height > 0 else { return }
+        let h = min(Int(natural.height), clampPixels(outHeight))
+        let w = lockAspect
+            ? max(1, Int((CGFloat(h) * natural.width / natural.height).rounded()))
+            : min(Int(natural.width), clampPixels(outWidth))
+        applyOutput(width: w, height: h, natural: natural)
+    }
+
+    private func commitPercent() {
+        guard let natural = model.naturalSize else { return }
+        let pct = min(100, max(1, Int(outPercent.filter(\.isNumber)) ?? 100))
+        applyOutput(width: max(1, Int((natural.width * CGFloat(pct) / 100).rounded())),
+                    height: max(1, Int((natural.height * CGFloat(pct) / 100).rounded())),
+                    natural: natural)
+    }
+
+    /// One place where the three fields and `settings.resize` are reconciled,
+    /// so they can't disagree about what the output is.
+    private func applyOutput(width: Int, height: Int, natural: CGSize) {
+        outWidth = String(width)
+        outHeight = String(height)
+        let pct = natural.width > 0 ? (CGFloat(width) / natural.width * 100).rounded() : 100
+        outPercent = String(Int(max(1, min(100, pct))))
+        model.settings.resize =
+            (width >= Int(natural.width) && height >= Int(natural.height))
+            ? .original
+            : .fitWithin(width: width, height: height)
+    }
+
+    /// Fills the fields from the photo's own dimensions. Runs when the card
+    /// opens and whenever the pager moves to a different photo.
+    private func resetSizeFields() {
+        guard let natural = model.naturalSize else { return }
+        switch model.settings.resize {
+        case .original:
+            outWidth = String(Int(natural.width))
+            outHeight = String(Int(natural.height))
+            outPercent = "100"
+        case .longEdge(let cap):
+            let t = ExportResize.longEdge(cap).targetSize(for: natural)
+            applyOutput(width: Int(t.width), height: Int(t.height), natural: natural)
+        case .fitWithin(let w, let h):
+            let t = ExportResize.fitWithin(width: w, height: h).targetSize(for: natural)
+            applyOutput(width: Int(t.width), height: Int(t.height), natural: natural)
+        }
     }
 
     /// A pasted nonsense number must never reach the renderer. 100 000 is well
     /// past any real sensor and still far under the decode budget.
     private func clampPixels(_ text: String) -> Int {
         min(100_000, max(1, Int(text.filter(\.isNumber)) ?? 1))
+    }
+
+    // MARK: - Background
+
+    /// What a transparent pixel becomes. Always visible, including for JPEG —
+    /// the question "what happens to my transparency" is exactly the one that
+    /// had no answer on the card before, and hiding the control for the formats
+    /// that can't keep it is what made it unanswerable.
+    private var backgroundControl: some View {
+        labelled(String(localized: "Background")) {
+            VStack(alignment: .leading, spacing: 4) {
+                Picker("", selection: $model.settings.background) {
+                    ForEach(backgroundOptions, id: \.self) { option in
+                        Text(option.displayName).tag(option)
+                    }
+                }
+                .pickerStyle(.segmented).labelsHidden()
+                .accessibilityLabel(Text("Background"))
+                if model.settings.background == .transparent,
+                   model.resolvedFormat.canCarryAlpha == false {
+                    Text("JPEG has no transparency — this exports on white.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    /// Transparent is only OFFERED where the container can carry it, but the
+    /// stored choice is left alone when you switch to a format that can't —
+    /// switching JPEG → PNG → JPEG must not silently forget that you wanted
+    /// transparency.
+    private var backgroundOptions: [ExportBackground] {
+        model.resolvedFormat.canCarryAlpha
+            ? ExportBackground.allCases
+            : [.white, .black]
     }
 
     private var savePresetRow: some View {
@@ -506,26 +717,6 @@ struct ExportCard: View {
         model.pendingPresetName = nil
     }
 
-    /// The advisories that only the format branch raises. Each is ONE key —
-    /// never `String(localized:) + name`, which ships the name's half in
-    /// English and no remaining-English grep catches it.
-    private var advisory: String? {
-        guard !model.isSocial, let url = model.currentURL else { return nil }
-        if model.settings.format == .sameAsOriginal, isRaw(url) {
-            return String(localized: "RAW can’t be written back — this exports as JPEG.")
-        }
-        if model.settings.format == .tiff, model.settings.tiff16,
-           EditStackIndex.stackHash(for: url) != nil {
-            return String(localized: "This photo has edits, which render at 8-bit — 16-bit adds depth the data doesn’t have.")
-        }
-        return nil
-    }
-
-    /// A RAW is exactly a file whose container `.sameAsOriginal` can't keep.
-    private func isRaw(_ url: URL) -> Bool {
-        AssetKind.detect(at: url) == .raw
-    }
-
     // MARK: - Preset dropdown
 
     /// Comparable tags for a menu that mixes three kinds of entry.
@@ -534,8 +725,6 @@ struct ExportCard: View {
         case social(String)
         case saved(UUID)
     }
-
-    private enum ResizeMode: Hashable { case original, longEdge, fitWithin }
 
     private var presetPicker: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -583,45 +772,12 @@ struct ExportCard: View {
                 case .saved(let id):
                     if let saved = presetStore.presets.first(where: { $0.id == id }) {
                         model.apply(saved)
-                        syncResizeFields()
+                        resetSizeFields()
                     }
                 }
             })
     }
 
-    private var resizeModeBinding: Binding<ResizeMode> {
-        Binding(
-            get: {
-                switch model.settings.resize {
-                case .original: .original
-                case .longEdge: .longEdge
-                case .fitWithin: .fitWithin
-                }
-            },
-            set: { mode in
-                switch mode {
-                case .original: model.settings.resize = .original
-                case .longEdge: model.settings.resize = .longEdge(clampPixels(longEdge))
-                case .fitWithin: model.settings.resize = .fitWithin(width: clampPixels(fitWidth),
-                                                                    height: clampPixels(fitHeight))
-                }
-            })
-    }
-
-    /// Loading a saved preset has to push its numbers back into the text
-    /// fields, or the fields would keep showing the previous values while the
-    /// settings underneath said something else.
-    private func syncResizeFields() {
-        switch model.settings.resize {
-        case .original:
-            break
-        case .longEdge(let n):
-            longEdge = String(n)
-        case .fitWithin(let w, let h):
-            fitWidth = String(w)
-            fitHeight = String(h)
-        }
-    }
 
     private var fitModePicker: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -729,13 +885,19 @@ struct ExportStageView: View {
         GeometryReader { geo in
             let frame = frameRect(in: geo.size)
             ZStack {
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(Color.black.opacity(0.06))
+                // No backing plate. It used to fill the whole stage area with a
+                // grey wash, which on any photo that didn't match the stage's
+                // aspect read as two arbitrary bands above and below the
+                // picture. The picture sits on the card's own surface now, and
+                // the only thing drawn around it is its own hairline.
                 content(in: frame)
                     .frame(width: frame.width, height: frame.height)
                     .clipped()
                     .overlay(safeZones(in: frame))
-                    .overlay(RoundedRectangle(cornerRadius: 2).stroke(Color.secondary.opacity(0.5)))
+                    .overlay(RoundedRectangle(cornerRadius: 3)
+                        .stroke(Color.primary.opacity(0.12), lineWidth: 1))
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                    .shadow(color: .black.opacity(0.10), radius: 8, y: 2)
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .contentShape(Rectangle())

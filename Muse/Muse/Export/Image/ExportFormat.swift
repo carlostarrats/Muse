@@ -45,11 +45,15 @@ nonisolated enum ExportFormat: String, CaseIterable, Codable, Sendable {
 
     var supportsBitDepth: Bool { self == .tiff }
 
-    /// JPEG and HEIC have no usable alpha, so those exports flatten onto white.
-    /// PNG, TIFF and WebP keep it — flattening them would be a data loss the
-    /// social path can afford (it's fitting a photo to a platform) and this one
-    /// can't (it's converting a file).
-    var keepsAlpha: Bool {
+    /// Whether the container can carry transparency at all. JPEG and HEIC
+    /// can't, so a transparent source has to land on something; PNG, TIFF and
+    /// WebP can, and flattening them by default would be a data loss the social
+    /// path can afford (it's fitting a photo to a platform) and this one can't
+    /// (it's converting a file).
+    ///
+    /// This is the CONTAINER's capability, not the user's choice — see
+    /// `ExportSettings.flattens(for:)`, which is where the two meet.
+    var canCarryAlpha: Bool {
         switch self {
         case .jpeg, .heic: false
         case .png, .tiff, .webp: true
@@ -148,6 +152,20 @@ nonisolated enum ExportResize: Equatable, Codable, Sendable {
     }
 }
 
+/// What a transparent pixel becomes. `.transparent` is only honoured by a
+/// container that can carry alpha — see `ExportSettings.flattens(for:)`.
+nonisolated enum ExportBackground: String, Codable, CaseIterable, Sendable {
+    case transparent, white, black
+
+    var displayName: String {
+        switch self {
+        case .transparent: String(localized: "Transparent")
+        case .white: String(localized: "White")
+        case .black: String(localized: "Black")
+        }
+    }
+}
+
 /// One export's worth of choices. Codable because a saved preset is exactly
 /// this, stored as JSON.
 nonisolated struct ExportSettings: Equatable, Codable, Sendable {
@@ -155,17 +173,48 @@ nonisolated struct ExportSettings: Equatable, Codable, Sendable {
     var quality: Double
     var tiff16: Bool
     var resize: ExportResize
+    var background: ExportBackground
     var includeEXIF: Bool
     var includeLocation: Bool
 
     init(format: ExportFormat = .jpeg, quality: Double = 0.9, tiff16: Bool = false,
-         resize: ExportResize = .original, includeEXIF: Bool = false,
-         includeLocation: Bool = false) {
+         resize: ExportResize = .original, background: ExportBackground = .transparent,
+         includeEXIF: Bool = false, includeLocation: Bool = false) {
         self.format = format
         self.quality = quality
         self.tiff16 = tiff16
         self.resize = resize
+        self.background = background
         self.includeEXIF = includeEXIF
         self.includeLocation = includeLocation
+    }
+
+    /// A preset saved before backgrounds existed decodes with the default
+    /// rather than failing — losing a preset because a field was added would be
+    /// a worse bug than the field not being there.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        format = try c.decodeIfPresent(ExportFormat.self, forKey: .format) ?? .jpeg
+        quality = try c.decodeIfPresent(Double.self, forKey: .quality) ?? 0.9
+        tiff16 = try c.decodeIfPresent(Bool.self, forKey: .tiff16) ?? false
+        resize = try c.decodeIfPresent(ExportResize.self, forKey: .resize) ?? .original
+        background = try c.decodeIfPresent(ExportBackground.self, forKey: .background) ?? .transparent
+        includeEXIF = try c.decodeIfPresent(Bool.self, forKey: .includeEXIF) ?? false
+        includeLocation = try c.decodeIfPresent(Bool.self, forKey: .includeLocation) ?? false
+    }
+
+    /// Whether this export composites onto an opaque colour. TRUE whenever the
+    /// user picked one — and also whenever they picked Transparent for a
+    /// container that can't carry it, because a JPEG has to land on something
+    /// and silently writing black (what an uncomposited alpha channel gives
+    /// you) is the bug this replaces.
+    func flattens(for resolved: ExportFormat) -> Bool {
+        background != .transparent || resolved.canCarryAlpha == false
+    }
+
+    /// The colour it lands on when it does flatten. Transparent-on-a-lossy-
+    /// container falls back to white, matching every other app's default.
+    func flattenColor(for resolved: ExportFormat) -> ExportBackground {
+        background == .transparent ? .white : background
     }
 }

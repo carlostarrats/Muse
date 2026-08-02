@@ -76,15 +76,17 @@ nonisolated enum ImageExportRender {
             image = ExportPipeline.scale(image, to: finalSize)
         }
 
-        // 4. Flatten only where the container can't carry alpha. JPEG and HEIC
-        //    would otherwise composite a transparent source against black;
-        //    PNG/TIFF/WebP keep it, because flattening them is a silent loss.
+        // 4. Background. Transparency survives only when the user asked for it
+        //    AND the container can carry it; otherwise the picture is
+        //    composited onto the chosen colour. A JPEG has to land on
+        //    something, and an uncomposited alpha channel lands on black.
         let extent = image.extent.integral
         guard extent.width >= 1, extent.height >= 1 else {
             throw ExportPipeline.RenderError.encodeFailed
         }
-        if format.keepsAlpha == false {
-            image = image.composited(over: CIImage(color: .white).cropped(to: extent))
+        if job.settings.flattens(for: format) {
+            let color: CIColor = job.settings.flattenColor(for: format) == .black ? .black : .white
+            image = image.composited(over: CIImage(color: color).cropped(to: extent))
         }
 
         // 5. Encode. sRGB throughout — converting wide-gamut RAW here is what

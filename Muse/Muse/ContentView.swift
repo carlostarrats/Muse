@@ -417,11 +417,6 @@ struct ContentView: View {
                     EmptyView()
                 }
             }
-            // Social export — a separate modal family from collectionModal (the
-            // two flags are structurally unrelated), raised from the grid menu,
-            // the hero viewer, or a collection header. Its own modifier because
-            // this chain is already at the type-checker's limit.
-            .modifier(ExportModal())
             .modifier(ShellErrorModals())
             .modifier(TagCommandAlerts())
             // Name prompts (rename collection / file / folder, new subfolder,
@@ -593,6 +588,12 @@ struct ContentView: View {
                 .id(prompt.id)
             }
         }
+        // Export. On the OUTER stack for the same reason as the two modals
+        // above: attached to the split view it drew above the shell's own cards
+        // but UNDER the hero viewer, so pressing Export… from Preview or Edit
+        // opened the card BEHIND the photo and you only found it by closing the
+        // viewer. Every raiser except the grid menu is inside the viewer.
+        .modifier(ExportModal())
         .animation(.easeInOut(duration: 0.18), value: appState.selectedFile?.id)
         .background(
             Button(action: {

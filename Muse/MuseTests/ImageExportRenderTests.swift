@@ -181,6 +181,93 @@ final class ImageExportRenderTests: XCTestCase {
 
     // MARK: - Quality
 
+    // MARK: - Background
+
+    /// A transparent PNG stays transparent. This is the case the card had no
+    /// control for at all, so it also had no test.
+    func testTransparentPNGKeepsItsAlpha() throws {
+        let src = try Self.makeTransparentPNG(width: 200, height: 200, name: "alpha", in: dir)
+        let result = try ImageExportRender.export(
+            .init(sourceURL: src,
+                  settings: ExportSettings(format: .png, background: .transparent)), to: dir)
+        XCTAssertEqual(try properties(of: result.url)[kCGImagePropertyHasAlpha as String] as? Bool,
+                       true)
+        XCTAssertEqual(try centerPixelAlpha(of: result.url), 0, accuracy: 2)
+    }
+
+    func testWhiteBackgroundFlattensAPNG() throws {
+        let src = try Self.makeTransparentPNG(width: 200, height: 200, name: "alphawhite", in: dir)
+        let result = try ImageExportRender.export(
+            .init(sourceURL: src,
+                  settings: ExportSettings(format: .png, background: .white)), to: dir)
+        XCTAssertEqual(try centerPixelAlpha(of: result.url), 255, accuracy: 2)
+        XCTAssertEqual(try centerPixelRed(of: result.url), 255, accuracy: 3)
+    }
+
+    func testBlackBackgroundFlattensAPNG() throws {
+        let src = try Self.makeTransparentPNG(width: 200, height: 200, name: "alphablack", in: dir)
+        let result = try ImageExportRender.export(
+            .init(sourceURL: src,
+                  settings: ExportSettings(format: .png, background: .black)), to: dir)
+        XCTAssertEqual(try centerPixelAlpha(of: result.url), 255, accuracy: 2)
+        XCTAssertEqual(try centerPixelRed(of: result.url), 0, accuracy: 3)
+    }
+
+    /// Transparent + JPEG is the coercion case: the container can't carry it,
+    /// so it lands on white rather than on the black an uncomposited alpha
+    /// channel would give.
+    func testTransparentOnJPEGLandsOnWhiteNotBlack() throws {
+        let src = try Self.makeTransparentPNG(width: 200, height: 200, name: "alphajpeg", in: dir)
+        let result = try ImageExportRender.export(
+            .init(sourceURL: src,
+                  settings: ExportSettings(format: .jpeg, background: .transparent)), to: dir)
+        XCTAssertEqual(try centerPixelRed(of: result.url), 255, accuracy: 4)
+    }
+
+    /// A fully transparent PNG, so the CENTRE pixel is the one under test.
+    private static func makeTransparentPNG(width: Int, height: Int,
+                                           name: String, in directory: URL) throws -> URL {
+        let space = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
+        let ctx = try XCTUnwrap(CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8,
+            bytesPerRow: width * 4, space: space,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        ctx.clear(CGRect(x: 0, y: 0, width: width, height: height))
+        // An opaque stripe along the top edge, so the file isn't uniformly
+        // empty and ImageIO still records real content.
+        ctx.setFillColor(CGColor(red: 0, green: 0.6, blue: 0.2, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: 8))
+        let image = try XCTUnwrap(ctx.makeImage())
+        let url = directory.appendingPathComponent("\(name).png")
+        let dest = try XCTUnwrap(CGImageDestinationCreateWithURL(
+            url as CFURL, UTType.png.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(dest, image, nil)
+        XCTAssertTrue(CGImageDestinationFinalize(dest))
+        return url
+    }
+
+    /// Reads one pixel from the middle of the written file.
+    private func centerPixel(of url: URL) throws -> [UInt8] {
+        let src = try XCTUnwrap(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let image = try XCTUnwrap(CGImageSourceCreateImageAtIndex(src, 0, nil))
+        var px = [UInt8](repeating: 0, count: 4)
+        let space = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
+        try px.withUnsafeMutableBytes { raw in
+            let ctx = try XCTUnwrap(CGContext(
+                data: raw.baseAddress, width: 1, height: 1, bitsPerComponent: 8,
+                bytesPerRow: 4, space: space,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+            ctx.draw(image, in: CGRect(x: -CGFloat(image.width) / 2,
+                                       y: -CGFloat(image.height) / 2,
+                                       width: CGFloat(image.width),
+                                       height: CGFloat(image.height)))
+        }
+        return px
+    }
+
+    private func centerPixelAlpha(of url: URL) throws -> Double { Double(try centerPixel(of: url)[3]) }
+    private func centerPixelRed(of url: URL) throws -> Double { Double(try centerPixel(of: url)[0]) }
+
     // MARK: - WebP
 
     /// Checks the CONTAINER, not the extension — writing `.webp` onto something

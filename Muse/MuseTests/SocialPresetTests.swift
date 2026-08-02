@@ -5,6 +5,10 @@
 //  Pins the ENTIRE preset table — a changed number here is a deliberate
 //  constant edit, never an accident.
 //
+//  Four presets since 2026-08-02, down from twelve. The trim is asserted, not
+//  just the survivors: a test that only checked what remained would go green if
+//  someone quietly re-added Glass.
+//
 
 import XCTest
 @testable import Muse
@@ -14,76 +18,64 @@ final class SocialPresetTests: XCTestCase {
         SocialPreset.all.first { $0.id == id }!
     }
 
-    func testExactlyTwelvePresetsWithUniqueIDs() {
-        XCTAssertEqual(SocialPreset.all.count, 12)
-        XCTAssertEqual(Set(SocialPreset.all.map(\.id)).count, 12)
+    func testExactlyFourPresetsWithUniqueIDs() {
+        XCTAssertEqual(SocialPreset.all.count, 4)
+        XCTAssertEqual(Set(SocialPreset.all.map(\.id)).count, 4)
     }
 
-    func testIGFeedPortrait() {
-        let p = preset("ig-feed-portrait")
-        XCTAssertEqual(p.kind, .fixed(width: 1080, height: 1350))
+    func testTheTableIsExactlyTheseFourInThisOrder() {
+        XCTAssertEqual(SocialPreset.all.map(\.id),
+                       ["instagram", "ig-story", "x", "facebook"])
+    }
+
+    /// The dropped platforms stay dropped. Their absence is the assertion —
+    /// re-adding one is a product decision, not a refactor.
+    func testTheRetiredPresetsAreGone() {
+        let ids = Set(SocialPreset.all.map(\.id))
+        for gone in ["glass", "flickr", "pinterest", "threads",
+                     "ig-feed-portrait", "ig-grid", "ig-square",
+                     "ig-landscape", "ig-carousel"] {
+            XCTAssertFalse(ids.contains(gone), "\(gone) came back")
+        }
+    }
+
+    /// Long-edge, not a fixed box: Instagram accepts 1.91:1 through 4:5, so a
+    /// 1080 long edge hands it a correctly-sized file at the photo's OWN aspect
+    /// with no crop step. That's the reason the four IG variants collapsed.
+    func testInstagram() {
+        let p = preset("instagram")
+        XCTAssertEqual(p.kind, .longEdge(1080))
         XCTAssertEqual(p.quality, 0.88)
         XCTAssertEqual(p.byteTargetKB, 800)
         XCTAssertEqual(p.sharpen, .standard)
         XCTAssertFalse(p.exifDefaultOn)
         XCTAssertFalse(p.uniformMulti)
         XCTAssertFalse(p.storySafeZones)
-        XCTAssertNotNil(p.warningKey)
+        XCTAssertNil(p.warningKey)
+        XCTAssertFalse(p.isFixed, "a fixed Instagram preset would force a crop again")
     }
 
-    func testIGGrid() {
-        let p = preset("ig-grid")
-        XCTAssertEqual(p.kind, .fixed(width: 1080, height: 1440))
+    /// Story is the one genuinely FIXED frame — the platform draws chrome over
+    /// it, which is what the safe zones exist to show.
+    func testInstagramStory() {
+        let p = preset("ig-story")
+        XCTAssertEqual(p.kind, .fixed(width: 1080, height: 1920))
         XCTAssertEqual(p.quality, 0.88)
         XCTAssertEqual(p.byteTargetKB, 800)
         XCTAssertEqual(p.sharpen, .standard)
-        XCTAssertNotNil(p.warningKey)
-    }
-
-    func testIGSquare() {
-        let p = preset("ig-square")
-        XCTAssertEqual(p.kind, .fixed(width: 1080, height: 1080))
-        XCTAssertEqual(p.quality, 0.88)
-        XCTAssertEqual(p.byteTargetKB, 800)
-        XCTAssertNil(p.warningKey)
-    }
-
-    func testIGLandscape() {
-        let p = preset("ig-landscape")
-        XCTAssertEqual(p.kind, .fixed(width: 1080, height: 566))
-        XCTAssertEqual(p.quality, 0.88)
-        XCTAssertEqual(p.byteTargetKB, 800)
-    }
-
-    func testIGStory() {
-        let p = preset("ig-story")
-        XCTAssertEqual(p.kind, .fixed(width: 1080, height: 1920))
+        XCTAssertFalse(p.exifDefaultOn)
         XCTAssertTrue(p.storySafeZones)
-        XCTAssertFalse(p.uniformMulti)
-    }
-
-    func testIGCarousel() {
-        let p = preset("ig-carousel")
-        XCTAssertEqual(p.kind, .fixed(width: 1080, height: 1350))
-        XCTAssertTrue(p.uniformMulti)
-        XCTAssertNotNil(p.warningKey)
-    }
-
-    func testThreads() {
-        let p = preset("threads")
-        XCTAssertEqual(p.kind, .fixed(width: 1080, height: 1350))
-        XCTAssertEqual(p.quality, 0.88)
-        XCTAssertFalse(p.uniformMulti)
+        XCTAssertNil(p.warningKey)
     }
 
     func testX() {
         let p = preset("x")
         XCTAssertEqual(p.kind, .longEdge(4096))
         XCTAssertEqual(p.quality, 0.90)
+        // X carries no byte TARGET — its five hard invariants apply instead.
         XCTAssertNil(p.byteTargetKB)
         XCTAssertEqual(p.sharpen, .light)
         XCTAssertFalse(p.exifDefaultOn)
-        // X's hard invariants apply instead of an advisory.
         XCTAssertNil(p.warningKey)
     }
 
@@ -93,35 +85,22 @@ final class SocialPresetTests: XCTestCase {
         XCTAssertEqual(p.quality, 0.85)
         XCTAssertEqual(p.byteTargetKB, 1000)
         XCTAssertEqual(p.sharpen, .standard)
+        XCTAssertFalse(p.exifDefaultOn)
     }
 
-    func testPinterest() {
-        let p = preset("pinterest")
-        XCTAssertEqual(p.kind, .fixed(width: 1000, height: 1500))
-        XCTAssertEqual(p.quality, 0.90)
-        XCTAssertNil(p.byteTargetKB)
-    }
-
-    func testFlickr() {
-        let p = preset("flickr")
-        XCTAssertEqual(p.kind, .original)
-        XCTAssertEqual(p.quality, 0.95)
-        XCTAssertEqual(p.sharpen, .none)
-        XCTAssertTrue(p.exifDefaultOn)
-    }
-
-    func testGlass() {
-        let p = preset("glass")
-        XCTAssertEqual(p.kind, .longEdge(4096))
-        XCTAssertEqual(p.quality, 0.92)
-        XCTAssertEqual(p.sharpen, .light)
-        XCTAssertTrue(p.exifDefaultOn)
+    /// Nothing left carries EXIF by default. The two that did were the
+    /// photography platforms (Flickr, Glass), and both are gone — so the
+    /// default is now uniformly off and the toggle is the only way on.
+    func testNoPresetShipsMetadataByDefault() {
+        for p in SocialPreset.all {
+            XCTAssertFalse(p.exifDefaultOn, "\(p.id) defaults to carrying EXIF")
+        }
     }
 
     func testOnlyFixedPresetsReportAnAspect() {
         for p in SocialPreset.all {
             XCTAssertEqual(p.isFixed, p.targetAspect != nil, p.id)
         }
-        XCTAssertEqual(preset("ig-square").targetAspect, 1)
+        XCTAssertEqual(preset("ig-story").targetAspect, 1080.0 / 1920.0)
     }
 }
