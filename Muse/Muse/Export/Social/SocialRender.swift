@@ -66,13 +66,6 @@ nonisolated enum SocialRender {
     static let xMaxDimension = 4096
     static let xMaxBytes = 5 * 1024 * 1024
 
-    /// One CIContext for every export in a run. Not the editor's live context —
-    /// this one doesn't cache intermediates (each image is seen once).
-    private static let context = CIContext(options: [
-        .workingColorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB) as Any,
-        .cacheIntermediates: false,
-    ])
-
     static func export(_ job: Job, to directory: URL) throws -> Result {
         // 1. Choke point — edited pixels ride here.
         let out = try OutputRender.forOutput(job.sourceURL)
@@ -81,23 +74,18 @@ nonisolated enum SocialRender {
         // unedited source (nothing was rendered).
         defer { OutputRender.discard(out) }
 
-        // 2. Budget gate.
-        guard let cgSource = CGImageSourceCreateWithURL(out.url as CFURL, nil) else {
+        // 2. Budget gate — header only, so a dimension bomb is refused before
+        //    any raster exists. `ExportPipeline` owns this step for every
+        //    exporter; the errors map back onto this enum so the public cases
+        //    don't change.
+        let sourceSize: CGSize
+        do {
+            sourceSize = try ExportPipeline.headerSize(url: out.url)
+        } catch ExportPipeline.RenderError.tooLarge {
+            throw RenderError.tooLarge
+        } catch {
             throw RenderError.decodeFailed
         }
-        guard ThumbnailCache.withinDecodeBudget(cgSource) else { throw RenderError.tooLarge }
-        guard let sourceProps = CGImageSourceCopyPropertiesAtIndex(cgSource, 0, nil) as? [String: Any],
-              let srcW = sourceProps[kCGImagePropertyPixelWidth as String] as? Int,
-              let srcH = sourceProps[kCGImagePropertyPixelHeight as String] as? Int,
-              srcW > 0, srcH > 0
-        else { throw RenderError.decodeFailed }
-        // The header reports STORED dimensions; an EXIF-rotated source decodes
-        // transposed, so swap before anything reasons about aspect.
-        let orientation = (sourceProps[kCGImagePropertyOrientation as String] as? UInt32) ?? 1
-        let transposed = (5...8).contains(Int(orientation))
-        let sourceSize = transposed
-            ? CGSize(width: srcH, height: srcW)
-            : CGSize(width: srcW, height: srcH)
 
         let targetSize = Self.targetSize(for: job.preset.kind, sourceSize: sourceSize)
 
@@ -112,15 +100,17 @@ nonisolated enum SocialRender {
             decodeMax = Int(min(sourceLongEdge,
                                 max(CGFloat(decodeFloor), CGFloat(decodeCeilingFactor) * outputLongEdge)))
         }
-        let decodeOptions: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceThumbnailMaxPixelSize: max(1, decodeMax),
-            kCGImageSourceCreateThumbnailWithTransform: true,
-        ]
-        guard let decoded = CGImageSourceCreateThumbnailAtIndex(cgSource, 0, decodeOptions as CFDictionary) else {
+        let source: ExportPipeline.DecodedSource
+        do {
+            source = try ExportPipeline.load(url: out.url, decodeLongEdgeMax: decodeMax)
+        } catch ExportPipeline.RenderError.tooLarge {
+            throw RenderError.tooLarge
+        } catch {
             throw RenderError.decodeFailed
         }
-        let decodedSize = CGSize(width: decoded.width, height: decoded.height)
+        let decoded = source.image
+        let sourceProps = source.sourceProperties
+        let decodedSize = source.decodedSize
 
         // 4. Fit compose.
         var ciImage = CIImage(cgImage: decoded)
@@ -196,7 +186,7 @@ nonisolated enum SocialRender {
         let matteColor: CIColor = job.matte == .black ? .black : .white
         let flattened = ciImage.composited(over: CIImage(color: matteColor).cropped(to: extent))
         guard let sRGB = CGColorSpace(name: CGColorSpace.sRGB),
-              let finalCG = context.createCGImage(flattened, from: extent,
+              let finalCG = ExportPipeline.context.createCGImage(flattened, from: extent,
                                                   format: .RGBA8, colorSpace: sRGB)
         else { throw RenderError.encodeFailed }
 
@@ -278,19 +268,10 @@ nonisolated enum SocialRender {
             .transformed(by: CGAffineTransform(translationX: -pixel.minX, y: -pixel.minY))
     }
 
-    /// Exact-dimension scale. `CILanczosScaleTransform` alone lands a fraction
-    /// of a pixel off on some ratios, so the result is cropped to the integral
-    /// target — output dims must be EXACT (matte and crop alike).
+    /// Exact-dimension scale. Lives in `ExportPipeline` now — every exporter
+    /// needs the same one, and a rounding fix has to land for all of them.
     private static func scale(_ image: CIImage, to size: CGSize) -> CIImage {
-        let extent = image.extent
-        guard extent.width > 0, extent.height > 0 else { return image }
-        let scaleY = size.height / extent.height
-        let scaleX = size.width / extent.width
-        let scaled = image.applyingFilter("CILanczosScaleTransform",
-            parameters: [kCIInputScaleKey: scaleY, kCIInputAspectRatioKey: scaleX / scaleY])
-        return scaled
-            .transformed(by: CGAffineTransform(translationX: -scaled.extent.minX, y: -scaled.extent.minY))
-            .cropped(to: CGRect(origin: .zero, size: size))
+        ExportPipeline.scale(image, to: size)
     }
 
     private static func scaleAspectFit(_ image: CIImage, into size: CGSize) -> CIImage {
@@ -351,15 +332,9 @@ nonisolated enum SocialRender {
     }
 
     /// The EditCopyNaming-style collision ladder: `<stem>-<preset.id>.jpg`, then
-    /// `-2`, `-3`… case-insensitively.
+    /// `-2`, `-3`… Lives in `ExportPipeline` now — never-overwrite is a rule
+    /// every export path holds, so it gets one implementation.
     private static func collisionSafeURL(base: String, ext: String, in directory: URL) -> URL {
-        var candidate = directory.appendingPathComponent("\(base).\(ext)")
-        var n = 2
-        let fm = FileManager.default
-        while fm.fileExists(atPath: candidate.path) {
-            candidate = directory.appendingPathComponent("\(base)-\(n).\(ext)")
-            n += 1
-        }
-        return candidate
+        ExportPipeline.collisionSafeURL(base: base, ext: ext, in: directory)
     }
 }
