@@ -300,7 +300,7 @@ nonisolated enum SocialRender {
         else { throw RenderError.encodeFailed }
         var properties: [String: Any] = [kCGImageDestinationLossyCompressionQuality as String: quality]
         if job.includeEXIF,
-           let merged = SocialMetadata.outputProperties(source: sourceProps as CFDictionary,
+           let merged = ExportMetadata.outputProperties(source: sourceProps as CFDictionary,
                                                         includeLocation: job.includeLocation) as? [String: Any] {
             properties.merge(merged) { _, new in new }
         }

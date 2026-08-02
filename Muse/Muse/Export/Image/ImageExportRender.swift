@@ -1,0 +1,151 @@
+//
+//  ImageExportRender.swift
+//  Muse
+//
+//  The general export pipeline. Same discipline as SocialRender — the ORDER is
+//  code, never data:
+//
+//    1  OutputRender.forOutput   — the choke point FIRST, so edits ride out
+//    2  budget gate + oriented decode — orientation BAKED, so no output tag
+//    3  resize                   — never upscales
+//    4  flatten, but only for containers with no usable alpha
+//    5  encode at the chosen format / quality / depth, sRGB
+//    6  verify clean when metadata is off, then write without overwriting
+//
+//  It deliberately does NOT sharpen, the one divergence from SocialRender. A
+//  social export is being FITTED to a platform, and unsharp masking undoes the
+//  resampling softness that fitting causes. A general export is a faithful
+//  conversion, and a sharpening pass nobody asked for is a surprise in someone
+//  else's pixels. darktable doesn't sharpen on export either.
+//
+//  Platform-neutral: Foundation / CoreGraphics / CoreImage / ImageIO only.
+//
+
+import Foundation
+import CoreGraphics
+import CoreImage
+import ImageIO
+import UniformTypeIdentifiers
+
+// `nonisolated`: exports render off-main.
+nonisolated enum ImageExportRender {
+    struct Job: Sendable {
+        /// The ORIGINAL library URL — `forOutput` resolves any edit stack.
+        var sourceURL: URL
+        var settings: ExportSettings
+
+        init(sourceURL: URL, settings: ExportSettings) {
+            self.sourceURL = sourceURL
+            self.settings = settings
+        }
+    }
+
+    struct Result: Sendable {
+        let url: URL
+        let pixelSize: CGSize
+        let bytes: Int
+    }
+
+    static func export(_ job: Job, to directory: URL) throws -> Result {
+        let format = job.settings.format.resolved(for: job.sourceURL)
+
+        // 1. Choke point. A 16-bit request renders its temp at 16-bit rather
+        //    than inflating an 8-bit one and calling it deep.
+        let preferred: OutputFormat? = (format == .tiff && job.settings.tiff16) ? .tiff16 : nil
+        let out = try OutputRender.forOutput(job.sourceURL, preferring: preferred)
+        // The render temp exists only to be decoded below; collect it here
+        // rather than leaving it for the 24 h launch sweep. No-op for an
+        // unedited source (nothing was rendered).
+        defer { OutputRender.discard(out) }
+
+        // 2. Budget gate on the header, then a bounded decode. Reading the
+        //    header first is what lets the decode ceiling be chosen from the
+        //    OUTPUT size — decoding 40 MP to write 1000px wastes both.
+        let headerSize = try ExportPipeline.headerSize(url: out.url)
+        let planned = job.settings.resize.targetSize(for: headerSize)
+        let source = try ExportPipeline.load(
+            url: out.url,
+            decodeLongEdgeMax: Int(max(1, max(planned.width, planned.height).rounded())))
+
+        // 3. Resize. Recomputed against what actually DECODED: the ImageIO
+        //    ceiling can land a pixel or two off on odd ratios, and the output
+        //    dimensions have to be exact.
+        var image = CIImage(cgImage: source.image)
+        let finalSize = job.settings.resize.targetSize(for: source.decodedSize)
+        if finalSize != source.decodedSize {
+            image = ExportPipeline.scale(image, to: finalSize)
+        }
+
+        // 4. Flatten only where the container can't carry alpha. JPEG and HEIC
+        //    would otherwise composite a transparent source against black;
+        //    PNG/TIFF/WebP keep it, because flattening them is a silent loss.
+        let extent = image.extent.integral
+        guard extent.width >= 1, extent.height >= 1 else {
+            throw ExportPipeline.RenderError.encodeFailed
+        }
+        if format.keepsAlpha == false {
+            image = image.composited(over: CIImage(color: .white).cropped(to: extent))
+        }
+
+        // 5. Encode. sRGB throughout — converting wide-gamut RAW here is what
+        //    makes an export look the same wherever it lands.
+        guard let sRGB = CGColorSpace(name: CGColorSpace.sRGB) else {
+            throw ExportPipeline.RenderError.encodeFailed
+        }
+        let deep = (format == .tiff && job.settings.tiff16)
+        guard let cgImage = ExportPipeline.context.createCGImage(
+            image, from: extent,
+            format: deep ? .RGBA16 : .RGBA8,
+            colorSpace: sRGB)
+        else { throw ExportPipeline.RenderError.encodeFailed }
+
+        let data = try encode(cgImage, format: format, job: job,
+                              sourceProperties: source.sourceProperties)
+
+        // 6. Verify, then write. A metadata-off output must be PROVABLY clean,
+        //    not merely constructed to be — the same rule the social and Drive
+        //    paths hold.
+        if job.settings.includeEXIF == false {
+            guard ImageMetadataStripper.isClean(data) else {
+                throw ExportPipeline.RenderError.verifyFailed
+            }
+        }
+        let stem = job.sourceURL.deletingPathExtension().lastPathComponent
+        let dest = ExportPipeline.collisionSafeURL(
+            base: stem,
+            ext: job.settings.format.fileExtension(for: job.sourceURL),
+            in: directory)
+        try data.write(to: dest, options: .atomic)
+        return Result(url: dest,
+                      pixelSize: CGSize(width: cgImage.width, height: cgImage.height),
+                      bytes: data.count)
+    }
+
+    /// WebP goes through our own encoder; everything else through ImageIO.
+    private static func encode(_ image: CGImage, format: ExportFormat, job: Job,
+                               sourceProperties: [String: Any]) throws -> Data {
+        if format == .webp {
+            return try WebPEncoder.encode(image, quality: job.settings.quality)
+        }
+        let type = format.utType(for: job.sourceURL).identifier as CFString
+        guard let mutable = CFDataCreateMutable(nil, 0),
+              let dest = CGImageDestinationCreateWithData(mutable, type, 1, nil)
+        else { throw ExportPipeline.RenderError.encodeFailed }
+
+        var properties: [String: Any] = [:]
+        if format.supportsQuality {
+            properties[kCGImageDestinationLossyCompressionQuality as String] = job.settings.quality
+        }
+        if job.settings.includeEXIF,
+           let merged = ExportMetadata.outputProperties(
+                source: sourceProperties as CFDictionary,
+                includeLocation: job.settings.includeLocation) as? [String: Any] {
+            properties.merge(merged) { _, new in new }
+        }
+        CGImageDestinationAddImage(dest, image, properties as CFDictionary)
+        guard CGImageDestinationFinalize(dest) else {
+            throw ExportPipeline.RenderError.encodeFailed
+        }
+        return mutable as Data
+    }
+}

@@ -1,5 +1,5 @@
 //
-//  SocialMetadataTests.swift
+//  ExportMetadataTests.swift
 //  MuseTests
 //
 
@@ -7,7 +7,7 @@ import XCTest
 import ImageIO
 @testable import Muse
 
-final class SocialMetadataTests: XCTestCase {
+final class ExportMetadataTests: XCTestCase {
     private func fixtureSourceProperties() -> CFDictionary {
         [
             kCGImagePropertyOrientation as String: 6,
@@ -34,7 +34,7 @@ final class SocialMetadataTests: XCTestCase {
     }
 
     private func output(includeLocation: Bool) -> [String: Any] {
-        SocialMetadata.outputProperties(source: fixtureSourceProperties(),
+        ExportMetadata.outputProperties(source: fixtureSourceProperties(),
                                         includeLocation: includeLocation) as! [String: Any]
     }
 

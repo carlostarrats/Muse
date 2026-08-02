@@ -51,14 +51,28 @@ nonisolated enum OutputRender {
     /// the worse outcome, and the fallback is visible (the user sees the
     /// original), not silent corruption.
     static func forOutput(_ url: URL) throws -> RenderedOutput {
+        try forOutput(url, preferring: nil)
+    }
+
+    /// `preferring` overrides the container the render TEMP is written in.
+    /// The general export uses it so a 16-bit request renders a 16-bit temp
+    /// rather than inflating an 8-bit one and calling it deep — a depth claim
+    /// the bytes wouldn't support.
+    ///
+    /// An ADDED overload, never a bypass: `RenderedOutput`'s init stays
+    /// `fileprivate` and this is still the only way to obtain one, so the
+    /// choke point (audit `OUT-1`) is intact. `nil` keeps the original
+    /// behaviour exactly.
+    static func forOutput(_ url: URL, preferring: OutputFormat?) throws -> RenderedOutput {
         guard let hash = EditStackIndex.stackHash(for: url),
               let stack = EditStackIndex.resolvedStack(for: url),
               EditRenderer.canRender(stack)
         else { return RenderedOutput(url: url, stackHash: nil) }
 
-        let format: OutputFormat = EditRenderer.isRawURL(url)
-            ? .jpeg                                  // RAW can't be written back
-            : .matchingSource(url)
+        let format: OutputFormat = preferring
+            ?? (EditRenderer.isRawURL(url)
+                ? .jpeg                              // RAW can't be written back
+                : .matchingSource(url))
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(tempDirectoryName, isDirectory: true)
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

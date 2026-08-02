@@ -2,13 +2,16 @@
 //  OutputRenderTests.swift
 //  MuseTests
 //
-//  forOutput is identity today (originals pass through unrendered).
+//  An unedited file passes through unrendered; an edited one renders.
 //  RenderedOutput cannot be constructed outside OutputRender.swift — the ONLY
 //  way this test file obtains one is by calling forOutput, which is the
-//  compile-time proof the export choke point can't be bypassed.
+//  compile-time proof the export choke point can't be bypassed. The
+//  `preferring:` cases exist to prove the added overload didn't open a second
+//  door.
 //
 
 import XCTest
+import ImageIO
 @testable import Muse
 
 final class OutputRenderTests: XCTestCase {
@@ -138,5 +141,37 @@ final class OutputRenderTests: XCTestCase {
         OutputRender.sweepRenderTemps()
         XCTAssertTrue(FileManager.default.fileExists(atPath: out.url.path),
                       "a temp minutes old is still in use — the sweep is age-based")
+    }
+
+    /// The `preferring:` overload must not become a second way to construct a
+    /// RenderedOutput. An unedited file takes exactly the same pass-through it
+    /// always did — the choke point has one behaviour, not two.
+    func testPreferringLeavesAnUneditedFileUntouched() throws {
+        let url = try EditRenderTestSupport.writeFixture(width: 32, height: 32,
+                                                         orientation: 1, named: "output-plain")
+        EditStackIndex.rebuild(entries: [])
+        let out = try OutputRender.forOutput(url, preferring: .tiff16)
+        XCTAssertEqual(out.url, url)
+        XCTAssertNil(out.stackHash)
+    }
+
+    /// An EDITED file asked for 16-bit renders its temp at 16-bit, rather than
+    /// producing an 8-bit temp the exporter would then inflate.
+    func testPreferringRendersTheTempInTheRequestedContainer() throws {
+        let url = try EditRenderTestSupport.writeFixture(width: 48, height: 48,
+                                                         orientation: 1, named: "output-deep")
+        var stack = EditStack.fresh()
+        stack.setTone { $0.exposureEV = 1 }
+        EditStackIndex.rebuild(entries: [(path: url.standardizedFileURL.path,
+                                          stackJSON: try EditStackCodec.encode(stack),
+                                          hash: EditStackCodec.hash(stack))])
+        EditStackIndex.installProvider(LiveEditStackProvider())
+        let out = try OutputRender.forOutput(url, preferring: .tiff16)
+        defer { OutputRender.discard(out) }
+        XCTAssertNotEqual(out.url, url, "an edited file must render to a temp")
+        XCTAssertEqual(out.url.pathExtension, "tif")
+        let src = try XCTUnwrap(CGImageSourceCreateWithURL(out.url as CFURL, nil))
+        let props = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any])
+        XCTAssertEqual(props[kCGImagePropertyDepth as String] as? Int, 16)
     }
 }

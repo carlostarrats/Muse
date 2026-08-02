@@ -366,8 +366,13 @@ nonisolated enum EditRenderer {
         guard extent.width >= 1, extent.height >= 1, extent.width.isFinite, extent.height.isFinite
         else { throw RenderError.decodeFailed }
         let context = RenderContexts.makeExportContext()
+        // `.tiff16` is the only deep container Muse writes. Building RGBA8 and
+        // labelling the result 16-bit is a quality claim the bytes don't
+        // support — which is what this case did before the general export gave
+        // a user a way to actually ask for it.
+        let ciFormat: CIFormat = (format == .tiff16) ? .RGBA16 : .RGBA8
         guard let cgImage = context.createCGImage(rendered.ciImage, from: extent,
-                                                  format: .RGBA8,
+                                                  format: ciFormat,
                                                   colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
         else { throw RenderError.renderFailed }
         try write(cgImage, to: dest, format: format)
