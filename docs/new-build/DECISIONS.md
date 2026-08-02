@@ -9,6 +9,15 @@ settled record, written before build. Product-level decisions live in
 `muse-photo-foundation.md` §13 (authoritative decision log); this file is the
 build-level layer future specs must not contradict.*
 
+> **Read this first (2026-08-01).** This file is a **decision archive — the
+> "why", not the "what is true today"**. Its volatile-facts block was deleted;
+> see "Current state — MOVED" below for where each kind of live fact now lives.
+> Two whole categories of section here are **historical or hypothetical**:
+> every "as built" section is a point-in-time snapshot from the spec that
+> shipped it, and every **Spec 08 / Spec 09** section describes work that was
+> **never built**. Both are labelled in place. Trust `CLAUDE.md` and
+> `FEATURE-LEDGER.md` for current state; trust this file for reasoning.
+
 *Updated 2026-07-31: **Specs 01–07 are built** (branch `new-product-build-1`), so
 the "no Spec 01–09 code exists" note above no longer holds for them. Migrations
 run through **v23** (Specs 06 and 07 added none); future specs continue at v24. The
@@ -18,75 +27,40 @@ wins.*
 
 ---
 
-## Current state — read this first
+## Current state — MOVED (2026-08-01)
 
-*The facts in this block CHANGE as specs land, so they are stated here ONCE and
-nowhere else. **This block outranks every other section, including the "as-built"
-ones** — those are point-in-time snapshots written by the spec that shipped them and
-go stale the moment the next spec lands. Verified against the tree 2026-07-31 after
-Spec 07. A spec that changes any of these updates THIS block rather than restating
-it in its own section.*
-
-- **Next migration version: `v24`.** The chain ends at `v23_edit_luts`. Per spec:
-  v13 (01) · v14–v17 (02) · v18–v19 (03) · v20–v21 (04) · v22–v23 (05) · none (06, 07).
-  Note `v22_photo_stats` ALTERs the existing `photo_traits` table rather than creating
-  one, despite the name.
-- **App-initiated network paths — three states, don't conflate them.** Today (Specs
-  01–07 built): (1) Sparkle update check, (2) Google Drive publish, (3)
-  `announcements.json`, (4) search-model download. Spec 08 ADDS the custom-domain
-  provisioning Worker. The deferred Mac App Store migration REMOVES Sparkle. The
-  recipient-browser portfolio `manifest.json` fetch is page traffic, not an app path,
-  in all three states. Everything else stays blocked.
-- **Distribution today is DIRECT with Sparkle self-update, not the Mac App Store.**
-  The MAS move is deferred to `docs/superpowers/plans/deferred-mac-app-store-migration.md`
-  and has NOT run: Sparkle is in the tree, the `temporary-exception.mach-lookup`
-  entitlements are still present, and `VALID_ARCHS` is `arm64 arm64e i386 x86_64`. The "Platform & distribution" section below describes the POST-migration
-  target state, not the current one. StoreKit plumbing is inert scaffolding until it runs.
-- **Localization is INCOMPLETE: 992 keys, 146 without an `fr` value** (from Specs 03
-  and 06 — Takeout/Lightroom-preset/cull/compare copy). Per CLAUDE.md this makes those
-  features unfinished. Any per-spec "all N keys translated" claim below was true only
-  when written.
-- **The app SHIPS UNIVERSAL and must keep compiling for x86_64** (owner
-  correction, 2026-08-01). It is tuned for Apple Silicon but has to run on Intel
-  Macs, and it did until Spec 03: `ClipVectors.swift` used `Float16`, which does
-  not exist on x86_64, so **a Release (universal) build of this branch was
-  impossible** — `xcodebuild -configuration Release` failed outright. It went
-  unnoticed for the whole build AND the review because a Debug build compiles
-  only the active arch, so on Apple Silicon everything looked fine. Fixed by
-  giving `ClipVectors` one wire format (IEEE-754 binary16 LE) and two encoders —
-  hardware `Float16` on arm64, a portable bit-twiddle elsewhere — held together
-  bit-for-bit by `ClipVectorsPortabilityTests` across all 65,536 half patterns.
-  **This supersedes foundation §9 / decision #24's "Apple Silicon only, M1
-  floor"**, which is now a TUNING target, not a build target. It also removes
-  the `-exportLocalizations` blocker, which had the same single cause.
-- **Specs 01–07 have been REVIEWED (2026-08-01) and the review's fixes are on
-  `new-product-build-1`.** Findings, per-slice, are in
-  `docs/new-build/REVIEW-FINDINGS.md`; the durable rules it established are in
-  `docs/durable-constraints.md`. Three things in this block changed as a result:
-  (a) the four launch backfills are now ONE serial chain (`LaunchBackfills`),
-  throttle-aware and single-flighted through `BackfillCoordinator`; (b) the
-  database now runs **WAL + `synchronous = NORMAL`** — `journal_mode` is
-  persistent, so every existing library converts on first open; (c) two of Pass
-  A's open questions are settled by runtime measurement, not reasoning: a
-  sandboxed Muse **can** exec `/usr/bin/unzip` (pinned by
-  `SandboxProcessTests`, so `ClipModelStore` works), and `CIImage(contentsOf:)`
-  + a scale transform does **not** force a full-resolution decode (measured:
-  59 ms at 1024 px vs 70 ms for a bounded ImageIO decode of the same 24 MP
-  file, and 73 ms at 4096 px — Core Image fuses the scale into the graph). The
-  RAW half of that finding was real and is fixed (`CIRAWFilter.scaleFactor`).
-- **What the review could NOT verify at runtime** — everything needing hands on
-  the GUI: hero open/close, the editor's sliders/curve/eyedropper/versions/
-  presets/Edit-a-Copy, compare and cull, all five import sources, social export,
-  Drive share and portfolio, and the backup/restore round trip. Static review
-  and the unit suite cover them; nobody has driven them.
-- **Backup does not carry edit data.** `BackupOccurrence` has no edit fields and
-  `BackupArchive.currentSchema` is 1, so edits, versions, presets and LUTs do NOT
-  survive a backup round trip. Spec 09's "Backup amendment A2" closes this; until then
-  it is an open gap in shipped Specs 04–05, not a documentation error.
-
+> **This block used to live here and has been deleted, deliberately.**
+>
+> It held volatile facts — migration version, network paths, distribution mode,
+> localization counts, what had and hadn't been verified — and claimed to
+> "outrank every other section". That made it the one place in the repo most
+> likely to be both authoritative-sounding and wrong, and by 2026-08-01 it was
+> wrong three times over: it said localization was incomplete (992 keys, 146
+> untranslated) when the catalog holds **1,002 keys with 0 translatable strings
+> untranslated**; it said backup does not carry edit data, which Spec 09
+> amendment A2 closed in review round 3; and it listed the whole GUI as
+> unverified, which review round 7 partly closed.
+>
+> Volatile facts now live in exactly one place each:
+>
+> - **`CLAUDE.md`** — migration version, distribution, network policy,
+>   localization state, what's merged where. Loaded every session.
+> - **`docs/new-build/FEATURE-LEDGER.md`** — per-feature verification state
+>   (automated / static / runtime) and the standing gaps.
+> - **`docs/durable-constraints.md`** — the rules that must not break.
+> - **`docs/new-build/REVIEW-LENSES.md`** — which review lenses have been run.
+>
+> **What this file is now:** the *why* archive. The sections below record the
+> reasoning behind build-level decisions — what was chosen, what was rejected,
+> and on what grounds. That is knowledge the code cannot reconstruct, and it is
+> the reason this file still exists. It is NOT a status document; do not add a
+> volatile fact to it, and do not trust a status claim you find in it.
 ---
 
 ## Spec 01 as built (2026-07-31, `new-product-build-1`)
+
+> **HISTORICAL SNAPSHOT.** What shipped at that date, not what is true now.
+> For current state see `CLAUDE.md` and `docs/new-build/FEATURE-LEDGER.md`.
 
 ### Scope actually shipped
 
@@ -259,6 +233,9 @@ and additions:
 
 ## Spec 02 as built (2026-07-31, `new-product-build-1`)
 
+> **HISTORICAL SNAPSHOT.** What shipped at that date, not what is true now.
+> For current state see `CLAUDE.md` and `docs/new-build/FEATURE-LEDGER.md`.
+
 *Where this disagrees with the pre-build sections below, this section wins.*
 
 ### Scope actually shipped
@@ -270,7 +247,7 @@ and additions:
 - **NOT built:** the token-search `PerfBaseline` metric (the plan's own conditional
   Task 15 — it needs a 50k synthetic `photo_meta` fixture; deferred to the harness).
 - **v13 already existed** (Spec 01), so this spec added v14–v17 only. (Next migration
-  version: see Current state.)
+  version: see `CLAUDE.md`.)
 
 ### Superseded Spec 01 units
 
@@ -407,10 +384,15 @@ and additions:
 
 ## Platform & distribution
 
+> **TARGET STATE, NOT CURRENT.** This section describes the world after the
+> deferred Mac App Store migration. Today the app ships **direct with
+> Sparkle**, universal (`x86_64 arm64`), and the StoreKit plumbing is inert
+> scaffolding. See `docs/superpowers/plans/deferred-mac-app-store-migration.md`.
+
 > **TARGET STATE, NOT CURRENT.** This section describes where the app lands after the
 > deferred Mac App Store migration runs. It has not run. What ships today — direct
 > distribution with Sparkle, non-arm64-only `VALID_ARCHS`, the mach-lookup entitlements
-> still in place — is in Current state at the top of this file.
+> still in place — is in `CLAUDE.md`.
 
 - Distribution is Mac App Store exclusively. No Sparkle, no DMG/appcast/GitHub-release
   tooling, no direct distribution. StoreKit 2 for all payments; TestFlight for betas;
@@ -1741,6 +1723,9 @@ and additions:
 
 ## Spec 06 as built (2026-07-31, `new-product-build-1`)
 
+> **HISTORICAL SNAPSHOT.** What shipped at that date, not what is true now.
+> For current state see `CLAUDE.md` and `docs/new-build/FEATURE-LEDGER.md`.
+
 *Where this disagrees with the "Import surface (Spec 06)" sections above, this
 section wins.*
 
@@ -2022,6 +2007,9 @@ section wins.*
 
 ## Spec 07 as built (2026-07-31, `new-product-build-1`)
 
+> **HISTORICAL SNAPSHOT.** What shipped at that date, not what is true now.
+> For current state see `CLAUDE.md` and `docs/new-build/FEATURE-LEDGER.md`.
+
 *Where this disagrees with the "Share manifest v2 & page layouts (Spec 07)",
 "Portfolio mode (Spec 07)" or "Social export (Spec 07)" sections above, this section
 wins.*
@@ -2144,6 +2132,9 @@ wins.*
 
 ## Domain-tier infrastructure (Spec 08)
 
+> **NEVER BUILT.** Spec 08/09 were not implemented; migrations end at v23.
+> This records the intended design, not code that exists.
+
 - **Spec 08 adds NO migrations** — future specs still continue at v24 — and changes
   **nothing in `web/share/`**: the same static deployment serves every hostname (the
   manifest rides the fragment, origin-independent by construction).
@@ -2162,6 +2153,9 @@ wins.*
   the Worker validator AND pre-validated app-side.
 
 ## Provisioning Worker (Spec 08)
+
+> **NEVER BUILT.** Spec 08/09 were not implemented; migrations end at v23.
+> This records the intended design, not code that exists.
 
 - `workers/domains/`: `worker.js` (host dispatch + scheduled), `router.js` (pure
   handlers taking injected `{verify, cf, kv, now}`), `verify.js`, `apple.js`,
@@ -2214,6 +2208,9 @@ wins.*
   transaction id (churn brake; the JWS is the security boundary).
 
 ## App domain module & link base (Spec 08)
+
+> **NEVER BUILT.** Spec 08/09 were not implemented; migrations end at v23.
+> This records the intended design, not code that exists.
 
 - `Sharing/Domains/`: `DomainConfig.swift` (`workerBaseURL`, `apexZone`,
   `cnameTarget`, `statusPollSeconds = 30`, `lapseGraceDays = 30`, `requestTimeout =
@@ -2281,12 +2278,18 @@ wins.*
 
 ## Perf baseline additions (Spec 08)
 
+> **NEVER BUILT.** Spec 08/09 were not implemented; migrations end at v23.
+> This records the intended design, not code that exists.
+
 - New recorded rows: Worker `POST /v1/hostname` end-to-end recorded with no target
   (network-bound) · `verify.js` fixture verification recorded manually, not CI ·
   launch refresher with nothing configured = zero network calls (code-shape fact,
   noted in the report).
 
 ## Pricing & trial (Spec 09)
+
+> **NEVER BUILT.** Spec 08/09 were not implemented; migrations end at v23.
+> This records the intended design, not code that exists.
 
 - **Pricing is NOT decided** (owner statement 2026-07-30: "none of the pricing is
   decided"). ASC working placeholders — unlock **$49.99**, sharing **$19.99/yr** — exist
@@ -2341,6 +2344,9 @@ wins.*
 
 ## Launch flips (Spec 09)
 
+> **NEVER BUILT.** Spec 08/09 were not implemented; migrations end at v23.
+> This records the intended design, not code that exists.
+
 - Build-time flips (land in Spec 09's build): `TrialPolicy.current.enforced = true` and
   `SharingTier.enforced = true` (its single `ShareCollectionButton` call site is
   untouched; `SharingTierTests` updated).
@@ -2352,6 +2358,11 @@ wins.*
 - `ITSAppUsesNonExemptEncryption = false` added to Info.plist (HTTPS-only exemption).
 
 ## Backup amendment A2 (Spec 09 → Spec 04)
+
+> **BUILT** — the one part of Spec 09 that shipped. Implemented in review
+> round 3 (2026-08-01), closing ledger gap G2: stacks, versions, presets and
+> LUT bytes now ride the `.muselibrary` archive. Pinned by
+> `BackupEditRoundTripTests` and `BackupArchiveCompatTests`.
 
 - **Spec 04/05's "the `.muselibrary` archive carries the DB" was factually wrong** —
   the shipped backup is a JSON encode of `BackupArchive` (occurrences carry tags +
@@ -2383,6 +2394,9 @@ wins.*
 
 ## Launch validation (Spec 09)
 
+> **NEVER BUILT.** Spec 08/09 were not implemented; migrations end at v23.
+> This records the intended design, not code that exists.
+
 - `scripts/make-synthetic-library.swift`: checked-in, zero-dependency, seeded generator
   of N unique-content-hash 64×64 JPEGs (≤ 1,000/folder) with EXIF/GPS variety written
   through the same property keys `PhotoHeaderReader` parses; ~2 GB at 500k.
@@ -2398,6 +2412,9 @@ wins.*
   passes and is recorded in the validation doc — earned, never asserted first.
 
 ## Site & metadata (Spec 09)
+
+> **NEVER BUILT.** Spec 08/09 were not implemented; migrations end at v23.
+> This records the intended design, not code that exists.
 
 - `web/share` `about`/`privacy`/`terms` are rewritten for a paid PolyForm-Shield app
   (they currently claim "free, open-source" — false at launch). `about.html` keeps its
@@ -2489,6 +2506,9 @@ wins.*
 
 ## Spec 03 as-built (culling & search phase 2)
 
+> **HISTORICAL SNAPSHOT.** What shipped at that date, not what is true now.
+> For current state see `CLAUDE.md` and `docs/new-build/FEATURE-LEDGER.md`.
+
 Binding facts from the actual implementation. Where this differs from the plan,
 this section wins.
 
@@ -2497,7 +2517,7 @@ this section wins.
 - `v18_clip_embeddings` then `v19_photo_traits`, both registered in that order
   after `v17_stacks`. (This bullet formerly claimed the chain ended at v19 and that
   this superseded the v24 note — true when Spec 03 shipped, wrong since Spec 04. Next
-  migration version: see Current state.)
+  migration version: see `CLAUDE.md`.)
 - `photo_traits(file_id PK cascade, traits_scanned_hash, traits_version,
   face_count, largest_face_frac, face_quality, pet_count, sharpness)` + indexes on
   `face_count` and `pet_count`. Content-keyed, NOT `(file_id, parent_dir)`.
@@ -2533,7 +2553,7 @@ this section wins.
   `ClipPromptVectors.refreshAll()`.
 - Adds the search-model download as an app-initiated network path. (The full
   path list, and how it differs before/after Spec 08 and the MAS migration, is in
-  Current state — do not count paths from this bullet alone.)
+  `CLAUDE.md`'s network policy — do not count paths from this bullet alone.)
 
 ### Search
 
@@ -2660,6 +2680,9 @@ this section wins.
 
 ## Spec 04 as-built (editing engine)
 
+> **HISTORICAL SNAPSHOT.** What shipped at that date, not what is true now.
+> For current state see `CLAUDE.md` and `docs/new-build/FEATURE-LEDGER.md`.
+
 *2026-07-31, `new-product-build-1`. Where this disagrees with the pre-build
 "Spec 04" sections above, this section wins.*
 
@@ -2675,7 +2698,7 @@ this section wins.
   identity functions. This spec made them live; it did not build them.
 - **NOT built:** the `PerfBaseline` rows for this spec's five measurements (the
   harness gap Spec 03 also left).
-- (Next migration version: see Current state. This bullet formerly said v22, true only
+- (Next migration version: see `CLAUDE.md`. This bullet formerly said v22, true only
   until Spec 05 took v22–v23.)
 
 ### Model — as built
@@ -2830,10 +2853,13 @@ this section wins.
   x86_64, and the extractor builds universal. Pre-existing Spec-03 breakage; Spec 04's
   French strings were written into `Localizable.xcstrings` directly (all 728 keys then
   in the catalog had an `fr` value — that was a point-in-time count, not a standing
-  claim; current translation status is in Current state). Fix `ClipVectors` before
+  claim; current translation status is in `CLAUDE.md`). Fix `ClipVectors` before
   relying on the export workflow again.
 
 ## Spec 05 as-built (editing readouts, learning layer, looks & LUTs)
+
+> **HISTORICAL SNAPSHOT.** What shipped at that date, not what is true now.
+> For current state see `CLAUDE.md` and `docs/new-build/FEATURE-LEDGER.md`.
 
 *2026-07-31, `new-product-build-1`. Where this disagrees with the pre-build
 "Spec 05" sections above, this section wins.*

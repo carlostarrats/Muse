@@ -21,7 +21,9 @@ Constraints:
 ## Ground truth, in precedence order
 
 1. `docs/new-build/DECISIONS.md` — binding build-level record. **Read its
-   "Current state" block first**; the per-spec "as-built" sections are point-in-time
+   decision ARCHIVE — the "why", not current state (its volatile-facts block was
+   deleted 2026-08-01 after going stale three ways). For current facts read
+   `CLAUDE.md` and `FEATURE-LEDGER.md`**; the per-spec "as-built" sections are point-in-time
    snapshots and some are stale.
 2. `CLAUDE.md` → "Durable constraints & gotchas" — must-not-break rules. Each encodes a
    bug that already shipped once.
@@ -82,7 +84,8 @@ cell rather than as something nobody thought to look for. Write each table into
 5. **Image decode sites.** Every one, whether it is automatic or user-initiated, and
    whether it is guarded by `withinDecodeBudget`.
 6. **Network.** Every `URLSession` call site, the user action that gates it, and what it
-   sends. Compare against DECISIONS' Current state list.
+   sends. Compare against the network policy in `CLAUDE.md`, and note that
+   `./scripts/audit-invariants.sh` check NET-1 enforces it mechanically.
 7. **Identity rewrites.** Every path that rewrites `parent_dir` or `file_id`, and whether
    it carries tags, notes AND edits (Spec 04's tables are the new ones).
 8. **`AppState` surface.** Every new `@Published`, and what re-evaluates when it fires.
@@ -220,7 +223,8 @@ confirms the predictions and catches the narrow class that only appears in motio
 
 Re-run the full suite, re-verify the Pass A tables (later fixes create new call sites),
 then update documentation: `CLAUDE.md` durable constraints for any new rule this review
-establishes, `DECISIONS.md` — its **Current state** block for anything volatile, not a new
+establishes, `DECISIONS.md` for build-level REASONING (never for volatile facts —
+`CLAUDE.md` and `FEATURE-LEDGER.md` own those), not a new
 per-spec section — `docs/architecture-map.md` for new or moved files, and a
 `docs/session-log.md` entry for the review. Then commit.
 

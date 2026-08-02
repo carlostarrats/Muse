@@ -7831,3 +7831,107 @@ No new user-facing strings, so localization is unchanged at 1,002 keys.
 Suite 1,806 → **1,818**, 2 skipped, 0 failures; UI tests 6/6; Release build
 warning-free. G1 — nobody has driven the GUI — is untouched and remains the
 branch's only substantive gap.
+
+---
+
+## 2026-08-01 — review round 7: enforcement, the GUI pass, and the chip row (`new-product-build-1`)
+
+The prompt that started this was a meta one: *"you keep finding things each round
+yet keep saying we need to move on — how do we stop me having to re-issue this?"*
+That is a fair description of rounds 1–6. Each found real bugs, and each found
+them by running lenses the previous rounds hadn't thought of — which works, and
+never terminates, because the lens space is unbounded. There was no definition of
+done, so "review until green" could not be satisfied.
+
+So round 7 changed the method rather than adding a seventh set of angles.
+
+**Two artifacts now supply an exit criterion.** `scripts/audit-invariants.sh` is
+12 checks, each a rule that was broken once, shipped, and cost a session (AV
+no-network, the QuickLook exclusion, the four network paths, remote-body bounds,
+`Int(exactly:)`, trash-not-unlink, the `OutputRender` choke point, decode budgets,
+Debug entitlements, `Editing/` neutrality, the `Float16` arch guard). It is a
+shell script rather than an XCTest on purpose: `EditingModuleImportTests` already
+tries the source-tree-grep approach and **skips** here, because the test host is
+the sandboxed app and the checkout lives in `~/Documents`. A check inside the
+suite passes vacuously exactly where it is needed. `docs/new-build/REVIEW-LENSES.md`
+records every lens ever run plus the ones not yet run, so a round means "run the
+registry", and static review is *finished* when the unrun list is empty and the
+audit is green.
+
+Two of the checks were wrong when first written, both the same way: they matched
+a rule being DISCUSSED in a comment as the rule being BROKEN. `ENT-1` flagged the
+very comment explaining that Debug omits iCloud. A checker that cries wolf gets
+ignored, which is worse than no checker, so both strip comments now. `ARCH-1` was
+also rewritten from file-level to line-level, because "does this file mention
+`#if arch(arm64)`" would have passed the exact regression it exists to catch —
+`ClipVectors` has two correctly-guarded uses that would alibi a third bad one.
+**Every check was negative-tested**: green on a clean tree, then verified to FAIL
+on an injected violation.
+
+**R7-1 — Spec 03 §5 "region similarity" was specified and never built.** Found by
+a spec→code symbol sweep. The spec describes a crosshair, a marquee drag,
+`RegionSearch.minSide`, crop embedding and an Escape branch; only the pure helper
+`Components/RegionMath.swift` exists, with tests. Third instance of this branch's
+signature failure after the grid cull badge and the five missing Escape branches:
+the testable half lands, the UI that makes it reachable does not, and the suite
+stays green. `RegionMath` is kept deliberately as the evidence. Building the
+feature is a product decision, left to the owner.
+
+Two dead files removed (`BreadcrumbView`, `ImageDetailPanel`). Checked and clean:
+schema downgrade, nil-`dbQueue` fallout, observer lifetimes, accessibility on the
+new surfaces. Recorded rather than re-spent later.
+
+**Then the owner pushed back — "you can drive the ui" — and was right.** The
+block had been osascript, refused with -1743 because the terminal holds no
+Automation TCC grant. XCUITest gets automation rights through the **test runner**
+and never needed it. `MuseUITests` also turned out to be three untouched Xcode
+template stubs asserting nothing, so "6 UI tests passing" had meant nothing.
+
+`MuseSurfaceDriveTests` now drives the real app, and every surface was confirmed
+by looking at the screenshot rather than by the test going green: the Spec 04
+editor (full slider panel, undo/redo, before/after), Spec 05 readouts (Tone Zones,
+a live Curve histogram, and the teaching copy computing "1.2% of pixels are
+clipped"), Spec 03 compare and cull, duplicates listing a real pair, all five
+import panels, backup's save panel, settings, and Escape on every modal. **G1 is
+partially closed** — feature *correctness* is still unverified (no slider was
+moved, no render compared), as are social export, Drive publish, restore/delete
+and running an import to completion.
+
+**R7-4 — the tag chip row re-measured every chip on every hover frame.** `ChipFlow`
+is a custom SwiftUI `Layout` over the whole chip set, and `sizeThatFits` and
+`placeSubviews` each ran a full text-measurement pass — twice per layout pass,
+with `hovered` animated, so one hover cost ~2 × 11 frames × n. n is 196 on the dev
+library (214 distinct tags; the busiest folder has 200), laid out to x≈17,500 in a
+1,202pt window. Fixed with `Layout`'s own `Cache`: natural widths are
+hover-independent by design (the count revealed on hover is drawn in an `.overlay`,
+which does not affect intrinsic size), so they are measured once per chip SET and
+reused. `ChipIdentityKey` is `nonisolated` — `Layout`'s methods are, and a
+main-actor-isolated key is an error under the Swift 6 language mode. Capping the
+row (a product change) and `LazyHStack` (incompatible with the no-reflow math)
+were both rejected and the reasons recorded.
+
+**Three test defects, all mine, all worth keeping.** The first hero test PASSED
+while doing nothing — it pressed Return, which only selects (`handleTileTap` opens
+on double-click), and asserted "the window exists", which is true either way; six
+other surface tests had the same vacuous shape and were strengthened. A cull test
+asserted Escape dismisses the HUD and reported the app broken, but **Spec 03
+deviation D8 deliberately keeps culling out of the Escape chain** so an accidental
+press cannot discard an hour of marking — the test now guards D8. And a hover test
+asserting on absolute `minX` reported a 10pt no-reflow "regression" that was the
+scroll (`hover()` scrolls the target into view); an entire lazy-cache workaround
+was written for a bug that did not exist, and reverted once a baseline run on
+unmodified code exposed it. **A perf change that appears to alter rendering
+deserves a baseline run before the cause is theorised.**
+
+**Documentation.** `DECISIONS.md`'s "Current state" block was deleted. It held
+volatile facts, claimed to outrank every other section, and was wrong three ways:
+localization (it said 992 keys / 146 untranslated; the catalog holds 1,002 with 0
+translatable strings untranslated), backup-carries-edits (closed in round 3), and
+the runtime-verification list. Volatile facts now live in one place each —
+`CLAUDE.md`, `FEATURE-LEDGER.md`, `durable-constraints.md`, `REVIEW-LENSES.md` —
+and DECISIONS is explicitly a *decision archive*, with every "as built" section
+labelled a historical snapshot and every Spec 08/09 section labelled never-built
+(except Backup amendment A2, which did ship).
+
+Suite **1,818 unit** (2 skipped) + **20 UI**, 0 failures. Audit 12/12. Release
+build 0 warnings, universal.

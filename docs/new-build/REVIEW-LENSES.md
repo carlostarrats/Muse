@@ -75,6 +75,9 @@ Rounds 1–3 are recorded in `REVIEW-FINDINGS.md` and `FEATURE-LEDGER.md`; round
 | Observer / resource lifetime (leaks, un-removed observers) | 7 | clean — both `NotificationCenter` sites are static + install-once |
 | Accessibility on the surfaces THIS branch added | 7 | broadly labelled; the one gap was in dead code |
 | Cross-process DB access (multi-instance, share extension) | 7 | clean for shipping; **dev-machine hazard** — see note below |
+| **Driving the running GUI** (XCUITest, not osascript) | **7b** | G1 partially closed; 10 surfaces confirmed by screenshot |
+| **Per-hover layout cost in a custom `Layout`** | **7b** | **R7-4 — the tag chip row re-measured every chip per hover frame** |
+| Vacuous test assertions (can this test fail?) | 7b | 7 of 10 UI tests asserted only "a window exists"; all strengthened |
 
 ## Part 2 — lenses NOT yet run
 

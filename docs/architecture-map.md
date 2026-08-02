@@ -741,3 +741,48 @@ a READER and a MAPPER, never a new writer** — everything lands through seams S
 *Documented inline in the tree listing above rather than as a section — see
 `Export/Social/`, `Components/SocialCropMath.swift`, `Views/Export/SocialExportCard.swift`,
 and the `Sharing/Drive/` entries (`DriveSharePublishGuard`, portfolio manifest handling).*
+
+### Verification harness (added 2026-08-01, review round 7)
+
+Not app code, but the things a change is checked against — listed here because
+"where do I verify this?" is the same question as "where does this live?".
+
+```
+scripts/audit-invariants.sh    12 mechanical checks of the durable constraints
+                               (AV no-network, QuickLook exclusion, the four
+                               network paths, remote-body bounds, Int(exactly:),
+                               trash-not-unlink, the OutputRender choke point,
+                               decode budgets, Debug entitlements, Editing/
+                               neutrality, Float16 arch guard). Run from the repo
+                               root before any commit; exit 0 = green.
+                               A SHELL SCRIPT, not an XCTest, deliberately: the
+                               test host is the sandboxed app and this checkout
+                               is in ~/Documents, so an in-suite source-tree grep
+                               SKIPS (see EditingModuleImportTests) — it would
+                               pass vacuously exactly where it is needed.
+
+Muse/MuseUITests/
+  MuseSurfaceDriveTests.swift  Drives the running app (XCUITest): editor,
+                               compare, cull, duplicates, all five import
+                               panels, backup, settings, rediscovery, hero.
+                               Each asserts on a control ONLY that surface
+                               publishes, and that Escape dismisses it — the
+                               standing regression test for round 1's F16.
+                               NOTE: cull is the exception and asserts Escape
+                               does NOT end the session (Spec 03 deviation D8).
+  MuseTagChipRowTests.swift    Guards the ChipFlow measurement cache: chips
+                               never overlap, re-measure after a folder switch
+                               (the staleness a cache introduces), and the row's
+                               SPAN is stable across hover. Assertions must be
+                               translation-invariant — hover() scrolls the target
+                               into view, so absolute positions lie.
+  MuseDriveProbe.swift         Discovery, not assertion: dumps the accessibility
+                               element tree so new tests can be written against
+                               what the app actually publishes.
+```
+
+**Docs that answer "is this current?"** — `CLAUDE.md` and
+`docs/new-build/FEATURE-LEDGER.md` own volatile facts;
+`docs/durable-constraints.md` owns the rules; `docs/new-build/REVIEW-LENSES.md`
+owns which review lenses have run. `docs/new-build/DECISIONS.md` is a decision
+ARCHIVE (the "why") and is not a status document.

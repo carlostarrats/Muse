@@ -194,8 +194,11 @@ are the load-bearing reference artifacts.
 > bytes ride `.muselibrary`), and the **442 Swift 6 concurrency warnings are
 > gone — the Release build is warning-free, keep it that way**. The binding
 > build-level record is
-> `docs/new-build/DECISIONS.md`; read its "Current state" block first, since the
-> per-spec "as-built" sections are point-in-time and go stale. **Distribution is
+> `docs/new-build/DECISIONS.md` — but treat it as a decision ARCHIVE ("why X was
+> chosen"), NOT as status: its volatile-facts block was deleted 2026-08-01 after
+> going stale three ways, and its "as built" and Spec 08/09 sections are labelled
+> in place as historical or never-built. Current facts live in THIS file and in
+> `FEATURE-LEDGER.md`. **Distribution is
 > unchanged** — the Mac App Store move (doctrine revisions, Sparkle excision,
 > Apple-Silicon-only build settings) was split out of Spec 01 at the owner's
 > request into `docs/superpowers/plans/deferred-mac-app-store-migration.md` and

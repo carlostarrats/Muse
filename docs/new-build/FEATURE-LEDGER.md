@@ -23,8 +23,11 @@ not upgrade a row on inference.
 actually produced (the grid cull badge that was specified and never built, the
 five modals with no Escape branch). **A + S is not a substitute for R.**
 
-Last full pass: **2026-08-01** (review round 5). Suite at that point:
-**1,806 tests, 2 skipped, 0 failures**; Release build warning-free.
+Last full pass: **2026-08-01** (review round 7). Suite at that point:
+**1,818 unit tests, 2 skipped, 0 failures**, plus **20 UI tests** that drive the
+real app (`MuseSurfaceDriveTests`, `MuseTagChipRowTests`); Release build
+warning-free and universal (`x86_64 arm64`); `./scripts/audit-invariants.sh`
+12/12 green.
 
 ---
 
@@ -45,7 +48,7 @@ These are true across many rows and are not repeated in each one.
 is now **1,002 keys, 0 untranslated**. **Closed in round 3:** G2 (backup carries
 edit data) and G6 (the concurrency warnings).
 
-**G1 is now the only substantive gap left.**
+**G1 is PARTIALLY CLOSED as of round 7** — the surfaces open and respond, confirmed by screenshot (see the G1 section at the end of this file). What remains is feature *correctness*, plus social export, Drive publish, restore/delete and running an import to completion. **R7-1** (Spec 03 §5 region similarity specified but never built) is the other open item, and it is a product decision rather than a defect.
 
 ---
 
@@ -66,10 +69,10 @@ question.
 | P5 | Collections (manual, smart, living) | `Collection*Tests` ×12, `SmartCollection*Tests`, `SmartRule*Tests` | 2026-08-01 | ⚠️ G1 | ✅ `.location` + `.similar` rules added without disturbing existing resolvers |
 | P6 | FTS5 search + scope toggle | `PhotoSearchTests`, `SearchBridgeTests`, `FtsEscapeTests`, `SearchQueryParserTests` | 2026-08-01 | ⚠️ G1 | ✅ `SearchMergeTests` pins folder-grain survival through the new semantic leg |
 | P7 | Color search (CIEDE2000) | `ColorQueryTests`, `ColorDistanceTests`, `PaletteMatchTests`, `NamedColorTests` | 2026-08-01 | ⚠️ G1 | ✅ untouched |
-| P8 | Duplicate finder + delete-to-trash | `DuplicateDeleteRulesTests`, `DeleteCoordinatorTests`, `TrashManagerTests` | 2026-08-01 | ⚠️ G1 | ✅ distinct from Spec 02 near-dup **stacks**; no shared state |
+| P8 | Duplicate finder + delete-to-trash | `DuplicateDeleteRulesTests`, `DeleteCoordinatorTests`, `TrashManagerTests` | 2026-08-01 | ✅ R7 modal opened, real dup pair listed (delete NOT run) | ✅ distinct from Spec 02 near-dup **stacks**; no shared state |
 | P9 | Grid virtualization + masonry | `MasonryGeometryTests`, `UniformGridLayoutTests`, `JustifiedRowsGeometryTests`, `GridSpacingTests` | 2026-08-01 | ⚠️ G1 | ✅ still virtualized — cull badge passed as a parameter, `CullStore` observed **once** |
 | P10 | Grid selection, keyboard nav, page scroll | `GridSelectionTests`, `GridKeyboardNavTests`, `PageScrollTests`, `GridScrollRevealTests` | 2026-08-01 | ⚠️ G1 | ⚠️ **was broken, fixed R1-F16** — 5 new modals gated the key catcher with no Escape branch |
-| P11 | Hero viewer (flight, zoom/pan, wash) | `ViewerGeometryTests`, `HeroPaletteTests`, `ImageHeaderSizeCacheTests` | 2026-08-01 | ⚠️ G1 | ⚠️ **fixed R2-1** — flight take-off rect used uncropped dims on a cold header cache |
+| P11 | Hero viewer (flight, zoom/pan, wash) | `ViewerGeometryTests`, `HeroPaletteTests`, `ImageHeaderSizeCacheTests` | 2026-08-01 | ✅ R7 opens on double-click, Escape closes | ⚠️ **fixed R2-1** — flight take-off rect used uncropped dims on a cold header cache |
 | P12 | Thumbnails + decode budget | `ThumbnailVariantTests`, `ThumbnailStackKeyTests`, `ThumbnailWriteTests`, `DecodePermitTests`, `VisionDecodeTests` | 2026-08-01 | ✅ launch trace | ✅ unedited key byte-identical to pre-Spec-04 — no library re-keys on upgrade |
 | P13 | QuickLook exclusion (video **and** audio) | `QuickLookExclusionTests`, `AudioArtworkTests` | 2026-08-01 | ⚠️ G1 | ✅ `mayUseQuickLook` still the single predicate; no new AV entry point bypasses it |
 | P14 | AV no-network (`rmra`/`rdrf`) | — (enforced by construction) | 2026-08-01 | ⚠️ G1 | ✅ **verified: zero bare `AVURLAsset(url:)`/`AVPlayer(url:)` in the tree.** Spec 02's new `PhotoHeaderReader` uses the restricted helper |
@@ -77,7 +80,7 @@ question.
 | P16 | Housekeeping prune (fail-closed) | `HousekeepingTests` | 2026-08-01 | ⚠️ G1 | ✅ root-visibility guard + `icloudRoot` param intact |
 | P17 | Path reconcile by existence (fail-closed) | `PathReconcilerTests` | 2026-08-01 | ⚠️ G1 | ✅ `rootReachable` gate intact, still fire-and-forget |
 | P18 | iCloud sidecars + hydration | `SidecarTests`, `SidecarStoreTests`, `EditSidecarTests`, `SidecarHydrateRatingTests` | 2026-08-01 | ⚠️ G1 | ⚠️ **fixed R2-4** — see P2. Sidecars now carry edits (Spec 04) with their own field clock |
-| P19 | Backup / restore / reconnect | `BackupArchiveTests`, `BackupBuilderTests`, `ReconnectMatcherTests`, `ReconnectApplierTests`, `CollectionMaterializerTests`, **`BackupEditRoundTripTests`**, **`BackupArchiveCompatTests`** | 2026-08-01 | ⚠️ G1 | ✅ **no schema regression** — every v13–v23 `ADD COLUMN` is nullable. ✅ **G2 closed** — edit data now rides the archive (R3-1) |
+| P19 | Backup / restore / reconnect | `BackupArchiveTests`, `BackupBuilderTests`, `ReconnectMatcherTests`, `ReconnectApplierTests`, `CollectionMaterializerTests`, **`BackupEditRoundTripTests`**, **`BackupArchiveCompatTests`** | 2026-08-01 | ✅ R7 save panel + correct default name (restore NOT run) | ✅ **no schema regression** — every v13–v23 `ADD COLUMN` is nullable. ✅ **G2 closed** — edit data now rides the archive (R3-1) |
 | P20 | Collection → PDF export | `CollectionPDFLayoutTests`, `PaperSizeTests` | 2026-08-01 | ⚠️ G1 | ✅ routed through `OutputRender`, renders per-task, `discard`s each temp |
 | P21 | Google Drive collection share | `DriveShare*Tests` ×4, `DriveMultipartTests`, `PKCETests`, `ImageMetadataStripperTests` | 2026-08-01 | ⚠️ G1 | ✅ render→strip→**verify** order preserved; all 3 upload loops `discard` |
 | P22 | Share sheet / Open With | `EditCopyNamingTests`, `EditTransferTests` | 2026-08-01 | ⚠️ G1 | ✅ edited files now fork via `OpenWithFork` instead of silently handing over the original |
@@ -143,6 +146,8 @@ question.
 | 4 | 2026-08-01 | Lenses rounds 1–3 did not run: SQL construction, crash-on-user-data, resource lifecycle, remote-body bounds; + a third check of the twice-recurring index-staleness class | 4 fixed (R4-1…R4-4) | 1,802 |
 | 5 | 2026-08-01 | Lenses rounds 1–4 did not run: **time-zone correctness of SQL date parts**, path-prefix boundaries, Unicode path normalization, comparator ordering, transaction atomicity, task-group concurrency bounds | 2 fixed (R5-1, R5-2) | 1,806 |
 | 6 | 2026-08-01 | Lenses rounds 1–5 did not run: **arithmetic traps on file-declared numbers**, untrusted metadata → filesystem path, bounds on the model download's PAYLOAD leg (round 4 bounded only the manifest), local log/trace leakage | 4 fixed (R6-1…R6-4) + 1 self-QA | 1,818 |
+| 7 | 2026-08-01 | **Method change, not a seventh set of angles.** Mechanized the greppable durable rules (`scripts/audit-invariants.sh`, 12 checks, all negative-tested) and started the lens registry (`REVIEW-LENSES.md`) so "static review is done" became checkable. Lenses rounds 1–6 didn't run: spec→code existence, dead code, schema downgrade, nil-`dbQueue`, observer lifetime, cross-process DB | R7-1 (region similarity never built — product call), R7-2 (2 dead files removed), R7-3 (dev-only multi-instance note) | 1,818 |
+| 7b | 2026-08-01 | **Drove the running GUI** via XCUITest (G1 partially closed) + the tag chip row's per-hover layout cost | R7-4 fixed (chip measurement cache); 7 vacuous UI assertions strengthened; 3 test defects of my own | 1,818 + **20 UI** |
 
 ### Round 2 findings
 
