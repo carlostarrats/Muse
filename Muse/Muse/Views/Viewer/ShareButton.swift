@@ -32,7 +32,7 @@ struct ShareButton: View {
     var body: some View {
         Menu {
             Button("Share") { share() }
-            Button("Export for Social…") {
+            Button("Export…") {
                 appState.exportRequest = ExportRequest(urls: [url])
             }
             .disabled(isRasterKind == false)

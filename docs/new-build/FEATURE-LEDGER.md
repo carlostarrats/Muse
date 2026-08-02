@@ -23,10 +23,14 @@ not upgrade a row on inference.
 actually produced (the grid cull badge that was specified and never built, the
 five modals with no Escape branch). **A + S is not a substitute for R.**
 
-Last full pass: **2026-08-01** (review round 7). Suite at that point:
-**1,811 unit tests, 2 skipped, 0 failures** (1,818 before the 7 `RegionMathTests`
-went with the dropped Spec 03 §5 feature), plus **20 UI tests** that drive the
-real app (`MuseSurfaceDriveTests`, `MuseTagChipRowTests`); Release build
+Last full pass: **2026-08-02** (general image export, P29). Suite:
+**1,840 unit tests, 2 skipped, 0 failures** — 1,791 before export's 49 — plus
+**20 UI tests** that drive the real app
+(`MuseSurfaceDriveTests`, `MuseTagChipRowTests`).
+*(The previous line here read "1,811 unit tests … plus 20 UI tests". Measured,
+1,811 was the TOTAL including those 20 — the unit target alone was 1,791. No
+tests were lost; the old figure double-counted.)*
+Release build
 warning-free and universal (`x86_64 arm64`); `./scripts/audit-invariants.sh`
 12/12 green.
 
@@ -131,8 +135,9 @@ question.
 | S06.4 | Throttle / analysis status / import FYI | `WorkProgressTests`, `LaunchBackfillQueryTests` | 2026-08-01 | ✅ trace | Throttle now scales concurrency, not just pause (R1-F4) |
 | S07.1 | Manifest v2 + three page layouts | `DriveShareManifestTests`, `SocialPresetTests` | 2026-08-01 | ❌ G1 | Page tests pass (`web/share/share.test.mjs`) |
 | S07.2 | Portfolio mode (stable URL, live manifest) | `DriveShareStoreTests` | 2026-08-01 | ❌ G1 | Upload → atomic swap → sweep, rollback before swap |
-| S07.3 | Social export card + render ladder | `SocialRenderTests`, `SocialCropMathTests`, `SocialMetadataTests` | 2026-08-01 | ❌ G1 | ⚠️ crop stage previewed the unedited original — fixed R1-F18 |
-| — | Migration chain v13→v23 | `MigrationChainTests` + 8 per-migration files | 2026-08-01 | ✅ replayed on real data | Pure DDL, O(1) at launch, endpoint pinned at v23 |
+| S07.3 | Social export card + render ladder | `SocialRenderTests`, `SocialCropMathTests`, `ExportMetadataTests` | 2026-08-02 | ❌ G1 | ⚠️ crop stage previewed the unedited original — fixed R1-F18. Card renamed `ExportCard`; social is now one branch of two |
+| P29 | **General image export** (format · quality · depth · resize · presets) | `ExportFormatTests`, `ExportResizeTests`, `ImageExportRenderTests`, `ExportPresetStoreTests`, `OutputRenderTests` | 2026-08-02 | ❌ **G1** | Renderer and value types are pinned hard (49 tests: exact dimensions, never-upscale, real 16-bit depth, provable metadata cleanliness, collision never overwrites). **The CARD is not runtime-verified** — see the plan below |
+| — | Migration chain v13→v23 | `MigrationChainTests` + 8 per-migration files | 2026-08-01 | ✅ replayed on real data | Pure DDL, O(1) at launch, endpoint pinned at v23. **Export added none** — presets are `AppSettings` JSON |
 
 ---
 
@@ -398,6 +403,30 @@ passing" had meant nothing at all.
 - **Social export, Drive publish/portfolio.** Need network and an OAuth session.
 - **Restore from backup, delete.** Deliberately excluded — they mutate user data.
 - **Import execution.** The panels open; no import was actually run to completion.
+- **The general export card (P29).** The renderer beneath it is pinned by 49
+  tests against real files, but nobody has driven the card. Written plan, in the
+  order a person would do it:
+  1. Grid, right-click one image ▸ **Export…** — the dropdown shows **Format**
+     above **Social**, with `Same as original` first.
+  2. Pick **JPEG**, drag Quality, set **Long edge** to 1200, Export, choose a
+     folder. One file lands, 1200px on its long edge, named after the source.
+  3. Export the same file again into the same folder — the second lands as
+     `<name>-2.jpg`. **The first is not overwritten.** This is the rule that
+     matters most; everything else here is a convenience.
+  4. Right-click a **RAW** ▸ Export… ▸ `Same as original`. The advisory reads
+     *"RAW can't be written back — this exports as JPEG."* and a JPEG appears.
+     **This is the gap the whole feature exists to close.**
+  5. Select several images, Export… — the pager appears, the progress bar runs,
+     and the count of files written matches the selection.
+  6. Open a photo ▸ **Edit**, change something, then the share button ▸ Export…
+     The exported file carries the edit.
+  7. **TIFF ▸ 16-bit** on an *edited* photo shows the 8-bit advisory; on an
+     unedited one it does not.
+  8. **Save Settings as Preset…**, name it — it appears under **My Presets**,
+     survives a relaunch, and selecting it restores every control including the
+     size fields.
+  9. A **Social** preset still crops, mattes and exports exactly as before. This
+     is the regression check on splitting the card in two.
 
 ### Two method lessons, both from this suite's own bugs
 

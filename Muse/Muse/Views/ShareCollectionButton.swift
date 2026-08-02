@@ -71,7 +71,7 @@ struct ShareCollectionButton: View {
         NSPasteboard.general.setString(record.pageURL, forType: .string)
     }
 
-    private func exportForSocial() {
+    private func presentExport() {
         appState.exportRequest = ExportRequest(urls: driveShareURLs)
     }
 
@@ -80,7 +80,7 @@ struct ShareCollectionButton: View {
             Button("Save to…") { Task { await save() } }
             Button("Share Drive Link") { presentDriveShare(mode: .share) }
                 .disabled(driveShareURLs.isEmpty)
-            Button("Export for Social…") { exportForSocial() }
+            Button("Export…") { presentExport() }
                 .disabled(driveShareURLs.isEmpty)
             if canUsePortfolio {
                 Divider()

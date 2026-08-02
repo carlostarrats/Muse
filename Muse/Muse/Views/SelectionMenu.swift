@@ -102,7 +102,7 @@ struct SelectionActionsMenu: View {
                 }
             }
             Button("Share") { share() }
-            Button("Export for Social…") { exportForSocial() }
+            Button("Export…") { presentExport() }
                 .disabled(exportableURLs.isEmpty)
             Menu("Rating") {
                 ForEach(Array((1...StarRating.maxStars).reversed()), id: \.self) { n in
@@ -217,7 +217,7 @@ struct SelectionActionsMenu: View {
         }
     }
 
-    private func exportForSocial() {
+    private func presentExport() {
         appState.exportRequest = ExportRequest(urls: exportableURLs)
     }
 
