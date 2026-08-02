@@ -123,7 +123,7 @@ struct ContentView: View {
         if appState.addTagRequest != nil { appState.addTagRequest = nil; return }
         if appState.newCollectionRequest { appState.cancelNewCollection(); return }
         if appState.importModal != nil { appState.importModal = nil; return }
-        if appState.socialExportRequest != nil { appState.socialExportRequest = nil; return }
+        if appState.exportRequest != nil { appState.exportRequest = nil; return }
         // Cancel returns to the LIVE cull session with nothing applied — same
         // as the card's own Cancel button.
         if appState.cullResolveShown { appState.cullResolveShown = false; return }
@@ -421,7 +421,7 @@ struct ContentView: View {
             // two flags are structurally unrelated), raised from the grid menu,
             // the hero viewer, or a collection header. Its own modifier because
             // this chain is already at the type-checker's limit.
-            .modifier(SocialExportModal())
+            .modifier(ExportModal())
             .modifier(ShellErrorModals())
             .modifier(TagCommandAlerts())
             // Name prompts (rename collection / file / folder, new subfolder,

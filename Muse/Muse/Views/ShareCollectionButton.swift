@@ -72,7 +72,7 @@ struct ShareCollectionButton: View {
     }
 
     private func exportForSocial() {
-        appState.socialExportRequest = SocialExportRequest(urls: driveShareURLs)
+        appState.exportRequest = ExportRequest(urls: driveShareURLs)
     }
 
     var body: some View {

@@ -33,7 +33,7 @@ struct ShareButton: View {
         Menu {
             Button("Share") { share() }
             Button("Export for Social…") {
-                appState.socialExportRequest = SocialExportRequest(urls: [url])
+                appState.exportRequest = ExportRequest(urls: [url])
             }
             .disabled(isRasterKind == false)
             Divider()

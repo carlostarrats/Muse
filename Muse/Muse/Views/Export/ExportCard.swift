@@ -1,5 +1,5 @@
 //
-//  SocialExportCard.swift
+//  ExportCard.swift
 //  Muse
 //
 //  The social export card: pick a platform preset, position the crop, export.
@@ -16,12 +16,12 @@ import UniformTypeIdentifiers
 /// A per-run social export request. Raised from the grid context menu, the hero
 /// viewer's share menu, or the collection header — none of which can present an
 /// in-window card themselves (it would be sized against the control).
-struct SocialExportRequest: Identifiable, Equatable {
+struct ExportRequest: Identifiable, Equatable {
     let id = UUID()
     var urls: [URL]           // raster kinds only, in grid order
 }
 
-@MainActor final class SocialExportModel: ObservableObject {
+@MainActor final class ExportModel: ObservableObject {
     struct PerImageState: Equatable {
         var zoom: CGFloat = 1
         var center = CGPoint(x: 0.5, y: 0.5)
@@ -145,38 +145,38 @@ struct SocialExportRequest: Identifiable, Equatable {
 /// Presents the card at the SHELL — a menu item can't present an in-window card
 /// itself (it would be sized against the control). Its own modifier so the
 /// detail view's modifier chain stays inside the type-checker's budget.
-struct SocialExportModal: ViewModifier {
+struct ExportModal: ViewModifier {
     @EnvironmentObject private var appState: AppState
 
     func body(content: Content) -> some View {
         content.museModal(isPresented: Binding(
-            get: { appState.socialExportRequest != nil },
-            set: { if !$0 { appState.socialExportRequest = nil } }),
+            get: { appState.exportRequest != nil },
+            set: { if !$0 { appState.exportRequest = nil } }),
                           width: 760,
                           palette: appState.moodPalette) {
-            if let request = appState.socialExportRequest {
-                SocialExportCard(request: request) {
-                    appState.socialExportRequest = nil
+            if let request = appState.exportRequest {
+                ExportCard(request: request) {
+                    appState.exportRequest = nil
                 }
             }
         }
     }
 }
 
-struct SocialExportCard: View {
-    @StateObject private var model: SocialExportModel
+struct ExportCard: View {
+    @StateObject private var model: ExportModel
     @EnvironmentObject private var appState: AppState
     let onClose: () -> Void
 
-    init(request: SocialExportRequest, onClose: @escaping () -> Void) {
-        _model = StateObject(wrappedValue: SocialExportModel(urls: request.urls))
+    init(request: ExportRequest, onClose: @escaping () -> Void) {
+        _model = StateObject(wrappedValue: ExportModel(urls: request.urls))
         self.onClose = onClose
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Export for Social").font(.system(size: 24, weight: .semibold))
+                Text("Export").font(.system(size: 24, weight: .semibold))
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
                 SheetCloseButton { onClose() }
@@ -362,7 +362,7 @@ struct SocialCropStageView: View {
     let preset: SocialPreset
     let fit: SocialFit
     let matte: MatteShade
-    @Binding var state: SocialExportModel.PerImageState
+    @Binding var state: ExportModel.PerImageState
 
     /// `nonisolated`: read by the card's off-main preview decode.
     nonisolated static let previewMaxPixel = 2048

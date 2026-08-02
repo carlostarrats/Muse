@@ -103,7 +103,7 @@ struct SelectionActionsMenu: View {
             }
             Button("Share") { share() }
             Button("Export for Social…") { exportForSocial() }
-                .disabled(socialExportURLs.isEmpty)
+                .disabled(exportableURLs.isEmpty)
             Menu("Rating") {
                 ForEach(Array((1...StarRating.maxStars).reversed()), id: \.self) { n in
                     let label = StarRating.label(for: n) ?? ""
@@ -208,7 +208,7 @@ struct SelectionActionsMenu: View {
     /// Raster kinds only, mirroring `ShareCollectionButton.driveShareURLs` —
     /// the render pipeline re-encodes pixels, so a PDF or a video has nothing to
     /// export here.
-    private var socialExportURLs: [URL] {
+    private var exportableURLs: [URL] {
         fileURLs.filter {
             switch AssetKind.detect(at: $0) {
             case .image, .raw, .psd: return true
@@ -218,7 +218,7 @@ struct SelectionActionsMenu: View {
     }
 
     private func exportForSocial() {
-        appState.socialExportRequest = SocialExportRequest(urls: socialExportURLs)
+        appState.exportRequest = ExportRequest(urls: exportableURLs)
     }
 
     private func share() {
