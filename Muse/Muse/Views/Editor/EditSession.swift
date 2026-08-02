@@ -57,6 +57,11 @@ final class EditSession: ObservableObject {
     @Published var canvasZoom: CGFloat = 1
     @Published var canvasPan: CGSize = .zero
 
+    /// Everything except the image is hidden. Lives on the session rather than
+    /// in EditorView because the Preview | Edit switch belongs to the hero
+    /// viewer, and "only see the image" has to mean that one too.
+    @Published var uiHidden = false
+
     /// The WB eyedropper is armed — the next canvas click samples a pixel
     /// instead of panning.
     @Published var eyedropperArmed = false

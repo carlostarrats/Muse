@@ -22,9 +22,12 @@ import CoreImage
 struct EditCanvasView: NSViewRepresentable {
     /// What to draw. nil renders nothing (the backdrop shows through).
     var image: CIImage?
-    /// Optional second image + divider for split-wipe compare.
+    /// The image to compare against — the original, or another version.
     var wipeAgainst: CIImage?
+    /// Set for the SPLIT compare: the divider's position, 0…1.
     var wipeFraction: Double?
+    /// Set for the SIDE-BY-SIDE compare: two whole images, before on the left.
+    var sideBySide = false
     /// Spec 05 overlays, both composited AFTER the fit so they are screen-space
     /// patterns at canvas resolution — a zebra scaled with the image would
     /// moiré on a downscaled proxy.
@@ -35,6 +38,13 @@ struct EditCanvasView: NSViewRepresentable {
     /// Forwarded to the backing view so target mode can consume scroll before
     /// the canvas zooms. Returns true when it consumed the event.
     var onScrollWhileTargeting: ((NSEvent) -> Bool)?
+    /// Canvas zoom (1 = fit) and pan in POINTS, matching the hero viewer's.
+    var zoom: CGFloat = 1
+    var pan: CGSize = .zero
+    /// The free space the image FITS into, in points, measured from the view's
+    /// edges. The view itself spans the window, so zooming pushes the photo
+    /// under the panels instead of being clipped to a column between them.
+    var fitInsets = EdgeInsets()
 
     func makeNSView(context: Context) -> MTKView {
         let view = CanvasMTKView()
@@ -55,9 +65,13 @@ struct EditCanvasView: NSViewRepresentable {
         context.coordinator.image = image
         context.coordinator.wipeAgainst = wipeAgainst
         context.coordinator.wipeFraction = wipeFraction
+        context.coordinator.sideBySide = sideBySide
         context.coordinator.zebrasOn = zebrasOn
         context.coordinator.zoneMask = zoneMask
         context.coordinator.hoveredZone = hoveredZone
+        context.coordinator.zoom = zoom
+        context.coordinator.pan = pan
+        context.coordinator.fitInsets = fitInsets
         (nsView as? CanvasMTKView)?.onScroll = { event in
             onScrollWhileTargeting?(event) ?? false
         }
@@ -86,9 +100,16 @@ struct EditCanvasView: NSViewRepresentable {
         var image: CIImage?
         var wipeAgainst: CIImage?
         var wipeFraction: Double?
+        var sideBySide = false
         var zebrasOn = false
         var zoneMask: CIImage?
         var hoveredZone: Int?
+        var zoom: CGFloat = 1
+        var pan: CGSize = .zero
+        var fitInsets = EdgeInsets()
+        /// Drawable pixels per point, so the pan (points) lands in the right
+        /// place on a Retina drawable.
+        private var pixelScale: CGFloat = 2
 
         func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
@@ -99,7 +120,17 @@ struct EditCanvasView: NSViewRepresentable {
 
             let drawableSize = view.drawableSize
             guard drawableSize.width >= 1, drawableSize.height >= 1 else { return }
+            pixelScale = view.bounds.width > 0 ? drawableSize.width / view.bounds.width : 2
+            // Composited over a TRANSPARENT full-drawable rect. Metal recycles
+            // drawables, and CI writes only the pixels its result covers — so a
+            // frame that shrinks (zoom out, Fit, or coming back from hidden
+            // controls) left the previous, larger frame's pixels around the new
+            // one: the photo appeared duplicated at the edges.
+            let full = CGRect(origin: .zero, size: drawableSize)
             let composited = overlays(on: composite(image, in: drawableSize), size: drawableSize)
+                .cropped(to: full)
+                .composited(over: CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0))
+                    .cropped(to: full))
 
             let destination = CIRenderDestination(
                 width: Int(drawableSize.width), height: Int(drawableSize.height),
@@ -117,6 +148,16 @@ struct EditCanvasView: NSViewRepresentable {
         /// what keeps the two compared images in exact register — a wipe whose
         /// halves are scaled differently reads as a bug in the edit.
         private func composite(_ image: CIImage, in drawableSize: CGSize) -> CIImage {
+            // SIDE BY SIDE: two WHOLE images, each fitted into half the free
+            // width. This never drew before — the mode only put "Before" and
+            // "After" captions over a single unchanged canvas, which is why it
+            // read as doing nothing.
+            if sideBySide, let wipeAgainst {
+                let gap: CGFloat = 8 * pixelScale
+                let (left, right) = halves(of: freeRect(in: drawableSize), gap: gap)
+                return fit(image, into: right)
+                    .composited(over: fit(wipeAgainst, into: left))
+            }
             let fitted = fit(image, in: drawableSize)
             guard let wipeAgainst, let fraction = wipeFraction else { return fitted }
             let other = fit(wipeAgainst, in: drawableSize)
@@ -145,15 +186,44 @@ struct EditCanvasView: NSViewRepresentable {
             return out
         }
 
+        /// Fit, then zoom about the centre and pan. Applied here so the image,
+        /// the compared image and the zone mask all move as one — and so the
+        /// hit-testing math (CanvasPointMath, which already takes zoom/pan) is
+        /// describing what is actually on screen.
+        /// The space an image FITS into: the drawable minus the panels. In
+        /// drawable pixels, and in CI's bottom-left origin.
+        private func freeRect(in size: CGSize) -> CGRect {
+            let leading = fitInsets.leading * pixelScale
+            let trailing = fitInsets.trailing * pixelScale
+            // CI's origin is bottom-left, the insets' is top-left.
+            let bottom = fitInsets.top * pixelScale
+            let top = fitInsets.bottom * pixelScale
+            return CGRect(x: leading, y: top,
+                          width: max(1, size.width - leading - trailing),
+                          height: max(1, size.height - top - bottom))
+        }
+
+        private func halves(of rect: CGRect, gap: CGFloat) -> (CGRect, CGRect) {
+            let w = max(1, (rect.width - gap) / 2)
+            return (CGRect(x: rect.minX, y: rect.minY, width: w, height: rect.height),
+                    CGRect(x: rect.maxX - w, y: rect.minY, width: w, height: rect.height))
+        }
+
         private func fit(_ image: CIImage, in size: CGSize) -> CIImage {
+            fit(image, into: freeRect(in: size))
+        }
+
+        /// Fit into `rect`, then zoom about its centre and pan. The ZOOM is not
+        /// clamped to the rect, so the image grows past it and under the panels.
+        private func fit(_ image: CIImage, into rect: CGRect) -> CIImage {
             let extent = image.extent
             guard extent.width > 0, extent.height > 0, extent.width.isFinite else { return image }
-            let scale = min(size.width / extent.width, size.height / extent.height)
+            let scale = min(rect.width / extent.width, rect.height / extent.height) * zoom
             let scaled = image
                 .transformed(by: CGAffineTransform(translationX: -extent.minX, y: -extent.minY))
                 .transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-            let dx = (size.width - extent.width * scale) / 2
-            let dy = (size.height - extent.height * scale) / 2
+            let dx = rect.minX + (rect.width - extent.width * scale) / 2 + pan.width * pixelScale
+            let dy = rect.minY + (rect.height - extent.height * scale) / 2 - pan.height * pixelScale
             return scaled.transformed(by: CGAffineTransform(translationX: dx, y: dy))
         }
     }

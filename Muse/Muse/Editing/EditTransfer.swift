@@ -39,6 +39,20 @@ nonisolated enum EditTransfer {
         return groups
     }
 
+    /// Is `source`'s look CURRENTLY on `target`?
+    ///
+    /// A preset is a one-shot graft, not a mode, so nothing recorded which one
+    /// was used — which left the Styles browser unable to say what's applied,
+    /// and left "none of them" unsayable. This answers it from the stacks
+    /// themselves: every group the source changes is present on the target with
+    /// the same values. Grafting the source onto the target and comparing is
+    /// the same question asked in one line, and it can't drift from `apply`.
+    static func isApplied(_ source: EditStack, onto target: EditStack) -> Bool {
+        let groups = adjustedGroups(of: source)
+        guard !groups.isEmpty else { return false }
+        return apply(groups: groups, from: source, onto: target) == target.normalized()
+    }
+
     /// Graft `groups` from `source` onto `target`. Never mutates either input
     /// (both are value types); the target's schema/process versions are kept,
     /// since the result is the TARGET's stack with some fields replaced.

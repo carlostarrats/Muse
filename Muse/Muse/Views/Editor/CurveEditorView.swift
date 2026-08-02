@@ -36,7 +36,7 @@ struct CurveEditorView: View {
         GeometryReader { geo in
             ZStack {
                 Rectangle()
-                    .fill(Color.black.opacity(0.15))
+                    .fill(theme.panelInkIsDark ? Color.white.opacity(0.5) : Color.black.opacity(0.15))
                 if let histogram { histogramBackdrop(histogram, size: geo.size) }
                 gridLines(size: geo.size)
                 curvePath(size: geo.size)

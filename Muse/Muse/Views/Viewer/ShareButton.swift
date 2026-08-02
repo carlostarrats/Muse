@@ -16,6 +16,8 @@ import AppKit
 struct ShareButton: View {
     @EnvironmentObject private var appState: AppState
     let url: URL
+    /// nil in Preview (white glass); the editor's resolved ink in Edit.
+    var ink: PanelContrast.Ink? = nil
     @State private var hovering = false
 
     /// Raster kinds only — the social render pipeline re-encodes pixels, so a
@@ -42,9 +44,9 @@ struct ShareButton: View {
         } label: {
             Image(systemName: "square.and.arrow.up")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white.opacity(hovering ? 1.0 : 0.85))
+                .foregroundStyle(ChromeStyle.glyph(ink, hovering: hovering))
                 .frame(width: 38, height: 38)
-                .background(Circle().fill(.white.opacity(hovering ? 0.24 : 0.10)))
+                .background(Circle().fill(ChromeStyle.fill(ink, hovering: hovering)))
         }
         .menuStyle(.button)
         .menuIndicator(.hidden)

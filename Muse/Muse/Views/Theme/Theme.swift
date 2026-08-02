@@ -21,6 +21,22 @@ import SwiftUI
 struct Theme: Equatable {
     var panelFill: Color
     var panelStroke: Color
+    /// A surface raised ON a panel card — a disclosure row, a small button.
+    /// Tinted like the card (away from the text), so it can't erode the
+    /// contrast the card just established. Default is the pre-panel look.
+    var panelRaised: Color = Color.primary.opacity(0.08)
+    var panelRaisedHover: Color = Color.primary.opacity(0.16)
+    /// True when the panel's ink is BLACK (a light backdrop). Plotting surfaces
+    /// read it to pick a blend mode: `.screen` paints channels onto a dark
+    /// card, and paints them into invisibility on a light one.
+    var panelInkIsDark: Bool = false
+    /// A SELECTED row's fill, and the ink that sits on it. One solid colour on
+    /// every backdrop — see PanelContrast.selectionSolidGrey.
+    var selectionFill: Color = Color(nsColor: .systemBlue)
+    var selectionInk: Color = .white
+    /// A destructive control's fill and ink — same resolution as the selection.
+    var dangerFill: Color = Color(nsColor: .systemRed)
+    var dangerInk: Color = .white
     /// Slider tints, curve strokes, active toggles — the one "this is
     /// interactive" colour. Tracks the mood so the editor doesn't read as a
     /// foreign panel bolted onto the app.
@@ -52,6 +68,29 @@ struct Theme: Equatable {
             controlAccent: Color(nsColor: .systemBlue),
             textPrimary: palette.scheme == .dark ? .white : .primary,
             textSecondary: .secondary)
+    }
+
+    /// The same tokens re-pointed at the hero viewer's translucent card — what
+    /// the Preview column has always been, and what the editor's panels became
+    /// when the two were unified.
+    ///
+    /// Not mood-derived: these cards sit on the neutral editor backdrop the
+    /// USER picks (white → black), so the ink follows that choice and nothing
+    /// else. The card fill is the same 0.09 at both ends.
+    func onPanel(_ ink: PanelContrast.Ink) -> Theme {
+        var t = self
+        t.panelFill = ink.cardFill
+        t.panelStroke = .clear
+        t.panelRaised = ink.raisedFill(0.16)
+        t.panelRaisedHover = ink.raisedFill(0.28)
+        t.panelInkIsDark = ink.isDark
+        t.selectionFill = ink.selectionFill
+        t.selectionInk = ink.selectionInk
+        t.dangerFill = ink.dangerFill
+        t.dangerInk = ink.dangerInk
+        t.textPrimary = ink.baseColor
+        t.textSecondary = ink.secondaryText
+        return t
     }
 
     /// Used only as the environment default, before `ContentView` injects the

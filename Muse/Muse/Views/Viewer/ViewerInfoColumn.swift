@@ -26,10 +26,6 @@ struct ViewerInfoColumn<Chrome: View>: View {
     /// Extra file metadata (EXIF / PDF / A/V) shown in the INFO card. Loaded by
     /// the hero viewer on open; nil/empty → the card is omitted.
     var metadata: FileMetadata? = nil
-    /// Deterministic "why it looks this way" notes, computed by the hero's
-    /// existing details load from precomputed columns. Empty → no card at all;
-    /// silence about a well-exposed photo is the correct output.
-    var feedbackNotes: [PhotoFeedback.Note] = []
     /// Near-opaque card drawn behind the whole column while zoomed. It's the
     /// direct background of the content stack, so it resizes in the same
     /// layout pass (and spring) as the Collection/Tags expanders.
@@ -72,9 +68,6 @@ struct ViewerInfoColumn<Chrome: View>: View {
     /// withAnimation transaction can't animate an @AppStorage publish (it lands
     /// outside the transaction; see CLAUDE.md).
     @State private var colorsExpanded = AppSettings.colorsCardExpanded
-    /// Same global-last-choice rule (and the same @State-not-@AppStorage
-    /// reason) as the colors card.
-    @State private var feedbackExpanded = AppSettings.feedbackCardExpanded
 
     var body: some View {
         ScrollView {
@@ -90,9 +83,6 @@ struct ViewerInfoColumn<Chrome: View>: View {
                     colorsCard(palette: displayPalette)
                 } else if paletteLoading {
                     colorsPlaceholderCard
-                }
-                if !feedbackNotes.isEmpty {
-                    feedbackCard
                 }
                 if let metadata, !metadata.rows.isEmpty {
                     infoCard(metadata)
@@ -336,13 +326,10 @@ struct ViewerInfoColumn<Chrome: View>: View {
                     PlusCircleButton(size: 18, rotated: noteExpanded,
                                      accessibilityLabel: noteExpanded ? String(localized: "Hide note")
                                                                       : String(localized: "Show note")) {
-                        // Collapsing commits any pending edit first.
-                        if noteExpanded { commitNote(to: url) }
-                        withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
-                            noteExpanded.toggle()
-                        }
+                        toggleNote()
                     }
                 }
+                .cardHeaderTap { toggleNote() }
                 if noteExpanded {
                     TextField(String(localized: "Add a note…"), text: $noteDraft, axis: .vertical)
                         .textFieldStyle(.plain)
@@ -402,6 +389,20 @@ struct ViewerInfoColumn<Chrome: View>: View {
         }
     }
 
+    /// Collapsing the note commits any pending edit first.
+    private func toggleNote() {
+        if noteExpanded { commitNote(to: url) }
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) { noteExpanded.toggle() }
+    }
+
+    private func toggleColors() {
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) { colorsExpanded.toggle() }
+    }
+
+    private func toggleInfo() {
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) { infoExpanded.toggle() }
+    }
+
     /// Write the draft to `target` only if it changed from the loaded value.
     private func commitNote(to target: URL) {
         let trimmed = noteDraft.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -428,11 +429,10 @@ struct ViewerInfoColumn<Chrome: View>: View {
                     PlusCircleButton(size: 18, rotated: colorsExpanded,
                                      accessibilityLabel: colorsExpanded ? String(localized: "Hide colors")
                                                                         : String(localized: "Show colors")) {
-                        withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
-                            colorsExpanded.toggle()
-                        }
+                        toggleColors()
                     }
                 }
+                .cardHeaderTap { toggleColors() }
                 if colorsExpanded {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 26, maximum: 26), spacing: 6)],
                               alignment: .leading, spacing: 6) {
@@ -454,41 +454,10 @@ struct ViewerInfoColumn<Chrome: View>: View {
         }
     }
 
-    // MARK: - Why it looks this way
-
-    private var feedbackCard: some View {
-        InfoCard {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    CardLabel(text: String(localized: "WHY IT LOOKS THIS WAY"))
-                    Spacer()
-                    PlusCircleButton(size: 18, rotated: feedbackExpanded,
-                                     accessibilityLabel: feedbackExpanded
-                                        ? String(localized: "Hide explanation")
-                                        : String(localized: "Show explanation")) {
-                        withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
-                            feedbackExpanded.toggle()
-                        }
-                    }
-                }
-                if feedbackExpanded {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(Array(feedbackNotes.enumerated()), id: \.offset) { _, note in
-                            Text(note.displayText)
-                                .font(.system(size: 12))
-                                .foregroundStyle(.white.opacity(0.75))
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .onChange(of: feedbackExpanded) { _, expanded in
-            UserDefaults.standard.set(expanded, forKey: AppSettings.feedbackCardExpandedKey)
-        }
-    }
+    // "Why it looks this way" used to live here. It moved to the EDIT panel
+    // (EditorView's left column) 2026-08-01: it is feedback about exposure and
+    // capture, which is only actionable once you're holding the sliders —
+    // reading it on the Preview page told you something you couldn't act on.
 
     // MARK: - Info card
 
@@ -500,11 +469,10 @@ struct ViewerInfoColumn<Chrome: View>: View {
                     Spacer()
                     PlusCircleButton(size: 18, rotated: infoExpanded,
                                      accessibilityLabel: infoExpanded ? String(localized: "Hide info") : String(localized: "Show info")) {
-                        withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
-                            infoExpanded.toggle()
-                        }
+                        toggleInfo()
                     }
                 }
+                .cardHeaderTap { toggleInfo() }
                 if infoExpanded {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(metadata.rows) { row in
@@ -619,33 +587,8 @@ struct PillItem: Identifiable, Equatable {
     var label: String
 }
 
-/// Rounded translucent card shell: radius 14, white 0.09 fill, 13/14 padding.
-private struct InfoCard<Content: View>: View {
-    @ViewBuilder var content: () -> Content
-
-    var body: some View {
-        content()
-            .padding(.horizontal, 13)
-            .padding(.vertical, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.white.opacity(0.09)))
-    }
-}
-
-private struct CardLabel: View {
-    let text: String
-    var body: some View {
-        Text(text)
-            .font(.system(size: 10, weight: .semibold))
-            .kerning(0.8)
-            .textCase(.uppercase)
-            .foregroundStyle(.white.opacity(0.42))
-            // Every card title (COLLECTION / TAGS / COLORS / INFO) is a heading,
-            // so VoiceOver's heading rotor can jump between the column's cards.
-            .accessibilityAddTraits(.isHeader)
-    }
-}
+// InfoCard / CardLabel / PlusCircleButton now live in InfoCardKit.swift — the
+// editor's panels draw from the same vocabulary, so it can't be private here.
 
 /// Card with a label row + ＋ expander button, HoverPill flow, and an
 /// expander section that springs open below the pills.
@@ -658,6 +601,10 @@ private struct PillCard<Expander: View>: View {
     var onPillRemove: (PillItem) -> Void
     @ViewBuilder var expander: () -> Expander
 
+    private func toggle() {
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) { isExpanded.toggle() }
+    }
+
     var body: some View {
         InfoCard {
             VStack(alignment: .leading, spacing: 10) {
@@ -667,11 +614,10 @@ private struct PillCard<Expander: View>: View {
                     PlusCircleButton(size: 18, rotated: isExpanded,
                                      accessibilityLabel: isExpanded ? String(localized: "Hide \(title.lowercased()) field")
                                                                     : String(localized: "Add \(title.lowercased())")) {
-                        withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
-                            isExpanded.toggle()
-                        }
+                        toggle()
                     }
                 }
+                .cardHeaderTap { toggle() }
                 if pills.isEmpty {
                     Text("None yet")
                         .font(.system(size: 11))
@@ -827,28 +773,6 @@ private struct CopyIconButton: View {
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
-        .accessibilityLabel(accessibilityLabel)
-        .onHover { hovering = $0 }
-    }
-}
-
-private struct PlusCircleButton: View {
-    let size: CGFloat
-    let rotated: Bool
-    var accessibilityLabel: String = String(localized: "Add")
-    var action: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: rotated ? "minus" : "plus")
-                .font(.system(size: size * 0.5, weight: .bold))
-                .foregroundStyle(.white.opacity(hovering ? 1.0 : 0.7))
-                .frame(width: size, height: size)
-                .background(Circle().fill(.white.opacity(hovering ? 0.28 : 0.14)))
-                .contentTransition(.identity)
-        }
-        .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
         .onHover { hovering = $0 }
     }

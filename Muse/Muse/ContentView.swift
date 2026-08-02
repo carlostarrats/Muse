@@ -428,43 +428,6 @@ struct ContentView: View {
             // rename tag) — cards now, not `.alert`s. Each keeps its draft in
             // LOCAL @State inside ModalPromptCard.
             .modifier(NamePromptModals())
-            // Confirms + errors raised from views that can't present (sidebar
-            // rows, tiles, other modals' content). LAST in the chain on
-            // purpose: attached outermost, it draws ABOVE any card that raised
-            // it — a delete confirmation from inside Duplicates has to sit on
-            // top of Duplicates, not behind it.
-            .museModal(isPresented: Binding(
-                get: { appState.alertRequest != nil },
-                set: { if !$0 { appState.alertRequest = nil } }),
-                       width: ModalMessageCardWidth.standard,
-                       palette: appState.moodPalette) {
-                if let alert = appState.alertRequest {
-                    ModalMessageCard(alert: alert) { appState.alertRequest = nil }
-                        .id(alert.id)
-                }
-            }
-            // Editor-raised name prompts (version / snapshot / preset). Hoisted
-            // here like every other prompt: an in-window card is sized from its
-            // host's geometry, and the editor's 260pt panel would size it to
-            // 260pt.
-            .museModal(isPresented: Binding(
-                get: { appState.editPromptRequest != nil },
-                set: { if !$0 { appState.editPromptRequest = nil } }),
-                       width: ModalMessageCardWidth.standard,
-                       palette: appState.moodPalette) {
-                if let prompt = appState.editPromptRequest {
-                    ModalPromptCard(title: prompt.title, message: prompt.message,
-                                    placeholder: prompt.placeholder,
-                                    confirmTitle: prompt.confirmTitle,
-                                    initialText: prompt.initialText) { name in
-                        appState.editPromptRequest = nil
-                        prompt.onCommit(name)
-                    } onCancel: {
-                        appState.editPromptRequest = nil
-                    }
-                    .id(prompt.id)
-                }
-            }
             // The Open-With fork. Reached from any external hand-off of a file
             // that carries Muse edits.
             .museModal(isPresented: Binding(
@@ -589,6 +552,46 @@ struct ContentView: View {
         .zIndex(58)
         GridToastHost(deletion: appState.deletion)
             .zIndex(60)
+        }
+        // Confirms + errors raised from views that can't present (sidebar rows,
+        // tiles, other modals' content, and the EDITOR). On the outer stack for
+        // the same reason as the prompt below: attached to the split view it
+        // drew above the shell's own cards but UNDER the hero viewer, so a
+        // "Delete this LUT?" raised from the editor opened behind it and the
+        // delete looked like it did nothing at all. Here it is above both.
+        .museModal(isPresented: Binding(
+            get: { appState.alertRequest != nil },
+            set: { if !$0 { appState.alertRequest = nil } }),
+                   width: ModalMessageCardWidth.standard,
+                   palette: appState.moodPalette) {
+            if let alert = appState.alertRequest {
+                ModalMessageCard(alert: alert) { appState.alertRequest = nil }
+                    .id(alert.id)
+            }
+        }
+        // Editor-raised name prompts (version / snapshot / preset). Presented on
+        // the OUTER stack, not with the shell's other modals: those are attached
+        // to the split view, which the hero viewer's overlay draws on top of —
+        // so "Save as Version…" opened its card BEHIND the editor and read as
+        // the button doing nothing. Every raiser of this prompt is inside the
+        // viewer, so it has to be presented above it.
+        .museModal(isPresented: Binding(
+            get: { appState.editPromptRequest != nil },
+            set: { if !$0 { appState.editPromptRequest = nil } }),
+                   width: ModalMessageCardWidth.standard,
+                   palette: appState.moodPalette) {
+            if let prompt = appState.editPromptRequest {
+                ModalPromptCard(title: prompt.title, message: prompt.message,
+                                placeholder: prompt.placeholder,
+                                confirmTitle: prompt.confirmTitle,
+                                initialText: prompt.initialText) { name in
+                    appState.editPromptRequest = nil
+                    prompt.onCommit(name)
+                } onCancel: {
+                    appState.editPromptRequest = nil
+                }
+                .id(prompt.id)
+            }
         }
         .animation(.easeInOut(duration: 0.18), value: appState.selectedFile?.id)
         .background(

@@ -2,7 +2,7 @@ import XCTest
 @testable import Muse
 
 final class ViewerGeometryTests: XCTestCase {
-    // viewport 1200x800, column 298 (258 + 40 margin), pad 40, topPad 70, bottomPad 60
+    // viewport 1200x800, column 298 (258 + 40 margin), pad 40, topPad 86, bottomPad 60
     func testFitCentersBetweenEdgeAndColumn() {
         let r = ViewerGeometry.fitRect(imageSize: CGSize(width: 2400, height: 1600),
                                        viewport: CGSize(width: 1200, height: 800))
@@ -14,7 +14,7 @@ final class ViewerGeometryTests: XCTestCase {
     func testTallImageHeightLimited() {
         let r = ViewerGeometry.fitRect(imageSize: CGSize(width: 800, height: 2400),
                                        viewport: CGSize(width: 1200, height: 800))
-        XCTAssertEqual(r.height, 800 - 70 - 60, accuracy: 0.5)
+        XCTAssertEqual(r.height, 800 - 86 - 60, accuracy: 0.5)
     }
     func testZoomClamp() {
         XCTAssertEqual(ViewerGeometry.clampZoom(0.3), 0.7)  // minZoom (zoom-out, 2026-06-14)

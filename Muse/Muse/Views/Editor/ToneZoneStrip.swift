@@ -30,31 +30,25 @@ struct ToneZoneStrip: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: theme.spacingS) {
+            // The card's own heading says TONE ZONES now, so this row is just
+            // the two controls — each one a button you can see and hit, not a
+            // bare glyph and a word.
             HStack(spacing: theme.spacingS) {
-                Text("Tone Zones")
-                    .font(theme.labelFont)
-                    .foregroundStyle(theme.textSecondary)
-                Spacer()
-                Button {
+                EditorSmallButton(label: String(localized: "On Photo"),
+                                  systemName: "dot.viewfinder") {
                     session.toneZoneTargeting.toggle()
                     if !session.toneZoneTargeting { session.hoveredZone = nil }
-                } label: {
-                    Image(systemName: "dot.viewfinder")
-                        .foregroundStyle(session.toneZoneTargeting
-                                         ? theme.controlAccent : theme.textPrimary)
                 }
-                .buttonStyle(.plain)
                 .help(Text("Adjust zones on the photo"))
-                .accessibilityLabel(Text("Adjust zones on the photo"))
-
-                Button {
+                .foregroundStyle(session.toneZoneTargeting
+                                 ? theme.controlAccent : theme.textPrimary)
+                Spacer()
+                EditorSmallButton(label: String(localized: "Reset"),
+                                  systemName: "arrow.counterclockwise") {
                     session.draft.setToneZone { $0 = .neutral }
                     session.commitGesture()
-                } label: { Text("Reset") }
-                    .buttonStyle(.plain)
-                    .font(theme.labelFont)
-                    .foregroundStyle(theme.textSecondary)
-                    .help(Text("Reset all zones"))
+                }
+                .help(Text("Reset all zones"))
             }
 
             HStack(spacing: 2) {
@@ -65,21 +59,28 @@ struct ToneZoneStrip: View {
 
             readout
 
-            DisclosureGroup(isExpanded: $slidersExpanded) {
-                VStack(spacing: 2) {
-                    ForEach(0..<ToneZoneParams.zoneCount, id: \.self) { index in
-                        EditSlider(label: "\(Self.zoneLabels[index]) EV",
-                                   value: Binding(get: { gain(index) },
-                                                  set: { setGain(index, to: $0) }),
-                                   onCommit: session.commitGesture)
+            // A real button, not a `DisclosureGroup` — that one's hit target is
+            // the chevron alone, so the row read as inert text.
+            EditorDisclosureRow(label: String(localized: "Zone Sliders"),
+                                isExpanded: $slidersExpanded)
+            // The reveal is CLIPPED to its own box. Without this the sliders
+            // slide in from above their own frame and are drawn over the zone
+            // strip, which reads as the strip being pushed around.
+            VStack(spacing: 0) {
+                if slidersExpanded {
+                    VStack(spacing: 2) {
+                        ForEach(0..<ToneZoneParams.zoneCount, id: \.self) { index in
+                            EditSlider(label: "\(Self.zoneLabels[index]) EV",
+                                       value: Binding(get: { gain(index) },
+                                                      set: { setGain(index, to: $0) }),
+                                       onCommit: session.commitGesture)
+                        }
                     }
+                    .padding(.top, theme.spacingS)
+                    .transition(.move(edge: .top).combined(with: .opacity))
                 }
-                .padding(.top, theme.spacingS)
-            } label: {
-                Text("Zone Sliders")
-                    .font(theme.labelFont)
-                    .foregroundStyle(theme.textSecondary)
             }
+            .clipped()
         }
     }
 

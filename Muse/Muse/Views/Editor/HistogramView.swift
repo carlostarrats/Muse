@@ -28,6 +28,10 @@ struct HistogramView: View {
     private static let dragEVPerPoint = 0.01
     private static let dragBlacksPerPoint = 0.004
 
+    /// Channels lighten onto a dark card and darken onto a light one — either
+    /// way they stay visible instead of dissolving into the surface.
+    private var channelBlend: BlendMode { theme.panelInkIsDark ? .multiply : .screen }
+
     var body: some View {
         GeometryReader { geo in
             ZStack {
@@ -35,11 +39,11 @@ struct HistogramView: View {
                     .fill(theme.panelFill)
                 if let stats {
                     channelPath(stats.histogram.r, in: geo.size)
-                        .fill(Color.red.opacity(0.55)).blendMode(.screen)
+                        .fill(Color.red.opacity(0.55)).blendMode(channelBlend)
                     channelPath(stats.histogram.g, in: geo.size)
-                        .fill(Color.green.opacity(0.55)).blendMode(.screen)
+                        .fill(Color.green.opacity(0.55)).blendMode(channelBlend)
                     channelPath(stats.histogram.b, in: geo.size)
-                        .fill(Color.blue.opacity(0.55)).blendMode(.screen)
+                        .fill(Color.blue.opacity(0.55)).blendMode(channelBlend)
                     if showLuminance {
                         channelStroke(stats.histogram.luma, in: geo.size)
                             .stroke(theme.controlAccent, lineWidth: 1)

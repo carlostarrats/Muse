@@ -25,6 +25,18 @@ enum AppSettings {
     static let showStarsOnGridKey = "showStarsOnGrid"
     static let colorsCardExpandedKey = "heroColorsCardExpanded"
     static let feedbackCardExpandedKey = "heroFeedbackCardExpanded"
+    /// Which of the editor panels' cards are open, by section id. A GLOBAL
+    /// working preference like the backdrop: the panel you opened for the last
+    /// photo is the one you want for the next.
+    /// Versioned: the section ids changed meaningfully (Scopes became
+    /// Histogram, Tone Zones split out), so a stored v1 set would leave the new
+    /// cards shut with no way to tell that from a deliberate choice.
+    static let editorExpandedSectionsKey = "editorExpandedSections2"
+    /// Styles browser: thumbnails as a grid, or a compact list. A working
+    /// preference — a library of fifty LUTs is a list, five is a grid.
+    static let editorStylesListModeKey = "editorStylesListMode"
+    /// Which Styles sub-sections (presets, luts) are showing their thumbnails.
+    static let editorStylesOpenKey = "editorStylesOpen"
     static let editorZebraHighKey = "editorZebraHigh"
     static let editorZebraLowKey = "editorZebraLow"
     /// The one-time "Smarter Search" offer has been shown. Set on ANY dismissal
@@ -92,11 +104,42 @@ enum AppSettings {
         UserDefaults.standard.object(forKey: colorsCardExpandedKey) as? Bool ?? true
     }
 
-    /// "Why it looks this way" card — same global last-choice rule as the
-    /// colors card, and @State-seeded for the same reason (an @AppStorage
-    /// publish lands outside a withAnimation transaction).
+    /// "Why it looks this way" card (now in the EDIT panel) — same global
+    /// last-choice rule as the colors card, and @State-seeded for the same
+    /// reason (an @AppStorage publish lands outside a withAnimation
+    /// transaction).
     static var feedbackCardExpanded: Bool {
         UserDefaults.standard.object(forKey: feedbackCardExpandedKey) as? Bool ?? true
+    }
+
+    static var editorStylesListMode: Bool {
+        get { UserDefaults.standard.bool(forKey: editorStylesListModeKey) }
+        set { UserDefaults.standard.set(newValue, forKey: editorStylesListModeKey) }
+    }
+
+    /// Which Styles sub-sections are expanded. Unset → both open.
+    static var editorStylesOpen: Set<String> {
+        get {
+            guard let ids = UserDefaults.standard.array(forKey: editorStylesOpenKey)
+                    as? [String] else { return ["presets", "luts"] }
+            return Set(ids)
+        }
+        set { UserDefaults.standard.set(Array(newValue), forKey: editorStylesOpenKey) }
+    }
+
+    /// Open editor panel cards. Unset (never touched) → nil, so the editor can
+    /// tell "no preference yet" from "the user closed everything" and apply its
+    /// own opening set only in the first case.
+    static var editorExpandedSections: Set<String>? {
+        get {
+            guard let ids = UserDefaults.standard.array(forKey: editorExpandedSectionsKey)
+                    as? [String] else { return nil }
+            return Set(ids)
+        }
+        set {
+            UserDefaults.standard.set(newValue.map(Array.init) ?? [],
+                                      forKey: editorExpandedSectionsKey)
+        }
     }
 
     /// Highlight-clipping threshold, 0…1 of full scale. Default 0.98.

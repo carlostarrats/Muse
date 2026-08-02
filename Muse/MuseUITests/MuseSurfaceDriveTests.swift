@@ -36,6 +36,20 @@ final class MuseSurfaceDriveTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = true
         app = XCUIApplication()
+        // Pin the editor's PERSISTED layout for the run.
+        //
+        // Which panel cards are open is a global preference, so a test that
+        // opens or closes one changes the starting point of every test after
+        // it — these passed alone and failed in sequence, in a different place
+        // each time. NSUserDefaults reads `-key value` launch arguments as its
+        // highest-priority domain, so this fixes the layout without a
+        // test-only code path in the app, and without touching the developer's
+        // real preferences.
+        app.launchArguments += [
+            "-editorExpandedSections2", "(tools,histogram,info,light,color)",
+            "-editorStylesOpen", "(presets,luts)",
+            "-editorBackdrop", "mid",
+        ]
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: uiTimeout),
                       "app never reached runningForeground")
@@ -65,6 +79,13 @@ final class MuseSurfaceDriveTests: XCTestCase {
         let out = dir.appendingPathComponent("muse-tree-\(name).txt")
         try? app.debugDescription.write(to: out, atomically: true, encoding: .utf8)
         print("TREE \(name): \(out.path)")
+    }
+
+    /// Click an element by its own centre coordinate. Needed for anything
+    /// inside a transparent SwiftUI ScrollView, where XCUITest's hit-point
+    /// resolution fails even though the control is perfectly clickable.
+    private func hit(_ element: XCUIElement) {
+        element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
     }
 
     /// Labels of every hittable button, the practical vocabulary for assertions.
@@ -200,6 +221,229 @@ final class MuseSurfaceDriveTests: XCTestCase {
         app.typeKey(.escape, modifierFlags: [])
         Thread.sleep(forTimeInterval: 3)
         snap("09-editor-closed")
+    }
+
+    /// Edit mode's own chrome row: the zoom pill actually zooms the canvas
+    /// (before this the editor could only ever show a fitted image), and the
+    /// eye hides every control including the hero's Preview | Edit switch.
+    func testEditorZoomAndHideControls() throws {
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.5)).doubleClick()
+        Thread.sleep(forTimeInterval: 4)
+
+        let editToggle = app.buttons["Edit"]
+        guard editToggle.waitForExistence(timeout: 10) else {
+            XCTFail("hero viewer has no 'Edit' toggle"); return
+        }
+        editToggle.click()
+        Thread.sleep(forTimeInterval: 5)
+
+        let zoomIn = app.buttons["Zoom in"]
+        XCTAssertTrue(zoomIn.waitForExistence(timeout: 10), "Edit mode published no zoom control")
+        // Coordinate clicks, not `.click()`: Edit's chrome rides INSIDE the
+        // panel's ScrollView (so it scrolls with the cards, as Preview's does),
+        // and XCUITest refuses to resolve a hit point through a scroll view
+        // with a transparent background. A real click lands fine.
+        hit(zoomIn); hit(zoomIn)
+        Thread.sleep(forTimeInterval: 1)
+        snap("09b-editor-zoomed")
+        // Fit only appears once the canvas is actually off its fitted scale.
+        XCTAssertTrue(app.buttons["Fit"].exists,
+                      "zooming published no Fit button — the zoom didn't take")
+
+        // Drag-to-pan. There is no queryable "pan" value, so the evidence is
+        // the pixels: the canvas is an MTKView behind an NSViewRepresentable,
+        // and a SwiftUI drag gesture on one of those is exactly the kind of
+        // thing that silently never fires.
+        let before = app.screenshot().pngRepresentation
+        let canvas = window.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.5))
+        canvas.press(forDuration: 0.2,
+                     thenDragTo: window.coordinate(withNormalizedOffset:
+                        CGVector(dx: 0.35, dy: 0.42)))
+        Thread.sleep(forTimeInterval: 1)
+        snap("09d-editor-panned")
+        XCTAssertNotEqual(before, app.screenshot().pngRepresentation,
+                          "dragging a zoomed canvas changed nothing — pan never fired")
+
+        let hide = app.buttons["Hide controls"]
+        XCTAssertTrue(hide.exists, "Edit mode published no hide-controls button")
+        hit(hide)
+        Thread.sleep(forTimeInterval: 1)
+        snap("09c-editor-ui-hidden")
+        XCTAssertFalse(app.buttons["Edit"].exists,
+                       "hiding the controls left the Preview | Edit switch on screen")
+        // NOT a slider count: the main window's grid-spacing slider lives in
+        // the same window and stays in the tree behind the viewer.
+        XCTAssertFalse(app.buttons["Reset All Adjustments"].exists,
+                       "hiding the controls left the panels on screen")
+
+        // And back: the eye stays reachable, or this is a one-way door.
+        let show = app.buttons["Show controls"]
+        XCTAssertTrue(show.exists, "no way back from hidden controls")
+        hit(show)
+        Thread.sleep(forTimeInterval: 1)
+        XCTAssertTrue(app.buttons["Reset All Adjustments"].exists, "controls never came back")
+
+        app.typeKey(.escape, modifierFlags: [])
+        Thread.sleep(forTimeInterval: 2)
+    }
+
+    /// The editor's name prompt must be VISIBLE. Regression test for a
+    /// layering bug, not a feature demo: the prompt was presented with the
+    /// shell's other modals, which are attached to the split view — and the
+    /// hero viewer's overlay draws on top of that, so "Save as Version…"
+    /// opened its card BEHIND the editor and read as the button doing nothing.
+    ///
+    /// It stops at CANCEL on purpose. This suite is non-destructive and runs
+    /// against the developer's real library; committing would leave a version
+    /// row behind, and the delete affordance is hover-only. The save itself was
+    /// confirmed by screenshot when the bug was fixed (2026-08-01).
+    func testEditorNamePromptOpensAboveTheEditor() throws {
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.5)).doubleClick()
+        Thread.sleep(forTimeInterval: 4)
+        let editToggle = app.buttons["Edit"]
+        guard editToggle.waitForExistence(timeout: 10) else {
+            XCTFail("hero viewer has no 'Edit' toggle"); return
+        }
+        editToggle.click()
+        Thread.sleep(forTimeInterval: 5)
+
+        // HISTORY is the LAST card in the left panel, so it starts below the
+        // fold — and an element that exists off-screen still answers `exists`,
+        // which is how this test previously clicked into empty space. Collapse
+        // the cards above it first so it's really on screen.
+        for card in ["TOOLS", "HISTOGRAM", "INFO"] where app.staticTexts[card].exists {
+            hit(app.staticTexts[card])
+            Thread.sleep(forTimeInterval: 0.4)
+        }
+        let heading = app.staticTexts["HISTORY"]
+        XCTAssertTrue(heading.waitForExistence(timeout: 10), "no HISTORY card")
+        // Open/closed PERSISTS, so this can't assume either state.
+        if !app.buttons["Save a snapshot"].exists {
+            hit(heading)
+            Thread.sleep(forTimeInterval: 1)
+        }
+
+        // One list, one Save — "versions" and "snapshots" were the same record
+        // under two names and collapsed into snapshots.
+        let save = app.buttons["Save a snapshot"]
+        if !save.waitForExistence(timeout: 5) {
+            dumpTree("history-missing-save")
+            snap("09-history-missing-save")
+        }
+        XCTAssertTrue(save.exists, "History has no Save control: "
+                      + buttonLabels().sorted().joined(separator: ", "))
+        hit(save)
+        Thread.sleep(forTimeInterval: 2)
+        snap("09e-version-prompt")
+
+        // The prompt's own title, not "a text field exists" — the main window
+        // has a search field, which made that assertion pass on nothing. And
+        // HITTABLE, not merely present: the bug being guarded is a card that
+        // renders behind the editor.
+        let title = app.staticTexts["Save Snapshot"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5),
+                      "the name prompt never appeared (presented behind the editor?)")
+        XCTAssertTrue(title.isHittable,
+                      "the name prompt is on screen but unreachable — something is over it")
+
+        // Escape, not the Cancel button: the modal's own buttons resolve
+        // inconsistently through XCUITest, and Escape is the path this suite
+        // already guards everywhere else.
+        app.typeKey(.escape, modifierFlags: [])
+        Thread.sleep(forTimeInterval: 1)
+        XCTAssertFalse(app.staticTexts["Save Snapshot"].exists, "Escape left the prompt up")
+
+        app.typeKey(.escape, modifierFlags: [])
+        Thread.sleep(forTimeInterval: 2)
+    }
+
+    /// Side by Side has to actually draw TWO images. It shipped as captions
+    /// only — "Before" and "After" floating over one unchanged canvas — which
+    /// is why it read as a toggle that does nothing.
+    func testSideBySideDrawsTwoImages() throws {
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.5)).doubleClick()
+        Thread.sleep(forTimeInterval: 4)
+        let editToggle = app.buttons["Edit"]
+        guard editToggle.waitForExistence(timeout: 10) else {
+            XCTFail("hero viewer has no 'Edit' toggle"); return
+        }
+        editToggle.click()
+        Thread.sleep(forTimeInterval: 5)
+
+        let before = app.screenshot().pngRepresentation
+        let sideBySide = app.buttons["Side by Side"]
+        XCTAssertTrue(sideBySide.waitForExistence(timeout: 10), "no Side by Side control")
+        hit(sideBySide)
+        Thread.sleep(forTimeInterval: 2)
+        snap("09g-side-by-side")
+
+        XCTAssertTrue(app.staticTexts["Before"].exists && app.staticTexts["After"].exists,
+                      "the two captions are missing")
+        // The canvas is an MTKView, so the pixels are the only evidence that
+        // the mode did anything at all.
+        XCTAssertNotEqual(before, app.screenshot().pngRepresentation,
+                          "Side by Side changed nothing on the canvas")
+
+        hit(sideBySide)   // back off
+        Thread.sleep(forTimeInterval: 1)
+        app.typeKey(.escape, modifierFlags: [])
+        Thread.sleep(forTimeInterval: 2)
+    }
+
+    /// The Styles browser: its sections collapse, it switches between grid and
+    /// list, and "Original" exists as a thing you can pick.
+    func testStylesBrowserModesAndOriginal() throws {
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.5)).doubleClick()
+        Thread.sleep(forTimeInterval: 4)
+        let editToggle = app.buttons["Edit"]
+        guard editToggle.waitForExistence(timeout: 10) else {
+            XCTFail("hero viewer has no 'Edit' toggle"); return
+        }
+        editToggle.click()
+        Thread.sleep(forTimeInterval: 5)
+
+        // The card's open/closed state PERSISTS, so this can't assume either
+        // one — tap the heading until the browser is actually showing.
+        let heading = app.staticTexts["STYLES"]
+        XCTAssertTrue(heading.waitForExistence(timeout: 10), "no STYLES card")
+        if !app.buttons["Grid"].exists {
+            hit(heading)
+            Thread.sleep(forTimeInterval: 1.5)
+        }
+        snap("09h-styles-grid")
+
+        for control in ["Grid", "List", "Presets", "LUTs"] {
+            XCTAssertTrue(app.buttons[control].exists, "Styles has no \(control) control")
+        }
+        // "Original" is only meaningful when there is something to opt out of,
+        // so it's asserted per section only when that section has content.
+        hit(app.buttons["List"])
+        Thread.sleep(forTimeInterval: 1.5)
+        snap("09i-styles-list")
+        // The mode has to actually CHANGE — the argument domain outranks a
+        // defaults write, so pinning this key made the button a no-op and the
+        // "list" screenshot was still a grid.
+        XCTAssertTrue(app.buttons["List"].isSelected, "the List button didn't take")
+
+        // Collapsing a section must keep saying what's selected.
+        hit(app.buttons["Presets"])
+        Thread.sleep(forTimeInterval: 1)
+        snap("09j-styles-collapsed")
+        XCTAssertEqual(app.buttons["Presets"].value as? String, "Original",
+                       "a collapsed section stopped reporting its selection")
+
+        hit(app.buttons["Grid"])
+        Thread.sleep(forTimeInterval: 1)
+        app.typeKey(.escape, modifierFlags: [])
+        Thread.sleep(forTimeInterval: 2)
     }
 
     // MARK: - Compare / cull (Spec 03)

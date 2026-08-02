@@ -1,12 +1,28 @@
 import Foundation
 
 /// Pure geometry for the hero viewer. Constants mirror the approved prototype:
-/// info column 258pt + 40pt margin, 40pt side pad, 70pt top, 60pt bottom.
+/// info column 258pt + 40pt margin, 40pt side pad, 86pt top, 60pt bottom.
 enum ViewerGeometry {
     static let columnWidth: CGFloat = 258
     static let columnMargin: CGFloat = 40
     static let sidePad: CGFloat = 40
-    static let topPad: CGFloat = 70
+    /// Clears the Preview | Edit switch outright: it starts at `chromeTop` and
+    /// is `chromeHeight` tall, so 70 is where it ENDS — a photo fitted to 70
+    /// touches it, and a tall one appeared to slide underneath on open. 16pt of
+    /// air past the switch; the image opens fractionally smaller for it.
+    static let topPad: CGFloat = 86
+
+    /// The y of the info column's chrome row (zoom pill / Fit / ✕), and of the
+    /// Preview | Edit switch: the viewer's top line.
+    /// = the right rail's 20pt top inset + the column's own 12pt card inset.
+    static let chromeTop: CGFloat = 32
+    /// The chrome row's height — the zoom pill's, which sets it.
+    static let chromeHeight: CGFloat = 38
+    /// The y of the info column's FIRST CARD (COLLECTION). The editor's panels
+    /// start here too, so the two modes' cards sit on one line:
+    ///   32 chromeTop + 38 chrome + 12 chrome bottom pad
+    ///   + 14 stack spacing + 20 filename header + 14 stack spacing.
+    static let cardsTop: CGFloat = 130
     static let bottomPad: CGFloat = 60
     static let maxZoom: CGFloat = 4
     /// A little headroom below Fit (1.0) so the image can be pulled back a

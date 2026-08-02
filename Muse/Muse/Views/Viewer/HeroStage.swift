@@ -153,6 +153,8 @@ struct HeroStage: View {
     @State private var didRetarget = false
     @State private var image: NSImage?
     @State private var dragStartPan: CGSize? = nil
+    /// The zoom a pinch started from — see `magnifyGesture`.
+    @State private var magnifyStartZoom: CGFloat?
     @State private var isDraggingPan = false
     /// Plain "is the pointer over the image" — independent of whether we've
     /// actually pushed a cursor for it (see `isHoverPushed`).
@@ -277,6 +279,12 @@ struct HeroStage: View {
                     // entirely inside FlightEffect's animated transform.
                     .position(x: base.midX, y: base.midY)
                     .gesture(panGesture)
+                    // Trackpad pinch, alongside the scroll-wheel zoom.
+                    // `simultaneously` rather than `.gesture`: a pinch and a
+                    // pan can overlap on a trackpad, and making them exclusive
+                    // means whichever SwiftUI recognises first wins and the
+                    // other silently never fires.
+                    .simultaneousGesture(magnifyGesture)
                     .onHover { hovering in
                         isHoveringImage = hovering
                         syncHoverCursor()
@@ -561,6 +569,22 @@ struct HeroStage: View {
         else { return }
         image = fallback
         withAnimation(HeroFlightMotion.settling(since: openedAt)) { displayRect = fitRect }
+    }
+
+    /// Pinch to zoom. The gesture reports a CUMULATIVE magnification, so the
+    /// scale is applied to the zoom the pinch STARTED at — reading it as a
+    /// delta compounds and the image leaps.
+    private var magnifyGesture: some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                guard burnProgress <= 0 else { return }
+                let start = magnifyStartZoom ?? zoom
+                magnifyStartZoom = start
+                let next = ViewerGeometry.clampZoom(start * value.magnification)
+                zoom = next
+                pan = ViewerGeometry.clampPan(pan, fittedSize: displayRect.size, zoom: next)
+            }
+            .onEnded { _ in magnifyStartZoom = nil }
     }
 
     private var panGesture: some Gesture {

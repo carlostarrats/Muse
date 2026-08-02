@@ -52,9 +52,10 @@ struct HeroImageViewer: View {
     /// are all untouched by it.
     @State private var editMode = false
     @State private var editSession: EditSession?
-    /// Deterministic capture feedback for the INFO column. Loaded alongside
-    /// the rest of the details — never on its own decode or query pass.
-    @State private var feedbackNotes: [PhotoFeedback.Note] = []
+    /// Read only so the Preview | Edit switch can stay legible over whichever
+    /// editor backdrop is set — the editor owns this preference.
+    @AppStorage(AppSettings.editorBackdropKey) private var editorBackdropRaw =
+        EditorBackdropLevel.default.rawValue
 
     init(file: FileNode) {
         self.file = file
@@ -78,7 +79,10 @@ struct HeroImageViewer: View {
                         .onTapGesture { startClose() }
 
                     if let editSession, editMode {
-                        EditorView(session: editSession)
+                        EditorView(session: editSession, onClose: {
+                            exitEditMode()
+                            startClose()
+                        })
                             // The stage's own scale, so entering Edit reads as
                             // the photo settling back to make room for the
                             // panels rather than as a new screen.
@@ -96,7 +100,17 @@ struct HeroImageViewer: View {
 
                         rightRail
                     }
-                    if editModeAvailable { editModeToggle }
+                    // Hidden along with the rest of the chrome when Edit's
+                    // eye is on: "only the image" has to include this too.
+                    if editModeAvailable {
+                        if let editSession, editMode {
+                            EditChromeGate(session: editSession) { zoomed in
+                                editModeToggle(zoomed: zoomed)
+                            }
+                        } else {
+                            editModeToggle(zoomed: zoom > 1.001)
+                        }
+                    }
                 }
                 ViewerToast(toast: $toast)
             }
@@ -248,7 +262,6 @@ struct HeroImageViewer: View {
                          fallbackPalette: computedPalette,
                          paletteLoading: !paletteResolved,
                          metadata: metadata,
-                         feedbackNotes: feedbackNotes,
                          backing: infoBackingColor,
                          backingVisible: zoom > 1.001,
                          refresh: { await loadDetails() },
@@ -418,7 +431,22 @@ struct HeroImageViewer: View {
         return kind == .image || kind == .raw
     }
 
-    private var editModeToggle: some View {
+    /// Sized and coloured as ONE MORE piece of the same chrome family as the
+    /// zoom pill and Fit: 38pt tall, white-glass, 11pt medium type. It sits at
+    /// ViewerGeometry.chromeTop, so the Preview | Edit switch is on exactly the
+    /// same line as Fit / ✕ across the viewer.
+    /// The switch floats over whatever is behind it. In Preview that's the
+    /// image's dark wash, so it's the same white glass as the zoom pill. In
+    /// EDIT it's the user's chosen backdrop — white through black — and a white
+    /// glass pill with white type on a white backdrop is invisible. So in edit
+    /// mode it takes the panels' resolved AA ink, exactly like the cards do.
+    private var toggleInk: PanelContrast.Ink? {
+        guard editMode else { return nil }
+        return PanelContrast.resolve(
+            backdrop: EditorBackdropLevel.resolve(editorBackdropRaw).brightness)
+    }
+
+    private func editModeToggle(zoomed: Bool) -> some View {
         HStack(spacing: 0) {
             segment(String(localized: "Preview"), active: !editMode) {
                 if editMode { exitEditMode() }
@@ -427,10 +455,19 @@ struct HeroImageViewer: View {
                 if !editMode { enterEditMode() }
             }
         }
-        .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
-        .overlay(Capsule(style: .continuous).stroke(Color.white.opacity(0.15)))
+        .frame(height: 38)
+        // Translucent glass over a FITTED photo is fine — the backdrop behind
+        // it is a wash. Over a ZOOMED one it isn't: the picture runs right
+        // under the switch and the labels disappear into it. Same answer the
+        // panels use, and the Preview column has always used: bring up a solid
+        // backing while zoomed.
+        .background(Capsule(style: .continuous).fill(
+            zoomed ? (toggleInk?.backing ?? Color(red: 0.14, green: 0.14, blue: 0.15))
+                        .opacity(0.94)
+                   : (toggleInk?.cardFill ?? .white.opacity(0.10))))
+        .clipShape(Capsule(style: .continuous))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .padding(.top, 14)
+        .padding(.top, ViewerGeometry.chromeTop)
         .opacity(chromeVisible ? 1 : 0)
         .animation(.easeOut(duration: 0.2), value: chromeVisible)
         .allowsHitTesting(chromeVisible && !isClosing)
@@ -438,15 +475,22 @@ struct HeroImageViewer: View {
 
     private func segment(_ title: String, active: Bool, action: @escaping () -> Void)
     -> some View {
-        Button(action: action) {
+        // Both the type and the selected segment's fill come from the resolved
+        // ink in edit mode; the fill is built from the VEIL, so selecting a
+        // segment can't pull the surface back under its own label.
+        let base = toggleInk?.baseColor ?? .white
+        let inactive = toggleInk?.secondaryOpacity ?? 0.7
+        return Button(action: action) {
             Text(title)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(active ? Color.primary : Color.secondary)
+                .foregroundStyle(base.opacity(active ? 1.0 : inactive))
                 .padding(.horizontal, 14)
-                .padding(.vertical, 5)
+                .frame(height: 38)
+                .contentShape(Rectangle())
                 .background {
                     if active {
-                        Capsule(style: .continuous).fill(Color.white.opacity(0.22))
+                        Capsule(style: .continuous)
+                            .fill(toggleInk?.raisedFill(0.24) ?? Color.white.opacity(0.24))
                     }
                 }
         }
@@ -467,6 +511,11 @@ struct HeroImageViewer: View {
 
     private func exitEditMode() {
         let session = editSession
+        // Preview comes back FITTED. The two modes keep their own zoom, and a
+        // trip through the editor leaving the Preview stage silently zoomed —
+        // whatever set it — reads as the editor having resized the photo.
+        zoom = 1
+        pan = .zero
         withAnimation(.easeOut(duration: 0.25)) { editMode = false }
         editSession = nil
         // Save on exit as well as on the debounce: leaving the editor is the
@@ -623,19 +672,9 @@ struct HeroImageViewer: View {
         let loaded = await detailsTask
         guard url == currentURL else { return }
         details = loaded
-        // Reads precomputed columns only (photo_meta + photo_traits), so this
-        // can't trigger a decode or query-time analysis.
-        if let fileID = loaded?.fileID, let queue = Database.shared.dbQueue {
-            let notes = await Task.detached(priority: .utility) { () -> [PhotoFeedback.Note] in
-                guard let inputs = try? queue.read({ db in
-                    try PhotoStatsQueries.feedbackInputs(fileID: fileID, db: db)
-                }) ?? nil else { return [] }
-                return PhotoFeedback.notes(for: inputs)
-            }.value
-            if url == currentURL { feedbackNotes = notes }
-        } else {
-            feedbackNotes = []
-        }
+        // "Why it looks this way" is no longer loaded here — it belongs to the
+        // EDIT panel now, which does its own (identical, precomputed-column)
+        // read when a session opens. The Preview page never pays for it.
         // Extra metadata for the INFO card (off-main, no DB). Derive the kind
         // from the live URL (navigation changes currentURL, not `file`). Like
         // `details`/palette above, we deliberately DON'T clear `metadata` first:
@@ -676,6 +715,11 @@ struct HeroImageViewer: View {
     /// over the stage zoom and are consumed.
     private func installScrollMonitor() {
         scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+            // Edit mode has its own scrollable panels on BOTH sides. This
+            // monitor claims everything left of the Preview column's x, which
+            // silently swallowed every scroll over the editor's left panel —
+            // the right one worked only because it sits past that line.
+            guard !editMode else { return event }
             guard !isClosing, !lingering, !burning, burnProgress <= 0,
                   let window = event.window, window.isKeyWindow else { return event }
             let width = window.contentView?.bounds.width ?? window.frame.width
@@ -700,76 +744,21 @@ struct HeroImageViewer: View {
     }
 }
 
-// MARK: - Chrome building blocks
-
-/// 38pt circular button (the ✕), hover-brightening.
-private struct ChromeCircleButton: View {
-    let systemName: String
-    var action: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white.opacity(hovering ? 1.0 : 0.85))
-                .frame(width: 38, height: 38)
-                // Hover lightens, like every other chrome control (prototype:
-                // rest .10 white, hover .24).
-                .background(Circle().fill(.white.opacity(hovering ? 0.24 : 0.10)))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(systemName == "xmark" ? String(localized: "Close") : systemName)
-        .onHover { hovering = $0 }
-    }
-}
-
-/// − / ＋ segments inside the zoom pill.
-private struct ChromePillButton: View {
-    let systemName: String
-    var disabled: Bool = false
-    var action: () -> Void
-    @State private var hovering = false
+/// Shows its content only while the editor's controls are visible.
+///
+/// `editSession` is held as plain @State by the hero viewer, which tracks the
+/// REFERENCE and not the object's `@Published` properties — so toggling
+/// `uiHidden` re-rendered the editor and left the Preview | Edit switch sitting
+/// over the photo. This one small view does the observing.
+private struct EditChromeGate<Content: View>: View {
+    @ObservedObject var session: EditSession
+    /// Passed the canvas's zoomed state, which the switch needs to stay legible
+    /// once the photo is running underneath it.
+    @ViewBuilder var content: (Bool) -> Content
 
     var body: some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                // Greyed when the zoom limit is reached — no hover lift, no fill.
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(disabled ? 0.25
-                                                : hovering ? 1.0 : 0.7))
-                .frame(width: 34, height: 38)
-                .contentShape(Rectangle())
-                // Explicit shape, not the bare-ShapeStyle background — that
-                // overload ignores safe-area edges and smears the hover fill
-                // into a full-height band beside the hidden toolbar area.
-                .background(Rectangle().fill(hovering && !disabled ? .white.opacity(0.20) : .clear))
+        if !session.uiHidden {
+            content(abs(session.canvasZoom - 1) > 0.001)
         }
-        .buttonStyle(.plain)
-        .disabled(disabled)
-        .accessibilityLabel(systemName == "minus" ? String(localized: "Zoom out")
-                            : systemName == "plus" ? String(localized: "Zoom in") : systemName)
-        .onHover { hovering = $0 }
-    }
-}
-
-/// 38pt-tall capsule text button ("Fit").
-private struct ChromeTextButton: View {
-    let label: String
-    var action: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            Text(label)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(hovering ? 1.0 : 0.85))
-                .padding(.horizontal, 14)
-                .frame(height: 38)
-                .background(Capsule(style: .continuous)
-                    .fill(.white.opacity(hovering ? 0.24 : 0.10)))
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
     }
 }

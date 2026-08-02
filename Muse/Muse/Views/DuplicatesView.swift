@@ -333,7 +333,7 @@ private struct DuplicateImageTile: View {
                     .allowsHitTesting(false)
             }
         }
-        .overlay(alignment: .topTrailing) {
+        .overlay(alignment: .bottomLeading) {
             RevealInFinderButton(url: member.url).padding(8)
         }
         .contentShape(Rectangle())
@@ -358,10 +358,14 @@ private struct DuplicateImageTile: View {
     }
 }
 
-/// Small reveal-in-Finder control on a tile — a frosted pill that names itself on
+/// Small reveal-in-Finder control on a tile — a blue pill that names itself on
 /// hover. Opens Finder with the file selected so it can be inspected full-size.
 /// The glyph is a folder, not a magnifier: at rest a magnifier reads as
 /// zoom/search-this-image, which is the wrong promise for a Finder hand-off.
+///
+/// Anchored BOTTOM-LEADING so the label grows rightwards into the tile's empty
+/// space instead of colliding with the KEEP badge (top-leading) — and so the
+/// resting circle never moves when the name appears.
 private struct RevealInFinderButton: View {
     let url: URL
     @State private var hovering = false
@@ -381,10 +385,12 @@ private struct RevealInFinderButton: View {
                         .transition(.opacity)
                 }
             }
-            .foregroundStyle(hovering ? .primary : .secondary)
+            // White on blue in both directions — a modal's controls don't follow
+            // the mood palette, and the glyph has to stay legible over the fill.
+            .foregroundStyle(.white)
             .padding(.horizontal, hovering ? 8 : 0)
             .frame(minWidth: 22, minHeight: 22)
-            .background(Capsule().fill(.thinMaterial))
+            .background(Capsule().fill(Color.accentColor.opacity(hovering ? 1.0 : 0.85)))
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
