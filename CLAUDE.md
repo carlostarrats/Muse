@@ -129,8 +129,13 @@ are the load-bearing reference artifacts.
 | Foundation 7 — **Spec-07 sharing & social export** (no migrations; manifest v2 `y`/`s`/`m` + three page layouts; portfolio mode — a live `manifest.json` in the user's Drive behind a URL that never changes; `Export/Social/` + the social export card; Google on-ramp copy) | ✅ merged, unreleased | `new-product-build-1` |
 
 | **Review — Specs 01–07** | ✅ reviewed + fixed 2026-08-01 (7 rounds) | `new-product-build-1` |
-| Editor UX pass — **Edit becomes the Preview page in a second mode** (shared cards/chrome/margins; zoom + pan + pinch in Edit, which had none; Side by Side actually renders; editor modals hoisted above the viewer; Scopes→Histogram, Looks→Styles, Insights, INFO dropped; versions folded into snapshots; Styles grid/list + Original + applied-preset detection; `PanelContrast` resolves every editor colour against WCAG AA) | ✅ reviewed 2026-08-02 (round 8), unmerged | `testing-new-features` |
+| Editor UX pass — **Edit becomes the Preview page in a second mode** (shared cards/chrome/margins; zoom + pan + pinch in Edit, which had none; Side by Side actually renders; editor modals hoisted above the viewer; Scopes→Histogram, Looks→Styles, Insights, INFO dropped; versions folded into snapshots; Styles grid/list + Original + applied-preset detection; `PanelContrast` resolves every editor colour against WCAG AA) | ✅ merged 2026-08-02 (round-8 reviewed), unreleased | `testing-new-features` |
 
+> The **Editor UX pass** and the two feature-removal commits before it were
+> merged to `main` on **2026-08-02** (fast-forward from `testing-new-features`),
+> reviewed in round 8 — see `docs/new-build/REVIEW-LENSES.md` and the 2026-08-02
+> session-log entry. Not in any release.
+>
 > Every row through Polish 27 is merged to `main` and shipped in release **`v1.5`**;
 > Polish 28 is merged to `main` but NOT yet in a release (`v1.5` is still the
 > current released build; Polish 25–27 landed in it after `v1.4`). **Foundation 1–7
