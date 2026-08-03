@@ -28,7 +28,12 @@ struct MuseApp: App {
     @StateObject private var announcementStore = AnnouncementStore()
     /// Observed so the View menu's hide-UI item can title and enable itself
     /// from the editor's state. See `EditorChromeCommand`.
-    @ObservedObject private var editorChrome = EditorChromeCommand.shared
+    ///
+    /// `@StateObject`, like every other object here — that is the shape already
+    /// proven to re-evaluate this file's `Commands` body (the Drive and
+    /// Open With items disable themselves off `appState` the same way). The
+    /// autoclosure runs once and hands back the singleton.
+    @StateObject private var editorChrome = EditorChromeCommand.shared
 
     /// Pin / Unpin label reflects the selected folder's current state.
     private var pinMenuTitle: String {
@@ -457,7 +462,11 @@ struct MuseApp: App {
                     }
                 }
                 .keyboardShortcut("u", modifiers: .command)
-                .disabled(editorChrome.uiHidden == nil)
+                // Also off while a card is up. Muse's modals are in-window
+                // overlays, so a key equivalent still reaches the menu — and
+                // hiding the chrome UNDER an open export card or name prompt
+                // leaves the UI gone for a reason the user never saw.
+                .disabled(editorChrome.uiHidden == nil || appState.modalPresented)
             }
 
             // Menu-bar equivalents of the chip context menu — keyboard and
