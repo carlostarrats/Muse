@@ -672,3 +672,55 @@ Consequences, until this is understood:
   would make the suite green against an app whose window is not on screen —
   the exact vacuous-pass failure this suite was built to avoid. Find out why
   the window doesn't appear first.
+
+---
+
+## Part 4 — editor workspace (2026-08-03)
+
+Spec: `docs/superpowers/specs/2026-08-03-editor-workspace-design.md`.
+Plan: `docs/superpowers/plans/2026-08-03-editor-workspace.md`.
+Branch: `feat/next-155`.
+
+The editor's twelve control cards stop being two hard-coded `@ViewBuilder`
+lists and become a persisted **workspace**: an ordered list per column plus the
+set the user has hidden. Single column is not a mode — it is the state where a
+column is empty.
+
+**Runtime is BLOCKED, not skipped.** `MuseSurfaceDriveTests` cannot run on this
+machine (see "The drive suite is BLOCKED on this machine", above — a
+pre-existing failure, `testAppLaunchesWithPopulatedSidebar` fails identically on
+untouched code). Nothing below marked ❌ has been seen working; the R column
+says what to check when the harness is fixed or a human drives it.
+
+| # | Feature | Automated (A) | Static (S) | Runtime (R) | Notes |
+|---|---|---|---|---|---|
+| P33.1 | Workspace model + load repair | `EditorWorkspaceTests` (26) | 2026-08-03 | n/a | Pure. Unknown id dropped, missing module appended VISIBLE to its home column, duplicate deduped, all-hidden refused. The every-module-exactly-once invariant is asserted after every mutation |
+| P33.2 | Persistence + transactional reorder | `EditorWorkspaceStoreTests` (18) | 2026-08-03 | ❌ | **Check: Save, quit, relaunch — the layout is still there.** Malformed/wrong-type preference falls back to standard. Leaving the mode by any route except Save is a cancel |
+| P33.3 | Customize Modules modal | store tests cover the writes | 2026-08-03 | ❌ | **Check: unchecking removes the card live behind the card; the LAST visible checkbox is inert; Escape closes it; the grid's key catcher is dead while it is up** |
+| P33.4 | Editor Workspace menu (Default / Customize / Reorder) | — | 2026-08-03 | ❌ | **Check: all three disabled outside Edit, behind a modal, and during a reorder.** No keyboard shortcuts by design |
+| P33.5 | Reorder mode — collapse + wiggle | — | 2026-08-03 | ❌ | **Check: every card becomes a bar, no slider/crop/Auto is reachable, and on exit every card is open or closed exactly as it was** (the expanded-sections preference is never written in this mode) |
+| P33.6 | Reorder drag (within + across columns) | `ReorderMathTests` (19 — 13 inherited from the sidebar, 6 new for the column split) | 2026-08-03 | ❌ | **Check: bars part, the insertion line marks the gap, a cross-column drag lands, and a drag INTO an emptied column works.** The riskiest part of the branch — see the risk note below |
+| P33.7 | Insertion line legibility | — | 2026-08-03 | ❌ | **Check on the WHITE backdrop and the BLACK one.** Draws in the `PanelContrast`-resolved accent; the panel backing is raised for the mode so the line is never over bare photograph |
+| P33.8 | Grab cursor | — | 2026-08-03 | ❌ | **Check: open hand on hover, closed fist while dragging, and NO stale hand anywhere in the app after Cancel or after closing the viewer mid-drag.** Every push is flag-tracked and popped once; `resetCursorState` unwinds fist → pan → hover in LIFO order |
+| P33.9 | All Left / All Right | `EditorWorkspaceTests` reading-order + idempotence tests | 2026-08-03 | ❌ | **Check both directions.** Reading order (left's list then right's) whichever side receives, so All Right matches the approved single-column layout |
+| P33.10 | Column-aware canvas insets | `EditorCanvasGeometryTests` (21, 7 new) | 2026-08-03 | ❌ | **Check: All Right → Save → the photo GLIDES left rather than jumping, and lands where Preview puts it.** The top inset must not move — the chrome row is pinned |
+| P33.11 | Escape cancels reorder | `EscapeActionTests` (4 new) | 2026-08-03 | ❌ | **Check: Escape in reorder mode cancels and does NOT close the viewer.** Resolves above the viewer cases, below a modal |
+
+### Known risk, called out rather than hidden
+
+P33.6's drag is written against `SidebarView`'s reorder, which is tuned for one
+column of uniform rows in a single scroll view. The editor's bars sit in **two
+independently-scrolling `EditorPanel`s**. Frames are collected in a shared
+`.coordinateSpace(name:)` that should absorb the difference, and the parting
+pitch is a known constant in this mode (every card is the same collapsed bar),
+but a cross-column drag while one column is scrolled is the case most likely to
+need adjustment once someone can actually drive it. Final placement stays
+correct regardless — the commit is identity-based, not frame-based.
+
+### What this deliberately does NOT include
+
+* **No "Single Column" menu toggle.** Rejected in design: restoring "your last
+  two-column arrangement" forces two arrangements to exist at once, one always
+  invisible. See the spec's §9.
+* **No reordering in the Customize modal**, and no visibility in reorder mode.
+  Two ways to do one thing in two places drift apart.
