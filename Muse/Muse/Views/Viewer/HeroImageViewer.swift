@@ -822,7 +822,16 @@ struct HeroImageViewer: View {
             guard event.keyCode == 53, !lingering, !burning, burnProgress <= 0,
                   let window = event.window, window.isKeyWindow,
                   // A card over the viewer owns Escape first.
-                  !appState.modalPresented else { return event }
+                  !appState.modalPresented,
+                  // So does a workspace reorder. It is a MODE inside the editor
+                  // rather than a card, so `modalPresented` does not cover it —
+                  // and this monitor runs ahead of SwiftUI, so without this the
+                  // shell's `.cancelEditorReorder` branch never got the key and
+                  // Escape closed the whole viewer, discarding the arrangement.
+                  // Yielding here (rather than cancelling from inside the
+                  // viewer) keeps ONE place deciding what Escape peels first:
+                  // EscapeResolver.
+                  !EditorWorkspaceStore.shared.reorderMode else { return event }
             if editMode { closeFromEditor() } else { startClose() }
             return nil
         }

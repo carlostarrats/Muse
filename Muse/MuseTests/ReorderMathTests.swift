@@ -112,4 +112,47 @@ final class ReorderMathTests: XCTestCase {
         // Degenerate container (a frame not yet measured). Must not trap.
         XCTAssertFalse(ReorderMath.isLeftColumn(x: 0, containerWidth: 0))
     }
+
+    // MARK: - Arriving shift (a drag ENTERING a column from the other one)
+
+    func testArrivingShiftOpensAGapAtAndBelowTheTarget() {
+        XCTAssertEqual(ReorderMath.arrivingRowShift(forIndex: 1, dropTarget: 1, pitch: pitch),
+                       pitch)
+        XCTAssertEqual(ReorderMath.arrivingRowShift(forIndex: 4, dropTarget: 1, pitch: pitch),
+                       pitch)
+    }
+
+    func testArrivingShiftLeavesRowsAboveTheTargetAlone() {
+        XCTAssertEqual(ReorderMath.arrivingRowShift(forIndex: 0, dropTarget: 1, pitch: pitch), 0)
+    }
+
+    func testArrivingShiftIsZeroWithNoTarget() {
+        XCTAssertEqual(ReorderMath.arrivingRowShift(forIndex: 2, dropTarget: nil, pitch: pitch), 0)
+    }
+
+    func testArrivingShiftAtTheHeadPushesEveryRowDown() {
+        for i in 0..<4 {
+            XCTAssertEqual(ReorderMath.arrivingRowShift(forIndex: i, dropTarget: 0, pitch: pitch),
+                           pitch)
+        }
+    }
+
+    func testArrivingShiftPastTheTailMovesNothing() {
+        // Target == count: the bar lands after everything, so nothing parts.
+        for i in 0..<3 {
+            XCTAssertEqual(ReorderMath.arrivingRowShift(forIndex: i, dropTarget: 3, pitch: pitch),
+                           0)
+        }
+    }
+
+    /// The distinction that matters: a WITHIN-column drag has a hole to close as
+    /// well as a gap to open, so the two functions disagree for rows below the
+    /// dragged one — which is exactly why the arriving case needs its own.
+    func testArrivingAndWithinDisagreeBelowTheDraggedRow() {
+        let within = ReorderMath.rowShift(forIndex: 3, draggedIndex: 0,
+                                          dropTarget: 2, pitch: pitch)
+        let arriving = ReorderMath.arrivingRowShift(forIndex: 3, dropTarget: 2, pitch: pitch)
+        XCTAssertEqual(within, 0, "the hole it left cancels the gap it opens")
+        XCTAssertEqual(arriving, pitch, "nothing was removed here, so the gap is real")
+    }
 }

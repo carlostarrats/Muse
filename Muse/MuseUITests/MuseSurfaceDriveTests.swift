@@ -581,4 +581,231 @@ final class MuseSurfaceDriveTests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Automatic organization"].exists,
                        "Escape did not close Settings")
     }
+
+    // MARK: - Editor workspace (Polish 33)
+
+    /// Opens the editor and returns once its sliders are published, or fails.
+    /// Every workspace test needs the same three steps first.
+    @discardableResult
+    private func openEditor() -> Bool {
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
+        guard openPhoto(in: app) else { return false }
+        let editToggle = app.buttons["Edit"]
+        guard editToggle.waitForExistence(timeout: 10) else {
+            XCTFail("hero viewer has no 'Edit' toggle")
+            return false
+        }
+        editToggle.click()
+        Thread.sleep(forTimeInterval: 5)
+        guard app.sliders.count > 0 else {
+            snap("20-editor-did-not-open")
+            XCTFail("Edit mode published no sliders — the editor did not open")
+            return false
+        }
+        return true
+    }
+
+    /// Leave the editor and the viewer, whatever state they are in, so one
+    /// test's mode cannot leak into the next.
+    private func closeEditor() {
+        app.typeKey(.escape, modifierFlags: [])
+        Thread.sleep(forTimeInterval: 1.5)
+        app.typeKey(.escape, modifierFlags: [])
+        Thread.sleep(forTimeInterval: 2)
+    }
+
+    /// The submenu exists, and every item is DISABLED outside Edit mode — the
+    /// same contextual gate the hide-UI item uses.
+    func testEditorWorkspaceMenuIsOffOutsideTheEditor() throws {
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
+
+        app.menuBars.menuBarItems["View"].click()
+        let submenu = app.menuBars.menuItems["Editor Workspace"]
+        XCTAssertTrue(submenu.waitForExistence(timeout: 5),
+                      "View menu has no 'Editor Workspace' submenu")
+
+        // Assert on the CHILDREN, not the submenu's parent item. AppKit reports
+        // a parent that owns a submenu as enabled whatever SwiftUI's
+        // `.disabled()` says — the disabling lands on the items inside. The
+        // first version of this test checked the parent and failed against a
+        // perfectly correct menu. `Hide controls` is the control: a plain
+        // Button under the same condition, which DOES report disabled.
+        XCTAssertFalse(app.menuBars.menuItems["Hide controls"].isEnabled,
+                       "the control item is enabled with no editor — "
+                       + "this test's premise is wrong, not the workspace menu")
+        submenu.hover()
+        for item in ["Default Layout", "Customize Modules…", "Reorder Modules"] {
+            let element = app.menuBars.menuItems[item]
+            XCTAssertTrue(element.waitForExistence(timeout: 5), "'\(item)' is missing")
+            XCTAssertFalse(element.isEnabled,
+                           "'\(item)' is live with no editor on screen")
+        }
+        snap("20-workspace-menu-disabled")
+        app.typeKey(.escape, modifierFlags: [])
+        Thread.sleep(forTimeInterval: 0.5)
+        app.typeKey(.escape, modifierFlags: [])
+    }
+
+    /// Customize Modules opens, applies LIVE, and Escape closes it.
+    ///
+    /// The live-apply assertion is the load-bearing one: unchecking a box has
+    /// to remove that card from the panel BEHIND the open modal, with no OK
+    /// button anywhere in the flow.
+    func testCustomizeModulesHidesACardLive() throws {
+        guard openEditor() else { return }
+        defer { closeEditor() }
+
+        XCTAssertTrue(app.staticTexts["SPLIT TONE"].exists,
+                      "SPLIT TONE is not on the panel to begin with")
+
+        guard menu("View", "Customize Modules…", submenu: "Editor Workspace") else {
+            XCTFail("Customize Modules… was not reachable")
+            return
+        }
+        Thread.sleep(forTimeInterval: 2)
+        snap("21-customize-open")
+
+        let box = app.checkBoxes["SPLIT TONE"]
+        XCTAssertTrue(box.waitForExistence(timeout: 5),
+                      "the Customize list has no SPLIT TONE row")
+        box.click()
+        Thread.sleep(forTimeInterval: 1.5)
+        // The checkbox itself must have flipped. Without this, a click that
+        // lands on nothing looks identical to a click that worked until the
+        // panel assertion below — and that is exactly how the card-behind-the-
+        // editor bug hid.
+        XCTAssertEqual(box.value as? Int, 0, "the checkbox did not change state")
+        snap("21-customize-unchecked")
+
+        app.typeKey(.escape, modifierFlags: [])
+        Thread.sleep(forTimeInterval: 2)
+        XCTAssertFalse(app.checkBoxes["SPLIT TONE"].exists, "Escape did not close Customize")
+        XCTAssertFalse(app.staticTexts["SPLIT TONE"].exists,
+                       "unchecking did not remove the card from the panel")
+        snap("21-card-gone")
+
+        // Put it back, so the persisted workspace does not leak into the next
+        // test — this preference survives relaunch by design.
+        guard menu("View", "Customize Modules…", submenu: "Editor Workspace") else { return }
+        Thread.sleep(forTimeInterval: 2)
+        app.checkBoxes["SPLIT TONE"].click()
+        Thread.sleep(forTimeInterval: 1)
+        app.typeKey(.escape, modifierFlags: [])
+        Thread.sleep(forTimeInterval: 1.5)
+        XCTAssertTrue(app.staticTexts["SPLIT TONE"].exists, "re-checking did not restore the card")
+    }
+
+    /// Reorder mode is a MODE: every card collapses to a bar, so no adjustment
+    /// control is reachable, and Escape cancels the mode rather than the viewer.
+    ///
+    /// The slider count is measured against a BASELINE taken before the editor
+    /// opens, not against zero. `app.sliders` is app-wide, and the grid's
+    /// "Images per row" toolbar slider is still published behind the viewer —
+    /// asserting zero failed against a perfectly collapsed panel.
+    func testReorderModeCollapsesEveryCardAndCancelRestores() throws {
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
+        let baseline = app.sliders.count
+
+        guard openEditor() else { return }
+        defer { closeEditor() }
+        let withCards = app.sliders.count
+        XCTAssertGreaterThan(withCards, baseline, "the editor published no sliders of its own")
+
+        guard menu("View", "Reorder Modules", submenu: "Editor Workspace") else {
+            XCTFail("Reorder Modules was not reachable")
+            return
+        }
+        Thread.sleep(forTimeInterval: 2.5)
+        snap("22-reorder-mode")
+
+        XCTAssertEqual(app.sliders.count, baseline,
+                       "reorder mode left editor sliders reachable — cards did not collapse")
+        XCTAssertTrue(app.buttons["Save"].exists, "no Save in the floating bar")
+        XCTAssertTrue(app.buttons["Cancel"].exists, "no Cancel in the floating bar")
+        XCTAssertTrue(app.buttons["All Left"].exists, "no All Left in the floating bar")
+        XCTAssertTrue(app.buttons["All Right"].exists, "no All Right in the floating bar")
+
+        // ONE Escape, with no menu open to swallow it. This is the branch that
+        // resolves above `.closeHero`: it must cancel the MODE and leave the
+        // viewer standing. If it closed the viewer instead, the cards do not
+        // come back and this fails.
+        app.typeKey(.escape, modifierFlags: [])
+        Thread.sleep(forTimeInterval: 2.5)
+        snap("22-reorder-cancelled")
+        XCTAssertFalse(app.buttons["Save"].exists, "Escape did not leave reorder mode")
+        XCTAssertEqual(app.sliders.count, withCards,
+                       "Escape did not restore the cards (or it closed the viewer)")
+    }
+
+    /// While a reorder owns the editor, the workspace menu and ⌘U are off.
+    ///
+    /// Asserted on the submenu's CHILDREN: AppKit reports a parent item that
+    /// owns a submenu as enabled whatever SwiftUI's `.disabled()` says.
+    func testWorkspaceMenuAndHideControlsAreOffDuringAReorder() throws {
+        guard openEditor() else { return }
+        defer { closeEditor() }
+
+        guard menu("View", "Reorder Modules", submenu: "Editor Workspace") else { return }
+        Thread.sleep(forTimeInterval: 2.5)
+
+        app.menuBars.menuBarItems["View"].click()
+        Thread.sleep(forTimeInterval: 0.8)
+        XCTAssertFalse(app.menuBars.menuItems["Hide controls"].isEnabled,
+                       "⌘U is still live during a reorder")
+        app.menuBars.menuItems["Editor Workspace"].hover()
+        Thread.sleep(forTimeInterval: 0.8)
+        for item in ["Default Layout", "Customize Modules…", "Reorder Modules"] {
+            XCTAssertFalse(app.menuBars.menuItems[item].isEnabled,
+                           "'\(item)' is still live during a reorder")
+        }
+        snap("22-menu-off-during-reorder")
+
+        // Two Escapes: the first dismisses the open menu, the second cancels
+        // the mode. The menu swallows the first — that off-by-one is what made
+        // the first version of this test fail against correct behaviour.
+        app.typeKey(.escape, modifierFlags: [])
+        Thread.sleep(forTimeInterval: 1)
+        app.typeKey(.escape, modifierFlags: [])
+        Thread.sleep(forTimeInterval: 2)
+        XCTAssertFalse(app.buttons["Save"].exists, "still in reorder mode")
+    }
+
+    /// All Right empties the left column; Save commits it and the photo gets
+    /// that side back. Then Default Layout puts everything home again.
+    func testAllRightThenDefaultLayoutRoundTrips() throws {
+        guard openEditor() else { return }
+        defer { closeEditor() }
+
+        // TOOLS is the left column's first card — its presence is the cheapest
+        // proof the left column is drawn at all.
+        XCTAssertTrue(app.staticTexts["TOOLS"].exists, "TOOLS missing before the move")
+
+        guard menu("View", "Reorder Modules", submenu: "Editor Workspace") else { return }
+        Thread.sleep(forTimeInterval: 2)
+        app.buttons["All Right"].click()
+        Thread.sleep(forTimeInterval: 1.5)
+        snap("23-all-right")
+        app.buttons["Save"].click()
+        Thread.sleep(forTimeInterval: 3)
+        snap("23-single-column")
+
+        // Still present — moved, not lost. This is the assertion that would
+        // catch a move that dropped modules on the floor.
+        XCTAssertTrue(app.staticTexts["TOOLS"].exists, "TOOLS vanished on All Right")
+        XCTAssertTrue(app.staticTexts["CROP & STRAIGHTEN"].exists,
+                      "CROP & STRAIGHTEN vanished on All Right")
+        XCTAssertGreaterThan(app.sliders.count, 0, "the single column has no controls")
+
+        guard menu("View", "Default Layout", submenu: "Editor Workspace") else {
+            XCTFail("Default Layout was not reachable")
+            return
+        }
+        Thread.sleep(forTimeInterval: 3)
+        snap("23-back-to-default")
+        XCTAssertTrue(app.staticTexts["TOOLS"].exists, "TOOLS missing after Default Layout")
+        XCTAssertTrue(app.staticTexts["STYLES"].exists, "STYLES missing after Default Layout")
+    }
 }

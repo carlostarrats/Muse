@@ -63,4 +63,20 @@ enum ReorderMath {
     static func isLeftColumn(x: CGFloat, containerWidth: CGFloat) -> Bool {
         x < containerWidth / 2
     }
+
+    /// How far a row slides when the dragged item is ARRIVING from somewhere
+    /// else — a different column, in the editor's two-column workspace.
+    ///
+    /// `rowShift` cannot serve this case. It assumes the dragged row was lifted
+    /// out of THIS list, so it nets the hole that left against the gap being
+    /// opened; passing it a nil `draggedIndex` (which is what a cross-column
+    /// drag produces) makes it return 0, and the destination column would sit
+    /// there refusing to part while the insertion line claimed a gap existed.
+    /// Here nothing was removed, so the gap is real and unnetted: every row at
+    /// or after the target moves down by one pitch.
+    static func arrivingRowShift(forIndex i: Int, dropTarget: Int?,
+                                 pitch: CGFloat) -> CGFloat {
+        guard let target = dropTarget, i >= target else { return 0 }
+        return pitch
+    }
 }

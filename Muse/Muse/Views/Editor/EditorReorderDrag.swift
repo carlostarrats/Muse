@@ -65,11 +65,24 @@ extension EditorView {
     /// How far a non-dragged bar slides to part and open the gap. The pitch is
     /// the bar's height plus the panel VStack's spacing, both known constants
     /// in this mode — every card is collapsed to the same bar.
+    ///
+    /// TWO cases, and they are not the same sum. When the bar came out of THIS
+    /// column there is a hole to close as well as a gap to open, and below the
+    /// dragged row those cancel. When it is arriving from the OTHER column
+    /// nothing was removed here, so the gap is unnetted. Using the within-column
+    /// formula for both is what made cross-column drags refuse to part: it
+    /// wants a `draggedIndex`, a cross-column drag has none in this list, and it
+    /// answers 0 — leaving the insertion line pointing at a gap that never
+    /// opened.
     func rowShift(_ module: EditorModule, in column: EditorColumn, index: Int) -> CGFloat {
         guard let dragging = draggingModule, dragging != module,
               column == dropColumn else { return 0 }
         let pitch = EditorReorderRow.height + 14
-        let draggedIndex = workspace.active.visible(in: column).firstIndex(of: dragging)
+        guard let draggedIndex = workspace.active.visible(in: column).firstIndex(of: dragging)
+        else {
+            return ReorderMath.arrivingRowShift(forIndex: index, dropTarget: dropTarget,
+                                                pitch: pitch)
+        }
         return ReorderMath.rowShift(forIndex: index, draggedIndex: draggedIndex,
                                     dropTarget: dropTarget, pitch: pitch)
     }

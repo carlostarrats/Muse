@@ -246,13 +246,6 @@ struct ContentView: View {
                        width: 600, palette: appState.moodPalette) {
                 InfoSheet(isPresented: $appState.infoShown)
             }
-            // Its own modifier rather than two more links in this chain: the
-            // modal chain here is long enough that adding to it inline tipped
-            // the type-checker over its time limit.
-            .editorCustomizeModal(store: editorWorkspace,
-                                  palette: appState.moodPalette) { shown in
-                appState.editorWorkspaceModalShown = shown
-            }
             // Three 120pt tiles and a subtitle — a 600pt card left it swimming.
             .museModal(isPresented: $appState.imageLayoutShown,
                        width: 460, palette: appState.moodPalette) {
@@ -514,6 +507,20 @@ struct ContentView: View {
                 ModalMessageCard(alert: alert) { appState.alertRequest = nil }
                     .id(alert.id)
             }
+        }
+        // Editor Workspace ▸ Customize Modules. On the OUTER stack for exactly
+        // the reason the prompt below spells out: attached to the split view
+        // with the shell's other cards, it drew UNDER the hero viewer's
+        // overlay, so the card opened BEHIND the editor. Every one of its
+        // checkboxes was then unclickable and the menu item read as doing
+        // nothing — which is what the drive test caught.
+        //
+        // Its own modifier rather than more links in this chain: the modal
+        // chains in this file are long enough that adding inline tipped the
+        // type-checker past its time limit.
+        .editorCustomizeModal(store: editorWorkspace,
+                              palette: appState.moodPalette) { shown in
+            appState.editorWorkspaceModalShown = shown
         }
         // Editor-raised name prompts (version / snapshot / preset). Presented on
         // the OUTER stack, not with the shell's other modals: those are attached

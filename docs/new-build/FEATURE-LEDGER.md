@@ -686,36 +686,66 @@ lists and become a persisted **workspace**: an ordered list per column plus the
 set the user has hidden. Single column is not a mode — it is the state where a
 column is empty.
 
-**Runtime is BLOCKED, not skipped.** `MuseSurfaceDriveTests` cannot run on this
-machine (see "The drive suite is BLOCKED on this machine", above — a
-pre-existing failure, `testAppLaunchesWithPopulatedSidebar` fails identically on
-untouched code). Nothing below marked ❌ has been seen working; the R column
-says what to check when the harness is fixed or a human drives it.
+**The drive-suite blocker cleared on 2026-08-03.** The section below titled
+"The drive suite is BLOCKED on this machine" describes a state that no longer
+holds — `MuseSurfaceDriveTests` runs 12/12 green again, and this feature added
+5 more. Nothing was changed to fix it; it simply started working, so treat that
+section as history and re-check before trusting it either way.
+
+**Driving it found two real bugs that every unit test missed**, both recorded in
+the rows below (P33.3, P33.11). Both were invisible to the suite because both
+were about LAYERING and KEY ROUTING — things no pure test can see. That is the
+argument for this column existing.
+
+Three of the five drive tests were ALSO wrong on the first run, in ways that
+accused correct code:
+
+* AppKit reports a submenu's PARENT item as enabled whatever SwiftUI's
+  `.disabled()` says; the disabling lands on the children. Assert on children.
+* `app.sliders` is app-wide, so the grid's "Images per row" toolbar slider is
+  still published behind the viewer. Measure against a BASELINE taken before
+  the editor opens, not against zero.
+* An open menu swallows the first Escape. Count them.
 
 | # | Feature | Automated (A) | Static (S) | Runtime (R) | Notes |
 |---|---|---|---|---|---|
 | P33.1 | Workspace model + load repair | `EditorWorkspaceTests` (26) | 2026-08-03 | n/a | Pure. Unknown id dropped, missing module appended VISIBLE to its home column, duplicate deduped, all-hidden refused. The every-module-exactly-once invariant is asserted after every mutation |
-| P33.2 | Persistence + transactional reorder | `EditorWorkspaceStoreTests` (18) | 2026-08-03 | ❌ | **Check: Save, quit, relaunch — the layout is still there.** Malformed/wrong-type preference falls back to standard. Leaving the mode by any route except Save is a cancel |
-| P33.3 | Customize Modules modal | store tests cover the writes | 2026-08-03 | ❌ | **Check: unchecking removes the card live behind the card; the LAST visible checkbox is inert; Escape closes it; the grid's key catcher is dead while it is up** |
-| P33.4 | Editor Workspace menu (Default / Customize / Reorder) | — | 2026-08-03 | ❌ | **Check: all three disabled outside Edit, behind a modal, and during a reorder.** No keyboard shortcuts by design |
-| P33.5 | Reorder mode — collapse + wiggle | — | 2026-08-03 | ❌ | **Check: every card becomes a bar, no slider/crop/Auto is reachable, and on exit every card is open or closed exactly as it was** (the expanded-sections preference is never written in this mode) |
-| P33.6 | Reorder drag (within + across columns) | `ReorderMathTests` (19 — 13 inherited from the sidebar, 6 new for the column split) | 2026-08-03 | ❌ | **Check: bars part, the insertion line marks the gap, a cross-column drag lands, and a drag INTO an emptied column works.** The riskiest part of the branch — see the risk note below |
+| P33.2 | Persistence + transactional reorder | `EditorWorkspaceStoreTests` (18) | 2026-08-03 | ⚠️ writes ✅, relaunch ❌ | The preference is confirmed to be written only when something actually commits — its ABSENCE was the evidence that proved the Customize card was dead (see P33.3). **Still to check: Save, quit, relaunch — the layout is still there.** Note the drive suite pins the other editor preferences with launch arguments and CANNOT pin this one (it is JSON `Data`), so a workspace test leaks into later runs and into the developer's own app; each test restores what it changed |
+| P33.3 | Customize Modules modal | store tests cover the writes | 2026-08-03 | ✅ `testCustomizeModulesHidesACardLive` | **BUG FOUND AND FIXED HERE.** The card was attached to the split view with the shell's other modals, which the hero viewer's overlay draws ON TOP OF — so it opened BEHIND the editor, every checkbox was unclickable, and the menu item read as doing nothing. Moved to the OUTER stack beside `editPromptRequest`/`alertRequest`/`exportRequest`, whose comments already spelled this out from being bitten twice before. The test now asserts the checkbox's own value flips, not just that the card left the panel — a click landing on nothing looked identical to one that worked |
+| P33.4 | Editor Workspace menu (Default / Customize / Reorder) | — | 2026-08-03 | ✅ `testEditorWorkspaceMenuIsOffOutsideTheEditor`, `testWorkspaceMenuAndHideControlsAreOffDuringAReorder` | All three items confirmed disabled outside Edit AND during a reorder, along with ⌘U. No keyboard shortcuts by design |
+| P33.5 | Reorder mode — collapse + wiggle | — | 2026-08-03 | ⚠️ collapse ✅, wiggle ❌ | `testReorderModeCollapsesEveryCardAndCancelRestores` confirms every editor slider goes and all of them come back on cancel. **The WIGGLE itself is still unseen** — an animation is not assertable from the element tree, and nobody has watched it |
+| P33.6 | Reorder drag (within + across columns) | `ReorderMathTests` (25 — 13 inherited from the sidebar, 6 for the column split, 6 for the arriving shift) | 2026-08-03 | ❌ | **BUG FOUND BY CODE REVIEW, fixed, still unseen at runtime.** A cross-column drag left the destination column refusing to part: `rowShift` nets the hole the dragged row left against the gap being opened, and a cross-column drag has no such hole — passing it a nil `draggedIndex` made it answer 0 while the insertion line claimed a gap existed. `arrivingRowShift` is the unnetted case. **Still to check by hand: bars part, the line marks the gap, a cross-column drag lands, and a drag INTO an emptied column works.** XCUITest cannot drive this — see the note below |
 | P33.7 | Insertion line legibility | — | 2026-08-03 | ❌ | **Check on the WHITE backdrop and the BLACK one.** Draws in the `PanelContrast`-resolved accent; the panel backing is raised for the mode so the line is never over bare photograph |
 | P33.8 | Grab cursor | — | 2026-08-03 | ❌ | **Check: open hand on hover, closed fist while dragging, and NO stale hand anywhere in the app after Cancel or after closing the viewer mid-drag.** Every push is flag-tracked and popped once; `resetCursorState` unwinds fist → pan → hover in LIFO order |
-| P33.9 | All Left / All Right | `EditorWorkspaceTests` reading-order + idempotence tests | 2026-08-03 | ❌ | **Check both directions.** Reading order (left's list then right's) whichever side receives, so All Right matches the approved single-column layout |
-| P33.10 | Column-aware canvas insets | `EditorCanvasGeometryTests` (21, 7 new) | 2026-08-03 | ❌ | **Check: All Right → Save → the photo GLIDES left rather than jumping, and lands where Preview puts it.** The top inset must not move — the chrome row is pinned |
-| P33.11 | Escape cancels reorder | `EscapeActionTests` (4 new) | 2026-08-03 | ❌ | **Check: Escape in reorder mode cancels and does NOT close the viewer.** Resolves above the viewer cases, below a modal |
+| P33.9 | All Left / All Right | `EditorWorkspaceTests` reading-order + idempotence tests | 2026-08-03 | ⚠️ All Right ✅, All Left ❌ | `testAllRightThenDefaultLayoutRoundTrips` drives All Right → Save → Default Layout and confirms no card is lost either way. All LEFT is still undriven |
+| P33.10 | Column-aware canvas insets | `EditorCanvasGeometryTests` (21, 7 new) | 2026-08-03 | ⚠️ layout ✅, motion ❌ | The single-column layout is reached and screenshotted by `testAllRightThenDefaultLayoutRoundTrips`. **Whether the photo GLIDES rather than jumps is still unseen** — a transition is not assertable from the element tree |
+| P33.11 | Escape cancels reorder | `EscapeActionTests` (4 new) | 2026-08-03 | ✅ `testReorderModeCollapsesEveryCardAndCancelRestores` | **BUG FOUND AND FIXED HERE.** The resolver branch was correct and never ran: `HeroImageViewer.installKeyMonitor` is a local `NSEvent` monitor that takes Escape ahead of SwiftUI and closes the viewer, gated only on `!appState.modalPresented` — and a reorder is a MODE, not a card. Escape was closing the whole viewer and discarding the arrangement. The monitor now also yields on `EditorWorkspaceStore.shared.reorderMode`, so `EscapeResolver` stays the single place that decides what Escape peels first |
 
-### Known risk, called out rather than hidden
+### The one part XCUITest cannot reach
 
-P33.6's drag is written against `SidebarView`'s reorder, which is tuned for one
-column of uniform rows in a single scroll view. The editor's bars sit in **two
-independently-scrolling `EditorPanel`s**. Frames are collected in a shared
-`.coordinateSpace(name:)` that should absorb the difference, and the parting
-pitch is a known constant in this mode (every card is the same collapsed bar),
-but a cross-column drag while one column is scrolled is the case most likely to
-need adjustment once someone can actually drive it. Final placement stays
-correct regardless — the commit is identity-based, not frame-based.
+**The drag itself is still unverified, and no drive test will fix that.**
+XCUITest can click and type; it cannot perform the press-move-release against a
+live SwiftUI `DragGesture` that this needs, and the parting animation and the
+wiggle are not assertable from the element tree in any case. Everything AROUND
+the drag is now driven — entering the mode, the collapse, the floating bar, All
+Right, Save, Cancel, Escape, the menu gating — so what is left is specifically:
+
+1. bars part to open a gap as you drag;
+2. the insertion line marks it, **on the WHITE backdrop and on the BLACK one**;
+3. a cross-column drag lands (this is where the `arrivingRowShift` bug was —
+   fixed, never seen working);
+4. a drag INTO an emptied column works;
+5. the open-hand / closed-fist cursor, and **no stale hand left in the app**
+   after Cancel or after closing the viewer mid-drag;
+6. the wiggle looks like a mode rather than a glitch.
+
+The drag borrows `SidebarView`'s math, which assumes ONE column in ONE scroll
+view; the editor has two that scroll independently. Frames are collected in a
+shared `.coordinateSpace(name:)` and the parting pitch is a known constant in
+this mode (every card is the same collapsed bar), so a cross-column drag while
+one column is scrolled is the case most likely to still be wrong. Final
+PLACEMENT stays correct regardless — the commit is identity-based, not
+frame-based — so a visual glitch there cannot corrupt a layout.
 
 ### What this deliberately does NOT include
 
