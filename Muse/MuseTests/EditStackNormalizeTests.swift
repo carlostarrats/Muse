@@ -170,4 +170,24 @@ extension EditStackNormalizeTests {
                              .lut(LutParams(lutHash: "a", name: "x", strength: 0))]
         XCTAssertTrue(stack.isNeutral)
     }
+
+    /// The contract the EFFECTS card leans on. Vignette shipped with a full
+    /// model and renderer and nothing that could write it, so until that card
+    /// existed no code path in the app could produce this state at all.
+    func testVignetteRoundTripsAtItsCanonicalIndex() {
+        var stack = EditStack.fresh()
+        stack.setVignette { $0.amount = -0.4; $0.midpoint = 0.3; $0.feather = 0.8 }
+        XCTAssertFalse(stack.isNeutral)
+
+        let normalized = stack.normalized()
+        XCTAssertEqual(normalized.vignetteParams?.amount, -0.4)
+        XCTAssertEqual(normalized.vignetteParams?.midpoint, 0.3)
+        XCTAssertEqual(normalized.vignetteParams?.feather, 0.8)
+
+        // Amount back to zero is neutral REGARDLESS of midpoint and feather.
+        // This is what stops the card from persisting a no-op blob after the
+        // user has nudged the shape sliders and then backed the effect out.
+        stack.setVignette { $0.amount = 0 }
+        XCTAssertTrue(stack.isNeutral)
+    }
 }

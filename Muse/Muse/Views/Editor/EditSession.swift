@@ -152,6 +152,34 @@ final class EditSession: ObservableObject {
         tapStats(from: image, maxPixel: Int(proxyLongEdge))
     }
 
+    // MARK: - Auto tone
+
+    /// Cached for the life of the session, which is what makes Auto
+    /// IDEMPOTENT: it always measures the same original, so a second press
+    /// computes the same answer instead of compounding the first one.
+    ///
+    /// `originalImage` is the unedited render of the proxy the session already
+    /// keeps for before/after, so this costs one small downsample and no extra
+    /// decode. Deliberately NOT `stats`, which describes the DRAFT and only
+    /// exists while a stats panel is open.
+    private var autoToneCache: AutoToneStats.Result?
+
+    func autoToneResult() async -> AutoToneStats.Result? {
+        if let autoToneCache { return autoToneCache }
+        guard let image = originalImage else { return nil }
+        let sampleEdge = Self.statsSampleLongEdge
+        let result = await Task.detached(priority: .userInitiated) {
+            () -> AutoToneStats.Result? in
+            guard let sample = Self.rgba8Sample(of: image, longEdge: sampleEdge,
+                                                context: RenderContexts.preview)
+            else { return nil }
+            return AutoToneStats.compute(rgba8: sample.bytes,
+                                         width: sample.width, height: sample.height)
+        }.value
+        autoToneCache = result
+        return result
+    }
+
     /// Latest-wins, one render in flight. A drag emits changes far faster than
     /// a 24 MP render completes.
     private let coalescer = RenderCoalescer<EditStack, CIImage>()
@@ -323,7 +351,9 @@ final class EditSession: ObservableObject {
     }
 
     /// Downsample to `longEdge` and read back RGBA8 — the histogram's input.
-    private nonisolated static func rgba8Sample(of image: CIImage, longEdge: Int,
+    /// Internal rather than private: the auto-tone tap above reads the ORIGINAL
+    /// through this same downsample.
+    nonisolated static func rgba8Sample(of image: CIImage, longEdge: Int,
                                                 context: CIContext)
         -> (bytes: [UInt8], width: Int, height: Int)? {
         let extent = image.extent

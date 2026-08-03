@@ -71,6 +71,8 @@ struct EditorView: View {
         static let tools = "tools", histogram = "histogram"
         static let insights = "insights", history = "history"
         static let looks = "looks", light = "light", zones = "zones", color = "color"
+        static let hsl = "hsl", splitTone = "splitTone", effects = "effects"
+        static let crop = "crop"
     }
 
     /// What a first-ever editor session opens with: the tools, the histogram
@@ -728,12 +730,22 @@ struct EditorView: View {
                       isExpanded: expansion(Section.looks)) { looksTab }
         EditorSection(title: String(localized: "LIGHT"),
                       ink: ink,
-                      accessory: resetButton(String(localized: "Reset Light")) {
-                          session.draft.setTone { $0 = .neutral }
-                          session.draft.setPresence { $0 = .neutral }
-                          session.draft.setCurve { $0 = .neutral }
-                          session.commitGesture()
-                      },
+                      accessory: autoAndReset(
+                          autoHelp: String(localized: "Auto Light"),
+                          auto: {
+                              Task {
+                                  guard let r = await session.autoToneResult() else { return }
+                                  AutoToneApply.light(r, onto: &session.draft)
+                                  session.commitGesture()
+                              }
+                          },
+                          resetHelp: String(localized: "Reset Light"),
+                          reset: {
+                              session.draft.setTone { $0 = .neutral }
+                              session.draft.setPresence { $0 = .neutral }
+                              session.draft.setCurve { $0 = .neutral }
+                              session.commitGesture()
+                          }),
                       isExpanded: expansion(Section.light)) { lightTab }
         // Its own card between Light and Color: the zone strip is a distinct
         // way of working (paint tone onto the photo by zone), not one more
@@ -745,11 +757,80 @@ struct EditorView: View {
         }
         EditorSection(title: String(localized: "COLOR"),
                       ink: ink,
-                      accessory: resetButton(String(localized: "Reset Color")) {
-                          session.draft.setColor { $0 = .neutral }
+                      accessory: autoAndReset(
+                          autoHelp: String(localized: "Auto Color"),
+                          auto: {
+                              Task {
+                                  guard let r = await session.autoToneResult() else { return }
+                                  AutoToneApply.color(r, onto: &session.draft)
+                                  session.commitGesture()
+                              }
+                          },
+                          resetHelp: String(localized: "Reset Color"),
+                          reset: {
+                              session.draft.setColor { $0 = .neutral }
+                              session.commitGesture()
+                          }),
+                      isExpanded: expansion(Section.color)) { colorTab }
+        // Vignette, and from Stage B grain. Called EFFECTS rather than the
+        // spec's original "Character" for the same reason SCOPES became
+        // HISTOGRAM: the heading has to say what it does to someone looking at
+        // their own photo.
+        EditorSection(title: String(localized: "EFFECTS"),
+                      ink: ink,
+                      accessory: resetButton(String(localized: "Reset Effects")) {
+                          session.draft.setVignette { $0 = .neutral }
                           session.commitGesture()
                       },
-                      isExpanded: expansion(Section.color)) { colorTab }
+                      isExpanded: expansion(Section.effects)) { effectsSection }
+    }
+
+    /// Auto beside Reset, in the card's heading. Auto is scoped exactly like
+    /// the Reset it sits next to (see `AutoToneApply`): the button in LIGHT
+    /// never moves a COLOR slider, because a card's controls promising one
+    /// group and touching another is the thing per-card Reset exists to avoid.
+    private func autoAndReset(autoHelp: String, auto: @escaping () -> Void,
+                              resetHelp: String, reset: @escaping () -> Void) -> AnyView {
+        AnyView(
+            HStack(spacing: 4) {
+                EditorSmallButton(label: String(localized: "Auto"),
+                                  systemName: "wand.and.stars",
+                                  action: auto)
+                    .environment(\.theme, panelTheme)
+                    .help(Text(autoHelp))
+                EditorSmallButton(label: String(localized: "Reset"),
+                                  systemName: "arrow.counterclockwise",
+                                  action: reset)
+                    .environment(\.theme, panelTheme)
+                    .help(Text(resetHelp))
+            }
+        )
+    }
+
+    /// Vignette (and, from Stage B, grain). Vignette shipped with a full model
+    /// and renderer in Spec 04 and NOTHING that could write it — the only
+    /// reference in the app was a reset. This card is that missing half.
+    private var effectsSection: some View {
+        VStack(alignment: .leading, spacing: panelTheme.spacingS) {
+            EditSlider(label: String(localized: "Vignette"),
+                       value: vignetteBinding(\.amount), onCommit: session.commitGesture)
+            EditSlider(label: String(localized: "Midpoint"),
+                       value: vignetteBinding(\.midpoint), range: 0...1, neutral: 0.5,
+                       onCommit: session.commitGesture)
+            EditSlider(label: String(localized: "Feather"),
+                       value: vignetteBinding(\.feather), range: 0...1, neutral: 0.5,
+                       onCommit: session.commitGesture)
+        }
+    }
+
+    /// `neutral:` matters on midpoint/feather: double-clicking their labels has
+    /// to return to 0.5, not to 0, or the reset gesture lands somewhere the
+    /// user never chose.
+    private func vignetteBinding(_ key: WritableKeyPath<VignetteParams, Double>)
+        -> Binding<Double> {
+        Binding(get: { session.draft.vignetteParams?[keyPath: key]
+                        ?? VignetteParams.neutral[keyPath: key] },
+                set: { v in session.draft.setVignette { $0[keyPath: key] = v } })
     }
 
     /// A card's own Reset — undoes that group and nothing else, so fixing the
