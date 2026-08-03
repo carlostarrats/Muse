@@ -65,6 +65,9 @@ struct EditorView: View {
     private static let chromeFade: Double = 0.22
     /// Styles browser: grid or list. A global working preference.
     @AppStorage(AppSettings.editorStylesListModeKey) private var stylesListMode = false
+    /// Session-scoped: which channel COLOR MIX is showing. Saturation first —
+    /// it is the one people reach for.
+    @State private var hslTab: HSLTab = .saturation
 
     /// Section ids. Stable strings, because they're persisted.
     private enum Section {
@@ -772,14 +775,26 @@ struct EditorView: View {
                               session.commitGesture()
                           }),
                       isExpanded: expansion(Section.color)) { colorTab }
-        // Vignette, and from Stage B grain. Called EFFECTS rather than the
-        // spec's original "Character" for the same reason SCOPES became
-        // HISTOGRAM: the heading has to say what it does to someone looking at
-        // their own photo.
+        // Hue-targeted colour, under the global COLOR sliders it refines.
+        EditorSection(title: String(localized: "COLOR MIX"),
+                      ink: ink,
+                      accessory: hslTabButtons,
+                      isExpanded: expansion(Section.hsl)) { hslSection }
+        EditorSection(title: String(localized: "SPLIT TONE"),
+                      ink: ink,
+                      accessory: resetButton(String(localized: "Reset Split Tone")) {
+                          session.draft.setSplitTone { $0 = .neutral }
+                          session.commitGesture()
+                      },
+                      isExpanded: expansion(Section.splitTone)) { splitToneSection }
+        // Vignette and grain. Called EFFECTS rather than the spec's original
+        // "Character" for the same reason SCOPES became HISTOGRAM: the heading
+        // has to say what it does to someone looking at their own photo.
         EditorSection(title: String(localized: "EFFECTS"),
                       ink: ink,
                       accessory: resetButton(String(localized: "Reset Effects")) {
                           session.draft.setVignette { $0 = .neutral }
+                          session.draft.setGrain { $0 = .neutral }
                           session.commitGesture()
                       },
                       isExpanded: expansion(Section.effects)) { effectsSection }
@@ -807,9 +822,9 @@ struct EditorView: View {
         )
     }
 
-    /// Vignette (and, from Stage B, grain). Vignette shipped with a full model
-    /// and renderer in Spec 04 and NOTHING that could write it — the only
-    /// reference in the app was a reset. This card is that missing half.
+    /// Vignette and grain. Vignette shipped with a full model and renderer in
+    /// Spec 04 and NOTHING that could write it — the only reference in the app
+    /// was a reset. This card is that missing half.
     private var effectsSection: some View {
         VStack(alignment: .leading, spacing: panelTheme.spacingS) {
             EditSlider(label: String(localized: "Vignette"),
@@ -820,7 +835,113 @@ struct EditorView: View {
             EditSlider(label: String(localized: "Feather"),
                        value: vignetteBinding(\.feather), range: 0...1, neutral: 0.5,
                        onCommit: session.commitGesture)
+
+            Divider()
+
+            EditSlider(label: String(localized: "Grain"),
+                       value: grainBinding(\.amount), range: 0...1, neutral: 0,
+                       onCommit: session.commitGesture)
+            EditSlider(label: String(localized: "Grain Size"),
+                       value: grainBinding(\.size), range: 0...1, neutral: 0.5,
+                       onCommit: session.commitGesture)
+            EditSlider(label: String(localized: "Grain Roughness"),
+                       value: grainBinding(\.roughness), range: 0...1, neutral: 0.5,
+                       onCommit: session.commitGesture)
         }
+    }
+
+    private func grainBinding(_ key: WritableKeyPath<GrainParams, Double>) -> Binding<Double> {
+        Binding(get: { session.draft.grainParams?[keyPath: key]
+                        ?? GrainParams.neutral[keyPath: key] },
+                set: { v in session.draft.setGrain { $0[keyPath: key] = v } })
+    }
+
+    // MARK: - Colour mix (HSL) + split toning
+
+    /// Which of the three HSL channels the eight sliders are editing. Lives in
+    /// the card HEADING, not the body — the same reason the Styles card's
+    /// Grid/List pair does: inside the card it pushed every row down.
+    private enum HSLTab: String, CaseIterable { case hue, saturation, luminance }
+
+    /// Band order is fixed and matches the kernel's 45° centres starting at red.
+    private static let hslBandNames = [
+        String(localized: "Red"), String(localized: "Orange"),
+        String(localized: "Yellow"), String(localized: "Green"),
+        String(localized: "Aqua"), String(localized: "Blue"),
+        String(localized: "Purple"), String(localized: "Magenta"),
+    ]
+
+    private var hslSection: some View {
+        VStack(alignment: .leading, spacing: panelTheme.spacingS) {
+            ForEach(Array(Self.hslBandNames.enumerated()), id: \.offset) { i, name in
+                EditSlider(label: name, value: hslBinding(i), onCommit: session.commitGesture)
+            }
+        }
+    }
+
+    private func hslBinding(_ band: Int) -> Binding<Double> {
+        Binding(get: {
+            let p = session.draft.hslParams ?? .neutral
+            let channel: [Double] = switch hslTab {
+            case .hue: p.hue
+            case .saturation: p.saturation
+            case .luminance: p.luminance
+            }
+            return band < channel.count ? channel[band] : 0
+        }, set: { v in
+            session.draft.setHSL { p in
+                switch hslTab {
+                case .hue: if band < p.hue.count { p.hue[band] = v }
+                case .saturation: if band < p.saturation.count { p.saturation[band] = v }
+                case .luminance: if band < p.luminance.count { p.luminance[band] = v }
+                }
+            }
+        })
+    }
+
+    private var hslTabButtons: AnyView {
+        AnyView(HStack(spacing: 4) {
+            stylesModeButton(systemName: "paintpalette", isOn: hslTab == .hue,
+                             label: String(localized: "Hue")) { hslTab = .hue }
+            stylesModeButton(systemName: "drop", isOn: hslTab == .saturation,
+                             label: String(localized: "Saturation")) { hslTab = .saturation }
+            stylesModeButton(systemName: "sun.max", isOn: hslTab == .luminance,
+                             label: String(localized: "Luminance")) { hslTab = .luminance }
+        })
+    }
+
+    private var splitToneSection: some View {
+        VStack(alignment: .leading, spacing: panelTheme.spacingS) {
+            Text("Shadows")
+                .font(panelTheme.labelFont).foregroundStyle(panelTheme.textSecondary)
+            EditSlider(label: String(localized: "Hue"), value: splitBinding(\.shadowHue),
+                       range: 0...1, neutral: 0, onCommit: session.commitGesture)
+            EditSlider(label: String(localized: "Saturation"),
+                       value: splitBinding(\.shadowSaturation),
+                       range: 0...1, neutral: 0, onCommit: session.commitGesture)
+
+            Divider()
+
+            Text("Highlights")
+                .font(panelTheme.labelFont).foregroundStyle(panelTheme.textSecondary)
+            EditSlider(label: String(localized: "Hue"), value: splitBinding(\.highlightHue),
+                       range: 0...1, neutral: 0, onCommit: session.commitGesture)
+            EditSlider(label: String(localized: "Saturation"),
+                       value: splitBinding(\.highlightSaturation),
+                       range: 0...1, neutral: 0, onCommit: session.commitGesture)
+
+            Divider()
+
+            EditSlider(label: String(localized: "Balance"), value: splitBinding(\.balance),
+                       onCommit: session.commitGesture)
+        }
+    }
+
+    private func splitBinding(_ key: WritableKeyPath<SplitToneParams, Double>)
+        -> Binding<Double> {
+        Binding(get: { session.draft.splitToneParams?[keyPath: key]
+                        ?? SplitToneParams.neutral[keyPath: key] },
+                set: { v in session.draft.setSplitTone { $0[keyPath: key] = v } })
     }
 
     /// `neutral:` matters on midpoint/feather: double-clicking their labels has

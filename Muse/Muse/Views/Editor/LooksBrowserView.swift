@@ -106,6 +106,9 @@ struct LooksBrowserView: View {
                             session.draft.setCurve { $0 = .neutral }
                             session.draft.setToneZone { $0 = .neutral }
                             session.draft.setVignette { $0 = .neutral }
+                            session.draft.setHSL { $0 = .neutral }
+                            session.draft.setSplitTone { $0 = .neutral }
+                            session.draft.setGrain { $0 = .neutral }
                             session.commitGesture()
                         },
                         items: presetStore.presets.map { preset in
