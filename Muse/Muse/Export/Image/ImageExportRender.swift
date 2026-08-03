@@ -49,6 +49,30 @@ nonisolated enum ImageExportRender {
     static func export(_ job: Job, to directory: URL) throws -> Result {
         let format = job.settings.format.resolved(for: job.sourceURL)
 
+        // 0. A faithful copy beats a re-encode.
+        //
+        //    When nothing is being CHANGED — no edit stack, no resize, no
+        //    format conversion, metadata kept — the most correct output is the
+        //    original bytes. Re-encoding them was destroying the gain map of a
+        //    file Muse had only been asked to copy, and it is also the only way
+        //    an HDR photo survives on macOS 14.6, where writing a gain map is
+        //    unavailable. Strictly more faithful for SDR files too.
+        if job.settings.format == .sameAsOriginal,
+           job.settings.resize == .original,
+           job.settings.includeEXIF,
+           job.settings.includeLocation,
+           EditStackIndex.resolvedStack(for: job.sourceURL) == nil {
+            let dest = ExportPipeline.collisionSafeURL(
+                base: job.sourceURL.deletingPathExtension().lastPathComponent,
+                ext: job.sourceURL.pathExtension,
+                in: directory)
+            try FileManager.default.copyItem(at: job.sourceURL, to: dest)
+            let size = (try? ExportPipeline.headerSize(url: dest)) ?? .zero
+            let attributes = try? FileManager.default.attributesOfItem(atPath: dest.path)
+            let bytes = (attributes?[.size] as? Int) ?? 0
+            return Result(url: dest, pixelSize: size, bytes: bytes)
+        }
+
         // 1. Choke point. A 16-bit request renders its temp at 16-bit rather
         //    than inflating an 8-bit one and calling it deep.
         let preferred: OutputFormat? = (format == .tiff && job.settings.tiff16) ? .tiff16 : nil
@@ -107,14 +131,24 @@ nonisolated enum ImageExportRender {
         guard let sRGB = CGColorSpace(name: CGColorSpace.sRGB) else {
             throw ExportPipeline.RenderError.encodeFailed
         }
+        //    HDR follows the FORMAT the user already picked — no separate
+        //    toggle. PNG, JPEG, TIFF and WebP cannot carry a gain map at all,
+        //    so they are SDR by construction; HEIC is the only place the
+        //    choice exists. Anything landing in SDR is TONE-MAPPED on the way,
+        //    never clipped.
+        let headroom = EditRenderer.sourceHeadroom(url: job.sourceURL)
+        let wantsHDR = Self.wantsHDR(headroom: headroom, format: format)
+        if !wantsHDR {
+            image = HDRDecode.toneMappedToSDR(image, headroom: headroom)
+        }
         guard let cgImage = ExportPipeline.context.createCGImage(
             image, from: extent,
-            format: deep ? .RGBA16 : .RGBA8,
-            colorSpace: sRGB)
+            format: (wantsHDR || deep) ? .RGBA16 : .RGBA8,
+            colorSpace: wantsHDR ? HDRDecode.hdrColorSpace : sRGB)
         else { throw ExportPipeline.RenderError.encodeFailed }
 
         let data = try encode(cgImage, format: format, job: job,
-                              sourceProperties: sourceProperties)
+                              sourceProperties: sourceProperties, writesHDR: wantsHDR)
 
         // 6. Verify, then write. A metadata-off output must be PROVABLY clean,
         //    not merely constructed to be — the same rule the social and Drive
@@ -167,8 +201,22 @@ nonisolated enum ImageExportRender {
     }
 
     /// WebP goes through our own encoder; everything else through ImageIO.
+    /// Whether this export writes a real HDR file.
+    ///
+    /// macOS 14.6 COULD write PQ here, and deliberately does not: a PQ file
+    /// looks wrong on an ordinary SDR display, whereas a gain-map file degrades
+    /// gracefully. Shipping something that looks broken everywhere else is
+    /// worse than shipping an SDR photo, so on the floor this stays off and the
+    /// image tone-maps instead.
+    static func wantsHDR(headroom: CGFloat, format: ExportFormat) -> Bool {
+        guard headroom > HDRDecode.hdrThreshold, format == .heic else { return false }
+        if #available(macOS 15.0, *) { return true }
+        return false
+    }
+
     private static func encode(_ image: CGImage, format: ExportFormat, job: Job,
-                               sourceProperties: [String: Any]) throws -> Data {
+                               sourceProperties: [String: Any],
+                               writesHDR: Bool = false) throws -> Data {
         if format == .webp {
             return try WebPEncoder.encode(image, quality: job.settings.quality,
                                           lossless: job.settings.webpLossless)
@@ -187,6 +235,12 @@ nonisolated enum ImageExportRender {
                 source: sourceProperties as CFDictionary,
                 includeLocation: job.settings.includeLocation) as? [String: Any] {
             properties.merge(merged) { _, new in new }
+        }
+        // The gain map is what makes an HDR export ALSO look right on an
+        // ordinary display — a bare PQ file does not.
+        if writesHDR, #available(macOS 15.0, *) {
+            properties[kCGImageDestinationEncodeRequest as String] =
+                kCGImageDestinationEncodeToISOGainmap
         }
         CGImageDestinationAddImage(dest, image, properties as CFDictionary)
         guard CGImageDestinationFinalize(dest) else {
