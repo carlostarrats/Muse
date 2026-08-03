@@ -168,4 +168,76 @@ final class EditorCanvasGeometryTests: XCTestCase {
         XCTAssertEqual(br?.x ?? -1, 1, accuracy: 0.0001)
         XCTAssertEqual(br?.y ?? -1, 1, accuracy: 0.0001)
     }
+
+    // MARK: - Column-aware panel insets
+
+    @MainActor func testBothColumnsReserveAPanelOnEachSide() {
+        let i = EditorCanvasGeometry.panelInsets(leftEmpty: false, rightEmpty: false,
+                                                 chromeProgress: 1)
+        XCTAssertEqual(i.leading, ViewerGeometry.editorPanelWidth, accuracy: 0.01)
+        XCTAssertEqual(i.trailing, ViewerGeometry.editorPanelWidth, accuracy: 0.01)
+    }
+
+    @MainActor func testAllCardsRightGivesThePhotoTheLeftSide() {
+        // Preview's exact geometry — content left, column right — so switching
+        // Preview to Edit does not move the photo at all.
+        let i = EditorCanvasGeometry.panelInsets(leftEmpty: true, rightEmpty: false,
+                                                 chromeProgress: 1)
+        XCTAssertEqual(i.leading, ViewerGeometry.sidePad, accuracy: 0.01)
+        XCTAssertEqual(i.trailing, ViewerGeometry.editorPanelWidth, accuracy: 0.01)
+    }
+
+    @MainActor func testAllCardsLeftGivesThePhotoTheRightSide() {
+        let i = EditorCanvasGeometry.panelInsets(leftEmpty: false, rightEmpty: true,
+                                                 chromeProgress: 1)
+        XCTAssertEqual(i.leading, ViewerGeometry.editorPanelWidth, accuracy: 0.01)
+        XCTAssertEqual(i.trailing, ViewerGeometry.sidePad, accuracy: 0.01)
+    }
+
+    @MainActor func testTheTopInsetNeverMoves() {
+        // The chrome row is pinned, so a photo widening into an emptied right
+        // column must still start below it.
+        for (l, r) in [(false, false), (true, false), (false, true), (true, true)] {
+            let i = EditorCanvasGeometry.panelInsets(leftEmpty: l, rightEmpty: r,
+                                                     chromeProgress: 1)
+            XCTAssertEqual(i.top, ViewerGeometry.topPad, accuracy: 0.01,
+                           "top moved for leftEmpty=\(l) rightEmpty=\(r)")
+        }
+    }
+
+    @MainActor func testHidingTheUIStillCollapsesEverySideToBare() {
+        let i = EditorCanvasGeometry.panelInsets(leftEmpty: false, rightEmpty: false,
+                                                 chromeProgress: 0)
+        XCTAssertEqual(i.leading, ViewerGeometry.sidePad, accuracy: 0.01)
+        XCTAssertEqual(i.trailing, ViewerGeometry.sidePad, accuracy: 0.01)
+        XCTAssertEqual(i.top, ViewerGeometry.sidePad, accuracy: 0.01)
+    }
+
+    @MainActor func testMidChromeProgressInterpolatesFromTheColumnAwareTarget() {
+        // Emptying a column and hiding the UI must compose: the interpolation
+        // runs toward THIS layout's inset, not the two-column one.
+        let i = EditorCanvasGeometry.panelInsets(leftEmpty: true, rightEmpty: false,
+                                                 chromeProgress: 0.5)
+        XCTAssertEqual(i.leading, ViewerGeometry.sidePad, accuracy: 0.01,
+                       "an emptied side is already bare at any progress")
+        let expected = ViewerGeometry.sidePad
+            + (ViewerGeometry.editorPanelWidth - ViewerGeometry.sidePad) * 0.5
+        XCTAssertEqual(i.trailing, expected, accuracy: 0.01)
+    }
+
+    @MainActor func testAnEmptiedColumnWidensTheFittedPhoto() {
+        // The point of the whole rule: the photo actually gets the space back.
+        let canvas = CGSize(width: 1600, height: 1000)
+        let two = EditorCanvasGeometry.fittedSize(
+            canvas: canvas,
+            insets: EditorCanvasGeometry.panelInsets(leftEmpty: false, rightEmpty: false,
+                                                     chromeProgress: 1),
+            aspect: 1.5)
+        let one = EditorCanvasGeometry.fittedSize(
+            canvas: canvas,
+            insets: EditorCanvasGeometry.panelInsets(leftEmpty: true, rightEmpty: false,
+                                                     chromeProgress: 1),
+            aspect: 1.5)
+        XCTAssertGreaterThan(one.width, two.width)
+    }
 }

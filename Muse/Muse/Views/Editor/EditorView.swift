@@ -234,6 +234,11 @@ struct EditorView: View {
             chromeCommand.editorPresented(uiHidden: hidden)
         }
         .onChange(of: expanded) { _, _ in updateStatsVisibility() }
+        // A column gaining or losing its last card changes the photo's fit.
+        // Stepped rather than animated, because the canvas reads the insets
+        // once per render — see stepCanvasRefit.
+        .onChange(of: workspace.active.isEmpty(.left)) { _, _ in stepCanvasRefit() }
+        .onChange(of: workspace.active.isEmpty(.right)) { _, _ in stepCanvasRefit() }
         .onChange(of: session.hoveredZone) { _, zone in
             guard zone != nil else { return }
             Task { await buildZoneMaskIfNeeded() }
@@ -295,20 +300,13 @@ struct EditorView: View {
     /// photo grows past it and under the panels, like Preview's does under the
     /// info column. Hiding the controls gives the whole window back.
     var fitInsets: EdgeInsets {
-        // Shared with the window minimum, which is derived from it — see
-        // ViewerGeometry.editorPanelWidth. (Its 20 is theme.spacingL.)
-        let column = ViewerGeometry.editorPanelWidth
-        let bare = ViewerGeometry.sidePad
-        // Interpolated, so hiding the controls GROWS the photo into the space
-        // instead of snapping it there a frame later.
-        let p = chromeProgress
-        func lerp(_ hidden: CGFloat, _ shown: CGFloat) -> CGFloat {
-            hidden + (shown - hidden) * p
-        }
-        return EdgeInsets(top: lerp(bare, ViewerGeometry.topPad),
-                          leading: lerp(bare, column),
-                          bottom: lerp(bare, ViewerGeometry.bottomPad),
-                          trailing: lerp(bare, column))
+        // Sides follow the cards, the top stays with the chrome — and the whole
+        // thing is interpolated through `chromeProgress`, so hiding the
+        // controls GROWS the photo into the space instead of snapping it there
+        // a frame later. See EditorCanvasGeometry.panelInsets.
+        EditorCanvasGeometry.panelInsets(leftEmpty: workspace.active.isEmpty(.left),
+                                         rightEmpty: workspace.active.isEmpty(.right),
+                                         chromeProgress: chromeProgress)
     }
 
     /// Trackpad pinch, the same contract as the Preview page's: the gesture
@@ -428,6 +426,31 @@ struct EditorView: View {
                 try? await Task.sleep(for: .milliseconds(16))
             }
             chromeProgress = to
+        }
+    }
+
+    /// Re-fit the canvas after the COLUMNS changed shape (a Save that emptied
+    /// one, or Default Layout putting it back).
+    ///
+    /// `fitInsets` is a value the MTKView reads once per render, so a plain
+    /// SwiftUI animation would never reach it — the same reason `toggleChrome`
+    /// steps `chromeProgress` frame by frame instead of animating it. Nothing
+    /// about the progress itself changes here; re-publishing it on each frame
+    /// for the length of the panel transition is what makes the photo GLIDE
+    /// into the freed space rather than jump there once the layout settles.
+    func stepCanvasRefit() {
+        // While the UI is hidden the insets are already bare on every side, so
+        // there is nothing to animate toward.
+        guard !session.uiHidden else { return }
+        chromeAnimation?.cancel()
+        let frames = max(1, Int(Self.chromeFade * 60))
+        chromeAnimation = Task { @MainActor in
+            for _ in 1...frames {
+                if Task.isCancelled { return }
+                chromeProgress = 1
+                try? await Task.sleep(for: .milliseconds(16))
+            }
+            chromeProgress = 1
         }
     }
 

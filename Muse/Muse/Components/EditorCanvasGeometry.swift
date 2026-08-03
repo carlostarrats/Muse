@@ -50,6 +50,40 @@ nonisolated enum EditorCanvasGeometry {
         return sideBySide ? single * (2 + sideBySideGapFraction) : single
     }
 
+    /// The insets the photo is fitted inside: SIDES FOLLOW THE CARDS, THE TOP
+    /// STAYS WITH THE CHROME.
+    ///
+    /// The editor's workspace can move every card to one side, and a column
+    /// with nothing in it must give the photo its space back rather than leave
+    /// a dead strip. All-cards-right lands on Preview's exact geometry —
+    /// content left, column right — so switching Preview ⇄ Edit does not move
+    /// the photo at all.
+    ///
+    /// The TOP inset never changes with the columns. The chrome row (zoom, the
+    /// hide-UI eye, Share, ✕) is a viewer control rather than a module and is
+    /// pinned top-right whatever happens to the cards, so a photo widening into
+    /// an emptied right column must still start below it.
+    ///
+    /// `chromeProgress` is the hide-UI animation: 1 = panels shown, 0 = hidden.
+    /// The interpolation runs toward THIS layout's targets, so hiding the UI on
+    /// a single-column workspace composes correctly instead of animating from a
+    /// two-column inset that is not on screen.
+    /// `@MainActor` only because it reads `ViewerGeometry`'s constants, which
+    /// are. The rest of this enum is nonisolated and stays that way.
+    @MainActor
+    static func panelInsets(leftEmpty: Bool, rightEmpty: Bool,
+                            chromeProgress p: Double) -> EdgeInsets {
+        let column = ViewerGeometry.editorPanelWidth
+        let bare = ViewerGeometry.sidePad
+        func lerp(_ hidden: CGFloat, _ shown: CGFloat) -> CGFloat {
+            hidden + (shown - hidden) * p
+        }
+        return EdgeInsets(top: lerp(bare, ViewerGeometry.topPad),
+                          leading: lerp(bare, leftEmpty ? bare : column),
+                          bottom: lerp(bare, ViewerGeometry.bottomPad),
+                          trailing: lerp(bare, rightEmpty ? bare : column))
+    }
+
     /// The free space inside the panels, in points.
     static func freeRect(canvas: CGSize, insets: EdgeInsets) -> CGRect {
         CGRect(x: insets.leading, y: insets.top,
