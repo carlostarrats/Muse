@@ -141,6 +141,54 @@ question.
 
 ---
 
+## Part 3 — editor adjustments batch (2026-08-02)
+
+Spec: `docs/superpowers/specs/2026-08-02-editor-adjustments-batch-design.md`.
+Plan: `docs/superpowers/plans/2026-08-02-editor-adjustments-batch.md`.
+
+Two of these rows are not new features so much as **missing halves**: geometry
+and vignette shipped in Spec 04 with a full model, renderer, codec and preset
+carry, and nothing in the app could write either one. An audit found them by
+checking every param type for a UI writer.
+
+| # | Feature | Automated (A) | Static (S) | Runtime (R) | Notes |
+|---|---|---|---|---|---|
+| P31.1 | Vignette card (EFFECTS) | `EditStackNormalizeTests.testVignetteRoundTripsAtItsCanonicalIndex` | 2026-08-02 | ❌ | Model+renderer shipped in Spec 04; only the UI was missing. Post-crop for free — the renderer already applies geometry first |
+| P31.2 | Auto-tone (two scoped buttons) | `AutoToneStatsTests` (11), `AutoToneApplyTests` (6) | 2026-08-02 | ❌ | Measures `originalImage`, cached per session → idempotent. Scoped per card to match per-card Reset. Own 256-bin histogram; `HistogramData.binCount` unchanged |
+| P31.3 | HSL / COLOR MIX (`.hsl`, index 8) | `StageBParamsTests`, `EditKernelLoadTests.testHSLIsIdentityAtZero`, `…LeavesGreyUntouched` | 2026-08-02 | ❌ | 8 bands × 3 channels, one Metal kernel, after saturation and before the LUT |
+| P31.4 | Split toning (`.splitTone`, index 9) | `StageBParamsTests`, `EditKernelLoadTests.testSplitToneIsIdentityAtZeroSaturation` | 2026-08-02 | ❌ | Display-referred, after the LUT. Five sliders, no hue wheel — darktable presents it the same way |
+| P31.5 | Grain (`.grain`, index 10) | `StageBParamsTests`, `EditKernelLoadTests.testGrainIsDeterministicPerSeed` | 2026-08-02 | ❌ | Long-edge-normalized cell `(1.5+4.5·size)/4032`; seed from the file path so grid, screen and export agree. Renders LAST |
+| P31.6 | Crop / straighten / rotate / flip | `CropDragMathTests` (15), `CropAspectPresetTests` (9), `GeometryParamsTests` | 2026-08-02 | ❌ | Model shipped in Spec 04; only the UI was missing. Crop is a canvas mode; canvas renders crop-full while framing |
+| P31.7 | Crop aspect menu | `CropAspectPresetTests` | 2026-08-02 | ❌ | Purpose + ratio at equal weight; social rows read `SocialPreset.nameKey` so the two surfaces can't drift |
+| P31.8 | Straighten auto-inset | `CropDragMathTests.testStraightenInsets*` (4) | 2026-08-02 | ❌ | Only auto-manages a crop it owns. Not destructive — writes a `crop` value, reversible by double-clicking the slider |
+
+**Runtime column = the GUI test plan for this batch.** Nothing here has been
+driven in the running app yet; every row is honestly ❌ R. What has to be
+checked, in order:
+
+1. **EFFECTS** — drag Vignette, corners darken; double-click Midpoint returns
+   to **0.5**, not 0.
+2. **Auto in LIGHT** on an underexposed photo — exposure/contrast/blacks/whites
+   move, Temperature and Tint do **not**. Press again: nothing changes.
+   ⌘Z undoes it in one step. Then **Auto in COLOR** — the mirror.
+3. **COLOR MIX** — Saturation tab, pull Blue to −1 on a sky photo. Only the sky
+   desaturates. Switch to Luminance: the eight sliders show that channel.
+4. **SPLIT TONE** — shadow saturation up, then shadow hue; the shadows tint and
+   the highlights don't. Balance shifts where the split falls.
+5. **Grain at 1.0 → look at the GRID TILE.** The grain must be visible there,
+   not only in the editor. A clean tile means the thumbnail path isn't applying
+   the stack, and that is a bug to fix, not to accept — the grid is the product.
+6. **CROP** — press Crop: the frame appears over the **whole** photo. Drag a
+   corner, the outside dims. Pick "Square 1:1", the frame snaps centred. Apply:
+   the canvas renders cropped and the mode ends. Re-open Crop: the whole photo
+   is back with your rectangle on it. **The grid tile reflows to the new aspect**
+   — intended, see spec §6.5.
+7. **Straighten to 10°** — the photo tilts and stays a filled rectangle, no
+   transparent corners. Double-click the label: back to 0 and full frame.
+8. **Batch** — select several photos, copy a crop and a vignette onto them via
+   the selection menu. Should work with no new code (`AdjustmentGroup` already
+   carried `.geometry`/`.vignette`).
+
 ## Review rounds
 
 | Round | Date | Scope | Findings | Suite after |
