@@ -128,7 +128,7 @@ are the load-bearing reference artifacts.
 | Foundation 6 — **Spec-06 import & migration** (no migrations; one File > Import surface over five sources; `ImportSupplement`; color-label namespace + mapping sheet; Lightroom `crs:` edits + presets; `WorkThrottleStore`/`AnalysisStatusStore`/import-size FYI) | ✅ merged, unreleased | `new-product-build-1` |
 | Foundation 7 — **Spec-07 sharing & social export** (no migrations; manifest v2 `y`/`s`/`m` + three page layouts; portfolio mode — a live `manifest.json` in the user's Drive behind a URL that never changes; `Export/Social/` + the social export card; Google on-ramp copy) | ✅ merged, unreleased | `new-product-build-1` |
 
-| Polish 31 — **editor adjustments batch** (the two orphaned halves — crop/straighten/rotate/flip UI and the vignette card — plus auto-tone, HSL/COLOR MIX, split toning and grain; three appended `Adjustment` cases at 8/9/10, no migration, no version bump) | ✅ built + unit-tested (1,952) + reviewed (round 10, 6 bugs fixed); **runtime PARTIAL — see FEATURE-LEDGER Part 3** | `feat/next-151` |
+| Polish 31 — **editor adjustments batch** (the two orphaned halves — crop/straighten/rotate/flip UI and the vignette card — plus auto-tone, HSL/COLOR MIX, split toning and grain; three appended `Adjustment` cases at 8/9/10, no migration, no version bump) | ✅ merged to `main` 2026-08-02 (`ceaea7e`), unreleased; unit-tested (1,952) + reviewed (round 10, 6 bugs fixed); **runtime PARTIAL — see FEATURE-LEDGER Part 3** | `feat/next-151` |
 
 | **Review — Specs 01–07** | ✅ reviewed + fixed 2026-08-01 (7 rounds) | `new-product-build-1` |
 | Polish 29 — **General image export** (one card, two preset families: Format — Same-as-original/JPEG/PNG/TIFF 8&16-bit/HEIC/WebP — above Spec 07's 12 Social presets, plus saved presets; quality, resize with never-upscale, EXIF/location toggles; `ExportPipeline` shared with `SocialRender`; real `.tiff16` at last; WebP via a statically-linked `libwebp`, the app's **first bundled binary dependency**; no filename controls and **no overwrite, ever**) | ✅ built + tested; **card runtime-verified** (XCUITest drives it — opens from grid/hero/editor, size fields, live estimate, format menu, social preset; plus owner review of the layout 2026-08-02). **A full export-to-disk run is still unconfirmed** — no test writes a file and picks it up. | ✅ merged to `main` 2026-08-02 (`c2e5f95`), unreleased |
@@ -140,6 +140,15 @@ are the load-bearing reference artifacts.
 > predates everything from Foundation 1 onward. Verified at the merge: Release
 > build warning-free, `MuseTests` 1,870, `MuseSurfaceDriveTests` 12/12,
 > `MuseExportDriveTests` 7/7, `audit-invariants.sh` 14/14.
+>
+> **Polish 31 was MERGED TO `main` on 2026-08-02** (fast-forward from
+> `feat/next-151`, tip `ceaea7e`), also unreleased. Verified at the merge:
+> Release build warning-free, `MuseTests` 1,952, 0 untranslated,
+> `audit-invariants.sh` 14/14. **Its runtime state is PARTIAL and the open check
+> is specific** — the crop card has never been driven on a ROTATED photo, which
+> is exactly where review round 10's coordinate-space fix lives
+> (`docs/new-build/FEATURE-LEDGER.md` step 6b). Unit tests cover all four turns
+> and both flips; nobody has watched it happen.
 >
 > **The editor canvas is SIZED TO THE IMAGE'S FITTED RECT, and that is
 > load-bearing (2026-08-02).** It used to span the window and re-fit internally,
