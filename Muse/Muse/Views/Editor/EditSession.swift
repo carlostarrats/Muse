@@ -295,9 +295,37 @@ final class EditSession: ObservableObject {
     /// exists while a stats panel is open.
     private var autoToneCache: AutoToneStats.Result?
 
+    /// The long edge of the on-demand original render used when Auto is
+    /// pressed before the proxy exists. Small on purpose: the measurement
+    /// downsamples to `statsSampleLongEdge` (256) anyway, so a bigger render
+    /// would buy an identical answer for real time — the same reasoning that
+    /// sets the sample size in the first place.
+    static let autoToneFallbackLongEdge = 1024
+
     func autoToneResult() async -> AutoToneStats.Result? {
         if let autoToneCache { return autoToneCache }
-        guard let image = originalImage else { return nil }
+        // Auto used to `return nil` when `originalImage` was nil — a SILENT
+        // no-op if you pressed it before the first render landed. The window
+        // was always there and got easier to hit once entering Edit started
+        // seeding the canvas, because the editor now looks ready on the first
+        // frame instead of sitting empty: nothing on screen says "not yet".
+        // Rendering the original on demand makes the press always do
+        // something. It costs nothing in the normal case, where the render has
+        // landed and this branch never runs.
+        let image: CIImage
+        if let originalImage {
+            image = originalImage
+        } else {
+            let url = self.url
+            let edge = Self.autoToneFallbackLongEdge
+            guard let fallback = await Task.detached(priority: .userInitiated,
+                                                     operation: { () -> CIImage? in
+                guard let cg = EditRenderer.render(url: url, stack: .fresh(), maxPixel: edge)
+                else { return nil }
+                return CIImage(cgImage: cg)
+            }).value else { return nil }
+            image = fallback
+        }
         let sampleEdge = Self.statsSampleLongEdge
         let result = await Task.detached(priority: .userInitiated) {
             () -> AutoToneStats.Result? in
