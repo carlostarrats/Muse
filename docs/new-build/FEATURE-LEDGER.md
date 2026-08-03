@@ -602,6 +602,19 @@ No test can confirm an HDR photo *looks* right; the suite can only prove values
 above 1.0 survived each stage. Everything below needs eyes on an EDR display,
 and none of it has been done.
 
+**This is CLAUDE's to run, not the owner's (owner call 2026-08-03.)** Asked to
+eyeball a gain-map photo in the grid, the owner's answer was "it looks fine to
+me but I don't know if I'm supposed to see something different" — which is the
+correct answer and exactly why the check can't be delegated that way. "Does this
+look right?" has no pass condition for someone who has never seen the broken
+version. Steps 2, 3 and 5 are the only ones with a real signal, and all three are
+COMPARISONS (tile vs. hero, before vs. after a slider, output vs. input) rather
+than judgements about a single image. **Design them so they compare two states
+and the difference is the verdict** — screenshot both sides and diff, or read
+the pixel values back — instead of asking anyone whether a photo looks bright
+enough. The general rule: never hand the owner a verification step whose pass
+condition is a perceptual judgement they have no baseline for.
+
 **Setup.** Build Release, **`stat` the binary's mtime** before looking at
 anything (an incremental build can print BUILD SUCCEEDED over a weeks-old
 `.app`), and quit all but one Muse instance. Use a real iPhone gain-map HEIC —
