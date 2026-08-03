@@ -428,9 +428,25 @@ nonisolated enum EditRenderer {
         let extent = rendered.ciImage.extent
         guard extent.width >= 1, extent.height >= 1, extent.width.isFinite, extent.height.isFinite
         else { return nil }
+        // The DISPLAY path keeps its headroom. Without this an HDR photo
+        // flattens the instant any edit exists, because the hero renders
+        // through here whenever a stack is present — one slider nudge and the
+        // picture visibly dims, which reads as "the editor broke my photo".
+        let isHDR = sourceHeadroom(url: url) > HDRDecode.hdrThreshold
         return context.createCGImage(rendered.ciImage, from: extent,
-                                     format: .RGBA8,
-                                     colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+                                     format: isHDR ? .RGBA16 : .RGBA8,
+                                     colorSpace: isHDR ? HDRDecode.hdrColorSpace
+                                                       : HDRDecode.sdrColorSpace)
+    }
+
+    /// The file's headroom, read from its header.
+    ///
+    /// Threaded through the chain as a VALUE rather than read back off the
+    /// filtered image: many CIFilters zero `contentHeadroom` as they pass an
+    /// image along, and the API that would let us re-assert it
+    /// (`imageBySettingContentHeadroom`) is macOS 16+, above Muse's 14.6 floor.
+    static func sourceHeadroom(url: URL) -> CGFloat {
+        HDRDecode.info(url: url).headroom
     }
 
     /// Full-resolution render straight to a file — the export path. Uses a
@@ -451,9 +467,14 @@ nonisolated enum EditRenderer {
         // support — which is what this case did before the general export gave
         // a user a way to actually ask for it.
         let ciFormat: CIFormat = (format == .tiff16) ? .RGBA16 : .RGBA8
-        guard let cgImage = context.createCGImage(rendered.ciImage, from: extent,
+        // This path writes SDR (the general export card owns the HDR decision),
+        // but it must TONE-MAP to get there. Letting `createCGImage` clamp was
+        // measured collapsing 2.0 and 4.0 onto the same white.
+        let flattened = HDRDecode.toneMappedToSDR(rendered.ciImage,
+                                                  headroom: sourceHeadroom(url: url))
+        guard let cgImage = context.createCGImage(flattened, from: extent,
                                                   format: ciFormat,
-                                                  colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+                                                  colorSpace: HDRDecode.sdrColorSpace)
         else { throw RenderError.renderFailed }
         try write(cgImage, to: dest, format: format)
     }
@@ -481,8 +502,14 @@ nonisolated enum EditRenderer {
             else { return nil }
             linear = raw
         } else {
-            guard let ci = CIImage(contentsOf: url, options: [.applyOrientationProperty: true])
-            else { return nil }
+            // `.expandToHDR` is the whole reason a gain-map HEIC survives the
+            // chain. `RenderContexts` already works in extended linear, so the
+            // pipeline INTERIOR needed no change — the clamps were only ever
+            // at this end and at `createCGImage`.
+            guard let ci = CIImage(contentsOf: url, options: [
+                .applyOrientationProperty: true,
+                .expandToHDR: true,
+            ]) else { return nil }
             linear = LinearImage.alreadyDecodedFromFile(ci)
         }
         var image = linear.ciImage
