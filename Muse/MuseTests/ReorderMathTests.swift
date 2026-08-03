@@ -83,4 +83,33 @@ final class ReorderMathTests: XCTestCase {
         // target=1 → frames[1].minY = 29.
         XCTAssertEqual(ReorderMath.insertionLineY(dropTarget: 1, orderedLiveFrames: twoRows), 29)
     }
+
+    // MARK: - Column split (editor workspace reorder)
+
+    func testColumnSplitLeftHalfIsLeft() {
+        XCTAssertTrue(ReorderMath.isLeftColumn(x: 100, containerWidth: 1000))
+    }
+
+    func testColumnSplitRightHalfIsRight() {
+        XCTAssertFalse(ReorderMath.isLeftColumn(x: 900, containerWidth: 1000))
+    }
+
+    func testColumnSplitExactMidpointIsRight() {
+        // Deliberate: the midpoint belongs to ONE side, and picking `<` makes
+        // the boundary consistent with `slot`'s `y < midY`.
+        XCTAssertFalse(ReorderMath.isLeftColumn(x: 500, containerWidth: 1000))
+    }
+
+    func testColumnSplitBeyondLeftEdgeIsLeft() {
+        XCTAssertTrue(ReorderMath.isLeftColumn(x: -40, containerWidth: 1000))
+    }
+
+    func testColumnSplitBeyondRightEdgeIsRight() {
+        XCTAssertFalse(ReorderMath.isLeftColumn(x: 1400, containerWidth: 1000))
+    }
+
+    func testColumnSplitZeroWidthIsRight() {
+        // Degenerate container (a frame not yet measured). Must not trap.
+        XCTAssertFalse(ReorderMath.isLeftColumn(x: 0, containerWidth: 0))
+    }
 }

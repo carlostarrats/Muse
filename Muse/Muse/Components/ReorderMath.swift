@@ -49,4 +49,18 @@ enum ReorderMath {
         }
         return orderedLiveFrames[target]?.minY
     }
+
+    /// Which of two side-by-side columns a drag at horizontal position `x`
+    /// belongs to, split at the container's midpoint. Added for the editor's
+    /// workspace reorder, which is the sidebar's drag plus this one question.
+    ///
+    /// Deliberately NOT measured from the columns' own frames, the way `slot`
+    /// measures rows: the workspace reorder can EMPTY a column, and an empty
+    /// column has no frames to hit-test — you would be unable to drag anything
+    /// back into it. The midpoint is always there.
+    ///
+    /// The midpoint itself resolves right, matching `slot`'s `y < midY`.
+    static func isLeftColumn(x: CGFloat, containerWidth: CGFloat) -> Bool {
+        x < containerWidth / 2
+    }
 }
