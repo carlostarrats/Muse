@@ -68,6 +68,10 @@ struct EditorView: View {
     /// Session-scoped: which channel COLOR MIX is showing. Saturation first —
     /// it is the one people reach for.
     @State private var hslTab: HSLTab = .saturation
+    /// Crop: the chosen shape and whether it is stood on end. One entry per
+    /// shape plus an orientation toggle, rather than two entries per shape.
+    @State private var cropAspect: CropAspectPreset = .original
+    @State private var cropPortrait = false
 
     /// Section ids. Stable strings, because they're persisted.
     private enum Section {
@@ -494,6 +498,18 @@ struct EditorView: View {
                         }
                     }
                     .overlay(alignment: .top) { sideBySideLabel }
+                    // The crop frame sits on the CANVAS, so its bounds are
+                    // already the image's content rect — in POINTS, from
+                    // EditorCanvasGeometry. Nothing here converts to pixels.
+                    .overlay {
+                        if session.cropMode {
+                            CropFrameOverlay(
+                                rect: Binding(get: { session.pendingCrop ?? .full },
+                                              set: { session.pendingCrop = $0 }),
+                                aspect: cropAspect.ratio(portrait: cropPortrait),
+                                onCommit: {})
+                        }
+                    }
                     .position(x: content.midX, y: content.midY)
             }
             .frame(width: geo.size.width, height: geo.size.height)
@@ -856,6 +872,142 @@ struct EditorView: View {
                 set: { v in session.draft.setGrain { $0[keyPath: key] = v } })
     }
 
+    // MARK: - Crop
+
+    /// Geometry shipped with a full model, renderer, codec and Lightroom
+    /// importer and NO editor UI — the only writers were the importer and the
+    /// social export's crop step. This card is the missing half.
+    private var cropSection: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            // A canvas MODE, exactly like Side by Side and Split Compare above
+            // — same component, same isActive treatment, nothing new to learn.
+            EditorToolRow(systemName: "crop",
+                          label: String(localized: "Crop"),
+                          isActive: session.cropMode,
+                          action: { session.cropMode.toggle() })
+
+            Menu {
+                ForEach(CropAspectPreset.modes) { p in
+                    Button(p.menuTitle) { selectAspect(p) }
+                }
+                Divider()
+                ForEach(CropAspectPreset.shapes) { p in
+                    Button(p.menuTitle) { selectAspect(p) }
+                }
+            } label: {
+                Text(cropAspect.menuTitle)
+                    .font(panelTheme.labelFont)
+            }
+            .menuStyle(.borderlessButton)
+            .disabled(!session.cropMode)
+            .accessibilityLabel(Text("Crop shape"))
+
+            EditorToolRow(systemName: "rotate.right",
+                          label: String(localized: "Portrait / Landscape"),
+                          isEnabled: session.cropMode && cropAspect.supportsOrientation,
+                          action: {
+                cropPortrait.toggle()
+                selectAspect(cropAspect)
+            })
+
+            Divider().padding(.vertical, 4)
+
+            EditSlider(label: String(localized: "Straighten"),
+                       value: straightenBinding, range: -45...45,
+                       onCommit: session.commitGesture)
+
+            EditorToolRow(systemName: "rotate.left",
+                          label: String(localized: "Rotate Left"),
+                          action: {
+                session.draft.setGeometry { $0.quarterTurns -= 1 }
+                session.commitGesture()
+            })
+            EditorToolRow(systemName: "rotate.right",
+                          label: String(localized: "Rotate Right"),
+                          action: {
+                session.draft.setGeometry { $0.quarterTurns += 1 }
+                session.commitGesture()
+            })
+            EditorToolRow(systemName: "arrow.left.and.right.square",
+                          label: String(localized: "Flip Horizontal"),
+                          isActive: session.draft.geometryParams?.flipH ?? false,
+                          action: {
+                session.draft.setGeometry { $0.flipH.toggle() }
+                session.commitGesture()
+            })
+            EditorToolRow(systemName: "arrow.up.and.down.square",
+                          label: String(localized: "Flip Vertical"),
+                          isActive: session.draft.geometryParams?.flipV ?? false,
+                          action: {
+                session.draft.setGeometry { $0.flipV.toggle() }
+                session.commitGesture()
+            })
+        }
+    }
+
+    /// Picking a shape refits the pending frame; Freeform leaves whatever is
+    /// on screen alone, since its whole point is that you place it yourself.
+    private func selectAspect(_ p: CropAspectPreset) {
+        cropAspect = p
+        guard session.cropMode else { return }
+        switch p.id {
+        case "original": session.pendingCrop = .full
+        case "freeform": break
+        default:
+            guard let ratio = p.ratio(portrait: cropPortrait) else { return }
+            session.pendingCrop = CropDragMath.fit(aspect: ratio, into: session.imageAspect)
+        }
+    }
+
+    /// Appears only once the pending frame differs from what is stored —
+    /// `EditorSection` already renders `accessory` conditionally, so a nil here
+    /// simply leaves the heading clean.
+    private var cropApplyButton: AnyView? {
+        guard session.cropHasPendingChange, let pending = session.pendingCrop else { return nil }
+        return AnyView(
+            EditorSmallButton(label: String(localized: "Apply"),
+                              systemName: "checkmark") {
+                session.draft.setGeometry { $0.crop = pending }
+                session.commitGesture()
+                session.cropMode = false
+            }
+            .environment(\.theme, panelTheme)
+            .help(Text("Apply Crop"))
+        )
+    }
+
+    /// Straighten writes the angle AND the inset crop that keeps the photo a
+    /// filled rectangle — `applyGeometry` rotates and then crops with no inset
+    /// of its own, so without this the corners go transparent. Lightroom and
+    /// Apple Photos both pull the crop in as you rotate.
+    ///
+    /// Not destructive: this is a `crop` value, the original file is untouched,
+    /// and double-clicking the slider back to 0 restores the full frame in one
+    /// gesture.
+    ///
+    /// It only auto-manages a crop it OWNS — full frame, or the inset it wrote
+    /// itself. A frame the user dragged is theirs, and straighten must not
+    /// silently reframe it.
+    private var straightenBinding: Binding<Double> {
+        Binding(get: { session.draft.geometryParams?.straightenDegrees ?? 0 },
+                set: { degrees in
+            let aspect = session.imageAspect
+            let existing = session.draft.geometryParams
+            let previous = existing?.straightenDegrees ?? 0
+            let current = existing?.crop ?? .full
+            let ownsCrop = current.isFull
+                || current == CropDragMath.straightenInset(degrees: previous, aspect: aspect)
+
+            session.draft.setGeometry { g in
+                g.straightenDegrees = degrees
+                guard ownsCrop else { return }
+                g.crop = degrees == 0
+                    ? .full
+                    : CropDragMath.straightenInset(degrees: degrees, aspect: aspect)
+            }
+        })
+    }
+
     // MARK: - Colour mix (HSL) + split toning
 
     /// Which of the three HSL channels the eight sliders are editing. Lives in
@@ -1076,6 +1228,10 @@ struct EditorView: View {
         // someone looking at their own photo. It IS a histogram (plus the
         // plain-English clipping read-out), so it says so, and it sits open
         // under the tools where it can be glanced at while you work.
+        EditorSection(title: String(localized: "CROP"),
+                      ink: ink,
+                      accessory: cropApplyButton,
+                      isExpanded: expansion(Section.crop)) { cropSection }
         EditorSection(title: String(localized: "HISTOGRAM"),
                       ink: ink,
                       isExpanded: expansion(Section.histogram)) {

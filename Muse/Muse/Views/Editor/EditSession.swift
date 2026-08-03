@@ -152,6 +152,51 @@ final class EditSession: ObservableObject {
         tapStats(from: image, maxPixel: Int(proxyLongEdge))
     }
 
+    // MARK: - Crop mode
+
+    /// While true the canvas renders the image with its crop forced to FULL and
+    /// the frame drawn over it, so you frame against the whole picture and can
+    /// pull the frame back OUT to reclaim area you cut earlier. That is Apple
+    /// Photos' behaviour, and the same trick Surface uses via
+    /// `CropGeometry.withFullRect()`.
+    @Published var cropMode = false {
+        didSet {
+            guard cropMode != oldValue else { return }
+            pendingCrop = cropMode ? (draft.geometryParams?.crop ?? .full) : nil
+            // Entering or leaving changes what the canvas shows (cropped vs.
+            // whole photo), and no draft change is coming to trigger it.
+            Task { await renderDraft() }
+        }
+    }
+
+    /// The frame being dragged. Committed into `draft` only on Apply, so an
+    /// abandoned drag costs nothing and never reaches the autosave.
+    @Published var pendingCrop: CropRect?
+
+    /// True once the pending frame differs from what is stored — what makes the
+    /// Apply button appear.
+    var cropHasPendingChange: Bool {
+        guard cropMode, let pendingCrop else { return false }
+        return pendingCrop != (draft.geometryParams?.crop ?? .full)
+    }
+
+    /// The stack to RENDER right now. Identical to `draft` except in crop mode.
+    var renderStack: EditStack {
+        guard cropMode else { return draft }
+        var s = draft
+        s.setGeometry { $0.crop = .full }
+        return s
+    }
+
+    /// The source image's aspect (width ÷ height), for fitting a preset and for
+    /// the straighten inset. Falls back to 1 before the first render lands.
+    var imageAspect: Double {
+        guard let extent = originalImage?.extent,
+              extent.width > 0, extent.height > 0,
+              extent.width.isFinite, extent.height.isFinite else { return 1 }
+        return Double(extent.width / extent.height)
+    }
+
     // MARK: - Auto tone
 
     /// Cached for the life of the session, which is what makes Auto
@@ -297,7 +342,10 @@ final class EditSession: ObservableObject {
         let maxPixel = Int(proxyLongEdge)
         guard maxPixel > 0 else { return }
         let url = self.url
-        let rendered = await coalescer.request(draft) { stack in
+        // `renderStack`, not `draft`: in crop mode the crop is forced full so
+        // you frame against the WHOLE photo. Identical to `draft` otherwise,
+        // and it stays the coalescer's key so a crop-mode toggle re-renders.
+        let rendered = await coalescer.request(renderStack) { stack in
             await Task.detached(priority: .userInitiated) { () -> CIImage? in
                 guard let cg = EditRenderer.render(url: url, stack: stack, maxPixel: maxPixel)
                 else { return nil }
