@@ -222,8 +222,9 @@ final class ThumbnailCache: ObservableObject {
                 let key = Self.cacheKey(url: url, size: v.size, scale: v.scale,
                                         stackHash: stackHash)
                 memCache.removeObject(forKey: key as NSString)
-                let path = diskPath(for: key)
-                if fm.fileExists(atPath: path.path) { try? fm.removeItem(at: path) }
+                for path in Self.diskCandidates(in: diskRoot, key: key) {
+                    if fm.fileExists(atPath: path.path) { try? fm.removeItem(at: path) }
+                }
             }
         }
     }
@@ -238,13 +239,13 @@ final class ThumbnailCache: ObservableObject {
         if let hit = memCache.object(forKey: key as NSString) {
             return hit
         }
-        let diskURL = diskPath(for: key)
+        let root = diskRoot
         // Thumbnails no longer drive the status pill. This path is INTERACTIVE
         // — a visible tile asking for its image — so reporting it made the pill
         // appear, fill and vanish on every scroll into un-prewarmed tiles. The
         // tile's own shimmer already says "this one is loading"; the pill is for
         // background work over the whole library. See WorkProgress's shares.
-        let img = await Self.loadOrGenerate(url: url, diskURL: diskURL,
+        let img = await Self.loadOrGenerate(url: url, diskRoot: root, key: key,
                                             size: size, scale: scale, order: order)
         if let img {
             let cost = Int(img.size.width * img.size.height * 4 * scale * scale)
@@ -293,24 +294,23 @@ final class ThumbnailCache: ObservableObject {
                                                size: CGSize, scale: CGFloat,
                                                order: Int) async {
         let key = cacheKey(url: url, size: size, scale: scale)
-        let diskURL = diskRoot.appendingPathComponent(key + ".png")
-        if FileManager.default.fileExists(atPath: diskURL.path) { return }
-        _ = await loadOrGenerate(url: url, diskURL: diskURL,
+        if existingDiskPath(in: diskRoot, key: key) != nil { return }
+        _ = await loadOrGenerate(url: url, diskRoot: diskRoot, key: key,
                                  size: size, scale: scale, order: order)
     }
 
     // MARK: - Off-main pipeline
 
     private nonisolated static func loadOrGenerate(
-        url: URL, diskURL: URL, size: CGSize, scale: CGFloat, order: Int
+        url: URL, diskRoot: URL, key: String, size: CGSize, scale: CGFloat, order: Int
     ) async -> NSImage? {
         // Header-only read (no decode) so a huge image takes a bigger share of
         // the gate than a snapshot does. Cheap enough to do before queueing.
         let cost = DecodePermit.cost(forDeclaredPixels: declaredPixelCount(url: url),
                                      limit: gateLimit)
         return await gate.withSlot(order: order, cost: cost) {
-            if FileManager.default.fileExists(atPath: diskURL.path),
-               let img = NSImage(contentsOf: diskURL) {
+            if let hit = existingDiskPath(in: diskRoot, key: key),
+               let img = NSImage(contentsOf: hit) {
                 return img
             }
             // Scrolled off-screen while queued? Skip the decode entirely.
@@ -318,9 +318,16 @@ final class ThumbnailCache: ObservableObject {
             guard let generated = await generate(url: url, size: size, scale: scale) else {
                 return nil
             }
+            // Header-only, so this costs a stat rather than a decode.
+            let isHDR = HDRDecode.info(url: url).isHDR
+            let diskURL = diskPath(in: diskRoot, key: key, isHDR: isHDR)
             // Persist in the background; the caller doesn't wait on the encode.
             Task.detached(priority: .background) {
-                writePNG(generated, to: diskURL)
+                if isHDR {
+                    writeHEIC(generated, to: diskURL)
+                } else {
+                    writePNG(generated, to: diskURL)
+                }
             }
             return generated
         }
@@ -376,9 +383,19 @@ final class ThumbnailCache: ObservableObject {
         if let stackHash {
             raw += "|\(stackHash)"
         }
+        raw += "|v\(cacheFormatVersion)"
         let hash = SHA256.hash(data: Data(raw.utf8))
         return hash.map { String(format: "%02x", $0) }.joined()
     }
+
+    /// Bumped when the cache's PIXEL FORMAT changes, not when its contents do.
+    ///
+    /// v2 = HDR-aware (10-bit PQ HEIC for HDR sources). Without this bump an
+    /// upgrading library keeps serving the 8-bit PNGs it already has, and the
+    /// HDR work is invisible to every existing user — the grid would stay flat
+    /// while the hero went HDR, which is precisely the mismatch this feature
+    /// exists to remove. Costs a one-time lazy regeneration of the cache.
+    private nonisolated static let cacheFormatVersion = 2
 
     #if DEBUG
     /// Test seam — `cacheKey` is private and must stay that way (the key
@@ -388,8 +405,40 @@ final class ThumbnailCache: ObservableObject {
     }
     #endif
 
-    private nonisolated func diskPath(for key: String) -> URL {
-        diskRoot.appendingPathComponent(key + ".png")
+    /// HDR tiles need a container that can hold headroom. PNG at 8 bits
+    /// HARD-CLIPS (measured: a 4.0 pixel reads back 1.0), so an HDR source
+    /// caches as 10-bit PQ HEIC. SDR sources keep writing PNG — most of a real
+    /// library is screenshots and documents, and re-encoding those buys
+    /// nothing.
+    ///
+    /// The cache therefore holds two extensions, and the key alone no longer
+    /// names a file. Every read probes both and every delete removes both: a
+    /// file edited from HDR to SDR in place would otherwise leave its stale
+    /// HEIC behind and keep serving it forever.
+    nonisolated static func cacheFileExtension(isHDR: Bool) -> String {
+        isHDR ? "heic" : "png"
+    }
+
+    nonisolated static let cacheFileExtensions = ["heic", "png"]
+
+    private nonisolated func diskPath(for key: String, isHDR: Bool) -> URL {
+        Self.diskPath(in: diskRoot, key: key, isHDR: isHDR)
+    }
+
+    private nonisolated static func diskPath(in root: URL, key: String, isHDR: Bool) -> URL {
+        root.appendingPathComponent(key + "." + cacheFileExtension(isHDR: isHDR))
+    }
+
+    /// Every container this key could be stored under, HDR first. Reads and
+    /// deletes both go through this so neither can drift from the writer.
+    private nonisolated static func diskCandidates(in root: URL, key: String) -> [URL] {
+        cacheFileExtensions.map { root.appendingPathComponent(key + "." + $0) }
+    }
+
+    /// The one that actually exists, if any.
+    private nonisolated static func existingDiskPath(in root: URL, key: String) -> URL? {
+        diskCandidates(in: root, key: key)
+            .first { FileManager.default.fileExists(atPath: $0.path) }
     }
 
     private nonisolated static func generate(url: URL, size: CGSize, scale: CGFloat) async -> NSImage? {
@@ -532,6 +581,17 @@ final class ThumbnailCache: ObservableObject {
                            size: NSSize(width: CGFloat(rendered.width) / scale,
                                         height: CGFloat(rendered.height) / scale))
         }
+        // HDR sources decode through the seam so the TILE carries the same
+        // headroom the hero will. A tile that changes brightness when the photo
+        // opens reads as a bug, and that mismatch is the reason the grid is in
+        // scope at all. `HDRDecode.decode` re-checks the budget itself; that is
+        // a second stat, not a second decode.
+        if HDRDecode.info(source: src).isHDR,
+           let cg = HDRDecode.decode(source: src, maxPixel: maxPixel) {
+            return NSImage(cgImage: cg,
+                           size: NSSize(width: CGFloat(cg.width) / scale,
+                                        height: CGFloat(cg.height) / scale))
+        }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
@@ -607,6 +667,26 @@ final class ThumbnailCache: ObservableObject {
             if let image = imageIOThumbnail(data: data, size: size, scale: scale) { return image }
         }
         return nil
+    }
+
+    /// 10-bit PQ HEIC, for tiles whose source carries headroom.
+    ///
+    /// `writeHEIF10Representation` is macOS 12+, so this works on the 14.6
+    /// floor — the macOS 15 restriction is on writing a GAIN MAP, not on
+    /// writing HDR at all. The cache doesn't need a gain map: it is Muse's own
+    /// scratch data, read back only by Muse, never handed to another app.
+    ///
+    /// Lossy, deliberately. These are ≤320 px tiles regenerated on demand, and
+    /// the lossless alternative (16-bit PQ PNG) measured ~10× the bytes — which
+    /// against the 2 GB cap means evicting a large library's tiles far sooner.
+    nonisolated static func writeHEIC(_ image: NSImage, to url: URL) {
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+        let context = CIContext(options: [
+            .workingColorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB) as Any,
+        ])
+        try? context.writeHEIF10Representation(of: CIImage(cgImage: cg), to: url,
+                                               colorSpace: HDRDecode.hdrColorSpace,
+                                               options: [:])
     }
 
     /// Encode an NSImage to PNG bytes via CGImageDestination — no TIFF round-trip.
