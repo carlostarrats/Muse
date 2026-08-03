@@ -22,6 +22,7 @@
 - **C8 — Release build stays warning-free.**
 - **Test command:** `xcodebuild -project Muse/Muse.xcodeproj -scheme Muse test -only-testing:MuseTests/<TestClass> 2>&1 | tail -20`
 - **Before every commit:** `./scripts/audit-invariants.sh`
+- **New files need NO `project.pbxproj` edit.** `Muse`, `MuseTests`, `MuseUITests` and `MuseShareExtension` are all `PBXFileSystemSynchronizedRootGroup`s (Xcode 16 synchronized folders), so a file dropped in the right directory joins its target automatically. Ignore any step below that says otherwise.
 
 ---
 
