@@ -29,6 +29,11 @@ struct ContentView: View {
     @State private var finishHoldScheduled = false
     @ObservedObject private var collectionsEngine = CollectionsEngine.shared
     @ObservedObject private var searchFacets = SearchFacets.shared
+    /// The editor's panel workspace — observed here because the Customize card
+    /// is HOISTED to the shell like every other editor modal (an in-window card
+    /// is sized from its host's geometry, and the editor's 260pt column would
+    /// size it to 260pt), and because Escape needs to see reorder mode.
+    @ObservedObject private var editorWorkspace = EditorWorkspaceStore.shared
     @State private var moodPickerShown = false
     /// Tags from visually similar photos, for the Add Tag card's offer row.
     @State private var similarTags: [TagSuggest.Candidate] = []
@@ -102,6 +107,7 @@ struct ContentView: View {
         if appState.reconnectShown { appState.reconnectShown = false; return }
         if appState.duplicatesSheetVisible { appState.duplicatesSheetVisible = false; return }
         if appState.driveSharesShown { appState.driveSharesShown = false; return }
+        if editorWorkspace.customizeShown { editorWorkspace.customizeShown = false; return }
         if appState.settingsShown { appState.settingsShown = false; return }
         if appState.imageLayoutShown { appState.imageLayoutShown = false; return }
         if appState.infoShown { appState.infoShown = false; return }
@@ -239,6 +245,13 @@ struct ContentView: View {
             .museModal(isPresented: $appState.infoShown,
                        width: 600, palette: appState.moodPalette) {
                 InfoSheet(isPresented: $appState.infoShown)
+            }
+            // Its own modifier rather than two more links in this chain: the
+            // modal chain here is long enough that adding to it inline tipped
+            // the type-checker over its time limit.
+            .editorCustomizeModal(store: editorWorkspace,
+                                  palette: appState.moodPalette) { shown in
+                appState.editorWorkspaceModalShown = shown
             }
             // Three 120pt tiles and a subtitle — a 600pt card left it swimming.
             .museModal(isPresented: $appState.imageLayoutShown,
@@ -553,6 +566,7 @@ struct ContentView: View {
                     queryIsEmpty: appState.searchQuery.isEmpty && searchText.isEmpty)
                 switch EscapeResolver.action(
                     modalPresented: appState.modalPresented,
+                    editorReorderActive: editorWorkspace.reorderMode,
                     hasSelectedFile: selected != nil,
                     selectedFileIsHero: isHero,
                     searchActive: searchPresent,
@@ -561,6 +575,10 @@ struct ContentView: View {
                     showingCollectionsPage: appState.showingCollections,
                     compareActive: CompareStore.shared.isActive
                 ) {
+                case .cancelEditorReorder:
+                    // Leaving the mode by any route other than Save is a
+                    // cancel — the in-flight arrangement is discarded.
+                    editorWorkspace.cancelReorder()
                 case .closeCompare:
                     CompareStore.shared.close()
                 case .closeHero:

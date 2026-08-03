@@ -561,6 +561,7 @@ final class AppState: ObservableObject {
             || newSubfolderRequest != nil || folderRenameRequest != nil
             || tagRenameRequest != nil
             || announcementPresented
+            || editorWorkspaceModalShown
             || clipOfferShown
             || editPromptRequest != nil || openWithForkRequest != nil
             || exportRequest != nil
@@ -593,6 +594,18 @@ final class AppState: ObservableObject {
     /// body that reads `modalPresented` is already re-evaluating when this
     /// changes. `ContentView` is the only writer.
     var announcementPresented = false
+
+    /// Mirror of `EditorWorkspaceStore.customizeShown`, so the key-catcher gate
+    /// and the Escape resolver see the Customize card like any other modal.
+    ///
+    /// Deliberately NOT `@Published`, exactly like `announcementPresented`:
+    /// AppState is frozen (DECIDED #26) and a published flag here would fan a
+    /// whole-shell re-render out of a feature that owns its own store. It
+    /// doesn't need to be — the card is presented from `ContentView`, which
+    /// observes `EditorWorkspaceStore` directly, so the body that reads
+    /// `modalPresented` is already re-evaluating when this changes.
+    /// `ContentView` is the only writer.
+    var editorWorkspaceModalShown = false
 
     /// A confirm/error card awaiting presentation by the shell — raised from
     /// views that can't present one themselves (a sidebar row, a tile, or the

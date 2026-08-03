@@ -234,4 +234,46 @@ extension EscapeActionTests {
                                             showingCollectionsPage: false, compareActive: false)
         XCTAssertEqual(action, .closeViewer)
     }
+
+    // MARK: - Editor workspace reorder
+
+    func testReorderCancelBeatsClosingTheHero() {
+        // Reorder mode lives INSIDE the hero. Without this branch Escape would
+        // close the whole viewer and silently discard the arrangement.
+        XCTAssertEqual(
+            EscapeResolver.action(editorReorderActive: true,
+                                  hasSelectedFile: true, selectedFileIsHero: true,
+                                  searchActive: false, tagsActive: false,
+                                  insideCollection: false, showingCollectionsPage: false),
+            .cancelEditorReorder)
+    }
+
+    func testAModalStillBeatsReorderCancel() {
+        // A card raised over the editor is the innermost layer, as always.
+        XCTAssertEqual(
+            EscapeResolver.action(modalPresented: true, editorReorderActive: true,
+                                  hasSelectedFile: true, selectedFileIsHero: true,
+                                  searchActive: false, tagsActive: false,
+                                  insideCollection: false, showingCollectionsPage: false),
+            .dismissModal)
+    }
+
+    func testReorderCancelBeatsCompare() {
+        XCTAssertEqual(
+            EscapeResolver.action(editorReorderActive: true,
+                                  hasSelectedFile: false, selectedFileIsHero: false,
+                                  searchActive: false, tagsActive: false,
+                                  insideCollection: false, showingCollectionsPage: false,
+                                  compareActive: true),
+            .cancelEditorReorder)
+    }
+
+    func testWithoutReorderTheHeroStillCloses() {
+        XCTAssertEqual(
+            EscapeResolver.action(editorReorderActive: false,
+                                  hasSelectedFile: true, selectedFileIsHero: true,
+                                  searchActive: false, tagsActive: false,
+                                  insideCollection: false, showingCollectionsPage: false),
+            .closeHero)
+    }
 }

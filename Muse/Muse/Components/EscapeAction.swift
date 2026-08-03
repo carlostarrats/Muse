@@ -21,6 +21,11 @@ enum EscapeAction: Equatable {
     /// swallows Escape for them, and a modal opened over a viewer is the
     /// innermost layer.
     case dismissModal
+    /// The editor's workspace reorder mode is active — cancel it, discarding
+    /// the in-flight arrangement. Resolves ABOVE the viewer cases: reorder
+    /// lives INSIDE the hero, so without this Escape would close the whole
+    /// viewer and take the rearrangement with it.
+    case cancelEditorReorder
     /// The side-by-side compare workbench is open — close it. Resolves ABOVE
     /// the viewer cases: compare and the hero viewer are mutually exclusive,
     /// but a stale `selectedFile` must never win over the visible overlay.
@@ -59,6 +64,7 @@ enum EscapeResolver {
     /// collection. It's peeled after search to mirror the chain (a search runs
     /// over whatever the tags left showing).
     static func action(modalPresented: Bool = false,
+                       editorReorderActive: Bool = false,
                        hasSelectedFile: Bool,
                        selectedFileIsHero: Bool,
                        searchActive: Bool,
@@ -71,6 +77,10 @@ enum EscapeResolver {
         // Escape for them. Returning early also keeps the modal press from
         // touching the hero close sequence.
         if modalPresented { return .dismissModal }
+        // Above the viewer cases, below a modal. Reorder mode lives INSIDE the
+        // hero, so without this branch Escape would close the whole viewer and
+        // silently discard the arrangement being built.
+        if editorReorderActive { return .cancelEditorReorder }
         // Below a modal, above everything else.
         if compareActive { return .closeCompare }
         if hasSelectedFile {

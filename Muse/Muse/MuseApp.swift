@@ -34,6 +34,9 @@ struct MuseApp: App {
     /// Open With items disable themselves off `appState` the same way). The
     /// autoclosure runs once and hands back the singleton.
     @StateObject private var editorChrome = EditorChromeCommand.shared
+    /// Observed so the Editor Workspace submenu can disable itself while a
+    /// reorder owns the editor.
+    @StateObject private var editorWorkspace = EditorWorkspaceStore.shared
 
     /// Pin / Unpin label reflects the selected folder's current state.
     private var pinMenuTitle: String {
@@ -466,7 +469,49 @@ struct MuseApp: App {
                 // overlays, so a key equivalent still reaches the menu — and
                 // hiding the chrome UNDER an open export card or name prompt
                 // leaves the UI gone for a reason the user never saw.
-                .disabled(editorChrome.uiHidden == nil || appState.modalPresented)
+                .disabled(editorChrome.uiHidden == nil || appState.modalPresented
+                          || editorWorkspace.reorderMode)
+
+                Divider()
+
+                // The editor's panel layout. Named "Editor Workspace" — a
+                // noun, the editor's workspace. "Edit Workspace" reads as a
+                // verb, which is exactly wrong for a submenu that contains an
+                // actual Customize item.
+                //
+                // There is deliberately NO "Single Column" item. Single column
+                // is the state where one column is empty, reached by dragging.
+                // A toggle that restored "your last two-column arrangement"
+                // would force two arrangements to exist at once, one of them
+                // always invisible to the user, plus rules for which one a
+                // reset applies to — state bought for a flip nobody performs.
+                //
+                // No keyboard shortcuts either: none of the three is a control
+                // you bounce on.
+                Menu {
+                    Button {
+                        EditorWorkspaceStore.shared.resetToDefault()
+                    } label: {
+                        Label("Default Layout", systemImage: "arrow.counterclockwise")
+                    }
+                    Button {
+                        EditorWorkspaceStore.shared.customizeShown = true
+                    } label: {
+                        Label("Customize Modules…", systemImage: "checklist")
+                    }
+                    Button {
+                        EditorWorkspaceStore.shared.beginReorder()
+                    } label: {
+                        Label("Reorder Modules", systemImage: "arrow.up.arrow.down")
+                    }
+                } label: {
+                    Label("Editor Workspace", systemImage: "rectangle.split.2x1")
+                }
+                // Off outside Edit mode (uiHidden is nil when no editor is on
+                // screen), behind any modal, and during a reorder — the mode
+                // owns the editor until it is saved or cancelled.
+                .disabled(editorChrome.uiHidden == nil || appState.modalPresented
+                          || editorWorkspace.reorderMode)
             }
 
             // Menu-bar equivalents of the chip context menu — keyboard and
