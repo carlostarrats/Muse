@@ -131,3 +131,94 @@ extension EditKernelLoadTests {
             try XCTUnwrap(EditRenderTestSupport.render(lutted))), 0, accuracy: 0.002)
     }
 }
+
+// MARK: - Stage B
+
+extension EditKernelLoadTests {
+
+    func testStageBKernelsLoadFromDefaultMetallib() {
+        XCTAssertNotNil(EditKernels.hslAdjust, "hslAdjust missing from the default metallib")
+        XCTAssertNotNil(EditKernels.splitTone, "splitTone missing from the default metallib")
+        XCTAssertNotNil(EditKernels.grain, "grain missing from the default metallib")
+    }
+
+    /// All-zero HSL must be an EXACT identity. A "neutral" that shifts pixels
+    /// means the stack is never really off, and the user cannot get back to
+    /// their original by zeroing the sliders.
+    func testHSLIsIdentityAtZero() throws {
+        let kernel = try XCTUnwrap(EditKernels.hslAdjust)
+        let source = CIImage(color: CIColor(red: 0.2, green: 0.55, blue: 0.35))
+            .cropped(to: CGRect(x: 0, y: 0, width: 8, height: 8))
+        var args: [Any] = [source]
+        args += Array(repeating: Float(0), count: 24)
+        let out = try XCTUnwrap(kernel.apply(extent: source.extent, arguments: args))
+        let a = try XCTUnwrap(EditRenderTestSupport.render(source))
+        let b = try XCTUnwrap(EditRenderTestSupport.render(out))
+        XCTAssertEqual(try EditRenderTestSupport.meanChannelError(a, b), 0, accuracy: 0.004)
+    }
+
+    /// A grey pixel has no hue to target, so HSL must leave it alone no matter
+    /// how hard the bands are pushed — otherwise a saturation move tints the
+    /// neutrals, which is the classic HSL implementation bug.
+    func testHSLLeavesGreyUntouched() throws {
+        let kernel = try XCTUnwrap(EditKernels.hslAdjust)
+        let source = CIImage(color: CIColor(red: 0.5, green: 0.5, blue: 0.5))
+            .cropped(to: CGRect(x: 0, y: 0, width: 8, height: 8))
+        var args: [Any] = [source]
+        args += Array(repeating: Float(1), count: 24)
+        let out = try XCTUnwrap(kernel.apply(extent: source.extent, arguments: args))
+        let a = try XCTUnwrap(EditRenderTestSupport.render(source))
+        let b = try XCTUnwrap(EditRenderTestSupport.render(out))
+        XCTAssertEqual(try EditRenderTestSupport.meanChannelError(a, b), 0, accuracy: 0.004)
+    }
+
+    /// Split toning at zero saturation is an exact identity — the model calls
+    /// that neutral, so the kernel must agree.
+    func testSplitToneIsIdentityAtZeroSaturation() throws {
+        let kernel = try XCTUnwrap(EditKernels.splitTone)
+        let source = CIImage(color: CIColor(red: 0.3, green: 0.45, blue: 0.7))
+            .cropped(to: CGRect(x: 0, y: 0, width: 8, height: 8))
+        let out = try XCTUnwrap(kernel.apply(extent: source.extent, arguments: [
+            source, Float(1), Float(0.5), Float(0), Float(0),
+            Float(0), Float(0.5), Float(1), Float(0), Float(0),
+        ]))
+        let a = try XCTUnwrap(EditRenderTestSupport.render(source))
+        let b = try XCTUnwrap(EditRenderTestSupport.render(out))
+        XCTAssertEqual(try EditRenderTestSupport.meanChannelError(a, b), 0, accuracy: 0.004)
+    }
+
+    /// Grain at zero amount is an exact identity.
+    func testGrainIsIdentityAtZeroAmount() throws {
+        let kernel = try XCTUnwrap(EditKernels.grain)
+        let source = CIImage(color: CIColor(red: 0.5, green: 0.5, blue: 0.5))
+            .cropped(to: CGRect(x: 0, y: 0, width: 16, height: 16))
+        let out = try XCTUnwrap(kernel.apply(extent: source.extent,
+                                             arguments: [source, Float(0), Float(4),
+                                                         Float(0.5), Float(0.25)]))
+        let a = try XCTUnwrap(EditRenderTestSupport.render(source))
+        let b = try XCTUnwrap(EditRenderTestSupport.render(out))
+        XCTAssertEqual(try EditRenderTestSupport.meanChannelError(a, b), 0, accuracy: 0.004)
+    }
+
+    /// The same seed must produce the same field, and a different seed a
+    /// different one. This is the property that makes the grid tile, the
+    /// on-screen preview and the export agree.
+    func testGrainIsDeterministicPerSeed() throws {
+        let kernel = try XCTUnwrap(EditKernels.grain)
+        let source = CIImage(color: CIColor(red: 0.5, green: 0.5, blue: 0.5))
+            .cropped(to: CGRect(x: 0, y: 0, width: 32, height: 32))
+        func field(seed: Float) throws -> CGImage {
+            let out = try XCTUnwrap(kernel.apply(extent: source.extent,
+                                                 arguments: [source, Float(1), Float(3),
+                                                             Float(0.5), seed]))
+            return try XCTUnwrap(EditRenderTestSupport.render(out))
+        }
+        let a = try field(seed: 0.25)
+        let b = try field(seed: 0.25)
+        let c = try field(seed: 0.75)
+        XCTAssertEqual(try EditRenderTestSupport.meanChannelError(a, b), 0, accuracy: 0.0001,
+                       "same seed must give the same grain")
+        XCTAssertGreaterThan(try EditRenderTestSupport.meanChannelError(a, c), 0.005,
+                             "a different seed must give a different grain")
+    }
+}

@@ -122,17 +122,18 @@ final class StageBParamsTests: XCTestCase {
         XCTAssertEqual(c.roughness, 1)
     }
 
-    /// Determinism: the same content hash yields the same seed, a different one
+    /// Determinism: the same identity yields the same seed, a different one
     /// yields a different seed. This is what makes the grid tile, the on-screen
     /// preview and the export agree instead of producing three random fields —
     /// the specific failure Surface shipped.
-    func testGrainSeedIsStableForAHashAndDiffersAcrossHashes() {
-        let a = GrainParams.seed(forContentHash: "abc123")
-        let b = GrainParams.seed(forContentHash: "abc123")
-        let c = GrainParams.seed(forContentHash: "def456")
+    func testGrainSeedIsStableForAnIdentityAndDiffersAcrossThem() {
+        let a = GrainParams.seed(forIdentity: "/photos/a.jpg")
+        let b = GrainParams.seed(forIdentity: "/photos/a.jpg")
+        let c = GrainParams.seed(forIdentity: "/photos/b.jpg")
         XCTAssertEqual(a, b)
         XCTAssertNotEqual(a, c)
         XCTAssertTrue(a.isFinite)
+        XCTAssertTrue((0...1).contains(a))
     }
 
     func testGrainRoundTripsAndTransfers() throws {

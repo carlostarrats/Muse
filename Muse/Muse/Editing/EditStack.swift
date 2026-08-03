@@ -650,9 +650,15 @@ nonisolated struct GrainParams: Codable, Equatable, Sendable {
     /// Deterministic per-photo seed. The same photo MUST grain identically at
     /// thumbnail, screen and export — Surface shipped a preview that dropped
     /// grain entirely, and Muse cannot do that because the grid IS the product.
-    /// Derived from the content hash, never from time or position alone.
-    static func seed(forContentHash hash: String) -> Float {
-        Float(SeededRandom.fnv1a([hash]) % 100_000) / 100_000
+    ///
+    /// The identity is the FILE PATH, not the content hash, and deliberately:
+    /// the content hash needs a DB read, which the renderer must never do
+    /// (`canRender`'s LUT branch documents the same hazard), so hashing it here
+    /// would force some call sites onto a different seed than others — and two
+    /// seeds for one photo is precisely the preview-vs-export disagreement this
+    /// exists to prevent. One source, reachable everywhere `apply` is called.
+    static func seed(forIdentity identity: String) -> Float {
+        Float(SeededRandom.fnv1a([identity]) % 100_000) / 100_000
     }
 }
 

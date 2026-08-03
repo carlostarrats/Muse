@@ -7,13 +7,19 @@
 //  what lets a stack copied from one photo to another mean the same thing.
 //
 //  Chain: decode/orient → geometry → tone (exposure → WB → toneBands →
-//  contrast) → curve → color (vibrance → saturation) → presence (NR → clarity
-//  → texture → sharpen) → vignette.
+//  contrast) → tone zones → curve → color (vibrance → saturation) → HSL →
+//  LUT → split toning → presence (NR → clarity → texture → sharpen) →
+//  vignette → grain.
 //
-//  Scene-referred throughout except the curve, which is the deliberate
-//  display-referred pocket (a point curve the user drew in a 0…1 box has to be
-//  evaluated in that box). Everything before it runs on un-clamped linear data
-//  so highlight recovery works on real headroom instead of flat white.
+//  Scene-referred throughout except three deliberate display-referred pockets
+//  — the curve (a point curve the user drew in a 0…1 box has to be evaluated in
+//  that box), the LUT (`.cube` packs are authored against display encoding),
+//  and split toning (a grade is judged on top of the look, not underneath it).
+//  Everything before them runs on un-clamped linear data so highlight recovery
+//  works on real headroom instead of flat white.
+//
+//  Grain is last on purpose: it is the film the whole image is recorded on,
+//  not an adjustment that later stages should sharpen or vignette.
 //
 //  SCALE RULE: every radius is `fraction × sourceLongEdge`, scaled by the
 //  actual decode ratio. A fixed pixel radius makes a thumbnail and an export
@@ -54,8 +60,12 @@ nonisolated enum EditRenderer {
 
     /// `sourceLongEdge` is the long edge of the image AS PASSED IN, so every
     /// fractional radius resolves to the right pixel count at this resolution.
+    /// `grainSeed` identifies the PHOTO, so the same file grains identically at
+    /// every resolution. Defaulted rather than required: a caller that renders
+    /// a stack detached from any one file (a preset swatch) has no photo to
+    /// identify, and 0 is a perfectly good constant field for a 90px chip.
     static func apply(_ stack: EditStack, to image: LinearImage,
-                      sourceLongEdge: CGFloat) -> LinearImage {
+                      sourceLongEdge: CGFloat, grainSeed: Float = 0) -> LinearImage {
         guard canRender(stack) else { return image }
         let toned = applyThroughTone(stack, to: image.ciImage, sourceLongEdge: sourceLongEdge)
         var current = toned.image
@@ -72,11 +82,22 @@ nonisolated enum EditRenderer {
         if let color = stack.colorParams, color.vibrance != 0 || color.saturation != 0 {
             current = applyColor(color.clamped(), to: current)
         }
+        // 4a2. HSL: hue-targeted, still scene-referred, and after saturation so
+        // a global saturation move and a per-band one compose the way the
+        // sliders read top to bottom.
+        if let hsl = stack.hslParams, !hsl.isNeutral {
+            current = applyHSL(hsl.clamped(), to: current)
+        }
         // 4b. LUT: the second display-referred pocket, and for the same reason
         // as the curve — `.cube` packs are authored against display encoding,
         // so applying one to linear data would not be the look on the tin.
         if let lut = stack.lutParams, !lut.isNeutral {
             current = applyLut(lut.clamped(), to: current)
+        }
+        // 4c. Split toning: the THIRD display-referred pocket, after the LUT
+        // because a grade is judged on top of the look, not underneath it.
+        if let split = stack.splitToneParams, !split.isNeutral {
+            current = applySplitTone(split.clamped(), to: current)
         }
         if let presence = stack.presenceParams, !presence.isNeutral {
             current = applyPresence(presence.clamped(), to: current,
@@ -84,6 +105,12 @@ nonisolated enum EditRenderer {
         }
         if let vignette = stack.vignetteParams, !vignette.isNeutral {
             current = applyVignette(vignette.clamped(), to: current)
+        }
+        // Grain is LAST — it is the film the whole image is recorded on, not
+        // an adjustment other stages should then sharpen or vignette.
+        if let grain = stack.grainParams, !grain.isNeutral {
+            current = applyGrain(grain.clamped(), to: current,
+                                 sourceLongEdge: radiusScale, seed: grainSeed)
         }
         return LinearImage(current)
     }
@@ -324,6 +351,57 @@ nonisolated enum EditRenderer {
                             arguments: [image, blurred, Float(amount)]) ?? image
     }
 
+    /// Eight-band HSL. The kernel takes 24 loose floats rather than arrays
+    /// because `CIColorKernel` arguments are scalars; `clamped()` has already
+    /// guaranteed each run is exactly `bandCount` long, so the index arithmetic
+    /// below cannot go out of range.
+    private static func applyHSL(_ p: HSLParams, to image: CIImage) -> CIImage {
+        guard let kernel = EditKernels.hslAdjust else { return image }
+        var args: [Any] = [image]
+        args += p.hue.map { Float($0) }
+        args += p.saturation.map { Float($0) }
+        args += p.luminance.map { Float($0) }
+        return kernel.apply(extent: image.extent, arguments: args) ?? image
+    }
+
+    private static func applySplitTone(_ p: SplitToneParams, to image: CIImage) -> CIImage {
+        guard let kernel = EditKernels.splitTone else { return image }
+        let sh = rgbFromHue(p.shadowHue)
+        let hi = rgbFromHue(p.highlightHue)
+        return kernel.apply(extent: image.extent, arguments: [
+            image, sh.0, sh.1, sh.2, Float(p.shadowSaturation),
+            hi.0, hi.1, hi.2, Float(p.highlightSaturation), Float(p.balance),
+        ]) ?? image
+    }
+
+    /// Fully-saturated RGB for a 0…1 hue — the tint the kernel blends toward.
+    private static func rgbFromHue(_ h: Double) -> (Float, Float, Float) {
+        let wrapped = (h.truncatingRemainder(dividingBy: 1) + 1)
+            .truncatingRemainder(dividingBy: 1)
+        let x = wrapped * 6
+        let f = Float(x.truncatingRemainder(dividingBy: 1))
+        switch Int(x) {
+        case 0: return (1, f, 0)
+        case 1: return (1 - f, 1, 0)
+        case 2: return (0, 1, f)
+        case 3: return (0, 1 - f, 1)
+        case 4: return (f, 0, 1)
+        default: return (1, 0, 1 - f)
+        }
+    }
+
+    /// The cell size is resolved from a LONG-EDGE FRACTION here, at the one
+    /// place that knows the actual decode scale — which is what makes the
+    /// thumbnail and the export agree. `EditRenderConsistencyTests` is the gate.
+    private static func applyGrain(_ p: GrainParams, to image: CIImage,
+                                   sourceLongEdge: CGFloat, seed: Float) -> CIImage {
+        guard let kernel = EditKernels.grain else { return image }
+        let cellPx = max(1, EditKernels.grainCellFraction(size: p.size) * sourceLongEdge)
+        return kernel.apply(extent: image.extent,
+                            arguments: [image, Float(p.amount), Float(cellPx),
+                                        Float(p.roughness), seed]) ?? image
+    }
+
     private static func applyVignette(_ vignette: VignetteParams, to image: CIImage) -> CIImage {
         let extent = image.extent
         guard extent.width.isFinite, extent.height.isFinite, extent.width > 0 else { return image }
@@ -344,7 +422,8 @@ nonisolated enum EditRenderer {
     static func render(url: URL, stack: EditStack, maxPixel: Int) -> CGImage? {
         guard canRender(stack), let source = decode(url: url, stack: stack, maxPixel: maxPixel)
         else { return nil }
-        let rendered = apply(stack, to: source.image, sourceLongEdge: source.longEdge)
+        let rendered = apply(stack, to: source.image, sourceLongEdge: source.longEdge,
+                             grainSeed: GrainParams.seed(forIdentity: url.path))
         let context = RenderContexts.preview
         let extent = rendered.ciImage.extent
         guard extent.width >= 1, extent.height >= 1, extent.width.isFinite, extent.height.isFinite
@@ -361,7 +440,8 @@ nonisolated enum EditRenderer {
                            format: OutputFormat) throws {
         guard canRender(stack), let source = decode(url: url, stack: stack, maxPixel: 0)
         else { throw RenderError.decodeFailed }
-        let rendered = apply(stack, to: source.image, sourceLongEdge: source.longEdge)
+        let rendered = apply(stack, to: source.image, sourceLongEdge: source.longEdge,
+                             grainSeed: GrainParams.seed(forIdentity: url.path))
         let extent = rendered.ciImage.extent
         guard extent.width >= 1, extent.height >= 1, extent.width.isFinite, extent.height.isFinite
         else { throw RenderError.decodeFailed }

@@ -202,3 +202,132 @@ extern "C" [[stitchable]] float4 lutMix(coreimage::sample_t base, coreimage::sam
                                         float strength) {
     return float4(mix(base.rgb, lutted.rgb, strength), base.a);
 }
+
+// MARK: - Stage B
+
+/// Eight-band HSL. Bands are centred every 45° starting at red (0°), and a
+/// pixel's influence falls off linearly to zero at the neighbouring centres —
+/// so the weights of any two adjacent bands always sum to 1 and there is no
+/// visible seam where one band hands over to the next.
+///
+/// A grey pixel has no hue to target and returns untouched, which is also what
+/// makes an all-zero parameter set an exact identity.
+extern "C" [[stitchable]] float4 hslAdjust(coreimage::sample_t s,
+                                           float h0, float h1, float h2, float h3,
+                                           float h4, float h5, float h6, float h7,
+                                           float s0, float s1, float s2, float s3,
+                                           float s4, float s5, float s6, float s7,
+                                           float l0, float l1, float l2, float l3,
+                                           float l4, float l5, float l6, float l7) {
+    float hueArr[8] = {h0, h1, h2, h3, h4, h5, h6, h7};
+    float satArr[8] = {s0, s1, s2, s3, s4, s5, s6, s7};
+    float lumArr[8] = {l0, l1, l2, l3, l4, l5, l6, l7};
+
+    float3 c = max(s.rgb, 0.0f);
+    float mx = max(c.r, max(c.g, c.b));
+    float mn = min(c.r, min(c.g, c.b));
+    float delta = mx - mn;
+    if (delta < 1e-6f || mx < 1e-6f) { return s; }
+
+    float hue;
+    if (mx == c.r)      { hue = fmod((c.g - c.b) / delta + 6.0f, 6.0f); }
+    else if (mx == c.g) { hue = (c.b - c.r) / delta + 2.0f; }
+    else                { hue = (c.r - c.g) / delta + 4.0f; }
+    hue = fmod(hue * 60.0f + 360.0f, 360.0f);
+
+    float pos = hue / 45.0f;                     // 0…8 across the eight bands
+    int lo = ((int)floor(pos)) % 8;
+    int hi = (lo + 1) % 8;
+    float t = pos - floor(pos);
+
+    float dHue = mix(hueArr[lo], hueArr[hi], t);
+    float dSat = mix(satArr[lo], satArr[hi], t);
+    float dLum = mix(lumArr[lo], lumArr[hi], t);
+
+    // ±30° of rotation at full slider — enough to move a leaf from green to
+    // yellow, not enough to turn it magenta by accident.
+    hue = fmod(hue + dHue * 30.0f + 360.0f, 360.0f);
+    float sat = clamp((delta / mx) * (1.0f + dSat), 0.0f, 1.0f);
+    float val = mx * (1.0f + dLum * 0.5f);
+
+    float cc = val * sat;
+    float xx = cc * (1.0f - fabs(fmod(hue / 60.0f, 2.0f) - 1.0f));
+    float m = val - cc;
+    float3 o;
+    if      (hue <  60.0f) o = float3(cc, xx, 0.0f);
+    else if (hue < 120.0f) o = float3(xx, cc, 0.0f);
+    else if (hue < 180.0f) o = float3(0.0f, cc, xx);
+    else if (hue < 240.0f) o = float3(0.0f, xx, cc);
+    else if (hue < 300.0f) o = float3(xx, 0.0f, cc);
+    else                   o = float3(cc, 0.0f, xx);
+    return float4(o + m, s.a);
+}
+
+/// Split toning. Weights each pixel toward a shadow tint or a highlight tint by
+/// its luma, with `balance` sliding the crossover point. Display-referred: it
+/// runs after the curve and the LUT, because that is the encoding the grade is
+/// being judged in.
+///
+/// Both amounts at zero leave every mix() factor at zero, so this is an exact
+/// identity when neutral.
+extern "C" [[stitchable]] float4 splitTone(coreimage::sample_t s,
+                                           float shR, float shG, float shB, float shAmt,
+                                           float hiR, float hiG, float hiB, float hiAmt,
+                                           float balance) {
+    float3 c = s.rgb;
+    float y = clamp(lumaOf(c), 0.0f, 1.0f);
+    // balance −1 pushes the crossover down (more of the frame reads as
+    // highlight), +1 pushes it up.
+    float pivot = clamp(0.5f - balance * 0.4f, 0.05f, 0.95f);
+    float hiW = smoothstep(pivot - 0.35f, pivot + 0.35f, y);
+    float shW = 1.0f - hiW;
+
+    float3 shadowTint = float3(shR, shG, shB);
+    float3 highlightTint = float3(hiR, hiG, hiB);
+    c = mix(c, c * (1.0f - shAmt) + shadowTint * shAmt, shW * shAmt > 0.0f ? shW : 0.0f);
+    c = mix(c, c * (1.0f - hiAmt) + highlightTint * hiAmt, hiW * hiAmt > 0.0f ? hiW : 0.0f);
+    return float4(c, s.a);
+}
+
+/// Film grain.
+///
+/// `cellPx` arrives ALREADY RESOLVED from a long-edge fraction, so the same
+/// photo grains identically at a 320px thumbnail and a 60 MP export — the one
+/// bug class that shows up as "the grid doesn't match what I edited". `seed`
+/// comes from the file's content hash, never from time or position alone, for
+/// the same reason.
+static inline float grainHash(float2 p, float seed) {
+    float h = dot(p, float2(127.1f, 311.7f)) + seed * 43.7f;
+    return fract(sin(h) * 43758.5453123f);
+}
+
+// `coreimage::destination` must be the LAST parameter, and a kernel that pairs
+// it with `sample_t` is still a CIColorKernel — not a general CIKernel, which
+// is what `coreimage::sampler` would make it. Getting that wrong makes the
+// function simply fail to load, silently, at runtime.
+extern "C" [[stitchable]] float4 grain(coreimage::sample_t s,
+                                       float amount, float cellPx, float roughness,
+                                       float seed,
+                                       coreimage::destination dest) {
+    float2 p = dest.coord() / max(cellPx, 1.0f);
+    float2 i = floor(p);
+    float2 f = fract(p);
+    // Bilinear value noise. Raw per-cell noise reads as digital blocks; the
+    // smoothstep interpolation is what makes it read as film.
+    float a = grainHash(i, seed);
+    float b = grainHash(i + float2(1.0f, 0.0f), seed);
+    float c = grainHash(i + float2(0.0f, 1.0f), seed);
+    float d = grainHash(i + float2(1.0f, 1.0f), seed);
+    float2 u = f * f * (3.0f - 2.0f * f);
+    float n = mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+
+    // Roughness pushes the noise toward its extremes.
+    n = mix(n, step(0.5f, n), roughness);
+    float delta = (n - 0.5f) * amount * 0.5f;
+
+    // Strongest in the midtones, fading in deep shadow and clipped highlight —
+    // how film actually behaves, and it keeps grain out of a black sky.
+    float y = clamp(lumaOf(s.rgb), 0.0f, 1.0f);
+    float weight = 1.0f - fabs(y * 2.0f - 1.0f);
+    return float4(s.rgb + delta * weight, s.a);
+}

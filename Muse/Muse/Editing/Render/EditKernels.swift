@@ -53,6 +53,28 @@ nonisolated enum EditKernels {
     /// LUT strength mix.
     static let lutMix: CIColorKernel? = load("lutMix")
 
+    // MARK: - Stage B
+
+    /// Eight-band HSL.
+    static let hslAdjust: CIColorKernel? = load("hslAdjust")
+
+    /// Shadow/highlight split toning.
+    static let splitTone: CIColorKernel? = load("splitTone")
+
+    /// Film grain. Still a COLOUR kernel despite reading `dest.coord()`:
+    /// pairing `coreimage::destination` with `sample_t` keeps it per-pixel,
+    /// and only `coreimage::sampler` would make it a general `CIKernel`.
+    /// Loading it with the wrong type just returns nil, silently, at runtime.
+    static let grain: CIColorKernel? = load("grain")
+
+    /// Grain cell size as a LONG-EDGE FRACTION — `(1.5 + 4.5·size)/4032`, the
+    /// normalization carried over from Surface. Never a pixel constant: a
+    /// fixed cell makes a thumbnail and an export disagree, which is exactly
+    /// the bug that shows up as "the grid doesn't match what I edited".
+    static func grainCellFraction(size: Double) -> CGFloat {
+        CGFloat(1.5 + 4.5 * min(max(size, 0), 1)) / 4032
+    }
+
     private static var libraryData: Data? = {
         guard let url = Bundle.main.url(forResource: "default", withExtension: "metallib")
         else { return nil }
