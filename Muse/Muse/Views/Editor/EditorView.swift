@@ -72,6 +72,7 @@ struct EditorView: View {
     /// shape plus an orientation toggle, rather than two entries per shape.
     @State private var cropAspect: CropAspectPreset = .original
     @State private var cropPortrait = false
+    @State private var applyCropHovering = false
 
     /// Section ids. Stable strings, because they're persisted.
     private enum Section {
@@ -1044,13 +1045,34 @@ struct EditorView: View {
             .foregroundStyle(panelTheme.selectionInk)
             .padding(.horizontal, 12)
             .frame(height: 24)
-            .background(Capsule(style: .continuous).fill(panelTheme.selectionFill))
+            .background(
+                Capsule(style: .continuous)
+                    .fill(panelTheme.selectionFill)
+                    // Hover reads as a lift rather than a colour change, so it
+                    // works whichever way the accent resolves against the
+                    // current backdrop — PanelContrast can hand this button a
+                    // light or a dark fill, and a hard-coded "brighter" would
+                    // be wrong for one of them.
+                    .overlay(Capsule(style: .continuous)
+                        .fill(Color.white.opacity(isApplyHot ? 0.18 : 0)))
+                    .shadow(color: .black.opacity(isApplyHot ? 0.28 : 0),
+                            radius: isApplyHot ? 4 : 0, y: isApplyHot ? 1 : 0))
+            .scaleEffect(isApplyHot ? 1.03 : 1)
             .contentShape(Capsule(style: .continuous))
         }
         .buttonStyle(.plain)
         .disabled(!session.cropHasPendingChange)
         .opacity(session.cropHasPendingChange ? 1 : 0.35)
+        .onHover { applyCropHovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: isApplyHot)
         .help(Text("Apply Crop"))
+    }
+
+    /// Hover only counts while the button can actually DO something — a
+    /// disabled control that lights up under the pointer is a promise it will
+    /// not keep.
+    private var isApplyHot: Bool {
+        applyCropHovering && session.cropHasPendingChange
     }
 
     /// The card's Reset, in the HEADING like every other card's — it clears the
