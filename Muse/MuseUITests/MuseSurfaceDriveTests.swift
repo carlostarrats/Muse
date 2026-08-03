@@ -281,6 +281,21 @@ final class MuseSurfaceDriveTests: XCTestCase {
         Thread.sleep(forTimeInterval: 1)
         XCTAssertTrue(app.buttons["Reset All Adjustments"].exists, "controls never came back")
 
+        // ⌘U is the same toggle from the keyboard, which is the whole point of
+        // it — hiding the UI is a there-and-back move and reaching for the
+        // button each way defeats it. The shortcut rides the eye BUTTON, and
+        // that button is in a different place in each state, so both
+        // directions have to be driven.
+        app.typeKey("u", modifierFlags: .command)
+        Thread.sleep(forTimeInterval: 1)
+        snap("09e-editor-ui-hidden-by-key")
+        XCTAssertFalse(app.buttons["Reset All Adjustments"].exists,
+                       "⌘U did not hide the controls")
+        app.typeKey("u", modifierFlags: .command)
+        Thread.sleep(forTimeInterval: 1)
+        XCTAssertTrue(app.buttons["Reset All Adjustments"].exists,
+                      "⌘U did not bring the controls back")
+
         app.typeKey(.escape, modifierFlags: [])
         Thread.sleep(forTimeInterval: 2)
     }

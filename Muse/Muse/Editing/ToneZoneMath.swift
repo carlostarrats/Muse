@@ -67,6 +67,25 @@ nonisolated enum ToneZoneMath {
         return bestIndex
     }
 
+    /// Where a drag lands a zone's gain: the value the press STARTED from plus
+    /// the pointer's total travel, one gain-point per screen point so the black
+    /// line stays under the cursor. `translationPoints` is SwiftUI's, positive
+    /// downward, and down means darker.
+    ///
+    /// The anchor is a parameter on purpose. The strip used to read the CURRENT
+    /// gain and add the gesture's cumulative translation to it, which re-applied
+    /// every earlier point of the same drag — the gain grew with the square of
+    /// the distance and the line shot off ahead of the pointer within a few
+    /// pixels. A function that cannot see the current gain cannot regress that
+    /// way.
+    static func draggedGain(anchor: Double,
+                            translationPoints: Double,
+                            cellHeight: Double) -> Double {
+        // The gain range (−1…+1) is drawn across the cell's full height.
+        let perPoint = 2.0 / max(cellHeight, 1)
+        return min(max(anchor - translationPoints * perPoint, -1), 1)
+    }
+
     /// Σ(weight_i · gain_i · maxZoneEV) — the exposure offset a pixel at this
     /// EV receives. Exactly 0 at all-zero gains, which is the neutrality
     /// golden's whole point.

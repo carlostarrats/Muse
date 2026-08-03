@@ -625,3 +625,37 @@ which bounds the risk to a compile/availability error rather than a behavioural
 one. The Reinhard fallback WAS exercised, by forcing the branch on this machine
 — and that is how its normalization bug was found, so the technique is worth
 repeating for any future 14.6-only path.
+
+## The drive suite is BLOCKED on this machine (2026-08-03) — OPEN
+
+`MuseSurfaceDriveTests` / `MuseExportDriveTests` are the evidence behind G1's
+"partially closed". **They cannot run right now**, and it is not a branch
+regression: `testAppLaunchesWithPopulatedSidebar` — untouched since round 7 —
+fails identically.
+
+What the runner sees:
+
+| Signal | Value |
+|---|---|
+| `app.state` | 4 (`runningForeground`) |
+| `app.windows.count` | **0** |
+| `app.dialogs.count` | 1 — the main window, published with the Dialog type |
+| `app.buttons.count` | 268, every grid tile labelled with its filename |
+| Every element | marked **Disabled**, so nothing is `isHittable` |
+| Screen during the run | Muse owns the menu bar; **no Muse window is drawn** |
+
+Launched by hand from the same build the app is completely normal (screenshot
+taken the same minute). So the app is fine and the harness is not: the window
+never becomes visible when XCUITest launches it, and AX reports the whole tree
+disabled behind a Dialog. Machine is macOS 26.5.2 (25F84).
+
+Consequences, until this is understood:
+
+* **Every "confirmed by screenshot" claim below is as of 2026-08-02.** Nothing
+  has been re-confirmed since.
+* The ⌘U assertions added to `testEditorZoomAndHideControls` on 2026-08-03 have
+  never executed. The shortcut is unverified at runtime.
+* Do NOT "fix" this by loosening the window lookup to accept a dialog. That
+  would make the suite green against an app whose window is not on screen —
+  the exact vacuous-pass failure this suite was built to avoid. Find out why
+  the window doesn't appear first.

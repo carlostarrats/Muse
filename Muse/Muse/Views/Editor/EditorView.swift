@@ -397,6 +397,18 @@ struct EditorView: View {
                                 : String(localized: "Hide controls")) {
             toggleChrome()
         }
+        // Hiding the UI is a there-and-back move, so it needs a key: ⌘U
+        // toggles it either way. NOT ⌘⇧H — a three-key chord for a control you
+        // bounce on is fiddly, and a slip off the shift hides the whole app.
+        // Nothing in Muse or macOS claims ⌘U, and its neighbours (⌘Y, ⌘I, ⌘J)
+        // are unbound too, so a miss does nothing at all.
+        //
+        // It rides the BUTTON rather than a key monitor because exactly one
+        // instance of it is in the tree at a time (the chrome row when the UI
+        // is up, the lone corner button when it is down) — so the shortcut
+        // can't double-fire. A ⌘ shortcut also can't steal a keystroke from a
+        // text field the way a bare letter would.
+        .keyboardShortcut("u", modifiers: .command)
         .help(Text(session.uiHidden ? "Show controls" : "Hide controls"))
     }
 
@@ -1063,16 +1075,14 @@ struct EditorView: View {
             .background(
                 Capsule(style: .continuous)
                     .fill(panelTheme.selectionFill)
-                    // Hover reads as a lift rather than a colour change, so it
-                    // works whichever way the accent resolves against the
-                    // current backdrop — PanelContrast can hand this button a
-                    // light or a dark fill, and a hard-coded "brighter" would
-                    // be wrong for one of them.
+                    // Hover is a TINT and nothing else — the app's hover
+                    // treatment everywhere. It was a shadow-and-lift here,
+                    // which read as a different kind of control. The white
+                    // wash works whichever way the accent resolves, since
+                    // PanelContrast can hand this button a light or a dark
+                    // fill and a hard-coded "brighter" would be wrong for one.
                     .overlay(Capsule(style: .continuous)
-                        .fill(Color.white.opacity(isApplyHot ? 0.18 : 0)))
-                    .shadow(color: .black.opacity(isApplyHot ? 0.28 : 0),
-                            radius: isApplyHot ? 4 : 0, y: isApplyHot ? 1 : 0))
-            .scaleEffect(isApplyHot ? 1.03 : 1)
+                        .fill(Color.white.opacity(isApplyHot ? 0.18 : 0))))
             .contentShape(Capsule(style: .continuous))
         }
         .buttonStyle(.plain)

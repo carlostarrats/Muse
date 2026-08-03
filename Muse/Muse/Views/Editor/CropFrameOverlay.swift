@@ -12,9 +12,9 @@
 //  down, exactly what `CropRect` and `EditRenderer.applyGeometry` use — so no
 //  flip is needed anywhere between this view and the renderer.
 //
-//  What changed in the port: the accent (Surface's capture accent → white,
-//  which is what reads over an arbitrary photo rather than over a known camera
-//  UI), and the input (iOS drag → macOS drag with a hover cursor).
+//  What changed in the port: the input (iOS drag → macOS drag with a hover
+//  cursor). The handles are drawn in Muse's own accent — they went white in the
+//  port and were hard to find against a light photo.
 //
 //  All geometry here is POINTS. `EditCanvasView` positions this view over the
 //  image's content rect, which `EditorCanvasGeometry` computes in points; this
@@ -26,6 +26,8 @@ import SwiftUI
 import AppKit
 
 struct CropFrameOverlay: View {
+    @Environment(\.theme) private var theme
+
     @Binding var rect: CropRect
     /// Locked aspect (width ÷ height, in PIXELS), or nil for freeform.
     var aspect: Double?
@@ -103,7 +105,11 @@ struct CropFrameOverlay: View {
     private func marks(frame: CGRect) -> some View {
         ForEach(Array(CropDragMath.Handle.allCases.enumerated()), id: \.offset) { _, handle in
             markShape(for: handle, frame: frame)
-                .fill(Color.white)
+                // The app's accent, not white: white brackets vanish into the
+                // bright edge of a photo, which is exactly where you go looking
+                // for them. The shadow stays — it's a legibility scrim that
+                // keeps the accent readable over a light subject too.
+                .fill(theme.controlAccent)
                 .shadow(color: .black.opacity(0.4), radius: 1)
                 .allowsHitTesting(false)
         }

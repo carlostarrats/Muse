@@ -6,6 +6,61 @@ the durable rules + a compact index live in `CLAUDE.md`. Nothing here is
 load-bearing for a fresh session beyond what that index already surfaces;
 read an entry when you need the full "why" behind a specific change.
 
+### Tone-zone dragging, crop handles, ⌘U — 2026-08-03 (on `feat/next-153`)
+
+Three owner reports from driving the editor, plus one thing the QA pass turned up.
+
+**"Dragging a black line in the tone zone is hard. It moves fast and seems like
+it's a distance away from where you click on it."** Both halves were the same
+bug, and it was not a tuning problem. `onChanged` did
+`setGain(index, to: gain(index) + translation × gainPerPoint)` — but
+`DragGesture.translation` is CUMULATIVE from the press, so every event re-applied
+the whole travel so far on top of a value that already contained it. The gain
+grew with the square of the distance: with events every couple of points, a
+50-point drag applied roughly 25× the intended change, which is exactly "moves
+fast" and "the line is nowhere near my cursor". Now the press captures an anchor
+and each event computes an ABSOLUTE value from it. The rate went with it: it was
+a feel-based `0.008`, and it is now derived — `2.0 / cellHeight`, the gain range
+over the height the line is drawn across — so one point of drag is one point of
+line movement and the mark stays under the pointer. The mapping moved into
+`ToneZoneMath.draggedGain(anchor:translationPoints:cellHeight:)`, which takes the
+anchor as a parameter so the accumulating form can't be written again, and
+`ToneZoneMathTests` replays a gesture's worth of events against a single-step
+evaluation. This is the SECOND time this exact bug shipped — the crop frame had
+it and was fixed 2026-08-02 — so it is now a durable rule under SwiftUI patterns.
+The anchor is keyed by cell index, so a drag that never delivers `onEnded`
+(window deactivated mid-gesture) can't anchor the next cell's drag.
+
+**"The hover state on Apply Crop is not what we normally do."** It was a
+shadow-and-lift (0.28 black shadow, 1.03 scale) plus a tint; it is now the tint
+alone, like every other hover in the app. The original comment argued the lift
+was backdrop-independent — true, but being consistent with the rest of the app
+matters more, and the white wash is itself backdrop-independent.
+
+**"Give the eye button a keyboard shortcut."** ⌘U, on the button itself rather
+than a key monitor: exactly one instance of it is in the tree at a time (the
+chrome row when the UI is up, the lone corner button when it is down), so it
+can't double-fire, and a ⌘ shortcut can't steal a keystroke from a text field the
+way a bare letter would. First attempt was ⌘⇧H, which the owner rejected on the
+right grounds — a three-key chord for a control you bounce on, and slipping off
+the shift hides the whole app. ⌘U is unclaimed here and by macOS (no Format menu
+in this app), and its neighbours ⌘Y/⌘I/⌘J are unbound too, so a miss does nothing.
+
+**Crop handles are the accent, not white** (owner, with a screenshot of white
+brackets over a pale photo). The white came from the Surface Camera port, where
+it sat over known camera chrome; over an arbitrary photo it vanishes into exactly
+the bright edge you go looking for it at. The black legibility shadow stays.
+
+**The XCUITest drive suite cannot drive the app on this machine right now**, and
+it is NOT this branch: `testAppLaunchesWithPopulatedSidebar`, untouched, fails the
+same way. The app launches to `runningForeground` and publishes a full element
+tree (268 buttons, every tile labelled), but `app.windows.count == 0` — the window
+comes through as a **Dialog**, every element is marked **Disabled**, and a
+screencapture during the run shows Muse owning the menu bar with **no window drawn
+on screen at all**. Launched by hand from the same build it is completely normal.
+So the ⌘U assertions added to `testEditorZoomAndHideControls` are written but have
+never run; the shortcut is unverified at runtime. Recorded in the ledger.
+
 ### Preview ↔ Edit is instant — 2026-08-03 (on `feat/next-153`)
 
 Owner report, both directions of the same switch: *"going from preview to edit,

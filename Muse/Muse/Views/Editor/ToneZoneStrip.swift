@@ -19,7 +19,6 @@ struct ToneZoneStrip: View {
 
     @State private var slidersExpanded = false
 
-    private static let gainPerPoint = 0.008
     private static let cellHeight: CGFloat = 56
     /// Mass rarely exceeds a quarter of the frame in one zone, so the bars are
     /// amplified to stay readable — they compare zones to each other, they are
@@ -33,6 +32,11 @@ struct ToneZoneStrip: View {
     private static let hoverDwellMilliseconds = 220
 
     @State private var hoverDwell: Task<Void, Never>?
+
+    /// The cell being dragged and the gain it held when the press began. Keyed
+    /// by index so a drag that never delivered its `onEnded` (window
+    /// deactivated mid-gesture) can't anchor the NEXT cell's drag.
+    @State private var dragAnchor: (index: Int, gain: Double)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: theme.spacingS) {
@@ -130,10 +134,26 @@ struct ToneZoneStrip: View {
             // could otherwise write a gain from a single point of twitch.
             DragGesture(minimumDistance: 3)
                 .onChanged { value in
-                    setGain(index, to: min(max(gain(index)
-                        + Double(-value.translation.height) * Self.gainPerPoint, -1), 1))
+                    // Anchor on the gain the drag STARTED from — see
+                    // `ToneZoneMath.draggedGain`, which owns the mapping and
+                    // the reason it takes the anchor rather than reading the
+                    // current gain.
+                    let start: Double
+                    if let anchor = dragAnchor, anchor.index == index {
+                        start = anchor.gain
+                    } else {
+                        start = gain(index)
+                        dragAnchor = (index, start)
+                    }
+                    setGain(index, to: ToneZoneMath.draggedGain(
+                        anchor: start,
+                        translationPoints: Double(value.translation.height),
+                        cellHeight: Double(Self.cellHeight)))
                 }
-                .onEnded { _ in session.commitGesture() }
+                .onEnded { _ in
+                    dragAnchor = nil
+                    session.commitGesture()
+                }
         )
         .onHover { inside in
             hoverDwell?.cancel()

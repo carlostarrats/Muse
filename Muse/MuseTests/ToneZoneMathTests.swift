@@ -98,4 +98,62 @@ final class ToneZoneMathTests: XCTestCase {
         XCTAssertEqual(ToneZoneMath.gainEV(forEV: -8, gains: [1.0]),
                        ToneZoneMath.maxZoneEV, accuracy: 1e-9)
     }
+
+    // MARK: - Drag mapping
+
+    func testDraggedGainIsTheAnchorAtZeroTravel() {
+        XCTAssertEqual(ToneZoneMath.draggedGain(anchor: 0.25, translationPoints: 0,
+                                                cellHeight: 56),
+                       0.25, accuracy: 1e-12)
+    }
+
+    /// One point of travel is one point of line movement — the property that
+    /// keeps the line under the cursor. Half the cell's height is half the
+    /// gain range (1.0), and up (negative translation) brightens.
+    func testDraggedGainMovesOnePointPerPoint() {
+        XCTAssertEqual(ToneZoneMath.draggedGain(anchor: 0, translationPoints: -28,
+                                                cellHeight: 56),
+                       1.0, accuracy: 1e-12)
+        XCTAssertEqual(ToneZoneMath.draggedGain(anchor: 0, translationPoints: 14,
+                                                cellHeight: 56),
+                       -0.5, accuracy: 1e-12)
+    }
+
+    /// The regression that made the control unusable: `translation` is
+    /// CUMULATIVE, so replaying a whole gesture's worth of events must land on
+    /// exactly the same gain as evaluating its final translation once. The old
+    /// call site fed each event's result back in as the next anchor, which grew
+    /// the gain with the square of the distance.
+    func testDraggedGainDoesNotAccumulateOverAGesture() {
+        let anchor = -0.25
+        var replayed = anchor
+        for point in 1...20 {
+            replayed = ToneZoneMath.draggedGain(anchor: anchor,
+                                                translationPoints: Double(-point),
+                                                cellHeight: 56)
+        }
+        XCTAssertEqual(replayed,
+                       ToneZoneMath.draggedGain(anchor: anchor, translationPoints: -20,
+                                                cellHeight: 56),
+                       accuracy: 1e-12)
+        // 20 points up from −0.25 lands mid-range. The accumulating version
+        // pinned at +1 long before here, so the clamp would have hidden the
+        // bug — this assert is what makes the equality above meaningful.
+        XCTAssertEqual(replayed, -0.25 + 20 * (2.0 / 56), accuracy: 1e-12)
+        XCTAssertLessThan(replayed, 1.0)
+    }
+
+    func testDraggedGainClampsToTheLegalRange() {
+        XCTAssertEqual(ToneZoneMath.draggedGain(anchor: 0.9, translationPoints: -500,
+                                                cellHeight: 56), 1.0, accuracy: 1e-12)
+        XCTAssertEqual(ToneZoneMath.draggedGain(anchor: -0.9, translationPoints: 500,
+                                                cellHeight: 56), -1.0, accuracy: 1e-12)
+    }
+
+    /// A degenerate cell height must not divide by zero.
+    func testDraggedGainSurvivesAZeroCellHeight() {
+        let g = ToneZoneMath.draggedGain(anchor: 0, translationPoints: -1, cellHeight: 0)
+        XCTAssertTrue(g.isFinite)
+        XCTAssertLessThanOrEqual(g, 1.0)
+    }
 }
