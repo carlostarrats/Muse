@@ -1,6 +1,9 @@
 //
-//  CompareCullTests.swift
+//  CompareTests.swift
 //  MuseTests
+//
+//  Was CompareCullTests. The CullSummary/CullStore cases went with the cull
+//  feature (removed 2026-08-02) — the compare workbench itself stays.
 //
 
 import XCTest
@@ -136,45 +139,5 @@ final class SharpnessRankTests: XCTestCase {
 
     func testEmptyInputReturnsEmpty() {
         XCTAssertTrue(SharpnessRank.rank(scores: []).isEmpty)
-    }
-}
-
-@MainActor
-final class CullSummaryTests: XCTestCase {
-    func testPartitionsKeepAndReject() {
-        let summary = CullSummary(marks: ["/a.jpg": .keep, "/b.jpg": .reject, "/c.jpg": .keep])
-        XCTAssertEqual(Set(summary.keepPaths), ["/a.jpg", "/c.jpg"])
-        XCTAssertEqual(summary.rejectPaths, ["/b.jpg"])
-    }
-
-    func testEmptySessionProducesEmptySummary() {
-        let summary = CullSummary(marks: [:])
-        XCTAssertTrue(summary.keepPaths.isEmpty)
-        XCTAssertTrue(summary.rejectPaths.isEmpty)
-    }
-
-    func testUnmarkedFilesAreSimplyAbsent() {
-        let summary = CullSummary(marks: ["/a.jpg": .keep])
-        XCTAssertEqual(summary.keepPaths.count, 1)
-        XCTAssertEqual(summary.rejectPaths.count, 0)
-    }
-
-    func testStoreIgnoresMarksWhileInactive() {
-        let store = CullStore()
-        store.setMark(.keep, path: "/a.jpg")
-        XCTAssertTrue(store.marks.isEmpty, "marks outside a session must not accumulate")
-    }
-
-    func testStoreBeginClearsAndEndDiscards() {
-        let store = CullStore()
-        store.begin()
-        store.setMark(.reject, path: "/a.jpg")
-        XCTAssertEqual(store.mark(for: "/a.jpg"), .reject)
-        store.setMark(nil, path: "/a.jpg")
-        XCTAssertNil(store.mark(for: "/a.jpg"))
-        store.setMark(.keep, path: "/b.jpg")
-        store.end()
-        XCTAssertFalse(store.active)
-        XCTAssertTrue(store.marks.isEmpty, "nothing survives the end of a session")
     }
 }

@@ -194,7 +194,7 @@ extension AssetKind {
 
 extension AssetKind {
     /// The kinds that carry photo semantics: a raster the Vision/CLIP passes
-    /// analyze, the hero viewer flies, and Compare/Cull operate on. Matches
+    /// analyze, the hero viewer flies, and Compare operates on. Matches
     /// the `('image','raw','psd')` filter every analysis query already uses.
     var isPhotoKind: Bool {
         self == .image || self == .raw || self == .psd

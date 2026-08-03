@@ -102,6 +102,11 @@ struct MuseApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                // The window had no minimum at all, so it could be dragged
+                // narrower than the hero viewer's fixed 258pt info column and
+                // the photo ended up drawn over it. See ViewerGeometry.
+                .frame(minWidth: ViewerGeometry.minWindowWidth,
+                       minHeight: ViewerGeometry.minWindowHeight)
                 .environmentObject(appState)
                 .environmentObject(googleAuth)
                 .environmentObject(commerceStore)
@@ -329,15 +334,6 @@ struct MuseApp: App {
                 .disabled(appState.selectedFile != nil
                           || !(2...CompareStore.maxPanes)
                               .contains(appState.effectiveSelectionURLs(fallback: "").count))
-
-                Button {
-                    guard appState.visibleFiles.filter({ $0.kind.isPhotoKind }).count >= 2 else { return }
-                    CullStore.shared.begin()
-                } label: {
-                    Label("Start Culling", systemImage: "checkmark.circle")
-                }
-                .keyboardShortcut("k", modifiers: [.command, .shift])
-                .disabled(appState.visibleFiles.filter { $0.kind.isPhotoKind }.count < 2)
 
                 Divider()
                 // Export from the keyboard, wherever you are. The open photo

@@ -330,22 +330,6 @@
         }
       }
     },
-    "%lld kept · %lld rejected": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "new",
-            "value": "%1$lld kept · %2$lld rejected"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld gardées · %lld rejetées"
-          }
-        }
-      }
-    },
     "%lld not found": {
       "localizations": {
         "fr": {
@@ -1753,16 +1737,6 @@
         }
       }
     },
-    "Clear Cull Mark": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Effacer la marque de tri"
-          }
-        }
-      }
-    },
     "Clear Rating": {
       "localizations": {
         "fr": {
@@ -2486,13 +2460,13 @@
         }
       }
     },
-    "Crops about %lld%% of the picture — drag it to choose which part.": {
+    "Crops about %lld%% of the picture, centred.": {
       "comment": "Export: how much a fixed social frame trims",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Recadre environ %lld %% de l’image — faites-la glisser pour choisir la partie conservée."
+            "value": "Recadre environ %lld %% de l’image, au centre."
           }
         }
       }
@@ -2503,32 +2477,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Couronne"
-          }
-        }
-      }
-    },
-    "Culling session": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Séance de tri"
-          }
-        }
-      }
-    },
-    "Culling — %lld kept · %lld rejected": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Culling — %1$lld kept · %2$lld rejected"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tri — %lld gardées · %lld rejetées"
           }
         }
       }
@@ -2871,26 +2819,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dimensions"
-          }
-        }
-      }
-    },
-    "Discard": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Abandonner"
-          }
-        }
-      }
-    },
-    "Discard this cull pass?": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Abandonner ce tri ?"
           }
         }
       }
@@ -3456,16 +3384,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Trouver des photos similaires"
-          }
-        }
-      }
-    },
-    "Finish": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Terminer"
           }
         }
       }
@@ -4449,32 +4367,12 @@
         }
       }
     },
-    "K keep · X reject · U clear": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "K garder · X rejeter · U effacer"
-          }
-        }
-      }
-    },
     "KEEP": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "CONSERVER"
-          }
-        }
-      }
-    },
-    "Keep": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Garder"
           }
         }
       }
@@ -5352,16 +5250,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mettre %1$lld fichier%2$@ à la corbeille ?"
-          }
-        }
-      }
-    },
-    "Move %lld rejected photos to the Trash": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mettre %lld photos rejetées à la corbeille"
           }
         }
       }
@@ -7045,16 +6933,6 @@
         }
       }
     },
-    "Rate kept photos": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Noter les photos gardées"
-          }
-        }
-      }
-    },
     "Rated %lld stars": {
       "localizations": {
         "fr": {
@@ -7222,26 +7100,6 @@
         }
       }
     },
-    "Reference Photo": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Photo de référence"
-          }
-        }
-      }
-    },
-    "Reference photo": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Photo de référence"
-          }
-        }
-      }
-    },
     "Refresh collection": {
       "localizations": {
         "fr": {
@@ -7278,26 +7136,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Régénérer les étiquettes de cette vue ?"
-          }
-        }
-      }
-    },
-    "Reject": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rejeter"
-          }
-        }
-      }
-    },
-    "Rejected": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rejetée"
           }
         }
       }
@@ -7833,16 +7671,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Afficher dans le Finder"
-          }
-        }
-      }
-    },
-    "Right-click a photo in the grid → Use as Reference Photo": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Clic droit sur une photo de la grille → Utiliser comme photo de référence"
           }
         }
       }
@@ -9305,16 +9133,6 @@
         }
       }
     },
-    "Start Culling": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Commencer le tri"
-          }
-        }
-      }
-    },
     "Stop Comparing": {
       "localizations": {
         "fr": {
@@ -10159,16 +9977,6 @@
         }
       }
     },
-    "Use as Reference Photo": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Utiliser comme photo de référence"
-          }
-        }
-      }
-    },
     "Used by %lld stored edits — they’ll show their originals until this LUT is imported again.": {
       "localizations": {
         "fr": {
@@ -10738,16 +10546,6 @@
         }
       }
     },
-    "kept": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "gardée"
-          }
-        }
-      }
-    },
     "kind": {
       "localizations": {
         "fr": {
@@ -10854,16 +10652,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "rouge"
-          }
-        }
-      }
-    },
-    "rejected": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "rejetée"
           }
         }
       }

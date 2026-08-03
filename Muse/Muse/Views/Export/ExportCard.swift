@@ -431,19 +431,13 @@ struct ExportCard: View {
 
     /// A bare SF Symbol inside a `.plain` button is only clickable on the
     /// glyph's own ink, which for a chevron is a few points of diagonal stroke.
-    /// The 32pt square and the `contentShape` are what make it a target.
+    /// The 32pt square and the `contentShape` are what make it a target — and
+    /// the hover fill is what makes that target VISIBLE. Without it the arrow
+    /// gave no sign it was a button at all, so paging through a multi-image
+    /// export was a guess at where to click.
     private func pagerButton(_ symbol: String, label: String, disabled: Bool,
                              action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 12, weight: .semibold))
-                .frame(width: 32, height: 32)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(disabled)
-        .opacity(disabled ? 0.3 : 1)
-        .accessibilityLabel(Text(label))
+        PagerButton(symbol: symbol, label: label, disabled: disabled, action: action)
     }
 
     private var controls: some View {
@@ -483,27 +477,38 @@ struct ExportCard: View {
     /// and the size fields already say both, and a card that says everything
     /// twice reads as noise.
     private var estimatedSizeRow: some View {
-        HStack {
-            Text("Est. file size")
+        readout(String(localized: "Est. file size"), estimatedSizeText)
+            .animation(.easeOut(duration: 0.15), value: model.estimatedBytes)
+    }
+
+    /// Label and value sit TOGETHER, with the slack after them.
+    ///
+    /// These were `label · Spacer() · value`, which on a 760pt card threw the
+    /// number to the far right with a hand's width of nothing between it and
+    /// the thing it labels — you had to look twice to pair them up. A readout
+    /// is one fact; it reads as one fact only when it's one group.
+    private func readout(_ label: String, _ value: String) -> some View {
+        HStack(spacing: 8) {
+            Text(label)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
-            Spacer()
-            Text(estimatedSizeText)
+            Text(value)
                 .font(.system(size: 12, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(.primary)
                 .contentTransition(.numericText())
+            Spacer(minLength: 0)
         }
-        .animation(.easeOut(duration: 0.15), value: model.estimatedBytes)
         .accessibilityElement(children: .combine)
     }
 
-    /// "≈" is load-bearing: the number comes from encoding the PREVIEW at these
-    /// exact settings and scaling by pixel count — a real measurement, but of a
-    /// smaller image, so it is close rather than exact.
+    /// No "≈": the row already says "Est.", and a second hedge in front of the
+    /// number was the same caveat twice. (The number still IS approximate — it
+    /// comes from encoding the PREVIEW at these exact settings and scaling by
+    /// pixel count, a real measurement of a smaller image.)
     private var estimatedSizeText: String {
         guard let bytes = model.estimatedBytes else { return "—" }
-        return "≈" + Self.byteFormatter.string(fromByteCount: Int64(bytes))
+        return Self.byteFormatter.string(fromByteCount: Int64(bytes))
     }
 
     private static let byteFormatter: ByteCountFormatter = {
@@ -549,14 +554,7 @@ struct ExportCard: View {
     /// the point of a platform preset) but they have to be visible.
     private var socialOutputRow: some View {
         VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Text("Size").font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(socialSizeText)
-                    .font(.system(size: 12, weight: .semibold))
-                    .monospacedDigit()
-            }
+            readout(String(localized: "Size"), socialSizeText)
             if let cropped = socialCropText {
                 Text(cropped)
                     .font(.system(size: 10))
@@ -564,7 +562,6 @@ struct ExportCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .accessibilityElement(children: .combine)
     }
 
     private var socialSizeText: String {
@@ -585,6 +582,13 @@ struct ExportCard: View {
     /// percentage of area. Only ever shown for a fixed preset in crop mode —
     /// Matte and Blur keep the whole image by construction, and a long-edge
     /// preset never crops at all.
+    ///
+    /// It no longer says "drag it to choose which part". The drag was a
+    /// damped nudge of the crop centre that moved the picture a fraction of
+    /// the distance the pointer travelled, so it read as a broken drag rather
+    /// than a positioning control. The crop is centred automatically now and
+    /// the preview shows exactly what comes out — this line just says how
+    /// much that costs.
     private var socialCropText: String? {
         guard model.preset.isFixed, model.fit == .crop,
               let natural = model.naturalSize,
@@ -597,7 +601,7 @@ struct ExportCard: View {
             targetAspect: frame.width / frame.height) * 100).rounded())
         guard lost >= 1 else { return nil }
         return String(format: NSLocalizedString(
-            "Crops about %lld%% of the picture — drag it to choose which part.",
+            "Crops about %lld%% of the picture, centred.",
             comment: "Export: how much a fixed social frame trims"), lost)
     }
 
@@ -650,16 +654,8 @@ struct ExportCard: View {
     /// reproduce yesterday's export.
     private var qualityControl: some View {
         VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Text("Quality")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(qualityPercent)
-                    .font(.system(size: 11, weight: .medium))
-                    .monospacedDigit()
-                    .foregroundStyle(.primary)
-            }
+            // Same grouping rule as the other two readouts — see `readout`.
+            readout(String(localized: "Quality"), qualityPercent)
             Slider(value: $model.settings.quality, in: 0.3...1.0)
                 .controlSize(.small)
                 .accessibilityLabel(Text("Quality"))
@@ -725,22 +721,16 @@ struct ExportCard: View {
         }
     }
 
+    /// A blue glyph on the card's own surface is a weak "on" — it reads as an
+    /// accent-coloured decoration, not as a pressed control, and next to two
+    /// text fields there's nothing to compare it against. Locked now FILLS:
+    /// accent capsule, white glyph. Unlocked is a plain secondary glyph with a
+    /// hover fill, so it also looks like something you can press.
     private var lockButton: some View {
-        Button {
+        LockAspectButton(isLocked: lockAspect) {
             lockAspect.toggle()
             if lockAspect { commitWidth() }
-        } label: {
-            Image(systemName: lockAspect ? "link" : "link.badge.plus")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(lockAspect ? Color.accentColor : Color.secondary)
-                .frame(width: 20, height: 20)
-                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .help(lockAspect ? String(localized: "Aspect ratio locked")
-                         : String(localized: "Aspect ratio unlocked"))
-        .accessibilityLabel(Text("Lock aspect ratio"))
-        .accessibilityValue(Text(lockAspect ? String(localized: "On") : String(localized: "Off")))
     }
 
     private enum SizeField: Hashable { case width, height, percent }
@@ -1127,7 +1117,78 @@ struct ExportCard: View {
     }
 }
 
-/// The crop/pan/zoom stage. Decodes the current image DIRECTLY at ≤ 2048 — no
+/// The width↔height aspect lock. Its own view for the hover `@State`, same as
+/// `PagerButton`.
+private struct LockAspectButton: View {
+    let isLocked: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: isLocked ? "link" : "link.badge.plus")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(isLocked ? Color.white : Color.secondary)
+                .frame(width: 22, height: 22)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(fill)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovered)
+        .animation(.easeOut(duration: 0.12), value: isLocked)
+        .help(isLocked ? String(localized: "Aspect ratio locked")
+                       : String(localized: "Aspect ratio unlocked"))
+        .accessibilityLabel(Text("Lock aspect ratio"))
+        .accessibilityValue(Text(isLocked ? String(localized: "On") : String(localized: "Off")))
+    }
+
+    /// Locked deepens on hover rather than lightening — an ON control that got
+    /// paler under the pointer would read as about to switch off.
+    private var fill: Color {
+        if isLocked { return Color.accentColor.opacity(isHovered ? 0.85 : 1) }
+        return Color.primary.opacity(isHovered ? 0.10 : 0)
+    }
+}
+
+/// One pager arrow, with a hover fill behind it. Its own view because `@State`
+/// for the hover can't live in the card (one flag there would light both
+/// arrows at once).
+private struct PagerButton: View {
+    let symbol: String
+    let label: String
+    let disabled: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .semibold))
+                .frame(width: 32, height: 32)
+                .background(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(Color.primary.opacity(isHovered && !disabled ? 0.10 : 0))
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? 0.3 : 1)
+        // A disabled arrow doesn't light up — a hover cue on a control that
+        // can't act is a promise it won't keep.
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovered)
+        .accessibilityLabel(Text(label))
+    }
+}
+
+/// The crop stage. Decodes the current image DIRECTLY at ≤ 2048 — no
 /// `ThumbnailCache` entry, so no `renderedVariants` change (the compare-pane
 /// rule: a one-off preview size must never enter the path-keyed cache).
 /// The card's preview. `preset == nil` is the FORMAT branch: the same loader
@@ -1170,8 +1231,6 @@ struct ExportStageView: View {
                     .shadow(color: .black.opacity(0.10), radius: 8, y: 2)
             }
             .frame(width: geo.size.width, height: geo.size.height)
-            .contentShape(Rectangle())
-            .gesture(dragGesture(in: frame))
         }
         .task(id: url) { await load() }
         .accessibilityLabel(Text(preset == nil
@@ -1232,21 +1291,14 @@ struct ExportStageView: View {
         }
     }
 
-    private func dragGesture(in frame: CGSize) -> some Gesture {
-        DragGesture()
-            .onChanged { value in
-                guard let preset, fit == .crop, preset.isFixed,
-                      frame.width > 0, frame.height > 0 else { return }
-                // Dragging moves the picture, so the crop center moves the other
-                // way. Clamping lives in SocialCropMath — this only proposes.
-                let dx = value.translation.width / frame.width / max(state.zoom, 0.001)
-                let dy = value.translation.height / frame.height / max(state.zoom, 0.001)
-                var s = state
-                s.center = CGPoint(x: min(1, max(0, s.center.x - dx * 0.05)),
-                                   y: min(1, max(0, s.center.y - dy * 0.05)))
-                state = s
-            }
-    }
+    // The crop stage had a drag gesture that nudged `state.center` by 5% of the
+    // pointer's travel. It was removed rather than retuned: a control that
+    // moves a fraction of the distance you drag reads as broken, and the
+    // preview it was positioning already shows the finished frame. The crop
+    // stays at the centre `PerImageState` defaults to, which is what the
+    // renderer produces and what this view now draws. `state.center`/`zoom`
+    // remain in the model — SocialCropMath still consumes them and they still
+    // describe the (centred, unzoomed) rect that comes out.
 
     /// The target frame, letterboxed inside the available stage area.
     private func frameRect(in available: CGSize) -> CGSize {

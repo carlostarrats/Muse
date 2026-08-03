@@ -448,9 +448,6 @@ final class AppState: ObservableObject {
     /// selection). The collection is created only on confirm — see
     /// confirmNewCollection() in AppState+Filters.
     @Published var newCollectionRequest = false
-    /// The cull session's Finish card. Presented at the shell like every other
-    /// modal, and registered in `modalPresented` so it gates the key catcher.
-    @Published var cullResolveShown = false
     /// The one-time "Smarter Search" download offer.
     @Published var clipOfferShown = false
     /// File paths captured at right-click time, created into a collection on
@@ -564,7 +561,7 @@ final class AppState: ObservableObject {
             || newSubfolderRequest != nil || folderRenameRequest != nil
             || tagRenameRequest != nil
             || announcementPresented
-            || cullResolveShown || clipOfferShown
+            || clipOfferShown
             || editPromptRequest != nil || openWithForkRequest != nil
             || exportRequest != nil
     }

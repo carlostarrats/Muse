@@ -116,8 +116,8 @@ question.
 | S03.1 | CLIP engine / index / model store | `ClipIndexTests`, `ClipVectorsTests`, `ClipPreprocessTests`, `ClipModelManifestTests`, `EmbedderTests`, `ClipMigrationTests` | 2026-08-01 | partial | Keyset-paged + bounded top-K (R1-F8) |
 | S03.2 | On-demand model download | `SandboxProcessTests`, `ClipModelManifestTests` | 2026-08-01 | ✅ exec pinned | Fail-closed ladder; SHA-256 before unpack |
 | S03.3 | `is:` / `faces:` / `pets:` / `similar:` tokens | `SearchTokenFacesTests`, `PhotoSearchTraitsTests`, `PhotoSearchSimilarTests`, `SimilarTermTests` | 2026-08-01 | ❌ G1 | |
-| S03.4 | Compare workbench + focus peaking | `CompareCullTests`, `PeakingOverlayTests`, `SharpnessScoreTests`, `PortraitHeuristicTests` | 2026-08-01 | ❌ G1 | ⚠️ **fixed R2-3** (VoiceOver) |
-| S03.5 | Ephemeral cull + grid badge | `CompareCullTests` | 2026-08-01 | ❌ G1 | ⚠️ badge **was never built**, added R1-F23 |
+| S03.4 | Compare workbench + focus peaking | `CompareTests` (was `CompareCullTests`), `PeakingOverlayTests`, `SharpnessScoreTests`, `PortraitHeuristicTests` | 2026-08-02 | ⚠️ G1 | ⚠️ **fixed R2-3** (VoiceOver). Survives the cull removal — rating, peaking and pane focus are untouched. |
+| S03.5 | ~~Ephemeral cull + grid badge~~ | — | — | — | ❌ **REMOVED 2026-08-02 (owner call).** Marking rejects and trashing them at Finish is what select + Move to Trash already does; Muse's persona is a generalist, not a photographer culling a shoot. `CullStore`, `CullSummary`, the HUD, the resolve card, the grid key hook + badge, and 20 strings are deleted. **Cancelled, not a gap — do not re-file.** One real loss: the resolve card was the only BULK KEYBOARD RATING path, and the grid still has no number-key rating. |
 | S03.6 | NL suggestions | `SearchSuggestTests`, `SearchSuggestTraitsTests`, `NLTokenComposerTests`, `LaunchBackfillQueryTests` | 2026-08-01 | ❌ G1 | ⚠️ **fixed R5-2** — the `in:` year facet labelled and stepped in UTC while `in:` itself resolves local |
 | S04.1 | Edit model + codec + history | `EditStackCodecTests`, `EditStackNormalizeTests`, `EditHistoryTests`, `EditMigrationTests`, `GeometryParamsTests` | 2026-08-01 | ❌ G1 | Canonical hash pinned by literal fixture |
 | S04.2 | Render chain (Core Image / Metal) | `EditRenderConsistencyTests`, `EditRenderNeutralityTests`, `EditKernelLoadTests`, `RenderCoalescerTests`, `CurveLUTTests`, `HighlightRecoveryTests` | 2026-08-01 | partial | RAW `scaleFactor` fixed R1-F3; non-RAW half **disproved** by measurement |
@@ -128,7 +128,7 @@ question.
 | S05.2 | Tone-zone control + overlay | `ToneZoneMathTests`, `PhotoStatsQueriesTests`, `PhotoStatsMigrationTests` | 2026-08-01 | ❌ G1 | |
 | S05.3 | "Why it looks this way" (deterministic) | `PhotoFeedbackTests` | 2026-08-01 | ❌ G1 | |
 | S05.4 | `.cube` LUT import + registry | `CubeLUTParserTests`, `LutRegistryTests`, `LutStoreTests`, `EditLutMigrationTests` | 2026-08-01 | ❌ G1 | LUT read is off-main (R1-F6) |
-| S05.5 | Looks browser + reference pane | — (UI) | 2026-08-01 | ❌ G1 | Single decode reused across cells |
+| S05.5 | Looks browser (Styles) | — (UI) | 2026-08-02 | ⚠️ G1 | Single decode reused across cells. The **reference pane is REMOVED (2026-08-02, owner call)** — its editor row was `isEnabled: url != nil` with a tooltip pointing at a right-click in the GRID, i.e. a permanently-disabled control advertising a gesture in another view. `EditReferenceStore` and the menu item are deleted. Before/after + Side by Side cover comparison; `similar:` search covers "ones like this". **Cancelled, not a gap.** |
 | S06.1 | One File > Import surface (5 sources) | `ImportPureTests`, `MetadataImportApplyTests`, `MetadataImportRulesTests`, `MetadataKeywordReaderTests` | 2026-08-01 | ❌ G1 | Re-run idempotency verified statically at every leg |
 | S06.2 | Lightroom `crs:` edits + presets | `LightroomImportTests`, `XPresetRuleTests` | 2026-08-01 | ❌ G1 | |
 | S06.3 | Color-label namespace + mapping sheet | `MetadataImportRulesTests` | 2026-08-01 | ❌ G1 | |
@@ -389,7 +389,7 @@ passing" had meant nothing at all.
 | **Editor (Spec 04)** | Full panel: Exposure→Noise Reduction sliders, Light/Color/Looks tabs, undo/redo, before/after, Reset |
 | **Readouts (Spec 05)** | Tone Zones strip, Zone Sliders, **Curve with a live histogram**, and the teaching copy computing a real value: "1.2% of pixels are clipped — those areas have lost detail" |
 | **Compare (Spec 03)** | Two panes, per-pane file tabs, Fit/1.0× zoom, focus indicators, active pane outlined |
-| **Cull (Spec 03)** | HUD live: "Culling — 0 kept · 0 rejected · K keep · X reject · U clear" + Cancel/Finish |
+| ~~**Cull (Spec 03)**~~ | Feature REMOVED 2026-08-02 (owner call) — nothing left to drive. |
 | Duplicates (P8) | Modal opened and listed a **real** duplicate pair from the library |
 | Import ×5 (Spec 06) | All five entries open their panel with correct, localized prompts |
 | Backup (P19/Spec 09) | Save panel with correct default `Muse Backup 2026-08-01.muselibrary` + guidance copy |

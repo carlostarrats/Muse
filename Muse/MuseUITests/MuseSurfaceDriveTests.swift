@@ -446,7 +446,7 @@ final class MuseSurfaceDriveTests: XCTestCase {
         Thread.sleep(forTimeInterval: 2)
     }
 
-    // MARK: - Compare / cull (Spec 03)
+    // MARK: - Compare (Spec 03)
 
     /// Compare needs a MULTI-selection, so this also exercises cmd-click
     /// multi-select in the grid (P10) on the way.
@@ -485,38 +485,6 @@ final class MuseSurfaceDriveTests: XCTestCase {
         Thread.sleep(forTimeInterval: 2)
         XCTAssertFalse(app.buttons["Fit"].exists,
                        "Escape did not close the compare workbench")
-    }
-
-    func testStartCullingOpensAndSurvivesEscape() throws {
-        guard menu("File", "Start Culling") else {
-            XCTFail("Start Culling was disabled at launch"); return
-        }
-        Thread.sleep(forTimeInterval: 3)
-        snap("04-cull-open")
-        dumpTree("cull")
-        // The HUD's own controls, not "a window exists".
-        XCTAssertTrue(app.buttons["Finish"].exists && app.buttons["Cancel"].exists,
-                      "cull HUD did not appear (no Finish/Cancel)")
-
-        // Escape must NOT end a culling session. That is Spec 03 deviation D8,
-        // and the reasoning is explicit: a cull pass holds keep/reject marks,
-        // so "an accidental Escape/misclick must not silently discard an hour
-        // of marking" — the session ends only through Finish or Cancel. An
-        // earlier version of this test asserted the opposite and reported the
-        // app as broken; this now GUARDS the deviation instead.
-        app.typeKey(.escape, modifierFlags: [])
-        Thread.sleep(forTimeInterval: 2)
-        snap("04-cull-after-escape")
-        XCTAssertTrue(app.buttons["Finish"].exists,
-                      "Escape ended the culling session — Spec 03 D8 says only "
-                      + "Finish/Cancel may, so marks are never silently discarded")
-
-        // Leave the session the way the design intends.
-        app.buttons["Cancel"].click()
-        Thread.sleep(forTimeInterval: 2)
-        snap("04-cull-closed")
-        XCTAssertFalse(app.buttons["Finish"].exists,
-                       "Cancel did not end the culling session")
     }
 
     // MARK: - Duplicates (pre-branch feature, P8)

@@ -36,34 +36,6 @@ struct ContentView: View {
 
     /// Close whichever modal is up. Only one is ever presented at a time, so
     /// this is a deterministic sweep rather than a real stack.
-    /// Resolve a cull session: rate the keepers, trash the rejects, end the
-    /// session. Both writes go through the EXISTING seams (`TagStore.setRating`
-    /// and `deleteWithBurn`) — a cull mark is never itself persisted.
-    private func applyCull(rating: Int?, moveToTrash: Bool) {
-        let summary = CullStore.shared.summary
-        Task { @MainActor in
-            if let rating {
-                let keepURLs = summary.keepPaths.map { URL(fileURLWithPath: $0) }
-                if !keepURLs.isEmpty {
-                    await TagStore.shared.setRating(rating, forURLs: keepURLs)
-                    appState.tagsVersion += 1
-                }
-            }
-            if moveToTrash {
-                let byPath = Dictionary(
-                    appState.visibleFiles.map { ($0.url.standardizedFileURL.path, $0) },
-                    uniquingKeysWith: { a, _ in a })
-                for path in summary.rejectPaths {
-                    guard let node = byPath[URL(fileURLWithPath: path).standardizedFileURL.path],
-                          node.kind != .folder else { continue }
-                    await appState.deletion.deleteWithBurn(node)
-                }
-            }
-            CullStore.shared.end()
-            appState.cullResolveShown = false
-        }
-    }
-
     /// The one place that maps an `ImportModal` case to its card. Every source
     /// shares the presenter, the width, and the report card — a new source adds
     /// a case here and nothing else at the shell.
@@ -124,9 +96,6 @@ struct ContentView: View {
         if appState.newCollectionRequest { appState.cancelNewCollection(); return }
         if appState.importModal != nil { appState.importModal = nil; return }
         if appState.exportRequest != nil { appState.exportRequest = nil; return }
-        // Cancel returns to the LIVE cull session with nothing applied — same
-        // as the card's own Cancel button.
-        if appState.cullResolveShown { appState.cullResolveShown = false; return }
         // Escape counts as declining the one-time offer, exactly like a scrim
         // click; without the seen-key write it would come back next launch.
         if appState.clipOfferShown { dismissClipOffer(); return }
@@ -282,17 +251,6 @@ struct ContentView: View {
                        width: 560, palette: appState.moodPalette) {
                 SettingsView(isPresented: $appState.settingsShown)
                     .environmentObject(appState)
-            }
-            // Cull resolution. Presented at the shell like every other card;
-            // Cancel here returns to the LIVE session with nothing applied.
-            .museModal(isPresented: $appState.cullResolveShown,
-                       width: 380, palette: appState.moodPalette) {
-                CullResolveCard(
-                    summary: CullStore.shared.summary,
-                    onApply: { rating, moveToTrash in
-                        applyCull(rating: rating, moveToTrash: moveToTrash)
-                    },
-                    onCancel: { appState.cullResolveShown = false })
             }
             // One-time offer to download the on-device search model.
             .museModal(isPresented: $appState.clipOfferShown,
@@ -523,28 +481,8 @@ struct ContentView: View {
         }
         // Compare is a workbench overlay at the same layer as the viewer —
         // mutually exclusive with it, and below modal presentation.
-        CompareView(store: CompareStore.shared, cull: CullStore.shared)
+        CompareView(store: CompareStore.shared)
             .zIndex(55)
-        // The cull HUD floats over whatever surface is culling (grid, hero or
-        // compare), so it sits above both.
-        VStack {
-            Spacer()
-            CullHUD(store: CullStore.shared,
-                    onFinish: { appState.cullResolveShown = true },
-                    onCancel: {
-                        if CullStore.shared.marks.isEmpty {
-                            CullStore.shared.end()
-                        } else {
-                            appState.alertRequest = MuseAlert.confirm(
-                                title: String(localized: "Discard this cull pass?"),
-                                message: String(localized: "The keep and reject marks will be lost. Nothing has been applied yet."),
-                                confirmTitle: String(localized: "Discard"),
-                                onConfirm: { CullStore.shared.end() })
-                        }
-                    })
-                .padding(.bottom, 24)
-        }
-        .zIndex(58)
         GridToastHost(deletion: appState.deletion)
             .zIndex(60)
         }

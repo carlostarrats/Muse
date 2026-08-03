@@ -29,17 +29,37 @@ enum ViewerGeometry {
     /// touch — not an infinite zoom-out, just one or two steps of breathing room.
     static let minZoom: CGFloat = 0.7
 
+    /// The narrowest the main window may get. Below this the hero viewer has
+    /// no honest layout: the info column is a fixed 258pt and the picture gets
+    /// what's left, so on a hard-narrowed window the image floor below took
+    /// over and the photo drew ON TOP of the column (owner report). A minimum
+    /// content width is the real fix — 258 column + 40 margin + 80 side pads
+    /// leaves 342pt of picture at the limit, which is small but correct.
+    static let minWindowWidth: CGFloat = 720
+    /// Enough for the chrome row, a card or two, and a picture between them.
+    static let minWindowHeight: CGFloat = 480
+
     /// Centered in the true viewable space: between the left edge and the info column.
     static func fitRect(imageSize: CGSize, viewport: CGSize) -> CGRect {
         let usableRight = viewport.width - columnWidth - columnMargin
-        let availW = max(120, usableRight - sidePad * 2)
+        // The box is derived from the space that actually EXISTS, both edges
+        // clamped to it. It used to be `max(120, usableRight - sidePad * 2)`
+        // at a fixed x of `sidePad`, which on a window narrower than ~378pt
+        // produced a 120pt-wide rect starting at x=40 — straight through the
+        // info column's left edge (owner report: "the image looks like it can
+        // go over the UI"). `minWindowWidth` means neither clamp binds in
+        // practice; they stay as the guarantee that no viewport, at any
+        // aspect, can produce an overlapping rect.
+        let left = min(sidePad, max(0, usableRight))
+        let right = max(left, usableRight - sidePad)
+        let availW = right - left
         let availH = max(120, viewport.height - topPad - bottomPad)
         guard imageSize.width > 0, imageSize.height > 0 else {
-            return CGRect(x: sidePad, y: topPad, width: availW, height: availH)
+            return CGRect(x: left, y: topPad, width: availW, height: availH)
         }
         let s = min(availW / imageSize.width, availH / imageSize.height)
         let w = imageSize.width * s, h = imageSize.height * s
-        return CGRect(x: sidePad + (availW - w) / 2,
+        return CGRect(x: left + (availW - w) / 2,
                       y: topPad + (availH - h) / 2,
                       width: w, height: h)
     }

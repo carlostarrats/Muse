@@ -2,14 +2,13 @@
 //  CompareKeyCatcher.swift
 //  Muse
 //
-//  The culling loop: arrows swap the focused pane's candidate, Tab cycles
-//  focus, 1-5/0 rate, P toggles peaking, and `onCharacter` carries K/X/U when
-//  a cull session is active.
+//  The compare loop: arrows swap the focused pane's candidate, Tab cycles
+//  focus, 1-5/0 rate, and P toggles peaking.
 //
 //  A NEW sibling of `KeyCaptureView`, not an extension of it — that view has
 //  three FIXED named closures (onLeft/onRight/onReturn) the hero's
-//  arrow-flip and return path depend on, and this catcher needs a generic
-//  character hook. Don't merge them.
+//  arrow-flip and return path depend on, and this catcher reads plain
+//  character keys. Don't merge them.
 //
 
 import AppKit
@@ -20,8 +19,6 @@ struct CompareKeyCatcher: NSViewRepresentable {
     var onTab: () -> Void
     var onRating: (Int?) -> Void      // nil = clear
     var onPeakingToggle: () -> Void
-    /// Returns true if consumed; false forwards down the responder chain.
-    var onCharacter: ((Character) -> Bool)?
 
     func makeNSView(context: Context) -> KeyView {
         let v = KeyView()
@@ -39,7 +36,6 @@ struct CompareKeyCatcher: NSViewRepresentable {
         v.onTab = onTab
         v.onRating = onRating
         v.onPeakingToggle = onPeakingToggle
-        v.onCharacter = onCharacter
     }
 
     final class KeyView: NSView {
@@ -47,7 +43,6 @@ struct CompareKeyCatcher: NSViewRepresentable {
         var onTab: (() -> Void)?
         var onRating: ((Int?) -> Void)?
         var onPeakingToggle: (() -> Void)?
-        var onCharacter: ((Character) -> Bool)?
 
         override var acceptsFirstResponder: Bool { true }
 
@@ -69,10 +64,7 @@ struct CompareKeyCatcher: NSViewRepresentable {
             case "0": onRating?(nil)
             case "1"..."5": onRating?(Int(String(c)))
             case "p", "P": onPeakingToggle?()
-            default:
-                if onCharacter?(c) != true {
-                    super.keyDown(with: event)
-                }
+            default: super.keyDown(with: event)
             }
         }
     }

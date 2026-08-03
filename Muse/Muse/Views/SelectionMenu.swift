@@ -66,9 +66,14 @@ struct SelectionActionsMenu: View {
                n)
     }
 
+    // Every top-level item in this menu carries a glyph. A macOS context menu
+    // with mixed labelled/unlabelled rows reads as a mistake, so the rule is
+    // all-or-nothing per menu — the grid's own section (compare, open
+    // with, rename, trash) follows it too. Submenu CONTENTS stay bare: a
+    // collection list or a tag list is a list of names, not of actions.
     var body: some View {
         if !fileURLs.isEmpty {
-            Menu("Add to Collection") {
+            Menu {
                 if engine.collections.isEmpty {
                     Button("No collections") {}.disabled(true)
                 } else {
@@ -78,9 +83,15 @@ struct SelectionActionsMenu: View {
                         Button(loaded.collection.name) { addToCollection(loaded.collection.id) }
                     }
                 }
+            } label: {
+                Label("Add to Collection", systemImage: "rectangle.on.rectangle.angled")
             }
-            Button("New Collection from Selection") { appState.requestNewCollection(fallback: path) }
-            Menu("Add Tag") {
+            Button {
+                appState.requestNewCollection(fallback: path)
+            } label: {
+                Label("New Collection from Selection", systemImage: "plus.rectangle.on.rectangle")
+            }
+            Menu {
                 // The grid had no way to CREATE a tag at all — this menu listed
                 // only labels that already existed, so a new one could be made
                 // solely from the hero viewer. New Tag… opens the shell's card,
@@ -100,11 +111,17 @@ struct SelectionActionsMenu: View {
                         }
                     }
                 }
+            } label: {
+                Label("Add Tag", systemImage: "tag")
             }
-            Button("Share") { share() }
-            Button("Export…") { presentExport() }
-                .disabled(exportableURLs.isEmpty)
-            Menu("Rating") {
+            Button { share() } label: {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+            Button { presentExport() } label: {
+                Label("Export…", systemImage: "arrow.down.circle")
+            }
+            .disabled(exportableURLs.isEmpty)
+            Menu {
                 ForEach(Array((1...StarRating.maxStars).reversed()), id: \.self) { n in
                     let label = StarRating.label(for: n) ?? ""
                     Button {
@@ -121,18 +138,14 @@ struct SelectionActionsMenu: View {
                     }
                     .accessibilityLabel(Text(ratingA11yLabel(n)))
                 }
+            } label: {
+                Label("Rating", systemImage: "star")
             }
             // Batch sync. Offered only when something has been copied AND the
             // selection contains files that can actually take an edit.
             if EditClipboard.shared.hasContent, !editableURLs.isEmpty {
-                Button("Paste Adjustments") { pasteAdjustments() }
-            }
-            // The editor's reference pane is fed from HERE rather than from a
-            // picker inside the editor: choosing a reference is a browsing act,
-            // and the grid is where you can actually see the candidates.
-            if editableURLs.count == 1, fileURLs.count == 1 {
-                Button("Use as Reference Photo") {
-                    EditReferenceStore.shared.url = editableURLs[0]
+                Button { pasteAdjustments() } label: {
+                    Label("Paste Adjustments", systemImage: "doc.on.clipboard")
                 }
             }
         }
@@ -142,19 +155,24 @@ struct SelectionActionsMenu: View {
         if appState.singleActiveTag != nil || appState.activeCollectionID != nil {
             Divider()
             if let label = appState.singleActiveTag {
-                Button("Remove Tag \u{201c}\(label)\u{201d}") {
+                Button {
                     appState.removeTag(label, fromURLs: urls)
+                } label: {
+                    Label("Remove Tag \u{201c}\(label)\u{201d}", systemImage: "tag.slash")
                 }
             }
             if let cid = appState.activeCollectionID {
-                Button("Remove from Collection \u{201c}\(collectionName(cid))\u{201d}") {
+                Button {
                     appState.removeFromCollection(cid, urls: urls)
+                } label: {
+                    Label("Remove from Collection \u{201c}\(collectionName(cid))\u{201d}",
+                          systemImage: "rectangle.on.rectangle.slash")
                 }
             }
             Divider()
         }
         if !fileURLs.isEmpty {
-            Menu("Move to Folder") {
+            Menu {
                 let folders = moveDestinations
                 if folders.isEmpty {
                     Button("No folders") {}.disabled(true)
@@ -163,6 +181,8 @@ struct SelectionActionsMenu: View {
                         Button(dest.name) { move(to: dest.url) }
                     }
                 }
+            } label: {
+                Label("Move to Folder", systemImage: "folder")
             }
         }
     }

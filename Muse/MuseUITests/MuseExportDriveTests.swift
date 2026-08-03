@@ -95,7 +95,7 @@ final class MuseExportDriveTests: XCTestCase {
     ///
     /// Rows built with `.accessibilityElement(children: .combine)` — the
     /// estimate and the social size row — publish ONE element whose *value* is
-    /// the merged "Est. file size, ≈128 KB". Asserting on `staticTexts["Est.
+    /// the merged "Est. file size, 128 KB". Asserting on `staticTexts["Est.
     /// file size"]` therefore finds nothing, which is what the first version of
     /// these tests did: three failures that were all this, and none of which
     /// meant the app was broken. Combining is right for VoiceOver (one fact,
@@ -252,10 +252,16 @@ final class MuseExportDriveTests: XCTestCase {
 
         // The preview has to decode first, then the estimate debounces 180ms
         // behind it, so this polls rather than reading once.
+        //
+        // Matched on the ROW (label + byte unit) rather than on a "≈" prefix,
+        // which the readout no longer carries: the row already says "Est.", so
+        // the second hedge in front of the number was dropped.
         var text = ""
         let deadline = Date().addingTimeInterval(20)
         while Date() < deadline {
-            if let found = staticTextStrings().first(where: { $0.contains("≈") }) {
+            if let found = staticTextStrings().first(where: {
+                $0.contains("Est. file size") && ($0.contains("KB") || $0.contains("MB"))
+            }) {
                 text = found
                 break
             }

@@ -84,7 +84,12 @@ struct FolderTreeNode: View {
                 Button(action: toggleExpand) {
                     Image(systemName: node.isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: SidebarView.chevronGlyphSize, weight: .semibold))
-                        .foregroundStyle(.secondary)
+                        // `secondaryStyle`, not `.secondary`: the icon, the
+                        // label, the pin and the count all switch to the
+                        // selection's own ink on a selected row, and the
+                        // disclosure chevron was the one element left behind —
+                        // a grey arrow sitting on the blue fill.
+                        .foregroundStyle(secondaryStyle)
                         // The hit target is the full slot at row height — it must
                         // NOT shrink with the (deliberately small) glyph, or the
                         // chevron becomes fiddly to click.

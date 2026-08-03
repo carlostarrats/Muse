@@ -21,7 +21,6 @@ struct GridView: View {
     /// Observed HERE, once, so a keep/reject mark repaints the tiles. Marks
     /// are then passed DOWN like `rating` — a virtualized grid must not mount
     /// one store observer per live tile.
-    @ObservedObject private var cull = CullStore.shared
 
     /// User-set gutter between tiles, persisted; the Settings → Grid slider
     /// drives it. Its floor is a real gap, never 0 — flush-packed images read
@@ -191,19 +190,6 @@ struct GridView: View {
                                 appState.openSubfolder(file.url)
                             } else {
                                 appState.selectedFile = file
-                            }
-                        },
-                        onCullKey: { c in
-                            guard CullStore.shared.active else { return false }
-                            let files = appState.visibleFiles
-                            guard let idx = appState.currentKeyboardIndex(order: files),
-                                  idx < files.count, files[idx].kind.isPhotoKind else { return false }
-                            let path = files[idx].url.standardizedFileURL.path
-                            switch c {
-                            case "k", "K": CullStore.shared.setMark(.keep, path: path); return true
-                            case "x", "X": CullStore.shared.setMark(.reject, path: path); return true
-                            case "u", "U": CullStore.shared.setMark(nil, path: path); return true
-                            default: return false
                             }
                         })
                         .frame(width: 0, height: 0)
@@ -416,9 +402,7 @@ struct GridView: View {
                          imageAspect: aspects.aspect(for: file),
                          cornerRadius: cornerRadius,
                          slotSize: rect.size,
-                         editedVersionCount: editedVersionCount(for: file),
-                         cullMark: cull.active
-                             ? cull.mark(for: file.url.standardizedFileURL.path) : nil)
+                         editedVersionCount: editedVersionCount(for: file))
                     .frame(width: rect.width, height: rect.height)
                     // The photo no longer paints the whole slot, so without an
                     // explicit shape the empty part of a Grid slot isn't
@@ -520,18 +504,6 @@ struct GridView: View {
                     // folder navigates IN (`openSubfolder`, what its double-click
                     // does) — applying the file path to a folder would wrongly
                     // route it to a viewer.
-                    // Cull marking is K/X/U on the grid's key catcher, which
-                    // VoiceOver swallows — so a running session also exposes
-                    // named actions. Session-gated, so they never clutter the
-                    // rotor outside a cull pass.
-                    .accessibilityActions {
-                        if cull.active, file.kind != .folder {
-                            let path = file.url.standardizedFileURL.path
-                            Button("Keep") { cull.setMark(.keep, path: path) }
-                            Button("Reject") { cull.setMark(.reject, path: path) }
-                            Button("Clear Cull Mark") { cull.setMark(nil, path: path) }
-                        }
-                    }
                     .accessibilityAction {
                         if file.kind == .folder {
                             appState.openSubfolder(file.url)
@@ -545,22 +517,28 @@ struct GridView: View {
                         if file.kind == .folder {
                             // A folder card behaves like a sidebar subfolder:
                             // New Subfolder / Rename / Reveal — nothing else.
-                            Button("New Subfolder…") {
+                            Button {
                                 if let n = appState.resolveFolderNode(file.url) {
                                     appState.requestNewSubfolder(n)
                                 }
+                            } label: {
+                                Label("New Subfolder…", systemImage: "folder.badge.plus")
                             }
                             if file.url.standardizedFileURL
                                 != appState.iCloudFolderURL?.standardizedFileURL {
-                                Button("Rename Folder…") {
+                                Button {
                                     if let n = appState.resolveFolderNode(file.url) {
                                         appState.requestRenameFolder(n)
                                     }
+                                } label: {
+                                    Label("Rename Folder…", systemImage: "pencil")
                                 }
                             }
                             Divider()
-                            Button("Reveal in Finder") {
+                            Button {
                                 NSWorkspace.shared.activateFileViewerSelecting([file.url])
+                            } label: {
+                                Label("Reveal in Finder", systemImage: "magnifyingglass")
                             }
                         } else {
                             let p = file.url.standardizedFileURL.path
@@ -574,15 +552,21 @@ struct GridView: View {
                             Divider()
                             if single {
                                 OpenWithMenu(url: file.url)
-                                Button("Rename…") { appState.requestRenameFile(file) }
+                                Button {
+                                    appState.requestRenameFile(file)
+                                } label: {
+                                    Label("Rename…", systemImage: "pencil")
+                                }
                                 if appState.activeCollectionID != nil {
-                                    Button("Set as Collection Cover") {
+                                    Button {
                                         appState.setCollectionCover(file)
+                                    } label: {
+                                        Label("Set as Collection Cover", systemImage: "photo.badge.checkmark")
                                     }
                                 }
                                 Divider()
                             }
-                            Button("Move to Trash", role: .destructive) {
+                            Button(role: .destructive) {
                                 let targets = appState.effectiveSelectionURLs(fallback: p)
                                 let byPath = Dictionary(
                                     appState.visibleFiles.map { ($0.url.standardizedFileURL.path, $0) },
@@ -601,6 +585,8 @@ struct GridView: View {
                                         }
                                     }
                                 }
+                            } label: {
+                                Label("Move to Trash", systemImage: "trash")
                             }
                         }
                     }
@@ -728,22 +714,17 @@ struct GridView: View {
             .filter { $0.kind.isPhotoKind }.map(\.url)
     }
 
-    /// Compare + cull entry points. Compare needs 2–4 photos; culling needs a
-    /// view with at least two photos in it.
+    /// The compare entry point. Needs 2–4 photos.
     @ViewBuilder
     private func compareMenuSection(for file: FileNode, path: String) -> some View {
         let targets = photoTargets(for: file, path: path)
         if (2...CompareStore.maxPanes).contains(targets.count) {
-            Button("Compare Side by Side") {
+            Button {
                 guard appState.selectedFile == nil else { return }
                 CompareStore.shared.open(urls: targets)
+            } label: {
+                Label("Compare Side by Side", systemImage: "rectangle.split.2x1")
             }
-        }
-        // `prefix(2)` not `count`: this runs per tile per render and only the
-        // "are there at least two" answer is needed.
-        if !CullStore.shared.active,
-           appState.visibleFiles.lazy.filter({ $0.kind.isPhotoKind }).prefix(2).count >= 2 {
-            Button("Start Culling") { CullStore.shared.begin() }
         }
     }
 
@@ -754,13 +735,17 @@ struct GridView: View {
         if ClipModelStore.shared.isReady {
             let targets = photoTargets(for: file, path: path)
             if single, file.kind.isPhotoKind {
-                Button("Find Similar Photos") {
+                Button {
                     appState.findSimilar(to: file.url)
+                } label: {
+                    Label("Find Similar Photos", systemImage: "square.on.square.dashed")
                 }
             }
             if (1...SimilarTerm.maxAnchors).contains(targets.count) {
-                Button("New Smart Collection from Selection") {
+                Button {
                     appState.newSmartCollectionFromSelection(urls: targets)
+                } label: {
+                    Label("New Smart Collection from Selection", systemImage: "wand.and.stars")
                 }
             }
         }
@@ -792,11 +777,6 @@ struct GridView: View {
                     "Edited, %lld versions",
                     comment: "VoiceOver: photo has Muse edits and saved versions"), versions)
                 : String(localized: "Edited"))
-        }
-        if cull.active,
-           let mark = cull.mark(for: file.url.standardizedFileURL.path) {
-            parts.append(mark == .keep ? String(localized: "Kept")
-                                       : String(localized: "Rejected"))
         }
         return Text(parts.joined(separator: ", "))
     }
@@ -949,10 +929,6 @@ private struct TileView: View {
     /// unedited. Passed DOWN like `rating` rather than read per tile, so a
     /// virtualized grid doesn't mount one store observer per live tile.
     var editedVersionCount: Int? = nil
-    /// Keep/reject mark for this file while a cull session is running; nil
-    /// when unmarked or when no session is active. Passed DOWN like `rating`.
-    var cullMark: CullStore.Mark? = nil
-
 
     @State private var thumbnail: NSImage?
     @State private var hovering = false
@@ -1193,28 +1169,10 @@ private struct TileView: View {
             // therefore never used). lineLimit is a backstop: if a future font
             // change breaks the measured constants, the badge truncates rather
             // than silently reintroducing the wrap this exists to prevent.
-            // Cull mark — bottom-LEADING (Spec 03). The grid already accepts
-            // K/X/U to mark files; without this badge that marking was
-            // completely invisible on the grid, which is where a cull pass is
-            // actually driven from. Display-only; the session's own HUD and
-            // the resolve card own every state change.
-            if let cullMark {
-                Image(systemName: cullMark == .keep ? "checkmark" : "xmark")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(Capsule(style: .continuous).fill(Color.black.opacity(0.6)))
-                    .padding(Self.badgeInset)
-                    .padding(isSelected ? Self.selectionInset : 0)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-            }
             // Edited badge — bottom-TRAILING. The tile corners are assigned:
-            // top-trailing star · bottom-leading cull · bottom-trailing edited
-            // (top-leading is free). Display-only, never a click target (a tap
-            // would fight tile select/open).
+            // top-trailing star · bottom-trailing edited (both leading corners
+            // are free). Display-only, never a click target (a tap would fight
+            // tile select/open).
             if let editedVersionCount {
                 HStack(spacing: 2) {
                     Image(systemName: "slider.horizontal.3")
@@ -1224,7 +1182,13 @@ private struct TileView: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
-                    .background(Capsule(style: .continuous).fill(Color.black.opacity(0.6)))
+                    // Accent blue, not a black wash. "This photo
+                    // has adjustments" is a state the user PUT there, and the
+                    // badge reads as that rather than as a shadow over the
+                    // corner. `accentColor` (not `ringColor`) on purpose: the
+                    // ring goes black or white on some moods to stay legible
+                    // against them, and a black badge is the thing being fixed.
+                    .background(Capsule(style: .continuous).fill(Color.accentColor))
                     .padding(Self.badgeInset)
                     .padding(isSelected ? Self.selectionInset : 0)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)

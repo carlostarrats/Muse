@@ -71,8 +71,7 @@ enum EscapeResolver {
         // Escape for them. Returning early also keeps the modal press from
         // touching the hero close sequence.
         if modalPresented { return .dismissModal }
-        // Below a modal (the cull resolve card can be raised over compare),
-        // above everything else.
+        // Below a modal, above everything else.
         if compareActive { return .closeCompare }
         if hasSelectedFile {
             return selectedFileIsHero ? .closeHero : .closeViewer

@@ -16,7 +16,6 @@ struct ComparePane: View {
     let mark: SharpnessRank.SharpnessMark
     let bestFaceQuality: Bool
     @ObservedObject var store: CompareStore
-    @ObservedObject var cull: CullStore
 
     @State private var sharpImage: CGImage?
     @State private var imageSize: CGSize = .zero
@@ -84,10 +83,6 @@ struct ComparePane: View {
                     .foregroundStyle(.green)
                     .help(String(localized: "Best face capture quality here"))
             }
-            if cull.active, let m = cull.mark(for: url.standardizedFileURL.path) {
-                Image(systemName: m == .keep ? "checkmark.circle.fill" : "xmark.circle.fill")
-                    .foregroundStyle(m == .keep ? .green : .red)
-            }
         }
         .font(.system(size: 10, weight: .semibold))
         .padding(6)
@@ -99,9 +94,6 @@ struct ComparePane: View {
         case .sharpest: parts.append(String(localized: "sharpest here"))
         case .softer:   parts.append(String(localized: "softer here"))
         default: break
-        }
-        if cull.active, let m = cull.mark(for: url.standardizedFileURL.path) {
-            parts.append(m == .keep ? String(localized: "kept") : String(localized: "rejected"))
         }
         return parts.joined(separator: ", ")
     }

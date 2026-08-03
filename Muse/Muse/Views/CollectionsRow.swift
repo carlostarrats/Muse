@@ -429,7 +429,15 @@ private struct CollectionStackCard: View {
                 queue: q, collectionID: collectionID, coverFileID: coverFileID)
         }
         // depth + 1: room to dedupe the cover out of the member page.
-        let members = (try? await CollectionStore.alivePaths(
+        //
+        // `alivePathsResolving`, NOT `alivePaths`: a SMART collection has no
+        // rows in `collection_members` — its membership is the rule, resolved
+        // on read. The manual-only query returned nothing for one, so every
+        // smart collection drew the grey "no pictures" placeholder on the
+        // Collections page while its sidebar row showed a count in the
+        // hundreds. Same reason the cover lookup below is guarded rather than
+        // assumed: a smart collection can carry a cover too.
+        let members = (try? await CollectionStore.alivePathsResolving(
             queue: q, collectionID: collectionID, limit: Self.depth + 1)) ?? []
         let paths = StackScatter.stackPaths(cover: cover, members: members,
                                             depth: Self.depth)

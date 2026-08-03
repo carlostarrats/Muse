@@ -22,12 +22,25 @@ struct OpenWithMenu: View {
         // Every external hand-off routes through the fork check — a file with
         // Muse edits opened externally would otherwise silently be the
         // unedited original.
-        Button("Open") { OpenWithFork.open(url: url, appURL: nil, appState: appState) }
-        Button("Reveal in Finder") {
+        Button {
+            OpenWithFork.open(url: url, appURL: nil, appState: appState)
+        } label: {
+            Label("Open", systemImage: "arrow.up.forward.app")
+        }
+        Button {
             NSWorkspace.shared.activateFileViewerSelecting([url])
+        } label: {
+            Label("Reveal in Finder", systemImage: "magnifyingglass")
         }
         Divider()
-        Menu("Open With") { OpenWithItems(url: url) }
+        // The submenu's own rows carry each app's real icon, so this one gets a
+        // glyph to match the rest of the top level — see the note in
+        // SelectionActionsMenu on the all-or-nothing rule.
+        Menu {
+            OpenWithItems(url: url)
+        } label: {
+            Label("Open With", systemImage: "app.badge")
+        }
     }
 
     static func applications(for url: URL) -> [URL] {

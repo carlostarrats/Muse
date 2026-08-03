@@ -224,7 +224,7 @@ extension EscapeActionTests {
                                             tagsActive: false, insideCollection: false,
                                             showingCollectionsPage: false, compareActive: true)
         XCTAssertEqual(action, .dismissModal,
-                       "a modal raised over compare (the cull resolve card) must dismiss first")
+                       "a modal raised over compare must dismiss first")
     }
 
     func testCompareInactiveFallsThroughToViewer() {

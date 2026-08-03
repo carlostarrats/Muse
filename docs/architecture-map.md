@@ -625,16 +625,26 @@ Performance:
   `similar` is deliberately absent from `SearchQueryParser.keys`).
 - **`Search/NaturalLanguageQuery.swift`, `NLQuerySuggest.swift`** — the `@Generable`
   intent (macOS 26 gated) + pure token composer behind the suggestion pill.
-- **`Models/CompareStore.swift`, `CullStore.swift`** + **`Components/CompareGeometry.swift`,
-  `CullSummary.swift`** — compare/cull state and their pure math.
+- **`Models/CompareStore.swift`** + **`Components/CompareGeometry.swift`** —
+  compare state and its pure math.
   (`RegionMath.swift` was here until 2026-08-01. Spec 03 §5 "region similarity"
   — drag a box inside a photo, search for that CROP — was **dropped by the owner**;
   only its geometry helper had ever been built. Deleted with its tests. Don't
   re-add it as "dead code someone forgot": the feature is cancelled, not pending.
-  Whole-photo "Find Similar Photos" and word search both already cover the ground.)
+  Whole-photo "Find Similar Photos" and word search both already cover the ground.
+  `CullStore.swift`/`CullSummary.swift`/`CullHUD.swift`/`CullResolveCard.swift`
+  went the same way on **2026-08-02** — see the cull note below.)
 - **`Views/Compare/`** — `CompareView`, `ComparePane`, `CompareKeyCatcher` (the
-  side-by-side workbench), with **`Views/CullHUD.swift`** and
-  **`Views/Modal/CullResolveCard.swift`** for the ephemeral K/X/U cull pass.
+  side-by-side workbench). The ephemeral K/X/U cull pass that used to live
+  alongside it is **removed (2026-08-02, owner call)**: marking a photo reject
+  and then trashing it at Finish is what selecting it and pressing Move to
+  Trash already does, and the app's persona is a generalist with a Downloads
+  folder, not a photographer working a 2,000-frame shoot. What went with it —
+  `CullStore`, `CullSummary`, the HUD, the resolve card, the grid's K/X/U key
+  hook and bottom-leading badge, `PageScrollCatcher.onCullKey`,
+  `CompareKeyCatcher.onCharacter`, `AppState.cullResolveShown`, and 20 strings.
+  Compare, ratings and focus peaking are untouched. Cancelled, not a gap.
+  The Spec 03 D8 "Escape must not end a cull session" deviation is moot.
 - **`Viewers/PeakingOverlay.swift`, `PeakingOverlayView.swift`** — focus peaking, ported
   from Surface Camera (display-referred input, 1080px working size).
 - **`Models/AppState+Similarity.swift`** — the Find Similar / New Smart Collection
@@ -697,8 +707,14 @@ Performance:
   `PhotoFeedback.Inputs` (by file id or by path).
 - **`Intelligence/Core/NoiseEstimate.swift`** — MAD-of-Laplacian noise sigma over the
   flattest tiles.
-- **`Models/LutStore.swift`** (Pattern B, queue-injectable) and
-  **`Models/EditReferenceStore.swift`** (memory-only `{ url, paneVisible }`).
+- **`Models/LutStore.swift`** (Pattern B, queue-injectable).
+  `Models/EditReferenceStore.swift` (the editor's pinned "reference photo" pane)
+  was here until **2026-08-02**, when the owner **dropped the feature**: the
+  editor's Reference Photo row was `isEnabled: referenceStore.url != nil`, so it
+  sat permanently disabled with a tooltip telling you to go right-click in the
+  GRID — a control that advertised a gesture in another view. Before/after and
+  Side by Side already cover comparison, and "show me ones like this" is
+  `similar:` search (right-click ▸ Find Similar Photos). Cancelled, not a gap.
 - **`Views/Editor/`** — `ScopesPanel` + `HistogramView` (the teaching histogram and
   clipping copy), `ToneZoneStrip` (nine cells, mass bars, target-mode toggle,
   accessible slider disclosure), `LooksBrowserView` (live-on-photo presets + LUTs,
@@ -764,13 +780,13 @@ scripts/audit-invariants.sh    12 mechanical checks of the durable constraints
 
 Muse/MuseUITests/
   MuseSurfaceDriveTests.swift  Drives the running app (XCUITest): editor,
-                               compare, cull, duplicates, all five import
-                               panels, backup, settings, rediscovery, hero.
+                               compare, duplicates, all five import panels,
+                               backup, settings, rediscovery, hero.
                                Each asserts on a control ONLY that surface
                                publishes, and that Escape dismisses it — the
                                standing regression test for round 1's F16.
-                               NOTE: cull is the exception and asserts Escape
-                               does NOT end the session (Spec 03 deviation D8).
+                               (The cull test went with the cull feature on
+                               2026-08-02.)
   MuseTagChipRowTests.swift    Guards the ChipFlow measurement cache: chips
                                never overlap, re-measure after a folder switch
                                (the staleness a cache introduces), and the row's

@@ -62,4 +62,44 @@ final class ViewerGeometryTests: XCTestCase {
         let tile = CGRect(x: 0, y: 0, width: 160, height: 120)
         XCTAssertEqual(ViewerGeometry.fitWithin(imageSize: .zero, frame: tile), tile)
     }
+
+    // MARK: - The image never crosses into the info column
+
+    /// The reported bug: a hard-narrowed window drew the photo ON TOP of the
+    /// 258pt info column. `availW` had a bare `max(120, …)` floor, so below
+    /// ~378pt of viewport it returned a 120pt-wide box starting at x = 40 —
+    /// straight through the column's left edge.
+    func testFitRectNeverEntersTheInfoColumnAtAnyWidth() {
+        let column = ViewerGeometry.columnWidth + ViewerGeometry.columnMargin
+        for w in stride(from: 200.0, through: 1600.0, by: 13.0) {
+            let viewport = CGSize(width: w, height: 900)
+            for image in [CGSize(width: 4000, height: 3000),   // landscape
+                          CGSize(width: 1200, height: 3600),   // very tall
+                          CGSize(width: 1000, height: 1000)] { // square
+                // `max(0, …)`: a viewport narrower than the column itself has
+                // no room at all, and the honest answer there is an empty rect
+                // at the origin, not a negative one. The window minimum puts
+                // that case out of reach; the sweep covers it anyway.
+                let limit = max(0, w - column)
+                let r = ViewerGeometry.fitRect(imageSize: image, viewport: viewport)
+                XCTAssertLessThanOrEqual(
+                    r.maxX, limit + 0.001,
+                    "viewport \(w) / image \(image): the picture reaches x=\(r.maxX), "
+                    + "past the info column's left edge at \(limit)")
+                XCTAssertGreaterThanOrEqual(r.minX, -0.001,
+                                            "viewport \(w): the picture starts off the left edge")
+            }
+        }
+    }
+
+    /// At the enforced window minimum the picture still has real room — the
+    /// clamp above must not be satisfied by collapsing the image to nothing.
+    func testFitRectAtMinimumWindowWidthLeavesUsableRoom() {
+        let r = ViewerGeometry.fitRect(
+            imageSize: CGSize(width: 4000, height: 3000),
+            viewport: CGSize(width: ViewerGeometry.minWindowWidth, height: 700))
+        XCTAssertGreaterThan(r.width, 300,
+                             "at the minimum window width the photo draws only \(r.width)pt wide")
+        XCTAssertGreaterThan(r.minX, 0)
+    }
 }
