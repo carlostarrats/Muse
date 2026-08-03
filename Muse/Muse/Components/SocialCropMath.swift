@@ -36,6 +36,17 @@ nonisolated enum SocialCropMath {
         return max(0, min(1, 1 - kept))
     }
 
+    /// The crop the export card actually asks for: centred and unzoomed.
+    ///
+    /// Named constants rather than defaulted parameters, because the crop UI
+    /// that once chose these is gone (2026-08-02 — a drag that moved the
+    /// picture 5% of the pointer's travel). A call site passing
+    /// `centred`/`unzoomed` states the policy; one passing a struct field that
+    /// nothing ever writes only implies it. The parameters stay, since the
+    /// function is the general geometry and is tested as such.
+    static let centred = CGPoint(x: 0.5, y: 0.5)
+    static let unzoomed: CGFloat = 1
+
     /// The normalized source-crop rect (unit coords, display-oriented) for a
     /// target aspect at a zoom/center chosen in the crop UI. zoom 1 = the
     /// minimal crop that fills the target frame (aspect-fill); zoom z > 1

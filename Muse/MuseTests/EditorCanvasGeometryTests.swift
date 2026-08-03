@@ -123,6 +123,24 @@ final class EditorCanvasGeometryTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(r.width, 0)
     }
 
+    /// The window minimum has to serve the EDITOR, not just Preview: both modes
+    /// share one window, and Edit spends two panels' worth of it. The first
+    /// version of `minWindowWidth` was derived from Preview's single info
+    /// column and left the editor 60pt of picture at the limit.
+    func testEditorHasAUsablePictureAtTheMinimumWindowWidth() {
+        let insets = EdgeInsets(top: ViewerGeometry.topPad,
+                                leading: ViewerGeometry.editorPanelWidth,
+                                bottom: ViewerGeometry.bottomPad,
+                                trailing: ViewerGeometry.editorPanelWidth)
+        let free = EditorCanvasGeometry.freeRect(
+            canvas: CGSize(width: ViewerGeometry.minWindowWidth, height: 800),
+            insets: insets)
+        XCTAssertGreaterThanOrEqual(
+            free.width, ViewerGeometry.columnWidth,
+            "at the minimum window width the editor's picture is only \(free.width)pt wide — "
+            + "narrower than one of the panels beside it")
+    }
+
     // MARK: - Point mapping
 
     func testUnitPointIsAPlainDivision() {

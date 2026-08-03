@@ -172,6 +172,36 @@ each cost a build, a test run and an owner trial. The trace cost one build and
 answered it immediately — and disproved the theory that had felt most obviously
 right. Instrument before theorising about anything with a GPU or a run loop in it.
 
+**Review round 9 (the session's own diff).** Ran the registry method against
+these three commits. Four findings, all in this session's own work:
+
+- **Dead code the diff created.** `ExportModel.PerImageState.zoom`/`.center`
+  were written nowhere once the crop drag went, so they were always their
+  defaults — state in name only — and the preview still applied an identity
+  `scaleEffect` and `offset` on every frame to honour them. Removed; the two
+  `SocialCropMath` call sites pass named `centred`/`unzoomed` constants, which
+  STATE the policy where a defaulted field only implied it.
+- **A constant derived from one consumer of a shared resource.**
+  `minWindowWidth` was sized from Preview's single 258pt info column — but Edit
+  shares the same window and spends TWO 330pt panels, so at the minimum the
+  editor had 60pt of picture. It is now derived from the editor (the more
+  demanding mode) via a shared `ViewerGeometry.editorPanelWidth` that
+  `EditorView.fitInsets` also uses, so the two can't drift again. 918pt, pinned
+  by a test asserting the picture is never narrower than a panel beside it.
+- **`CanvasPointMath` orphaned** by the canvas refactor — deleted, `WBEyedropper`
+  split into its own file.
+- **The architecture map listed a file this diff deleted** — fixed, along with a
+  stale `SocialExportCard.swift` reference. THREE more pre-existing stale
+  entries were found and deliberately left: fixing other commits' rot would have
+  unscoped the change. Recorded in the lens registry instead, along with WHY the
+  sweep must stay human — the map keeps historical mentions of deleted files on
+  purpose, and no grep separates those from a stale listing.
+
+Also recorded: **"instrument before theorising"** is now a lens in its own right,
+and **"geometry computed in two places"** went on the unrun list — the eyedropper
+bug this session fixed by accident is exactly that shape, and nothing says it is
+the only instance.
+
 **Verification.** Debug build clean; `MuseTests` 1,860 green (was 1,865 — the
 five `CullSummaryTests` went with the feature, +2 new `ViewerGeometryTests`);
 `audit-invariants.sh` 14/14; localization 0 untranslated across 1,059 keys after

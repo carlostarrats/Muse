@@ -84,6 +84,10 @@ Rounds 1–3 are recorded in `REVIEW-FINDINGS.md` and `FEATURE-LEDGER.md`; round
 | Clamp coverage after moving a value to a new writer | 8 | 1 finding — Edit's zoom-out stopped clamping the pan when `setZoom` moved to the animator |
 | Dead code created by the round's OWN diff | 8 | 4 findings removed |
 | UI tests left stale by a rename | 8 | 2 findings — a card renamed and one deleted while its test still named them |
+| **Instrument before theorising** (trace a GPU/run-loop symptom rather than reasoning about it) | **9** (2026-08-02) | The lens itself is the finding: 3 rounds of plausible theories each produced a wrong fix, one actively worse. One trace answered it and disproved the most convincing theory. |
+| Dead code created by the round's OWN diff | 9 | 2 findings — `PerImageState.zoom`/`.center` written nowhere after the crop drag went, with identity transforms still applied per frame; `CanvasPointMath` orphaned by the canvas refactor |
+| A constant derived from ONE consumer of a shared resource | 9 | 1 finding — `minWindowWidth` was sized from Preview's single info column; Edit shares the window and spends two panels, leaving 60pt of picture at the minimum |
+| Architecture map vs. the filesystem (do the listed files exist?) | 9 | 1 finding in this round's own diff; **3 pre-existing** — see note below |
 
 ## Part 2 — lenses NOT yet run
 
@@ -99,6 +103,23 @@ an unrun lens on the list is worth more than a good idea that evaporates.
 | Long-session memory growth (retain cycles, not allocation shape) | Round 6 checked allocation *shape*; SwiftUI/Combine retain cycles are a different failure. |
 | Preference-key lifecycle (renamed/removed ids left in a stored set) | `editorExpandedSections2` keeps whatever ids a user has stored; removing a section leaves a dead id there forever. Harmless today, but nothing prunes. |
 | Two-instance runs during GUI testing | The 2026-08-02 round hit a 21-failure suite caused by a developer-launched instance racing the test's own; GRDB's `.immediateError` means the loser gets no window. Worth a mechanical guard rather than a note. |
+| Geometry computed in two places | Round 9 found the editor's eyedropper and EV hover fitting against the WHOLE window while the renderer fitted against the window minus panels — so both sampled the wrong pixel whenever the panels showed. Nobody reported it; it surfaced only when the two were merged. Worth sweeping for other duplicated layout math. |
+
+**Round 9 note — the architecture map has pre-existing rot.** A `.swift` name in
+`docs/architecture-map.md` that no longer exists on disk: three are stale
+CURRENT-file listings from earlier commits (`MetadataImportSheet.swift`,
+`CoordinateReader.swift`, `CoordinateBackfill.swift` — the last two are already
+described as deleted in prose elsewhere, so only the first is misleading). Round
+9 fixed only the entry its own diff broke, deliberately, to keep the change
+scoped.
+
+**Deliberately NOT mechanized** (add it to Part 3's list): a grep for
+`.swift` names that don't exist on disk cannot tell a stale CURRENT-file
+listing from a legitimate historical mention — and the map is full of the
+latter on purpose ("`RegionMath` was here until…", "`CullStore` went the same
+way"), because recording why something was removed is the map's job. A check
+that fires on those is one people learn to ignore. The sweep is worth RUNNING
+by hand in a review round; the triage is the human part.
 
 **Round 7 correction.** An earlier draft of this file recorded "no unrun lenses
 identified" — written before actually looking, and wrong. The five above came
@@ -168,6 +189,10 @@ a shipping user the situation is unreachable.
 Not every rule can be a grep, and pretending otherwise produces checks that cry
 wolf until they are ignored. These stay human:
 
+- **Architecture-map entries vs. the filesystem.** The map deliberately keeps
+  historical mentions of deleted files (why something went, so it isn't
+  re-added), and no grep separates those from a stale current listing. Sweep it
+  by hand in a round; don't automate the triage. (Round 9.)
 - **"Manual tags beat vision tags."** A semantic precedence rule, enforced by a
   `UNIQUE` constraint and branching. Pinned by tests, not greppable.
 - **Fail-closed root visibility** (`Housekeeping.pruneUnreachable`,

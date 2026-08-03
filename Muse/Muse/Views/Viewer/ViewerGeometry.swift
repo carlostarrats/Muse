@@ -29,13 +29,25 @@ enum ViewerGeometry {
     /// touch — not an infinite zoom-out, just one or two steps of breathing room.
     static let minZoom: CGFloat = 0.7
 
-    /// The narrowest the main window may get. Below this the hero viewer has
-    /// no honest layout: the info column is a fixed 258pt and the picture gets
-    /// what's left, so on a hard-narrowed window the image floor below took
-    /// over and the photo drew ON TOP of the column (owner report). A minimum
-    /// content width is the real fix — 258 column + 40 margin + 80 side pads
-    /// leaves 342pt of picture at the limit, which is small but correct.
-    static let minWindowWidth: CGFloat = 720
+    /// One of the EDITOR's two panels, in points. Lives here rather than in
+    /// `EditorView` because the window minimum below is derived from it — a
+    /// private copy in the view is how the two silently disagreed.
+    /// = 258 column + 24 card inset + (40 − 12) margin + 20 stack spacing.
+    static let editorPanelWidth: CGFloat = columnWidth + 24 + (columnMargin - 12) + 20
+
+    /// The narrowest the main window may get.
+    ///
+    /// Derived from the EDITOR, which is the more demanding of the two modes
+    /// that share this window: Preview has ONE 258pt info column, Edit has TWO
+    /// `editorPanelWidth` panels. Sizing this from Preview alone (the first
+    /// version of this constant) left the editor 60pt of picture at the
+    /// minimum — technically laid out, useless to edit in. Both panels plus a
+    /// picture at least as wide as one info column is the floor.
+    ///
+    /// It exists because the window had NO minimum at all, so it could be
+    /// dragged narrower than the info column and the photo drew ON TOP of it
+    /// (owner report).
+    static let minWindowWidth: CGFloat = editorPanelWidth * 2 + columnWidth
     /// Enough for the chrome row, a card or two, and a picture between them.
     static let minWindowHeight: CGFloat = 480
 

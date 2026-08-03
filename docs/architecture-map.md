@@ -683,8 +683,16 @@ Performance:
 - **`Views/Theme/Theme.swift`** — the minimal semantic token layer (role-named colors,
   spacing, radius, fonts), injected once in `ContentView`, read by every NEW
   editor-adjacent surface only.
-- **`Components/CanvasPointMath.swift`** — canvas → unit image point under fit/zoom/pan
-  (+ the pure `WBEyedropper.solve`).
+- **`Components/WBEyedropper.swift`** — the pure `WBEyedropper.solve`. Was
+  `CanvasPointMath.swift`; that enum mapped a canvas point back through
+  fit/zoom/pan and went with the 2026-08-02 canvas refactor — the Metal view is
+  sized to the image's rect now, so the mapping is a division
+  (`EditorCanvasGeometry.unitPoint`).
+- **`Components/EditorCanvasGeometry.swift`** (2026-08-02) — where the editor's
+  canvas view SITS, in points: content aspect, free rect, fitted size, content
+  rect, unit point. The ONLY place that geometry is computed; the renderer just
+  fills the drawable it is handed. Its aspect invariance is what makes a live
+  resize a uniform scale rather than a re-fit.
 
 ### Components added 2026-07-31 (Spec 05, readouts / learning layer / looks)
 
@@ -756,7 +764,8 @@ a READER and a MAPPER, never a new writer** — everything lands through seams S
 ### Spec 07 (sharing & social export)
 
 *Documented inline in the tree listing above rather than as a section — see
-`Export/Social/`, `Components/SocialCropMath.swift`, `Views/Export/SocialExportCard.swift`,
+`Export/Social/`, `Components/SocialCropMath.swift`, `Views/Export/ExportCard.swift`
+(renamed from `SocialExportCard.swift` when the one card grew the Format family),
 and the `Sharing/Drive/` entries (`DriveSharePublishGuard`, portfolio manifest handling).*
 
 ### Verification harness (added 2026-08-01, review round 7)

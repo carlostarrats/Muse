@@ -276,8 +276,9 @@ struct EditorView: View {
     /// photo grows past it and under the panels, like Preview's does under the
     /// info column. Hiding the controls gives the whole window back.
     private var fitInsets: EdgeInsets {
-        let column = ViewerGeometry.columnWidth + 24
-            + (ViewerGeometry.columnMargin - 12) + theme.spacingL
+        // Shared with the window minimum, which is derived from it — see
+        // ViewerGeometry.editorPanelWidth. (Its 20 is theme.spacingL.)
+        let column = ViewerGeometry.editorPanelWidth
         let bare = ViewerGeometry.sidePad
         // Interpolated, so hiding the controls GROWS the photo into the space
         // instead of snapping it there a frame later.

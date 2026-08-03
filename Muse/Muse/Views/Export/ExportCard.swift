@@ -33,8 +33,6 @@ struct ExportRequest: Identifiable, Equatable {
 
 @MainActor final class ExportModel: ObservableObject {
     struct PerImageState: Equatable {
-        var zoom: CGFloat = 1
-        var center = CGPoint(x: 0.5, y: 0.5)
         /// The decoded preview's pixel size. The crop rect is normalized in THIS
         /// space (that's the space the user positions it in), so the render job
         /// must be handed a rect derived from it — not from the raw file.
@@ -249,7 +247,8 @@ struct ExportRequest: Identifiable, Equatable {
                     let cropRect: CGRect? = (fit == .crop && preset.isFixed)
                         ? SocialCropMath.rect(sourceSize: s.decodedSize ?? .zero,
                                               targetAspect: preset.targetAspect ?? 1,
-                                              zoom: s.zoom, center: s.center)
+                                              zoom: SocialCropMath.unzoomed,
+                                              center: SocialCropMath.centred)
                         : nil
                     let job = SocialRender.Job(sourceURL: url, preset: preset, fit: fit,
                                                matte: matte, cropRect: cropRect,
@@ -281,7 +280,8 @@ struct ExportRequest: Identifiable, Equatable {
         let s = state(for: url)
         let social = SocialCropMath.rect(sourceSize: s.decodedSize ?? .zero,
                                          targetAspect: preset.targetAspect ?? 1,
-                                         zoom: s.zoom, center: s.center)
+                                         zoom: SocialCropMath.unzoomed,
+                                         center: SocialCropMath.centred)
         var stack = await EditStore.shared.stack(for: url) ?? .fresh()
         let existing = stack.geometryParams?.crop.map { (c: CropRect) in
             CGRect(x: c.x, y: c.y, width: c.w, height: c.h)
@@ -1249,12 +1249,12 @@ struct ExportStageView: View {
             case .crop:
                 // Aspect-FILL the frame, then offset by the chosen center — the
                 // same geometry SocialCropMath describes, drawn.
+                // Aspect-FILL the frame. No scale or offset: the crop is
+                // centred and unzoomed, so both were identity transforms
+                // evaluated on every frame of the card's body.
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .scaleEffect(state.zoom)
-                    .offset(x: (0.5 - state.center.x) * frame.width * state.zoom,
-                            y: (0.5 - state.center.y) * frame.height * state.zoom)
             case .matte, .blurExtend:
                 ZStack {
                     if fit == .blurExtend {
@@ -1291,14 +1291,17 @@ struct ExportStageView: View {
         }
     }
 
-    // The crop stage had a drag gesture that nudged `state.center` by 5% of the
-    // pointer's travel. It was removed rather than retuned: a control that
+    // The crop stage had a drag gesture that nudged the crop centre by 5% of
+    // the pointer's travel. It was removed rather than retuned: a control that
     // moves a fraction of the distance you drag reads as broken, and the
-    // preview it was positioning already shows the finished frame. The crop
-    // stays at the centre `PerImageState` defaults to, which is what the
-    // renderer produces and what this view now draws. `state.center`/`zoom`
-    // remain in the model — SocialCropMath still consumes them and they still
-    // describe the (centred, unzoomed) rect that comes out.
+    // preview it was positioning already shows the finished frame.
+    //
+    // `PerImageState.zoom`/`.center` went with it — with nothing writing them
+    // they were always their defaults, so they were state in name only, and the
+    // preview applied an identity scale and offset on every frame to honour
+    // them. `SocialCropMath` still takes both, and the call sites now pass its
+    // named constants, which says "centred and unzoomed" where a defaulted
+    // field only implied it.
 
     /// The target frame, letterboxed inside the available stage area.
     private func frameRect(in available: CGSize) -> CGSize {
