@@ -62,9 +62,82 @@ final class EditRenderConsistencyTests: XCTestCase {
         toneZone.gains[1] = -0.4      // pull the deep shadows
         toneZone.gains[7] = 0.3       // lift the highlights
         let lut = LutParams(lutHash: Self.fixtureLut.id, name: "Fixture", strength: 0.6)
+        // Stage B joins the gate in the same commit that added the stages, per
+        // the rule above — with ONE deliberate exception, `grain`, explained
+        // below `allGroupsStack`.
+        var hsl = HSLParams.neutral
+        hsl.saturation[5] = -0.5      // blue
+        hsl.luminance[2] = 0.3        // yellow
+        var split = SplitToneParams.neutral
+        split.shadowHue = 0.6; split.shadowSaturation = 0.35
+        split.highlightHue = 0.1; split.highlightSaturation = 0.2
         stack.adjustments = [.tone(tone), .color(color), .presence(presence),
-                             .curve(curve), .vignette(vignette), .toneZone(toneZone), .lut(lut)]
+                             .curve(curve), .vignette(vignette), .toneZone(toneZone),
+                             .lut(lut), .hsl(hsl), .splitTone(split)]
         return stack
+    }
+
+    // MARK: - Why grain is not in the fixture above
+    //
+    // It is the one stage that CANNOT be gated by pixel equality, and leaving a
+    // note rather than an omission because the rule above says every renderable
+    // group belongs in the fixture.
+    //
+    // `assertAgreesAcrossResolutions` renders at 256/1024/2048 and downsamples
+    // all three to a 128px grid — so it averages 2x, 8x and 16x respectively.
+    // Box-averaging high-frequency noise by 8x smooths it far harder than by
+    // 2x, so two CORRECT grain renders land at different residual amplitudes
+    // and the comparison fails (measured 0.0274 against a 0.0235 tolerance).
+    // That is a property of measuring noise through unequal downsampling, not a
+    // scale-dependent radius — verified by bisection: with grain removed and
+    // `.hsl`/`.splitTone` still present, the fixture passes.
+    //
+    // Grain gets `testGrainStrengthAgreesAcrossResolutions` instead, which asks
+    // the question that actually applies to noise: is the grain the same
+    // STRENGTH relative to the image at every size.
+    //
+    // DO NOT "fix" this by adding grain here and raising `tolerance`. The
+    // tolerance is what makes this file catch a pixel-radius regression in
+    // every OTHER stage; loosening it to accommodate noise would blind the gate
+    // that matters.
+
+    /// Grain's OWN gate, separate from the all-groups fixture because it is
+    /// measured differently: the question is not "do two renders look alike"
+    /// but "is the grain the same STRENGTH relative to the image at every
+    /// size". A pixel-constant cell fails this by a wide margin while a
+    /// long-edge fraction holds.
+    ///
+    /// Surface shipped a preview that dropped grain entirely rather than solve
+    /// this; Muse cannot, because the grid IS the product.
+    func testGrainStrengthAgreesAcrossResolutions() throws {
+        let url = try EditRenderTestSupport.writeFixture(width: 2048, height: 1365,
+                                                         orientation: 1, named: "grain-fixture")
+        var grained = EditStack.fresh()
+        grained.setGrain { $0.amount = 0.9; $0.size = 0.5; $0.roughness = 0.4 }
+
+        func deviation(at maxPixel: Int) throws -> Double {
+            let plain = try XCTUnwrap(
+                EditRenderer.render(url: url, stack: .fresh(), maxPixel: maxPixel))
+            let withGrain = try XCTUnwrap(
+                EditRenderer.render(url: url, stack: grained, maxPixel: maxPixel))
+            // Downsample BOTH to a common grid first, so the comparison is
+            // about grain strength rather than about resolution.
+            let a = try EditRenderTestSupport.downsample(plain, toGrid: 128)
+            let b = try EditRenderTestSupport.downsample(withGrain, toGrid: 128)
+            return try EditRenderTestSupport.meanChannelError(a, b)
+        }
+
+        let small = try deviation(at: 512)
+        let large = try deviation(at: 2048)
+        XCTAssertGreaterThan(small, 0.001, "grain did not render at 512px")
+        XCTAssertGreaterThan(large, 0.001, "grain did not render at 2048px")
+        // Within 2.5x across a 4x resolution change. Generous, because
+        // downsampling averages a fine grain harder than a coarse one — but a
+        // pixel-constant cell would differ by the full 4x factor.
+        let ratio = max(small, large) / max(min(small, large), 1e-9)
+        XCTAssertLessThan(ratio, 2.5,
+                          "grain strength changed with resolution (\(small) vs \(large)) — "
+                          + "the cell size is probably a pixel constant, not a long-edge fraction")
     }
 
     private func renderDownsampled(_ url: URL, decodeLongEdge: Int) throws -> CGImage {
