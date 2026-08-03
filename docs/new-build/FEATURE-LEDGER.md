@@ -136,7 +136,7 @@ question.
 | S07.1 | Manifest v2 + three page layouts | `DriveShareManifestTests`, `SocialPresetTests` | 2026-08-01 | ❌ G1 | Page tests pass (`web/share/share.test.mjs`) |
 | S07.2 | Portfolio mode (stable URL, live manifest) | `DriveShareStoreTests` | 2026-08-01 | ❌ G1 | Upload → atomic swap → sweep, rollback before swap |
 | S07.3 | Social export card + render ladder | `SocialRenderTests`, `SocialCropMathTests`, `ExportMetadataTests` | 2026-08-02 | ❌ G1 | ⚠️ crop stage previewed the unedited original — fixed R1-F18. Card renamed `ExportCard`; social is now one branch of two |
-| P29 | **General image export** (format · quality · depth · resize · background · presets) | `ExportFormatTests`, `ExportResizeTests`, `ImageExportRenderTests`, `ExportPresetStoreTests`, `SocialCropMathTests`, `OutputRenderTests` | 2026-08-02 (3 review rounds) | ⚠️ **blocked** | Renderer and value types pinned hard (68 tests: exact dimensions, never-upscale, 16-bit that survives a round trip, alpha kept/flattened per choice, provable metadata cleanliness, collision never overwrites, WebP a real RIFF/WEBP container). `MuseExportDriveTests` is WRITTEN and could not RUN — see below |
+| P29 | **General image export** (format · quality · depth · resize · background · presets) | `ExportFormatTests`, `ExportResizeTests`, `ImageExportRenderTests`, `ExportModelEstimateTests`, `ExportPresetStoreTests`, `SocialCropMathTests`, `OutputRenderTests` | 2026-08-02 (3 review rounds) | ✅ **driven 2026-08-02** | 72 unit tests + `MuseExportDriveTests` ×7, all green in the running app: card opens IN FRONT of the viewer and the editor, typing a size commits, the estimate resolves to a real byte count, the dropdown offers the formats and not the cut platforms, a social preset states its output size. Export itself stops at the powerbox panel — the bytes past it are `ImageExportRenderTests`' job |
 | — | Migration chain v13→v23 | `MigrationChainTests` + 8 per-migration files | 2026-08-01 | ✅ replayed on real data | Pure DDL, O(1) at launch, endpoint pinned at v23. **Export added none** — presets are `AppSettings` JSON |
 
 ---
@@ -411,17 +411,26 @@ passing" had meant nothing at all.
   the formats and no longer offers the cut platforms, and that a social preset
   states its output size.
 
-  **It has never been executed — the Mac's SCREEN WAS LOCKED.** Every XCUITest
-  fails at runner init with `LocalAuthentication Code=-4 "System authentication
-  is running."`, which reads like a stray dialog and isn't: it is the login
-  window, and `CGSessionCopyCurrentDictionary()` confirmed
-  `CGSSessionScreenIsLocked = 1`. XCUITest cannot drive a GUI through the lock
-  screen, so this blocks the whole UI target, not just these tests — the
-  previously-passing `MuseSurfaceDriveTests` fails identically. Killing
-  `coreautha` does NOT help; that agent only presents the prompt the lock screen
-  asks for. **Unlock the Mac and re-run — there is nothing to fix in the code.**
-  Worth knowing for any future remote session: a locked screen means no GUI
-  verification, full stop.
+  **Ran 2026-08-02, all seven green.** Two lessons from the first run, both
+  about the TEST rather than the app.
+
+  A locked screen blocks the whole UI target. Every XCUITest fails at runner
+  init with `LocalAuthentication Code=-4 "System authentication is running."`,
+  which reads like a stray dialog and isn't — it's the login window, confirmed
+  by `CGSSessionScreenIsLocked = 1`. Killing `coreautha` does nothing; that
+  agent only presents what the lock screen asks for. No GUI verification is
+  possible remotely on a locked Mac, full stop.
+
+  Then three of seven failed on the first real run, and none of the three meant
+  the app was broken. Rows built with `.accessibilityElement(children:
+  .combine)` — the estimate and the social size row — publish ONE element whose
+  *value* is the merged `"Est. file size, ≈128 KB"`, so
+  `staticTexts["Est. file size"]` finds nothing. Combining is right for
+  VoiceOver, so the assertions moved to matching on element values.
+  `ExportModelEstimateTests` was added to settle it: it drives `ExportModel`
+  directly and proved the estimate chain was fine before any test was touched,
+  which is the check that stops "fix the test until it passes" from hiding a
+  real fault.
 
   The card also deliberately stops SHORT of pressing Export: that opens the
   sandbox powerbox folder panel, which is out-of-process and unreliable to

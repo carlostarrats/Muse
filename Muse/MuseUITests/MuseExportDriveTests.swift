@@ -91,6 +91,29 @@ final class MuseExportDriveTests: XCTestCase {
         Thread.sleep(forTimeInterval: 1.5)
     }
 
+    /// Every static text's LABEL and VALUE.
+    ///
+    /// Rows built with `.accessibilityElement(children: .combine)` — the
+    /// estimate and the social size row — publish ONE element whose *value* is
+    /// the merged "Est. file size, ≈128 KB". Asserting on `staticTexts["Est.
+    /// file size"]` therefore finds nothing, which is what the first version of
+    /// these tests did: three failures that were all this, and none of which
+    /// meant the app was broken. Combining is right for VoiceOver (one fact,
+    /// read once), so the test moves, not the app.
+    private func staticTextStrings() -> [String] {
+        var out: [String] = []
+        for i in 0..<app.staticTexts.count {
+            let e = app.staticTexts.element(boundBy: i)
+            if !e.label.isEmpty { out.append(e.label) }
+            if let v = e.value as? String, !v.isEmpty { out.append(v) }
+        }
+        return out
+    }
+
+    private func anyStaticText(containing needle: String) -> Bool {
+        staticTextStrings().contains { $0.contains(needle) }
+    }
+
     /// The card is up when its own title and its Export button are both there.
     private func exportCardIsOpen() -> Bool {
         app.staticTexts["Export"].exists && app.buttons["Export…"].exists
@@ -117,7 +140,7 @@ final class MuseExportDriveTests: XCTestCase {
         // The controls the rebuild added, all of which are format-branch only.
         XCTAssertTrue(app.staticTexts["Quality"].exists, "no Quality control")
         XCTAssertTrue(app.staticTexts["Size"].exists, "no Size control")
-        XCTAssertTrue(app.staticTexts["Est. file size"].exists,
+        XCTAssertTrue(anyStaticText(containing: "Est. file size"),
                       "no estimated size readout")
 
         app.typeKey(.escape, modifierFlags: [])
@@ -227,19 +250,20 @@ final class MuseExportDriveTests: XCTestCase {
         XCTAssertTrue(menu("File", "Export…"), "File ▸ Export… unavailable")
         waitForExportCard("the export card never appeared")
 
-        // The preview decodes, then the estimate debounces 180ms behind it.
+        // The preview has to decode first, then the estimate debounces 180ms
+        // behind it, so this polls rather than reading once.
         var text = ""
-        let deadline = Date().addingTimeInterval(15)
+        let deadline = Date().addingTimeInterval(20)
         while Date() < deadline {
-            let candidates = app.staticTexts.allElementsBoundByIndex
-                .map(\.label)
-                .filter { $0.hasPrefix("≈") }
-            if let first = candidates.first { text = first; break }
+            if let found = staticTextStrings().first(where: { $0.contains("≈") }) {
+                text = found
+                break
+            }
             Thread.sleep(forTimeInterval: 0.5)
         }
         snap("07-estimate")
         XCTAssertFalse(text.isEmpty,
-                       "the estimated size never resolved — still showing the placeholder")
+                       "the estimate never resolved — the readout still shows its placeholder")
         XCTAssertTrue(text.contains("B"), "estimate '\(text)' carries no byte unit")
 
         app.typeKey(.escape, modifierFlags: [])
@@ -298,11 +322,10 @@ final class MuseExportDriveTests: XCTestCase {
         Thread.sleep(forTimeInterval: 2)
         snap("10-instagram-selected")
 
-        XCTAssertTrue(app.staticTexts["Size"].exists,
+        XCTAssertTrue(anyStaticText(containing: "Size"),
                       "a social preset states no output size")
-        let statesPixels = app.staticTexts.allElementsBoundByIndex
-            .contains { $0.label.contains("px") }
-        XCTAssertTrue(statesPixels, "no pixel dimensions shown for the platform preset")
+        XCTAssertTrue(anyStaticText(containing: "px"),
+                      "no pixel dimensions shown for the platform preset")
 
         app.typeKey(.escape, modifierFlags: [])
         Thread.sleep(forTimeInterval: 1)
