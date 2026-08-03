@@ -180,6 +180,10 @@ final class ThumbnailCache: ObservableObject {
             .appendingPathComponent("Muse", isDirectory: true)
             .appendingPathComponent("ThumbnailCache", isDirectory: true)
         try? FileManager.default.createDirectory(at: diskRoot, withIntermediateDirectories: true)
+        // Before anything reads or writes a tile: drop entries written in an
+        // older pixel format, so a re-keyed cache doesn't sit on the cap as
+        // dead weight.
+        Self.resetCacheFormatIfNeeded(in: diskRoot)
     }
 
     /// Synchronous memory-cache peek — no disk read, no generation. Lets the
@@ -394,8 +398,12 @@ final class ThumbnailCache: ObservableObject {
     /// upgrading library keeps serving the 8-bit PNGs it already has, and the
     /// HDR work is invisible to every existing user — the grid would stay flat
     /// while the hero went HDR, which is precisely the mismatch this feature
-    /// exists to remove. Costs a one-time lazy regeneration of the cache.
-    private nonisolated static let cacheFormatVersion = 2
+    /// exists to remove.
+    ///
+    /// **A key change is not a migration** — see `resetCacheFormatIfNeeded`.
+    /// Bumping this alone ORPHANS every existing file rather than removing it,
+    /// and orphans still count against the 2 GB cap.
+    nonisolated static let cacheFormatVersion = 2
 
     #if DEBUG
     /// Test seam — `cacheKey` is private and must stay that way (the key
@@ -420,6 +428,42 @@ final class ThumbnailCache: ObservableObject {
     }
 
     nonisolated static let cacheFileExtensions = ["heic", "png"]
+
+    // MARK: - Format reset
+
+    /// Marker file naming the format the cache on disk was written in.
+    nonisolated static let formatMarkerName = ".format-version"
+    nonisolated static var cacheFormatMarker: String { String(cacheFormatVersion) }
+
+    nonisolated static func needsFormatReset(marker: String?) -> Bool {
+        marker != cacheFormatMarker
+    }
+
+    /// Delete every cached thumbnail whose format predates the current one.
+    ///
+    /// THE BUG THIS FIXES (found in the running app, 2026-08-03): bumping
+    /// `cacheFormatVersion` re-keys the cache, which makes every existing file
+    /// unreachable — but unreachable is not gone. Measured on a real library,
+    /// 11,794 of 11,833 files were dead v1 keys holding the FULL 2 GB cap, so
+    /// the whole library had to regenerate into a cache with no free space.
+    /// The grid came up empty and stayed that way.
+    ///
+    /// Wiping is right rather than clever here: the cache is disposable by
+    /// definition, it refills lazily on demand, and the alternative (keeping
+    /// SDR entries and re-deriving which sources are HDR) costs a header read
+    /// per tile forever to save a one-time rebuild.
+    nonisolated static func resetCacheFormatIfNeeded(in root: URL) {
+        let fm = FileManager.default
+        let markerURL = root.appendingPathComponent(formatMarkerName)
+        let marker = try? String(contentsOf: markerURL, encoding: .utf8)
+        guard needsFormatReset(marker: marker) else { return }
+        if let entries = try? fm.contentsOfDirectory(atPath: root.path) {
+            for entry in entries where cacheFileExtensions.contains((entry as NSString).pathExtension) {
+                try? fm.removeItem(at: root.appendingPathComponent(entry))
+            }
+        }
+        try? Data(cacheFormatMarker.utf8).write(to: markerURL, options: .atomic)
+    }
 
     private nonisolated func diskPath(for key: String, isHDR: Bool) -> URL {
         Self.diskPath(in: diskRoot, key: key, isHDR: isHDR)

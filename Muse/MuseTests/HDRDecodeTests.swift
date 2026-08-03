@@ -34,6 +34,47 @@ final class HDRDecodeTests: XCTestCase {
         XCTAssertFalse(HDRDecode.info(url: missing).isHDR)
     }
 
+    // MARK: - Headroom from properties
+
+    /// The fast path: a real iPhone gain-map HEIC declares its own headroom,
+    /// measured at 8.0 on the owner's library. Reading it beats probing the
+    /// auxiliary data — cheaper (~1 ms vs ~3 ms per file, which the grid pays
+    /// per tile) and accurate, where the probe could only assume a flat 4.0.
+    func testDeclaredHeadroomIsUsedVerbatim() {
+        let info = HDRDecode.info(properties: ["Headroom" as CFString: NSNumber(value: 8.0)])
+        XCTAssertEqual(info.headroom, 8.0, accuracy: 0.001)
+        XCTAssertTrue(info.isHDR)
+    }
+
+    func testDeclaredHeadroomOfOneIsSDR() {
+        XCTAssertFalse(
+            HDRDecode.info(properties: ["Headroom" as CFString: NSNumber(value: 1.0)]).isHDR)
+    }
+
+    func testPQProfileWithoutADeclaredHeadroomStillReadsAsHDR() {
+        let info = HDRDecode.info(
+            properties: [kCGImagePropertyProfileName: "Rec. ITU-R BT.2100-2 PQ" as CFString])
+        XCTAssertTrue(info.isHDR)
+    }
+
+    func testAnOrdinaryProfileIsSDR() {
+        XCTAssertFalse(
+            HDRDecode.info(properties: [kCGImagePropertyProfileName: "sRGB IEC61966-2.1" as CFString])
+                .isHDR)
+    }
+
+    /// A garbage value must not become a headroom. NaN through the comparison
+    /// would make `isHDR` false anyway, but an infinite one would sail through
+    /// and then divide the tone map by infinity.
+    func testNonFiniteHeadroomIsIgnored() {
+        XCTAssertFalse(
+            HDRDecode.info(properties: ["Headroom" as CFString: NSNumber(value: Double.infinity)])
+                .isHDR)
+        XCTAssertFalse(
+            HDRDecode.info(properties: ["Headroom" as CFString: NSNumber(value: Double.nan)])
+                .isHDR)
+    }
+
     // MARK: - Decode
 
     func testDecodePreservesValuesAboveOne() throws {

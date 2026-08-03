@@ -78,33 +78,39 @@ nonisolated enum HDRDecode {
     }
 
     static func info(source: CGImageSource) -> HDRInfo {
-        // A gain map is stored as auxiliary image data, so its presence is the
-        // signal — checked before the profile, because a gain-map HEIC's BASE
-        // image is ordinary SDR and would otherwise read as an SDR file.
-        if let headroom = gainMapHeadroom(source: source) {
-            return HDRInfo(headroom: headroom)
-        }
-        // No gain map, but the base image may itself be PQ or HLG.
         guard let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)
                 as? [CFString: Any] else { return .sdr }
+        return info(properties: props)
+    }
+
+    /// Split out from the source so it is a pure function over a dictionary —
+    /// testable without a file, and reusable by any caller that already read
+    /// the properties (the thumbnail path reads them for the decode budget, so
+    /// HDR detection there costs nothing extra).
+    static func info(properties props: [CFString: Any]) -> HDRInfo {
+        // ImageIO exposes the file's own headroom on a gain-map capture. It is
+        // not a published constant, so it is read defensively and by name —
+        // but when present it is both CHEAPER and more accurate than the
+        // alternative. Measured on a real iPhone HEIC: this dictionary read is
+        // ~1 ms while `CGImageSourceCopyAuxiliaryDataInfoAtIndex` is ~3 ms
+        // (it copies the actual gain-map bytes), and the true value was 8.0
+        // where the aux probe could only assume a flat 4.0. Reading it per
+        // tile is what made the first cut of this expensive.
+        if let n = props["Headroom" as CFString] as? NSNumber {
+            let value = CGFloat(n.doubleValue)
+            if value.isFinite, value > 1.0 { return HDRInfo(headroom: value) }
+        }
+        // No headroom declared, but the base image may itself be PQ or HLG.
         if let profile = props[kCGImagePropertyProfileName] as? String,
            profile.contains("PQ") || profile.contains("HLG") || profile.contains("2100") {
             return HDRInfo(headroom: assumedGainMapHeadroom)
         }
+        // Deliberately NOT falling back to an auxiliary-data probe. A gain-map
+        // file that declares no headroom would be treated as SDR — which is
+        // exactly what Muse did before any of this, so the failure mode is
+        // "no HDR", never a wrong picture, and it isn't worth 3 ms on every
+        // tile in the grid to chase.
         return .sdr
-    }
-
-    private static func gainMapHeadroom(source: CGImageSource) -> CGFloat? {
-        var types: [CFString] = [kCGImageAuxiliaryDataTypeHDRGainMap]
-        if #available(macOS 15.0, *) {
-            types.append(kCGImageAuxiliaryDataTypeISOGainMap)
-        }
-        for type in types {
-            guard CGImageSourceCopyAuxiliaryDataInfoAtIndex(source, 0, type)
-                    as? [CFString: Any] != nil else { continue }
-            return assumedGainMapHeadroom
-        }
-        return nil
     }
 
     // MARK: - Decode
