@@ -83,13 +83,50 @@ final class EditSessionTests: XCTestCase {
         XCTAssertNil(s.displayImage)
     }
 
-    /// Preview NEVER decodes full-res: the proxy is the hero ladder's formula,
-    /// floored at 1600 and capped at 4096.
+    /// Preview NEVER decodes full-res: floored at 1600, capped at 4096.
     func testProxyMaxPixelIsBoundedBothWays() {
         XCTAssertEqual(EditSession.proxyMaxPixel(canvasLongEdge: 100, scale: 2), 1600)
         XCTAssertEqual(EditSession.proxyMaxPixel(canvasLongEdge: 100_000, scale: 2), 4096)
         XCTAssertEqual(EditSession.proxyMaxPixel(canvasLongEdge: 1000, scale: 2), 4096)
-        XCTAssertEqual(EditSession.proxyMaxPixel(canvasLongEdge: 500, scale: 2), 2500)
+        // 500 × 2 × 2.5 = 2500 → the rung ABOVE it. Was 2500 exactly, when the
+        // formula was continuous.
+        XCTAssertEqual(EditSession.proxyMaxPixel(canvasLongEdge: 500, scale: 2), 2560)
+    }
+
+    /// The point of the ladder: a live window resize must NOT change the proxy
+    /// on every pixel of drag, because each change costs a decode plus a full
+    /// edit-stack render. Only rung crossings may — so the cost of a drag is
+    /// bounded by the LADDER's length, never by the drag's.
+    func testProxyMaxPixelChangesAreBoundedByTheLadderNotTheDrag() {
+        // 800 samples across the whole usable canvas range.
+        let samples = stride(from: 100.0, through: 900.0, by: 1.0)
+            .map { EditSession.proxyMaxPixel(canvasLongEdge: $0, scale: 2) }
+        var changes = 0
+        for (a, b) in zip(samples, samples.dropFirst()) where a != b { changes += 1 }
+        XCTAssertLessThan(changes, EditSession.proxyLadder.count,
+                          "the proxy rebuilt \(changes) times across an 800-step drag; "
+                          + "with a ladder of \(EditSession.proxyLadder.count) rungs it can "
+                          + "cross at most \(EditSession.proxyLadder.count - 1)")
+    }
+
+    /// And within a rung it doesn't move at all.
+    func testProxyMaxPixelIsStableWithinARung() {
+        // 300pt × 2 × 2.5 = 1500, comfortably inside the 1600 rung.
+        let values = Set(stride(from: 300.0, through: 315.0, by: 1.0)
+            .map { EditSession.proxyMaxPixel(canvasLongEdge: $0, scale: 2) })
+        XCTAssertEqual(values, [1600])
+    }
+
+    /// Every rung is on the ladder, and the ladder only ascends — a
+    /// non-monotonic step would make a resize flip between two proxies.
+    func testProxyMaxPixelIsMonotonicAndOnTheLadder() {
+        var previous = 0
+        for edge in stride(from: 50.0, through: 2000.0, by: 5.0) {
+            let v = EditSession.proxyMaxPixel(canvasLongEdge: edge, scale: 2)
+            XCTAssertTrue(EditSession.proxyLadder.contains(v), "\(v) is not a ladder rung")
+            XCTAssertGreaterThanOrEqual(v, previous, "proxy size went DOWN as the canvas grew")
+            previous = v
+        }
     }
 }
 

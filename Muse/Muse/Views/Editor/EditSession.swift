@@ -230,16 +230,44 @@ final class EditSession: ObservableObject {
     /// NEVER decodes full-res: on an M1 Air a 60 MP full-res round trip per
     /// slider tick is the difference between an editor and a slideshow.
     static func proxyMaxPixel(canvasLongEdge: CGFloat, scale: CGFloat) -> Int {
-        min(max(Int(canvasLongEdge * scale * 2.5), 1600), 4096)
+        let wanted = CGFloat(canvasLongEdge * scale * 2.5)
+        return proxyLadder.first { CGFloat($0) >= wanted } ?? proxyLadder[proxyLadder.count - 1]
     }
+
+    /// Proxy sizes, quantized — the same lesson as `ThumbnailCache`'s hero
+    /// fallback ladder, for a different reason.
+    ///
+    /// This used to be a continuous `min(max(edge * scale * 2.5, 1600), 4096)`,
+    /// and `EditorView` rebuilds the proxy from a `.task(id: canvasSize)`. So
+    /// during a live window resize EVERY pixel of drag changed the target by a
+    /// few pixels, which cleared the `!=` guard in `updateCanvas` and kicked off
+    /// a fresh `renderOriginal` + `renderDraft` — a decode and a full
+    /// edit-stack render, per frame, at up to 4096px. `.task(id:)` cancels the
+    /// previous one, but the `Task.detached` inside doesn't check cancellation,
+    /// so a fast drag queued dozens of full renders that all ran to completion.
+    /// That is the jagged motion: the canvas wasn't slow to re-fit, it was
+    /// competing with its own backlog.
+    ///
+    /// On a ladder, a drag crosses a rung a handful of times at most; between
+    /// rungs the proxy is reused and resizing is pure geometry. The rungs are
+    /// close enough that the visible resolution never drops noticeably — the
+    /// proxy is already 2.5× the canvas.
+    nonisolated static let proxyLadder: [Int] = [1600, 2048, 2560, 3072, 4096]
 
     /// (Re)build the proxy for a new canvas size, then render the draft.
     func updateCanvas(canvasLongEdge: CGFloat, scale: CGFloat) async {
         let maxPixel = Self.proxyMaxPixel(canvasLongEdge: canvasLongEdge, scale: scale)
-        guard CGFloat(maxPixel) != proxyLongEdge else { return }
+        guard CGFloat(maxPixel) != proxyLongEdge else {
+            CanvasTrace.log("proxy       SKIP  edge=\(Int(canvasLongEdge)) rung=\(maxPixel) (unchanged)")
+            return
+        }
+        CanvasTrace.log("proxy       REBUILD edge=\(Int(canvasLongEdge)) "
+            + "\(Int(proxyLongEdge)) -> \(maxPixel)")
         proxyLongEdge = CGFloat(maxPixel)
         await renderOriginal(maxPixel: maxPixel)
         await renderDraft()
+        CanvasTrace.log("proxy       DONE rung=\(maxPixel) "
+            + "canvasExtent=\(tr(canvasImage?.extent ?? .zero))")
     }
 
     func renderDraft() async {

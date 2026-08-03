@@ -131,7 +131,40 @@ are the load-bearing reference artifacts.
 | **Review — Specs 01–07** | ✅ reviewed + fixed 2026-08-01 (7 rounds) | `new-product-build-1` |
 | Polish 29 — **General image export** (one card, two preset families: Format — Same-as-original/JPEG/PNG/TIFF 8&16-bit/HEIC/WebP — above Spec 07's 12 Social presets, plus saved presets; quality, resize with never-upscale, EXIF/location toggles; `ExportPipeline` shared with `SocialRender`; real `.tiff16` at last; WebP via a statically-linked `libwebp`, the app's **first bundled binary dependency**; no filename controls and **no overwrite, ever**) | 🚧 built + tested, **card not runtime-verified** | `feat/next-150` |
 | Editor UX pass — **Edit becomes the Preview page in a second mode** (shared cards/chrome/margins; zoom + pan + pinch in Edit, which had none; Side by Side actually renders; editor modals hoisted above the viewer; Scopes→Histogram, Looks→Styles, Insights, INFO dropped; versions folded into snapshots; Styles grid/list + Original + applied-preset detection; `PanelContrast` resolves every editor colour against WCAG AA) | ✅ merged 2026-08-02 (round-8 reviewed), unreleased | `testing-new-features` |
+| Polish 30 — **owner UI pass** (export readouts regrouped + `≈` dropped; social crop-drag removed for an automatic centred crop; aspect-lock fills when on; context-menu icons everywhere; smart collections finally draw their cover pile; window minimum + non-overlapping hero fit; blue edit badge; sidebar chevron takes the selection ink; pager hover; **live-resize work on both viewer stages** — Preview fixed, Edit improved 4× but NOT correct, see below). **Two features REMOVED on owner call: culling and the editor's reference photo.** | ✅ committed, unreleased | `feat/next-150` |
 
+> **The editor canvas's live resize is IMPROVED, NOT FIXED (2026-08-02).** The
+> Preview stage is correct now (its `displayRect` write on resize was animated
+> while the layout snapped — unanimated, it tracks the window edge). The EDIT
+> canvas is an `MTKView`, and its remaining ~3% of badly-sized frames during a
+> fast drag are structural: `autoResizeDrawable` owns `drawableSize` and updates
+> it AFTER notifying `drawableSizeWillChange`, so a frame drawn during a live
+> resize can render into the PREVIOUS surface, and the only hook that reliably
+> runs during a drag fires too early. **Four configurations were measured with a
+> real trace — the table is in `EditCanvasView.swift`; read it before touching
+> that file, and do not re-run those experiments.** The real fix is to size the
+> Metal view to the FITTED RECT the way Preview lays out its `Image` (its aspect
+> then never changes during a resize and `pixelScale` stops mattering), which
+> reworks zoom, pan and eyedropper hit-testing — **not approved, ask first**.
+> `Views/Editor/CanvasTrace.swift` is the TEMPORARY instrument that found it,
+> off unless `MUSE_CANVAS_TRACE=1`; delete it when the question is closed.
+>
+> **Two more features were DROPPED on owner review 2026-08-02, on `feat/next-150`:
+> culling (Spec 03) and the editor's reference photo (Spec 05).** Both are fully
+> deleted — stores, views, key hooks, badges, tests and 20 strings. Cancelled,
+> not gaps; do not re-file or re-add. **Culling**: marking rejects and trashing
+> them at Finish is what select + Move to Trash already does, and Muse's persona
+> is a generalist with a Downloads folder, not someone working a 2,000-frame
+> shoot. Note what went with it — the ONLY bulk keyboard rating path in the app
+> (the resolve card's "rate the keepers"); the grid still has no number-key
+> rating. Spec 03 deviation D8 (Escape must not end a cull session) is moot.
+> **Reference photo**: the editor's row was `isEnabled: referenceStore.url != nil`
+> with a tooltip reading "Right-click a photo in the grid → Use as Reference
+> Photo" — a permanently-disabled control advertising a gesture in another view.
+> Before/after and Side by Side cover comparison; "show me ones like this" is
+> already `similar:` search via right-click ▸ Find Similar Photos, which writes
+> a removable token into the real search field.
+>
 > The **Editor UX pass** and the two feature-removal commits before it were
 > merged to `main` on **2026-08-02** (fast-forward from `testing-new-features`),
 > reviewed in round 8 — see `docs/new-build/REVIEW-LENSES.md` and the 2026-08-02

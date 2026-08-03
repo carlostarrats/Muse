@@ -6,6 +6,149 @@ the durable rules + a compact index live in `CLAUDE.md`. Nothing here is
 load-bearing for a fresh session beyond what that index already surfaces;
 read an entry when you need the full "why" behind a specific change.
 
+### Owner UI pass + two feature removals — 2026-08-02 (on `feat/next-150`)
+
+Nine pieces of owner feedback against the running app, delivered as screenshots,
+then two features cut on the strength of the discussion they started.
+
+**The nine.**
+
+1. **Export readouts read as two unrelated things.** "Est. file size" and its
+   number sat at opposite ends of a 760pt card (`label · Spacer() · value`).
+   One `readout(_:_:)` helper now groups label and value with the slack after
+   them; applied to Est. file size, Size and Quality — the third wasn't flagged
+   but had the identical defect, and leaving it would have made the card
+   inconsistent.
+2. **The `≈` before the number is gone.** The row already says "Est."; the
+   comment claiming the character was load-bearing was arguing for saying the
+   same caveat twice. The estimate is still approximate and still measured the
+   same way.
+3. **The social crop drag is removed.** It nudged `state.center` by **5% of the
+   pointer's travel**, so the picture crawled behind the cursor — the owner's
+   "terrible in execution" is exactly right, and retuning the constant would
+   only have made a positioning control nobody asked for feel less bad. The crop
+   is centred, the preview shows the finished frame, and the caption says how
+   much it costs. `SocialCropMath` and `state.center/zoom` stay — the renderer
+   still consumes them, describing the centred rect.
+4. **Right-click menus have icons.** All-or-nothing per menu: every top-level
+   row in the grid's file and folder menus, plus Open / Reveal / Open With.
+   Submenu CONTENTS stay bare — a list of collection or tag names is names, not
+   actions. ("Export for Social…" was already "Export…" as of `75f8a53`; the
+   owner's screenshot predated it.)
+5. **Smart collections drew the grey "no pictures" placeholder** while their
+   sidebar count read 160. `CollectionStackCard.loadStack` called
+   `CollectionStore.alivePaths` (manual `collection_members` only) while the
+   COUNT came from `fetchAll`, which resolves smart rules — two queries, one
+   feature, contradicting each other on screen. Now `alivePathsResolving`.
+6. **The hero photo drew ON TOP of the info column** on a narrowed window. Two
+   causes, both fixed: the window had **no minimum size at all**, and
+   `fitRect`'s `max(120, …)` floor returned a 120pt box at x=40 regardless of
+   the space available. Minimum is now 720×480 and both edges of the fit box
+   are clamped to space that exists. Pinned by a sweep across widths × aspects.
+7. **The edit badge is accent blue**, not a black wash. `accentColor`, not the
+   mood-aware `ringColor` — that goes black on some moods, which is the thing
+   being fixed.
+8. **The sidebar disclosure chevron takes the selection ink.** Icon, label, pin
+   and count all switched on a selected row; the chevron was the one element
+   left grey on the blue fill (`.secondary` → the existing `secondaryStyle`).
+9. **The export pager arrows have a hover fill.** Own view, so one `@State`
+   can't light both. A disabled arrow stays dark — a hover cue on a control
+   that can't act is a promise it won't keep.
+
+**Culling: removed.** The owner's argument was that you can already select the
+photos you don't want and delete them. Mostly right, and the honest counterpoint
+was narrow: culling marked in BOTH directions, deferred every write to Finish,
+and — the only real one — its resolve card **star-rated every keeper in one
+pass**, the app's sole bulk keyboard rating path. The owner's read held: for a
+generalist managing a Downloads folder, a two-pass keep/reject rhythm with a
+session, a HUD and a resolve card is ceremony around select-and-delete. Deleted:
+`CullStore`, `CullSummary`, `CullHUD`, `CullResolveCard`, the grid's K/X/U hook
+and bottom-leading badge, `PageScrollCatcher.onCullKey`,
+`CompareKeyCatcher.onCharacter`, `AppState.cullResolveShown`, the compare pane's
+marks, the UI test, and 20 strings. Compare, ratings and peaking are untouched.
+**Note the gap this leaves: there is still no number-key rating on the grid.**
+Spec 03 deviation D8 is moot.
+
+**Reference photo: removed.** The owner called it "buried in a right click …
+useless and detached", and the code was worse than that: the editor's Reference
+Photo row is `isEnabled: referenceStore.url != nil`, so it rendered permanently
+disabled with a tooltip reading *"Right-click a photo in the grid → Use as
+Reference Photo"* — a dead control advertising a gesture in a different view.
+The owner's instinct ("the ideal would be to search for images in the actual
+search") is already shipped and was simply never connected to this: right-click
+▸ **Find Similar Photos** runs `AppState.findSimilar`, which stashes the CLIP
+vector and writes `similar:<handle>` **into the real search field**, where it
+appears as a removable chip like any other token. Deleted `EditReferenceStore`,
+the editor pane and split, the tool row and the menu item.
+
+**The editor canvas resize, and four measured attempts at it.** The owner
+reported the Edit canvas warping and lagging on a live window resize (Preview
+was fixed separately, in `HeroStage` — its `displayRect` write on resize was
+animated, so the layout snapped to the new viewport while the transform still
+described the old one). Edit is a different mechanism entirely: an `MTKView`
+with `isPaused` + `enableSetNeedsDisplay`, spanning the window and re-fitting
+internally so zoom can push the photo under the panels.
+
+Two real fixes landed first and stand on their own:
+
+- **The proxy was rebuilt on every pixel of drag.** `EditorView` rebuilds from
+  `.task(id: canvasSize)`, and `proxyMaxPixel` was continuous, so each frame
+  cleared the `!=` guard and started a fresh decode + full edit-stack render at
+  up to 4096px. `.task(id:)` cancels, but the `Task.detached` inside never checks
+  cancellation, so a fast drag queued dozens that all ran. Now quantized to
+  `proxyLadder` [1600, 2048, 2560, 3072, 4096] with a 120ms debounce; a drag's
+  cost is bounded by the ladder's length, not the drag's. Three tests pin it.
+- **Presentation was out of sync with layout.** `presentsWithTransaction` (with
+  the required commit → `waitUntilScheduled` → `present` order), implicit layer
+  animations on bounds/position nulled, and `contentsGravity = .resizeAspect` so
+  a stale texture scales uniformly instead of stretching per-axis — the per-axis
+  stretch WAS the warp.
+
+Then the remaining artifact was chased by GUESS three times and each guess was
+wrong, so it was **traced instead** (`Views/Editor/CanvasTrace.swift`, off unless
+`MUSE_CANVAS_TRACE=1`). The trace answered it in one drag: `drawable.texture` is
+STALE relative to `view.bounds` during a resize — 2572px wide while the view was
+already 775pt — and since `pixelScale` is `texture.width / bounds.width` it came
+out **3.32 instead of 2.0**, inflating the point→pixel inset conversion so the
+photo was fitted into 382×478 instead of ~1080 wide. **67 of 114 frames.** That
+was the shrink-and-pop, and it also explains why an earlier "fix" that forced
+`pixelScale` to the backing scale made things WORSE: it corrected the scale while
+still rendering into a stale-sized surface, so every frame came out uniformly
+~60% too small instead of just some of them.
+
+Four configurations, all measured against real drags:
+
+| | wrong-sized frames | outcome |
+|---|---|---|
+| 1. draw directly in `drawableSizeWillChange` | 59%, worst 66% off | shrink-and-pop |
+| 2. + `releaseDrawables()` + `view.draw()` | 16% (>1%), 3% badly | **shipped** |
+| 3. `needsDisplay` instead of drawing | 0% | canvas FROZE mid-drag (32 frames/session) |
+| 4. `autoResizeDrawable = false`, own the size | correct by construction | nothing rendered at all |
+
+(2) ships. **It is better, not correct** — the table lives in `EditCanvasView`
+so nobody re-runs the same four experiments. The root cause is structural:
+`autoResizeDrawable` owns `drawableSize` and updates it AFTER notifying the
+delegate, so any frame drawn during a live resize risks the previous surface,
+while the only hook that reliably runs during a drag fires too early. (3) proves
+the sizes can be made right; (4) proves ownership is the lever. The real fix is
+to size the Metal view to the FITTED RECT the way Preview lays out its `Image`,
+so the view's aspect never changes during a resize and `pixelScale` stops
+mattering — but that reworks zoom, pan and eyedropper hit-testing, and the owner
+has not approved it. **Residual: ~3% of frames during a fast drag settle a beat
+late.**
+
+**Lesson worth keeping:** three rounds were spent on plausible theories that
+each cost a build, a test run and an owner trial. The trace cost one build and
+answered it immediately — and disproved the theory that had felt most obviously
+right. Instrument before theorising about anything with a GPU or a run loop in it.
+
+**Verification.** Debug build clean; `MuseTests` 1,860 green (was 1,865 — the
+five `CullSummaryTests` went with the feature, +2 new `ViewerGeometryTests`);
+`audit-invariants.sh` 14/14; localization 0 untranslated across 1,059 keys after
+pruning 20 orphans. The catalog was pruned by TEXT surgery, not a
+`json.load`/`json.dump` round-trip — the round-trip re-sorts every key and turns
+a 20-line removal into a 2,900-line diff.
+
 ### Editor UX pass — 2026-08-02 (on `testing-new-features`, `504e7a7` + `8694ae1`)
 
 A long owner-driven session on the hero viewer's **Edit** mode. It began as

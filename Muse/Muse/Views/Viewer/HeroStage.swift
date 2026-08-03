@@ -352,7 +352,27 @@ struct HeroStage: View {
                     displayRect = fitRect
                 }
             } else {
-                withAnimation(HeroFlightMotion.settling(since: openedAt)) { displayRect = fitRect }
+                // A live window resize is TRACKING, not a flight — write the
+                // rect with animation explicitly off.
+                //
+                // The layout below takes `base = fitRect` directly, so the
+                // frame and position snap to the new viewport the instant the
+                // window moves, while `FlightEffect` draws `displayRect`
+                // RELATIVE to that base. Animating this write therefore left
+                // the transform describing the OLD size for the length of the
+                // curve: the window and the rest of the UI moved, the photo
+                // stayed big, then sprang to catch up — and because a drag
+                // emits a resize per frame, each one restarted the curve, so
+                // it lagged the whole way and overshot at the end (owner
+                // report). Unanimated, base and displayRect stay equal and the
+                // photo tracks the edge exactly.
+                //
+                // `disablesAnimations` rather than a bare assignment: a resize
+                // can arrive inside an ambient transaction, and one inherited
+                // animation is all it takes to bring the lag back.
+                var t = Transaction()
+                t.disablesAnimations = true
+                withTransaction(t) { displayRect = fitRect }
             }
         }
         .task(id: url) { await loadFullRes() }

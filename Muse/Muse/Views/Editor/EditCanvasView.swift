@@ -57,6 +57,36 @@ struct EditCanvasView: NSViewRepresentable {
         view.autoResizeDrawable = true
         view.clearColor = MTLClearColorMake(0, 0, 0, 0)
         view.layer?.isOpaque = false
+        // RESIZE SYNC. Without these three the canvas visibly lagged a live
+        // window resize: the view's bounds change immediately, but the drawable
+        // presented on its own schedule, so for a frame or two the PREVIOUS
+        // frame's texture was stretched to the new bounds by the layer — the
+        // photo squashed, then snapped back once the next render landed. Owner
+        // report: "the image size is being redrawn".
+        //
+        // `presentsWithTransaction` is the documented fix: it takes the
+        // drawable's presentation out of the GPU's schedule and puts it in the
+        // CoreAnimation transaction that is already committing the new bounds,
+        // so bounds and pixels land in the SAME frame. It changes the present
+        // call — see `draw(in:)`, which must commit, wait until scheduled, and
+        // then present on the main thread. Don't set this without that.
+        view.presentsWithTransaction = true
+        // Implicit layer animations on a Metal layer interpolate the BOUNDS
+        // while the texture inside doesn't, which is the stretch above with a
+        // duration attached.
+        view.layer?.actions = ["bounds": NSNull(), "position": NSNull(),
+                               "contents": NSNull()]
+        // The backstop for any frame that still slips through: a Metal layer's
+        // default `contentsGravity` is `.resize`, which stretches the last
+        // texture to whatever the new bounds are — INDEPENDENTLY in x and y.
+        // That is the warp: drag a corner and the width lands first while the
+        // height is still catching up, so for a frame or two the photo is a
+        // different shape rather than a different size. `.resizeAspect` scales
+        // the stale texture UNIFORMLY, so the worst case degrades from "wrong
+        // shape" to "very slightly wrong size" — which is what the Preview
+        // stage does, since a SwiftUI `Image` can only ever scale uniformly
+        // inside a frame it fits into.
+        view.layer?.contentsGravity = .resizeAspect
         view.delegate = context.coordinator
         return view
     }
@@ -87,6 +117,7 @@ struct EditCanvasView: NSViewRepresentable {
             if onScroll?(event) == true { return }
             super.scrollWheel(with: event)
         }
+
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -111,21 +142,120 @@ struct EditCanvasView: NSViewRepresentable {
         /// place on a Retina drawable.
         private var pixelScale: CGFloat = 2
 
-        func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
+        /// Draw the new size NOW, in the resize's own pass.
+        ///
+        /// This was empty. With `isPaused` + `enableSetNeedsDisplay` the view
+        /// only redraws when something marks it dirty, so a drawable that grew
+        /// with the window kept showing the old frame — stretched to fit —
+        /// until the next unrelated update happened to request a draw. Drawing
+        /// synchronously here means every intermediate size of a live drag gets
+        /// its own correctly-fitted frame.
+        func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
+            CanvasTrace.log("willChange  passed=\(tr(size)) "
+                + "bounds=\(tr(view.bounds.size)) "
+                + "view.drawableSize=\(tr(view.drawableSize)) "
+                + "layerDrawable=\(tr((view.layer as? CAMetalLayer)?.drawableSize ?? .zero)) "
+                + "contentsScale=\(view.layer?.contentsScale ?? -1)")
+            guard size.width >= 1, size.height >= 1 else { return }
+            // WILL change — so the layer may not carry the new size yet, and
+            // `view.currentDrawable` would hand back a texture of the OLD size.
+            // Rendering a correctly-fitted frame into an old-sized surface and
+            // letting the layer stretch it to the new bounds is the warp itself,
+            // manufactured by the very code meant to prevent it. Setting the
+            // layer's `drawableSize` first makes the next `currentDrawable` the
+            // right size; it's what `autoResizeDrawable` is about to do anyway,
+            // so this only makes the ordering explicit rather than assumed.
+            // ASK for a frame; do not render one here.
+            //
+            // "willChange" is literal: `autoResizeDrawable` means MTKView owns
+            // `drawableSize` and recomputes it from bounds AFTER it notifies this
+            // delegate, so at THIS instant the layer's drawable is still the
+            // previous size. Two rounds were spent rendering here anyway —
+            // first calling `draw(in:)` directly, then setting
+            // `metalLayer.drawableSize` and calling `view.draw()` — and the trace
+            // showed the assignment silently ignored (the view owns it) and the
+            // texture still the old size in every one of those frames. Rendering
+            // a correctly-fitted image into a surface of the wrong size is what
+            // produced the shrink-and-pop: `pixelScale` is `texture.width /
+            // bounds.width`, so a stale texture inflated it to 3.3 instead of
+            // 2.0 and the photo was fitted into a third of its proper width.
+            //
+            guard size.width >= 1, size.height >= 1 else { return }
+            // Release the pooled old-size drawables and run the view's own draw
+            // cycle. This does NOT fully fix the size — `autoResizeDrawable`
+            // owns `drawableSize` and updates it after this call, so a minority
+            // of frames still render into the previous size. See the log of
+            // attempts in the staleness guard below; this is the best measured
+            // configuration, not a correct one.
+            view.releaseDrawables()
+            view.draw()
+        }
 
         func draw(in view: MTKView) {
             guard let image, let drawable = view.currentDrawable,
                   let commandBuffer = commandQueue?.makeCommandBuffer()
             else { return }
 
-            let drawableSize = view.drawableSize
+            // The DRAWABLE's own texture, not `view.drawableSize`. They agree
+            // in steady state, but `drawableSizeWillChange` fires while the
+            // change is still in flight, and rendering a frame sized from a
+            // property that hasn't caught up puts a correctly-fitted image
+            // into a differently-sized surface — a stretch, which is the
+            // artifact this whole path exists to remove. The texture is the
+            // surface actually being written, so it cannot disagree.
+            let drawableSize = CGSize(width: drawable.texture.width,
+                                      height: drawable.texture.height)
             guard drawableSize.width >= 1, drawableSize.height >= 1 else { return }
+            // Derived from the drawable and the view's own bounds, NOT from the
+            // layer's `contentsScale`.
+            //
+            // Tried the latter on 2026-08-02, on the theory that `bounds` is
+            // stale during `drawableSizeWillChange` and so this ratio must be
+            // wrong mid-drag. The owner reported the result as worse, with MORE
+            // delay, and it was reverted. The theory was wrong somewhere — most
+            // likely the two do agree here (MTKView derives `drawableSize` from
+            // `bounds × contentsScale`, so the ratio just gives the scale back),
+            // which means the substitution changed nothing about correctness
+            // and only removed the one value that tracks the drawable actually
+            // being drawn into. Don't re-try it without a measurement showing
+            // the two genuinely disagree during a resize.
             pixelScale = view.bounds.width > 0 ? drawableSize.width / view.bounds.width : 2
             // Composited over a TRANSPARENT full-drawable rect. Metal recycles
             // drawables, and CI writes only the pixels its result covers — so a
             // frame that shrinks (zoom out, Fit, or coming back from hidden
             // controls) left the previous, larger frame's pixels around the new
             // one: the photo appeared duplicated at the edges.
+            let stale = CanvasTrace.enabled && {
+                let scale = view.layer?.contentsScale ?? 2
+                return abs(view.bounds.width * scale - drawableSize.width) > 1
+                    || abs(view.bounds.height * scale - drawableSize.height) > 1
+            }()
+            // Staleness is REPORTED (in the trace only), not acted on.
+            //
+            // Four configurations were measured on 2026-08-02, against a trace
+            // of real drags:
+            //   1. draw directly in willChange   — 59% of frames wrong-sized,
+            //      worst 66% off. The shrink-and-pop.
+            //   2. + assign metalLayer.drawableSize, releaseDrawables, view.draw()
+            //      — 16% wrong by >1%, 3% badly wrong. Owner: "much better".
+            //      The assignment itself is ignored (the view owns it).
+            //   3. mark needsDisplay instead of drawing — 0% wrong, but a live
+            //      drag never services needsDisplay, so the canvas FROZE mid-drag
+            //      (32 frames in a session). Owner: "worse".
+            //   4. autoResizeDrawable = false + own the size in setFrameSize —
+            //      correct by construction, but nothing rendered at all.
+            // (2) ships. Skipping the stale frames on top of it was not tried
+            // separately and would leave the last good frame up, uniformly
+            // scaled by `.resizeAspect`; it may be worth measuring, but not by
+            // guessing. The remaining 3% is the residual settle.
+            CanvasTrace.log((stale ? "draw STALE  " : "draw        ") + "texture=\(tr(drawableSize)) "
+                + "bounds=\(tr(view.bounds.size)) "
+                + "view.drawableSize=\(tr(view.drawableSize)) "
+                + "pixelScale=\(String(format: "%.3f", pixelScale)) "
+                + "imageExtent=\(tr(image.extent)) "
+                + "free=\(tr(freeRect(in: drawableSize))) "
+                + "fitted=\(tr(fit(image, in: drawableSize).extent)) "
+                + "zoom=\(String(format: "%.3f", zoom))")
             let full = CGRect(origin: .zero, size: drawableSize)
             let composited = overlays(on: composite(image, in: drawableSize), size: drawableSize)
                 .cropped(to: full)
@@ -139,8 +269,15 @@ struct EditCanvasView: NSViewRepresentable {
             // Returns a CIRenderTask for callers that want to await timing; the
             // canvas just presents the drawable, so discard it explicitly.
             _ = try? RenderContexts.preview.startTask(toRender: composited, to: destination)
-            commandBuffer.present(drawable)
+            // `presentsWithTransaction` (set in makeNSView) forbids
+            // `commandBuffer.present(drawable)`: presentation has to happen on
+            // THIS thread, inside the CoreAnimation transaction that is
+            // committing the view's new bounds, or the pixels arrive a frame
+            // after the geometry. Commit → wait until scheduled → present is
+            // the required order.
             commandBuffer.commit()
+            commandBuffer.waitUntilScheduled()
+            drawable.present()
         }
 
         /// Fit into the drawable, centred, plus the wipe composite when one is

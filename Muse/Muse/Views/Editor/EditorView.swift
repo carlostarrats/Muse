@@ -38,7 +38,6 @@ struct EditorView: View {
     @State private var wipeImage: CIImage?
 
     // Spec 05
-    @ObservedObject private var referenceStore = EditReferenceStore.shared
     /// Read only to name what's applied in the collapsed STYLES heading.
     @ObservedObject private var presetStore = EditPresetStore.shared
     @ObservedObject private var lutStore = LutStore.shared
@@ -48,7 +47,6 @@ struct EditorView: View {
     /// and holding a stale one would hatch the wrong pixels.
     @State private var zoneMask: CIImage?
     @State private var zoneMaskStack: EditStack?
-    @State private var referenceImage: CGImage?
     @State private var hoveredEV: Double?
     @State private var targetCommitTask: Task<Void, Never>?
     /// Feedback notes for the editor's Info tab — the same deterministic rules
@@ -184,6 +182,19 @@ struct EditorView: View {
         }
         .task(id: canvasSize) {
             guard canvasSize.width > 0 else { return }
+            // Settle before rebuilding. `.task(id:)` cancels and restarts on
+            // every canvas change, so a sleep at the top IS the debounce: while
+            // a drag is in flight each new size cancels the pending rebuild
+            // here, at the await, BEFORE any decode or render has been started.
+            // Without it the proxy rebuild raced the drag — see the ladder note
+            // on `EditSession.proxyMaxPixel`. Between rungs of that ladder this
+            // is a no-op anyway; the pairing matters when a drag crosses one.
+            CanvasTrace.log("task        canvasSize=\(tr(canvasSize)) (debounce start)")
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else {
+                CanvasTrace.log("task        cancelled during debounce")
+                return
+            }
             await session.updateCanvas(canvasLongEdge: max(canvasSize.width, canvasSize.height),
                                        scale: 2)
         }
@@ -193,7 +204,10 @@ struct EditorView: View {
             // one would hatch pixels the gains no longer act on.
             zoneMask = nil
         }
-        .onAppear { updateStatsVisibility() }
+        .onAppear {
+            CanvasTrace.begin("editor opened")
+            updateStatsVisibility()
+        }
         .onDisappear {
             chromeAnimation?.cancel()
             session.cancelCanvasAnimation()
@@ -480,49 +494,12 @@ struct EditorView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// The canvas, optionally split with the pinned reference photo. The
-    /// reference is hidden while a before/after compare is running: two
-    /// simultaneous comparisons is one too many to reason about.
-    @ViewBuilder
-    private var canvasRegion: some View {
-        if referenceStore.paneVisible, let refURL = referenceStore.url,
-           session.compareMode == .off {
-            HStack(spacing: 1) {
-                referencePane(url: refURL)
-                canvas
-            }
-        } else {
-            canvas
-        }
-    }
-
-    private func referencePane(url: URL) -> some View {
-        ZStack(alignment: .bottomLeading) {
-            if let referenceImage {
-                Image(decorative: referenceImage, scale: 1)
-                    .resizable().aspectRatio(contentMode: .fit)
-            } else {
-                Color.clear
-            }
-            Text(url.lastPathComponent)
-                .font(theme.labelFont)
-                .foregroundStyle(theme.textPrimary)
-                .lineLimit(1).truncationMode(.middle)
-                .padding(theme.spacingS)
-                .background(theme.panelFill, in: RoundedRectangle(cornerRadius: theme.radius))
-                .padding(theme.spacingM)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task(id: url) {
-            // Rendered THROUGH ITS OWN edit stack: a reference carrying Muse
-            // edits has to look the way it looks everywhere else, or it isn't
-            // a reference. Fit-only — no zoom/pan sync in v1.
-            referenceImage = await Task.detached(priority: .userInitiated) { () -> CGImage? in
-                let stack = EditStackIndex.resolvedStack(for: url) ?? .fresh()
-                return EditRenderer.render(url: url, stack: stack, maxPixel: 1024)
-            }.value
-        }
-    }
+    /// The canvas. Was a split that could pair the canvas with a pinned
+    /// "reference photo"; that feature is gone (2026-08-02) — the only way to
+    /// arm it was a right-click in a different view, so in the editor it read
+    /// as a permanently-disabled control. Before/after and Side by Side cover
+    /// comparison, and Find Similar Photos covers "show me ones like this".
+    private var canvasRegion: some View { canvas }
 
     /// The floating EV/zone readout shown while targeting on the canvas.
     @ViewBuilder
@@ -580,7 +557,7 @@ struct EditorView: View {
         }
     }
 
-    /// Compare, zebras, reference and reset — the TOOLS card in the left panel.
+    /// Compare, zebras and reset — the TOOLS card in the left panel.
     ///
     /// This was a capsule of eight unlabelled glyphs floating under the canvas.
     /// It was too small to hit comfortably and gave no clue what any of it did,
@@ -647,15 +624,6 @@ struct EditorView: View {
                     Button { showZebraThresholds = true } label: { Text("Zebra Thresholds…") }
                 }
                 .popover(isPresented: $showZebraThresholds) { ZebraThresholdsPopover() }
-
-            EditorToolRow(systemName: "photo.on.rectangle",
-                          label: String(localized: "Reference Photo"),
-                          isActive: referenceStore.paneVisible,
-                          isEnabled: referenceStore.url != nil,
-                          action: { referenceStore.paneVisible.toggle() })
-            .help(Text(referenceStore.url == nil
-                       ? "Right-click a photo in the grid → Use as Reference Photo"
-                       : "Reference photo"))
 
             Divider().padding(.vertical, 4)
 
