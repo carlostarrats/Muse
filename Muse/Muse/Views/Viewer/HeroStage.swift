@@ -264,6 +264,9 @@ struct HeroStage: View {
                 let base = fitRect
                 Image(nsImage: image)
                     .resizable()
+                    // The opened photo is the surface HDR is FOR. Paired with
+                    // the same modifier on the grid tile so the two match.
+                    .allowedDynamicRange(.high)
                     .aspectRatio(contentMode: .fill)
                     .frame(width: base.width, height: base.height)
                     .clipShape(FlightRoundedRect(radius: cornerRadius,
@@ -506,12 +509,11 @@ struct HeroStage: View {
                     return NSImage(cgImage: rendered,
                                    size: NSSize(width: rendered.width, height: rendered.height))
                 }
-                guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, [
-                          kCGImageSourceCreateThumbnailFromImageAlways: true,
-                          kCGImageSourceCreateThumbnailWithTransform: true,
-                          kCGImageSourceShouldCacheImmediately: true,
-                          kCGImageSourceThumbnailMaxPixelSize: 1600,
-                      ] as CFDictionary) else { return nil }
+                // Through the HDR seam, so a gain-map HEIC keeps its
+                // headroom at BOTH rungs. Decoding the mid rung flat would
+                // land a dim photo that brightened a moment later.
+                guard let cg = HDRDecode.decode(source: src, maxPixel: 1600)
+                else { return nil }
                 return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
             }.value
             // `!isClosing`: swapping the image mid-close changes `fitRect`,
@@ -536,13 +538,7 @@ struct HeroStage: View {
                 return NSImage(cgImage: rendered,
                                size: NSSize(width: rendered.width, height: rendered.height))
             }
-            let opts: [CFString: Any] = [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceShouldCacheImmediately: true,
-                kCGImageSourceThumbnailMaxPixelSize: target,
-            ]
-            guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary)
+            guard let cg = HDRDecode.decode(source: src, maxPixel: target)
             else { return nil }
             return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
         }.value

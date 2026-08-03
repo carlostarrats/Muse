@@ -1294,6 +1294,12 @@ private struct TileView: View {
                 if let img = thumbnail {
                     Image(nsImage: img)
                         .resizable()
+                        // A tile that changes brightness when the photo opens
+                        // reads as a bug, so the grid renders HDR exactly like
+                        // the hero. This is a CEILING, not a forcing function —
+                        // an SDR image is unaffected — so it applies to every
+                        // tile rather than branching on the file.
+                        .allowedDynamicRange(.high)
                         .aspectRatio(contentMode: .fit)
                         .transition(.opacity)
                         // While this tile is the open hero, the IMAGE stays
@@ -1356,6 +1362,7 @@ private struct TileView: View {
         if let img = thumbnail {
             Image(nsImage: img)
                 .resizable()
+                .allowedDynamicRange(.high)
                 .aspectRatio(contentMode: .fit)
         } else {
             Image(systemName: iconName(for: file.kind))
