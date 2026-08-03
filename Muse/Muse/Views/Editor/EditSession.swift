@@ -450,11 +450,13 @@ final class EditSession: ObservableObject {
         let sampleEdge = Self.statsSampleLongEdge
         let highThreshold = AppSettings.editorZebraHigh
         let lowThreshold = AppSettings.editorZebraLow
-        // Read on the main actor, before the hop: it's a header read, and it
-        // decides which sampler runs below.
-        let headroom = EditRenderer.sourceHeadroom(url: url)
         Task.detached(priority: .userInitiated) { [weak self] in
             let context = RenderContexts.preview
+            // Read HERE, not before the hop. This opens the file and reads its
+            // properties, and `tapStats` runs on every completed render while a
+            // readout panel is showing — so on the main actor it was sync file
+            // I/O per slider frame.
+            let headroom = EditRenderer.sourceHeadroom(url: url)
             // An HDR photo is sampled in FLOAT. `rgba8Sample` renders through
             // `.RGBA8`/sRGB, which clamps before the statistics even run — so
             // every specular highlight landed at 255 and the panel reported it

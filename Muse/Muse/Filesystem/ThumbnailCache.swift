@@ -182,8 +182,15 @@ final class ThumbnailCache: ObservableObject {
         try? FileManager.default.createDirectory(at: diskRoot, withIntermediateDirectories: true)
         // Before anything reads or writes a tile: drop entries written in an
         // older pixel format, so a re-keyed cache doesn't sit on the cap as
-        // dead weight.
+        // dead weight. The move is O(1); the bytes go in the background.
         Self.resetCacheFormatIfNeeded(in: diskRoot)
+        // Sweep, rather than deleting just the directory we staged: a quit or
+        // crash between the rename and this deletion would otherwise strand one
+        // outside anything that counts it.
+        let root = diskRoot
+        Task.detached(priority: .background) {
+            Self.sweepStagedCaches(besideRoot: root)
+        }
     }
 
     /// Synchronous memory-cache peek — no disk read, no generation. Lets the
@@ -322,16 +329,17 @@ final class ThumbnailCache: ObservableObject {
             guard let generated = await generate(url: url, size: size, scale: scale) else {
                 return nil
             }
-            // Header-only, so this costs a stat rather than a decode.
+            // Properties-only, so this costs a header read rather than a decode.
             let isHDR = HDRDecode.info(url: url).isHDR
-            let diskURL = diskPath(in: diskRoot, key: key, isHDR: isHDR)
             // Persist in the background; the caller doesn't wait on the encode.
             Task.detached(priority: .background) {
-                if isHDR {
-                    writeHEIC(generated, to: diskURL)
-                } else {
-                    writePNG(generated, to: diskURL)
+                if isHDR, writeHEIC(generated, to: diskPath(in: diskRoot, key: key, isHDR: true)) {
+                    return
                 }
+                // Fall back to PNG when the HEIC encode fails — a flat cached
+                // tile is worth more than re-decoding this file on every
+                // launch for the rest of the library's life.
+                writePNG(generated, to: diskPath(in: diskRoot, key: key, isHDR: false))
             }
             return generated
         }
@@ -452,17 +460,62 @@ final class ThumbnailCache: ObservableObject {
     /// definition, it refills lazily on demand, and the alternative (keeping
     /// SDR entries and re-deriving which sources are HDR) costs a header read
     /// per tile forever to save a one-time rebuild.
-    nonisolated static func resetCacheFormatIfNeeded(in root: URL) {
+    ///
+    /// **Staged by RENAME, not deleted inline.** `ThumbnailCache` is
+    /// `@MainActor`, so an inline wipe would run one directory scan plus ~11,800
+    /// `removeItem` calls on the main thread during launch. Moving the
+    /// directory aside is O(1); the caller deletes the staged copy in the
+    /// background. Returns that staged URL, or nil when there was nothing to
+    /// reclaim.
+    /// Suffix marking a cache directory that has been renamed aside and is
+    /// waiting to be deleted.
+    private nonisolated static let stagedSuffix = "-stale-"
+
+    /// Staged caches left beside `root` — normally none, but a quit or crash
+    /// between the rename and the background delete strands one.
+    nonisolated static func stagedCacheURLs(besideRoot root: URL) -> [URL] {
+        let parent = root.deletingLastPathComponent()
+        let prefix = root.lastPathComponent + stagedSuffix
+        let entries = (try? FileManager.default.contentsOfDirectory(atPath: parent.path)) ?? []
+        return entries.filter { $0.hasPrefix(prefix) }.map { parent.appendingPathComponent($0) }
+    }
+
+    /// Delete any staged cache directories. **`enforceDiskCap` cannot do this**
+    /// — the cap only measures files INSIDE the cache root, and a staged
+    /// directory is a sibling, so an orphan would sit on disk forever counted
+    /// by nothing. On the library that produced this bug that is 2 GB.
+    nonisolated static func sweepStagedCaches(besideRoot root: URL) {
+        for staged in stagedCacheURLs(besideRoot: root) {
+            try? FileManager.default.removeItem(at: staged)
+        }
+    }
+
+    @discardableResult
+    nonisolated static func resetCacheFormatIfNeeded(in root: URL) -> URL? {
         let fm = FileManager.default
         let markerURL = root.appendingPathComponent(formatMarkerName)
         let marker = try? String(contentsOf: markerURL, encoding: .utf8)
-        guard needsFormatReset(marker: marker) else { return }
-        if let entries = try? fm.contentsOfDirectory(atPath: root.path) {
-            for entry in entries where cacheFileExtensions.contains((entry as NSString).pathExtension) {
-                try? fm.removeItem(at: root.appendingPathComponent(entry))
+        guard needsFormatReset(marker: marker) else { return nil }
+
+        var staged: URL?
+        let hasEntries = (try? fm.contentsOfDirectory(atPath: root.path))?
+            .contains { cacheFileExtensions.contains(($0 as NSString).pathExtension) } ?? false
+        if hasEntries {
+            let candidate = root.deletingLastPathComponent()
+                .appendingPathComponent(
+                    "\(root.lastPathComponent)\(stagedSuffix)\(UUID().uuidString)")
+            // A rename that fails (permissions, a volume that can't) must not
+            // leave the marker claiming the cache was reset — the next launch
+            // has to try again rather than serve stale-format tiles forever.
+            if (try? fm.moveItem(at: root, to: candidate)) != nil {
+                staged = candidate
+                try? fm.createDirectory(at: root, withIntermediateDirectories: true)
+            } else {
+                return nil
             }
         }
         try? Data(cacheFormatMarker.utf8).write(to: markerURL, options: .atomic)
+        return staged
     }
 
     private nonisolated func diskPath(for key: String, isHDR: Bool) -> URL {
@@ -723,14 +776,25 @@ final class ThumbnailCache: ObservableObject {
     /// Lossy, deliberately. These are ≤320 px tiles regenerated on demand, and
     /// the lossless alternative (16-bit PQ PNG) measured ~10× the bytes — which
     /// against the 2 GB cap means evicting a large library's tiles far sooner.
-    nonisolated static func writeHEIC(_ image: NSImage, to url: URL) {
-        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+    /// Returns whether a file was actually produced. The caller MUST check:
+    /// a silent failure leaves no cache entry at all, so that tile re-decodes
+    /// from scratch on every launch forever with nothing saying why. A flat
+    /// PNG fallback beats an infinite decode loop.
+    @discardableResult
+    nonisolated static func writeHEIC(_ image: NSImage, to url: URL) -> Bool {
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        else { return false }
         let context = CIContext(options: [
             .workingColorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB) as Any,
         ])
-        try? context.writeHEIF10Representation(of: CIImage(cgImage: cg), to: url,
-                                               colorSpace: HDRDecode.hdrColorSpace,
-                                               options: [:])
+        do {
+            try context.writeHEIF10Representation(of: CIImage(cgImage: cg), to: url,
+                                                  colorSpace: HDRDecode.hdrColorSpace,
+                                                  options: [:])
+        } catch {
+            return false
+        }
+        return FileManager.default.fileExists(atPath: url.path)
     }
 
     /// Encode an NSImage to PNG bytes via CGImageDestination — no TIFF round-trip.

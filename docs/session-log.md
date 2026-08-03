@@ -90,7 +90,36 @@ no tone map — so a social export of an HDR photo blew its highlights in the ve
 picture someone was about to post, and the Looks swatches showed clipping the
 live canvas didn't have. Both now tone-map; neither was allowlisted.
 
-Suite 1,952 → 1,985 (33 new tests) across five new test files. Release build warning-free,
+**Round 11 — self-QA of this work's own diff, after it was already committed,
+green and running.** Seven defects, several only findable by driving the app.
+
+The one that mattered: **the grid came up empty on the owner's library.** Root
+cause was the cache re-key above — it orphaned 11,794 of 11,833 entries without
+deleting them, and orphans still count against the 2 GB cap, so 3,655 tiles
+regenerated into a cache with no free space. *A key change is not a migration.*
+The fix stages the old cache aside by rename (an inline wipe would be ~11,800
+`removeItem` calls on the `@MainActor` launch path) and sweeps it in the
+background — and sweeps any directory a crash stranded, since a staged sibling
+sits outside what `enforceDiskCap` measures.
+
+The rest: HDR detection was copying the gain-map BYTES per tile (~3 ms) for a
+fact the properties dictionary states in ~1 ms — and states better, since the
+owner's photo declares headroom 8.0 where the probe assumed a flat 4.0; a failed
+HEIC write left no cache entry at all, so that tile re-decoded on every launch
+forever (this is the "disk-full / write-failure" lens off the unrun list, and it
+found something the first time it ran); `tapStats` read the file header on the
+main actor once per render while a readout panel was open; the export
+byte-copy passthrough bypassed `OutputRender`, which is an invariant even though
+the guard made it behaviourally identical; and `HDRDecode.decode(maxPixel: 0)`
+returned photos SIDEWAYS, because `CGImageSourceCreateImageAtIndex` ignores
+`kCGImageSourceCreateThumbnailWithTransform` — one function with two contracts
+depending on an argument, measured at 40×20 vs the thumbnail rung's correct
+20×40.
+
+Two new lenses went into the registry from this: *a re-key that orphans data
+instead of migrating it*, and *data staged outside what the cap measures*.
+
+Suite 1,952 → 2,002 (50 new tests) across seven new test files. Release build warning-free,
 `audit-invariants.sh` 15/15. **Runtime is OPEN** — no test can confirm an HDR
 photo *looks* right, and nobody has yet opened a real gain-map HEIC on an EDR
 display. The eight-step plan is in `docs/new-build/FEATURE-LEDGER.md`.

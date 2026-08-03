@@ -121,7 +121,17 @@ Muse/Muse/
                                    ordered load; 2-tier cache (NSCache 512MB + disk LRU 2GB).
                                    Key on standardized path; invalidate(_:) drops mem+disk so
                                    an in-place edit regenerates. Non-image → QuickLook .all
-                                   (real macOS icon/preview)
+                                   (real macOS icon/preview). HDR sources cache as 10-bit PQ
+                                   HEIC, SDR as PNG, so reads/deletes probe BOTH extensions;
+                                   cacheFormatVersion + a .format-version marker stage the old
+                                   cache aside by RENAME on a format change and sweep it in the
+                                   background (a re-key alone orphans 2GB against the cap)
+    HDRDecode.swift                the ONE HDR seam: headroom from the properties dictionary
+                                   (never the 3ms gain-map byte probe), HDR-aware decode via
+                                   the thumbnail API at BOTH rungs (the full-res API ignores
+                                   the orientation key), and toneMappedToSDR — the only
+                                   sanctioned HDR→SDR conversion, since createCGImage to sRGB
+                                   hard-clips. Audit check HDR-1 enforces it
     AVURLAsset+NoNetwork.swift     `.noNetwork(url:)` helpers pinning every AVFoundation
                                    asset to reference-restrictions .forbidAll — a reference
                                    movie / HLS remote data-ref can't phone home. Use everywhere.

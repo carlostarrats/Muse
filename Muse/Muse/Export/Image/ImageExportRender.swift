@@ -57,16 +57,25 @@ nonisolated enum ImageExportRender {
         //    file Muse had only been asked to copy, and it is also the only way
         //    an HDR photo survives on macOS 14.6, where writing a gain map is
         //    unavailable. Strictly more faithful for SDR files too.
+        //    It STILL goes through the choke point. `forOutput` is an identity
+        //    for an unedited file, so the bytes copied are the user's own —
+        //    but taking the source from `RenderedOutput` rather than from the
+        //    raw URL is what keeps "everything that leaves the app goes
+        //    through OutputRender" structurally true. If the guard below is
+        //    ever loosened by mistake, an edited file gets its RENDER copied
+        //    rather than its unedited original.
         if job.settings.format == .sameAsOriginal,
            job.settings.resize == .original,
            job.settings.includeEXIF,
            job.settings.includeLocation,
            EditStackIndex.resolvedStack(for: job.sourceURL) == nil {
+            let passthrough = try OutputRender.forOutput(job.sourceURL)
+            defer { OutputRender.discard(passthrough) }
             let dest = ExportPipeline.collisionSafeURL(
                 base: job.sourceURL.deletingPathExtension().lastPathComponent,
                 ext: job.sourceURL.pathExtension,
                 in: directory)
-            try FileManager.default.copyItem(at: job.sourceURL, to: dest)
+            try FileManager.default.copyItem(at: passthrough.url, to: dest)
             let size = (try? ExportPipeline.headerSize(url: dest)) ?? .zero
             let attributes = try? FileManager.default.attributesOfItem(atPath: dest.path)
             let bytes = (attributes?[.size] as? Int) ?? 0

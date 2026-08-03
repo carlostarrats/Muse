@@ -131,14 +131,40 @@ nonisolated enum HDRDecode {
         var options: [CFString: Any] = [
             kCGImageSourceDecodeRequest: kCGImageSourceDecodeToHDR,
             kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
         ]
-        if maxPixel > 0 {
-            options[kCGImageSourceCreateThumbnailFromImageAlways] = true
-            options[kCGImageSourceCreateThumbnailWithTransform] = true
-            options[kCGImageSourceThumbnailMaxPixelSize] = maxPixel
-            return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+        // BOTH rungs go through the thumbnail API, and that is deliberate.
+        // `CGImageSourceCreateImageAtIndex` IGNORES
+        // `kCGImageSourceCreateThumbnailWithTransform` — the key only applies
+        // to the thumbnail call — so the full-resolution branch returned
+        // photos SIDEWAYS. Measured on a 40×20 file tagged orientation 6: the
+        // thumbnail rung gave 20×40 and the full rung gave 40×20. One function
+        // with two contracts depending on an argument is exactly the kind of
+        // thing the first full-res caller would have shipped as a bug.
+        //
+        // A ceiling at the source's own long edge is not a downscale, so
+        // "full resolution" stays full resolution.
+        options[kCGImageSourceThumbnailMaxPixelSize] =
+            maxPixel > 0 ? maxPixel : fullResolutionCeiling(source: source)
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+    }
+
+    /// A ceiling at or above the source's own long edge, so the thumbnail API
+    /// returns every pixel rather than downsampling.
+    private static func fullResolutionCeiling(source: CGImageSource) -> Int {
+        if let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+           let w = (props[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue,
+           let h = (props[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue {
+            return max(w, h)
         }
-        return CGImageSourceCreateImageAtIndex(source, 0, options as CFDictionary)
+        // Undeclared dimensions must not mean "no image". Matching
+        // `withinDecodeBudget`, which ALLOWS a header it can't measure, this
+        // falls back to a ceiling no real photo reaches — the decode budget
+        // caps at 300 MP, whose long edge is ~17k even before aspect. The
+        // thumbnail API never upsamples, so an over-large ceiling is simply
+        // "full size".
+        return 1_000_000
     }
 
     // MARK: - Tone map

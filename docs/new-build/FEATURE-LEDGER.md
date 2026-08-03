@@ -96,7 +96,7 @@ question.
 | P27 | Localization (FR) | `VocabularyLocalizerTests`, `TagFallbackNamerLocalizationTests` | 2026-08-01 | ⚠️ G1 | ✅ **1,002 keys, 0 untranslated** (was 146 missing). ⚠️ **fixed R2-2** — a translated string was being persisted |
 | P28 | Accessibility (VoiceOver) | `EscapeActionTests` | 2026-08-01 | ⚠️ G1 | ⚠️ **fixed R2-3** — Compare's rating + cull were keyboard-only, unreachable under VoiceOver |
 | P29 | Sparkle update channel | — | 2026-08-01 | ✅ (v1.5) | ✅ untouched; `SUEnableAutomaticChecks` still true, EdDSA key intact |
-| P30 | **HDR gain maps** (decode seam, HEIC tile cache, headroom through the edit chain, headroom-aware readouts, export) | `HDRDecodeTests` (9), `ThumbnailHDRCacheTests` (6), `EditRendererHDRTests` (5), `HistogramHeadroomTests` (6), `ImageExportHDRTests` (7) | 2026-08-03 | ❌ **OPEN — see the HDR runtime plan below** | New this work; `audit-invariants.sh` **HDR-1** is the standing regression gate |
+| P30 | **HDR gain maps** (decode seam, HEIC tile cache, headroom through the edit chain, headroom-aware readouts, export) | `HDRDecodeTests` (14), `ThumbnailHDRCacheTests` (6), `EditRendererHDRTests` (5), `HistogramHeadroomTests` (6), `ImageExportHDRTests` (7), `ThumbnailCacheFormatResetTests` (5), `HDRReviewFindingsTests` (7) | 2026-08-03 | ❌ **OPEN — see the HDR runtime plan below** | New this work; `audit-invariants.sh` **HDR-1** is the standing regression gate |
 
 ---
 

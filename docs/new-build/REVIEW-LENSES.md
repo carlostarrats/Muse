@@ -49,7 +49,9 @@ Rounds 1–3 are recorded in `REVIEW-FINDINGS.md` and `FEATURE-LEDGER.md`; round
 | Backup completeness vs. the edit model | 3 | G2 closed — edits ride the archive |
 | Swift 6 strict concurrency | 3 | 442 warnings eliminated |
 | Localization completeness | 3 | 1,002 keys, 0 untranslated |
-| Self-QA of the round's own diff | 3, 6 | 4 + 1 defects in the review's own work |
+| Self-QA of the round's own diff | 3, 6, **11** | 4 + 1 + **7** defects in the review's own work |
+| Disk-full / write-failure behaviour | 11 (2026-08-03) | 1 finding — a failed HEIC write left NO cache entry, so that tile re-decoded on every launch forever |
+| Main-thread I/O introduced by a new feature | 11 (2026-08-03) | 1 finding — a per-stats-tap header read on `@MainActor` |
 | SQL **construction** (injection, escaping) | 4 | clean |
 | Crash-on-user-data (`try!`, `fatalError`, unchecked subscript) | 4 | clean — and the wrong door; see round 6 |
 | Resource lifecycle (shared things rebuilt per item) | 4 | 2 findings (CIContext, LUT LRU) |
@@ -98,12 +100,13 @@ an unrun lens on the list is worth more than a good idea that evaporates.
 
 | Lens | Why it might matter |
 |---|---|
-| Disk-full / write-failure behaviour | Every `try?` around a write turns a full disk into silent data loss. Untested. |
 | Sparkle update path integrity on THIS branch | The appcast/EdDSA path has not been re-reviewed since Spec 01 added `Commerce/`. |
 | TOCTOU on user paths | A file swapped between the `fileExists` check and the read. Round 5 covered prefixes, not timing. |
 | Long-session memory growth (retain cycles, not allocation shape) | Round 6 checked allocation *shape*; SwiftUI/Combine retain cycles are a different failure. |
 | Preference-key lifecycle (renamed/removed ids left in a stored set) | `editorExpandedSections2` keeps whatever ids a user has stored; removing a section leaves a dead id there forever. Harmless today, but nothing prunes. |
 | A control's coordinate space vs the renderer's | Round 10's crop bug was ONE calculation in the WRONG frame of reference, so a duplication sweep could never see it. Any control that writes a value the renderer later interprets needs its space checked against the render chain's ORDER of operations. |
+| A re-key that orphans data instead of migrating it | **Round 11 found one.** Changing a cache/derived-data KEY makes the old entries unreachable, not gone — and unreachable data still counts against a cap. Any key or format version bump needs something that deletes the old shape. |
+| Data staged outside what the cap measures | **Round 11 found one.** A directory renamed aside for background deletion is a SIBLING of the cache root, so `enforceDiskCap` — which measures only inside the root — can never reclaim it if a crash strands it. |
 | Two-instance runs during GUI testing | The 2026-08-02 round hit a 21-failure suite caused by a developer-launched instance racing the test's own; GRDB's `.immediateError` means the loser gets no window. Worth a mechanical guard rather than a note. |
 
 **Round 9 — the drive suites' own fragility has now cost three rounds.** Every
