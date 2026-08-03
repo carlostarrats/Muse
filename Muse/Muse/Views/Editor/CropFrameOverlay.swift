@@ -27,8 +27,12 @@ import AppKit
 
 struct CropFrameOverlay: View {
     @Binding var rect: CropRect
-    /// Locked aspect (width ÷ height), or nil for freeform.
+    /// Locked aspect (width ÷ height, in PIXELS), or nil for freeform.
     var aspect: Double?
+    /// The image's own width ÷ height. Required by the lock — a `CropRect`'s
+    /// sides are fractions of DIFFERENT pixel extents, so the ratio has to be
+    /// converted into normalized space before it can be enforced.
+    var imageAspect: Double = 1
     /// Called once per completed drag — exactly one undo step per gesture, the
     /// same rule `EditSlider` follows.
     let onCommit: () -> Void
@@ -162,7 +166,8 @@ struct CropFrameOverlay: View {
                 guard let start = dragStart else { return }
                 let delta = CGSize(width: value.translation.width / max(bounds.width, 1),
                                    height: value.translation.height / max(bounds.height, 1))
-                rect = CropDragMath.resize(start, handle: handle, by: delta, aspect: aspect)
+                rect = CropDragMath.resize(start, handle: handle, by: delta,
+                                           aspect: aspect, imageAspect: imageAspect)
             }
             .onEnded { _ in
                 dragStart = nil

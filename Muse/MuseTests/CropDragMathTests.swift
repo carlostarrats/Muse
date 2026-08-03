@@ -84,11 +84,62 @@ final class CropDragMathTests: XCTestCase {
         }
     }
 
-    /// A locked aspect is honoured on every drag.
-    func testAspectLockIsPreserved() {
+    /// A locked aspect is honoured on every drag — measured in PIXELS.
+    ///
+    /// The previous version of this test asserted `r.w == r.h` for a 1:1 lock,
+    /// which is the bug restated rather than a test of it: a `CropRect`'s w and
+    /// h are fractions of the image's width and height, so equal normalized
+    /// sides on a 3:2 photo are a 1.5:1 rectangle. Every assertion here
+    /// converts back to pixels before checking.
+    func testAspectLockIsPreservedInPixels() {
+        for imageAspect in [1.0, 1.5, 0.75, 2.0] {
+            for target in [1.0, 4.0 / 5.0, 16.0 / 9.0, 3.0 / 2.0] {
+                let r = CropDragMath.resize(full, handle: .bottomRight,
+                                            by: CGSize(width: -0.4, height: -0.1),
+                                            aspect: target, imageAspect: imageAspect)
+                let pixelAspect = (r.w * imageAspect) / r.h
+                XCTAssertEqual(pixelAspect, target, accuracy: 1e-6,
+                               "image \(imageAspect), target \(target)")
+            }
+        }
+    }
+
+    /// The concrete case that shipped broken: a 1:1 lock on a 3:2 photo.
+    func testSquareLockOnALandscapePhotoIsActuallySquare() {
         let r = CropDragMath.resize(full, handle: .bottomRight,
-                                    by: CGSize(width: -0.4, height: 0), aspect: 1.0)
-        XCTAssertEqual(r.w, r.h, accuracy: 1e-6)
+                                    by: CGSize(width: -0.3, height: -0.3),
+                                    aspect: 1.0, imageAspect: 1.5)
+        XCTAssertEqual((r.w * 1.5) / r.h, 1.0, accuracy: 1e-6)
+        XCTAssertNotEqual(r.w, r.h, accuracy: 1e-6,
+                          "a square on a 3:2 photo must NOT have equal normalized sides")
+    }
+
+    /// A locked drag still cannot leave the image or invert.
+    func testAspectLockedDragStaysInsideTheImage() {
+        for handle in CropDragMath.Handle.allCases {
+            for d in stride(from: -1.0, through: 1.0, by: 0.25) {
+                let r = CropDragMath.resize(full, handle: handle,
+                                            by: CGSize(width: d, height: d),
+                                            aspect: 16.0 / 9.0, imageAspect: 1.5)
+                XCTAssertGreaterThanOrEqual(r.x, -1e-9, "\(handle) \(d)")
+                XCTAssertGreaterThanOrEqual(r.y, -1e-9, "\(handle) \(d)")
+                XCTAssertLessThanOrEqual(r.x + r.w, 1 + 1e-9, "\(handle) \(d)")
+                XCTAssertLessThanOrEqual(r.y + r.h, 1 + 1e-9, "\(handle) \(d)")
+            }
+        }
+    }
+
+    /// `fit` and a locked drag must agree — picking "Square" and then nudging a
+    /// handle must not silently change the shape.
+    func testFitAndLockedDragAgreeOnShape() {
+        let imageAspect = 1.5
+        let fitted = CropDragMath.fit(aspect: 1.0, into: imageAspect)
+        XCTAssertEqual((fitted.w * imageAspect) / fitted.h, 1.0, accuracy: 1e-6)
+
+        let dragged = CropDragMath.resize(fitted, handle: .bottomRight,
+                                          by: CGSize(width: -0.1, height: 0),
+                                          aspect: 1.0, imageAspect: imageAspect)
+        XCTAssertEqual((dragged.w * imageAspect) / dragged.h, 1.0, accuracy: 1e-6)
     }
 
     // MARK: - Fitting a preset

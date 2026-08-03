@@ -34,9 +34,26 @@ nonisolated enum AutoToneStats {
     /// DISPLAY-ENCODED buffer this is handed, not on linear light.
     static let targetMeanLuma = 0.46
 
+    /// How much of the computed exposure correction to actually apply.
+    ///
+    /// Mean luma is a weak proxy for correct exposure — a snow scene really is
+    /// bright and a night shot really is dark, and driving every photo to one
+    /// mid-grey turns both into mud. Damping keeps Auto useful on the common
+    /// case (genuinely under- or over-exposed) without wrecking a deliberate
+    /// high- or low-key frame, and every value it picks is a slider the user
+    /// can immediately drag.
+    static let exposureDamping = 0.65
+    static let exposureLimit = 2.0
+
     /// Inter-percentile spread of an image that already has normal contrast.
-    /// Narrower than this opens up; wider pulls back.
-    static let targetSpread = 0.62
+    ///
+    /// This was 0.62, which is FAR below what a normal photo measures (~0.9),
+    /// so the term below went negative on almost every image and Auto Light
+    /// flattened everything it touched. Contrast is now clamped to be
+    /// non-negative as well: the black and white points above already do the
+    /// expanding, so this only ever helps a genuinely flat frame and never
+    /// takes contrast away from a photo that has it.
+    static let targetSpread = 0.90
 
     struct Result: Equatable {
         var exposureEV: Double = 0
@@ -78,7 +95,8 @@ nonisolated enum AutoToneStats {
         // than diverging.
         let mean = sumLuma / n
         if mean > 0.0001 {
-            out.exposureEV = clamp(log2(targetMeanLuma / mean), -5, 5)
+            let raw = log2(targetMeanLuma / mean)
+            out.exposureEV = clamp(raw * exposureDamping, -exposureLimit, exposureLimit)
         }
 
         // --- Black / white points from clipped percentiles.
@@ -89,12 +107,13 @@ nonisolated enum AutoToneStats {
 
         // Distance from the ideal 0 and 1 endpoints, in slider units. A frame
         // whose darkest pixel already sits at 0 needs no black move at all.
-        out.blacks = clamp(-low * 2.0, -1, 1)
-        out.whites = clamp((1 - high) * 2.0, -1, 1)
+        out.blacks = clamp(-low * 1.5, -1, 0)
+        out.whites = clamp((1 - high) * 1.5, 0, 1)
 
-        // --- Contrast from the inter-percentile spread.
+        // --- Contrast: only ever ADDED, and only to a frame that is genuinely
+        // flat. See the note on `targetSpread`.
         let spread = max(0.0001, high - low)
-        out.contrast = clamp((targetSpread - spread) * 1.2, -1, 1)
+        out.contrast = clamp((targetSpread - spread) * 1.5, 0, 0.6)
 
         // --- Grey-world white balance. The average scene is neutral, so the
         // correction is the INVERSE of the measured cast: a red-heavy frame
@@ -149,5 +168,14 @@ nonisolated enum AutoToneApply {
             $0.temperature = r.temperature
             $0.tint = r.tint
         }
+    }
+
+    /// Both at once, for the Tools card's single Auto — the common case is
+    /// "just make this look right", not "make the tone right and then, as a
+    /// separate decision, the colour". The per-card buttons stay for when you
+    /// want only one of them.
+    static func all(_ r: AutoToneStats.Result, onto stack: inout EditStack) {
+        light(r, onto: &stack)
+        color(r, onto: &stack)
     }
 }

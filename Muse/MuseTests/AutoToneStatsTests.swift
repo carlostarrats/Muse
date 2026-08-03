@@ -112,6 +112,75 @@ final class AutoToneStatsTests: XCTestCase {
         }
     }
 
+    /// REGRESSION: Auto Light used to flatten every photo it touched.
+    ///
+    /// `targetSpread` was 0.62 while a normal photo measures ~0.9, so the
+    /// contrast term went negative on almost everything. Contrast is now
+    /// clamped non-negative — Auto may ADD contrast to a genuinely flat frame
+    /// and must never TAKE it from a photo that already has it.
+    func testContrastIsNeverNegative() {
+        // A full-range frame: a black half and a white half, spread ~1.0.
+        var px: [UInt8] = []
+        for i in 0..<(64 * 64) {
+            let v: UInt8 = i % 2 == 0 ? 4 : 250
+            px += [v, v, v, 255]
+        }
+        let r = AutoToneStats.compute(rgba8: px, width: 64, height: 64)
+        XCTAssertGreaterThanOrEqual(r.contrast, 0,
+                                    "Auto must never remove contrast — this is the flatness bug")
+    }
+
+    /// And across a wide sweep of synthetic frames, never negative.
+    func testContrastStaysNonNegativeAcrossManyFrames() {
+        for centre in stride(from: 20, through: 235, by: 15) {
+            for width in [2, 10, 40, 90] {
+                var px: [UInt8] = []
+                for i in 0..<(32 * 32) {
+                    let v = UInt8(max(0, min(255, centre + (i % width) - width / 2)))
+                    px += [v, v, v, 255]
+                }
+                let r = AutoToneStats.compute(rgba8: px, width: 32, height: 32)
+                XCTAssertGreaterThanOrEqual(r.contrast, 0, "centre \(centre) width \(width)")
+                XCTAssertLessThanOrEqual(r.contrast, 0.6)
+            }
+        }
+    }
+
+    /// A genuinely flat frame still gets help.
+    func testFlatFrameStillGainsContrast() {
+        var px: [UInt8] = []
+        for i in 0..<(64 * 64) {
+            let v = UInt8(118 + (i % 12))          // a very narrow band
+            px += [v, v, v, 255]
+        }
+        let r = AutoToneStats.compute(rgba8: px, width: 64, height: 64)
+        XCTAssertGreaterThan(r.contrast, 0.2)
+    }
+
+    /// Exposure is damped and capped, so a deliberately high- or low-key frame
+    /// is nudged rather than dragged to mid-grey.
+    func testExposureIsDampedAndCapped() {
+        let dark = AutoToneStats.compute(rgba8: Self.solid(r: 3, g: 3, b: 3, count: 32 * 32),
+                                         width: 32, height: 32)
+        XCTAssertLessThanOrEqual(dark.exposureEV, AutoToneStats.exposureLimit)
+        let bright = AutoToneStats.compute(rgba8: Self.solid(r: 252, g: 252, b: 252,
+                                                             count: 32 * 32),
+                                           width: 32, height: 32)
+        XCTAssertGreaterThanOrEqual(bright.exposureEV, -AutoToneStats.exposureLimit)
+    }
+
+    /// Blacks only ever darken and whites only ever brighten — the two are an
+    /// auto-LEVELS expansion, so a sign flip would invert the whole point.
+    func testBlackAndWhitePointsMoveOnlyOutward() {
+        for v in stride(from: 10, through: 245, by: 15) {
+            let r = AutoToneStats.compute(
+                rgba8: Self.solid(r: UInt8(v), g: UInt8(v), b: UInt8(v), count: 16 * 16),
+                width: 16, height: 16)
+            XCTAssertLessThanOrEqual(r.blacks, 0, "value \(v)")
+            XCTAssertGreaterThanOrEqual(r.whites, 0, "value \(v)")
+        }
+    }
+
     private static func solid(r: UInt8, g: UInt8, b: UInt8, count: Int) -> [UInt8] {
         var out: [UInt8] = []
         out.reserveCapacity(count * 4)

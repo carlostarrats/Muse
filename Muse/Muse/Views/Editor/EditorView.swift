@@ -504,9 +504,18 @@ struct EditorView: View {
                     .overlay {
                         if session.cropMode {
                             CropFrameOverlay(
-                                rect: Binding(get: { session.pendingCrop ?? .full },
-                                              set: { session.pendingCrop = $0 }),
+                                rect: Binding(
+                                    get: { session.pendingGeometry?.crop ?? .full },
+                                    set: { rect in
+                                        var g = session.pendingGeometry ?? .neutral
+                                        g.crop = rect
+                                        session.pendingGeometry = g
+                                    }),
                                 aspect: cropAspect.ratio(portrait: cropPortrait),
+                                // Without this the lock is applied to the raw
+                                // ratio in NORMALIZED space, and a 1:1 drag on
+                                // a 3:2 photo yields a 1.5:1 rect.
+                                imageAspect: session.imageAspect,
                                 onCommit: {})
                         }
                     }
@@ -614,6 +623,22 @@ struct EditorView: View {
             EditorToolRow(systemName: "arrow.uturn.forward",
                           label: String(localized: "Redo"),
                           isEnabled: session.canRedo, action: { session.redo() })
+
+            Divider().padding(.vertical, 4)
+
+            // One Auto for "just make this look right". The per-card buttons
+            // stay for when you want only the tone or only the colour — but
+            // the common case is not two separate decisions, and making the
+            // user find both was the wrong default.
+            EditorToolRow(systemName: "wand.and.stars",
+                          label: String(localized: "Auto Enhance"),
+                          action: {
+                Task {
+                    guard let r = await session.autoToneResult() else { return }
+                    AutoToneApply.all(r, onto: &session.draft)
+                    session.commitGesture()
+                }
+            })
 
             Divider().padding(.vertical, 4)
 
@@ -742,11 +767,6 @@ struct EditorView: View {
         // First and closed: a style is a STARTING POINT you pick before you
         // touch a slider, and it's a browser — same rule as the Preview page's
         // cards, open it when you want it.
-        EditorSection(title: String(localized: "STYLES"),
-                      ink: ink,
-                      accessory: stylesModeButtons,
-                      summary: stylesSummary,
-                      isExpanded: expansion(Section.looks)) { looksTab }
         EditorSection(title: String(localized: "LIGHT"),
                       ink: ink,
                       accessory: autoAndReset(
@@ -794,7 +814,10 @@ struct EditorView: View {
         // Hue-targeted colour, under the global COLOR sliders it refines.
         EditorSection(title: String(localized: "COLOR MIX"),
                       ink: ink,
-                      accessory: hslTabButtons,
+                      accessory: resetButton(String(localized: "Reset Color Mix")) {
+                          session.draft.setHSL { $0 = .neutral }
+                          session.commitGesture()
+                      },
                       isExpanded: expansion(Section.hsl)) { hslSection }
         EditorSection(title: String(localized: "SPLIT TONE"),
                       ink: ink,
@@ -814,6 +837,11 @@ struct EditorView: View {
                           session.commitGesture()
                       },
                       isExpanded: expansion(Section.effects)) { effectsSection }
+        // Crop sits with the other things that change the PICTURE rather than
+        // the picture's tone, and its Apply/Reset live in the card body.
+        EditorSection(title: String(localized: "CROP"),
+                      ink: ink,
+                      isExpanded: expansion(Section.crop)) { cropSection }
     }
 
     /// Auto beside Reset, in the card's heading. Auto is scoped exactly like
@@ -841,9 +869,13 @@ struct EditorView: View {
     /// Vignette and grain. Vignette shipped with a full model and renderer in
     /// Spec 04 and NOTHING that could write it — the only reference in the app
     /// was a reset. This card is that missing half.
+    /// Two named groups of three, not six loose sliders. Without the headings
+    /// the card advertised six independent effects when it has two, and
+    /// "Midpoint" and "Feather" gave no clue which one they belonged to.
     private var effectsSection: some View {
         VStack(alignment: .leading, spacing: panelTheme.spacingS) {
-            EditSlider(label: String(localized: "Vignette"),
+            effectsGroupLabel(String(localized: "Vignette"))
+            EditSlider(label: String(localized: "Amount"),
                        value: vignetteBinding(\.amount), onCommit: session.commitGesture)
             EditSlider(label: String(localized: "Midpoint"),
                        value: vignetteBinding(\.midpoint), range: 0...1, neutral: 0.5,
@@ -852,18 +884,27 @@ struct EditorView: View {
                        value: vignetteBinding(\.feather), range: 0...1, neutral: 0.5,
                        onCommit: session.commitGesture)
 
-            Divider()
+            Divider().padding(.vertical, 2)
 
-            EditSlider(label: String(localized: "Grain"),
+            effectsGroupLabel(String(localized: "Grain"))
+            EditSlider(label: String(localized: "Amount"),
                        value: grainBinding(\.amount), range: 0...1, neutral: 0,
                        onCommit: session.commitGesture)
-            EditSlider(label: String(localized: "Grain Size"),
+            EditSlider(label: String(localized: "Size"),
                        value: grainBinding(\.size), range: 0...1, neutral: 0.5,
                        onCommit: session.commitGesture)
-            EditSlider(label: String(localized: "Grain Roughness"),
+            EditSlider(label: String(localized: "Roughness"),
                        value: grainBinding(\.roughness), range: 0...1, neutral: 0.5,
                        onCommit: session.commitGesture)
         }
+    }
+
+    /// The group heading inside a card — same treatment Split Tone already uses
+    /// for Shadows/Highlights, so the two cards read the same way.
+    private func effectsGroupLabel(_ text: String) -> some View {
+        Text(text)
+            .font(panelTheme.labelFont.weight(.semibold))
+            .foregroundStyle(panelTheme.textSecondary)
     }
 
     private func grainBinding(_ key: WritableKeyPath<GrainParams, Double>) -> Binding<Double> {
@@ -877,6 +918,11 @@ struct EditorView: View {
     /// Geometry shipped with a full model, renderer, codec and Lightroom
     /// importer and NO editor UI — the only writers were the importer and the
     /// social export's crop step. This card is the missing half.
+    ///
+    /// TRANSACTIONAL: every control here edits `session.pendingGeometry` and
+    /// nothing reaches `draft` until Apply. Rotate, flip and straighten used to
+    /// write through immediately, which saved and re-thumbnailed a crop the
+    /// user had not applied.
     private var cropSection: some View {
         VStack(alignment: .leading, spacing: 2) {
             // A canvas MODE, exactly like Side by Side and Split Compare above
@@ -886,23 +932,13 @@ struct EditorView: View {
                           isActive: session.cropMode,
                           action: { session.cropMode.toggle() })
 
-            Menu {
-                ForEach(CropAspectPreset.modes) { p in
-                    Button(p.menuTitle) { selectAspect(p) }
-                }
-                Divider()
-                ForEach(CropAspectPreset.shapes) { p in
-                    Button(p.menuTitle) { selectAspect(p) }
-                }
-            } label: {
-                Text(cropAspect.menuTitle)
-                    .font(panelTheme.labelFont)
-            }
-            .menuStyle(.borderlessButton)
-            .disabled(!session.cropMode)
-            .accessibilityLabel(Text("Crop shape"))
+            // Spaced off the Crop row above: it is a different KIND of control
+            // (a choice, not a switch) and read as attached to it.
+            cropAspectMenu
+                .padding(.top, panelTheme.spacingS)
+                .padding(.bottom, 2)
 
-            EditorToolRow(systemName: "rotate.right",
+            EditorToolRow(systemName: "rectangle.portrait.rotate",
                           label: String(localized: "Portrait / Landscape"),
                           isEnabled: session.cropMode && cropAspect.supportsOrientation,
                           action: {
@@ -914,66 +950,136 @@ struct EditorView: View {
 
             EditSlider(label: String(localized: "Straighten"),
                        value: straightenBinding, range: -45...45,
-                       onCommit: session.commitGesture)
+                       onCommit: {})
 
             EditorToolRow(systemName: "rotate.left",
                           label: String(localized: "Rotate Left"),
-                          action: {
-                session.draft.setGeometry { $0.quarterTurns -= 1 }
-                session.commitGesture()
-            })
+                          isEnabled: session.cropMode,
+                          action: { mutatePendingGeometry { $0.quarterTurns -= 1 } })
             EditorToolRow(systemName: "rotate.right",
                           label: String(localized: "Rotate Right"),
-                          action: {
-                session.draft.setGeometry { $0.quarterTurns += 1 }
-                session.commitGesture()
-            })
+                          isEnabled: session.cropMode,
+                          action: { mutatePendingGeometry { $0.quarterTurns += 1 } })
             EditorToolRow(systemName: "arrow.left.and.right.square",
                           label: String(localized: "Flip Horizontal"),
-                          isActive: session.draft.geometryParams?.flipH ?? false,
-                          action: {
-                session.draft.setGeometry { $0.flipH.toggle() }
-                session.commitGesture()
-            })
+                          isActive: session.pendingGeometry?.flipH ?? false,
+                          isEnabled: session.cropMode,
+                          action: { mutatePendingGeometry { $0.flipH.toggle() } })
             EditorToolRow(systemName: "arrow.up.and.down.square",
                           label: String(localized: "Flip Vertical"),
-                          isActive: session.draft.geometryParams?.flipV ?? false,
-                          action: {
-                session.draft.setGeometry { $0.flipV.toggle() }
-                session.commitGesture()
-            })
+                          isActive: session.pendingGeometry?.flipV ?? false,
+                          isEnabled: session.cropMode,
+                          action: { mutatePendingGeometry { $0.flipV.toggle() } })
+
+            if session.cropMode {
+                Divider().padding(.vertical, 4)
+                cropApplyRow
+            }
         }
     }
 
-    /// Picking a shape refits the pending frame; Freeform leaves whatever is
-    /// on screen alone, since its whole point is that you place it yourself.
+    /// A real dropdown rather than a bare label with a chevron — it is a menu
+    /// of nine shapes, and it has to look like one before it is opened.
+    private var cropAspectMenu: some View {
+        Menu {
+            ForEach(CropAspectPreset.modes) { p in
+                Button(p.menuTitle) { selectAspect(p) }
+            }
+            Divider()
+            ForEach(CropAspectPreset.shapes) { p in
+                Button(p.menuTitle) { selectAspect(p) }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "aspectratio")
+                    .font(.system(size: 11, weight: .semibold))
+                Text(cropAspect.menuTitle)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .font(panelTheme.labelFont)
+            .foregroundStyle(session.cropMode ? panelTheme.textPrimary : panelTheme.textSecondary)
+            .padding(.horizontal, 8)
+            .frame(height: 24)
+            .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(panelTheme.panelRaised))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .disabled(!session.cropMode)
+        .accessibilityLabel(Text("Crop shape"))
+        .help(Text("Crop shape"))
+    }
+
+    /// Apply and Reset together at the foot of the card. Apply is the FILLED
+    /// accent button — it is the one action that commits, and it was previously
+    /// a small grey checkmark in the heading that read as decoration.
+    private var cropApplyRow: some View {
+        HStack(spacing: 6) {
+            Button {
+                guard let pending = session.pendingGeometry else { return }
+                session.draft.setGeometry { $0 = pending }
+                session.commitGesture()
+                session.cropMode = false
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .bold))
+                    Text("Apply")
+                }
+                .font(panelTheme.labelFont)
+                .foregroundStyle(panelTheme.selectionInk)
+                .padding(.horizontal, 10)
+                .frame(height: 24)
+                .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(panelTheme.selectionFill))
+            }
+            .buttonStyle(.plain)
+            .disabled(!session.cropHasPendingChange)
+            .opacity(session.cropHasPendingChange ? 1 : 0.4)
+            .help(Text("Apply Crop"))
+
+            EditorSmallButton(label: String(localized: "Reset"),
+                              systemName: "arrow.counterclockwise") {
+                session.pendingGeometry = .neutral
+                cropAspect = .original
+                cropPortrait = false
+                Task { await session.renderDraft() }
+            }
+            .environment(\.theme, panelTheme)
+            .help(Text("Reset Crop"))
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// Every geometry control funnels through here so none of them can
+    /// accidentally reach `draft`.
+    private func mutatePendingGeometry(_ mutate: (inout GeometryParams) -> Void) {
+        var g = session.pendingGeometry ?? session.draft.geometryParams ?? .neutral
+        mutate(&g)
+        session.pendingGeometry = g.clamped()
+        Task { await session.renderDraft() }
+    }
+
+    /// Picking a shape refits the pending frame; Freeform leaves whatever is on
+    /// screen alone, since its whole point is that you place it yourself.
     private func selectAspect(_ p: CropAspectPreset) {
         cropAspect = p
         guard session.cropMode else { return }
         switch p.id {
-        case "original": session.pendingCrop = .full
-        case "freeform": break
+        case "original":
+            mutatePendingGeometry { $0.crop = .full }
+        case "freeform":
+            break
         default:
             guard let ratio = p.ratio(portrait: cropPortrait) else { return }
-            session.pendingCrop = CropDragMath.fit(aspect: ratio, into: session.imageAspect)
+            let fitted = CropDragMath.fit(aspect: ratio, into: session.imageAspect)
+            mutatePendingGeometry { $0.crop = fitted }
         }
-    }
-
-    /// Appears only once the pending frame differs from what is stored —
-    /// `EditorSection` already renders `accessory` conditionally, so a nil here
-    /// simply leaves the heading clean.
-    private var cropApplyButton: AnyView? {
-        guard session.cropHasPendingChange, let pending = session.pendingCrop else { return nil }
-        return AnyView(
-            EditorSmallButton(label: String(localized: "Apply"),
-                              systemName: "checkmark") {
-                session.draft.setGeometry { $0.crop = pending }
-                session.commitGesture()
-                session.cropMode = false
-            }
-            .environment(\.theme, panelTheme)
-            .help(Text("Apply Crop"))
-        )
     }
 
     /// Straighten writes the angle AND the inset crop that keeps the photo a
@@ -981,24 +1087,21 @@ struct EditorView: View {
     /// of its own, so without this the corners go transparent. Lightroom and
     /// Apple Photos both pull the crop in as you rotate.
     ///
-    /// Not destructive: this is a `crop` value, the original file is untouched,
-    /// and double-clicking the slider back to 0 restores the full frame in one
-    /// gesture.
-    ///
-    /// It only auto-manages a crop it OWNS — full frame, or the inset it wrote
-    /// itself. A frame the user dragged is theirs, and straighten must not
-    /// silently reframe it.
+    /// Pending like everything else in this card, so an abandoned straighten
+    /// never reaches the file. It only auto-manages a crop it OWNS — full
+    /// frame, or the inset it wrote itself; a frame the user dragged is theirs.
     private var straightenBinding: Binding<Double> {
-        Binding(get: { session.draft.geometryParams?.straightenDegrees ?? 0 },
+        Binding(get: { session.pendingGeometry?.straightenDegrees
+                        ?? session.draft.geometryParams?.straightenDegrees ?? 0 },
                 set: { degrees in
             let aspect = session.imageAspect
-            let existing = session.draft.geometryParams
-            let previous = existing?.straightenDegrees ?? 0
-            let current = existing?.crop ?? .full
+            let existing = session.pendingGeometry ?? session.draft.geometryParams ?? .neutral
+            let previous = existing.straightenDegrees
+            let current = existing.crop ?? .full
             let ownsCrop = current.isFull
                 || current == CropDragMath.straightenInset(degrees: previous, aspect: aspect)
 
-            session.draft.setGeometry { g in
+            mutatePendingGeometry { g in
                 g.straightenDegrees = degrees
                 guard ownsCrop else { return }
                 g.crop = degrees == 0
@@ -1025,6 +1128,7 @@ struct EditorView: View {
 
     private var hslSection: some View {
         VStack(alignment: .leading, spacing: panelTheme.spacingS) {
+            hslTabs
             ForEach(Array(Self.hslBandNames.enumerated()), id: \.offset) { i, name in
                 EditSlider(label: name, value: hslBinding(i), onCommit: session.commitGesture)
             }
@@ -1051,15 +1155,37 @@ struct EditorView: View {
         })
     }
 
-    private var hslTabButtons: AnyView {
-        AnyView(HStack(spacing: 4) {
-            stylesModeButton(systemName: "paintpalette", isOn: hslTab == .hue,
-                             label: String(localized: "Hue")) { hslTab = .hue }
-            stylesModeButton(systemName: "drop", isOn: hslTab == .saturation,
-                             label: String(localized: "Saturation")) { hslTab = .saturation }
-            stylesModeButton(systemName: "sun.max", isOn: hslTab == .luminance,
-                             label: String(localized: "Luminance")) { hslTab = .luminance }
-        })
+    /// Three TEXT tabs at the top of the card body, not icons in the heading.
+    /// The icons were unreadable — a palette, a drop and a sun say nothing
+    /// about hue, saturation and luminance, and a tooltip you have to hover to
+    /// find is not a label.
+    private var hslTabs: some View {
+        HStack(spacing: 2) {
+            hslTabButton(String(localized: "Hue"), .hue)
+            hslTabButton(String(localized: "Saturation"), .saturation)
+            hslTabButton(String(localized: "Luminance"), .luminance)
+        }
+        .padding(2)
+        .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
+            .fill(panelTheme.panelRaised))
+    }
+
+    private func hslTabButton(_ label: String, _ tab: HSLTab) -> some View {
+        let isOn = hslTab == tab
+        return Button { hslTab = tab } label: {
+            Text(label)
+                .font(.system(size: 10, weight: isOn ? .semibold : .regular))
+                .foregroundStyle(isOn ? panelTheme.selectionInk : panelTheme.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity)
+                .frame(height: 20)
+                .background(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(isOn ? panelTheme.selectionFill : .clear))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(label))
+        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
     }
 
     private var splitToneSection: some View {
@@ -1224,14 +1350,18 @@ struct EditorView: View {
         EditorSection(title: String(localized: "TOOLS"),
                       ink: ink,
                       isExpanded: expansion(Section.tools)) { toolsSection }
+        // Styles lives on the LEFT, under Tools: it is where you START — pick a
+        // look, then refine it with the sliders on the right. Keeping it on the
+        // right put a browser at the top of the column you adjust in.
+        EditorSection(title: String(localized: "STYLES"),
+                      ink: ink,
+                      accessory: stylesModeButtons,
+                      summary: stylesSummary,
+                      isExpanded: expansion(Section.looks)) { looksTab }
         // Was "SCOPES" — a word from broadcast video that says nothing to
         // someone looking at their own photo. It IS a histogram (plus the
         // plain-English clipping read-out), so it says so, and it sits open
         // under the tools where it can be glanced at while you work.
-        EditorSection(title: String(localized: "CROP"),
-                      ink: ink,
-                      accessory: cropApplyButton,
-                      isExpanded: expansion(Section.crop)) { cropSection }
         EditorSection(title: String(localized: "HISTOGRAM"),
                       ink: ink,
                       isExpanded: expansion(Section.histogram)) {

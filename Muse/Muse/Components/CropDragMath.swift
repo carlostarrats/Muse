@@ -31,14 +31,22 @@ nonisolated enum CropDragMath {
         var movesBottomEdge: Bool { self == .bottomLeft || self == .bottom || self == .bottomRight }
     }
 
-    /// Apply a normalized drag delta to one handle. `aspect` (width ÷ height)
-    /// locks the shape when non-nil.
+    /// Apply a normalized drag delta to one handle. `aspect` (width ÷ height,
+    /// in PIXELS) locks the shape when non-nil.
+    ///
+    /// `imageAspect` is required whenever `aspect` is, and it is not optional
+    /// noise: a `CropRect`'s w and h are fractions of the image's width and
+    /// height, which have DIFFERENT pixel scales. So a normalized 0.6 × 0.6 on
+    /// a 3:2 photo is a 1.5:1 rectangle, not a square. The lock therefore has
+    /// to be applied to `aspect / imageAspect` — comparing the raw ratio was a
+    /// real shipped bug, and the test that "covered" it asserted `w == h`,
+    /// which is the bug restated.
     ///
     /// The result is ALWAYS a valid sub-rect of the image: never inverted,
     /// never smaller than `minimumSide`, never outside 0…1. Those three are
     /// what stop a fast drag from producing a frame the renderer can't crop to.
     static func resize(_ rect: CropRect, handle: Handle, by delta: CGSize,
-                       aspect: Double?) -> CropRect {
+                       aspect: Double?, imageAspect: Double = 1) -> CropRect {
         var minX = rect.x
         var minY = rect.y
         var maxX = rect.x + rect.w
@@ -57,12 +65,18 @@ nonisolated enum CropDragMath {
         var w = max(maxX - minX, minimumSide)
         var h = max(maxY - minY, minimumSide)
 
-        if let aspect, aspect > 0 {
-            // Honour the lock by shrinking the over-long axis, never growing
-            // the other — growing could push the frame back outside the image.
-            if w / h > aspect { w = h * aspect } else { h = w / aspect }
+        if let aspect, aspect > 0, imageAspect > 0, aspect.isFinite, imageAspect.isFinite {
+            // The lock in NORMALIZED space, which is the pixel ratio divided by
+            // the image's own ratio — see the note on this function.
+            let target = aspect / imageAspect
+            // Shrink the over-long axis, never grow the other: growing could
+            // push the frame back outside the image.
+            if w / h > target { w = h * target } else { h = w / target }
             w = min(w, 1)
             h = min(h, 1)
+            // Clamping one axis to 1 can break the lock; re-derive the other
+            // from whichever axis actually survived.
+            if w / h > target { w = h * target } else { h = w / target }
         }
 
         // Re-anchor to whichever edges this handle did NOT move, so the

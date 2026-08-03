@@ -162,29 +162,43 @@ final class EditSession: ObservableObject {
     @Published var cropMode = false {
         didSet {
             guard cropMode != oldValue else { return }
-            pendingCrop = cropMode ? (draft.geometryParams?.crop ?? .full) : nil
-            // Entering or leaving changes what the canvas shows (cropped vs.
-            // whole photo), and no draft change is coming to trigger it.
+            // Entering snapshots the stored geometry; LEAVING discards the
+            // pending copy wholesale. Abandoning the card must cost nothing.
+            pendingGeometry = cropMode ? (draft.geometryParams ?? .neutral) : nil
             Task { await renderDraft() }
         }
     }
 
-    /// The frame being dragged. Committed into `draft` only on Apply, so an
-    /// abandoned drag costs nothing and never reaches the autosave.
-    @Published var pendingCrop: CropRect?
+    /// The WHOLE geometry group while the card is open — crop, straighten,
+    /// quarter turns and flips together.
+    ///
+    /// It is the whole group and not just the crop rect because the card has to
+    /// be TRANSACTIONAL: rotate, flip and straighten used to write straight
+    /// into `draft`, so touching any of them saved and pushed a new thumbnail
+    /// to the grid even though Apply was never pressed. A card with an Apply
+    /// button that only governs one of its four controls is a card that lies.
+    @Published var pendingGeometry: GeometryParams?
 
-    /// True once the pending frame differs from what is stored — what makes the
-    /// Apply button appear.
+    /// True once the pending geometry differs from what is stored — what makes
+    /// the Apply button appear.
     var cropHasPendingChange: Bool {
-        guard cropMode, let pendingCrop else { return false }
-        return pendingCrop != (draft.geometryParams?.crop ?? .full)
+        guard cropMode, let pendingGeometry else { return false }
+        return pendingGeometry != (draft.geometryParams ?? .neutral)
     }
 
-    /// The stack to RENDER right now. Identical to `draft` except in crop mode.
+    /// The stack to RENDER right now.
+    ///
+    /// In crop mode the pending geometry is previewed live — you see the
+    /// straighten and the rotation as you make them — but the CROP is forced
+    /// full, so you frame against the whole photo and can pull the frame back
+    /// out to reclaim area. That is Apple Photos' behaviour.
     var renderStack: EditStack {
-        guard cropMode else { return draft }
+        guard cropMode, let pendingGeometry else { return draft }
         var s = draft
-        s.setGeometry { $0.crop = .full }
+        s.setGeometry {
+            $0 = pendingGeometry
+            $0.crop = .full
+        }
         return s
     }
 

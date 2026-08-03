@@ -1015,6 +1015,16 @@
         }
       }
     },
+    "Amount" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Intensité"
+          }
+        }
+      }
+    },
     "Analysis" : {
       "localizations" : {
         "fr" : {
@@ -1243,6 +1253,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Couleur auto"
+          }
+        }
+      }
+    },
+    "Auto Enhance" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Amélioration auto"
           }
         }
       }
@@ -3850,6 +3870,7 @@
       }
     },
     "Grain Roughness" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -3860,6 +3881,7 @@
       }
     },
     "Grain Size" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -7785,6 +7807,26 @@
         }
       }
     },
+    "Reset Color Mix" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réinitialiser le mélange de couleurs"
+          }
+        }
+      }
+    },
+    "Reset Crop" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réinitialiser le recadrage"
+          }
+        }
+      }
+    },
     "Reset Curve" : {
       "localizations" : {
         "fr" : {
@@ -7972,6 +8014,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rotation à droite"
+          }
+        }
+      }
+    },
+    "Roughness" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rugosité"
           }
         }
       }
