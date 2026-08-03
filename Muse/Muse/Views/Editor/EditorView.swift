@@ -41,6 +41,8 @@ struct EditorView: View {
     /// Read only to name what's applied in the collapsed STYLES heading.
     @ObservedObject private var presetStore = EditPresetStore.shared
     @ObservedObject private var lutStore = LutStore.shared
+    /// The View menu's half of the hide-UI eye — see `EditorChromeCommand`.
+    @ObservedObject private var chromeCommand = EditorChromeCommand.shared
     @State private var showZebraThresholds = false
     /// The smoothed-EV mask the zone hatch draws through. Built lazily on first
     /// hover and dropped whenever the draft changes — it's a per-render mask,
@@ -219,6 +221,7 @@ struct EditorView: View {
         }
         .onAppear {
             updateStatsVisibility()
+            chromeCommand.editorPresented(uiHidden: session.uiHidden)
         }
         .onDisappear {
             chromeAnimation?.cancel()
@@ -228,6 +231,17 @@ struct EditorView: View {
             session.hoveredZone = nil
             session.toneZoneTargeting = false
             targetCommitTask?.cancel()
+            // Leaves the View menu's item disabled and correctly titled for the
+            // next visit, whichever state this one ended in.
+            chromeCommand.editorDismissed()
+        }
+        // The menu item is the SAME action as the eye, so it goes through the
+        // same animated toggle rather than setting `uiHidden` behind its back —
+        // a bare assignment would slide the panels without stepping the canvas
+        // insets, and the photo would jump instead of growing into the space.
+        .onChange(of: chromeCommand.toggleRequests) { _, _ in toggleChrome() }
+        .onChange(of: session.uiHidden) { _, hidden in
+            chromeCommand.editorPresented(uiHidden: hidden)
         }
         .onChange(of: expanded) { _, _ in updateStatsVisibility() }
         .onChange(of: session.hoveredZone) { _, zone in
@@ -397,18 +411,9 @@ struct EditorView: View {
                                 : String(localized: "Hide controls")) {
             toggleChrome()
         }
-        // Hiding the UI is a there-and-back move, so it needs a key: ⌘U
-        // toggles it either way. NOT ⌘⇧H — a three-key chord for a control you
-        // bounce on is fiddly, and a slip off the shift hides the whole app.
-        // Nothing in Muse or macOS claims ⌘U, and its neighbours (⌘Y, ⌘I, ⌘J)
-        // are unbound too, so a miss does nothing at all.
-        //
-        // It rides the BUTTON rather than a key monitor because exactly one
-        // instance of it is in the tree at a time (the chrome row when the UI
-        // is up, the lone corner button when it is down) — so the shortcut
-        // can't double-fire. A ⌘ shortcut also can't steal a keystroke from a
-        // text field the way a bare letter would.
-        .keyboardShortcut("u", modifiers: .command)
+        // ⌘U is NOT here — it lives on the View menu's item, which is where a
+        // Mac user looks up a shortcut. A second copy on this button would be a
+        // duplicate key equivalent in the same window.
         .help(Text(session.uiHidden ? "Show controls" : "Hide controls"))
     }
 

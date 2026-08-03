@@ -26,6 +26,9 @@ struct MuseApp: App {
     /// googleAuth above.
     @StateObject private var commerceStore = CommerceStore()
     @StateObject private var announcementStore = AnnouncementStore()
+    /// Observed so the View menu's hide-UI item can title and enable itself
+    /// from the editor's state. See `EditorChromeCommand`.
+    @ObservedObject private var editorChrome = EditorChromeCommand.shared
 
     /// Pin / Unpin label reflects the selected folder's current state.
     private var pinMenuTitle: String {
@@ -431,6 +434,30 @@ struct MuseApp: App {
                     Label("Manage Drive Shares…", systemImage: "link")
                 }
                 .keyboardShortcut("l", modifiers: [.command, .shift])
+
+                // The editor's hide-UI eye, in the menu bar — which is where a
+                // Mac user goes to LEARN a shortcut, and the reason ⌘U isn't
+                // just an undiscoverable key on the button.
+                //
+                // Disabled outside Edit mode: `uiHidden` is nil when no editor
+                // is on screen. The title follows the state, like Apple's own
+                // Hide/Show Toolbar, so the item always names what it will do.
+                //
+                // Not ⌘⇧H — a three-key chord for a control you bounce on, and
+                // a slip off the shift hides the app. Nothing in Muse or macOS
+                // claims ⌘U (this app has no Format menu), and its neighbours
+                // ⌘Y/⌘I/⌘J are unbound too, so a miss does nothing.
+                Button {
+                    EditorChromeCommand.shared.requestToggle()
+                } label: {
+                    if editorChrome.uiHidden == true {
+                        Label("Show controls", systemImage: "eye")
+                    } else {
+                        Label("Hide controls", systemImage: "eye.slash")
+                    }
+                }
+                .keyboardShortcut("u", modifiers: .command)
+                .disabled(editorChrome.uiHidden == nil)
             }
 
             // Menu-bar equivalents of the chip context menu — keyboard and

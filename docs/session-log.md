@@ -37,14 +37,30 @@ alone, like every other hover in the app. The original comment argued the lift
 was backdrop-independent — true, but being consistent with the rest of the app
 matters more, and the white wash is itself backdrop-independent.
 
-**"Give the eye button a keyboard shortcut."** ⌘U, on the button itself rather
-than a key monitor: exactly one instance of it is in the tree at a time (the
-chrome row when the UI is up, the lone corner button when it is down), so it
-can't double-fire, and a ⌘ shortcut can't steal a keystroke from a text field the
-way a bare letter would. First attempt was ⌘⇧H, which the owner rejected on the
-right grounds — a three-key chord for a control you bounce on, and slipping off
-the shift hides the whole app. ⌘U is unclaimed here and by macOS (no Format menu
-in this app), and its neighbours ⌘Y/⌘I/⌘J are unbound too, so a miss does nothing.
+**"Give the eye button a keyboard shortcut"** — and then, on seeing it, **"the
+⌘U action should be in the View menu when in edit mode."** Right call: a key
+equivalent hidden on a button is a shortcut nobody can look up. It is now a View
+menu item that titles itself from the state (Hide controls / Show controls, like
+Apple's own Hide/Show Toolbar) and is disabled outside Edit.
+
+Getting it there needed a seam — the menu bar is built in `MuseApp`, the editor
+is several layers inside `ContentView`'s viewer overlay.
+`EditorChromeCommand` is a Pattern B singleton holding a MIRROR of
+`EditSession.uiHidden` (nil = no editor on screen = item disabled) plus a request
+counter. It is deliberately not two more `@Published`s on `AppState`: one
+property there re-evaluates the whole `ContentView` body, sidebar and grid
+included, every time the eye is toggled. The menu bumps the counter and the
+EDITOR runs its own animated toggle — setting `uiHidden` directly would slide the
+panels without stepping the canvas insets, and the photo would jump instead of
+growing into the space. The shortcut left the button: two copies of ⌘U in one
+window is a duplicate key equivalent.
+
+First attempt was ⌘⇧H, which the owner rejected on the right grounds — a
+three-key chord for a control you bounce on, and slipping off the shift hides the
+whole app. ⌘U is unclaimed here and by macOS (this app has no Format menu), and
+its neighbours ⌘Y/⌘I/⌘J are unbound too, so a miss does nothing. Both menu
+strings already existed in the catalog from the button's tooltip, so French came
+for free.
 
 **Crop handles are the accent, not white** (owner, with a screenshot of white
 brackets over a pale photo). The white came from the Surface Camera port, where
