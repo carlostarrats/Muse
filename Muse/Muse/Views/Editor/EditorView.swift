@@ -954,7 +954,11 @@ struct EditorView: View {
             })
 
             if session.cropMode {
-                cropApplyRow.padding(.top, panelTheme.spacingS)
+                HStack {
+                    cropApplyRow
+                    Spacer(minLength: 0)
+                }
+                .padding(.top, panelTheme.spacingS)
             }
 
             Divider().padding(.vertical, 6)
@@ -1009,28 +1013,14 @@ struct EditorView: View {
                 Button(p.menuTitle(portrait: cropPortrait)) { selectAspect(p) }
             }
         } label: {
-            HStack(spacing: 6) {
-                Text(cropAspect.menuTitle(portrait: cropPortrait))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Spacer(minLength: 4)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
-            }
-            .font(panelTheme.labelFont)
-            .foregroundStyle(session.cropMode ? panelTheme.textPrimary : panelTheme.textSecondary)
-            .padding(.horizontal, 8)
-            .frame(height: 24)
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(panelTheme.panelRaised)
-                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(panelTheme.textSecondary.opacity(0.35), lineWidth: 1)))
-            .contentShape(Rectangle())
+            Text(cropAspect.menuTitle(portrait: cropPortrait))
+                .lineLimit(1)
+                .truncationMode(.tail)
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
+        // Standard pop-up treatment — the platform already draws a control that
+        // reads as pressable, and the hand-rolled border was a second, worse
+        // version of it.
+        .controlSize(.small)
         .disabled(!session.cropMode)
         .accessibilityLabel(Text("Crop shape"))
         .help(Text("Crop shape"))
@@ -1050,13 +1040,12 @@ struct EditorView: View {
                     .font(.system(size: 10, weight: .bold))
                 Text("Apply Crop")
             }
-            .font(panelTheme.labelFont)
+            .font(panelTheme.labelFont.weight(.semibold))
             .foregroundStyle(panelTheme.selectionInk)
+            .padding(.horizontal, 12)
             .frame(height: 24)
-            .frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(panelTheme.selectionFill))
-            .contentShape(Rectangle())
+            .background(Capsule(style: .continuous).fill(panelTheme.selectionFill))
+            .contentShape(Capsule(style: .continuous))
         }
         .buttonStyle(.plain)
         .disabled(!session.cropHasPendingChange)

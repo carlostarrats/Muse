@@ -28,6 +28,12 @@ struct ToneZoneStrip: View {
 
     private static let zoneLabels = ["−8", "−7", "−6", "−5", "−4", "−3", "−2", "−1", "0"]
 
+    /// Long enough that opening the card under the cursor doesn't hatch, short
+    /// enough that a deliberate hover feels immediate.
+    private static let hoverDwellMilliseconds = 220
+
+    @State private var hoverDwell: Task<Void, Never>?
+
     var body: some View {
         VStack(alignment: .leading, spacing: theme.spacingS) {
             // The card's own heading says TONE ZONES now, so this row is just
@@ -123,7 +129,9 @@ struct ToneZoneStrip: View {
         .frame(height: Self.cellHeight)
         .contentShape(Rectangle())
         .gesture(
-            DragGesture(minimumDistance: 1)
+            // 3pt, not 1: a cell that appears under an already-pressed cursor
+            // could otherwise write a gain from a single point of twitch.
+            DragGesture(minimumDistance: 3)
                 .onChanged { value in
                     setGain(index, to: min(max(gain(index)
                         + Double(-value.translation.height) * Self.gainPerPoint, -1), 1))
@@ -131,10 +139,23 @@ struct ToneZoneStrip: View {
                 .onEnded { _ in session.commitGesture() }
         )
         .onHover { inside in
-            if inside {
+            hoverDwell?.cancel()
+            guard inside else {
+                if session.hoveredZone == index { session.hoveredZone = nil }
+                return
+            }
+            // DWELL before hatching the canvas.
+            //
+            // `.onHover` fires when a view appears UNDER a stationary cursor,
+            // not only when the pointer moves onto it — so expanding this card
+            // used to hatch the photo instantly and unbidden, which reads as an
+            // edit having been applied. Requiring the pointer to rest here
+            // first keeps the deliberate hover-a-zone-to-see-it feature while
+            // making the card safe to merely open.
+            hoverDwell = Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(Self.hoverDwellMilliseconds))
+                guard !Task.isCancelled else { return }
                 session.hoveredZone = index
-            } else if session.hoveredZone == index {
-                session.hoveredZone = nil
             }
         }
         .onTapGesture(count: 2) {
