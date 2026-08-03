@@ -258,16 +258,11 @@ final class EditSession: ObservableObject {
     func updateCanvas(canvasLongEdge: CGFloat, scale: CGFloat) async {
         let maxPixel = Self.proxyMaxPixel(canvasLongEdge: canvasLongEdge, scale: scale)
         guard CGFloat(maxPixel) != proxyLongEdge else {
-            CanvasTrace.log("proxy       SKIP  edge=\(Int(canvasLongEdge)) rung=\(maxPixel) (unchanged)")
             return
         }
-        CanvasTrace.log("proxy       REBUILD edge=\(Int(canvasLongEdge)) "
-            + "\(Int(proxyLongEdge)) -> \(maxPixel)")
         proxyLongEdge = CGFloat(maxPixel)
         await renderOriginal(maxPixel: maxPixel)
         await renderDraft()
-        CanvasTrace.log("proxy       DONE rung=\(maxPixel) "
-            + "canvasExtent=\(tr(canvasImage?.extent ?? .zero))")
     }
 
     func renderDraft() async {

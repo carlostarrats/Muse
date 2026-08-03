@@ -131,23 +131,30 @@ are the load-bearing reference artifacts.
 | **Review — Specs 01–07** | ✅ reviewed + fixed 2026-08-01 (7 rounds) | `new-product-build-1` |
 | Polish 29 — **General image export** (one card, two preset families: Format — Same-as-original/JPEG/PNG/TIFF 8&16-bit/HEIC/WebP — above Spec 07's 12 Social presets, plus saved presets; quality, resize with never-upscale, EXIF/location toggles; `ExportPipeline` shared with `SocialRender`; real `.tiff16` at last; WebP via a statically-linked `libwebp`, the app's **first bundled binary dependency**; no filename controls and **no overwrite, ever**) | 🚧 built + tested, **card not runtime-verified** | `feat/next-150` |
 | Editor UX pass — **Edit becomes the Preview page in a second mode** (shared cards/chrome/margins; zoom + pan + pinch in Edit, which had none; Side by Side actually renders; editor modals hoisted above the viewer; Scopes→Histogram, Looks→Styles, Insights, INFO dropped; versions folded into snapshots; Styles grid/list + Original + applied-preset detection; `PanelContrast` resolves every editor colour against WCAG AA) | ✅ merged 2026-08-02 (round-8 reviewed), unreleased | `testing-new-features` |
-| Polish 30 — **owner UI pass** (export readouts regrouped + `≈` dropped; social crop-drag removed for an automatic centred crop; aspect-lock fills when on; context-menu icons everywhere; smart collections finally draw their cover pile; window minimum + non-overlapping hero fit; blue edit badge; sidebar chevron takes the selection ink; pager hover; **live-resize work on both viewer stages** — Preview fixed, Edit improved 4× but NOT correct, see below). **Two features REMOVED on owner call: culling and the editor's reference photo.** | ✅ committed, unreleased | `feat/next-150` |
+| Polish 30 — **owner UI pass** (export readouts regrouped + `≈` dropped; social crop-drag removed for an automatic centred crop; aspect-lock fills when on; context-menu icons everywhere; smart collections finally draw their cover pile; window minimum + non-overlapping hero fit; blue edit badge; sidebar chevron takes the selection ink; pager hover; **live-resize work on both viewer stages** — Preview fixed; Edit rebuilt so the canvas is sized to the image, see below). **Two features REMOVED on owner call: culling and the editor's reference photo.** | ✅ committed, unreleased | `feat/next-150` |
 
-> **The editor canvas's live resize is IMPROVED, NOT FIXED (2026-08-02).** The
-> Preview stage is correct now (its `displayRect` write on resize was animated
-> while the layout snapped — unanimated, it tracks the window edge). The EDIT
-> canvas is an `MTKView`, and its remaining ~3% of badly-sized frames during a
-> fast drag are structural: `autoResizeDrawable` owns `drawableSize` and updates
-> it AFTER notifying `drawableSizeWillChange`, so a frame drawn during a live
-> resize can render into the PREVIOUS surface, and the only hook that reliably
-> runs during a drag fires too early. **Four configurations were measured with a
-> real trace — the table is in `EditCanvasView.swift`; read it before touching
-> that file, and do not re-run those experiments.** The real fix is to size the
-> Metal view to the FITTED RECT the way Preview lays out its `Image` (its aspect
-> then never changes during a resize and `pixelScale` stops mattering), which
-> reworks zoom, pan and eyedropper hit-testing — **not approved, ask first**.
-> `Views/Editor/CanvasTrace.swift` is the TEMPORARY instrument that found it,
-> off unless `MUSE_CANVAS_TRACE=1`; delete it when the question is closed.
+> **The editor canvas is SIZED TO THE IMAGE'S FITTED RECT, and that is
+> load-bearing (2026-08-02).** It used to span the window and re-fit internally,
+> converting panel insets from points to drawable pixels with a `pixelScale`
+> read off the drawable — which lags the bounds during a live resize, so that
+> scale was wrong on most frames (measured 3.32 vs 2.0) and the photo jumped.
+> Now `EditorCanvasGeometry` owns the geometry in POINTS, zoom scales the view's
+> frame and pan moves it, and the renderer only fills whatever drawable it is
+> handed. **The invariant: the view's aspect equals the image's aspect and never
+> changes on resize**, so a lagging drawable is a correctly-SHAPED texture and
+> `contentsGravity = .resizeAspect` maps it exactly — only resolution differs,
+> for one frame. Verified by trace: geometry error went from 3× to ±0.3%, and
+> stale frames now measure the same aspect range as fresh ones.
+> `EditorCanvasGeometryTests` pins the aspect invariance, the
+> zoom-past-the-panels behaviour, and the point mapping. **Don't put the canvas
+> back to spanning the window, and don't reintroduce a point→pixel conversion in
+> the renderer.** Two consequences worth knowing: the eyedropper and the EV
+> hover were sampling the wrong pixel whenever panels showed (they fitted
+> against the whole window while the renderer fitted against the free rect) and
+> are now correct; and `CanvasPointMath` is deleted, since nothing re-derives
+> fit/zoom/pan any more (`WBEyedropper` moved to its own file). Also here:
+> `EditSession.proxyLadder` quantizes the preview proxy, because a continuous
+> size rebuilt it — decode plus full edit-stack render — on every pixel of drag.
 >
 > **Two more features were DROPPED on owner review 2026-08-02, on `feat/next-150`:
 > culling (Spec 03) and the editor's reference photo (Spec 05).** Both are fully

@@ -137,6 +137,36 @@ mattering — but that reworks zoom, pan and eyedropper hit-testing, and the own
 has not approved it. **Residual: ~3% of frames during a fast drag settle a beat
 late.**
 
+**Then the structural fix, approved after the measurement.** The canvas view is
+now SIZED TO THE CONTENT — the image's fitted rect — and positioned, exactly as
+the Preview page lays out its `Image`. `Components/EditorCanvasGeometry.swift`
+owns the geometry in POINTS (fitted size, content rect, unit point); zoom scales
+the view's frame and pan moves it; the renderer fills whatever drawable it is
+handed, with no insets, no zoom, no pan and **no point→pixel conversion left to
+get wrong**. The invariant that ends the bug class: the view's aspect equals the
+image's aspect and never changes during a resize, so a drawable that lags is a
+correctly-SHAPED texture on a correctly-shaped view and `.resizeAspect` maps it
+exactly — only resolution differs, invisibly, for one frame.
+
+Verified against the trace rather than by eye: geometry error fell from
+`pixelScale` 1.17–3.76 (3× off) to an aspect of 0.8312–0.8362 (±0.3%), and stale
+frames now measure the SAME aspect range as fresh ones (0.8312–0.8362 vs
+0.8319–0.8362) — the drawable still lags about half the time and it no longer
+matters, which was the entire point. Owner: "yeah this is nice".
+
+Preserved deliberately, with tests: a zoomed photo still grows past the free rect
+and runs under the panels (that came free from the full-window canvas and was the
+thing most at risk), and pan/pinch still work anywhere on the backdrop — the
+gesture surface stays window-sized, just below the canvas.
+
+Two bugs fell out of it, both artifacts of the same geometry living in two
+places: **the eyedropper and the tone-zone EV hover were sampling the wrong
+pixel** whenever the panels were showing (both rebuilt a fit from the FULL window
+while the renderer fitted into the window minus the panels), and
+**`CanvasPointMath` is deleted** — it existed only to re-derive fit/zoom/pan,
+which nothing does now. `WBEyedropper` moved to its own file with its tests.
+`CanvasTrace` was removed once it had done its job.
+
 **Lesson worth keeping:** three rounds were spent on plausible theories that
 each cost a build, a test run and an owner trial. The trace cost one build and
 answered it immediately — and disproved the theory that had felt most obviously

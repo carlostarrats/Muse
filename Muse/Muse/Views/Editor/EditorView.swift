@@ -189,10 +189,8 @@ struct EditorView: View {
             // Without it the proxy rebuild raced the drag — see the ladder note
             // on `EditSession.proxyMaxPixel`. Between rungs of that ladder this
             // is a no-op anyway; the pairing matters when a drag crosses one.
-            CanvasTrace.log("task        canvasSize=\(tr(canvasSize)) (debounce start)")
             try? await Task.sleep(for: .milliseconds(120))
             guard !Task.isCancelled else {
-                CanvasTrace.log("task        cancelled during debounce")
                 return
             }
             await session.updateCanvas(canvasLongEdge: max(canvasSize.width, canvasSize.height),
@@ -205,7 +203,6 @@ struct EditorView: View {
             zoneMask = nil
         }
         .onAppear {
-            CanvasTrace.begin("editor opened")
             updateStatsVisibility()
         }
         .onDisappear {
@@ -317,15 +314,13 @@ struct EditorView: View {
             }
     }
 
-    /// The image's drawn size at zoom 1 — what the pan clamp is measured
-    /// against, so you can never drag the photo off its own canvas.
+    /// The content's drawn size at zoom 1 — what the pan clamp is measured
+    /// against, so you can never drag the photo off its own canvas. Shares
+    /// `EditorCanvasGeometry` with the layout itself, rather than re-deriving
+    /// the same fit a second time.
     private func fittedSize(in canvas: CGSize) -> CGSize {
-        guard let extent = session.canvasImage?.extent,
-              extent.width > 0, extent.height > 0 else { return canvas }
-        let free = CGSize(width: max(1, canvas.width - fitInsets.leading - fitInsets.trailing),
-                          height: max(1, canvas.height - fitInsets.top - fitInsets.bottom))
-        let scale = min(free.width / extent.width, free.height / extent.height)
-        return CGSize(width: extent.width * scale, height: extent.height * scale)
+        EditorCanvasGeometry.fittedSize(canvas: canvas, insets: fitInsets,
+                                        aspect: contentAspect)
     }
 
     private func syncHoverCursor() {
@@ -453,45 +448,71 @@ struct EditorView: View {
 
     private var canvas: some View {
         GeometryReader { geo in
-            EditCanvasView(image: session.displayImage,
-                           wipeAgainst: wipeCompareImage,
-                           wipeFraction: wipeFraction,
-                           sideBySide: session.compareMode == .sideBySide,
-                           zebrasOn: session.zebrasOn,
-                           zoneMask: zoneMask,
-                           hoveredZone: session.hoveredZone,
-                           onScrollWhileTargeting: handleTargetScroll,
-                           zoom: session.canvasZoom,
-                           pan: session.canvasPan,
-                           fitInsets: fitInsets)
-                .onAppear { canvasSize = geo.size }
-                .onChange(of: geo.size) { _, size in canvasSize = size }
-                // The eyedropper is a MODE, not a persistent overlay: it
-                // swallows one click and disarms, so a stray second click
-                // can't silently re-sample.
-                .overlay {
-                    if session.eyedropperArmed {
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .onTapGesture { location in
-                                sampleWhiteBalance(at: location, canvas: geo.size)
-                            }
+            // The canvas view is SIZED TO THE CONTENT and positioned, exactly
+            // as the Preview page lays out its `Image`. Zoom scales this frame
+            // and pan moves it — deliberately unclamped to the free rect, so a
+            // zoomed photo grows past it and runs UNDER the panels (they are
+            // drawn later in the parent ZStack).
+            let content = EditorCanvasGeometry.contentRect(
+                canvas: geo.size, insets: fitInsets, aspect: contentAspect,
+                zoom: session.canvasZoom, pan: session.canvasPan)
+            ZStack {
+                // The gesture surface stays window-sized: pan and pinch worked
+                // anywhere on the backdrop when the Metal view spanned the
+                // window, and shrinking the view to the photo must not quietly
+                // shrink where you can grab it. BELOW the canvas, so the
+                // eyedropper's overlay still gets clicks on the photo first.
+                Color.clear.contentShape(Rectangle())
+
+                EditCanvasView(image: session.displayImage,
+                               wipeAgainst: wipeCompareImage,
+                               wipeFraction: wipeFraction,
+                               sideBySide: session.compareMode == .sideBySide,
+                               zebrasOn: session.zebrasOn,
+                               zoneMask: zoneMask,
+                               hoveredZone: session.hoveredZone,
+                               onScrollWhileTargeting: handleTargetScroll)
+                    .frame(width: content.width, height: content.height)
+                    // The eyedropper is a MODE, not a persistent overlay: it
+                    // swallows one click and disarms, so a stray second click
+                    // can't silently re-sample. On the CANVAS, so the point is
+                    // already in content space — a click on the backdrop simply
+                    // misses it instead of being mapped to an edge pixel.
+                    .overlay {
+                        if session.eyedropperArmed {
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .onTapGesture { location in
+                                    sampleWhiteBalance(at: location, content: content.size)
+                                }
+                        }
                     }
-                }
-                .overlay(alignment: .top) { sideBySideLabel }
-                .gesture(panGesture(canvas: geo.size))
-                .simultaneousGesture(magnifyGesture(canvas: geo.size))
-                .onHover { hovering in
-                    isHoveringCanvas = hovering
-                    syncHoverCursor()
-                }
-                .onChange(of: session.canvasZoom) { _, _ in syncHoverCursor() }
-                .overlay(alignment: .topLeading) { targetReadout }
-                .onContinuousHover { phase in
-                    handleTargetHover(phase, canvas: geo.size)
-                }
+                    .overlay(alignment: .top) { sideBySideLabel }
+                    .position(x: content.midX, y: content.midY)
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .onAppear { canvasSize = geo.size }
+            .onChange(of: geo.size) { _, size in canvasSize = size }
+            .gesture(panGesture(canvas: geo.size))
+            .simultaneousGesture(magnifyGesture(canvas: geo.size))
+            .onHover { hovering in
+                isHoveringCanvas = hovering
+                syncHoverCursor()
+            }
+            .onChange(of: session.canvasZoom) { _, _ in syncHoverCursor() }
+            .overlay(alignment: .topLeading) { targetReadout }
+            .onContinuousHover { phase in
+                handleTargetHover(phase, content: content)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// The width ÷ height the canvas view takes, from the image being shown.
+    private var contentAspect: CGFloat {
+        EditorCanvasGeometry.contentAspect(
+            imageSize: session.canvasImage?.extent.size ?? CGSize(width: 3, height: 2),
+            sideBySide: session.compareMode == .sideBySide)
     }
 
     /// The canvas. Was a split that could pair the canvas with a pinned
@@ -946,12 +967,15 @@ struct EditorView: View {
 
     /// Target mode: hovering the canvas reads the SMOOTHED mask's EV, so the
     /// number shown is the number the scroll wheel then moves.
-    private func handleTargetHover(_ phase: HoverPhase, canvas: CGSize) {
+    private func handleTargetHover(_ phase: HoverPhase, content: CGRect) {
         guard session.toneZoneTargeting else { return }
         switch phase {
         case .active(let location):
             NSCursor.crosshair.set()
-            guard let ev = sampleEV(at: location, canvas: canvas) else { return }
+            // The hover point is in the WINDOW-sized gesture surface; shift it
+            // into the content's own coordinates before mapping.
+            let local = CGPoint(x: location.x - content.minX, y: location.y - content.minY)
+            guard let ev = sampleEV(at: local, content: content.size) else { return }
             hoveredEV = ev
             session.hoveredZone = ToneZoneMath.zoneIndex(forEV: ev)
         case .ended:
@@ -963,18 +987,14 @@ struct EditorView: View {
         }
     }
 
-    private func sampleEV(at point: CGPoint, canvas: CGSize) -> Double? {
+    private func sampleEV(at point: CGPoint, content: CGSize) -> Double? {
         guard let map = session.zoneEVMap, map.width > 0, map.height > 0,
-              let image = session.canvasImage else { return nil }
-        let extent = image.extent
-        guard extent.width > 0, extent.height > 0 else { return nil }
-        let fitScale = min(canvas.width / extent.width, canvas.height / extent.height)
-        let fit = CGRect(x: (canvas.width - extent.width * fitScale) / 2,
-                         y: (canvas.height - extent.height * fitScale) / 2,
-                         width: extent.width * fitScale, height: extent.height * fitScale)
-        guard let unit = CanvasPointMath.imagePoint(fromCanvasPoint: point, fit: fit,
-                                                    zoom: session.canvasZoom,
-                                                    pan: session.canvasPan)
+              session.canvasImage != nil else { return nil }
+        // A division, because the content rect IS the image's rect. This used
+        // to rebuild a fit from the FULL window while the renderer fitted into
+        // the window minus the panels, so it read the wrong pixel whenever the
+        // panels were showing.
+        guard let unit = EditorCanvasGeometry.unitPoint(inContentOfSize: content, at: point)
         else { return nil }
         let x = min(max(Int(unit.x * Double(map.width)), 0), map.width - 1)
         let y = min(max(Int(unit.y * Double(map.height)), 0), map.height - 1)
@@ -1023,18 +1043,15 @@ struct EditorView: View {
     /// The stack stays declarative: what's stored is the resulting offsets,
     /// never the click location. A stored location would have to be re-sampled
     /// on every render and would point somewhere else the moment a crop moved.
-    private func sampleWhiteBalance(at location: CGPoint, canvas: CGSize) {
+    private func sampleWhiteBalance(at location: CGPoint, content: CGSize) {
         session.eyedropperArmed = false
         guard let image = session.originalImage ?? session.canvasImage else { return }
         let extent = image.extent
         guard extent.width > 0, extent.height > 0 else { return }
-        let fitScale = min(canvas.width / extent.width, canvas.height / extent.height)
-        let fit = CGRect(x: (canvas.width - extent.width * fitScale) / 2,
-                         y: (canvas.height - extent.height * fitScale) / 2,
-                         width: extent.width * fitScale, height: extent.height * fitScale)
-        guard let unit = CanvasPointMath.imagePoint(fromCanvasPoint: location, fit: fit,
-                                                    zoom: session.canvasZoom,
-                                                    pan: session.canvasPan)
+        // `location` is already in the canvas view's own space — the overlay
+        // sits ON the canvas, which is the image's rect. Same correction as
+        // sampleEV: the old path fitted against the whole window.
+        guard let unit = EditorCanvasGeometry.unitPoint(inContentOfSize: content, at: location)
         else { return }   // clicked the backdrop: sampling it would set WB from grey
 
         // CIImage's origin is bottom-left; the click's is top-left.

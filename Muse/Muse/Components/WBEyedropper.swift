@@ -1,34 +1,16 @@
 //
-//  CanvasPointMath.swift
+//  WBEyedropper.swift
 //  Muse
 //
-//  Canvas point → unit image-space point, under fit/zoom/pan. Pure, so the
-//  eyedropper's coordinate maths is testable without a canvas.
-//
-//  Returns nil OUT of the image rather than clamping: sampling a click that
-//  landed on the backdrop would set white balance from the backdrop colour,
-//  which reads as the eyedropper being broken.
+//  Was CanvasPointMath.swift. That enum mapped a canvas point back through
+//  fit/zoom/pan to unit image space, and it went with the editor canvas
+//  refactor (2026-08-02): the Metal view is now SIZED to the image's rect, so
+//  the mapping is a division — `EditorCanvasGeometry.unitPoint`. Re-deriving
+//  the fit in a second place is what let the eyedropper sample against the
+//  whole window while the renderer fitted into the window minus the panels.
 //
 
 import CoreGraphics
-
-nonisolated enum CanvasPointMath {
-    static func imagePoint(fromCanvasPoint point: CGPoint, fit: CGRect,
-                           zoom: CGFloat, pan: CGSize) -> CGPoint? {
-        guard fit.width > 0, fit.height > 0, zoom > 0 else { return nil }
-        // Zoom is about the fitted rect's CENTRE, which is what the canvas
-        // does — scaling about the origin instead would drift the sample point
-        // further off as the user zooms in.
-        let center = CGPoint(x: fit.midX + pan.width, y: fit.midY + pan.height)
-        let scaled = CGRect(x: center.x - fit.width * zoom / 2,
-                            y: center.y - fit.height * zoom / 2,
-                            width: fit.width * zoom, height: fit.height * zoom)
-        let u = (point.x - scaled.minX) / scaled.width
-        let v = (point.y - scaled.minY) / scaled.height
-        guard (0...1).contains(u), (0...1).contains(v) else { return nil }
-        return CGPoint(x: u, y: v)
-    }
-}
 
 /// Solve a temperature/tint slider pair from a pixel the user declared
 /// neutral. Pure and testable, unlike the RAW path (which asks CIRAWFilter for

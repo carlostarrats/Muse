@@ -38,13 +38,11 @@ struct EditCanvasView: NSViewRepresentable {
     /// Forwarded to the backing view so target mode can consume scroll before
     /// the canvas zooms. Returns true when it consumed the event.
     var onScrollWhileTargeting: ((NSEvent) -> Bool)?
-    /// Canvas zoom (1 = fit) and pan in POINTS, matching the hero viewer's.
-    var zoom: CGFloat = 1
-    var pan: CGSize = .zero
-    /// The free space the image FITS into, in points, measured from the view's
-    /// edges. The view itself spans the window, so zooming pushes the photo
-    /// under the panels instead of being clipped to a column between them.
-    var fitInsets = EdgeInsets()
+    // NOTE: no zoom, pan or insets. The view is SIZED to the content by
+    // `EditorCanvasGeometry` (zoom scales its frame, pan moves it), so this
+    // renderer's whole job is to fill the drawable it is handed. That is what
+    // removes the point→pixel conversion whose scale was wrong on a large
+    // fraction of live-resize frames — see the note in EditorCanvasGeometry.
 
     func makeNSView(context: Context) -> MTKView {
         let view = CanvasMTKView()
@@ -99,9 +97,6 @@ struct EditCanvasView: NSViewRepresentable {
         context.coordinator.zebrasOn = zebrasOn
         context.coordinator.zoneMask = zoneMask
         context.coordinator.hoveredZone = hoveredZone
-        context.coordinator.zoom = zoom
-        context.coordinator.pan = pan
-        context.coordinator.fitInsets = fitInsets
         (nsView as? CanvasMTKView)?.onScroll = { event in
             onScrollWhileTargeting?(event) ?? false
         }
@@ -135,12 +130,6 @@ struct EditCanvasView: NSViewRepresentable {
         var zebrasOn = false
         var zoneMask: CIImage?
         var hoveredZone: Int?
-        var zoom: CGFloat = 1
-        var pan: CGSize = .zero
-        var fitInsets = EdgeInsets()
-        /// Drawable pixels per point, so the pan (points) lands in the right
-        /// place on a Retina drawable.
-        private var pixelScale: CGFloat = 2
 
         /// Draw the new size NOW, in the resize's own pass.
         ///
@@ -151,11 +140,6 @@ struct EditCanvasView: NSViewRepresentable {
         /// synchronously here means every intermediate size of a live drag gets
         /// its own correctly-fitted frame.
         func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
-            CanvasTrace.log("willChange  passed=\(tr(size)) "
-                + "bounds=\(tr(view.bounds.size)) "
-                + "view.drawableSize=\(tr(view.drawableSize)) "
-                + "layerDrawable=\(tr((view.layer as? CAMetalLayer)?.drawableSize ?? .zero)) "
-                + "contentsScale=\(view.layer?.contentsScale ?? -1)")
             guard size.width >= 1, size.height >= 1 else { return }
             // WILL change — so the layer may not carry the new size yet, and
             // `view.currentDrawable` would hand back a texture of the OLD size.
@@ -219,17 +203,12 @@ struct EditCanvasView: NSViewRepresentable {
             // and only removed the one value that tracks the drawable actually
             // being drawn into. Don't re-try it without a measurement showing
             // the two genuinely disagree during a resize.
-            pixelScale = view.bounds.width > 0 ? drawableSize.width / view.bounds.width : 2
             // Composited over a TRANSPARENT full-drawable rect. Metal recycles
             // drawables, and CI writes only the pixels its result covers — so a
             // frame that shrinks (zoom out, Fit, or coming back from hidden
             // controls) left the previous, larger frame's pixels around the new
             // one: the photo appeared duplicated at the edges.
-            let stale = CanvasTrace.enabled && {
-                let scale = view.layer?.contentsScale ?? 2
-                return abs(view.bounds.width * scale - drawableSize.width) > 1
-                    || abs(view.bounds.height * scale - drawableSize.height) > 1
-            }()
+
             // Staleness is REPORTED (in the trace only), not acted on.
             //
             // Four configurations were measured on 2026-08-02, against a trace
@@ -248,14 +227,6 @@ struct EditCanvasView: NSViewRepresentable {
             // separately and would leave the last good frame up, uniformly
             // scaled by `.resizeAspect`; it may be worth measuring, but not by
             // guessing. The remaining 3% is the residual settle.
-            CanvasTrace.log((stale ? "draw STALE  " : "draw        ") + "texture=\(tr(drawableSize)) "
-                + "bounds=\(tr(view.bounds.size)) "
-                + "view.drawableSize=\(tr(view.drawableSize)) "
-                + "pixelScale=\(String(format: "%.3f", pixelScale)) "
-                + "imageExtent=\(tr(image.extent)) "
-                + "free=\(tr(freeRect(in: drawableSize))) "
-                + "fitted=\(tr(fit(image, in: drawableSize).extent)) "
-                + "zoom=\(String(format: "%.3f", zoom))")
             let full = CGRect(origin: .zero, size: drawableSize)
             let composited = overlays(on: composite(image, in: drawableSize), size: drawableSize)
                 .cropped(to: full)
@@ -290,7 +261,10 @@ struct EditCanvasView: NSViewRepresentable {
             // "After" captions over a single unchanged canvas, which is why it
             // read as doing nothing.
             if sideBySide, let wipeAgainst {
-                let gap: CGFloat = 8 * pixelScale
+                // Proportional, so it matches the gap already baked into the
+                // view's aspect by EditorCanvasGeometry.contentAspect.
+                let f = EditorCanvasGeometry.sideBySideGapFraction
+                let gap = drawableSize.width * (f / (2 + f))
                 let (left, right) = halves(of: freeRect(in: drawableSize), gap: gap)
                 return fit(image, into: right)
                     .composited(over: fit(wipeAgainst, into: left))
@@ -323,21 +297,11 @@ struct EditCanvasView: NSViewRepresentable {
             return out
         }
 
-        /// Fit, then zoom about the centre and pan. Applied here so the image,
-        /// the compared image and the zone mask all move as one — and so the
-        /// hit-testing math (CanvasPointMath, which already takes zoom/pan) is
-        /// describing what is actually on screen.
-        /// The space an image FITS into: the drawable minus the panels. In
-        /// drawable pixels, and in CI's bottom-left origin.
+        /// The whole drawable. The view is already the content's rect, so the
+        /// image fills it — there are no panel insets to subtract here any more,
+        /// and no points to convert into pixels.
         private func freeRect(in size: CGSize) -> CGRect {
-            let leading = fitInsets.leading * pixelScale
-            let trailing = fitInsets.trailing * pixelScale
-            // CI's origin is bottom-left, the insets' is top-left.
-            let bottom = fitInsets.top * pixelScale
-            let top = fitInsets.bottom * pixelScale
-            return CGRect(x: leading, y: top,
-                          width: max(1, size.width - leading - trailing),
-                          height: max(1, size.height - top - bottom))
+            CGRect(origin: .zero, size: size)
         }
 
         private func halves(of rect: CGRect, gap: CGFloat) -> (CGRect, CGRect) {
@@ -350,17 +314,19 @@ struct EditCanvasView: NSViewRepresentable {
             fit(image, into: freeRect(in: size))
         }
 
-        /// Fit into `rect`, then zoom about its centre and pan. The ZOOM is not
-        /// clamped to the rect, so the image grows past it and under the panels.
+        /// Aspect-fit into `rect`, centred. No zoom and no pan: the view's FRAME
+        /// carries both now. Since the view is sized to the content's aspect,
+        /// this fit is an exact fill in the normal case — the centring only does
+        /// anything for the sub-pixel remainder and for the side-by-side halves.
         private func fit(_ image: CIImage, into rect: CGRect) -> CIImage {
             let extent = image.extent
             guard extent.width > 0, extent.height > 0, extent.width.isFinite else { return image }
-            let scale = min(rect.width / extent.width, rect.height / extent.height) * zoom
+            let scale = min(rect.width / extent.width, rect.height / extent.height)
             let scaled = image
                 .transformed(by: CGAffineTransform(translationX: -extent.minX, y: -extent.minY))
                 .transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-            let dx = rect.minX + (rect.width - extent.width * scale) / 2 + pan.width * pixelScale
-            let dy = rect.minY + (rect.height - extent.height * scale) / 2 - pan.height * pixelScale
+            let dx = rect.minX + (rect.width - extent.width * scale) / 2
+            let dy = rect.minY + (rect.height - extent.height * scale) / 2
             return scaled.transformed(by: CGAffineTransform(translationX: dx, y: dy))
         }
     }
