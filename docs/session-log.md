@@ -68,7 +68,22 @@ not clearing `editMode` early was updated, since the failure it describes is now
 "reveals the stage" rather than "mounts the stage".
 
 The accepted cost: the hero's full-res `NSImage` stays retained while editing,
-where before entering Edit freed it. That is what buys the instant return.
+where before entering Edit freed it. That is what buys the instant return. It is
+released on close — the viewer only exists while a file is selected, so the whole
+subtree and its state go with it.
+
+**Follow-up: auto-tone's pre-render no-op, fixed here rather than filed.** The
+ledger already recorded that pressing Auto before the first render completed did
+nothing at all, silently, because `autoToneResult` bailed on a nil
+`originalImage`. Seeding the canvas did not cause that, but it made it easier to
+hit — the editor now looks ready on the first frame instead of sitting empty, so
+nothing on screen says "not yet". It renders the original on demand at
+`autoToneFallbackLongEdge` (1024) in that case; `rgba8Sample` downsamples to 256
+either way, so both paths measure the same-size frame, and whichever ran first is
+cached for the session so Auto stays idempotent. Not bit-identical to the proxy
+path — the resampler starts from a different source size — which does not matter
+for histogram statistics of the same picture, and the code comment says so rather
+than claiming otherwise.
 
 Tests 2,011 (+9: the seed, `hasProxy`, and the `HeroImageBox` file-match guard);
 Release build warning-free; `audit-invariants.sh` 15/15. The

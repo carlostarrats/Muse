@@ -296,10 +296,14 @@ final class EditSession: ObservableObject {
     private var autoToneCache: AutoToneStats.Result?
 
     /// The long edge of the on-demand original render used when Auto is
-    /// pressed before the proxy exists. Small on purpose: the measurement
-    /// downsamples to `statsSampleLongEdge` (256) anyway, so a bigger render
-    /// would buy an identical answer for real time — the same reasoning that
-    /// sets the sample size in the first place.
+    /// pressed before the proxy exists. Small on purpose: `rgba8Sample`
+    /// downsamples to `statsSampleLongEdge` (256) either way, so both paths
+    /// measure a 256px frame and a bigger render would buy resampling
+    /// differences, not information — the same reasoning that sets the sample
+    /// size in the first place. Not bit-identical to the proxy path (the
+    /// resampler starts from a different source size), which does not matter:
+    /// these are histogram statistics of the same picture, and whichever runs
+    /// first is cached for the session, so Auto stays idempotent.
     static let autoToneFallbackLongEdge = 1024
 
     func autoToneResult() async -> AutoToneStats.Result? {

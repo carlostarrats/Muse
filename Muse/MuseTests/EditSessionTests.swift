@@ -176,6 +176,74 @@ extension EditSessionTests {
         XCTAssertEqual(s.zoneEVMap?.values, [-4])
     }
 
+    // MARK: - Auto-tone before the first render
+
+    /// Auto used to bail to nil when `originalImage` was nil, so pressing it
+    /// in the window before the first render landed did NOTHING, silently —
+    /// and seeding the canvas made that window easier to hit, because the
+    /// editor now looks ready on the first frame. It renders the original on
+    /// demand instead. `updateCanvas` is never called here, so `originalImage`
+    /// is nil for the whole test: this is exactly the pre-render state.
+    func testAutoToneMeasuresWithoutWaitingForTheFirstRender() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("autotone-\(UUID().uuidString).png")
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 64, pixelsHigh: 64,
+                                   bitsPerSample: 8, samplesPerPixel: 3, hasAlpha: false,
+                                   isPlanar: false, colorSpaceName: .deviceRGB,
+                                   bytesPerRow: 0, bitsPerPixel: 0)!
+        // A gradient, not a flat fill: auto-tone measures spread, and a single
+        // colour has none — it would pass on a degenerate input.
+        for x in 0..<64 {
+            for y in 0..<64 {
+                let v = CGFloat(x) / 63
+                rep.setColor(NSColor(deviceRed: v, green: v, blue: v, alpha: 1), atX: x, y: y)
+            }
+        }
+        try rep.representation(using: .png, properties: [:])!.write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let s = EditSession(url: url, stack: nil)
+        XCTAssertNil(s.originalImage, "precondition: no render has landed yet")
+        let result = await s.autoToneResult()
+        XCTAssertNotNil(result, "Auto silently did nothing before the first render")
+    }
+
+    /// Cached for the session's life, which is what keeps Auto idempotent —
+    /// a second press must measure the same original, not compound the first.
+    /// That has to hold for the on-demand render too.
+    func testAutoToneResultIsCachedAcrossPresses() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("autotone-\(UUID().uuidString).png")
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 32, pixelsHigh: 32,
+                                   bitsPerSample: 8, samplesPerPixel: 3, hasAlpha: false,
+                                   isPlanar: false, colorSpaceName: .deviceRGB,
+                                   bytesPerRow: 0, bitsPerPixel: 0)!
+        for x in 0..<32 {
+            for y in 0..<32 {
+                let v = CGFloat(y) / 31
+                rep.setColor(NSColor(deviceRed: v, green: v, blue: v, alpha: 1), atX: x, y: y)
+            }
+        }
+        try rep.representation(using: .png, properties: [:])!.write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let s = EditSession(url: url, stack: nil)
+        let first = await s.autoToneResult()
+        let second = await s.autoToneResult()
+        XCTAssertNotNil(first)
+        XCTAssertEqual(first, second)
+    }
+
+    /// The fallback render is deliberately small — both paths downsample to
+    /// `statsSampleLongEdge` before measuring, so a larger one would buy
+    /// resampling differences, not information.
+    func testAutoToneFallbackRenderIsSmallerThanTheSmallestProxyRung() {
+        XCTAssertLessThan(EditSession.autoToneFallbackLongEdge,
+                          EditSession.proxyLadder.first!)
+        XCTAssertGreaterThan(EditSession.autoToneFallbackLongEdge,
+                             EditSession.statsSampleLongEdge)
+    }
+
     // MARK: - Opening canvas
 
     private func swatch(w: Int, h: Int) -> NSImage {
