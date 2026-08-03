@@ -39,6 +39,12 @@ enum AppSettings {
     static let editorStylesOpenKey = "editorStylesOpen"
     static let editorZebraHighKey = "editorZebraHigh"
     static let editorZebraLowKey = "editorZebraLow"
+    /// The editor's panel workspace — which cards, in what order, on which
+    /// side, and which are hidden. A GLOBAL working preference like the
+    /// backdrop and the expanded set, stored as JSON because it is structured.
+    /// Not library data: it does not go in the database and does not ride a
+    /// backup.
+    static let editorWorkspaceKey = "editorWorkspace"
     /// The one-time "Smarter Search" offer has been shown. Set on ANY dismissal
     /// — declining once must never nag again.
     static let clipOfferSeenKey = "clipOfferSeen"
@@ -126,6 +132,26 @@ enum AppSettings {
         set {
             UserDefaults.standard.set(newValue.map(Array.init) ?? [],
                                       forKey: editorExpandedSectionsKey)
+        }
+    }
+
+    /// The saved editor workspace. Unset, malformed, or the wrong type all
+    /// read as the standard layout — a preference that cannot be parsed must
+    /// never leave the user with an editor that has no controls. The repair of
+    /// a workspace that parses but disagrees with this build (an id we no
+    /// longer have, a card we just added) lives in `EditorWorkspace.init(dto:)`.
+    static var editorWorkspace: EditorWorkspace {
+        get {
+            guard let data = UserDefaults.standard.data(forKey: editorWorkspaceKey),
+                  let dto = try? JSONDecoder().decode(EditorWorkspaceDTO.self, from: data)
+            else { return .standard }
+            return EditorWorkspace(dto: dto)
+        }
+        set {
+            guard let data = try? JSONEncoder().encode(EditorWorkspaceDTO(newValue)) else {
+                return
+            }
+            UserDefaults.standard.set(data, forKey: editorWorkspaceKey)
         }
     }
 
