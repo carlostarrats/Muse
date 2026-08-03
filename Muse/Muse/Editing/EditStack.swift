@@ -133,6 +133,18 @@ nonisolated extension EditStack {
         for case .lut(let p) in adjustments { return p }
         return nil
     }
+    var hslParams: HSLParams? {
+        for case .hsl(let p) in adjustments { return p }
+        return nil
+    }
+    var splitToneParams: SplitToneParams? {
+        for case .splitTone(let p) in adjustments { return p }
+        return nil
+    }
+    var grainParams: GrainParams? {
+        for case .grain(let p) in adjustments { return p }
+        return nil
+    }
 
     /// Find-or-insert the matching case, mutate it, write it back. The editor
     /// binds sliders through these, so a first non-neutral write creates the
@@ -183,6 +195,21 @@ nonisolated extension EditStack {
             adjustments.sort { $0.canonicalIndex < $1.canonicalIndex }
         }
     }
+    mutating func setHSL(_ mutate: (inout HSLParams) -> Void) {
+        var p = hslParams ?? .neutral
+        mutate(&p)
+        replace(.hsl(p))
+    }
+    mutating func setSplitTone(_ mutate: (inout SplitToneParams) -> Void) {
+        var p = splitToneParams ?? .neutral
+        mutate(&p)
+        replace(.splitTone(p))
+    }
+    mutating func setGrain(_ mutate: (inout GrainParams) -> Void) {
+        var p = grainParams ?? .neutral
+        mutate(&p)
+        replace(.grain(p))
+    }
     mutating func setRaw(_ mutate: (inout RawParams) -> Void) {
         var p = rawParams ?? .neutral
         mutate(&p)
@@ -220,6 +247,10 @@ nonisolated enum Adjustment: Equatable, Sendable {
     // would re-key every pre-existing edited thumbnail's `stack_hash`.
     case toneZone(ToneZoneParams)
     case lut(LutParams)
+    // Stage B — APPENDED after lut, same rule.
+    case hsl(HSLParams)
+    case splitTone(SplitToneParams)
+    case grain(GrainParams)
 
     /// Declaration order. NEW CASES APPEND — never insert.
     var canonicalIndex: Int {
@@ -232,6 +263,9 @@ nonisolated enum Adjustment: Equatable, Sendable {
         case .vignette: 5
         case .toneZone: 6
         case .lut: 7
+        case .hsl: 8
+        case .splitTone: 9
+        case .grain: 10
         }
     }
 
@@ -245,6 +279,9 @@ nonisolated enum Adjustment: Equatable, Sendable {
         case .vignette(let p): p.isNeutral
         case .toneZone(let p): p.isNeutral
         case .lut(let p): p.isNeutral
+        case .hsl(let p): p.isNeutral
+        case .splitTone(let p): p.isNeutral
+        case .grain(let p): p.isNeutral
         }
     }
 }
@@ -253,6 +290,7 @@ extension Adjustment: Codable {
     private enum CodingKeys: String, CodingKey { case type, params }
     private enum Kind: String, Codable {
         case tone, color, presence, curve, geometry, vignette, toneZone, lut
+        case hsl, splitTone, grain
     }
 
     init(from decoder: Decoder) throws {
@@ -271,6 +309,9 @@ extension Adjustment: Codable {
         case .vignette: self = .vignette(try c.decode(VignetteParams.self, forKey: .params))
         case .toneZone: self = .toneZone(try c.decode(ToneZoneParams.self, forKey: .params))
         case .lut: self = .lut(try c.decode(LutParams.self, forKey: .params))
+        case .hsl: self = .hsl(try c.decode(HSLParams.self, forKey: .params))
+        case .splitTone: self = .splitTone(try c.decode(SplitToneParams.self, forKey: .params))
+        case .grain: self = .grain(try c.decode(GrainParams.self, forKey: .params))
         }
     }
 
@@ -293,6 +334,12 @@ extension Adjustment: Codable {
             try c.encode(Kind.toneZone, forKey: .type); try c.encode(p, forKey: .params)
         case .lut(let p):
             try c.encode(Kind.lut, forKey: .type); try c.encode(p, forKey: .params)
+        case .hsl(let p):
+            try c.encode(Kind.hsl, forKey: .type); try c.encode(p, forKey: .params)
+        case .splitTone(let p):
+            try c.encode(Kind.splitTone, forKey: .type); try c.encode(p, forKey: .params)
+        case .grain(let p):
+            try c.encode(Kind.grain, forKey: .type); try c.encode(p, forKey: .params)
         }
     }
 }
@@ -505,6 +552,107 @@ nonisolated struct LutParams: Codable, Equatable, Sendable {
 
     func clamped() -> LutParams {
         LutParams(lutHash: lutHash, name: name, strength: min(max(strength, 0), 1))
+    }
+}
+
+/// Eight fixed hue bands — red, orange, yellow, green, aqua, blue, purple,
+/// magenta — Lightroom's model, because it is the one people have already
+/// seen. Three parallel arrays rather than eight structs so the renderer hands
+/// the kernel three flat runs of floats.
+nonisolated struct HSLParams: Codable, Equatable, Sendable {
+    static let bandCount = 8
+
+    var hue: [Double]
+    var saturation: [Double]
+    var luminance: [Double]
+
+    init(hue: [Double], saturation: [Double], luminance: [Double]) {
+        self.hue = hue; self.saturation = saturation; self.luminance = luminance
+    }
+
+    static let neutral = HSLParams(
+        hue: .init(repeating: 0, count: bandCount),
+        saturation: .init(repeating: 0, count: bandCount),
+        luminance: .init(repeating: 0, count: bandCount))
+
+    var isNeutral: Bool {
+        hue.allSatisfy { $0 == 0 } && saturation.allSatisfy { $0 == 0 }
+            && luminance.allSatisfy { $0 == 0 }
+    }
+
+    /// Clamps range AND normalizes LENGTH, for the same reason `ToneZoneParams`
+    /// does: decoding round-trips the blob byte-identically, so a hand-edited
+    /// or future-shaped sidecar reaches the renderer and must not index out of
+    /// bounds.
+    func clamped() -> HSLParams {
+        HSLParams(hue: Self.fit(hue), saturation: Self.fit(saturation),
+                  luminance: Self.fit(luminance))
+    }
+
+    private static func fit(_ a: [Double]) -> [Double] {
+        var v = a
+        if v.count < bandCount {
+            v += Array(repeating: 0, count: bandCount - v.count)
+        } else if v.count > bandCount {
+            v = Array(v.prefix(bandCount))
+        }
+        return v.map { min(max($0, -1), 1) }
+    }
+}
+
+/// Shadow and highlight tinting. Hue is 0…1 around the wheel, saturation 0…1,
+/// balance shifts the crossover. Display-referred — the renderer applies it
+/// after the curve and the LUT, because that is the encoding the user is
+/// judging the grade in.
+nonisolated struct SplitToneParams: Codable, Equatable, Sendable {
+    var shadowHue: Double = 0
+    var shadowSaturation: Double = 0
+    var highlightHue: Double = 0
+    var highlightSaturation: Double = 0
+    var balance: Double = 0           // −1…+1
+
+    static let neutral = SplitToneParams()
+
+    /// A hue with no saturation tints nothing, so it is NOT an edit — opening
+    /// the card and sliding a hue must not persist a blob that moves no pixels.
+    var isNeutral: Bool { shadowSaturation == 0 && highlightSaturation == 0 }
+
+    func clamped() -> SplitToneParams {
+        SplitToneParams(shadowHue: min(max(shadowHue, 0), 1),
+                        shadowSaturation: min(max(shadowSaturation, 0), 1),
+                        highlightHue: min(max(highlightHue, 0), 1),
+                        highlightSaturation: min(max(highlightSaturation, 0), 1),
+                        balance: min(max(balance, -1), 1))
+    }
+}
+
+/// Film grain. `amount` is the only field that makes it real; size and
+/// roughness shape a grain that is otherwise absent.
+nonisolated struct GrainParams: Codable, Equatable, Sendable {
+    var amount: Double = 0            // 0…1
+    var size: Double = 0.5            // 0…1
+    var roughness: Double = 0.5       // 0…1
+
+    init(amount: Double = 0, size: Double = 0.5, roughness: Double = 0.5) {
+        self.amount = amount; self.size = size; self.roughness = roughness
+    }
+
+    static let neutral = GrainParams()
+
+    var isNeutral: Bool { amount == 0 }
+
+    func clamped() -> GrainParams {
+        GrainParams(amount: min(max(amount, 0), 1),
+                    size: min(max(size, 0), 1),
+                    roughness: min(max(roughness, 0), 1))
+    }
+
+    /// Deterministic per-photo seed. The same photo MUST grain identically at
+    /// thumbnail, screen and export — Surface shipped a preview that dropped
+    /// grain entirely, and Muse cannot do that because the grid IS the product.
+    /// Derived from the content hash, never from time or position alone.
+    static func seed(forContentHash hash: String) -> Float {
+        Float(SeededRandom.fnv1a([hash]) % 100_000) / 100_000
     }
 }
 

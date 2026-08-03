@@ -24,6 +24,8 @@ nonisolated enum AdjustmentGroup: String, CaseIterable, Codable, Sendable {
     // Spec 05. `raw` stays where it is — it is not an `Adjustment` case, so
     // its position carries no hashing consequence.
     case toneZone, lut
+    // Stage B
+    case hsl, splitTone, grain
 }
 
 nonisolated enum EditTransfer {
@@ -94,6 +96,9 @@ nonisolated extension Adjustment {
         case .vignette: .vignette
         case .toneZone: .toneZone
         case .lut: .lut
+        case .hsl: .hsl
+        case .splitTone: .splitTone
+        case .grain: .grain
         }
     }
 }
