@@ -87,7 +87,8 @@ Rounds 1–3 are recorded in `REVIEW-FINDINGS.md` and `FEATURE-LEDGER.md`; round
 | **Instrument before theorising** (trace a GPU/run-loop symptom rather than reasoning about it) | **9** (2026-08-02) | The lens itself is the finding: 3 rounds of plausible theories each produced a wrong fix, one actively worse. One trace answered it and disproved the most convincing theory. |
 | Dead code created by the round's OWN diff | 9 | 2 findings — `PerImageState.zoom`/`.center` written nowhere after the crop drag went, with identity transforms still applied per frame; `CanvasPointMath` orphaned by the canvas refactor |
 | A constant derived from ONE consumer of a shared resource | 9 | 1 finding — `minWindowWidth` was sized from Preview's single info column; Edit shares the window and spends two panels, leaving 60pt of picture at the minimum |
-| Architecture map vs. the filesystem (do the listed files exist?) | 9 | 1 finding in this round's own diff; **3 pre-existing** — see note below |
+| Architecture map vs. the filesystem (do the listed files exist?) | 9 | 1 finding in this round's own diff; 3 pre-existing, all fixed |
+| **UI-test aim: does the test depend on WINDOW SIZE?** | **9** | 6 tests failed with the app working perfectly — a magic `(0.55, 0.5)` window fraction, in 10 places across both drive suites |
 
 ## Part 2 — lenses NOT yet run
 
@@ -105,13 +106,35 @@ an unrun lens on the list is worth more than a good idea that evaporates.
 | Two-instance runs during GUI testing | The 2026-08-02 round hit a 21-failure suite caused by a developer-launched instance racing the test's own; GRDB's `.immediateError` means the loser gets no window. Worth a mechanical guard rather than a note. |
 | Geometry computed in two places | Round 9 found the editor's eyedropper and EV hover fitting against the WHOLE window while the renderer fitted against the window minus panels — so both sampled the wrong pixel whenever the panels showed. Nobody reported it; it surfaced only when the two were merged. Worth sweeping for other duplicated layout math. |
 
-**Round 9 note — the architecture map has pre-existing rot.** A `.swift` name in
+**Round 9 — the drive suites' own fragility has now cost three rounds.** Every
+photo-opening test aimed itself with a fixed window fraction, `(0.55, 0.5)`.
+macOS RESTORES the window frame between runs, so a developer resizing the
+window by hand — or a change to the window's minimum size — silently re-aims
+every one of them; on the ragged masonry grid the fraction landed in the GAP
+between two tiles, which clears the selection instead of opening anything. Six
+tests failed, and they failed reporting *"hero viewer has no 'Edit' toggle"* —
+pointing at the editor, which had just been rewritten. A plausible, wrong
+signal aimed straight at the code most likely to be suspected.
+
+This is the same suite that previously (a) pressed Return, which only selects,
+and passed anyway because it asserted "a window exists", and (b) asserted
+nothing falsifiable in 7 of 10 tests. **The pattern is that these tests fail in
+ways that accuse the app.** Fixed by finding the tile as an ELEMENT
+(`MuseUITests/GridTileFinder.swift` — tiles are buttons labelled with their
+filename) and clicking its own centre. No test now depends on the window's size.
+Rule going forward: **a drive test must locate what it clicks, never compute
+it.**
+
+**Round 9 note — the architecture map had pre-existing rot (now fixed).** A `.swift` name in
 `docs/architecture-map.md` that no longer exists on disk: three are stale
 CURRENT-file listings from earlier commits (`MetadataImportSheet.swift`,
 `CoordinateReader.swift`, `CoordinateBackfill.swift` — the last two are already
 described as deleted in prose elsewhere, so only the first is misleading). Round
-9 fixed only the entry its own diff broke, deliberately, to keep the change
-scoped.
+Round 9 first fixed only the entry its own diff broke, to keep the change
+scoped; the owner then asked for the rest, so all three are corrected — the
+Spec 01 section listed `CoordinateReader`/`CoordinateBackfill` as current while
+the Spec 02 section said they were deleted, and `MetadataImportSheet.swift` had
+been superseded by the shared import run/report cards.
 
 **Deliberately NOT mechanized** (add it to Part 3's list): a grep for
 `.swift` names that don't exist on disk cannot tell a stale CURRENT-file

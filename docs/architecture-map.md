@@ -390,7 +390,9 @@ Muse/Muse/
                                    + rating-presence check, per (file_id, parent_dir). Unit-tested
     MetadataImportModel.swift      @MainActor orchestrator: enumerate → index-first → read off-main →
                                    batched writes, progress/cancel/summary, idempotent
-    MetadataImportSheet.swift      progress + summary modal card
+                                   (Its `MetadataImportSheet.swift` progress/summary card was
+                                   replaced by Spec 06's shared `Views/ImportRunCard.swift` +
+                                   `ImportReportCard.swift`, which serve all five sources.)
   Backup/                          Library Backup & Restore. Export one self-contained `.muselibrary`
                                    file + reconnect it on another Mac by content hash
     BackupArchive.swift            pure Codable model; reuses Sidecar for per-file metadata.
@@ -524,13 +526,12 @@ MuseShareExtension/                (separate app-extension target) "Send to Muse
 
 Coordinates (v13):
 
-- `Filesystem/CoordinateReader.swift` — header-only GPS read (EXIF for images/RAW,
-  ISO-6709 common metadata for video, through the reference-restricted asset). Calls
-  `FileMetadata`'s own pure parsers, so the DB and the viewer can't disagree; skips
-  dataless iCloud placeholders; `sanitize` rejects non-finite/out-of-range values.
-- `Intelligence/CoordinateBackfill.swift` — launch pass for libraries indexed before v13.
-  Mirrors `IntentBackfill`: fire-and-forget, capped per launch, bounded concurrency,
-  batched writes. `candidate(id:path:)` is the pure, tested selection predicate.
+- ~~`Filesystem/CoordinateReader.swift`~~ and ~~`Intelligence/CoordinateBackfill.swift`~~
+  — **both DELETED**, superseded by Spec 02's `PhotoHeaderReader` (one header read
+  serving coordinates AND EXIF) and `PhotoHeaderBackfill`. Kept as a line here
+  because this section is the Spec 01 record and the names appear in its commits;
+  see the Spec 02 section below for what replaced them. They were listed as
+  current until 2026-08-02, which is the whole reason this note is explicit.
 - `AnalyzePipeline.writeCoordinates` / `writeCoordinatesOnly` — the guarded write points
   (content-hash re-check, `coords_scanned_hash` stamped even with no GPS).
 

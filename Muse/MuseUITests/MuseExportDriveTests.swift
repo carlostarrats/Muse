@@ -87,8 +87,7 @@ final class MuseExportDriveTests: XCTestCase {
     private func selectFirstTile() {
         let window = app.windows.firstMatch
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
-        window.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.5)).click()
-        Thread.sleep(forTimeInterval: 1.5)
+        guard openPhoto(in: app, doubleClick: false, settle: 1.5) else { return }
     }
 
     /// Every static text's LABEL and VALUE.
@@ -158,8 +157,7 @@ final class MuseExportDriveTests: XCTestCase {
     func testExportCardOpensInFrontOfTheHeroViewer() throws {
         let window = app.windows.firstMatch
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
-        window.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.5)).doubleClick()
-        Thread.sleep(forTimeInterval: 3)
+        guard openPhoto(in: app, settle: 3) else { return }
         snap("02-hero-open")
 
         XCTAssertTrue(menu("File", "Export…"),
@@ -183,8 +181,7 @@ final class MuseExportDriveTests: XCTestCase {
     func testExportCardOpensInFrontOfTheEditor() throws {
         let window = app.windows.firstMatch
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
-        window.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.5)).doubleClick()
-        Thread.sleep(forTimeInterval: 3)
+        guard openPhoto(in: app, settle: 3) else { return }
 
         let editToggle = app.buttons["Edit"].firstMatch
         guard editToggle.waitForExistence(timeout: 8) else {

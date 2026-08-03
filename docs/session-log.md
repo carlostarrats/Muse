@@ -197,6 +197,24 @@ these three commits. Four findings, all in this session's own work:
   sweep must stay human — the map keeps historical mentions of deleted files on
   purpose, and no grep separates those from a stale listing.
 
+**And the GUI suite, which is how the round found its most misleading failure.**
+Running `MuseSurfaceDriveTests` after the canvas refactor gave 6 failures out of
+12, every one reporting *"hero viewer has no 'Edit' toggle"* — pointing squarely
+at the code just rewritten. The app was fine. Every photo-opening test aimed
+itself at a fixed window fraction `(0.55, 0.5)`, macOS restores the window frame
+between runs, and a session spent resizing the window by hand had re-aimed all
+of them into the gap between two masonry tiles, where a click clears the
+selection instead of opening anything. Ten occurrences across the two drive
+suites, now replaced by `MuseUITests/GridTileFinder.swift`: tiles are buttons
+labelled with their filename, so a test FINDS one and clicks its centre. 12/12
+after — which is also the first runtime confirmation of the canvas refactor,
+side-by-side included.
+
+This is the third time this suite has failed in a way that accuses the app
+(after a test that pressed Return and passed while doing nothing, and 7 of 10
+asserting only "a window exists"). The rule is now in the registry: **a drive
+test must locate what it clicks, never compute it.**
+
 Also recorded: **"instrument before theorising"** is now a lens in its own right,
 and **"geometry computed in two places"** went on the unrun list — the eyedropper
 bug this session fixed by accident is exactly that shape, and nothing says it is

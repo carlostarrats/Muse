@@ -81,6 +81,7 @@ final class MuseSurfaceDriveTests: XCTestCase {
         print("TREE \(name): \(out.path)")
     }
 
+
     /// Click an element by its own centre coordinate. Needed for anything
     /// inside a transparent SwiftUI ScrollView, where XCUITest's hit-point
     /// resolution fails even though the control is perfectly clickable.
@@ -140,10 +141,9 @@ final class MuseSurfaceDriveTests: XCTestCase {
     private func selectFirstTile() {
         let window = app.windows.firstMatch
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
-        // Click into the grid area — right of the sidebar, below the chip row.
-        let grid = window.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.5))
-        grid.click()
-        Thread.sleep(forTimeInterval: 1.5)
+        // The TILE, not a window fraction — see `firstPhotoTile`. A fraction is
+        // aimed by whatever size the window was restored at.
+        guard openPhoto(in: app, doubleClick: false, settle: 1.5) else { return }
     }
 
     // MARK: - The library shell
@@ -171,9 +171,7 @@ final class MuseSurfaceDriveTests: XCTestCase {
     func testHeroViewerOpensAndEscapeCloses() throws {
         let window = app.windows.firstMatch
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
-        let tile = window.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.5))
-        tile.doubleClick()
-        Thread.sleep(forTimeInterval: 4)
+        guard openPhoto(in: app) else { return }
         snap("03-hero-open")
         dumpTree("hero")
 
@@ -199,8 +197,7 @@ final class MuseSurfaceDriveTests: XCTestCase {
     func testEditorOpensFromHero() throws {
         let window = app.windows.firstMatch
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
-        window.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.5)).doubleClick()
-        Thread.sleep(forTimeInterval: 4)
+        guard openPhoto(in: app) else { return }
 
         let editToggle = app.buttons["Edit"]
         guard editToggle.waitForExistence(timeout: 10) else {
@@ -229,8 +226,7 @@ final class MuseSurfaceDriveTests: XCTestCase {
     func testEditorZoomAndHideControls() throws {
         let window = app.windows.firstMatch
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
-        window.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.5)).doubleClick()
-        Thread.sleep(forTimeInterval: 4)
+        guard openPhoto(in: app) else { return }
 
         let editToggle = app.buttons["Edit"]
         guard editToggle.waitForExistence(timeout: 10) else {
@@ -302,8 +298,7 @@ final class MuseSurfaceDriveTests: XCTestCase {
     func testEditorNamePromptOpensAboveTheEditor() throws {
         let window = app.windows.firstMatch
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
-        window.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.5)).doubleClick()
-        Thread.sleep(forTimeInterval: 4)
+        guard openPhoto(in: app) else { return }
         let editToggle = app.buttons["Edit"]
         guard editToggle.waitForExistence(timeout: 10) else {
             XCTFail("hero viewer has no 'Edit' toggle"); return
@@ -367,8 +362,7 @@ final class MuseSurfaceDriveTests: XCTestCase {
     func testSideBySideDrawsTwoImages() throws {
         let window = app.windows.firstMatch
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
-        window.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.5)).doubleClick()
-        Thread.sleep(forTimeInterval: 4)
+        guard openPhoto(in: app) else { return }
         let editToggle = app.buttons["Edit"]
         guard editToggle.waitForExistence(timeout: 10) else {
             XCTFail("hero viewer has no 'Edit' toggle"); return
@@ -401,8 +395,7 @@ final class MuseSurfaceDriveTests: XCTestCase {
     func testStylesBrowserModesAndOriginal() throws {
         let window = app.windows.firstMatch
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
-        window.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.5)).doubleClick()
-        Thread.sleep(forTimeInterval: 4)
+        guard openPhoto(in: app) else { return }
         let editToggle = app.buttons["Edit"]
         guard editToggle.waitForExistence(timeout: 10) else {
             XCTFail("hero viewer has no 'Edit' toggle"); return
