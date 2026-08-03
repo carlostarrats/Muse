@@ -11,9 +11,18 @@
 //
 //  Layout: a neutral backdrop, a centred canvas, and two scrollable panels of
 //  section cards drawn in the Preview page's own vocabulary (EditorPanel).
-//  Left is Tools / Histogram / Info / Insights / Snapshots; right is Styles /
-//  Light / Tone Zones / Color. Sections open and close independently and
-//  remember it globally, so the panel is as tall as the work in front of you.
+//  WHICH cards, in what order, on which side, and which are hidden is no longer
+//  written here — it is the user's WORKSPACE (EditorWorkspace), and this view
+//  reads it. Sections open and close independently and remember it globally, so
+//  the panel is as tall as the work in front of you.
+//
+//  This file is the stage: the body, the canvas, the chrome row, and the state
+//  the rest of the editor hangs off. Everything else lives beside it —
+//  EditorCards{Left,Right,Crop} hold the card bodies, EditorCardBuilder maps a
+//  module to its card, EditorCanvasGestures owns pan/pinch and the cursor
+//  discipline, EditorSampling owns what the editor READS off the photo, and
+//  EditorReorderDrag owns the workspace rearrange. It was 1,682 lines with all
+//  of that inline.
 //
 
 import SwiftUI
@@ -45,6 +54,20 @@ struct EditorView: View {
     @ObservedObject var chromeCommand = EditorChromeCommand.shared
     /// The panel layout — which cards, where, and which are hidden.
     @ObservedObject var workspace = EditorWorkspaceStore.shared
+
+    // Reorder-mode drag state, mirroring SidebarView's. `dragStartFrames` is a
+    // FROZEN snapshot: the dragged bar's own frame moves with the drag, and
+    // measuring slots against live frames would corrupt them.
+    @State var draggingModule: EditorModule?
+    @State var dragStartFrames: [EditorModule: CGRect] = [:]
+    @State var moduleFrames: [EditorModule: CGRect] = [:]
+    @State var dropTarget: Int?
+    @State var dropColumn: EditorColumn = .right
+    @State var dragTranslation: CGSize = .zero
+    /// Tracks the closed-fist push so it is popped exactly once — a mismatched
+    /// pair corrupts the cursor stack for the whole app.
+    @State var dragCursorPushed = false
+    static let reorderSpace = "editorReorderSpace"
     @State var showZebraThresholds = false
     /// The smoothed-EV mask the zone hatch draws through. Built lazily on first
     /// hover and dropped whenever the draft changes — it's a per-render mask,
@@ -144,7 +167,7 @@ struct EditorView: View {
                     // the RIGHT column's first card lands on (below its chrome
                     // row) — and clear of the window's traffic lights.
                     EditorPanel(topInset: Self.panelTop, ink: ink,
-                                backingVisible: isZoomed, chrome: { EmptyView() }) {
+                                backingVisible: isZoomed || workspace.reorderMode, chrome: { EmptyView() }) {
                         columnContent(.left)
                     }
                     .transition(.move(edge: .leading).combined(with: .opacity))
@@ -159,7 +182,7 @@ struct EditorView: View {
                 // the hide-UI eye already produces.
                 if !session.uiHidden {
                     EditorPanel(topInset: ViewerGeometry.chromeTop, ink: ink,
-                                backingVisible: isZoomed, chrome: { chromeRow }) {
+                                backingVisible: isZoomed || workspace.reorderMode, chrome: { chromeRow }) {
                         columnContent(.right)
                     }
                     .transition(.move(edge: .trailing).combined(with: .opacity))
@@ -178,7 +201,22 @@ struct EditorView: View {
                     .padding(.horizontal, ViewerGeometry.columnMargin - 12)
                     .padding(.top, ViewerGeometry.chromeTop)
             }
+            if workspace.reorderMode {
+                insertionLine
+                draggedModuleOverlay
+                EditorReorderBar(ink: ink,
+                                 onAllLeft: { moveAll(to: .left) },
+                                 onAllRight: { moveAll(to: .right) },
+                                 onReset: { workspace.resetDraft() },
+                                 onCancel: { workspace.cancelReorder() },
+                                 onSave: { workspace.saveReorder() })
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, 28)
+                    .transition(.opacity)
+            }
         }
+        .coordinateSpace(name: Self.reorderSpace)
+        .onPreferenceChange(EditorModuleFramePreference.self) { moduleFrames = $0 }
         .task(id: canvasSize) {
             guard canvasSize.width > 0 else { return }
             // Settle before rebuilding. `.task(id:)` cancels and restarts on
@@ -262,43 +300,6 @@ struct EditorView: View {
         }
     }
 
-    // MARK: - Pan
-
-    /// Drag-to-pan while zoomed, with the same open-hand / closed-fist cursors
-    /// the Preview page uses — and the same push/pop discipline: a bare
-    /// `.set()` is clobbered by AppKit's per-mouse-move cursor recalculation,
-    /// and mismatched push/pop corrupts the stack for the whole app. See
-    /// HeroStage, which this deliberately mirrors.
-    func panGesture(canvas: CGSize) -> some Gesture {
-        DragGesture()
-            .onChanged { value in
-                // The eyedropper and zone targeting own the drag while armed.
-                guard isZoomed, !session.eyedropperArmed, !session.toneZoneTargeting
-                else { return }
-                if dragStartPan == nil {
-                    isDraggingPan = true
-                    session.cancelCanvasAnimation()
-                    NSCursor.closedHand.push()
-                }
-                let start = dragStartPan ?? session.canvasPan
-                dragStartPan = start
-                session.canvasPan = ViewerGeometry.clampPan(
-                    CGSize(width: start.width + value.translation.width,
-                           height: start.height + value.translation.height),
-                    fittedSize: fittedSize(in: canvas), zoom: session.canvasZoom)
-            }
-            .onEnded { _ in
-                dragStartPan = nil
-                guard isDraggingPan else { return }
-                isDraggingPan = false
-                NSCursor.pop()
-            }
-    }
-
-    /// The free space the image FITS into: the window minus the two panels
-    /// (and minus the chrome line at the top). Zoom is not clamped to it — the
-    /// photo grows past it and under the panels, like Preview's does under the
-    /// info column. Hiding the controls gives the whole window back.
     var fitInsets: EdgeInsets {
         // Sides follow the cards, the top stays with the chrome — and the whole
         // thing is interpolated through `chromeProgress`, so hiding the
@@ -312,56 +313,6 @@ struct EditorView: View {
     /// Trackpad pinch, the same contract as the Preview page's: the gesture
     /// reports a CUMULATIVE magnification, so it multiplies the zoom the pinch
     /// started at rather than compounding every frame.
-    func magnifyGesture(canvas: CGSize) -> some Gesture {
-        MagnifyGesture()
-            .onChanged { value in
-                guard !session.eyedropperArmed, !session.toneZoneTargeting else { return }
-                let start = magnifyStartZoom ?? session.canvasZoom
-                if magnifyStartZoom == nil { session.cancelCanvasAnimation() }
-                magnifyStartZoom = start
-                let next = ViewerGeometry.clampZoom(start * value.magnification)
-                session.canvasZoom = next
-                session.canvasPan = ViewerGeometry.clampPan(session.canvasPan,
-                                                           fittedSize: fittedSize(in: canvas),
-                                                           zoom: next)
-            }
-            .onEnded { _ in
-                magnifyStartZoom = nil
-                if abs(session.canvasZoom - 1) <= 0.001 { session.canvasPan = .zero }
-                syncHoverCursor()
-            }
-    }
-
-    /// The content's drawn size at zoom 1 — what the pan clamp is measured
-    /// against, so you can never drag the photo off its own canvas. Shares
-    /// `EditorCanvasGeometry` with the layout itself, rather than re-deriving
-    /// the same fit a second time.
-    func fittedSize(in canvas: CGSize) -> CGSize {
-        EditorCanvasGeometry.fittedSize(canvas: canvas, insets: fitInsets,
-                                        aspect: contentAspect)
-    }
-
-    func syncHoverCursor() {
-        guard !isDraggingPan else { return }
-        let shouldPush = isHoveringCanvas && isZoomed
-            && !session.eyedropperArmed && !session.toneZoneTargeting
-        if shouldPush && !isHoverPushed {
-            isHoverPushed = true
-            NSCursor.openHand.push()
-        } else if !shouldPush && isHoverPushed {
-            isHoverPushed = false
-            NSCursor.pop()
-        }
-    }
-
-    /// Unwinds this view's cursor pushes in LIFO order, so leaving Edit never
-    /// leaves a stale hand haunting the rest of the app.
-    func resetCursorState() {
-        if isDraggingPan { isDraggingPan = false; NSCursor.pop() }
-        if isHoverPushed { isHoverPushed = false; NSCursor.pop() }
-        isHoveringCanvas = false
-    }
-
     // MARK: - Chrome row (zoom / Fit / hide UI / Share / close)
 
     /// The Preview page's chrome, in Edit: the same controls, the same 38pt
@@ -645,153 +596,33 @@ struct EditorView: View {
     /// The workspace decides which cards a column holds and in what order. It
     /// used to be two hard-coded @ViewBuilder lists here — `leftPanelContent`
     /// and `rightPanelContent` — so the layout was source code.
+    ///
+    /// In reorder mode this draws collapsed BARS instead of cards. Not a card
+    /// with its content hidden — a different view, which is what makes
+    /// "nothing inside a card is reachable" structurally true rather than a
+    /// guard on every slider, and leaves the expanded-sections preference
+    /// untouched so cards come back the way you left them.
     @ViewBuilder
     func columnContent(_ column: EditorColumn) -> some View {
-        ForEach(workspace.active.visible(in: column)) { module in
-            card(for: module)
-        }
-    }
-
-    // MARK: - Readouts, target mode, feedback
-
-    /// Statistics cost something, so they run only while a panel is showing
-    /// them — the Light card (curve backdrop + zone mass) or Scopes. Collapsing
-    /// both stops the pass, which is the point of making the cards collapsible.
-    func updateStatsVisibility() {
-        let visible = expanded.contains(Section.light)
-            || expanded.contains(Section.zones)      // the strip draws zone mass
-            || expanded.contains(Section.histogram)
-        session.statsVisible = visible
-        if visible {
-            session.refreshStats()
+        let modules = workspace.active.visible(in: column)
+        if workspace.reorderMode {
+            ForEach(Array(modules.enumerated()), id: \.element) { index, module in
+                EditorReorderRow(module: module, ink: ink,
+                                 isDragging: draggingModule == module,
+                                 wigglePhase: Double(index) * 0.037)
+                    .background(GeometryReader { geo in
+                        Color.clear.preference(
+                            key: EditorModuleFramePreference.self,
+                            value: [module: geo.frame(in: .named(Self.reorderSpace))])
+                    })
+                    .offset(y: rowShift(module, in: column, index: index))
+                    .gesture(reorderGesture(module))
+            }
         } else {
-            session.hoveredZone = nil
+            ForEach(modules) { module in
+                card(for: module)
+            }
         }
-    }
-
-    /// Build the hatch overlay's mask for the current draft. Lazy — most
-    /// sessions never hover a zone, and this is a decode.
-    func buildZoneMaskIfNeeded() async {
-        guard zoneMask == nil || zoneMaskStack != session.draft else { return }
-        let url = session.url
-        let stack = session.draft
-        let edge = max(Int(max(canvasSize.width, canvasSize.height)), 1)
-        let mask = await Task.detached(priority: .userInitiated) { () -> CIImage? in
-            guard let toneStage = EditRenderer.toneStageImage(url: url, stack: stack,
-                                                              maxPixel: edge)
-            else { return nil }
-            return ToneZoneFilter.smoothedEVMap(for: toneStage, longEdge: CGFloat(edge))
-        }.value
-        guard session.draft == stack else { return }
-        zoneMask = mask
-        zoneMaskStack = stack
-    }
-
-    /// Target mode: hovering the canvas reads the SMOOTHED mask's EV, so the
-    /// number shown is the number the scroll wheel then moves.
-    func handleTargetHover(_ phase: HoverPhase, content: CGRect) {
-        guard session.toneZoneTargeting else { return }
-        switch phase {
-        case .active(let location):
-            NSCursor.crosshair.set()
-            // The hover point is in the WINDOW-sized gesture surface; shift it
-            // into the content's own coordinates before mapping.
-            let local = CGPoint(x: location.x - content.minX, y: location.y - content.minY)
-            guard let ev = sampleEV(at: local, content: content.size) else { return }
-            hoveredEV = ev
-            session.hoveredZone = ToneZoneMath.zoneIndex(forEV: ev)
-        case .ended:
-            NSCursor.arrow.set()
-            hoveredEV = nil
-            session.hoveredZone = nil
-        @unknown default:
-            break
-        }
-    }
-
-    func sampleEV(at point: CGPoint, content: CGSize) -> Double? {
-        guard let map = session.zoneEVMap, map.width > 0, map.height > 0,
-              session.canvasImage != nil else { return nil }
-        // A division, because the content rect IS the image's rect. This used
-        // to rebuild a fit from the FULL window while the renderer fitted into
-        // the window minus the panels, so it read the wrong pixel whenever the
-        // panels were showing.
-        guard let unit = EditorCanvasGeometry.unitPoint(inContentOfSize: content, at: point)
-        else { return nil }
-        let x = min(max(Int(unit.x * Double(map.width)), 0), map.width - 1)
-        let y = min(max(Int(unit.y * Double(map.height)), 0), map.height - 1)
-        return Double(map.values[y * map.width + x])
-    }
-
-    /// Scroll adjusts the hovered zone while targeting, and is CONSUMED so the
-    /// canvas doesn't zoom underneath the gesture.
-    func handleTargetScroll(_ event: NSEvent) -> Bool {
-        guard session.toneZoneTargeting, let zone = session.hoveredZone else { return false }
-        let scrollGainPerTick = 0.02
-        let deltaY = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY : event.deltaY
-        session.draft.setToneZone { params in
-            var gains = params.clamped().gains
-            gains[zone] = min(max(gains[zone] + Double(deltaY) * scrollGainPerTick, -1), 1)
-            params = ToneZoneParams(gains: gains)
-        }
-        // One history entry per burst of scrolling, matching the slider's
-        // push-on-gesture-end contract.
-        targetCommitTask?.cancel()
-        targetCommitTask = Task {
-            try? await Task.sleep(for: .milliseconds(250))
-            guard !Task.isCancelled else { return }
-            session.commitGesture()
-        }
-        return true
-    }
-
-    func loadFeedback() async {
-        let path = session.url.path
-        feedbackNotes = await Task.detached(priority: .utility) { () -> [PhotoFeedback.Note] in
-            guard let queue = Database.shared.dbQueue,
-                  let inputs = try? queue.read({ db in
-                      try PhotoStatsQueries.feedbackInputs(path: path, db: db)
-                  }) ?? nil
-            else { return [] }
-            return PhotoFeedback.notes(for: inputs)
-        }.value
-    }
-
-    // MARK: - Eyedropper
-
-    /// Sample the PROXY the canvas is already showing, map the pixel to a
-    /// temperature/tint pair, and store those as ordinary slider values.
-    ///
-    /// The stack stays declarative: what's stored is the resulting offsets,
-    /// never the click location. A stored location would have to be re-sampled
-    /// on every render and would point somewhere else the moment a crop moved.
-    func sampleWhiteBalance(at location: CGPoint, content: CGSize) {
-        session.eyedropperArmed = false
-        guard let image = session.originalImage ?? session.canvasImage else { return }
-        let extent = image.extent
-        guard extent.width > 0, extent.height > 0 else { return }
-        // `location` is already in the canvas view's own space — the overlay
-        // sits ON the canvas, which is the image's rect. Same correction as
-        // sampleEV: the old path fitted against the whole window.
-        guard let unit = EditorCanvasGeometry.unitPoint(inContentOfSize: content, at: location)
-        else { return }   // clicked the backdrop: sampling it would set WB from grey
-
-        // CIImage's origin is bottom-left; the click's is top-left.
-        let px = extent.minX + CGFloat(unit.x) * extent.width
-        let py = extent.minY + CGFloat(1 - unit.y) * extent.height
-        var bytes = [UInt8](repeating: 0, count: 4)
-        RenderContexts.preview.render(
-            image, toBitmap: &bytes, rowBytes: 4,
-            bounds: CGRect(x: px, y: py, width: 1, height: 1),
-            format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
-        let solved = WBEyedropper.solve(sampledColor: (r: Double(bytes[0]) / 255,
-                                                       g: Double(bytes[1]) / 255,
-                                                       b: Double(bytes[2]) / 255))
-        session.draft.setColor {
-            $0.temperature = solved.temperature
-            $0.tint = solved.tint
-        }
-        session.commitGesture()
     }
 
 }
