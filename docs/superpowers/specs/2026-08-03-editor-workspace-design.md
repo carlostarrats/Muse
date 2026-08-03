@@ -224,8 +224,13 @@ Over the photo, centred near the bottom, clear of both columns:
 Grouped because they are different kinds of thing: the left pair rearranges,
 the right three end the mode.
 
-- **All Left / All Right** move every visible module to that column, preserving
-  relative order (the receiving column's own list first, then the arriving one).
+- **All Left / All Right** move every module to that column in **reading
+  order** — the left column's list first, then the right column's, whichever
+  column is receiving. So All Right yields TOOLS · HISTOGRAM · INSIGHTS ·
+  SNAPSHOTS · STYLES · LIGHT · … and All Left yields the same sequence on the
+  other side. One rule, symmetric, and it matches the approved single-column
+  layout in §8. (An earlier draft said "the receiving column's own list first",
+  which would have put STYLES above TOOLS on All Right — contradicting §8.)
   They exist because "everything on one side" is otherwise four to eight drags,
   and both directions exist because dragging is symmetric — the one-column-left
   state is reachable by hand whether or not a button offers it, so it needs a
