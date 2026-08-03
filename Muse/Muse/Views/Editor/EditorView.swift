@@ -792,6 +792,10 @@ struct EditorView: View {
         // slider, and it was the tallest thing buried at the bottom of Light.
         EditorSection(title: String(localized: "TONE ZONES"),
                       ink: ink,
+                      accessory: resetButton(String(localized: "Reset Tone Zones")) {
+                          session.draft.setToneZone { $0 = .neutral }
+                          session.commitGesture()
+                      },
                       isExpanded: expansion(Section.zones)) {
             ToneZoneStrip(session: session)
         }

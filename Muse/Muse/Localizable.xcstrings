@@ -7909,6 +7909,16 @@
         }
       }
     },
+    "Reset Tone Zones" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réinitialiser les zones de tons"
+          }
+        }
+      }
+    },
     "Reset all adjustments" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7921,6 +7931,7 @@
       }
     },
     "Reset all zones" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {

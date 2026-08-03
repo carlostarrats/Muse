@@ -36,9 +36,12 @@ struct ToneZoneStrip: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: theme.spacingS) {
-            // The card's own heading says TONE ZONES now, so this row is just
-            // the two controls — each one a button you can see and hit, not a
-            // bare glyph and a word.
+            // Reset now lives in the CARD HEADING, in the `accessory` slot
+            // every other card's Reset uses — it is an ordinary per-card action
+            // and had no reason to be the one exception sitting in the body.
+            //
+            // "On Photo" stays here: it is a MODE, not a per-card action, and
+            // it belongs beside the strip it switches the behaviour of.
             HStack(spacing: theme.spacingS) {
                 EditorSmallButton(label: String(localized: "On Photo"),
                                   systemName: "dot.viewfinder") {
@@ -49,12 +52,6 @@ struct ToneZoneStrip: View {
                 .foregroundStyle(session.toneZoneTargeting
                                  ? theme.controlAccent : theme.textPrimary)
                 Spacer()
-                EditorSmallButton(label: String(localized: "Reset"),
-                                  systemName: "arrow.counterclockwise") {
-                    session.draft.setToneZone { $0 = .neutral }
-                    session.commitGesture()
-                }
-                .help(Text("Reset all zones"))
             }
 
             HStack(spacing: 2) {
