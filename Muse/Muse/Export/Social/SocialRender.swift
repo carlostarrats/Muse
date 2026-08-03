@@ -185,8 +185,15 @@ nonisolated enum SocialRender {
         guard extent.width >= 1, extent.height >= 1 else { throw RenderError.encodeFailed }
         let matteColor: CIColor = job.matte == .black ? .black : .white
         let flattened = ciImage.composited(over: CIImage(color: matteColor).cropped(to: extent))
+        //    A social export is SDR by design — the platforms it targets don't
+        //    render HDR reliably. But it must get there by TONE-MAPPING, not by
+        //    letting createCGImage clamp: an HDR source's specular highlights
+        //    would otherwise land as one flat white blob in the very picture
+        //    someone is about to post.
+        let toneMapped = HDRDecode.toneMappedToSDR(
+            flattened, headroom: EditRenderer.sourceHeadroom(url: job.sourceURL))
         guard let sRGB = CGColorSpace(name: CGColorSpace.sRGB),
-              let finalCG = ExportPipeline.context.createCGImage(flattened, from: extent,
+              let finalCG = ExportPipeline.context.createCGImage(toneMapped, from: extent,
                                                   format: .RGBA8, colorSpace: sRGB)
         else { throw RenderError.encodeFailed }
 

@@ -298,6 +298,32 @@ done
 report "DEC-1" "every CGImageSourceCreateImageAtIndex site guards its budget" "$v" \
     "call ThumbnailCache.withinDecodeBudget(src) before any automatic full decode"
 
+# ---------------------------------------------------------------------------
+# HDR-1 — nothing flattens an HDR photo by hard-clipping it.
+#
+# THE BUG: `createCGImage(format: .RGBA8, colorSpace: sRGB)` silently CLAMPS.
+# Measured — a 4.0 pixel and a 2.0 pixel both come back 1.0, so every specular
+# highlight in an iPhone gain-map HEIC becomes one flat white blob. Every
+# deliberate HDR->SDR conversion goes through HDRDecode.toneMappedToSDR
+# instead. The pixel-producing files are the ones that matter; a file that
+# renders to sRGB must show it knows about the tone map.
+# ---------------------------------------------------------------------------
+v=""
+for f in $(grep -rl --include='*.swift' 'createCGImage' "$SRC" 2>/dev/null); do
+    grep -qE 'CGColorSpace\.sRGB|colorSpace: sRGB' "$f" || continue
+    # The seam itself, and files that only ever handle SDR-by-construction
+    # output (a QuickLook type icon, a video frame) legitimately never see
+    # headroom. Everything else must reference the tone map.
+    case "$f" in
+        */HDRDecode.swift) continue ;;
+    esac
+    if ! grep -qE 'toneMappedToSDR|HDRDecode' "$f"; then
+        v="$v$f: renders to sRGB without going through HDRDecode"$'\n'
+    fi
+done
+report "HDR-1" "no sRGB render path that can't tone-map an HDR source" "$v" \
+    "convert with HDRDecode.toneMappedToSDR; createCGImage to sRGB hard-clips"
+
 echo
 echo "Build & platform integrity"
 echo "----------------------------------------------------------------------"

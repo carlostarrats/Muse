@@ -96,6 +96,7 @@ question.
 | P27 | Localization (FR) | `VocabularyLocalizerTests`, `TagFallbackNamerLocalizationTests` | 2026-08-01 | ⚠️ G1 | ✅ **1,002 keys, 0 untranslated** (was 146 missing). ⚠️ **fixed R2-2** — a translated string was being persisted |
 | P28 | Accessibility (VoiceOver) | `EscapeActionTests` | 2026-08-01 | ⚠️ G1 | ⚠️ **fixed R2-3** — Compare's rating + cull were keyboard-only, unreachable under VoiceOver |
 | P29 | Sparkle update channel | — | 2026-08-01 | ✅ (v1.5) | ✅ untouched; `SUEnableAutomaticChecks` still true, EdDSA key intact |
+| P30 | **HDR gain maps** (decode seam, HEIC tile cache, headroom through the edit chain, headroom-aware readouts, export) | `HDRDecodeTests` (9), `ThumbnailHDRCacheTests` (6), `EditRendererHDRTests` (5), `HistogramHeadroomTests` (6), `ImageExportHDRTests` (7) | 2026-08-03 | ❌ **OPEN — see the HDR runtime plan below** | New this work; `audit-invariants.sh` **HDR-1** is the standing regression gate |
 
 ---
 
@@ -591,3 +592,36 @@ Third, smaller: asserting one shared "Import" button across all five import
 sources produced two false failures. `AppState+Import` sets "Import", "Import
 Here" or "Choose Library" depending on what each panel asks for; the test is now
 per-source.
+
+
+---
+
+## HDR runtime plan (2026-08-03) — OPEN
+
+No test can confirm an HDR photo *looks* right; the suite can only prove values
+above 1.0 survived each stage. Everything below needs eyes on an EDR display,
+and none of it has been done.
+
+**Setup.** Build Release, **`stat` the binary's mtime** before looking at
+anything (an incremental build can print BUILD SUCCEEDED over a weeks-old
+`.app`), and quit all but one Muse instance. Use a real iPhone gain-map HEIC —
+the fixtures are synthetic PQ files, which exercise the code but are not what
+a user owns.
+
+| # | Step | Pass condition |
+|---|---|---|
+| 1 | Open a folder holding a gain-map HEIC | The tile renders; highlights show EDR brightness |
+| 2 | Open the photo into the hero | **The tile and the hero match** — no brightness jump on open. This is the whole reason the grid was in scope |
+| 3 | Nudge Exposure in the editor | The photo does **not** flatten. Before this work it went SDR the instant a stack existed |
+| 4 | Watch the histogram on a correctly-exposed HDR frame | No "those areas have lost detail" over ordinary specular highlights |
+| 5 | Export as PNG | Highlights rolled off, not blown to flat white |
+| 6 | Export as HEIC (macOS 15+) | Output still HDR, and still looks right when opened on a non-HDR display |
+| 7 | Export unedited as "Same as original" with metadata kept | Byte-identical to the input (this one IS covered by `ImageExportHDRTests`) |
+| 8 | Second launch after the update | Tiles regenerate once (the `cacheFormatVersion` bump) and then load from cache |
+
+**macOS 14.6 cannot be checked on the development machine.** The `#available`
+branches are shaped so the 14.6 path is the code the app already ran (SDR),
+which bounds the risk to a compile/availability error rather than a behavioural
+one. The Reinhard fallback WAS exercised, by forcing the branch on this machine
+— and that is how its normalization bug was found, so the technique is worth
+repeating for any future 14.6-only path.

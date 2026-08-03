@@ -6,6 +6,95 @@ the durable rules + a compact index live in `CLAUDE.md`. Nothing here is
 load-bearing for a fresh session beyond what that index already surfaces;
 read an entry when you need the full "why" behind a specific change.
 
+### HDR gain maps — 2026-08-03 (on `feat/next-153`)
+
+`muse-photo-foundation.md` §6 line 196 required HDR and none of it was built:
+`gainmap|expandToHDR|toneMapHeadroom|contentHeadroom` had zero hits in `Muse/`.
+Since gain-map HEIC is the default iPhone capture and Muse's persona shoots a
+phone, the single most common file a user owns was the one Muse displayed flat
+and exported flatter — visibly worse than Photos on the same display.
+
+**Everything here started from a measurement, not a doc.** A 4.0 linear pixel
+written four ways and read back through `kCGImageSourceDecodeToHDR`:
+
+| Written as | Read back | Size |
+|---|---|---|
+| PNG 8-bit sRGB | 1.0 — hard clip | 323 B |
+| PNG 16-bit linear sRGB | 1.0 — hard clip | 779 B |
+| PNG 16-bit PQ | 4.00 — intact | 5,138 B |
+| HEIC 10-bit PQ | 4.02 — intact | 491 B |
+
+Two conclusions drove the whole design. **The container is not the constraint** —
+PNG holds HDR fine at 16-bit PQ, so "PNG loses HDR" was the wrong diagnosis;
+bit depth and colour space are what matter. The owner pushed back on exactly
+this point and was right. And **8-bit sRGB hard-clips rather than tone-mapping**:
+2.0 and 4.0 both land on 1.0, so every specular highlight becomes one flat white
+blob. That is why `HDRDecode.toneMappedToSDR` exists and why `audit-invariants.sh`
+grew check **HDR-1** to keep a bare sRGB render from creeping back.
+
+**The scope grew twice during design, both times for a real reason.**
+
+First, display could not be separated from editing. `HeroStage` renders through
+`EditRenderer` whenever a stack exists, so "HDR on display, SDR in the editor"
+would have flattened the photo the moment a slider moved — a regression a user
+can trigger deliberately, which is worse than uniform flatness.
+
+Second, the readouts had to move. `HistogramCompute` is 0–255 with a 254/255
+clip threshold and `EditSession.rgba8Sample` renders `.RGBA8`/sRGB, which clamps
+before the statistics run. Left alone, the panel would announce *"X% of pixels
+are clipped — those areas have lost detail"* over every correctly-exposed HDR
+frame. Spec 05's whole purpose is teaching the user what they are looking at, so
+a confident wrong answer there is worse than none. The float entry point
+normalizes by headroom: clipping now means "at the top of what this file can
+hold". `VisionServices`' capture stats and `AutoToneStats` deliberately did NOT
+change — those write `photo_traits` rows whose meaning must not shift because a
+decode got deeper.
+
+**The grid was in scope because of a mismatch, not because of ambition.** A tile
+that changes brightness when the photo opens reads as a bug. That required the
+thumbnail disk cache to stop being 8-bit PNG; it now writes 10-bit PQ HEIC for
+HDR sources, chosen over 16-bit PQ PNG purely on the measured ~10× size
+difference against the 2 GB cap. `cacheFormatVersion` was added and bumped to 2 —
+without it an upgrading library keeps serving its old flat PNGs and the entire
+feature is invisible to every existing user.
+
+**Export needed no new control.** The format menu already decides it: PNG, JPEG,
+TIFF and WebP cannot carry a gain map at all, so they are SDR by construction;
+HEIC is the only place the choice exists. The owner's "can't an HDR image just
+save a PNG version?" is what collapsed a planned HDR toggle into nothing. Three
+defects were fixed there: `.sameAsOriginal` re-encoded a file it had only been
+asked to copy (destroying the gain map — it now copies bytes when nothing is
+being changed), everything else hard-clipped, and HEIC never carried HDR.
+
+**macOS 14.6 loses exactly one thing.** `kCGImageDestinationEncodeToISOGainmap`
+is 15.0+, so the floor cannot write a gain map. It *could* write PQ HEIC and
+deliberately does not: a PQ file looks wrong on an ordinary display, while a
+gain-map file degrades gracefully, so shipping something broken elsewhere is
+worse than shipping SDR. `CIToneMapHeadroom` is also 15.0+, so 14.6 tone-maps
+through a Reinhard curve in `EditKernels.metal`.
+
+**The 14.6 fallback had a bug that only appeared when it was forced to run.**
+Plain Reinhard — `(c/(1+c/h))·(1+1/h)` — looks like it normalizes and does not:
+it maps `h` to `h/2 + 0.5`, so at headroom 4.0 everything above ~1.6 still
+clipped and 2.0 and 4.0 landed on the same white. It was found by temporarily
+changing `#available(macOS 15.0, *)` to `macOS 99.0` on a machine that would
+otherwise never take that branch. Extended Reinhard —
+`c(1 + c/h²)/(1 + c)` — maps `h` to exactly 1.0. **Force the branch for any
+future floor-only path**; the test that catches this class asserts that two
+different bright values stay different, because a clamp and a tone map are
+indistinguishable by "is it ≤ 1.0".
+
+**The audit check found two real bugs on its first run**, which is the argument
+for writing it. `SocialRender` and `LooksBrowserView` both rendered to sRGB with
+no tone map — so a social export of an HDR photo blew its highlights in the very
+picture someone was about to post, and the Looks swatches showed clipping the
+live canvas didn't have. Both now tone-map; neither was allowlisted.
+
+Suite 1,952 → 1,985 (33 new tests) across five new test files. Release build warning-free,
+`audit-invariants.sh` 15/15. **Runtime is OPEN** — no test can confirm an HDR
+photo *looks* right, and nobody has yet opened a real gain-map HEIC on an EDR
+display. The eight-step plan is in `docs/new-build/FEATURE-LEDGER.md`.
+
 ### Owner UI pass + two feature removals — 2026-08-02 (on `feat/next-150`)
 
 Nine pieces of owner feedback against the running app, delivered as screenshots,

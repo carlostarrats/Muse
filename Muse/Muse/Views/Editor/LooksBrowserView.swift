@@ -598,11 +598,18 @@ struct LooksBrowserView: View {
             let longEdge = max(cropped.ciImage.extent.width, cropped.ciImage.extent.height)
             let context = RenderContexts.preview
 
+            // These thumbnails sit beside the live canvas, which renders with
+            // headroom. Clipping them would show every Look with blown
+            // highlights the canvas doesn't have — the swatch would be lying
+            // about what picking it does.
+            let headroom = EditRenderer.sourceHeadroom(url: url)
+
             func render(_ stack: EditStack) -> CGImage? {
                 let out = EditRenderer.apply(stack, to: cropped, sourceLongEdge: longEdge)
                 let extent = out.ciImage.extent
                 guard extent.width >= 1, extent.height >= 1, extent.width.isFinite else { return nil }
-                return context.createCGImage(out.ciImage, from: extent, format: .RGBA8,
+                let shown = HDRDecode.toneMappedToSDR(out.ciImage, headroom: headroom)
+                return context.createCGImage(shown, from: extent, format: .RGBA8,
                                              colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
             }
 
