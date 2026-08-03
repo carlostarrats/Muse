@@ -25,59 +25,59 @@ struct EditorView: View {
     /// flight, so it hands the action down rather than the editor reaching for
     /// AppState and skipping the choreography.
     var onClose: () -> Void = {}
-    @Environment(\.theme) private var theme
+    @Environment(\.theme) var theme
 
-    @AppStorage(AppSettings.editorBackdropKey) private var backdropRaw =
+    @AppStorage(AppSettings.editorBackdropKey) var backdropRaw =
         EditorBackdropLevel.default.rawValue
 
     /// Which section cards are open, by id. Global, so the panel you set up for
     /// one photo is the panel you get for the next.
-    @State private var expanded: Set<String> =
+    @State var expanded: Set<String> =
         AppSettings.editorExpandedSections ?? EditorView.defaultExpanded
-    @State private var canvasSize: CGSize = .zero
-    @State private var wipeImage: CIImage?
+    @State var canvasSize: CGSize = .zero
+    @State var wipeImage: CIImage?
 
     // Spec 05
     /// Read only to name what's applied in the collapsed STYLES heading.
-    @ObservedObject private var presetStore = EditPresetStore.shared
-    @ObservedObject private var lutStore = LutStore.shared
+    @ObservedObject var presetStore = EditPresetStore.shared
+    @ObservedObject var lutStore = LutStore.shared
     /// The View menu's half of the hide-UI eye — see `EditorChromeCommand`.
-    @ObservedObject private var chromeCommand = EditorChromeCommand.shared
-    @State private var showZebraThresholds = false
+    @ObservedObject var chromeCommand = EditorChromeCommand.shared
+    @State var showZebraThresholds = false
     /// The smoothed-EV mask the zone hatch draws through. Built lazily on first
     /// hover and dropped whenever the draft changes — it's a per-render mask,
     /// and holding a stale one would hatch the wrong pixels.
-    @State private var zoneMask: CIImage?
-    @State private var zoneMaskStack: EditStack?
-    @State private var hoveredEV: Double?
-    @State private var targetCommitTask: Task<Void, Never>?
+    @State var zoneMask: CIImage?
+    @State var zoneMaskStack: EditStack?
+    @State var hoveredEV: Double?
+    @State var targetCommitTask: Task<Void, Never>?
     /// Feedback notes for the editor's Info tab — the same deterministic rules
     /// the hero card uses, read from precomputed columns.
-    @State private var feedbackNotes: [PhotoFeedback.Note] = []
+    @State var feedbackNotes: [PhotoFeedback.Note] = []
     /// Pan state, mirroring HeroStage's.
-    @State private var dragStartPan: CGSize?
-    @State private var isDraggingPan = false
-    @State private var isHoveringCanvas = false
-    @State private var isHoverPushed = false
+    @State var dragStartPan: CGSize?
+    @State var isDraggingPan = false
+    @State var isHoveringCanvas = false
+    @State var isHoverPushed = false
     /// The zoom a pinch started from — see `magnifyGesture`.
-    @State private var magnifyStartZoom: CGFloat?
+    @State var magnifyStartZoom: CGFloat?
     /// 1 = panels shown, 0 = hidden. Stepped, so the canvas re-fits smoothly.
-    @State private var chromeProgress: Double = 1
-    @State private var chromeAnimation: Task<Void, Never>?
-    private static let chromeFade: Double = 0.22
+    @State var chromeProgress: Double = 1
+    @State var chromeAnimation: Task<Void, Never>?
+    static let chromeFade: Double = 0.22
     /// Styles browser: grid or list. A global working preference.
-    @AppStorage(AppSettings.editorStylesListModeKey) private var stylesListMode = false
+    @AppStorage(AppSettings.editorStylesListModeKey) var stylesListMode = false
     /// Session-scoped: which channel COLOR MIX is showing. Saturation first —
     /// it is the one people reach for.
-    @State private var hslTab: HSLTab = .saturation
+    @State var hslTab: HSLTab = .saturation
     /// Crop: the chosen shape and whether it is stood on end. One entry per
     /// shape plus an orientation toggle, rather than two entries per shape.
-    @State private var cropAspect: CropAspectPreset = .original
-    @State private var cropPortrait = false
-    @State private var applyCropHovering = false
+    @State var cropAspect: CropAspectPreset = .original
+    @State var cropPortrait = false
+    @State var applyCropHovering = false
 
     /// Section ids. Stable strings, because they're persisted.
-    private enum Section {
+    enum Section {
         static let tools = "tools", histogram = "histogram"
         static let insights = "insights", history = "history"
         static let looks = "looks", light = "light", zones = "zones", color = "color"
@@ -89,7 +89,7 @@ struct EditorView: View {
     /// you judge against, the file's identity, and the sliders you reach for
     /// first. Looks is a PRESET browser — closed until asked for, like the
     /// Preview page's cards — and Tone Zones is a deliberate detour.
-    private static let defaultExpanded: Set<String> =
+    static let defaultExpanded: Set<String> =
         [Section.tools, Section.histogram, Section.insights, Section.light, Section.color]
 
     /// The left column's first card: level with the RIGHT column's first card,
@@ -99,32 +99,7 @@ struct EditorView: View {
     static let panelTop: CGFloat = ViewerGeometry.chromeTop
         + ViewerGeometry.chromeHeight + 12 + 14
 
-    /// The preset and/or LUT currently on the photo, for the collapsed STYLES
-    /// heading — otherwise a closed card looks identical whether you're on
-    /// Original or three looks deep.
-    private var stylesSummary: String? {
-        // Only while the card is CLOSED — that's the only time it's drawn, and
-        // computing it otherwise costs a stack comparison per preset per frame.
-        guard !expanded.contains(Section.looks) else { return nil }
-        let preset = presetStore.presets.first { row in
-            guard let stack = presetStore.stacks[row.id] else { return false }
-            return EditTransfer.isApplied(stack, onto: session.draft)
-        }
-        let lut = session.draft.lutParams.flatMap { applied -> String? in
-            guard !applied.isNeutral else { return nil }
-            return lutStore.luts.first { $0.id == applied.lutHash }?.name ?? applied.name
-        }
-        let names = [preset?.name, lut].compactMap { $0 }
-        return names.isEmpty ? nil : names.joined(separator: " · ")
-    }
-
-    private var hasInsights: Bool {
-        !feedbackNotes.isEmpty
-            || session.draft.origin == .lightroom
-            || session.draft.rawParams?.decoderVersion != nil
-    }
-
-    private func expansion(_ id: String) -> Binding<Bool> {
+    func expansion(_ id: String) -> Binding<Bool> {
         Binding(get: { expanded.contains(id) },
                 set: { on in
                     if on { expanded.insert(id) } else { expanded.remove(id) }
@@ -134,7 +109,7 @@ struct EditorView: View {
 
     /// Ink + card fill for the CURRENT backdrop, measured against WCAG AA
     /// rather than guessed from a brightness threshold. See PanelContrast.
-    private var ink: PanelContrast.Ink {
+    var ink: PanelContrast.Ink {
         PanelContrast.resolve(backdrop: EditorBackdropLevel.resolve(backdropRaw).brightness)
     }
 
@@ -143,9 +118,9 @@ struct EditorView: View {
     /// the tool rows' tint) captures colours at construction time from this
     /// view's own environment — which is the app's, not the panel's. Reading it
     /// explicitly is what keeps that text legible on the card.
-    private var panelTheme: Theme { theme.onPanel(ink) }
+    var panelTheme: Theme { theme.onPanel(ink) }
 
-    private var backdropLevel: Binding<EditorBackdropLevel> {
+    var backdropLevel: Binding<EditorBackdropLevel> {
         Binding(get: { EditorBackdropLevel.resolve(backdropRaw) },
                 set: { backdropRaw = $0.rawValue })
     }
@@ -274,7 +249,7 @@ struct EditorView: View {
     /// `.set()` is clobbered by AppKit's per-mouse-move cursor recalculation,
     /// and mismatched push/pop corrupts the stack for the whole app. See
     /// HeroStage, which this deliberately mirrors.
-    private func panGesture(canvas: CGSize) -> some Gesture {
+    func panGesture(canvas: CGSize) -> some Gesture {
         DragGesture()
             .onChanged { value in
                 // The eyedropper and zone targeting own the drag while armed.
@@ -304,7 +279,7 @@ struct EditorView: View {
     /// (and minus the chrome line at the top). Zoom is not clamped to it — the
     /// photo grows past it and under the panels, like Preview's does under the
     /// info column. Hiding the controls gives the whole window back.
-    private var fitInsets: EdgeInsets {
+    var fitInsets: EdgeInsets {
         // Shared with the window minimum, which is derived from it — see
         // ViewerGeometry.editorPanelWidth. (Its 20 is theme.spacingL.)
         let column = ViewerGeometry.editorPanelWidth
@@ -324,7 +299,7 @@ struct EditorView: View {
     /// Trackpad pinch, the same contract as the Preview page's: the gesture
     /// reports a CUMULATIVE magnification, so it multiplies the zoom the pinch
     /// started at rather than compounding every frame.
-    private func magnifyGesture(canvas: CGSize) -> some Gesture {
+    func magnifyGesture(canvas: CGSize) -> some Gesture {
         MagnifyGesture()
             .onChanged { value in
                 guard !session.eyedropperArmed, !session.toneZoneTargeting else { return }
@@ -348,12 +323,12 @@ struct EditorView: View {
     /// against, so you can never drag the photo off its own canvas. Shares
     /// `EditorCanvasGeometry` with the layout itself, rather than re-deriving
     /// the same fit a second time.
-    private func fittedSize(in canvas: CGSize) -> CGSize {
+    func fittedSize(in canvas: CGSize) -> CGSize {
         EditorCanvasGeometry.fittedSize(canvas: canvas, insets: fitInsets,
                                         aspect: contentAspect)
     }
 
-    private func syncHoverCursor() {
+    func syncHoverCursor() {
         guard !isDraggingPan else { return }
         let shouldPush = isHoveringCanvas && isZoomed
             && !session.eyedropperArmed && !session.toneZoneTargeting
@@ -368,7 +343,7 @@ struct EditorView: View {
 
     /// Unwinds this view's cursor pushes in LIFO order, so leaving Edit never
     /// leaves a stale hand haunting the rest of the app.
-    private func resetCursorState() {
+    func resetCursorState() {
         if isDraggingPan { isDraggingPan = false; NSCursor.pop() }
         if isHoverPushed { isHoverPushed = false; NSCursor.pop() }
         isHoveringCanvas = false
@@ -379,7 +354,7 @@ struct EditorView: View {
     /// The Preview page's chrome, in Edit: the same controls, the same 38pt
     /// sizes, drawn in the backdrop's resolved ink. Zoom drives the canvas
     /// itself — before this, Edit could only ever show a fitted image.
-    private var chromeRow: some View {
+    var chromeRow: some View {
         HStack(spacing: 8) {
             zoomPill
             // Same swap as Preview: zooming replaces ✕ with Fit, and the
@@ -402,7 +377,7 @@ struct EditorView: View {
         .frame(width: ViewerGeometry.columnWidth)
     }
 
-    private var hideUIButton: some View {
+    var hideUIButton: some View {
         ChromeCircleButton(systemName: session.uiHidden ? "eye.slash" : "eye",
                            ink: ink,
                            isSelected: session.uiHidden,
@@ -423,7 +398,7 @@ struct EditorView: View {
     /// panels (a transition), while the canvas re-fit is a value the MTKView
     /// only reads once per render — so `chromeProgress` is stepped frame by
     /// frame, exactly like the zoom, and `fitInsets` interpolates through it.
-    private func toggleChrome() {
+    func toggleChrome() {
         let hiding = !session.uiHidden
         withAnimation(.easeOut(duration: Self.chromeFade)) { session.uiHidden = hiding }
         chromeAnimation?.cancel()
@@ -441,7 +416,7 @@ struct EditorView: View {
         }
     }
 
-    private var zoomPill: some View {
+    var zoomPill: some View {
         HStack(spacing: 0) {
             ChromePillButton(systemName: "minus",
                              disabled: session.canvasZoom <= ViewerGeometry.minZoom + 0.001,
@@ -463,9 +438,9 @@ struct EditorView: View {
         .clipShape(Capsule(style: .continuous))
     }
 
-    private var isZoomed: Bool { abs(session.canvasZoom - 1) > 0.001 }
+    var isZoomed: Bool { abs(session.canvasZoom - 1) > 0.001 }
 
-    private func setZoom(_ value: CGFloat) {
+    func setZoom(_ value: CGFloat) {
         let next = ViewerGeometry.clampZoom(value)
         // Clamp the pan to the NEW zoom: zooming out with a pan applied would
         // otherwise leave the photo hanging off its own canvas, since a smaller
@@ -479,7 +454,7 @@ struct EditorView: View {
 
     // MARK: - Canvas
 
-    private var canvas: some View {
+    var canvas: some View {
         GeometryReader { geo in
             // The canvas view is SIZED TO THE CONTENT and positioned, exactly
             // as the Preview page lays out its `Image`. Zoom scales this frame
@@ -558,7 +533,7 @@ struct EditorView: View {
     }
 
     /// The width ÷ height the canvas view takes, from the image being shown.
-    private var contentAspect: CGFloat {
+    var contentAspect: CGFloat {
         EditorCanvasGeometry.contentAspect(
             imageSize: session.canvasImage?.extent.size ?? CGSize(width: 3, height: 2),
             sideBySide: session.compareMode == .sideBySide)
@@ -569,11 +544,11 @@ struct EditorView: View {
     /// arm it was a right-click in a different view, so in the editor it read
     /// as a permanently-disabled control. Before/after and Side by Side cover
     /// comparison, and Find Similar Photos covers "show me ones like this".
-    private var canvasRegion: some View { canvas }
+    var canvasRegion: some View { canvas }
 
     /// The floating EV/zone readout shown while targeting on the canvas.
     @ViewBuilder
-    private var targetReadout: some View {
+    var targetReadout: some View {
         if session.toneZoneTargeting, let ev = hoveredEV, let zone = session.hoveredZone {
             Text(String(format: "%.1f EV · ", ev) + String(localized: "Zone \(zone + 1)"))
                 .font(theme.valueFont)
@@ -584,7 +559,7 @@ struct EditorView: View {
         }
     }
 
-    private func compareChip(_ text: String) -> some View {
+    func compareChip(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 11, weight: .medium))
             .foregroundStyle(ink.baseColor)
@@ -597,20 +572,20 @@ struct EditorView: View {
     /// The image being compared against — the original unless a version or the
     /// embedded Lightroom preview was chosen. Needed by BOTH compare modes;
     /// side-by-side used to get nothing, which is why it drew nothing.
-    private var wipeCompareImage: CIImage? {
+    var wipeCompareImage: CIImage? {
         switch session.compareMode {
         case .off: return nil
         case .wipe, .sideBySide: return wipeImage ?? session.originalImage
         }
     }
 
-    private var wipeFraction: Double? {
+    var wipeFraction: Double? {
         if case .wipe(let f) = session.compareMode { return f }
         return nil
     }
 
     @ViewBuilder
-    private var sideBySideLabel: some View {
+    var sideBySideLabel: some View {
         if session.compareMode == .sideBySide {
             // Labels, not controls — but they sat as bare grey text on the
             // backdrop, below AA and looking like something you should be able
@@ -627,156 +602,10 @@ struct EditorView: View {
         }
     }
 
-    /// Compare, zebras and reset — the TOOLS card in the left panel.
-    ///
-    /// This was a capsule of eight unlabelled glyphs floating under the canvas.
-    /// It was too small to hit comfortably and gave no clue what any of it did,
-    /// so every control now states its name and lives with the rest of the
-    /// controls instead of on top of the photo.
-    private var toolsSection: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            EditorToolRow(systemName: "arrow.uturn.backward",
-                          label: String(localized: "Undo"),
-                          isEnabled: session.canUndo, action: { session.undo() })
-            EditorToolRow(systemName: "arrow.uturn.forward",
-                          label: String(localized: "Redo"),
-                          isEnabled: session.canRedo, action: { session.redo() })
-
-            Divider().padding(.vertical, 4)
-
-            // One Auto for "just make this look right". The per-card buttons
-            // stay for when you want only the tone or only the colour — but
-            // the common case is not two separate decisions, and making the
-            // user find both was the wrong default.
-            EditorToolRow(systemName: "wand.and.stars",
-                          label: String(localized: "Auto Enhance"),
-                          action: {
-                Task {
-                    guard let r = await session.autoToneResult() else { return }
-                    AutoToneApply.all(r, onto: &session.draft)
-                    session.commitGesture()
-                }
-            })
-
-            Divider().padding(.vertical, 4)
-
-            // Press-and-hold, not a toggle: peek is a momentary comparison, and
-            // a toggle leaves the user unsure which one they're looking at.
-            // MOMENTARY: down shows the original, up puts it back. It used to
-            // be a Button whose action toggled AND a press gesture that set —
-            // so a click ended with the peek stuck on and no way to click it
-            // off. A peek you can leave on is just a confusing second mode.
-            EditorToolRow(systemName: "eye",
-                          label: String(localized: "Hold to See Original"),
-                          isActive: session.beforePeek,
-                          onPressChanged: { pressing in session.beforePeek = pressing })
-
-            EditorToolRow(systemName: "rectangle.split.2x1",
-                          label: String(localized: "Side by Side"),
-                          isActive: session.compareMode == .sideBySide,
-                          action: {
-                session.compareMode = session.compareMode == .sideBySide ? .off : .sideBySide
-            })
-
-            EditorToolRow(systemName: "rectangle.lefthalf.inset.filled",
-                          label: String(localized: "Split Compare"),
-                          isActive: isWiping,
-                          action: {
-                if case .wipe = session.compareMode {
-                    session.compareMode = .off
-                } else {
-                    session.compareMode = .wipe(0.5)
-                }
-            })
-
-            if case .wipe(let fraction) = session.compareMode {
-                Slider(value: Binding(get: { fraction },
-                                      set: { session.compareMode = .wipe($0) }), in: 0...1)
-                    .tint(panelTheme.controlAccent)
-                    .padding(.horizontal, 8)
-                    .accessibilityLabel(Text("Split position"))
-            }
-
-            Divider().padding(.vertical, 4)
-
-            // Zebras: session-scoped, J to toggle. Right-click opens the
-            // thresholds, which DO persist — the stripes are a check, the
-            // thresholds are a preference.
-            EditorToolRow(systemName: "circle.lefthalf.striped.horizontal",
-                          label: String(localized: "Clipping Zebras (J)"),
-                          isActive: session.zebrasOn,
-                          action: { session.zebrasOn.toggle() })
-                .contextMenu {
-                    Button { showZebraThresholds = true } label: { Text("Zebra Thresholds…") }
-                }
-                .popover(isPresented: $showZebraThresholds) { ZebraThresholdsPopover() }
-
-            Divider().padding(.vertical, 4)
-
-            EditorToolRow(systemName: "arrow.counterclockwise",
-                          label: String(localized: "Reset All Adjustments"),
-                          action: { session.resetAll() })
-
-            Divider().padding(.vertical, 4)
-
-            backdropPicker
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// The editor backdrop, as five visible swatches.
-    ///
-    /// It was reachable only by right-clicking the backdrop itself, which is a
-    /// gesture nobody discovers — the setting looked like it didn't exist. The
-    /// context menu still works; this is the way you can SEE.
-    private var backdropPicker: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Background")
-                .font(panelTheme.labelFont)
-                .foregroundStyle(panelTheme.textSecondary)
-                .padding(.horizontal, 8)
-            HStack(spacing: 6) {
-                ForEach(EditorBackdropLevel.allCases) { level in
-                    backdropSwatch(level)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 8)
-        }
-        .padding(.vertical, 2)
-    }
-
-    private func backdropSwatch(_ level: EditorBackdropLevel) -> some View {
-        let selected = EditorBackdropLevel.resolve(backdropRaw) == level
-        return Button {
-            backdropRaw = level.rawValue
-        } label: {
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(Color(white: level.brightness))
-                .frame(width: 22, height: 22)
-                // A hairline in the panel's own ink, so a white swatch on a
-                // white backdrop still has an edge.
-                .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .strokeBorder(panelTheme.textPrimary.opacity(0.35), lineWidth: 1))
-                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(selected ? panelTheme.controlAccent : .clear, lineWidth: 2)
-                    .padding(-3))
-        }
-        .buttonStyle(.plain)
-        .help(Text(level.label))
-        .accessibilityLabel(Text(level.label))
-        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-    }
-
-    private var isWiping: Bool {
-        if case .wipe = session.compareMode { return true }
-        return false
-    }
-
     // MARK: - Right card
 
     @ViewBuilder
-    private var rightPanelContent: some View {
+    var rightPanelContent: some View {
         // "Looks" is film-industry shorthand; this card is presets, LUTs and
         // copy/paste of adjustments — all of it "settings you saved and can
         // apply again", which is what a STYLE is in plain English (and what
@@ -872,545 +701,10 @@ struct EditorView: View {
                       isExpanded: expansion(Section.crop)) { cropSection }
     }
 
-    /// Auto beside Reset, in the card's heading. Auto is scoped exactly like
-    /// the Reset it sits next to (see `AutoToneApply`): the button in LIGHT
-    /// never moves a COLOR slider, because a card's controls promising one
-    /// group and touching another is the thing per-card Reset exists to avoid.
-    private func autoAndReset(autoHelp: String, auto: @escaping () -> Void,
-                              resetHelp: String, reset: @escaping () -> Void) -> AnyView {
-        AnyView(
-            HStack(spacing: 4) {
-                EditorSmallButton(label: String(localized: "Auto"),
-                                  systemName: "wand.and.stars",
-                                  action: auto)
-                    .environment(\.theme, panelTheme)
-                    .help(Text(autoHelp))
-                EditorSmallButton(label: String(localized: "Reset"),
-                                  systemName: "arrow.counterclockwise",
-                                  action: reset)
-                    .environment(\.theme, panelTheme)
-                    .help(Text(resetHelp))
-            }
-        )
-    }
-
-    /// Vignette and grain. Vignette shipped with a full model and renderer in
-    /// Spec 04 and NOTHING that could write it — the only reference in the app
-    /// was a reset. This card is that missing half.
-    /// Two named groups of three, not six loose sliders. Without the headings
-    /// the card advertised six independent effects when it has two, and
-    /// "Midpoint" and "Feather" gave no clue which one they belonged to.
-    private var effectsSection: some View {
-        VStack(alignment: .leading, spacing: panelTheme.spacingS) {
-            effectsGroupLabel(String(localized: "Vignette"))
-            EditSlider(label: String(localized: "Amount"),
-                       value: vignetteBinding(\.amount), onCommit: session.commitGesture)
-            EditSlider(label: String(localized: "Midpoint"),
-                       value: vignetteBinding(\.midpoint), range: 0...1, neutral: 0.5,
-                       onCommit: session.commitGesture)
-            EditSlider(label: String(localized: "Feather"),
-                       value: vignetteBinding(\.feather), range: 0...1, neutral: 0.5,
-                       onCommit: session.commitGesture)
-
-            Divider().padding(.vertical, 2)
-
-            effectsGroupLabel(String(localized: "Grain"))
-            EditSlider(label: String(localized: "Amount"),
-                       value: grainBinding(\.amount), range: 0...1, neutral: 0,
-                       onCommit: session.commitGesture)
-            EditSlider(label: String(localized: "Size"),
-                       value: grainBinding(\.size), range: 0...1, neutral: 0.5,
-                       onCommit: session.commitGesture)
-            EditSlider(label: String(localized: "Roughness"),
-                       value: grainBinding(\.roughness), range: 0...1, neutral: 0.5,
-                       onCommit: session.commitGesture)
-        }
-    }
-
-    /// The group heading inside a card — same treatment Split Tone already uses
-    /// for Shadows/Highlights, so the two cards read the same way.
-    private func effectsGroupLabel(_ text: String) -> some View {
-        Text(text)
-            .font(panelTheme.labelFont.weight(.semibold))
-            .foregroundStyle(panelTheme.textSecondary)
-    }
-
-    private func grainBinding(_ key: WritableKeyPath<GrainParams, Double>) -> Binding<Double> {
-        Binding(get: { session.draft.grainParams?[keyPath: key]
-                        ?? GrainParams.neutral[keyPath: key] },
-                set: { v in session.draft.setGrain { $0[keyPath: key] = v } })
-    }
-
-    // MARK: - Crop & straighten
-
-    /// Geometry shipped with a full model, renderer, codec and Lightroom
-    /// importer and NO editor UI — the only writers were the importer and the
-    /// social export's crop step. This card is the missing half.
-    ///
-    /// TWO tools, labelled as such: framing (a mode you enter, frame, and
-    /// Apply) and orientation (straighten, rotate, flip — direct actions that
-    /// have nothing to do with the crop rectangle and must not be gated behind
-    /// entering crop mode).
-    ///
-    /// Only the crop RECTANGLE is transactional. It has to be: it is the one
-    /// control you set up over several drags before you mean it.
-    private var cropSection: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            effectsGroupLabel(String(localized: "Crop"))
-
-            EditorToolRow(systemName: "crop",
-                          label: session.cropMode
-                              ? String(localized: "Cancel Crop")
-                              : String(localized: "Crop"),
-                          isActive: session.cropMode,
-                          action: { session.cropMode.toggle() })
-
-            // Spaced off the row above: it is a different KIND of control (a
-            // choice, not a switch) and read as attached to it.
-            cropAspectMenu
-                .padding(.top, panelTheme.spacingS)
-                .padding(.bottom, 2)
-
-            EditorToolRow(systemName: "rectangle.portrait.rotate",
-                          label: String(localized: "Portrait / Landscape"),
-                          isActive: cropPortrait,
-                          isEnabled: session.cropMode && cropAspect.supportsOrientation,
-                          action: {
-                cropPortrait.toggle()
-                selectAspect(cropAspect)
-            })
-
-            if session.cropMode {
-                HStack {
-                    cropApplyRow
-                    Spacer(minLength: 0)
-                }
-                .padding(.top, panelTheme.spacingS)
-            }
-
-            Divider().padding(.vertical, 6)
-
-            effectsGroupLabel(String(localized: "Straighten"))
-
-            EditSlider(label: String(localized: "Angle"),
-                       value: straightenBinding, range: -45...45,
-                       onCommit: session.commitGesture)
-
-            // Rotate and flip are NOT crop operations — they turn the whole
-            // photo — so they apply directly and are never gated behind crop
-            // mode.
-            EditorToolRow(systemName: "rotate.left",
-                          label: String(localized: "Rotate Left"),
-                          action: { turnPhoto(by: -1) })
-            EditorToolRow(systemName: "rotate.right",
-                          label: String(localized: "Rotate Right"),
-                          action: { turnPhoto(by: 1) })
-            EditorToolRow(systemName: "arrow.left.and.right.square",
-                          label: String(localized: "Flip Horizontal"),
-                          isActive: session.draft.geometryParams?.flipH ?? false,
-                          action: { flipPhoto(horizontal: true) })
-            EditorToolRow(systemName: "arrow.up.and.down.square",
-                          label: String(localized: "Flip Vertical"),
-                          isActive: session.draft.geometryParams?.flipV ?? false,
-                          action: { flipPhoto(horizontal: false) })
-        }
-    }
-
-    /// Turning or flipping while the crop card is open changes what DISPLAY
-    /// space means; `EditSession.draft`'s own `didSet` re-places the pending
-    /// frame onto the new orientation, so it stays on the same part of the
-    /// picture. These two exist only to normalize the turn count.
-    private func turnPhoto(by delta: Int) {
-        session.draft.setGeometry {
-            $0.quarterTurns = CropDragMath.normalizedTurns($0.quarterTurns + delta)
-        }
-        session.commitGesture()
-    }
-
-    private func flipPhoto(horizontal: Bool) {
-        session.draft.setGeometry {
-            if horizontal { $0.flipH.toggle() } else { $0.flipV.toggle() }
-        }
-        session.commitGesture()
-    }
-
-    /// A real dropdown — bordered as well as filled, because as a bare label
-    /// with a chevron it did not read as something you could press.
-    private var cropAspectMenu: some View {
-        Menu {
-            ForEach(CropAspectPreset.modes) { p in
-                Button(p.menuTitle()) { selectAspect(p) }
-            }
-            Divider()
-            ForEach(CropAspectPreset.shapes) { p in
-                Button(p.menuTitle(portrait: cropPortrait)) { selectAspect(p) }
-            }
-        } label: {
-            Text(cropAspect.menuTitle(portrait: cropPortrait))
-                .lineLimit(1)
-                .truncationMode(.tail)
-        }
-        // Standard pop-up treatment — the platform already draws a control that
-        // reads as pressable, and the hand-rolled border was a second, worse
-        // version of it.
-        .controlSize(.small)
-        .disabled(!session.cropMode)
-        .accessibilityLabel(Text("Crop shape"))
-        .help(Text("Crop shape"))
-    }
-
-    /// Apply is the FILLED accent button — it is the one action that commits,
-    /// and as a small grey checkmark in the heading it read as decoration.
-    private var cropApplyRow: some View {
-        Button {
-            guard let pending = session.pendingCropInSourceSpace else { return }
-            session.draft.setGeometry { $0.crop = pending }
-            session.commitGesture()
-            session.cropMode = false
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .bold))
-                Text("Apply Crop")
-            }
-            .font(panelTheme.labelFont.weight(.semibold))
-            .foregroundStyle(panelTheme.selectionInk)
-            .padding(.horizontal, 12)
-            .frame(height: 24)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(panelTheme.selectionFill)
-                    // Hover is a TINT and nothing else — the app's hover
-                    // treatment everywhere. It was a shadow-and-lift here,
-                    // which read as a different kind of control. The white
-                    // wash works whichever way the accent resolves, since
-                    // PanelContrast can hand this button a light or a dark
-                    // fill and a hard-coded "brighter" would be wrong for one.
-                    .overlay(Capsule(style: .continuous)
-                        .fill(Color.white.opacity(isApplyHot ? 0.18 : 0))))
-            .contentShape(Capsule(style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .disabled(!session.cropHasPendingChange)
-        .opacity(session.cropHasPendingChange ? 1 : 0.35)
-        .onHover { applyCropHovering = $0 }
-        .animation(.easeOut(duration: 0.12), value: isApplyHot)
-        .help(Text("Apply Crop"))
-    }
-
-    /// Hover only counts while the button can actually DO something — a
-    /// disabled control that lights up under the pointer is a promise it will
-    /// not keep.
-    private var isApplyHot: Bool {
-        applyCropHovering && session.cropHasPendingChange
-    }
-
-    /// The card's Reset, in the HEADING like every other card's — it clears the
-    /// whole geometry group (crop, angle, rotation, flips), which is what
-    /// "reset this card" means everywhere else in the editor.
-    private var cropResetButton: AnyView {
-        resetButton(String(localized: "Reset Crop & Straighten")) {
-            session.draft.setGeometry { $0 = .neutral }
-            session.pendingCrop = session.cropMode ? .full : nil
-            cropAspect = .original
-            cropPortrait = false
-            session.commitGesture()
-        }
-    }
-
-    /// Picking a shape refits the pending frame; Freeform leaves whatever is on
-    /// screen alone, since its whole point is that you place it yourself.
-    ///
-    /// "Original" resolves to the STORED crop when that is already full, so
-    /// choosing it changes nothing and the Apply button correctly stays down —
-    /// picking the option you are already on is not an edit.
-    private func selectAspect(_ p: CropAspectPreset) {
-        cropAspect = p
-        guard session.cropMode else { return }
-        switch p.id {
-        case "original":
-            session.pendingCrop = .full
-        case "freeform":
-            break
-        default:
-            guard let ratio = p.ratio(portrait: cropPortrait) else { return }
-            session.pendingCrop = CropDragMath.fit(aspect: ratio, into: session.displayAspect)
-        }
-    }
-
-    /// Straighten writes the angle AND the inset crop that keeps the photo a
-    /// filled rectangle — `applyGeometry` rotates and then crops with no inset
-    /// of its own, so without this the corners go transparent. Lightroom and
-    /// Apple Photos both pull the crop in as you rotate.
-    ///
-    /// It applies directly rather than through Apply: it is a slider, and every
-    /// other slider in the editor takes effect as you drag it. It only
-    /// auto-manages a crop it OWNS — full frame, or the inset it wrote itself;
-    /// a frame the user dragged is theirs.
-    private var straightenBinding: Binding<Double> {
-        Binding(get: { session.draft.geometryParams?.straightenDegrees ?? 0 },
-                set: { degrees in
-            // SOURCE aspect, not display: `applyGeometry` straightens and then
-            // crops, both in source space, so the inscribed-rect problem lives
-            // there. The inset it produces is a CENTRED rect with equal
-            // normalized sides, which is orientation-invariant, so it can be
-            // written to `crop` directly without a mapping.
-            let aspect = session.imageAspect
-            let existing = session.draft.geometryParams ?? .neutral
-            let previous = existing.straightenDegrees
-            let current = existing.crop ?? .full
-            let ownsCrop = current.isFull
-                || current == CropDragMath.straightenInset(degrees: previous, aspect: aspect)
-
-            session.draft.setGeometry { g in
-                g.straightenDegrees = degrees
-                guard ownsCrop else { return }
-                g.crop = degrees == 0
-                    ? .full
-                    : CropDragMath.straightenInset(degrees: degrees, aspect: aspect)
-            }
-        })
-    }
-
-    // MARK: - Colour mix (HSL) + split toning
-
-    /// Which of the three HSL channels the eight sliders are editing. Lives in
-    /// the card HEADING, not the body — the same reason the Styles card's
-    /// Grid/List pair does: inside the card it pushed every row down.
-    private enum HSLTab: String, CaseIterable { case hue, saturation, luminance }
-
-    /// Band order is fixed and matches the kernel's 45° centres starting at red.
-    private static let hslBandNames = [
-        String(localized: "Red"), String(localized: "Orange"),
-        String(localized: "Yellow"), String(localized: "Green"),
-        String(localized: "Aqua"), String(localized: "Blue"),
-        String(localized: "Purple"), String(localized: "Magenta"),
-    ]
-
-    private var hslSection: some View {
-        VStack(alignment: .leading, spacing: panelTheme.spacingS) {
-            hslTabs
-            ForEach(Array(Self.hslBandNames.enumerated()), id: \.offset) { i, name in
-                EditSlider(label: name, value: hslBinding(i), onCommit: session.commitGesture)
-            }
-        }
-    }
-
-    private func hslBinding(_ band: Int) -> Binding<Double> {
-        Binding(get: {
-            let p = session.draft.hslParams ?? .neutral
-            let channel: [Double] = switch hslTab {
-            case .hue: p.hue
-            case .saturation: p.saturation
-            case .luminance: p.luminance
-            }
-            return band < channel.count ? channel[band] : 0
-        }, set: { v in
-            session.draft.setHSL { p in
-                switch hslTab {
-                case .hue: if band < p.hue.count { p.hue[band] = v }
-                case .saturation: if band < p.saturation.count { p.saturation[band] = v }
-                case .luminance: if band < p.luminance.count { p.luminance[band] = v }
-                }
-            }
-        })
-    }
-
-    /// Three TEXT tabs at the top of the card body, not icons in the heading.
-    /// The icons were unreadable — a palette, a drop and a sun say nothing
-    /// about hue, saturation and luminance, and a tooltip you have to hover to
-    /// find is not a label.
-    private var hslTabs: some View {
-        HStack(spacing: 2) {
-            hslTabButton(String(localized: "Hue"), .hue)
-            hslTabButton(String(localized: "Saturation"), .saturation)
-            hslTabButton(String(localized: "Luminance"), .luminance)
-        }
-        .padding(2)
-        .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
-            .fill(panelTheme.panelRaised))
-    }
-
-    private func hslTabButton(_ label: String, _ tab: HSLTab) -> some View {
-        let isOn = hslTab == tab
-        return Button { hslTab = tab } label: {
-            Text(label)
-                .font(.system(size: 10, weight: isOn ? .semibold : .regular))
-                .foregroundStyle(isOn ? panelTheme.selectionInk : panelTheme.textSecondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .frame(maxWidth: .infinity)
-                .frame(height: 22)
-                .background(RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(isOn ? panelTheme.selectionFill : .clear))
-                // Without this the tab is only clickable ON the glyphs, which
-                // makes a full-width control feel broken.
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(label))
-        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
-    }
-
-    private var splitToneSection: some View {
-        VStack(alignment: .leading, spacing: panelTheme.spacingS) {
-            Text("Shadows")
-                .font(panelTheme.labelFont).foregroundStyle(panelTheme.textSecondary)
-            EditSlider(label: String(localized: "Hue"), value: splitBinding(\.shadowHue),
-                       range: 0...1, neutral: 0, onCommit: session.commitGesture)
-            EditSlider(label: String(localized: "Saturation"),
-                       value: splitBinding(\.shadowSaturation),
-                       range: 0...1, neutral: 0, onCommit: session.commitGesture)
-
-            Divider()
-
-            Text("Highlights")
-                .font(panelTheme.labelFont).foregroundStyle(panelTheme.textSecondary)
-            EditSlider(label: String(localized: "Hue"), value: splitBinding(\.highlightHue),
-                       range: 0...1, neutral: 0, onCommit: session.commitGesture)
-            EditSlider(label: String(localized: "Saturation"),
-                       value: splitBinding(\.highlightSaturation),
-                       range: 0...1, neutral: 0, onCommit: session.commitGesture)
-
-            Divider()
-
-            EditSlider(label: String(localized: "Balance"), value: splitBinding(\.balance),
-                       onCommit: session.commitGesture)
-        }
-    }
-
-    private func splitBinding(_ key: WritableKeyPath<SplitToneParams, Double>)
-        -> Binding<Double> {
-        Binding(get: { session.draft.splitToneParams?[keyPath: key]
-                        ?? SplitToneParams.neutral[keyPath: key] },
-                set: { v in session.draft.setSplitTone { $0[keyPath: key] = v } })
-    }
-
-    /// `neutral:` matters on midpoint/feather: double-clicking their labels has
-    /// to return to 0.5, not to 0, or the reset gesture lands somewhere the
-    /// user never chose.
-    private func vignetteBinding(_ key: WritableKeyPath<VignetteParams, Double>)
-        -> Binding<Double> {
-        Binding(get: { session.draft.vignetteParams?[keyPath: key]
-                        ?? VignetteParams.neutral[keyPath: key] },
-                set: { v in session.draft.setVignette { $0[keyPath: key] = v } })
-    }
-
-    /// A card's own Reset — undoes that group and nothing else, so fixing the
-    /// colour doesn't cost you the tone work.
-    private func resetButton(_ help: String, action: @escaping () -> Void) -> AnyView {
-        AnyView(
-            EditorSmallButton(label: String(localized: "Reset"),
-                              systemName: "arrow.counterclockwise",
-                              action: action)
-                .environment(\.theme, panelTheme)
-                .help(Text(help))
-        )
-    }
-
-    private var lightTab: some View {
-        VStack(alignment: .leading, spacing: panelTheme.spacingS) {
-            EditSlider(label: String(localized: "Exposure"),
-                       value: toneBinding(\.exposureEV),
-                       range: ToneParams.exposureRange, onCommit: session.commitGesture)
-            EditSlider(label: String(localized: "Contrast"),
-                       value: toneBinding(\.contrast), onCommit: session.commitGesture)
-            EditSlider(label: String(localized: "Highlights"),
-                       value: toneBinding(\.highlights), onCommit: session.commitGesture)
-            EditSlider(label: String(localized: "Shadows"),
-                       value: toneBinding(\.shadows), onCommit: session.commitGesture)
-            EditSlider(label: String(localized: "Whites"),
-                       value: toneBinding(\.whites), onCommit: session.commitGesture)
-            EditSlider(label: String(localized: "Blacks"),
-                       value: toneBinding(\.blacks), onCommit: session.commitGesture)
-
-            Divider()
-
-            EditSlider(label: String(localized: "Clarity"),
-                       value: presenceBinding(\.clarity), onCommit: session.commitGesture)
-            EditSlider(label: String(localized: "Texture"),
-                       value: presenceBinding(\.texture), onCommit: session.commitGesture)
-            EditSlider(label: String(localized: "Sharpen"),
-                       value: presenceBinding(\.sharpen), range: 0...1,
-                       onCommit: session.commitGesture)
-            EditSlider(label: String(localized: "Noise Reduction"),
-                       value: presenceBinding(\.noiseReduction), range: 0...1,
-                       onCommit: session.commitGesture)
-
-            Divider()
-
-            Text("Curve").font(panelTheme.labelFont).foregroundStyle(panelTheme.textSecondary)
-            CurveEditorView(points: curveBinding,
-                            // The seam Spec 04 left: the curve's backdrop is
-                            // the luma channel of the SAME shared statistics
-                            // pass the Scopes tab draws.
-                            histogram: session.stats?.curveHistogram,
-                            onCommit: session.commitGesture)
-        }
-    }
-
-    private var colorTab: some View {
-        VStack(alignment: .leading, spacing: panelTheme.spacingS) {
-            HStack(spacing: panelTheme.spacingS) {
-                EditSlider(label: String(localized: "Temperature"),
-                           value: colorBinding(\.temperature), onCommit: session.commitGesture)
-                WBEyedropperButton(session: session)
-            }
-            EditSlider(label: String(localized: "Tint"),
-                       value: colorBinding(\.tint), onCommit: session.commitGesture)
-            EditSlider(label: String(localized: "Vibrance"),
-                       value: colorBinding(\.vibrance), onCommit: session.commitGesture)
-            EditSlider(label: String(localized: "Saturation"),
-                       value: colorBinding(\.saturation), onCommit: session.commitGesture)
-
-            if session.isRaw {
-                Divider()
-                EditToggleRow(label: String(localized: "Auto Lens Correction"),
-                              isOn: Binding(
-                                get: { session.draft.rawParams?.lensCorrection ?? true },
-                                set: { on in session.draft.setRaw { $0.lensCorrection = on } }),
-                              onCommit: session.commitGesture)
-            }
-        }
-    }
-
-    private var looksTab: some View {
-        LooksBrowserView(session: session, listMode: $stylesListMode)
-    }
-
-    /// Grid vs list for the Styles browser, as a pair of buttons in the card's
-    /// HEADING — inside the card they pushed every look down by a row.
-    private var stylesModeButtons: AnyView {
-        AnyView(
-            HStack(spacing: 4) {
-                stylesModeButton(systemName: "square.grid.2x2", isOn: !stylesListMode,
-                                 label: String(localized: "Grid")) { stylesListMode = false }
-                stylesModeButton(systemName: "list.bullet", isOn: stylesListMode,
-                                 label: String(localized: "List")) { stylesListMode = true }
-            }
-        )
-    }
-
-    private func stylesModeButton(systemName: String, isOn: Bool, label: String,
-                                  action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(isOn ? panelTheme.selectionInk : panelTheme.textPrimary)
-                .frame(width: 22, height: 18)
-                .background(RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(isOn ? panelTheme.selectionFill : panelTheme.panelRaised))
-        }
-        .buttonStyle(.plain)
-        .help(Text(label))
-        .accessibilityLabel(Text(label))
-        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
-    }
-
     // MARK: - Left card
 
     @ViewBuilder
-    private var leftPanelContent: some View {
+    var leftPanelContent: some View {
         EditorSection(title: String(localized: "TOOLS"),
                       ink: ink,
                       isExpanded: expansion(Section.tools)) { toolsSection }
@@ -1439,48 +733,12 @@ struct EditorView: View {
         }
     }
 
-    /// What this card says about the photo. The INFO card that used to sit
-    /// beside it was the filename (already above the panel), a count of
-    /// adjustment groups (the sliders say that), and these same notes — so it
-    /// went, and the two lines that were only ever there moved here.
-    private var insightsSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // Provenance: these values came from someone else's software and
-            // are approximations, not a transfer.
-            if session.draft.origin == .lightroom {
-                Label("Approximated from Lightroom", systemImage: "info.circle")
-                    .font(panelTheme.labelFont)
-                    .foregroundStyle(panelTheme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            ForEach(Array(feedbackNotes.enumerated()), id: \.offset) { _, note in
-                Text(note.displayText)
-                    .font(panelTheme.labelFont)
-                    .foregroundStyle(panelTheme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            // The RAW decoder version is PINNED at first edit so a later OS
-            // can't silently re-render the same stack differently. When the
-            // pinned one is gone we say what we substituted rather than hide it.
-            if let decoderVersion = session.draft.rawParams?.decoderVersion {
-                let live = RawSource.currentDecoderVersion(for: session.url)
-                Text(live == nil || live == decoderVersion
-                     ? String(localized: "Process: RAW decoder \(decoderVersion)")
-                     : String(localized: "Process: RAW decoder \(decoderVersion) (this Mac renders with \(live ?? ""))"))
-                    .font(panelTheme.labelFont)
-                    .foregroundStyle(panelTheme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
     // MARK: - Readouts, target mode, feedback
 
     /// Statistics cost something, so they run only while a panel is showing
     /// them — the Light card (curve backdrop + zone mass) or Scopes. Collapsing
     /// both stops the pass, which is the point of making the cards collapsible.
-    private func updateStatsVisibility() {
+    func updateStatsVisibility() {
         let visible = expanded.contains(Section.light)
             || expanded.contains(Section.zones)      // the strip draws zone mass
             || expanded.contains(Section.histogram)
@@ -1494,7 +752,7 @@ struct EditorView: View {
 
     /// Build the hatch overlay's mask for the current draft. Lazy — most
     /// sessions never hover a zone, and this is a decode.
-    private func buildZoneMaskIfNeeded() async {
+    func buildZoneMaskIfNeeded() async {
         guard zoneMask == nil || zoneMaskStack != session.draft else { return }
         let url = session.url
         let stack = session.draft
@@ -1512,7 +770,7 @@ struct EditorView: View {
 
     /// Target mode: hovering the canvas reads the SMOOTHED mask's EV, so the
     /// number shown is the number the scroll wheel then moves.
-    private func handleTargetHover(_ phase: HoverPhase, content: CGRect) {
+    func handleTargetHover(_ phase: HoverPhase, content: CGRect) {
         guard session.toneZoneTargeting else { return }
         switch phase {
         case .active(let location):
@@ -1532,7 +790,7 @@ struct EditorView: View {
         }
     }
 
-    private func sampleEV(at point: CGPoint, content: CGSize) -> Double? {
+    func sampleEV(at point: CGPoint, content: CGSize) -> Double? {
         guard let map = session.zoneEVMap, map.width > 0, map.height > 0,
               session.canvasImage != nil else { return nil }
         // A division, because the content rect IS the image's rect. This used
@@ -1548,7 +806,7 @@ struct EditorView: View {
 
     /// Scroll adjusts the hovered zone while targeting, and is CONSUMED so the
     /// canvas doesn't zoom underneath the gesture.
-    private func handleTargetScroll(_ event: NSEvent) -> Bool {
+    func handleTargetScroll(_ event: NSEvent) -> Bool {
         guard session.toneZoneTargeting, let zone = session.hoveredZone else { return false }
         let scrollGainPerTick = 0.02
         let deltaY = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY : event.deltaY
@@ -1568,7 +826,7 @@ struct EditorView: View {
         return true
     }
 
-    private func loadFeedback() async {
+    func loadFeedback() async {
         let path = session.url.path
         feedbackNotes = await Task.detached(priority: .utility) { () -> [PhotoFeedback.Note] in
             guard let queue = Database.shared.dbQueue,
@@ -1588,7 +846,7 @@ struct EditorView: View {
     /// The stack stays declarative: what's stored is the resulting offsets,
     /// never the click location. A stored location would have to be re-sampled
     /// on every render and would point somewhere else the moment a crop moved.
-    private func sampleWhiteBalance(at location: CGPoint, content: CGSize) {
+    func sampleWhiteBalance(at location: CGPoint, content: CGSize) {
         session.eyedropperArmed = false
         guard let image = session.originalImage ?? session.canvasImage else { return }
         let extent = image.extent
@@ -1617,39 +875,15 @@ struct EditorView: View {
         session.commitGesture()
     }
 
-    // MARK: - Bindings
-
-    /// Each binding reads through the typed accessor and writes through the
-    /// find-or-insert mutator, so touching a slider creates its adjustment
-    /// case and nothing else has to know the stack's shape.
-    private func toneBinding(_ keyPath: WritableKeyPath<ToneParams, Double>) -> Binding<Double> {
-        Binding(get: { session.draft.toneParams?[keyPath: keyPath] ?? 0 },
-                set: { v in session.draft.setTone { $0[keyPath: keyPath] = v } })
-    }
-
-    private func colorBinding(_ keyPath: WritableKeyPath<ColorParams, Double>) -> Binding<Double> {
-        Binding(get: { session.draft.colorParams?[keyPath: keyPath] ?? 0 },
-                set: { v in session.draft.setColor { $0[keyPath: keyPath] = v } })
-    }
-
-    private func presenceBinding(_ keyPath: WritableKeyPath<PresenceParams, Double>) -> Binding<Double> {
-        Binding(get: { session.draft.presenceParams?[keyPath: keyPath] ?? 0 },
-                set: { v in session.draft.setPresence { $0[keyPath: keyPath] = v } })
-    }
-
-    private var curveBinding: Binding<[CurveParams.Point]> {
-        Binding(get: { session.draft.curveParams?.rgb ?? [] },
-                set: { pts in session.draft.setCurve { $0.rgb = pts } })
-    }
 }
 
 /// Zebra thresholds. These persist (unlike the toggle) because they are a
 /// judgement about what counts as clipped, not a momentary check — and they
 /// are the SAME values the Scopes percentages and the stored-stat-free live
 /// statistics read.
-private struct ZebraThresholdsPopover: View {
-    @State private var high = AppSettings.editorZebraHigh
-    @State private var low = AppSettings.editorZebraLow
+struct ZebraThresholdsPopover: View {
+    @State var high = AppSettings.editorZebraHigh
+    @State var low = AppSettings.editorZebraLow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
