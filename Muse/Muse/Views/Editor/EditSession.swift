@@ -15,6 +15,9 @@
 
 import Foundation
 import CoreImage
+// AppKit for `seedCanvas`'s NSImage only. This file lives in Views/, not in
+// the platform-neutral `Editing/` module the audit guards.
+import AppKit
 
 enum CompareMode: Equatable {
     case off
@@ -409,6 +412,27 @@ final class EditSession: ObservableObject {
     /// close enough that the visible resolution never drops noticeably — the
     /// proxy is already 2.5× the canvas.
     nonisolated static let proxyLadder: [Int] = [1600, 2048, 2560, 3072, 4096]
+
+    /// Whether a proxy has ever been built for this session — i.e. whether the
+    /// next `updateCanvas` is the FIRST one (mount) or a resize.
+    var hasProxy: Bool { proxyLongEdge > 0 }
+
+    /// Open the canvas on the image the Preview page is already showing.
+    ///
+    /// Synchronous and best-effort: it is a placeholder for the ~200–400 ms it
+    /// takes the real proxy to decode and render, not a substitute for it. Only
+    /// ever fills an EMPTY canvas, so it can never override a real render.
+    ///
+    /// The image handed in is the hero's own decode, which `HeroStage` already
+    /// renders through the saved stack — so this is the same photo with the
+    /// same edits, and `contentAspect` (which otherwise falls back to a 3:2
+    /// guess) is right on the first frame too.
+    func seedCanvas(with placeholder: NSImage?) {
+        guard canvasImage == nil, let placeholder,
+              let cg = placeholder.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        else { return }
+        canvasImage = CIImage(cgImage: cg)
+    }
 
     /// (Re)build the proxy for a new canvas size, then render the draft.
     func updateCanvas(canvasLongEdge: CGFloat, scale: CGFloat) async {

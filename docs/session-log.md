@@ -6,6 +6,76 @@ the durable rules + a compact index live in `CLAUDE.md`. Nothing here is
 load-bearing for a fresh session beyond what that index already surfaces;
 read an entry when you need the full "why" behind a specific change.
 
+### Preview ↔ Edit is instant — 2026-08-03 (on `feat/next-153`)
+
+Owner report, both directions of the same switch: *"going from preview to edit,
+how the image shows up is not that nice — it's a rough delayed instant. Would be
+nicer if it was already there. Also in reverse, the preview image has the
+animation every time going back and forth."*
+
+Two symptoms, two unrelated causes, both structural rather than cosmetic.
+
+**Edit → Preview: the stage was being REMOUNTED.** The body was an if/else —
+`EditorView` in one branch, `HeroStage` + the info column in the other — so
+leaving Edit did not reveal the Preview page, it rebuilt it. A remount fires
+`.onAppear { open() }`, and `open()` is the OPEN FLIGHT: `displayRect =
+sourceRect` (the grid tile's drawn rect, behind the viewer), then a spring out to
+`fitRect`, seeded from the 320pt thumbnail with `loadFullRes()` re-decoding
+behind it. So every single trip back flew the photo in from a tile the user
+could not see and landed it soft. That is the animation the owner was watching
+"every time".
+
+The stage now stays mounted behind the editor at `.opacity(0)`, hit-testing off.
+Coming back is one frame: same view, same decoded image, already at `fitRect`.
+
+**Preview → Edit: the canvas mounted EMPTY.** `EditSession` is created with
+`canvasImage == nil`, and `EditCanvasView` draws nothing for a nil image — so
+the sequence was: photo disappears, backdrop for as long as it takes layout to
+settle plus a 120 ms debounce plus a proxy decode plus a full edit-stack render,
+then the photo pops back at a different size. It also fitted the canvas to
+`contentAspect`'s 3:2 fallback in the meantime, so the shape snapped when the
+real image arrived. That is the "rough delayed instant".
+
+Three fixes. `EditSession.seedCanvas(_:)` opens the session on the image the
+Preview stage is already showing — and that is not an approximation: `HeroStage`
+decodes through `EditRenderer.render(url:stack:maxPixel:)` with the resolved
+saved stack, which is the same function the canvas proxy calls, so the swap when
+the proxy lands is invisible. `EditorView`'s `.task(id: canvasSize)` debounce is
+now skipped while `!session.hasProxy` — it exists to keep a live window resize
+from racing the proxy rebuild, and on mount there is no drag to race, so it was
+120 ms of dead time in front of the first decode. And both switches became CUTS:
+with both pages now carrying the image, a cross-fade dissolves two offset copies
+of the same photo through each other, because Preview fits to the whole viewport
+and Edit fits to the free space between the panels.
+
+**What the review rounds caught in this diff, none of it visible in the
+symptom.** (1) A flip race: arrow keys move `currentURL` the instant they are
+pressed while the new file's decode is still in flight, so the held image is the
+PREVIOUS photo — flip then immediately click Edit and the editor opened on the
+wrong picture. The seed is keyed by URL now and a miss just mounts empty, as
+before. (2) The seed was `@State`, which meant the three decode rungs each
+re-rendered the whole viewer — backdrop, info column, chrome — for data only the
+Edit click ever reads. It is a reference box (`HeroImageBox`) so mutating it
+invalidates nothing. (3) `.opacity(0)` hides a view from the eye but leaves it
+in the accessibility tree, so VoiceOver could still land on the invisible
+Preview stage while the editor was the thing on screen; `.accessibilityHidden`
+was missing.
+
+Also checked and found safe: Escape in Edit routes to `closeFromEditor`, which
+never sets `isClosing`, so the now-mounted stage cannot be left mid-flight; the
+scroll monitor already bails on `editMode`; and `closeFromEditor`'s note about
+not clearing `editMode` early was updated, since the failure it describes is now
+"reveals the stage" rather than "mounts the stage".
+
+The accepted cost: the hero's full-res `NSImage` stays retained while editing,
+where before entering Edit freed it. That is what buys the instant return.
+
+Tests 2,011 (+9: the seed, `hasProxy`, and the `HeroImageBox` file-match guard);
+Release build warning-free; `audit-invariants.sh` 15/15. The
+durable-constraints index counts were stale in every section (the header claimed
+170 rules against 187 actual) and were regenerated while adding the new
+Hero-viewer rule.
+
 ### HDR gain maps — 2026-08-03 (on `feat/next-153`)
 
 `muse-photo-foundation.md` §6 line 196 required HDR and none of it was built:

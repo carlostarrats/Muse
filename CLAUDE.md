@@ -300,7 +300,7 @@ must-not-break rules distilled from those sessions live in
 
 ### Durable constraints & gotchas (DO NOT BREAK)
 
-**The full set of 170 rules lives in `docs/durable-constraints.md`. READ THE
+**The full set of 187 rules lives in `docs/durable-constraints.md`. READ THE
 RELEVANT SECTION BEFORE ANY NON-TRIVIAL CHANGE** — each one is hard-won, and
 re-introducing it re-introduces a shipped bug. Sections there:
 

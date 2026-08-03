@@ -176,6 +176,55 @@ extension EditSessionTests {
         XCTAssertEqual(s.zoneEVMap?.values, [-4])
     }
 
+    // MARK: - Opening canvas
+
+    private func swatch(w: Int, h: Int) -> NSImage {
+        let img = NSImage(size: NSSize(width: w, height: h))
+        img.lockFocus()
+        NSColor.red.setFill()
+        NSRect(x: 0, y: 0, width: w, height: h).fill()
+        img.unlockFocus()
+        return img
+    }
+
+    /// Entering Edit used to mount an EMPTY canvas — nothing on screen until a
+    /// proxy decode + full stack render landed, which is the photo vanishing
+    /// and popping back. The session opens on the hero's decoded pixels instead.
+    func testSeedCanvasFillsAnEmptyCanvas() throws {
+        let s = session()
+        XCTAssertNil(s.canvasImage)
+        s.seedCanvas(with: swatch(w: 40, h: 20))
+        XCTAssertNotNil(s.canvasImage)
+        // Right ASPECT on the first frame too — `contentAspect` otherwise falls
+        // back to a 3:2 guess and the canvas snaps shape when the proxy lands.
+        // Aspect, not size: the seed carries the image's PIXELS, which on a
+        // Retina-backed NSImage are its points times the backing scale. The
+        // canvas fits by aspect, so only the ratio has to survive.
+        let extent = try XCTUnwrap(s.canvasImage?.extent)
+        XCTAssertEqual(extent.width / extent.height, 2, accuracy: 0.001)
+    }
+
+    /// It is a placeholder, never an override: a real render always wins.
+    func testSeedCanvasNeverReplacesAnExistingCanvas() {
+        let s = session()
+        s.seedCanvas(with: swatch(w: 40, h: 20))
+        let first = s.canvasImage?.extent.width
+        s.seedCanvas(with: swatch(w: 400, h: 200))
+        XCTAssertEqual(s.canvasImage?.extent.width, first)
+    }
+
+    func testSeedCanvasWithNoImageIsANoOp() {
+        let s = session()
+        s.seedCanvas(with: nil)
+        XCTAssertNil(s.canvasImage)
+    }
+
+    /// The proxy-rebuild debounce is skipped on the FIRST build (mount) and
+    /// applied on resizes; `hasProxy` is that distinction.
+    func testHasProxyIsFalseBeforeAnyCanvasBuild() {
+        XCTAssertFalse(session().hasProxy)
+    }
+
     func testStatsSampleLongEdgeIsSmallOnPurpose() {
         // A 256px sample's histogram is indistinguishable from the full frame's,
         // and the difference in cost per slider tick is the whole feature.

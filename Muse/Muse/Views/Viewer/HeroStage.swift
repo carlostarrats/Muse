@@ -122,6 +122,13 @@ struct HeroStage: View {
     let viewport: CGSize
     var burnProgress: Double = 0
     var onCloseFinished: () -> Void
+    /// Every decode rung this stage lands, handed up so the hero viewer can
+    /// open the editor on the pixels already on screen instead of on nothing.
+    ///
+    /// Carries the URL the pixels came from. An arrow-key flip changes the
+    /// file before the new decode lands, so an untagged image would let the
+    /// editor open on the PREVIOUS photo.
+    var onImageReady: ((URL, NSImage) -> Void)? = nil
 
     @Binding var zoom: CGFloat
     @Binding var pan: CGSize
@@ -296,6 +303,7 @@ struct HeroStage: View {
         }
         .onAppear { open() }
         .onDisappear { resetCursorState() }
+        .onChange(of: image) { _, new in if let new { onImageReady?(url, new) } }
         .onChange(of: isClosing) { _, closing in if closing { close() } }
         .onChange(of: zoom) { _, _ in syncHoverCursor() }
         .onChange(of: sourceFrame) { _, newFrame in

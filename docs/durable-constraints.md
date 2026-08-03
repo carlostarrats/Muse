@@ -13,9 +13,9 @@ is data-loss, privacy-egress or permanent-delete class — inline it there too.
 
 - [Network egress & viewer security](#network-egress--viewer-security) — 5 rules
 - [Google Drive share & the share page](#google-drive-share--the-share-page) — 9 rules
-- [Export & the output choke point](#export--the-output-choke-point) — 6 rules
+- [Export & the output choke point](#export--the-output-choke-point) — 8 rules
 - [Import & migration](#import--migration) — 6 rules
-- [Editing engine](#editing-engine) — 21 rules
+- [Editing engine](#editing-engine) — 25 rules
 - [Photo metadata, geocoding & stacks](#photo-metadata-geocoding--stacks) — 6 rules
 - [Indexing & file identity](#indexing--file-identity) — 7 rules
 - [iCloud sync & sidecars](#icloud-sync--sidecars) — 7 rules
@@ -24,13 +24,13 @@ is data-loss, privacy-egress or permanent-delete class — inline it there too.
 - [Analysis pipeline](#analysis-pipeline) — 16 rules
 - [Thumbnails & decode budgets](#thumbnails--decode-budgets) — 6 rules
 - [Grid & layout](#grid--layout) — 10 rules
-- [Hero viewer](#hero-viewer) — 6 rules
+- [Hero viewer](#hero-viewer) — 10 rules
 - [Sidebar](#sidebar) — 6 rules
 - [Collections](#collections) — 4 rules
-- [Modals, toolbar & menus](#modals-toolbar--menus) — 8 rules
+- [Modals, toolbar & menus](#modals-toolbar--menus) — 9 rules
 - [SwiftUI patterns, animation & AppState](#swiftui-patterns-animation--appstate) — 15 rules
 - [Filesystem, roots & sandbox](#filesystem-roots--sandbox) — 9 rules
-- [Selection, duplicates, App Intents & accessibility](#selection-duplicates-app-intents--accessibility) — 5 rules
+- [Selection, duplicates, App Intents & accessibility](#selection-duplicates-app-intents--accessibility) — 8 rules
 - [Working practice](#working-practice) — 5 rules
 
 ## Network egress & viewer security
@@ -215,6 +215,7 @@ is data-loss, privacy-egress or permanent-delete class — inline it there too.
 - **A later `withAnimation` on the same value REPLACES a running animation — the hero's post-decode `displayRect` writes must stay on the open spring (2026-07-29).** Every decode step (quick thumb → mid-res → sharp) re-writes `displayRect = fitRect`, and a normal image's sharp decode lands ~100–200 ms in, so a `withAnimation(.easeOut)` there swallowed the open bounce entirely. `HeroFlightMotion.settling(since:)` keeps those writes on the spring while it's still settling and falls back to a plain ease after (by then it's a correction, not the flight) — same class as the `isClosing` guard already documented in `loadFullRes`. The open curve is `.spring(duration:bounce:)`, NOT `.spring(response:dampingFraction:)`: the latter has no bounded settle, so damping high enough to tame the overshoot still crept past half a second — slow AND bounceless at once. An arrow-key FLIP is a re-fit, not a flight, so `flipTo` clears the settle window (otherwise the same keypress bounced or not depending on the user's timing). The close FLIGHT stays on its fixed 0.34s curve — the backdrop fade (0.3s) and unmount (0.36s) are timed against that number.
 
 - **Closing the viewer from EDIT mode is an instant CUT — no flight, no fade (owner decision, 2026-08-02).** Four animated versions were built and rejected: (1) leave Edit then run the normal close, which puts the Preview page on screen for the whole flight and replays the OPEN flight from the tile first; (2) cross-fade the surface, jagged because of the MTKView; (3) fly a copy of the photo over the still-mounted editor; (4) mount the stage for the return leg only. The editor's canvas shares no geometry with a grid tile, so there is no honest motion between them. `closeFromEditor` also must NOT clear `editMode`/`editSession` before dismissing — that flips the body to the Preview branch for a frame — and must NOT set `viewerDismissing`, because that and `selectedFile == nil` both call `ToolbarFade.show()` and firing both in one transaction flickers the toolbar.
+- **`HeroStage` stays MOUNTED behind the editor, and both Preview↔Edit switches are instant CUTS (2026-08-03).** Edit used to replace the stage in an if/else, so every return to Preview was a REMOUNT — which fires `HeroStage.open()`: take off from the grid tile's rect on the open spring, re-seed from the 320pt thumbnail, re-decode. The photo flew in from behind the viewer and landed soft, on every single trip. It now stays mounted at `.opacity(0)` with `allowsHitTesting(false)` **and `accessibilityHidden(true)`** — opacity alone hides a view from the eye but not from VoiceOver — so coming back is one frame with nothing to reload. Entering Edit was the mirror problem for a different reason: the canvas mounted with `canvasImage == nil` and drew NOTHING until layout settled, a 120 ms debounce elapsed and a proxy decode + full stack render landed, fitting the canvas to a placeholder 3:2 guess meanwhile. `EditSession.seedCanvas(_:)` opens it on the hero's already-decoded image (which `HeroStage` renders through the same saved stack via the same `EditRenderer`, so the proxy that replaces it is an invisible swap), and `EditorView`'s debounce is now skipped when `!session.hasProxy` — on mount there is no drag to race. **Neither switch may be wrapped in `withAnimation`**: the two pages fit the photo into different rects (Preview to the whole viewport, Edit to the free space between the panels), so now that BOTH carry the image a cross-fade dissolves two offset copies of the same photo through each other. The seed is held in `HeroImageBox`, a reference box rather than `@State`, for two reasons that are both load-bearing: the stage lands three decode rungs per file and a published value would re-render the whole viewer (backdrop, info column, chrome) three times per open for data only the Edit click reads; and it is keyed by URL, because an arrow-key flip moves `currentURL` while the new file's decode is still in flight and an untagged image would open the editor on the PREVIOUS photo. The cost is that the hero's full-res `NSImage` stays retained while editing — that is the price of the instant return, accepted.
 - **The grid's parting field must converge when the EDITOR opens, not when the viewer closes (2026-08-02).** Opening the hero pushes every other tile radially away and drops it to `PartingField.partedOpacity` (0.15); that state persisted behind the editor, and leaving Edit snapped every tile back in one frame — a flash across the whole grid. `AppState.editorActive` drops the parting while the editor covers the window, so the exit has nothing to undo. `AppState.viewerCutOut` separately suppresses the converge ANIMATION for that cut.
 - **Escape in the viewer is handled by a local `keyDown` monitor, not the shell's `.cancelAction` button (2026-08-02).** Routing it through `AppState.viewerClosing` cost a full shell re-evaluation (a `@Published` write) before the close began, which is why Escape visibly failed to animate while ✕ — which calls `startClose()` directly — did. The monitor yields to `appState.modalPresented` so a card over the viewer still owns Escape first.
 

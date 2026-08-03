@@ -53,6 +53,21 @@ struct HeroImageViewer: View {
     /// are all untouched by it.
     @State private var editMode = false
     @State private var editSession: EditSession?
+    /// The pixels the Preview stage is showing right now — already decoded and
+    /// already rendered through the saved edit stack. Handed to a new
+    /// `EditSession` as its opening canvas so Edit doesn't mount empty.
+    ///
+    /// A reference BOX, not a plain `@State` value, and that is the point: the
+    /// stage lands three decode rungs per file (thumbnail → mid → sharp), so a
+    /// value here would invalidate this whole view — backdrop, info column,
+    /// chrome — three times per open, for data no part of the body reads. Only
+    /// `enterEditMode` reads it, at the moment of the click. Mutating the box's
+    /// contents changes no SwiftUI state, so nothing re-renders.
+    @State private var heroImage = HeroImageBox()
+
+    /// Edit is on screen. Mounting both and hiding one costs a compositing
+    /// no-op; unmounting either costs a reload.
+    private var editing: Bool { editMode && editSession != nil }
 
     /// Read only so the Preview | Edit switch can stay legible over whichever
     /// editor backdrop is set — the editor owns this preference.
@@ -80,24 +95,38 @@ struct HeroImageViewer: View {
                         .contentShape(Rectangle())
                         .onTapGesture { startClose() }
 
+                    // The stage stays MOUNTED while editing, hidden behind the
+                    // editor. Unmounting it is what made the return to Preview
+                    // replay the whole open flight: a remount fires
+                    // `HeroStage.open()`, which takes off from the grid tile's
+                    // rect and re-seeds from the 320pt thumbnail before
+                    // decoding again — so every Edit → Preview trip flew the
+                    // photo in from behind the viewer and landed it soft.
+                    // Kept alive, coming back is a no-op: same view, same
+                    // decoded image, already at `fitRect`.
+                    HeroStage(url: currentURL,
+                              sourceFrame: localSourceFrame(overlayGlobal: overlayGlobal,
+                                                            viewport: geo.size),
+                              viewport: geo.size,
+                              burnProgress: burnProgress,
+                              onCloseFinished: finishClose,
+                              onImageReady: { heroImage.store($1, for: $0) },
+                              zoom: $zoom,
+                              pan: $pan,
+                              isClosing: $isClosing)
+                        .opacity(editing ? 0 : 1)
+                        // No hover cursor, no pan/pinch from the hidden stage.
+                        .allowsHitTesting(!editing)
+                        // Opacity 0 hides a view from the eye but NOT from
+                        // VoiceOver — an invisible stage left mounted would
+                        // still be an element to swipe onto while the editor
+                        // is the thing on screen.
+                        .accessibilityHidden(editing)
+
+                    if !editing { rightRail }
+
                     if let editSession, editMode {
                         EditorView(session: editSession, onClose: closeFromEditor)
-                            // The stage's own scale, so entering Edit reads as
-                            // the photo settling back to make room for the
-                            // panels rather than as a new screen.
-                            .transition(.opacity)
-                    } else {
-                        HeroStage(url: currentURL,
-                                  sourceFrame: localSourceFrame(overlayGlobal: overlayGlobal,
-                                                                viewport: geo.size),
-                                  viewport: geo.size,
-                                  burnProgress: burnProgress,
-                                  onCloseFinished: finishClose,
-                                  zoom: $zoom,
-                                  pan: $pan,
-                                  isClosing: $isClosing)
-
-                        rightRail
                     }
                     // Hidden along with the rest of the chrome when Edit's
                     // eye is on: "only the image" has to include this too.
@@ -506,10 +535,25 @@ struct HeroImageViewer: View {
         Task {
             let stack = await EditStore.shared.stack(for: url)
             guard currentURL == url else { return }
-            editSession = EditSession(url: url, stack: stack, isRaw: isRaw)
+            let session = EditSession(url: url, stack: stack, isRaw: isRaw)
+            // Before the flip, not after: the editor's first frame then already
+            // has the photo. Without it the canvas mounts with `canvasImage ==
+            // nil`, so the page is empty until layout settles, a 120 ms
+            // debounce elapses and a proxy decode + full stack render land —
+            // the photo vanishing and then popping back in, which is what the
+            // switch to Edit looked like. It is also the same PIXELS, rendered
+            // through the same saved stack, so the proxy that replaces it a
+            // moment later is an invisible swap.
+            session.seedCanvas(with: heroImage.image(for: url))
+            editSession = session
             // Let the grid come back together while it's hidden.
             appState.editorActive = true
-            withAnimation(.easeOut(duration: 0.25)) { editMode = true }
+            // A CUT, not a cross-fade. The two pages fit the photo into
+            // different rects (Preview to the whole viewport, Edit to the free
+            // space between the panels), so fading one into the other now that
+            // BOTH carry the image would dissolve two offset copies of the same
+            // photo through each other.
+            editMode = true
         }
     }
 
@@ -545,9 +589,9 @@ struct HeroImageViewer: View {
         appState.editorActive = false
         chromeVisible = false
         // NOTE: editMode/editSession are deliberately left alone. Clearing them
-        // here flips the body to the Preview branch — mounting the stage and
-        // the info column — for the frame before `selectedFile` clears, which
-        // is the flicker. The whole subtree is about to be torn down anyway.
+        // here reveals the Preview page — un-hiding the stage and mounting the
+        // info column — for the frame before `selectedFile` clears, which is
+        // the flicker. The whole subtree is about to be torn down anyway.
         reallyFinish()
         Task { @MainActor in
             // One frame is enough for the tiles to land un-animated; clearing
@@ -565,7 +609,10 @@ struct HeroImageViewer: View {
         // whatever set it — reads as the editor having resized the photo.
         zoom = 1
         pan = .zero
-        withAnimation(.easeOut(duration: 0.25)) { editMode = false }
+        // Instant, for the same reason entering is: the stage underneath is
+        // still mounted and still showing this photo at `fitRect`, so revealing
+        // it is a single frame with nothing to animate.
+        editMode = false
         editSession = nil
         // Save on exit as well as on the debounce: leaving the editor is the
         // moment a user expects their work to be safe, and the pending
@@ -814,6 +861,26 @@ struct HeroImageViewer: View {
             scrollMonitor = nil
         }
     }
+}
+
+/// Holds the hero stage's latest decode without publishing it.
+///
+/// See the `heroImage` note in `HeroImageViewer`: this exists so landing a
+/// decode rung doesn't re-render the viewer, and so the image can never be
+/// read back for a file it doesn't belong to.
+/// Not `private`: the file-match guard is the whole correctness of the seed,
+/// and a test has to be able to reach it.
+final class HeroImageBox {
+    private var url: URL?
+    private var latest: NSImage?
+
+    func store(_ image: NSImage, for url: URL) {
+        self.url = url
+        latest = image
+    }
+
+    /// The stored image, but only if it is this file's.
+    func image(for url: URL) -> NSImage? { self.url == url ? latest : nil }
 }
 
 /// Shows its content only while the editor's controls are visible.

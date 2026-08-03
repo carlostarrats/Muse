@@ -199,9 +199,14 @@ struct EditorView: View {
             // Without it the proxy rebuild raced the drag — see the ladder note
             // on `EditSession.proxyMaxPixel`. Between rungs of that ladder this
             // is a no-op anyway; the pairing matters when a drag crosses one.
-            try? await Task.sleep(for: .milliseconds(120))
-            guard !Task.isCancelled else {
-                return
+            // …but only once there IS a proxy. On mount there is nothing to
+            // race, and the debounce was pure dead time in front of the first
+            // decode — 120 ms of empty canvas on every entry to Edit.
+            if session.hasProxy {
+                try? await Task.sleep(for: .milliseconds(120))
+                guard !Task.isCancelled else {
+                    return
+                }
             }
             await session.updateCanvas(canvasLongEdge: max(canvasSize.width, canvasSize.height),
                                        scale: 2)
