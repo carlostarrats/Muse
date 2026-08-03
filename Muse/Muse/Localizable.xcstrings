@@ -1086,6 +1086,16 @@
         }
       }
     },
+    "Angle" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Angle"
+          }
+        }
+      }
+    },
     "Any" : {
       "localizations" : {
         "fr" : {
@@ -1628,11 +1638,22 @@
       }
     },
     "CROP" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "RECADRAGE"
+          }
+        }
+      }
+    },
+    "CROP & STRAIGHTEN" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RECADRAGE ET REDRESSEMENT"
           }
         }
       }
@@ -1673,6 +1694,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Annuler"
+          }
+        }
+      }
+    },
+    "Cancel Crop" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annuler le recadrage"
           }
         }
       }
@@ -7818,11 +7849,22 @@
       }
     },
     "Reset Crop" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Réinitialiser le recadrage"
+          }
+        }
+      }
+    },
+    "Reset Crop & Straighten" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réinitialiser le recadrage et le redressement"
           }
         }
       }

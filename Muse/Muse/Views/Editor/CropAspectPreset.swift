@@ -7,6 +7,10 @@
 //  "Story & Reel", and neither should have to decode the other. That is why
 //  there is no bare "16:9" row and no bare "Widescreen" row either.
 //
+//  The ratio is stored as two INTEGERS rather than a Double so the label can be
+//  printed exactly and so the orientation toggle can swap it honestly: flipping
+//  4:3 has to read "3:4", not "4:3" with an invisible change of meaning.
+//
 //  The two social rows read their DISPLAY NAME from `SocialPreset` so the crop
 //  menu and the export card cannot drift apart. The NAME is shared, not the
 //  geometry: `SocialPreset`'s four remaining entries are deliberately mostly
@@ -21,44 +25,44 @@ import Foundation
 struct CropAspectPreset: Identifiable, Equatable {
     let id: String
     let label: String
-    /// Landscape orientation, width ÷ height. Nil = no fixed ratio.
-    private let baseRatio: Double?
+    /// Width and height as the preset is normally written. Nil for the two
+    /// rows that are modes rather than shapes.
+    private let num: Int?
+    private let den: Int?
 
-    var ratio: Double? { baseRatio }
+    var ratio: Double? {
+        guard let num, let den, den != 0 else { return nil }
+        return Double(num) / Double(den)
+    }
 
-    /// The portrait toggle swaps width and height, so 16:9 and 9:16 are ONE
-    /// row rather than two — the menu stays scannable and the user makes one
-    /// decision about shape and a separate one about orientation.
+    /// The orientation toggle swaps width and height, so each shape is ONE row
+    /// rather than two — the menu stays scannable, and the user makes one
+    /// decision about shape and a separate one about which way up.
     func ratio(portrait: Bool) -> Double? {
-        guard let baseRatio, baseRatio > 0 else { return nil }
-        return portrait ? 1 / baseRatio : baseRatio
+        guard let num, let den, num != 0, den != 0 else { return nil }
+        return portrait ? Double(den) / Double(num) : Double(num) / Double(den)
     }
 
     /// Square, Original and Freeform have no orientation to swap, so the
     /// button disables rather than sitting there doing nothing.
     var supportsOrientation: Bool {
-        guard let baseRatio else { return false }
-        return abs(baseRatio - 1) > 1e-9
+        guard let num, let den else { return false }
+        return num != den
     }
 
-    /// The ratio as the user reads it, shown beside the label at the same
-    /// weight. Empty for the two rows that are modes rather than shapes.
-    var ratioLabel: String {
-        switch id {
-        case "original", "freeform": ""
-        case "square": "1:1"
-        case "ig-post": "4:5"
-        case "ig-story": "9:16"
-        case "print-4x6": "3:2"
-        case "print-8x10": "5:4"
-        case "camera-default": "4:3"
-        default: "16:9"
-        }
+    /// The ratio as the user reads it — and it FOLLOWS the orientation toggle,
+    /// so pressing Portrait on 4:3 shows "3:4". Showing the unswapped ratio
+    /// made the toggle look like it had done nothing.
+    func ratioLabel(portrait: Bool = false) -> String {
+        guard let num, let den else { return "" }
+        let (a, b) = portrait ? (den, num) : (num, den)
+        return "\(a):\(b)"
     }
 
     /// Purpose and value in one string, for the menu row.
-    var menuTitle: String {
-        ratioLabel.isEmpty ? label : "\(label)   \(ratioLabel)"
+    func menuTitle(portrait: Bool = false) -> String {
+        let ratio = ratioLabel(portrait: portrait)
+        return ratio.isEmpty ? label : "\(label)   \(ratio)"
     }
 
     private static func socialName(_ presetID: String, fallback: String) -> String {
@@ -67,27 +71,27 @@ struct CropAspectPreset: Identifiable, Equatable {
     }
 
     static let original = CropAspectPreset(
-        id: "original", label: String(localized: "Original"), baseRatio: nil)
+        id: "original", label: String(localized: "Original"), num: nil, den: nil)
     static let freeform = CropAspectPreset(
-        id: "freeform", label: String(localized: "Freeform"), baseRatio: nil)
+        id: "freeform", label: String(localized: "Freeform"), num: nil, den: nil)
     static let square = CropAspectPreset(
-        id: "square", label: String(localized: "Square"), baseRatio: 1)
+        id: "square", label: String(localized: "Square"), num: 1, den: 1)
     static let igPost = CropAspectPreset(
         id: "ig-post",
         label: socialName("instagram", fallback: String(localized: "Instagram Post")),
-        baseRatio: 4.0 / 5.0)
+        num: 4, den: 5)
     static let story = CropAspectPreset(
         id: "ig-story",
         label: socialName("ig-story", fallback: String(localized: "Story & Reel")),
-        baseRatio: 9.0 / 16.0)
+        num: 9, den: 16)
     static let print4x6 = CropAspectPreset(
-        id: "print-4x6", label: String(localized: "Print 4×6"), baseRatio: 3.0 / 2.0)
+        id: "print-4x6", label: String(localized: "Print 4×6"), num: 3, den: 2)
     static let print8x10 = CropAspectPreset(
-        id: "print-8x10", label: String(localized: "Print 8×10"), baseRatio: 5.0 / 4.0)
+        id: "print-8x10", label: String(localized: "Print 8×10"), num: 5, den: 4)
     static let cameraDefault = CropAspectPreset(
-        id: "camera-default", label: String(localized: "Camera Default"), baseRatio: 4.0 / 3.0)
+        id: "camera-default", label: String(localized: "Camera Default"), num: 4, den: 3)
     static let widescreen = CropAspectPreset(
-        id: "widescreen", label: String(localized: "Video / Widescreen"), baseRatio: 16.0 / 9.0)
+        id: "widescreen", label: String(localized: "Video / Widescreen"), num: 16, den: 9)
 
     /// Original and Freeform sit above the divider because they are MODES, not
     /// shapes. Nine rows is about the ceiling before a menu stops being

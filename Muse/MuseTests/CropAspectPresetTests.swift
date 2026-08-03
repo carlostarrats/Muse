@@ -23,6 +23,30 @@ final class CropAspectPresetTests: XCTestCase {
         XCTAssertEqual(CropAspectPreset.widescreen.ratio!, 16.0 / 9.0, accuracy: 1e-9)
     }
 
+    /// The LABEL follows the orientation toggle. Showing "4:3" after pressing
+    /// Portrait made the button look like it had done nothing.
+    func testRatioLabelSwapsWithOrientation() {
+        XCTAssertEqual(CropAspectPreset.cameraDefault.ratioLabel(), "4:3")
+        XCTAssertEqual(CropAspectPreset.cameraDefault.ratioLabel(portrait: true), "3:4")
+        XCTAssertEqual(CropAspectPreset.widescreen.ratioLabel(), "16:9")
+        XCTAssertEqual(CropAspectPreset.widescreen.ratioLabel(portrait: true), "9:16")
+        XCTAssertEqual(CropAspectPreset.story.ratioLabel(), "9:16")
+        XCTAssertEqual(CropAspectPreset.story.ratioLabel(portrait: true), "16:9")
+        XCTAssertEqual(CropAspectPreset.square.ratioLabel(portrait: true), "1:1")
+    }
+
+    /// And the label always agrees with the ratio actually applied.
+    func testLabelAgreesWithTheAppliedRatio() {
+        for p in CropAspectPreset.shapes {
+            for portrait in [false, true] {
+                let parts = p.ratioLabel(portrait: portrait).split(separator: ":")
+                let fromLabel = Double(parts[0])! / Double(parts[1])!
+                XCTAssertEqual(p.ratio(portrait: portrait)!, fromLabel, accuracy: 1e-9,
+                               "\(p.id) portrait=\(portrait)")
+            }
+        }
+    }
+
     /// The portrait toggle swaps w:h, so each shape is ONE row not two.
     func testPortraitInvertsTheRatio() {
         XCTAssertEqual(CropAspectPreset.widescreen.ratio(portrait: true)!,
@@ -46,17 +70,18 @@ final class CropAspectPresetTests: XCTestCase {
     func testEveryShapeRowNamesBothPurposeAndRatio() {
         for p in CropAspectPreset.shapes {
             XCTAssertFalse(p.label.isEmpty, "\(p.id) has no purpose name")
-            XCTAssertFalse(p.ratioLabel.isEmpty, "\(p.id) has no ratio")
-            XCTAssertTrue(p.menuTitle.contains(p.label))
-            XCTAssertTrue(p.menuTitle.contains(p.ratioLabel))
+            XCTAssertFalse(p.ratioLabel().isEmpty, "\(p.id) has no ratio")
+            XCTAssertTrue(p.menuTitle().contains(p.label))
+            XCTAssertTrue(p.menuTitle().contains(p.ratioLabel()))
         }
     }
 
     /// The two modes are shapeless by design and show no ratio.
     func testModeRowsShowNoRatio() {
         for p in CropAspectPreset.modes {
-            XCTAssertTrue(p.ratioLabel.isEmpty)
-            XCTAssertEqual(p.menuTitle, p.label)
+            XCTAssertTrue(p.ratioLabel().isEmpty)
+            XCTAssertTrue(p.ratioLabel(portrait: true).isEmpty)
+            XCTAssertEqual(p.menuTitle(), p.label)
         }
     }
 

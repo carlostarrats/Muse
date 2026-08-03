@@ -504,13 +504,8 @@ struct EditorView: View {
                     .overlay {
                         if session.cropMode {
                             CropFrameOverlay(
-                                rect: Binding(
-                                    get: { session.pendingGeometry?.crop ?? .full },
-                                    set: { rect in
-                                        var g = session.pendingGeometry ?? .neutral
-                                        g.crop = rect
-                                        session.pendingGeometry = g
-                                    }),
+                                rect: Binding(get: { session.pendingCrop ?? .full },
+                                              set: { session.pendingCrop = $0 }),
                                 aspect: cropAspect.ratio(portrait: cropPortrait),
                                 // Without this the lock is applied to the raw
                                 // ratio in NORMALIZED space, and a 1:1 drag on
@@ -767,6 +762,11 @@ struct EditorView: View {
         // First and closed: a style is a STARTING POINT you pick before you
         // touch a slider, and it's a browser — same rule as the Preview page's
         // cards, open it when you want it.
+        EditorSection(title: String(localized: "STYLES"),
+                      ink: ink,
+                      accessory: stylesModeButtons,
+                      summary: stylesSummary,
+                      isExpanded: expansion(Section.looks)) { looksTab }
         EditorSection(title: String(localized: "LIGHT"),
                       ink: ink,
                       accessory: autoAndReset(
@@ -839,8 +839,9 @@ struct EditorView: View {
                       isExpanded: expansion(Section.effects)) { effectsSection }
         // Crop sits with the other things that change the PICTURE rather than
         // the picture's tone, and its Apply/Reset live in the card body.
-        EditorSection(title: String(localized: "CROP"),
+        EditorSection(title: String(localized: "CROP & STRAIGHTEN"),
                       ink: ink,
+                      accessory: cropResetButton,
                       isExpanded: expansion(Section.crop)) { cropSection }
     }
 
@@ -913,87 +914,103 @@ struct EditorView: View {
                 set: { v in session.draft.setGrain { $0[keyPath: key] = v } })
     }
 
-    // MARK: - Crop
+    // MARK: - Crop & straighten
 
     /// Geometry shipped with a full model, renderer, codec and Lightroom
     /// importer and NO editor UI — the only writers were the importer and the
     /// social export's crop step. This card is the missing half.
     ///
-    /// TRANSACTIONAL: every control here edits `session.pendingGeometry` and
-    /// nothing reaches `draft` until Apply. Rotate, flip and straighten used to
-    /// write through immediately, which saved and re-thumbnailed a crop the
-    /// user had not applied.
+    /// TWO tools, labelled as such: framing (a mode you enter, frame, and
+    /// Apply) and orientation (straighten, rotate, flip — direct actions that
+    /// have nothing to do with the crop rectangle and must not be gated behind
+    /// entering crop mode).
+    ///
+    /// Only the crop RECTANGLE is transactional. It has to be: it is the one
+    /// control you set up over several drags before you mean it.
     private var cropSection: some View {
         VStack(alignment: .leading, spacing: 2) {
-            // A canvas MODE, exactly like Side by Side and Split Compare above
-            // — same component, same isActive treatment, nothing new to learn.
+            effectsGroupLabel(String(localized: "Crop"))
+
             EditorToolRow(systemName: "crop",
-                          label: String(localized: "Crop"),
+                          label: session.cropMode
+                              ? String(localized: "Cancel Crop")
+                              : String(localized: "Crop"),
                           isActive: session.cropMode,
                           action: { session.cropMode.toggle() })
 
-            // Spaced off the Crop row above: it is a different KIND of control
-            // (a choice, not a switch) and read as attached to it.
+            // Spaced off the row above: it is a different KIND of control (a
+            // choice, not a switch) and read as attached to it.
             cropAspectMenu
                 .padding(.top, panelTheme.spacingS)
                 .padding(.bottom, 2)
 
             EditorToolRow(systemName: "rectangle.portrait.rotate",
                           label: String(localized: "Portrait / Landscape"),
+                          isActive: cropPortrait,
                           isEnabled: session.cropMode && cropAspect.supportsOrientation,
                           action: {
                 cropPortrait.toggle()
                 selectAspect(cropAspect)
             })
 
-            Divider().padding(.vertical, 4)
+            if session.cropMode {
+                cropApplyRow.padding(.top, panelTheme.spacingS)
+            }
 
-            EditSlider(label: String(localized: "Straighten"),
+            Divider().padding(.vertical, 6)
+
+            effectsGroupLabel(String(localized: "Straighten"))
+
+            EditSlider(label: String(localized: "Angle"),
                        value: straightenBinding, range: -45...45,
-                       onCommit: {})
+                       onCommit: session.commitGesture)
 
+            // Rotate and flip are NOT crop operations — they turn the whole
+            // photo — so they apply directly and are never gated behind crop
+            // mode.
             EditorToolRow(systemName: "rotate.left",
                           label: String(localized: "Rotate Left"),
-                          isEnabled: session.cropMode,
-                          action: { mutatePendingGeometry { $0.quarterTurns -= 1 } })
+                          action: {
+                session.draft.setGeometry { $0.quarterTurns = (($0.quarterTurns - 1) % 4 + 4) % 4 }
+                session.commitGesture()
+            })
             EditorToolRow(systemName: "rotate.right",
                           label: String(localized: "Rotate Right"),
-                          isEnabled: session.cropMode,
-                          action: { mutatePendingGeometry { $0.quarterTurns += 1 } })
+                          action: {
+                session.draft.setGeometry { $0.quarterTurns = (($0.quarterTurns + 1) % 4 + 4) % 4 }
+                session.commitGesture()
+            })
             EditorToolRow(systemName: "arrow.left.and.right.square",
                           label: String(localized: "Flip Horizontal"),
-                          isActive: session.pendingGeometry?.flipH ?? false,
-                          isEnabled: session.cropMode,
-                          action: { mutatePendingGeometry { $0.flipH.toggle() } })
+                          isActive: session.draft.geometryParams?.flipH ?? false,
+                          action: {
+                session.draft.setGeometry { $0.flipH.toggle() }
+                session.commitGesture()
+            })
             EditorToolRow(systemName: "arrow.up.and.down.square",
                           label: String(localized: "Flip Vertical"),
-                          isActive: session.pendingGeometry?.flipV ?? false,
-                          isEnabled: session.cropMode,
-                          action: { mutatePendingGeometry { $0.flipV.toggle() } })
-
-            if session.cropMode {
-                Divider().padding(.vertical, 4)
-                cropApplyRow
-            }
+                          isActive: session.draft.geometryParams?.flipV ?? false,
+                          action: {
+                session.draft.setGeometry { $0.flipV.toggle() }
+                session.commitGesture()
+            })
         }
     }
 
-    /// A real dropdown rather than a bare label with a chevron — it is a menu
-    /// of nine shapes, and it has to look like one before it is opened.
+    /// A real dropdown — bordered as well as filled, because as a bare label
+    /// with a chevron it did not read as something you could press.
     private var cropAspectMenu: some View {
         Menu {
             ForEach(CropAspectPreset.modes) { p in
-                Button(p.menuTitle) { selectAspect(p) }
+                Button(p.menuTitle()) { selectAspect(p) }
             }
             Divider()
             ForEach(CropAspectPreset.shapes) { p in
-                Button(p.menuTitle) { selectAspect(p) }
+                Button(p.menuTitle(portrait: cropPortrait)) { selectAspect(p) }
             }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "aspectratio")
-                    .font(.system(size: 11, weight: .semibold))
-                Text(cropAspect.menuTitle)
+                Text(cropAspect.menuTitle(portrait: cropPortrait))
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer(minLength: 4)
@@ -1004,8 +1021,13 @@ struct EditorView: View {
             .foregroundStyle(session.cropMode ? panelTheme.textPrimary : panelTheme.textSecondary)
             .padding(.horizontal, 8)
             .frame(height: 24)
-            .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(panelTheme.panelRaised))
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(panelTheme.panelRaised)
+                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(panelTheme.textSecondary.opacity(0.35), lineWidth: 1)))
+            .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
@@ -1014,71 +1036,64 @@ struct EditorView: View {
         .help(Text("Crop shape"))
     }
 
-    /// Apply and Reset together at the foot of the card. Apply is the FILLED
-    /// accent button — it is the one action that commits, and it was previously
-    /// a small grey checkmark in the heading that read as decoration.
+    /// Apply is the FILLED accent button — it is the one action that commits,
+    /// and as a small grey checkmark in the heading it read as decoration.
     private var cropApplyRow: some View {
-        HStack(spacing: 6) {
-            Button {
-                guard let pending = session.pendingGeometry else { return }
-                session.draft.setGeometry { $0 = pending }
-                session.commitGesture()
-                session.cropMode = false
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .bold))
-                    Text("Apply")
-                }
-                .font(panelTheme.labelFont)
-                .foregroundStyle(panelTheme.selectionInk)
-                .padding(.horizontal, 10)
-                .frame(height: 24)
-                .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(panelTheme.selectionFill))
+        Button {
+            guard let pending = session.pendingCrop else { return }
+            session.draft.setGeometry { $0.crop = pending }
+            session.commitGesture()
+            session.cropMode = false
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .bold))
+                Text("Apply Crop")
             }
-            .buttonStyle(.plain)
-            .disabled(!session.cropHasPendingChange)
-            .opacity(session.cropHasPendingChange ? 1 : 0.4)
-            .help(Text("Apply Crop"))
-
-            EditorSmallButton(label: String(localized: "Reset"),
-                              systemName: "arrow.counterclockwise") {
-                session.pendingGeometry = .neutral
-                cropAspect = .original
-                cropPortrait = false
-                Task { await session.renderDraft() }
-            }
-            .environment(\.theme, panelTheme)
-            .help(Text("Reset Crop"))
-
-            Spacer(minLength: 0)
+            .font(panelTheme.labelFont)
+            .foregroundStyle(panelTheme.selectionInk)
+            .frame(height: 24)
+            .frame(maxWidth: .infinity)
+            .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(panelTheme.selectionFill))
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .disabled(!session.cropHasPendingChange)
+        .opacity(session.cropHasPendingChange ? 1 : 0.35)
+        .help(Text("Apply Crop"))
     }
 
-    /// Every geometry control funnels through here so none of them can
-    /// accidentally reach `draft`.
-    private func mutatePendingGeometry(_ mutate: (inout GeometryParams) -> Void) {
-        var g = session.pendingGeometry ?? session.draft.geometryParams ?? .neutral
-        mutate(&g)
-        session.pendingGeometry = g.clamped()
-        Task { await session.renderDraft() }
+    /// The card's Reset, in the HEADING like every other card's — it clears the
+    /// whole geometry group (crop, angle, rotation, flips), which is what
+    /// "reset this card" means everywhere else in the editor.
+    private var cropResetButton: AnyView {
+        resetButton(String(localized: "Reset Crop & Straighten")) {
+            session.draft.setGeometry { $0 = .neutral }
+            session.pendingCrop = session.cropMode ? .full : nil
+            cropAspect = .original
+            cropPortrait = false
+            session.commitGesture()
+        }
     }
 
     /// Picking a shape refits the pending frame; Freeform leaves whatever is on
     /// screen alone, since its whole point is that you place it yourself.
+    ///
+    /// "Original" resolves to the STORED crop when that is already full, so
+    /// choosing it changes nothing and the Apply button correctly stays down —
+    /// picking the option you are already on is not an edit.
     private func selectAspect(_ p: CropAspectPreset) {
         cropAspect = p
         guard session.cropMode else { return }
         switch p.id {
         case "original":
-            mutatePendingGeometry { $0.crop = .full }
+            session.pendingCrop = .full
         case "freeform":
             break
         default:
             guard let ratio = p.ratio(portrait: cropPortrait) else { return }
-            let fitted = CropDragMath.fit(aspect: ratio, into: session.imageAspect)
-            mutatePendingGeometry { $0.crop = fitted }
+            session.pendingCrop = CropDragMath.fit(aspect: ratio, into: session.imageAspect)
         }
     }
 
@@ -1087,21 +1102,21 @@ struct EditorView: View {
     /// of its own, so without this the corners go transparent. Lightroom and
     /// Apple Photos both pull the crop in as you rotate.
     ///
-    /// Pending like everything else in this card, so an abandoned straighten
-    /// never reaches the file. It only auto-manages a crop it OWNS — full
-    /// frame, or the inset it wrote itself; a frame the user dragged is theirs.
+    /// It applies directly rather than through Apply: it is a slider, and every
+    /// other slider in the editor takes effect as you drag it. It only
+    /// auto-manages a crop it OWNS — full frame, or the inset it wrote itself;
+    /// a frame the user dragged is theirs.
     private var straightenBinding: Binding<Double> {
-        Binding(get: { session.pendingGeometry?.straightenDegrees
-                        ?? session.draft.geometryParams?.straightenDegrees ?? 0 },
+        Binding(get: { session.draft.geometryParams?.straightenDegrees ?? 0 },
                 set: { degrees in
             let aspect = session.imageAspect
-            let existing = session.pendingGeometry ?? session.draft.geometryParams ?? .neutral
+            let existing = session.draft.geometryParams ?? .neutral
             let previous = existing.straightenDegrees
             let current = existing.crop ?? .full
             let ownsCrop = current.isFull
                 || current == CropDragMath.straightenInset(degrees: previous, aspect: aspect)
 
-            mutatePendingGeometry { g in
+            session.draft.setGeometry { g in
                 g.straightenDegrees = degrees
                 guard ownsCrop else { return }
                 g.crop = degrees == 0
@@ -1179,9 +1194,12 @@ struct EditorView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity)
-                .frame(height: 20)
+                .frame(height: 22)
                 .background(RoundedRectangle(cornerRadius: 5, style: .continuous)
                     .fill(isOn ? panelTheme.selectionFill : .clear))
+                // Without this the tab is only clickable ON the glyphs, which
+                // makes a full-width control feel broken.
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(label))
@@ -1350,14 +1368,6 @@ struct EditorView: View {
         EditorSection(title: String(localized: "TOOLS"),
                       ink: ink,
                       isExpanded: expansion(Section.tools)) { toolsSection }
-        // Styles lives on the LEFT, under Tools: it is where you START — pick a
-        // look, then refine it with the sliders on the right. Keeping it on the
-        // right put a browser at the top of the column you adjust in.
-        EditorSection(title: String(localized: "STYLES"),
-                      ink: ink,
-                      accessory: stylesModeButtons,
-                      summary: stylesSummary,
-                      isExpanded: expansion(Section.looks)) { looksTab }
         // Was "SCOPES" — a word from broadcast video that says nothing to
         // someone looking at their own photo. It IS a histogram (plus the
         // plain-English clipping read-out), so it says so, and it sits open
