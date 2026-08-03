@@ -100,14 +100,6 @@ final class AnalyzePipeline: ObservableObject {
         await analyze(folder: urls)
     }
 
-    /// User-initiated "Analyze this file". Claims the pass gate for the same
-    /// reason as `analyzeFolderManual`.
-    func analyzeFileManual(_ url: URL) async {
-        guard await acquirePass() else { return }
-        defer { passClaimed = false }
-        await analyze(file: url)
-    }
-
     // MARK: - File-level
 
     func analyze(file url: URL) async {

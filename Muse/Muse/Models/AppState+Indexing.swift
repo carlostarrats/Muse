@@ -79,17 +79,4 @@ extension AppState {
         }
     }
 
-    func analyzeCurrentFolder() async {
-        let urls = currentFiles
-            .filter { $0.kind == .image || $0.kind == .raw || $0.kind == .psd }
-            .map { $0.url }
-        await AnalyzePipeline.shared.analyzeFolderManual(urls)
-        // Re-sort in case visual signals just landed
-        resort()
-    }
-
-    func analyzeSelected() async {
-        guard let url = selectedFile?.url else { return }
-        await AnalyzePipeline.shared.analyzeFileManual(url)
-    }
 }
