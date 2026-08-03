@@ -75,6 +75,14 @@ nonisolated enum EditKernels {
         CGFloat(1.5 + 4.5 * min(max(size, 0), 1)) / 4032
     }
 
+    // MARK: - HDR
+
+    /// The macOS 14.6 tone-map fallback, used by `HDRDecode.toneMappedToSDR`
+    /// when `CIToneMapHeadroom` (15.0+) isn't available. Nil-safe like every
+    /// other kernel here: `HDRDecode` falls back to a linear divide, which is
+    /// dimmer but still never clips.
+    static let reinhardToneMap: CIColorKernel? = load("reinhardToneMap")
+
     private static var libraryData: Data? = {
         guard let url = Bundle.main.url(forResource: "default", withExtension: "metallib")
         else { return nil }

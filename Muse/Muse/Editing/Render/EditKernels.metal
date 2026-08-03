@@ -331,3 +331,26 @@ extern "C" [[stitchable]] float4 grain(coreimage::sample_t s,
     float weight = 1.0f - fabs(y * 2.0f - 1.0f);
     return float4(s.rgb + delta * weight, s.a);
 }
+
+/// Reinhard highlight roll-off — the macOS 14.6 tone-map fallback.
+///
+/// `CIToneMapHeadroom` is macOS 15.0 and Muse's floor is 14.6, so the older
+/// systems need their own HDR -> SDR curve. The alternative, letting
+/// `createCGImage` clamp, was measured collapsing 2.0 and 4.0 onto the same
+/// 1.0 — every specular highlight becomes one flat white blob.
+///
+/// EXTENDED Reinhard: out = c(1 + c/h^2) / (1 + c), which maps `h` exactly to
+/// 1.0 and leaves midtones close to where they were. The plain Reinhard
+/// variant looks equivalent and is not — it maps h to h/2 + 0.5, so at
+/// headroom 4.0 everything above ~1.6 still clipped and 2.0 and 4.0 landed on
+/// the same white. Caught only by forcing this branch on a machine that would
+/// otherwise take the macOS 15 path.
+///
+/// A linear divide would also avoid clipping, but would drag a 4.0-headroom
+/// photo's midtones to a quarter brightness. It survives as HDRDecode's
+/// last-resort fallback for a kernel that failed to load, not as the curve.
+extern "C" [[stitchable]] float4 reinhardToneMap(coreimage::sample_t s, float h) {
+    float3 c = max(s.rgb, 0.0f);
+    float3 mapped = c * (1.0f + c / (h * h)) / (1.0f + c);
+    return float4(clamp(mapped, 0.0f, 1.0f), s.a);
+}
