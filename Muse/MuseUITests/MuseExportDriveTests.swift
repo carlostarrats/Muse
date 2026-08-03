@@ -137,7 +137,15 @@ final class MuseExportDriveTests: XCTestCase {
         snap("01-export-from-grid")
 
         // The controls the rebuild added, all of which are format-branch only.
-        XCTAssertTrue(app.staticTexts["Quality"].exists, "no Quality control")
+        // Quality is a COMBINED row ("Quality, 85%") — same reason as the
+        // estimate below, and it moved into the shared `readout` helper on
+        // 2026-08-02, which is what broke the old `staticTexts["Quality"]`
+        // lookup. Asserting on the merged string also proves the readout
+        // RESOLVED, where a bare label only proved a label was drawn.
+        XCTAssertTrue(staticTextStrings().contains { $0.contains("Quality") && $0.contains("%") },
+                      "no Quality readout — got: \(staticTextStrings().prefix(20))")
+        // Size stays a plain `labelled(_:)` header over the width/height
+        // fields, so it is still its own element.
         XCTAssertTrue(app.staticTexts["Size"].exists, "no Size control")
         XCTAssertTrue(anyStaticText(containing: "Est. file size"),
                       "no estimated size readout")

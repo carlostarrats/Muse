@@ -227,14 +227,14 @@ are the load-bearing reference artifacts.
 > true, though, that almost none of it
 > has been exercised in the RUNNING app — launch, migrations and the backfill
 > chain were confirmed with `MUSE_TRACE=1` against the real library, but the
-> editor, compare/cull, import, share and backup surfaces need someone to drive
+> editor, compare, import, share and backup surfaces need someone to drive
 > them. **`docs/new-build/FEATURE-LEDGER.md` is the standing feature × verification
 > ledger** — one row per feature area with separate automated / static / runtime
 > states, and the Runtime column doubles as the written GUI test plan. Read and
 > update it with any feature work. **G1 (nobody has driven the GUI) is now
 > PARTIALLY CLOSED** — `MuseUITests/MuseSurfaceDriveTests.swift` drives the real
 > app and confirms by screenshot that the editor, Spec 05 readouts, compare,
-> cull, duplicates, all five import panels, backup and settings open and respond,
+> duplicates, all five import panels, backup and settings open and respond,
 > and that every modal honours Escape. **Drive the GUI with XCUITest, not
 > osascript**: the test runner carries automation rights, while a terminal needs
 > Automation/Accessibility TCC permission and is otherwise refused (-1743). Two

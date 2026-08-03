@@ -89,6 +89,7 @@ Rounds 1–3 are recorded in `REVIEW-FINDINGS.md` and `FEATURE-LEDGER.md`; round
 | A constant derived from ONE consumer of a shared resource | 9 | 1 finding — `minWindowWidth` was sized from Preview's single info column; Edit shares the window and spends two panels, leaving 60pt of picture at the minimum |
 | Architecture map vs. the filesystem (do the listed files exist?) | 9 | 1 finding in this round's own diff; 3 pre-existing, all fixed |
 | **UI-test aim: does the test depend on WINDOW SIZE?** | **9** | 6 tests failed with the app working perfectly — a magic `(0.55, 0.5)` window fraction, in 10 places across both drive suites |
+| **Accessibility STRUCTURE changed by a refactor** | **9** | 1 finding — moving the Quality row into a shared `readout()` helper gave it `children: .combine`, so `staticTexts["Quality"]` stopped existing and its test failed. The app was right; combining is correct for VoiceOver. Same trap the estimate row had already documented. |
 
 ## Part 2 — lenses NOT yet run
 
