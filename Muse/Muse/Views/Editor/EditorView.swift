@@ -43,6 +43,8 @@ struct EditorView: View {
     @ObservedObject var lutStore = LutStore.shared
     /// The View menu's half of the hide-UI eye — see `EditorChromeCommand`.
     @ObservedObject var chromeCommand = EditorChromeCommand.shared
+    /// The panel layout — which cards, where, and which are hidden.
+    @ObservedObject var workspace = EditorWorkspaceStore.shared
     @State var showZebraThresholds = false
     /// The smoothed-EV mask the zone hatch draws through. Built lazily on first
     /// hover and dropped whenever the draft changes — it's a per-render mask,
@@ -134,21 +136,31 @@ struct EditorView: View {
             // panels exactly as it does under the Preview column.
             canvasRegion
             HStack(alignment: .top, spacing: theme.spacingL) {
-                if !session.uiHidden {
+                // The LEFT column stops drawing when the workspace has moved
+                // everything off it — an empty panel would leave a dead strip
+                // beside the photo instead of giving the space back.
+                if !session.uiHidden && !workspace.active.isEmpty(.left) {
                     // No chrome on this side, so its cards start on the line
                     // the RIGHT column's first card lands on (below its chrome
                     // row) — and clear of the window's traffic lights.
                     EditorPanel(topInset: Self.panelTop, ink: ink,
                                 backingVisible: isZoomed, chrome: { EmptyView() }) {
-                        leftPanelContent
+                        columnContent(.left)
                     }
                     .transition(.move(edge: .leading).combined(with: .opacity))
                 }
                 Spacer(minLength: 0)
+                // The RIGHT column ALWAYS draws, even with no cards on it: it
+                // carries the chrome row, and zoom / the eye / Share / ✕ are
+                // viewer controls, not modules. They stay pinned top-right
+                // whatever happens to the cards — which is what makes an
+                // all-cards-left layout coherent. With nothing on it this
+                // renders the chrome row alone over the canvas, exactly what
+                // the hide-UI eye already produces.
                 if !session.uiHidden {
                     EditorPanel(topInset: ViewerGeometry.chromeTop, ink: ink,
                                 backingVisible: isZoomed, chrome: { chromeRow }) {
-                        rightPanelContent
+                        columnContent(.right)
                     }
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
@@ -209,6 +221,9 @@ struct EditorView: View {
             // Leaves the View menu's item disabled and correctly titled for the
             // next visit, whichever state this one ended in.
             chromeCommand.editorDismissed()
+            // Leaving the editor by any route discards an in-flight
+            // rearrangement and closes the Customize card — see the store.
+            workspace.editorDismissed()
         }
         // The menu item is the SAME action as the eye, so it goes through the
         // same animated toggle rather than setting `uiHidden` behind its back —
@@ -602,134 +617,15 @@ struct EditorView: View {
         }
     }
 
-    // MARK: - Right card
+    // MARK: - Columns
 
+    /// The workspace decides which cards a column holds and in what order. It
+    /// used to be two hard-coded @ViewBuilder lists here — `leftPanelContent`
+    /// and `rightPanelContent` — so the layout was source code.
     @ViewBuilder
-    var rightPanelContent: some View {
-        // "Looks" is film-industry shorthand; this card is presets, LUTs and
-        // copy/paste of adjustments — all of it "settings you saved and can
-        // apply again", which is what a STYLE is in plain English (and what
-        // Lightroom's French build has called it for years).
-        //
-        // First and closed: a style is a STARTING POINT you pick before you
-        // touch a slider, and it's a browser — same rule as the Preview page's
-        // cards, open it when you want it.
-        EditorSection(title: String(localized: "STYLES"),
-                      ink: ink,
-                      accessory: stylesModeButtons,
-                      summary: stylesSummary,
-                      isExpanded: expansion(Section.looks)) { looksTab }
-        EditorSection(title: String(localized: "LIGHT"),
-                      ink: ink,
-                      accessory: autoAndReset(
-                          autoHelp: String(localized: "Auto Light"),
-                          auto: {
-                              Task {
-                                  guard let r = await session.autoToneResult() else { return }
-                                  AutoToneApply.light(r, onto: &session.draft)
-                                  session.commitGesture()
-                              }
-                          },
-                          resetHelp: String(localized: "Reset Light"),
-                          reset: {
-                              session.draft.setTone { $0 = .neutral }
-                              session.draft.setPresence { $0 = .neutral }
-                              session.draft.setCurve { $0 = .neutral }
-                              session.commitGesture()
-                          }),
-                      isExpanded: expansion(Section.light)) { lightTab }
-        // Its own card between Light and Color: the zone strip is a distinct
-        // way of working (paint tone onto the photo by zone), not one more
-        // slider, and it was the tallest thing buried at the bottom of Light.
-        EditorSection(title: String(localized: "TONE ZONES"),
-                      ink: ink,
-                      accessory: resetButton(String(localized: "Reset Tone Zones")) {
-                          session.draft.setToneZone { $0 = .neutral }
-                          session.commitGesture()
-                      },
-                      isExpanded: expansion(Section.zones)) {
-            ToneZoneStrip(session: session)
-        }
-        EditorSection(title: String(localized: "COLOR"),
-                      ink: ink,
-                      accessory: autoAndReset(
-                          autoHelp: String(localized: "Auto Color"),
-                          auto: {
-                              Task {
-                                  guard let r = await session.autoToneResult() else { return }
-                                  AutoToneApply.color(r, onto: &session.draft)
-                                  session.commitGesture()
-                              }
-                          },
-                          resetHelp: String(localized: "Reset Color"),
-                          reset: {
-                              session.draft.setColor { $0 = .neutral }
-                              session.commitGesture()
-                          }),
-                      isExpanded: expansion(Section.color)) { colorTab }
-        // Hue-targeted colour, under the global COLOR sliders it refines.
-        EditorSection(title: String(localized: "COLOR MIX"),
-                      ink: ink,
-                      accessory: resetButton(String(localized: "Reset Color Mix")) {
-                          session.draft.setHSL { $0 = .neutral }
-                          session.commitGesture()
-                      },
-                      isExpanded: expansion(Section.hsl)) { hslSection }
-        EditorSection(title: String(localized: "SPLIT TONE"),
-                      ink: ink,
-                      accessory: resetButton(String(localized: "Reset Split Tone")) {
-                          session.draft.setSplitTone { $0 = .neutral }
-                          session.commitGesture()
-                      },
-                      isExpanded: expansion(Section.splitTone)) { splitToneSection }
-        // Vignette and grain. Called EFFECTS rather than the spec's original
-        // "Character" for the same reason SCOPES became HISTOGRAM: the heading
-        // has to say what it does to someone looking at their own photo.
-        EditorSection(title: String(localized: "EFFECTS"),
-                      ink: ink,
-                      accessory: resetButton(String(localized: "Reset Effects")) {
-                          session.draft.setVignette { $0 = .neutral }
-                          session.draft.setGrain { $0 = .neutral }
-                          session.commitGesture()
-                      },
-                      isExpanded: expansion(Section.effects)) { effectsSection }
-        // Crop sits with the other things that change the PICTURE rather than
-        // the picture's tone, and its Apply/Reset live in the card body.
-        EditorSection(title: String(localized: "CROP & STRAIGHTEN"),
-                      ink: ink,
-                      accessory: cropResetButton,
-                      isExpanded: expansion(Section.crop)) { cropSection }
-    }
-
-    // MARK: - Left card
-
-    @ViewBuilder
-    var leftPanelContent: some View {
-        EditorSection(title: String(localized: "TOOLS"),
-                      ink: ink,
-                      isExpanded: expansion(Section.tools)) { toolsSection }
-        // Was "SCOPES" — a word from broadcast video that says nothing to
-        // someone looking at their own photo. It IS a histogram (plus the
-        // plain-English clipping read-out), so it says so, and it sits open
-        // under the tools where it can be glanced at while you work.
-        EditorSection(title: String(localized: "HISTOGRAM"),
-                      ink: ink,
-                      isExpanded: expansion(Section.histogram)) {
-            ScopesPanel(session: session)
-        }
-        // Moved here from the Preview column: it's feedback about how the photo
-        // was exposed, which only becomes useful once you're holding the
-        // sliders that answer it. Called INSIGHTS rather than the old "Why it
-        // looks this way", which read like an apology.
-        if hasInsights {
-            EditorSection(title: String(localized: "INSIGHTS"),
-                          ink: ink,
-                          isExpanded: expansion(Section.insights)) { insightsSection }
-        }
-        EditorSection(title: String(localized: "SNAPSHOTS"),
-                      ink: ink,
-                      isExpanded: expansion(Section.history)) {
-            EditVersionsList(session: session)
+    func columnContent(_ column: EditorColumn) -> some View {
+        ForEach(workspace.active.visible(in: column)) { module in
+            card(for: module)
         }
     }
 
