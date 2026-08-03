@@ -154,17 +154,19 @@ checking every param type for a UI writer.
 | # | Feature | Automated (A) | Static (S) | Runtime (R) | Notes |
 |---|---|---|---|---|---|
 | P31.1 | Vignette card (EFFECTS) | `EditStackNormalizeTests.testVignetteRoundTripsAtItsCanonicalIndex` | 2026-08-02 | ❌ | Model+renderer shipped in Spec 04; only the UI was missing. Post-crop for free — the renderer already applies geometry first |
-| P31.2 | Auto-tone (two scoped buttons) | `AutoToneStatsTests` (11), `AutoToneApplyTests` (6) | 2026-08-02 | ❌ | Measures `originalImage`, cached per session → idempotent. Scoped per card to match per-card Reset. Own 256-bin histogram; `HistogramData.binCount` unchanged |
+| P31.2 | Auto-tone (three buttons: Light, Color, Auto Enhance) | `AutoToneStatsTests` (16), `AutoToneApplyTests` (6) | 2026-08-02 (round 10) | partial | Owner drove it and reported it flattened images — `targetSpread` was 0.62 against a normal photo's ~0.9, so contrast went NEGATIVE almost always. Retuned + clamped non-negative; four regression tests. **Re-drive to confirm the retune.** Known gap: pressing Auto before the first render completes is a silent no-op (`originalImage` is nil); window is <200ms after opening the editor |
+| P31.9 | Tone-zone hover dwell | — | 2026-08-02 (round 10) | ✅ owner | Opening the card hatched the photo because `.onHover` fires when a view appears under a stationary cursor. 220ms dwell; drag floor 1pt → 3pt |
 | P31.3 | HSL / COLOR MIX (`.hsl`, index 8) | `StageBParamsTests`, `EditKernelLoadTests.testHSLIsIdentityAtZero`, `…LeavesGreyUntouched` | 2026-08-02 | ❌ | 8 bands × 3 channels, one Metal kernel, after saturation and before the LUT |
 | P31.4 | Split toning (`.splitTone`, index 9) | `StageBParamsTests`, `EditKernelLoadTests.testSplitToneIsIdentityAtZeroSaturation` | 2026-08-02 | ❌ | Display-referred, after the LUT. Five sliders, no hue wheel — darktable presents it the same way |
 | P31.5 | Grain (`.grain`, index 10) | `StageBParamsTests`, `EditKernelLoadTests.testGrainIsDeterministicPerSeed` | 2026-08-02 | ❌ | Long-edge-normalized cell `(1.5+4.5·size)/4032`; seed from the file path so grid, screen and export agree. Renders LAST |
-| P31.6 | Crop / straighten / rotate / flip | `CropDragMathTests` (15), `CropAspectPresetTests` (9), `GeometryParamsTests` | 2026-08-02 | ❌ | Model shipped in Spec 04; only the UI was missing. Crop is a canvas mode; canvas renders crop-full while framing |
+| P31.6 | Crop / straighten / rotate / flip | `CropDragMathTests` (24), `CropAspectPresetTests` (11), `GeometryParamsTests` | 2026-08-02 (round 10) | partial | Owner drove the card 2026-08-02 and found two bugs (see below). Model shipped in Spec 04; only the UI was missing. **Not yet driven on a ROTATED photo**, which is where round 10's coordinate-space fix lives — that is the open runtime check |
 | P31.7 | Crop aspect menu | `CropAspectPresetTests` | 2026-08-02 | ❌ | Purpose + ratio at equal weight; social rows read `SocialPreset.nameKey` so the two surfaces can't drift |
 | P31.8 | Straighten auto-inset | `CropDragMathTests.testStraightenInsets*` (4) | 2026-08-02 | ❌ | Only auto-manages a crop it owns. Not destructive — writes a `crop` value, reversible by double-clicking the slider |
 
-**Runtime column = the GUI test plan for this batch.** Nothing here has been
-driven in the running app yet; every row is honestly ❌ R. What has to be
-checked, in order:
+**Runtime column = the GUI test plan for this batch.** The owner drove parts of
+it on 2026-08-02 and it found four bugs (round 10 in `REVIEW-LENSES.md`), which
+is the argument for this column existing. Rows still ❌ have genuinely not been
+driven. What remains to be checked, in order:
 
 1. **EFFECTS** — drag Vignette, corners darken; double-click Midpoint returns
    to **0.5**, not 0.
@@ -183,6 +185,13 @@ checked, in order:
    the canvas renders cropped and the mode ends. Re-open Crop: the whole photo
    is back with your rectangle on it. **The grid tile reflows to the new aspect**
    — intended, see spec §6.5.
+6b. **CROP ON A ROTATED PHOTO — the open one.** Rotate 90°, then crop the TOP
+   band of what you see, then Apply. The result must be the top of what you were
+   looking at. Before round 10 it was the LEFT band of the original, because the
+   crop is stored in source space and the canvas shows display space. Fixed and
+   unit-tested over all four turns and both flips, but not yet driven.
+6c. Turn **Side by Side** on while crop mode is active — crop mode must switch
+   itself off rather than draw a frame across both panes.
 7. **Straighten to 10°** — the photo tilts and stays a filled rectangle, no
    transparent corners. Double-click the label: back to 0 and full frame.
 8. **Batch** — select several photos, copy a crop and a vignette onto them via

@@ -101,11 +101,10 @@ an unrun lens on the list is worth more than a good idea that evaporates.
 | Disk-full / write-failure behaviour | Every `try?` around a write turns a full disk into silent data loss. Untested. |
 | Sparkle update path integrity on THIS branch | The appcast/EdDSA path has not been re-reviewed since Spec 01 added `Commerce/`. |
 | TOCTOU on user paths | A file swapped between the `fileExists` check and the read. Round 5 covered prefixes, not timing. |
-| Undo/redo coherence across editor + delete-undo | Two independent undo stacks now exist; nobody has checked they don't confuse each other. |
 | Long-session memory growth (retain cycles, not allocation shape) | Round 6 checked allocation *shape*; SwiftUI/Combine retain cycles are a different failure. |
 | Preference-key lifecycle (renamed/removed ids left in a stored set) | `editorExpandedSections2` keeps whatever ids a user has stored; removing a section leaves a dead id there forever. Harmless today, but nothing prunes. |
+| A control's coordinate space vs the renderer's | Round 10's crop bug was ONE calculation in the WRONG frame of reference, so a duplication sweep could never see it. Any control that writes a value the renderer later interprets needs its space checked against the render chain's ORDER of operations. |
 | Two-instance runs during GUI testing | The 2026-08-02 round hit a 21-failure suite caused by a developer-launched instance racing the test's own; GRDB's `.immediateError` means the loser gets no window. Worth a mechanical guard rather than a note. |
-| Geometry computed in two places | Round 9 found the editor's eyedropper and EV hover fitting against the WHOLE window while the renderer fitted against the window minus panels — so both sampled the wrong pixel whenever the panels showed. Nobody reported it; it surfaced only when the two were merged. Worth sweeping for other duplicated layout math. |
 
 **Round 9 — the drive suites' own fragility has now cost three rounds.** Every
 photo-opening test aimed itself with a fixed window fraction, `(0.55, 0.5)`.
@@ -153,6 +152,54 @@ empty *after* a real attempt.
 
 When this section is empty and the audit is green, **static review is done**.
 Further confidence has to come from running the app, not from reading it.
+
+---
+
+## Round 10 (2026-08-02) — the editor adjustments batch
+
+Ran against the batch's own diff. Two lenses moved out of Part 2 as a result.
+
+**"Geometry computed in two places" — RUN, and it paid.** The sweep found the
+crop card writing rects in one coordinate space and the renderer reading them
+in another. `EditRenderer.applyGeometry` crops FIRST and then flips and
+quarter-turns, so `GeometryParams.crop` is in SOURCE coordinates — but the
+editor displays the photo with those turns already applied, and the overlay
+stored what the user drew straight into `crop`. Rotate a landscape photo 90°,
+crop the top of what you see, and you got the LEFT band of the original. This
+is the exact failure `applyGeometry`'s own comment predicts, written by someone
+who saw it coming and could not enforce it from there.
+
+Fixed with an explicit space conversion (`CropDragMath.sourceRect(fromDisplay:)`
+/ `displayRect(fromSource:)` / `displayAspect(source:quarterTurns:)`), applied
+at every boundary: Apply, preset fitting, the aspect lock, and re-entry.
+Round-tripped in tests over all four turns × both flips.
+
+**The same sweep found a second instance of the same class.** Side-by-side
+compare makes the canvas twice as wide as the photo
+(`EditorCanvasGeometry.contentAspect`), so a crop frame drawn over it spans
+both panes and maps to nothing real — and nothing prevented both modes being
+on. Crop, compare, the eyedropper and tone-zone targeting are now mutually
+exclusive: one owner of the canvas at a time, enforced in `didSet` on all four.
+
+**"Undo/redo coherence" — RUN.** The pending crop rect is expressed in display
+space, which the draft's own rotation defines, so any geometry change
+invalidates it. The crop card cannot know about every path that replaces the
+draft wholesale — applying a preset, pasting adjustments, restoring a snapshot,
+Reset, undo, redo — so the resync moved into `EditSession.draft`'s `didSet`,
+which is the one place all of them pass through.
+
+**Also fixed, from the batch's own QA:** the aspect lock enforced in normalized
+space (a 1:1 lock on a 3:2 photo produced a 1.5:1 rect — and the test covering
+it asserted `w == h`, which is the bug restated); `AutoToneStats.targetSpread`
+at 0.62 against a normal photo's ~0.9, so Auto Light drove contrast NEGATIVE on
+almost every image; and the tone-zone hover firing on card expansion, because
+`.onHover` fires when a view appears under a stationary cursor.
+
+**Lens worth adding, not yet run:** *a control's coordinate space vs the
+renderer's*. Distinct from "geometry computed in two places" — that is about
+duplicated math, this is about the same math being correct in two different
+frames of reference. The crop bug was invisible to the duplication sweep
+because there was no duplication; there was one calculation, in the wrong space.
 
 ---
 

@@ -511,7 +511,7 @@ struct EditorView: View {
                                 // Without this the lock is applied to the raw
                                 // ratio in NORMALIZED space, and a 1:1 drag on
                                 // a 3:2 photo yields a 1.5:1 rect.
-                                imageAspect: session.imageAspect,
+                                imageAspect: session.displayAspect,
                                 onCommit: {})
                         }
                     }
@@ -979,31 +979,37 @@ struct EditorView: View {
             // mode.
             EditorToolRow(systemName: "rotate.left",
                           label: String(localized: "Rotate Left"),
-                          action: {
-                session.draft.setGeometry { $0.quarterTurns = (($0.quarterTurns - 1) % 4 + 4) % 4 }
-                session.commitGesture()
-            })
+                          action: { turnPhoto(by: -1) })
             EditorToolRow(systemName: "rotate.right",
                           label: String(localized: "Rotate Right"),
-                          action: {
-                session.draft.setGeometry { $0.quarterTurns = (($0.quarterTurns + 1) % 4 + 4) % 4 }
-                session.commitGesture()
-            })
+                          action: { turnPhoto(by: 1) })
             EditorToolRow(systemName: "arrow.left.and.right.square",
                           label: String(localized: "Flip Horizontal"),
                           isActive: session.draft.geometryParams?.flipH ?? false,
-                          action: {
-                session.draft.setGeometry { $0.flipH.toggle() }
-                session.commitGesture()
-            })
+                          action: { flipPhoto(horizontal: true) })
             EditorToolRow(systemName: "arrow.up.and.down.square",
                           label: String(localized: "Flip Vertical"),
                           isActive: session.draft.geometryParams?.flipV ?? false,
-                          action: {
-                session.draft.setGeometry { $0.flipV.toggle() }
-                session.commitGesture()
-            })
+                          action: { flipPhoto(horizontal: false) })
         }
+    }
+
+    /// Turning or flipping while the crop card is open changes what DISPLAY
+    /// space means; `EditSession.draft`'s own `didSet` re-places the pending
+    /// frame onto the new orientation, so it stays on the same part of the
+    /// picture. These two exist only to normalize the turn count.
+    private func turnPhoto(by delta: Int) {
+        session.draft.setGeometry {
+            $0.quarterTurns = CropDragMath.normalizedTurns($0.quarterTurns + delta)
+        }
+        session.commitGesture()
+    }
+
+    private func flipPhoto(horizontal: Bool) {
+        session.draft.setGeometry {
+            if horizontal { $0.flipH.toggle() } else { $0.flipV.toggle() }
+        }
+        session.commitGesture()
     }
 
     /// A real dropdown — bordered as well as filled, because as a bare label
@@ -1035,7 +1041,7 @@ struct EditorView: View {
     /// and as a small grey checkmark in the heading it read as decoration.
     private var cropApplyRow: some View {
         Button {
-            guard let pending = session.pendingCrop else { return }
+            guard let pending = session.pendingCropInSourceSpace else { return }
             session.draft.setGeometry { $0.crop = pending }
             session.commitGesture()
             session.cropMode = false
@@ -1108,7 +1114,7 @@ struct EditorView: View {
             break
         default:
             guard let ratio = p.ratio(portrait: cropPortrait) else { return }
-            session.pendingCrop = CropDragMath.fit(aspect: ratio, into: session.imageAspect)
+            session.pendingCrop = CropDragMath.fit(aspect: ratio, into: session.displayAspect)
         }
     }
 
@@ -1124,6 +1130,11 @@ struct EditorView: View {
     private var straightenBinding: Binding<Double> {
         Binding(get: { session.draft.geometryParams?.straightenDegrees ?? 0 },
                 set: { degrees in
+            // SOURCE aspect, not display: `applyGeometry` straightens and then
+            // crops, both in source space, so the inscribed-rect problem lives
+            // there. The inset it produces is a CENTRED rect with equal
+            // normalized sides, which is orientation-invariant, so it can be
+            // written to `crop` directly without a mapping.
             let aspect = session.imageAspect
             let existing = session.draft.geometryParams ?? .neutral
             let previous = existing.straightenDegrees

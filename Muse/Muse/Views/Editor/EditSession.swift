@@ -37,13 +37,31 @@ final class EditSession: ObservableObject {
         didSet {
             guard draft != oldValue else { return }
             scheduleAutosave()
+            // The pending crop frame is expressed in DISPLAY space, which is
+            // defined by the draft's own rotation and flips. Any change to the
+            // geometry therefore invalidates it — and the draft is replaced
+            // wholesale by more paths than the crop card can know about
+            // (applying a preset, pasting adjustments, restoring a snapshot,
+            // Reset, undo/redo). Resyncing HERE is the only place that catches
+            // all of them.
+            if cropMode, draft.geometryParams != oldValue.geometryParams {
+                pendingCrop = displayCrop
+            }
         }
     }
     @Published private(set) var history: EditHistory
 
     /// Hold-to-peek: the canvas shows the ORIGINAL while true.
     @Published var beforePeek = false
-    @Published var compareMode: CompareMode = .off
+    /// Compare owns the canvas the same way crop does — side-by-side makes it
+    /// twice as wide as the photo, so a crop frame drawn over it would span
+    /// both panes. Whichever mode is turned on last wins, in both directions.
+    @Published var compareMode: CompareMode = .off {
+        didSet {
+            guard compareMode != oldValue, compareMode != .off else { return }
+            cropMode = false
+        }
+    }
     /// What "before" means for the wipe/side-by-side — nil is the original,
     /// otherwise a saved snapshot's stack.
     @Published var wipeAgainst: EditStack?
@@ -100,7 +118,12 @@ final class EditSession: ObservableObject {
 
     /// The WB eyedropper is armed — the next canvas click samples a pixel
     /// instead of panning.
-    @Published var eyedropperArmed = false
+    @Published var eyedropperArmed = false {
+        didSet {
+            guard eyedropperArmed, eyedropperArmed != oldValue else { return }
+            cropMode = false
+        }
+    }
 
     /// The live preview. Never full-res — see `proxyMaxPixel`.
     @Published private(set) var canvasImage: CIImage?
@@ -127,7 +150,12 @@ final class EditSession: ObservableObject {
     @Published var zebrasOn = false
     /// Direct manipulation on the canvas. Behind an explicit mode because
     /// plain scroll has to keep zooming the canvas.
-    @Published var toneZoneTargeting = false
+    @Published var toneZoneTargeting = false {
+        didSet {
+            guard toneZoneTargeting, toneZoneTargeting != oldValue else { return }
+            cropMode = false
+        }
+    }
     /// Which zone the cursor is over — drives the strip highlight, the readout
     /// and the canvas hatch.
     @Published var hoveredZone: Int?
@@ -162,11 +190,53 @@ final class EditSession: ObservableObject {
     @Published var cropMode = false {
         didSet {
             guard cropMode != oldValue else { return }
-            // Entering snapshots the stored rect; LEAVING discards the pending
-            // copy wholesale. Abandoning the frame must cost nothing.
-            pendingCrop = cropMode ? (draft.geometryParams?.crop ?? .full) : nil
+            if cropMode {
+                // Compare and crop are BOTH canvas modes, and side-by-side
+                // makes the canvas twice as wide as the photo
+                // (`EditorCanvasGeometry.contentAspect`) — the crop frame would
+                // span both panes and map to nothing real. One owner at a time.
+                compareMode = .off
+                beforePeek = false
+                eyedropperArmed = false
+                toneZoneTargeting = false
+                hoveredZone = nil
+            }
+            // Entering snapshots the stored rect (mapped into the space the
+            // user is LOOKING at); leaving discards the pending copy wholesale.
+            // Abandoning the frame must cost nothing.
+            pendingCrop = cropMode ? displayCrop : nil
             Task { await renderDraft() }
         }
+    }
+
+    /// The stored crop, placed on the DISPLAYED image.
+    ///
+    /// `applyGeometry` crops before it flips and turns, so `crop` is in SOURCE
+    /// coordinates while the editor shows the photo already turned. Everything
+    /// the crop card touches works in display space and converts on the way in
+    /// and out — see `CropDragMath`'s note.
+    var displayCrop: CropRect {
+        let g = draft.geometryParams ?? .neutral
+        return CropDragMath.displayRect(fromSource: g.crop ?? .full,
+                                        quarterTurns: g.quarterTurns,
+                                        flipH: g.flipH, flipV: g.flipV)
+    }
+
+    /// The pending display rect converted back for storage.
+    var pendingCropInSourceSpace: CropRect? {
+        guard let pendingCrop else { return nil }
+        let g = draft.geometryParams ?? .neutral
+        return CropDragMath.sourceRect(fromDisplay: pendingCrop,
+                                       quarterTurns: g.quarterTurns,
+                                       flipH: g.flipH, flipV: g.flipV)
+    }
+
+    /// The aspect the user is LOOKING at — the source's, transposed by an odd
+    /// number of quarter turns. Preset fitting and the aspect lock both need
+    /// this rather than the raw source aspect.
+    var displayAspect: Double {
+        CropDragMath.displayAspect(source: imageAspect,
+                                   quarterTurns: draft.geometryParams?.quarterTurns ?? 0)
     }
 
     /// The crop RECTANGLE being framed. Committed into `draft` only on Apply,
@@ -183,7 +253,9 @@ final class EditSession: ObservableObject {
     /// Apply live. Choosing the shape you are already on is not an edit.
     var cropHasPendingChange: Bool {
         guard cropMode, let pendingCrop else { return false }
-        return pendingCrop != (draft.geometryParams?.crop ?? .full)
+        // Both sides in DISPLAY space — comparing a display rect against a
+        // stored source rect would report a change on every rotated photo.
+        return pendingCrop != displayCrop
     }
 
     /// The stack to RENDER right now.

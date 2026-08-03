@@ -77,6 +77,15 @@ nonisolated enum CropDragMath {
             // Clamping one axis to 1 can break the lock; re-derive the other
             // from whichever axis actually survived.
             if w / h > target { w = h * target } else { h = w / target }
+            // A very lopsided target against a very lopsided image can drive
+            // one side under the floor. Honour the floor over the lock — a
+            // frame too small to grab is worse than one slightly off-ratio,
+            // and every other caller relies on the minimum holding.
+            if w < minimumSide || h < minimumSide {
+                let lift = max(minimumSide / max(w, 1e-9), minimumSide / max(h, 1e-9))
+                w = min(1, w * lift)
+                h = min(1, h * lift)
+            }
         }
 
         // Re-anchor to whichever edges this handle did NOT move, so the
@@ -104,6 +113,69 @@ nonisolated enum CropDragMath {
             w = aspect / imageAspect            // limited by width
         }
         return CropRect(x: (1 - w) / 2, y: (1 - h) / 2, w: w, h: h)
+    }
+
+    // MARK: - Display space vs source space
+    //
+    // `EditRenderer.applyGeometry` crops FIRST and then flips and quarter-turns
+    // the result, so `GeometryParams.crop` is expressed in the SOURCE's
+    // coordinates. The editor, meanwhile, shows the photo with those flips and
+    // turns already applied — so a rect the user draws on screen is in DISPLAY
+    // coordinates and has to be mapped back before it is stored.
+    //
+    // Without this, rotating a landscape photo 90° and cropping the top of what
+    // you see stores the LEFT band of the original. That is the exact failure
+    // `applyGeometry`'s own comment warns about: "crops the wrong band and looks
+    // like an off-by-one in the editor's crop handles".
+
+    /// The aspect the user is LOOKING at: the source's, transposed by an odd
+    /// number of quarter turns.
+    static func displayAspect(source: Double, quarterTurns: Int) -> Double {
+        guard source > 0, source.isFinite else { return 1 }
+        return normalizedTurns(quarterTurns) % 2 == 1 ? 1 / source : source
+    }
+
+    /// Map a rect drawn on the DISPLAY back into source coordinates, for
+    /// storage in `GeometryParams.crop`.
+    static func sourceRect(fromDisplay rect: CropRect, quarterTurns: Int,
+                           flipH: Bool, flipV: Bool) -> CropRect {
+        var r = rect
+        // Undo the turns first — they were applied last.
+        for _ in 0..<normalizedTurns(quarterTurns) { r = rotatedCCW(r) }
+        if flipV { r = flippedV(r) }
+        if flipH { r = flippedH(r) }
+        return r
+    }
+
+    /// The inverse: take a stored crop and place it on the displayed image, so
+    /// re-opening the card shows the frame where the user left it.
+    static func displayRect(fromSource rect: CropRect, quarterTurns: Int,
+                            flipH: Bool, flipV: Bool) -> CropRect {
+        var r = rect
+        if flipH { r = flippedH(r) }
+        if flipV { r = flippedV(r) }
+        for _ in 0..<normalizedTurns(quarterTurns) { r = rotatedCW(r) }
+        return r
+    }
+
+    static func normalizedTurns(_ turns: Int) -> Int { ((turns % 4) + 4) % 4 }
+
+    /// One 90° clockwise turn of the IMAGE. The source's top-left corner ends
+    /// up at the display's top-right, which is what fixes the mapping.
+    private static func rotatedCW(_ r: CropRect) -> CropRect {
+        CropRect(x: 1 - r.y - r.h, y: r.x, w: r.h, h: r.w)
+    }
+
+    private static func rotatedCCW(_ r: CropRect) -> CropRect {
+        CropRect(x: r.y, y: 1 - r.x - r.w, w: r.h, h: r.w)
+    }
+
+    private static func flippedH(_ r: CropRect) -> CropRect {
+        CropRect(x: 1 - r.x - r.w, y: r.y, w: r.w, h: r.h)
+    }
+
+    private static func flippedV(_ r: CropRect) -> CropRect {
+        CropRect(x: r.x, y: 1 - r.y - r.h, w: r.w, h: r.h)
     }
 
     /// The largest centred rect that stays inside the image after rotating by
