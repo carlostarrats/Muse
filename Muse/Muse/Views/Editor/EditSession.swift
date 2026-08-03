@@ -450,14 +450,32 @@ final class EditSession: ObservableObject {
         let sampleEdge = Self.statsSampleLongEdge
         let highThreshold = AppSettings.editorZebraHigh
         let lowThreshold = AppSettings.editorZebraLow
+        // Read on the main actor, before the hop: it's a header read, and it
+        // decides which sampler runs below.
+        let headroom = EditRenderer.sourceHeadroom(url: url)
         Task.detached(priority: .userInitiated) { [weak self] in
             let context = RenderContexts.preview
-            guard let sample = Self.rgba8Sample(of: displayImage, longEdge: sampleEdge,
-                                                context: context)
-            else { return }
-            let (histogram, clipping) = HistogramCompute.compute(
-                rgba8: sample.bytes, width: sample.width, height: sample.height,
-                highThreshold: highThreshold, lowThreshold: lowThreshold)
+            // An HDR photo is sampled in FLOAT. `rgba8Sample` renders through
+            // `.RGBA8`/sRGB, which clamps before the statistics even run — so
+            // every specular highlight landed at 255 and the panel reported it
+            // as clipped. See `HistogramCompute.compute(rgbaFloat:…)`.
+            let histogram: HistogramData
+            let clipping: ClippingStats
+            if headroom > HDRDecode.hdrThreshold,
+               let sample = Self.rgbaFloatSample(of: displayImage, longEdge: sampleEdge,
+                                                 context: context) {
+                (histogram, clipping) = HistogramCompute.compute(
+                    rgbaFloat: sample.values, width: sample.width, height: sample.height,
+                    headroom: headroom,
+                    highThreshold: highThreshold, lowThreshold: lowThreshold)
+            } else {
+                guard let sample = Self.rgba8Sample(of: displayImage, longEdge: sampleEdge,
+                                                    context: context)
+                else { return }
+                (histogram, clipping) = HistogramCompute.compute(
+                    rgba8: sample.bytes, width: sample.width, height: sample.height,
+                    highThreshold: highThreshold, lowThreshold: lowThreshold)
+            }
 
             // The zone tap reads the chain at position 2b — the tone-zone
             // stage's own input — so the mass bars and the hover readout
@@ -506,6 +524,35 @@ final class EditSession: ObservableObject {
                            format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
         }
         return (bytes, width, height)
+    }
+
+    /// The HDR sibling of `rgba8Sample`. Renders half-float in extended linear
+    /// so values above 1.0 survive to the statistics — `.RGBA8`/sRGB clamps
+    /// them first, which is what made every HDR highlight read as clipped.
+    nonisolated static func rgbaFloatSample(of image: CIImage, longEdge: Int,
+                                            context: CIContext)
+        -> (values: [Float], width: Int, height: Int)? {
+        let extent = image.extent
+        guard extent.width > 0, extent.height > 0, extent.width.isFinite, extent.height.isFinite
+        else { return nil }
+        let scale = min(CGFloat(longEdge) / max(extent.width, extent.height), 1)
+        let scaled = scale < 1
+            ? image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+            : image
+        let rect = scaled.extent
+        let width = Int(rect.width.rounded(.down)), height = Int(rect.height.rounded(.down))
+        guard width > 0, height > 0 else { return nil }
+        var values = [Float](repeating: 0, count: width * height * 4)
+        values.withUnsafeMutableBytes { raw in
+            guard let base = raw.baseAddress else { return }
+            context.render(scaled, toBitmap: base,
+                           rowBytes: width * 4 * MemoryLayout<Float>.size,
+                           bounds: CGRect(x: rect.minX, y: rect.minY,
+                                          width: CGFloat(width), height: CGFloat(height)),
+                           format: .RGBAf,
+                           colorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB))
+        }
+        return (values, width, height)
     }
 
     /// The original render is refreshed only when the PROXY changes, not per

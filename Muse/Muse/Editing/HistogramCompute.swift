@@ -151,6 +151,35 @@ nonisolated enum HistogramCompute {
         return (histogram, clipping)
     }
 
+    /// The HDR entry point. Values are LINEAR and may exceed 1.0; thresholds
+    /// are fractions of the image's HEADROOM, not of 1.0.
+    ///
+    /// Clipping means "at the top of what this file can hold". An HDR photo
+    /// with headroom 4.0 and highlights at 3.5 has lost nothing, and the 0–255
+    /// path below would call every one of those pixels clipped — so the panel
+    /// would announce "those areas have lost detail" about the photos this
+    /// readout matters most for. Spec 05's whole purpose is teaching the user
+    /// what they are looking at; a confident wrong answer is worse than none.
+    ///
+    /// Normalizing by headroom and reusing the byte pass keeps ONE statistics
+    /// implementation. The histogram's SHAPE is what the panel draws and is
+    /// identical either way; what moves is where "the top" is.
+    static func compute(rgbaFloat: [Float], width: Int, height: Int,
+                        headroom: CGFloat,
+                        highThreshold: Double, lowThreshold: Double)
+        -> (histogram: HistogramData, clipping: ClippingStats) {
+        guard width > 0, height > 0, rgbaFloat.count >= width * height * 4 else {
+            return (.empty, .none)
+        }
+        let ceiling = max(Double(headroom), 1.0)
+        let scaled: [UInt8] = rgbaFloat.map { value in
+            let normalized = min(max(Double(value) / ceiling, 0), 1)
+            return UInt8(normalized * 255.0)
+        }
+        return compute(rgba8: scaled, width: width, height: height,
+                       highThreshold: highThreshold, lowThreshold: lowThreshold)
+    }
+
     private static func binIndex(for value: Double, bins: Int) -> Int {
         let clamped = min(max(value / 255.0, 0), 1)
         return min(Int(clamped * Double(bins)), bins - 1)
