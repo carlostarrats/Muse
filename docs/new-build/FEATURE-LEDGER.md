@@ -825,11 +825,13 @@ because `.scaleEffect(zoom)` sits INSIDE `FlightEffect`; the rect was handed
 over in `.global`, which goes stale when the window is DRAGGED (the content
 rect doesn't change, the global origin does) — now a named coordinate space.
 
-### Still open on this path
+### Accepted behaviour on this path — NOT an open item
 
-* **Crop, then close from Edit.** The stage holds pre-edit pixels on this path
-  — there is no re-decode on the way out, deliberately, since the viewer is
-  leaving — so closing straight after a crop flies the UNCROPPED photo home.
-  The takeoff fits the image into the editor's box rather than filling it, so
-  it letterboxes instead of stretching, but the pixels are still the old ones.
-  Not seen by anyone yet; the honest state is "known, unverified, unfixed."
+* **Crop, then close from Edit, flies the UNCROPPED photo home.** The stage
+  holds pre-edit pixels here: there is no re-decode on the way out,
+  deliberately, since the viewer is leaving. The takeoff fits the image into
+  the editor's box rather than filling it, so it letterboxes instead of
+  stretching, but the pixels are the old ones and the photo resizes when it
+  lands in the grid. Raised with the owner as a known gap and **accepted as
+  correct-feeling**: *"not a big deal once it's on grid it resizes — it feels
+  normal that it would do this."* Cancelled, not deferred; don't re-file it.
