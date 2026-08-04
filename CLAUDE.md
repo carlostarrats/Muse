@@ -263,20 +263,30 @@ are the load-bearing reference artifacts.
 > them. **`docs/new-build/FEATURE-LEDGER.md` is the standing feature × verification
 > ledger** — one row per feature area with separate automated / static / runtime
 > states, and the Runtime column doubles as the written GUI test plan. Read and
-> update it with any feature work. **G1 (nobody has driven the GUI) is now
-> PARTIALLY CLOSED** — `MuseUITests/MuseSurfaceDriveTests.swift` drives the real
-> app and confirms by screenshot that the editor, Spec 05 readouts, compare,
-> duplicates, all five import panels, backup and settings open and respond,
-> and that every modal honours Escape. **Drive the GUI with XCUITest, not
-> osascript**: the test runner carries automation rights, while a terminal needs
-> Automation/Accessibility TCC permission and is otherwise refused (-1743). Two
-> traps it caught in its own tests: a UI test asserting only "the window exists"
-> passes while doing nothing (the hero test pressed Return, which merely selects
-> — `handleTileTap` opens on DOUBLE-click), and on the ragged masonry grid a
-> click between tiles clears the selection, so click tile CENTRES measured from a
-> real screenshot. **Still open:** feature correctness (no slider moved, no render
-> compared), social export, Drive publish, restore/delete, and running an import
-> to completion. Also **quit all but one Muse instance
+> update it with any feature work. **G1 — GUI verification is the OWNER's manual
+> pass, and the 24 surface-driving XCUITests were DELETED on 2026-08-04 (round
+> 16b). Do not rebuild them.** `MuseSurfaceDriveTests` (18) and
+> `MuseExportDriveTests` (7) drove "does this surface open, does Escape close
+> it" — a second pass behind a human one that already covers it, faster and with
+> better judgement. Across sixteen rounds every registry entry about those suites
+> is a defect in the SUITE (window fractions that re-aimed themselves, state
+> leaking between tests, a relative drag posing as an undo, an AXDialog subrole),
+> and not one records them catching an app regression; they cost 45 minutes a run
+> and four rounds of triage, and they failed by ACCUSING the app — "Compare is
+> broken" when compare was fine, "no main window" when the window was right
+> there. What survives is `MuseLaunchIntegrityTests` (the app launches, the DB
+> opens, migrations run, the sidebar publishes — 11 s),
+> `MuseTagChipRowTests` (sub-pixel chip overlap, which an eye cannot catch) and
+> launch smoke. **The rule they left behind: a UI test that names an element TYPE,
+> or trusts `isHittable`, is asserting about AppKit rather than about Muse.** If
+> the GUI must be driven anyway, do it with XCUITest, not osascript — the test
+> runner carries automation rights, a terminal needs Automation/Accessibility TCC
+> and is otherwise refused (-1743) — and know that `handleTileTap` opens on
+> DOUBLE-click, that a click between masonry tiles clears the selection, and that
+> macOS publishes the main window with the AXDialog subrole. **Still open, for the
+> manual pass:** feature correctness (no slider moved, no render compared), social
+> export, Drive publish, restore/delete, and running an import to completion.
+> Also **quit all but one Muse instance
 > before driving it**, since GRDB's `busyMode` is `.immediateError` and two
 > instances against one DB manufacture phantom "my edit didn't save" bugs.
 > Everything else the reviews recorded

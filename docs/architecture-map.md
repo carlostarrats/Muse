@@ -851,14 +851,22 @@ scripts/audit-invariants.sh    12 mechanical checks of the durable constraints
                                pass vacuously exactly where it is needed.
 
 Muse/MuseUITests/
-  MuseSurfaceDriveTests.swift  Drives the running app (XCUITest): editor,
-                               compare, duplicates, all five import panels,
-                               backup, settings, rediscovery, hero.
-                               Each asserts on a control ONLY that surface
-                               publishes, and that Escape dismisses it — the
-                               standing regression test for round 1's F16.
-                               (The cull test went with the cull feature on
-                               2026-08-02.)
+  MuseLaunchIntegrityTests.swift
+                               The app launches, the DB opens, the migrations
+                               run and the sidebar publishes real rows (~11 s).
+                               All that remains of MuseSurfaceDriveTests (18
+                               tests) and MuseExportDriveTests (7), DELETED
+                               2026-08-04 — they drove "does this surface open,
+                               does Escape close it", which is the owner's own
+                               manual pass; across sixteen rounds they caught no
+                               app regression and cost four rounds of triage by
+                               failing in ways that accused the app. The file's
+                               header carries the full reasoning. Don't rebuild
+                               them.
+  MainWindowFinder.swift       Waits for the main window as EITHER .window or
+                               .dialog — macOS publishes it with the AXDialog
+                               subrole, so app.windows matches nothing while
+                               every descendant stays reachable.
   MuseTagChipRowTests.swift    Guards the ChipFlow measurement cache: chips
                                never overlap, re-measure after a folder switch
                                (the staleness a cache introduces), and the row's
