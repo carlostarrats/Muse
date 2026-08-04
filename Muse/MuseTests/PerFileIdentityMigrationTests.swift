@@ -232,6 +232,59 @@ final class PerFileIdentityMigrationTests: XCTestCase {
         }
     }
 
+    /// A cross-folder split leaves the ORIGINAL row holding rows for a folder
+    /// it no longer occupies. Unreachable today, but the moment `parent_dir` is
+    /// dropped two such rows collapse onto one primary key — so they are swept.
+    func testStrandedCrossFolderRowsAreSwept() throws {
+        let queue = try seededQueue(paths: ["/A/x.jpg", "/B/x.jpg"])
+        try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO notes (file_id, parent_dir, body, updated_at)
+                VALUES ('F', '/A', 'note A', 1), ('F', '/B', 'note B', 2)
+                """)
+            try db.execute(sql: """
+                INSERT INTO tags (id, file_id, parent_dir, label, source)
+                VALUES ('tA', 'F', '/A', 'a', 'manual'), ('tB', 'F', '/B', 'b', 'manual')
+                """)
+        }
+        try migrate(queue)
+        try queue.read { db in
+            // Exactly one note and one tag per file, each in its own folder.
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM notes"), 2)
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tags"), 2)
+            let stranded = try Int.fetchOne(db, sql: """
+                SELECT COUNT(*) FROM notes n
+                JOIN paths p ON p.file_id = n.file_id AND p.is_alive = 1
+                WHERE n.parent_dir <> rtrim(p.absolute_path, replace(p.absolute_path, '/', ''))
+                       || ''
+                  AND n.parent_dir NOT IN ('/A', '/B')
+                """)
+            XCTAssertEqual(stranded, 0)
+            // Each file's note matches its own folder.
+            for (path, body) in [("/A/x.jpg", "note A"), ("/B/x.jpg", "note B")] {
+                XCTAssertEqual(try String.fetchOne(db, sql: """
+                    SELECT n.body FROM notes n
+                    JOIN paths p ON p.file_id = n.file_id AND p.is_alive = 1
+                    WHERE p.absolute_path = ?
+                    """, arguments: [path]), body)
+            }
+        }
+    }
+
+    /// The v13 partial coordinate index must survive the rebuild of `files` —
+    /// DROP TABLE takes every index with it, including ones added by LATER
+    /// migrations, and losing this one turns every geo query into a full scan
+    /// with nothing failing loudly.
+    func testIndexesOnFilesSurviveTheRebuild() throws {
+        let queue = try seededQueue(paths: ["/A/x.jpg"])
+        try migrate(queue)
+        try queue.read { db in
+            let names = try db.indexes(on: "files").map(\.name)
+            XCTAssertTrue(names.contains("files_coords_idx"), "geo index lost: \(names)")
+            XCTAssertTrue(names.contains("files_content_hash_idx"), "hash index lost: \(names)")
+        }
+    }
+
     /// Two rows sharing a content_hash must now be LEGAL — that is the whole
     /// change. A surviving UNIQUE would make the split fail at insert.
     func testContentHashIsNoLongerUnique() throws {

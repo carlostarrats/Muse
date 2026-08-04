@@ -36,7 +36,11 @@ final class TagParentDirMigrationTests: XCTestCase {
             try db.execute(sql: "INSERT INTO files (id, content_hash, kind, last_seen_at) VALUES ('f3','h3','image',0)")
             try db.execute(sql: "INSERT INTO tags (id, file_id, label, source, confidence) VALUES ('t3','f3','green','vision',0.5)")
         }
-        try migrator.migrate(q)   // up to v7
+        // Pinned to v7 ON PURPOSE. This class tests what v7 DID; running the
+        // whole chain silently retested v24 instead, which splits the welded
+        // duplicate into two rows and changes every count here. v24's own
+        // behaviour is covered by PerFileIdentityMigrationTests.
+        try migrator.migrate(q, upTo: "v7_tag_parent_dir")
         return q
     }
 

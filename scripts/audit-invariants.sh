@@ -450,6 +450,61 @@ report "DOC-2" "CLAUDE.md's release tag matches the newest git tag" "$v" \
     "update the release tag in CLAUDE.md when a release is cut"
 
 echo
+echo "Per-file identity"
+echo "----------------------------------------------------------------------"
+
+# ---------------------------------------------------------------------------
+# PFI-1 — a files row must never be shared by two alive paths.
+#
+# THE BUG: `files.content_hash` was UNIQUE, so N byte-identical files collapsed
+# onto one row and shared everything hanging off it. The owner's repro: twelve
+# RAW_SONY_ILCA-77M2*.ARW in one folder, twelve alive paths, ONE edits row —
+# editing one changed all twelve, and eleven of the twelve filenames were
+# unfindable because one FTS row holds one basename.
+#
+# Migration v24 split them and the indexer now gives every copy its own row.
+# What was doing the structural work — the UNIQUE constraint — is deliberately
+# gone, and SQLite cannot express "at most one alive path per file". So the
+# invariant lives in tests, and this check makes sure those tests still exist:
+# delete them and the guarantee silently evaporates.
+# ---------------------------------------------------------------------------
+v=""
+for t in testNoFileRowKeepsTwoAlivePaths testSameFolderCopyBecomesItsOwnRow \
+         testConcurrentIdenticalContentGetsOneRowPerFile; do
+    if ! grep -rq --include='*.swift' "func $t" Muse/MuseTests 2>/dev/null; then
+        v="$v
+missing test: $t"
+    fi
+done
+report "PFI-1" "the one-alive-path-per-file tests still exist" "$v" \
+    "these tests ARE the invariant — content_hash UNIQUE no longer enforces it"
+
+# ---------------------------------------------------------------------------
+# PFI-2 — content_hash must not be made UNIQUE again.
+#
+# Re-adding it would make the split impossible (the second copy's INSERT would
+# fail) and quietly restore the shared-row bug for anything that slipped past.
+# The v1 migration is the historical exception: migrations are frozen at the
+# shape they shipped with, and v24 rebuilds the table without the constraint.
+# ---------------------------------------------------------------------------
+v="$(scan 'content_hash[[:space:]]+TEXT[[:space:]]+UNIQUE' Muse/Muse)"
+v="$(printf '%s' "$v" | grep -v 'v1_schema' || true)"
+# The v1 CREATE TABLE is inside a multi-line SQL literal, so match on the file
+# and line region instead: allow only the one occurrence in Database.swift that
+# sits above the "v2_intelligence" migration.
+if [ -n "$v" ]; then
+    first_unique_line="$(grep -n 'content_hash TEXT UNIQUE' Muse/Muse/Database/Database.swift | head -1 | cut -d: -f1)"
+    v2_line="$(grep -n 'v2_intelligence' Muse/Muse/Database/Database.swift | head -1 | cut -d: -f1)"
+    count="$(grep -c 'content_hash TEXT UNIQUE' Muse/Muse/Database/Database.swift)"
+    if [ "$count" = "1" ] && [ -n "$first_unique_line" ] && [ -n "$v2_line" ] \
+       && [ "$first_unique_line" -lt "$v2_line" ]; then
+        v=""
+    fi
+fi
+report "PFI-2" "content_hash is not UNIQUE outside the frozen v1 migration" "$v" \
+    "identity is the file on disk; a UNIQUE content_hash re-welds copies together"
+
+echo
 echo "======================================================================"
 if [ "$FAILURES" -eq 0 ]; then
     green "$CHECKS checks, all green."

@@ -692,6 +692,15 @@ final class Database {
             // content_hash keeps an index — it is still the grouping key for
             // Find Duplicates and for analysis reuse — just not a unique one.
             try db.execute(sql: "CREATE INDEX files_content_hash_idx ON files(content_hash)")
+            // DROP TABLE takes every index on it with it, including ones added
+            // by LATER migrations than the one that created the table. v13's
+            // partial coordinate index is the case in point — losing it turns
+            // every `near:` / `in:` / `.location` query into a full scan, with
+            // nothing failing loudly to say so. Any future rebuild of `files`
+            // has to re-create this list.
+            try db.execute(sql: """
+                CREATE INDEX files_coords_idx ON files(lat, lon) WHERE lat IS NOT NULL
+                """)
 
             // 2. Split. Every alive path beyond the first, per file.
             let rows = try Row.fetchAll(db, sql: """
@@ -804,6 +813,37 @@ final class Database {
                 // no folder of their own to reason about.
                 try db.execute(sql: "UPDATE paths SET file_id = ? WHERE id = ?",
                                arguments: [newID, pathID])
+            }
+
+            // Sweep per-location rows stranded on a folder their row no longer
+            // occupies. The copy above is a COPY, not a move — correct for the
+            // same-folder case, where the original keeps its own rows — but for
+            // a CROSS-folder split the original row keeps a `/B` tag it can no
+            // longer reach, because its only alive path is now in `/A`.
+            //
+            // Unreachable rather than harmful today: every read scopes by the
+            // file's own folder. It is swept anyway because `parent_dir` is
+            // redundant under per-file identity and is expected to be dropped —
+            // and at that moment two rows differing only by `parent_dir`
+            // collapse onto one primary key and the migration fails.
+            //
+            // Rows on a file with NO alive path are left alone: that is v7's
+            // deliberate NULL-scope orphan case, whose lifecycle belongs to
+            // housekeeping.
+            let alive = try Row.fetchAll(db, sql: """
+                SELECT file_id, absolute_path FROM paths
+                WHERE is_alive = 1 AND file_id IS NOT NULL
+                """)
+            for row in alive {
+                guard let fid: String = row["file_id"],
+                      let path: String = row["absolute_path"] else { continue }
+                let dir = (path as NSString).deletingLastPathComponent
+                for table in ["tags", "notes", "edits", "edit_versions"] {
+                    try db.execute(sql: """
+                        DELETE FROM \(table)
+                        WHERE file_id = ? AND parent_dir IS NOT NULL AND parent_dir <> ?
+                        """, arguments: [fid, dir])
+                }
             }
 
             // Derived caches keyed on the old identities. The next Find

@@ -8717,3 +8717,94 @@ labelled a historical snapshot and every Spec 08/09 section labelled never-built
 
 Suite **1,818 unit** (2 skipped) + **20 UI**, 0 failures. Audit 12/12. Release
 build 0 warnings, universal.
+
+## 2026-08-03 — per-file identity, and the sidebar readout that wasn't ours (`feat/next-155`)
+
+**Two things, and the small one came first.** The owner asked why the sidebar's
+bottom bar was showing "3,652 of 3,655 analyzed" with a ▶ beside it. It is
+Spec 06's `AnalysisStatusStore` + `WorkThrottleStore` pair, and ▶ means the pass
+is paused. Owner call: wrong place, wrong style, not this app's UI. Removed,
+with the three stores it observed and the orphaned "Pause analyzing" string.
+
+That left a real hole. A paused pass keeps its claim and SUSPENDS rather than
+cancelling, so `isRunning` stays true and the grid's status pill sits there with
+a frozen bar and no explanation — which reads as a stall. The pill is the right
+home: it is already the one place that reports background work, in the grid, in
+the grid's own glass. It now dims the bar to 50% (legible before you read a
+word), says **Paused**, and offers ▶ to resume where the state is reported
+rather than sending you to Settings. A THERMAL pause gets its own label and no
+button — it lifts on its own, and a control that cannot work is worse than none.
+
+**Then the real bug.** "Raw file with copies of itself. The grid and edit sees
+one change to one and applies to all." Confirmed against the live database
+before theorising:
+
+```
+file_id F5737547-… → 12 alive paths, ALL in /Users/…/Desktop/Raw Files
+   RAW_SONY_ILCA-77M2.ARW, … copy.ARW, … copy 2.ARW, … copy 2 2 2.ARW
+```
+
+`files.content_hash` was UNIQUE, so twelve byte-identical files collapsed onto
+ONE row, and everything the user authors hangs off that row. The code had
+anticipated the neighbouring case and guarded it — but only across folders
+(`EditRecordStore.allWithAlivePaths`: *"a stack applied to the copy in /A would
+render the untouched copy in /B too"*). Same-folder copies pass that filter
+unchanged. It was never edits-only: tags, ratings and notes pooled the same way,
+collection membership was worse (keyed on `file_id` alone, so it leaked across
+folders too), and eleven of the twelve filenames were unfindable because one FTS
+row holds one basename.
+
+**The owner chose the deep fix** over patching the six affected tables: *"every
+image should be its own. own editing, own tags, own everything. even duplicates.
+even images with the same bytes"* — with the motivating workflow being two
+different edits on two copies, to compare. And, asked directly, that a new copy
+INHERITS the original's edits and diverges, rather than starting blank.
+
+Spec `2026-08-03-per-file-identity-design.md`, plan `2026-08-03-per-file-identity.md`,
+six commits. What it cost and what it bought:
+
+- **v24** splits every shared row. Content-derived data (EXIF, traits, place,
+  embeddings, the analysis columns) is COPIED so no copy emerges looking
+  unanalyzed; user data is copied because a copy inherits. Each new row's FTS
+  entry carries ITS OWN basename — which is how eleven filenames became
+  searchable for the first time. The table rebuild is only safe because GRDB
+  runs migrations with `foreign_keys` OFF; with them ON the `DROP TABLE files`
+  would cascade-delete every paths/tags/notes/edits row in the library. That is
+  noted in the migration so nobody switches it to `.immediate`.
+- **The indexer** stopped attaching new paths to existing rows. Rename and move
+  still carry their edits via an explicit distinction: an ORPHANED row (these
+  bytes, no alive path) is the same file renamed; a row alive elsewhere is a
+  copy.
+- **`AnalysisReuse`** closes the other door — a copy queued while its twin was
+  still pending — so identical bytes are Visioned once, not twelve times.
+- **Two knock-on bugs surfaced by the change.** Sidecars were
+  `.muse/<content_hash>.json`, so two copies in one folder shared one file and
+  whichever synced last silently overwrote the other; a test writes both and
+  proves it. And backup membership was hash-keyed, which cannot say "this copy
+  is in the collection and its twin is not".
+
+**The change is a NET DELETION.** The split-on-edit branch, the hash-collision
+carry with its `keepsSiblingInDir` copy-vs-move rule, `unionTags`,
+`inheritVisionTags` and both `carryAll`s existed *only* because a row could be
+shared. All gone. Three test files changed meaning rather than regressed and say
+so in their headers — most pointedly `IndexerConcurrencyTests`, which asserted
+that 32 identical files collapse to ONE row and now asserts 32 rows with the
+one-alive-path invariant.
+
+**The invariant has no enforcement but tests.** `content_hash UNIQUE` was doing
+that structural work and is deliberately gone; SQLite cannot express "at most
+one alive path per file". So audit checks **PFI-1** (the three invariant tests
+still exist) and **PFI-2** (`content_hash` is not UNIQUE again) were added and
+negative-tested. 17 checks.
+
+**Deferred, explicitly:** dropping the now-redundant `parent_dir` column from
+`tags`/`notes`/`edits`/`edit_versions`. It is 66 files of mechanical churn, and
+the trap it represents is already disarmed — with one alive path per row,
+`parent_dir` has exactly one value per `file_id`, so a query that forgets to
+filter on it now returns the right answer anyway. Left as cleanup, not a gap.
+
+**Also on process.** Third conversation about test runs: *"how many conversations
+do we have to have about the fucking test suite. you are abusing it."* The
+loophole was reading "checkpoint before a commit" as making a commit a TRIGGER.
+It isn't — the blast radius decides. Memory updated: when no test covers the
+changed code, the build IS the verification.
