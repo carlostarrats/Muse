@@ -49,9 +49,15 @@ local-first, Apple-Intelligence-native, and free forever.
   Foundation Models is used only to name auto-generated collections,
   capability-gated to Apple Intelligence Macs (macOS 26+); the in-app
   chat panel was retired (see the 2026-06-12 session log).
-- Primary user persona: **generalist** — managing a Downloads folder,
-  Documents, miscellaneous archives. Defaults bend to fast Quick Look
-  + Open With; AI features available but not the front door.
+- Primary user persona: **enthusiast photographers first**, but a versatile
+  library for everyone — designers welcome, generalists (Downloads folder,
+  Documents, miscellaneous archives) **not amputated**. This is decision #2 in
+  `docs/new-build/muse-photo-foundation.md` §13 and it SUPERSEDES the old
+  "generalist-only" line that stood here until 2026-08-03 — the photo-focused
+  repositioning (decision #1) is the later, deliberate call. Triage features
+  against the photographer first and check that the generalist still isn't cut;
+  a feature serving ONLY a working pro (culling a 2,000-frame shoot) is still
+  out of scope. Defaults stay fast Quick Look + Open With.
 
 ## Plan documents
 

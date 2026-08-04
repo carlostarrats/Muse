@@ -206,3 +206,75 @@ that field into the platform-neutral sidecar format is best done NOW, before an 
 ships against the format. Scope: `Sidecar` (new optional field, back-compat nil),
 `SidecarHydrator` (forced full re-hydrate path), `NoteStore.applyHydrated`/`Sidecar.merge`
 (compare the per-field clock), a Settings button, and unit tests. Not started.
+
+## Local adjustments — an open QUESTION, not a planned item (parked 2026-08-03)
+
+**Status: undecided, deliberately. Not a gap, not a to-do, not a finding.**
+Decision #5 in `docs/new-build/muse-photo-foundation.md` §13 stands as written —
+masking/healing/layers are answered by Edit-a-Copy. Nothing here reopens it. This
+is a note so the reasoning isn't re-derived from scratch next time the subject
+comes up.
+
+**What prompted it:** a feature review named "no masks / local adjustments" as
+Muse's biggest editor gap. It isn't a gap — it's a documented decision. But the
+follow-up question (*is it actually valuable to Muse's user?*) turned out to be
+genuinely open, for a reason worth writing down.
+
+**Why it can't be answered yet:** the editor is unreleased. `v1.5` predates all of
+Foundation 1–7, and most editor surfaces are still runtime-unverified in
+`FEATURE-LEDGER.md`. Whether local adjustments matter depends entirely on whether
+people *finish photos in Muse* or treat it as a library and bounce to Path B —
+and that experiment hasn't run. If they bounce, Path B was right and this stays
+closed forever. If they finish in Muse, "the sky is blown" arrives within a week.
+
+**The precedent that argues no:** culling was dropped 2026-08-02 on the reasoning
+that Muse's persona is "a generalist with a Downloads folder, not someone working
+a 2,000-frame shoot." Local adjustments fail that test harder — culling at least
+helps a generalist with 400 vacation photos.
+
+**The ambiguity underneath it — RESOLVED 2026-08-03.** `CLAUDE.md` used to say the
+persona was a "generalist — managing a Downloads folder" while §13 decision #2 says
+"enthusiast photographers first," and feature triage kept landing on whichever line
+the session read first. Not a coin flip on inspection: the persona line dated from
+2026-04-28, the decision table from 2026-08-01, and decision #1 is the photo-focused
+repositioning — so `CLAUDE.md` was simply stale and has been updated to decision #2's
+layered wording (photographer first, generalist not amputated). It does NOT change
+the answer above; local adjustments stay parked, because "enthusiast" still isn't
+"working pro finishing client work," which is the tier masks actually serve.
+
+> **Caution on direction — §13 is authoritative on PRODUCT, not on DISTRIBUTION.**
+> Decision #33 in that same table reads "Mac App Store EXCLUSIVELY, no Sparkle," and
+> that one is the stale side: Muse ships direct with Sparkle, the MAS move was split
+> out to `docs/superpowers/plans/deferred-mac-app-store-migration.md`, and Specs
+> 08/09 are on hold by owner choice. Don't "reconcile" a doc pair without checking
+> which side is actually newer — here the two conflicts resolve in opposite
+> directions.
+
+**If it is ever revisited, the cost is NOT uniform** (verified against the code
+2026-08-03 — this is the part not worth re-deriving):
+
+- *Cheap half* — gradient (linear/radial) and luminance-range masks, plus subject
+  select. `ToneZoneFilter.smoothedEVMap` is already a shipped, scale-normalized,
+  edge-aware guided filter with three consumers; gradients are resolution-independent
+  math; `VNGenerateForegroundInstanceMaskRequest` is public API above the 14.6 floor
+  (unlike the private faceprint API that blocked face identity). The `masks: [Mask]`
+  codec slot exists and round-trips, so this is not a schema break. This is also the
+  darktable-shaped answer — parametric masks are the part Lightroom lacks — and it
+  overlaps the already-parked ΔE spot tool (§12, marked v2 candidate).
+- *Expensive half* — brushes. Four known hazards, all in existing constraints:
+  (1) a mask drawn on screen hits the same source-vs-display coordinate trap that
+  `CropDragMath` exists to solve, and a duplication sweep cannot find that class;
+  (2) `stack_hash` keys the edited-thumbnail cache, so a mask must render identically
+  at 90px / proxy / export or thumbnails silently diverge from the photo;
+  (3) canvas ownership — crop, compare, eyedropper and tone-zone targeting already
+  clear each other in `EditSession`'s `didSet`s, and a brush is a fifth claimant
+  needing continuous drag, which is currently pan; (4) a stroke re-renders the whole
+  chain per frame, which is why `proxyLadder` exists.
+
+**Non-technical cost:** the foundation doc's reasoning is that Path B "permanently
+protects Path A's scope." Brushes spend that protection and make healing/layers the
+next reasonable ask. The gradient/parametric half does not — it reads as finishing
+the tone equalizer.
+
+**Suggested trigger, if any:** post-release usage showing people editing in Muse
+rather than forking out. Until then this stays parked.
