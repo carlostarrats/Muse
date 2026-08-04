@@ -53,10 +53,10 @@ Muse pivots from an **import-based image inspiration vault** to a **filesystem-n
 | Q20 | Sidebar contents | Just the folder tree. Tags / starred / saved searches live elsewhere in the UI (TBD). |
 | Q21 | Search scope | Default = current folder. Toggle in search bar for "search everywhere" (entire indexed library). |
 | Q22 | DB migration | Wipe & start fresh. Existing user-data file at `~/Library/Application Support/Muse/` left untouched on disk for now (new app simply doesn't read it). |
-| Q23 | Distribution | **Mac App Store**, sandboxed, free forever. Apple Developer account already in place. Auto-updates via App Store. |
+| Q23 | Distribution | **Mac App Store**, sandboxed. Apple Developer account already in place. Auto-updates via App Store. *(Reversed twice: pivoted to direct-with-Sparkle 2026-06-15, then back to **Mac App Store EXCLUSIVELY** by decision #33 of `docs/new-build/muse-photo-foundation.md` (2026-07-29) — no GitHub download, no Sparkle, StoreKit 2 for payments, TestFlight for betas. **The code still ships direct with Sparkle**; the migration is `docs/superpowers/plans/deferred-mac-app-store-migration.md` and has not been run. The "free forever" that used to end this line is struck — see Q23a.)* |
 | Q24 | Primary user persona | **Generalist** — managing a Downloads folder, Documents, miscellaneous archives. Defaults bend toward fast Quick Look + Open With; AI features available but not the front door. |
 | Q25 | Globe & water shader | **Keep both. Polish later.** Globe view reworked for current-folder content. Water shader stays as alt visualization for image folders. |
-| Q23a | Pricing | **Free forever.** No purchase, no subscriptions, no in-app purchases, no ads. Privacy nutrition label: **Data Not Collected.** |
+| Q23a | Pricing | ~~Free forever. No purchase, no subscriptions, no in-app purchases.~~ **SUPERSEDED — Muse is PAID** (`docs/new-build/muse-photo-foundation.md` §11 + decision #30, 2026-07-29). Free download → built-in trial → one-time IAP unlock, plus an auto-renewable subscription for the sharing tier. Ceiling ≤ $100; leaning ~$49 one-time + ~$15–20/yr; **exact price still OPEN**. Unchanged: **no ads**, and the privacy nutrition label is still **Data Not Collected**. |
 | Q23a' | Network policy | **Zero network calls, ever.** No analytics, no telemetry, no update pings, no crash reporting that leaves the device, no auto-suggest fetches, no remote config, no fonts loaded from the web, no SVG resources fetched. The app does not request the network entitlement. Apple's built-in crash reports (Xcode → App Store Connect) are the only failure-signal channel — they're routed by Apple, not by Muse. |
 | Q23b | MCP (consequence of App Store) | **Dropped from v1.** Sandbox blocks Unix-socket IPC to external agents (Claude Desktop, Comet, Cursor). Replaced by **App Intents** for Shortcuts/Siri/Spotlight automation. If MCP becomes load-bearing later, it requires a direct-distribution build (Q23 reopens). |
 | Q23c | iCloud Drive support | **Yes — best practice.** A root can be `~/Library/Mobile Documents/com~apple~CloudDocs/…`. Honor `NSURLUbiquitousItemDownloadingStatusKey`; auto-trigger downloads on file access; show "downloading from iCloud" state in grid for `NSURLUbiquitousItemIsDownloadingKey`. |
@@ -544,7 +544,7 @@ Keep: typography + masonry-style grid + parallax tilt + lime-green selection + c
 - iOS/iPadOS — macOS only
 - **MCP server** — incompatible with App Store sandbox; reopens only if distribution channel changes
 - External AI agent integration (Claude Desktop, Comet, Cursor) — same reason
-- Pricing / monetization — free forever, no IAPs, no subscriptions, no ads, no analytics, no paid tier
+- ~~Pricing / monetization — free forever, no IAPs, no subscriptions, no paid tier~~ — **no longer out of scope (2026-08-04): Muse is PAID.** Still out of scope: ads, analytics.
 - Persistent jobs across launches — quitting Muse cancels in-flight scans
 - HNSW / LSH approximate nearest neighbor — scope-by-default + prefilter is enough for v1
 

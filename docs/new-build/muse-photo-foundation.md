@@ -330,7 +330,16 @@ Drive collection share: manifest (signature text, expiry, ordered Drive image id
    - Architecture: ONE ~50-line provisioning Worker (verify app-issued license/JWT → rate-limit one active hostname per license → forward create/status/delete to CF API with token in Worker secret). **NEVER ship the CF API token in the app.** Workers free tier (100k req/day) covers it forever
    - UX fits in an in-app modal (no web portal needed): user enters `photos.theirdomain.com` → Worker creates custom hostname → app shows copy-paste CNAME (+DCV) instructions → app polls status until active (minutes–hour) → share links flip to the custom domain. Same Pages deployment serves every hostname (fragment-based data needs zero changes)
    - Subdomains only (`photos.domain.com`) — apex requires CF Enterprise; note CNAME-flattening workaround for users on Cloudflare DNS
-   - **Free/cheap middle tier:** `username.muse.app` via wildcard DNS — zero provisioning cost, gate behind paid accounts (abuse/Safe-Browsing risk), takedown path required
+   - **Free/cheap middle tier:** `username.muse-photo.com` via wildcard DNS — zero provisioning cost, gate behind paid accounts (abuse/Safe-Browsing risk), takedown path required
+   - **The username applies to ALL of a user's links, not just their portfolio (owner decision 2026-08-04).** Spec 07 built sharing on one host and Spec 08 later added a username to portfolio mode alone; that split was an artifact of the order the specs were written, NOT a design decision, and the owner rejected it as incoherent — a user with a name should not send trip photos from one hostname and their portfolio from another. Nothing technical forces the split: the manifest rides the URL fragment and the same Pages deployment serves every hostname unchanged. So once a user has a name, every new link they create is `carlos.muse-photo.com/#<manifest>`.
+   - **`share.muse-photo.com` is the DEFAULT hostname** — what every link uses when the user has no username, which is everyone until Spec 08 ships. It is permanent and can never be retired: links already sent are immutable, and the same is true of the original `muse-share.pages.dev`, so that Pages project must never be deleted either. Adopting a username moves NEW links only.
+   - **DEFERRED to Spec 08/09 — do NOT cut the app over early (owner decision 2026-08-04).** `muse-share.pages.dev` works today and every link minted from it stays valid forever, so there is no reason to touch app code before the custom-domain work actually runs. Flipping the constant before the new host serves would mint dead links. When Spec 08/09 is built, the switchover is one pass:
+     - `DriveConfig.shareBaseURL` — the live constant every link is built from. `CommerceConfig.announcementsURL` derives from it, so `announcements.json` must already exist at the new host or the launch fetch 404s.
+     - `InfoSheet.swift` — the privacy deep link is hardcoded separately and will NOT follow the constant.
+     - `DriveShareStoreTests.swift` — two fixture URLs, cosmetic.
+     - **The Google OAuth console** — `consentScreenVerified` is still `false`, and `web/share/robots.txt` keeps `/about` crawlable specifically so Google can reach it for verification. The console's homepage/privacy/terms URLs point at the old host; changing them mid-review restarts verification, so settle the hostname BEFORE submitting.
+     - `web/share/_headers` — HSTS is `includeSubDomains; preload`. Fine on a subdomain; never serve that header from the apex or every future `muse-photo.com` subdomain is committed to HTTPS-only before it exists.
+     - The `RESERVED` username list in Spec 08's `validate.js` must be live before the wildcard tier opens, or a customer could claim `share`/`domains`/`admin` and take down your own infrastructure hostname.
    - Market anchor: manual CNAME + verify button is the standard (SmugMug, Adobe Portfolio); Savee bundles portfolio+domain at $15/mo — evidence of willingness to pay
 4. **Social export presets** (see below) feeding the share/export flow
 
@@ -413,7 +422,7 @@ Drive collection share: manifest (signature text, expiry, ordered Drive image id
 | 17 | Geocoding | Offline (bundled GeoNames); no per-photo network |
 | 18 | Map | Not now — place-grouped grid + maps:// link-out (add Google Maps option); clustered map deferred; globe never |
 | 19 | Sharing backend | Google Drive only; no iCloud/Dropbox; no download-originals feature; no server state ever |
-| 20 | Custom domains | Yes, paid tier — CF for SaaS + ~50-line Worker + in-app modal UX; username.muse.app free tier |
+| 20 | Custom domains | Yes, paid tier — CF for SaaS + ~50-line Worker + in-app modal UX; `username.muse-photo.com` free tier. **Domain purchased 2026-08-04: `muse-photo.com`, via Cloudflare Registrar (zone already on CF DNS).** `share.muse-photo.com` = the permanent default host for ALL share links; a username replaces it for ALL of that user's new links, not just their portfolio (see §10.3) |
 | 21 | Social export | Required; ephemeral in-flow crop; matte/border option; preset table in §10; X no-recompress target |
 | 22 | Analysis | Always on; never off, never skippable; background, throttled, pausable |
 | 23 | Import-size notice | FYI only (one button), gated on estimated time > ~20–30 min (not count), estimate measured on-device |

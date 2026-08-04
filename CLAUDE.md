@@ -8,17 +8,34 @@ so a fresh Claude session can pick up productively.
 
 Muse is a **filesystem-native universal file viewer + AI-organized
 asset library** for macOS, in the spirit of Adobe Bridge but
-local-first, Apple-Intelligence-native, and free forever.
+local-first and Apple-Intelligence-native.
 
-- Distribution: **Direct** — a Developer ID–signed, notarized build that
-  self-updates via **Sparkle**, hosted on GitHub Releases (DMG with a
-  drag-to-Applications background). **Not the Mac App Store**: Sparkle
-  self-update is incompatible with MAS, and shipping directly lets updates
-  go out without an App Store submission. Still **sandboxed**. (Pivoted from
-  MAS on 2026-06-15 — see that session log. If a MAS build is ever wanted,
-  it must be a separate target/config with Sparkle compiled out.) Release
-  workflow: `docs/RELEASING.md`.
-- Pricing: **Free**, no IAPs, no subscriptions, no ads
+- Pricing: **PAID — Muse is NOT free.** Never describe it as "free forever";
+  that line stood here until 2026-08-04 and was wrong for months. The decided
+  structure (foundation §11, decision #30) is **free download → built-in trial
+  → one-time non-consumable IAP unlock** for the app, plus the **sharing tier**
+  (portfolio + custom domain) as an **auto-renewable subscription**, because
+  Apple requires digital services to go through IAP. The free download is a
+  TRIAL VEHICLE, not a free tier. Price ceiling is **≤ $100** (affordable is
+  the point); current leaning is **~$49 one-time + ~$15–20/YEAR** for sharing
+  — but the final number is **OPEN**, deferred until the feature set is real,
+  so quote it as a leaning, never as the price. Gift codes = Apple promo codes.
+  Still true and still worth saying: **no ads, no telemetry, no data
+  collection, local-first, Data Not Collected.** Don't conflate those with free.
+- Distribution: **Mac App Store EXCLUSIVELY** (foundation §11, decision #33) —
+  no GitHub download, no Sparkle, no direct distribution. The rationale is
+  discoverability: "photo library" is a term people search in the App Store,
+  and a self-hosted download nobody finds isn't a channel. Payments are
+  **StoreKit 2 and nothing else** (Apple handles tax/VAT/refunds; enroll in the
+  Small Business Program for 15%); betas go through **TestFlight for Mac**.
+  Sandboxing — the biggest MAS hurdle for a files-based app — is already done.
+  **What the CODE does today is still the OLD direct path**: Developer ID,
+  notarized, Sparkle self-update, DMG on GitHub Releases
+  (`docs/RELEASING.md`). Foundation 1 landed the StoreKit 2 plumbing with an
+  **UNENFORCED** trial gate; Sparkle removal (drop the dep so GRDB is the only
+  one, delete the DMG/appcast/`release.sh` tooling) has NOT been done. State it
+  as "decided MAS-exclusive, not yet migrated" — never as if the app already
+  ships there.
 - Network policy: **Update-only, plus opt-in publish and two static fetches.**
   No analytics, no telemetry, no data collection. **Four** sanctioned network
   code paths, all gated by `com.apple.security.network.client`:
