@@ -13,6 +13,26 @@ import Foundation
 import GRDB
 
 enum SidecarHydrator {
+    /// Whether a local row already holds everything a sidecar could describe,
+    /// so the read can be skipped.
+    ///
+    /// `analyzed_hash == content_hash` means "Vision has described these
+    /// bytes" — a valid shortcut ONLY for the kinds Vision describes. Non-image
+    /// kinds are stamped too (so `analyzePending` stops re-queuing a PDF on
+    /// every folder visit), and that stamp says nothing about the sidecar's
+    /// contents: treating it as "nothing to import" would permanently block a
+    /// note, rating, manual tag or edit made on another device from arriving
+    /// for a PDF, video, archive or document. Silent, and it would surface only
+    /// as "my note didn't sync".
+    ///
+    /// Pure so the rule is testable without a DB or a sidecar on disk, and
+    /// `nonisolated` because it is consulted from inside a GRDB read closure.
+    nonisolated static func alreadyDescribed(kind: String, analyzedHash: String?,
+                                             contentHash: String) -> Bool {
+        guard let analyzedHash, analyzedHash == contentHash else { return false }
+        return AssetKind(rawValue: kind)?.isPhotoKind ?? false
+    }
+
     /// For each url in the iCloud zone, if a matching sidecar exists and is
     /// current (sidecar.analyzed_hash == the file's content_hash), apply it.
     static func hydrate(urls: [URL], folder: URL?) async {
@@ -28,8 +48,9 @@ enum SidecarHydrator {
                       let fid = path.file_id,
                       let file = try FileRow.filter(FileRow.Columns.id == fid).fetchOne(db),
                       let hash = file.content_hash else { return nil }
-                // Already analyzed at this content — nothing to import.
-                if file.analyzed_hash == hash { return nil }
+                // Already described at this content — nothing to import.
+                if alreadyDescribed(kind: file.kind, analyzedHash: file.analyzed_hash,
+                                    contentHash: hash) { return nil }
                 return (fid, hash)
             } ?? nil
             guard let info else { continue }

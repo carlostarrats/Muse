@@ -196,7 +196,15 @@ extension AssetKind {
     /// The kinds that carry photo semantics: a raster the Vision/CLIP passes
     /// analyze, the hero viewer flies, and Compare operates on. Matches
     /// the `('image','raw','psd')` filter every analysis query already uses.
-    var isPhotoKind: Bool {
+    ///
+    /// `SidecarHydrator.alreadyDescribed` also depends on it: `analyzed_hash`
+    /// is stamped for every kind (so `analyzePending` stops re-queuing a PDF),
+    /// but it only MEANS "described" for these. A new Vision-backed kind
+    /// belongs here.
+    /// `nonisolated` because `SidecarHydrator.alreadyDescribed` consults it
+    /// from inside a GRDB read closure. Pure value comparison, so this is safe
+    /// and the main-actor callers are unaffected.
+    nonisolated var isPhotoKind: Bool {
         self == .image || self == .raw || self == .psd
     }
 }

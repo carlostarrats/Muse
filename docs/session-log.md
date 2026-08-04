@@ -8907,3 +8907,90 @@ piece of code was correct for a different reason than documented.
 
 Static review of this session's diff is done: two rounds, the second finding no
 behaviour bug. Suite **2,132**, audit 17/17, Release warning-free.
+
+---
+
+## 2026-08-03 (later) — "is the app constantly analyzing?" (`feat/next-155`)
+
+**The owner's question, with a screenshot: the progress pill saying "Preparing
+your files… 50%", and the observation that a new build now does this when it
+used to not.** Answering it meant querying the real library read-only rather
+than reasoning about the code, and the first two answers were wrong.
+
+**Wrong answer #1: "it's re-analyzing your photos."** It wasn't. Vision analysis
+was pending for **25 files out of 5,139** — none of them photos.
+
+**Wrong answer #2: "the deep-analysis backfill is still chewing through a
+2,923-file backlog and you keep quitting before it drains."** Also wrong, and
+the evidence that killed it was cheap: sampled `photo_traits` every 30s for
+three minutes against a Muse that had been up for 68 minutes. The count never
+moved and CPU sat at 0.0. Not paused either — `analysisPaused = 0`, on AC power,
+no thermal warning, so `ThrottlePolicy.mode` was `.normal`. A pass that isn't
+running and isn't finished is a pass that gave up.
+
+**The actual root cause.** Every one of the 2,923 rows names a file that does
+not exist:
+
+```
+Desktop/Muse Index Test-2   MISSING (2,520 alive rows)
+Desktop/Muse Analyze Test   MISSING (300)
+Desktop/Muse-test-round2    MISSING (117)
+Desktop/Muse Hero Test      MISSING (42)
+```
+
+Four test folders, indexed and then deleted. Their `paths.is_alive` is still 1,
+and **nothing in the app is allowed to look at them**:
+`PathReconciler.reconcileByExistence` only walks the subtree of a CURRENT root,
+and the only persisted root is `Desktop/untitled folder`. So every launch
+`DeepAnalysisBackfill` selected them, `boundedDecode` returned nil, and
+`scanOne`'s `guard FileManager.default.fileExists` returned WITHOUT stamping a
+marker — deliberately, because a file that is merely offline must not be
+recorded as scanned. Identical set next launch. A loop that cannot converge.
+
+Per-file identity is why it got bigger: 2,613 of the 2,923 are v24 split rows,
+only 1,554 distinct hashes among them.
+
+**Three fixes were offered; two were built and one was refused.**
+
+1. `DeepAnalysisBackfill.scanList` drops candidates whose file isn't on disk,
+   before any decode, using the same probe as `reconcileByExistence` (dataless
+   iCloud files still have an entry; the evicted placeholder is offline, not
+   deleted). Dropped rather than stamped, so a file that comes back is still
+   scanned.
+2. `AnalyzePipeline.stampUnanalyzableKind` stamps `analyzed_hash` for kinds
+   Vision never handles, so the 25 stop being re-queued and the pill stops
+   firing on document folders. This includes VIDEO, reversing the documented
+   "videos are never stamped" note — the marker check kept the re-queue cheap
+   but could not stop the pill, and `PhotoHeaderBackfill` selects on the header
+   markers independently.
+3. **Refused: "let existence reconcile reach paths whose root was removed."**
+   Not safely implementable in a sandbox. Outside a granted scope `fileExists`
+   returns false for *deleted* and *not permitted* alike, so marking those rows
+   dead would silently drop every file in a folder merely removed from the
+   sidebar. The existing ghosts are retired by `Housekeeping`'s 180-day
+   retention; fix 1 makes them free in the meantime.
+
+**Review found two more, one of them in the fix itself.**
+
+*The regression fix #2 introduced.* `SidecarHydrator` short-circuits on
+"already analyzed at this content — nothing to import". Once a PDF is stamped
+that test is true for a file Vision never described, so a note, rating, manual
+tag or edit made on another device could never land on it again — silent, and
+visible only as "my note didn't sync". The shortcut now goes through
+`alreadyDescribed`, which also requires `isPhotoKind`. Behaviour is identical to
+before the stamping change for every kind.
+
+*A latent one.* `maxPerLaunch` was applied by the SQL `LIMIT`, so absent rows
+spent the budget: a library with more ghosts than the cap would never reach a
+single real photo, and nothing would say so because the pass "completed". It is
+a SCAN budget now, with a wider `selectionCeiling` on the selection queries.
+
+*And a duplication caught on the last read-through:* the review added an
+`isVisionAnalyzable` predicate that `AssetKind.isPhotoKind` already was. Deleted;
+both sites consult `isPhotoKind`.
+
+**The lens worth keeping: a count that never moves is not a slow count.** Two
+plausible stories ("still working", "throttled") both survived reading the code
+and died in thirty seconds against `ps` and a repeated `SELECT COUNT(*)`.
+
+Suite **2,146**, audit 17/17, Release warning-free.

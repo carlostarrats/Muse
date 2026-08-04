@@ -454,6 +454,34 @@ final class AnalyzePipeline: ObservableObject {
         }
     }
 
+    /// Stamp `analyzed_hash` for a kind the Vision pipeline never handles at
+    /// all — everything outside `isPhotoKind` (pdf, markdown, office, archive,
+    /// video, audio, text, code, svg…).
+    ///
+    /// Those kinds fall straight out of `analyzeOne`'s image guard, and
+    /// returning without a stamp left them permanently pending: every visit to
+    /// their folder re-queued them and raised the progress pill for work that
+    /// was never going to happen. Same permanent-retry shape
+    /// `markAnalysisAttempted` closed for an undecodable IMAGE, through the
+    /// neighbouring door.
+    ///
+    /// Nothing is lost by stamping. A video's GPS + EXIF are written by
+    /// `writePhotoHeaderOnly` before this, under their own markers, and
+    /// `PhotoHeaderBackfill` selects on those markers independently of
+    /// `analyzed_hash`. New bytes clear the stamp: `Indexer.reconcile` nulls
+    /// `analyzed_hash` when content_hash changes.
+    ///
+    /// (This supersedes the note that videos are "never stamped, so
+    /// analyzePending re-queues them on every folder visit". The marker check
+    /// did keep the re-queue cheap, but it could not stop the pill.)
+    static func stampUnanalyzableKind(fileID: String, queue: DatabaseQueue) async {
+        let hash: String? = (try? await queue.read { db in
+            try FileRow.filter(FileRow.Columns.id == fileID).fetchOne(db)?.content_hash
+        }) ?? nil
+        guard let hash else { return }
+        await markAnalysisAttempted(fileID: fileID, hash: hash, queue: queue)
+    }
+
     /// Stamp coordinates AND EXIF from one header read, under the SAME
     /// content_hash guard the main analyze write uses — a file edited mid-pass
     /// keeps its header data pending rather than being stamped from stale
@@ -551,10 +579,17 @@ final class AnalyzePipeline: ObservableObject {
             await Self.writePhotoHeaderOnly(fileID: fileID, url: url, kind: kind)
         }
 
-        // Skip non-image kinds; Vision pipeline only handles images
-        guard kind == .image || kind == .raw || kind == .psd else { return }
-
         guard let queue = Database.shared.dbQueue else { return }
+
+        // Skip non-image kinds; Vision pipeline only handles images. Stamped on
+        // the way out so `analyzePending` stops re-queuing them — and stops
+        // raising the pill — on every visit to their folder. See
+        // `stampUnanalyzableKind`.
+        guard kind.isPhotoKind else {
+            await Self.stampUnanalyzableKind(fileID: fileID, queue: queue)
+            return
+        }
+
         // Capture the content identity BEFORE Vision runs. The file can be
         // edited + re-indexed while a long pass is in flight; stamping
         // analyzed_hash from a commit-time re-read would mark tags/caption

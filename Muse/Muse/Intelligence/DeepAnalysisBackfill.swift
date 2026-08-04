@@ -17,7 +17,14 @@ import Foundation
 import GRDB
 
 nonisolated enum DeepAnalysisBackfill {
+    /// Files SCANNED per launch. See `scanList` — absent rows don't spend it.
     nonisolated static let maxPerLaunch = 5_000
+    /// Rows the selection queries may return, so `maxPerLaunch` real files are
+    /// still reachable behind a wall of rows whose file is gone. Bounded (and
+    /// id-only) rather than unlimited: the context query that follows costs one
+    /// indexed read per `contextChunk`, and that must not scale with a library
+    /// whose ghost count is unbounded.
+    static let selectionCeiling = 50_000
     static let concurrency = 2
     static let writeChunk = 200
     /// Candidates per context query. Comfortably under SQLite's bound-variable
@@ -62,6 +69,50 @@ nonisolated enum DeepAnalysisBackfill {
             """, arguments: [ClipModel.current.generation, limit])
     }
 
+    /// The candidates actually worth opening, up to `limit` of them.
+    ///
+    /// `paths.is_alive = 1` is a CLAIM, and nothing in the app is allowed to
+    /// re-check it outside a current root: `PathReconciler.reconcileByExistence`
+    /// walks a root's subtree, and a sandboxed app has no access to a folder
+    /// whose bookmark is gone. So a folder that was indexed, removed from the
+    /// sidebar and deleted from disk keeps alive rows indefinitely (until
+    /// `Housekeeping` retires them at 180 days).
+    ///
+    /// Selecting them was a permanent retry loop: the decode fails, `scanOne`
+    /// deliberately does NOT stamp a marker for an absent file, and the same
+    /// rows come back next launch. Owner-reported as the app "analyzing every
+    /// time you make a new build" — 2,923 rows from four deleted test folders.
+    ///
+    /// They are DROPPED rather than stamped, so nothing is recorded and a file
+    /// that comes back is still scanned. Fail-safe by construction: a
+    /// transiently unreachable root just skips this launch.
+    ///
+    /// `limit` is a SCAN budget, not a candidate budget — an absent row costs a
+    /// `stat` and spends nothing. It used to be spent by the SQL `LIMIT`, so a
+    /// library with more ghosts than the cap would never reach a single real
+    /// photo, and nothing would say so because the pass "completed". Hence the
+    /// wider `selectionCeiling` on the queries feeding this.
+    ///
+    /// `exists` mirrors `reconcileByExistence`'s probe — dataless iCloud files
+    /// still have a filesystem entry, and the old-style evicted placeholder is
+    /// offline, not deleted.
+    static func scanList(candidateIDs: [String],
+                         context: [String: (url: URL, hash: String)],
+                         limit: Int,
+                         exists: (String) -> Bool = {
+                             FileManager.default.fileExists(atPath: $0)
+                             || PathReconciler.isEvictedPlaceholder($0)
+                         }) -> [String] {
+        var kept: [String] = []
+        kept.reserveCapacity(min(limit, candidateIDs.count))
+        for id in candidateIDs {
+            guard kept.count < limit else { break }
+            guard let ctx = context[id], exists(ctx.url.path) else { continue }
+            kept.append(id)
+        }
+        return kept
+    }
+
     private struct ScanResult: Sendable {
         var traits: PhotoTraitsRow?
         var clip: ClipEmbeddingRow?
@@ -81,15 +132,15 @@ nonisolated enum DeepAnalysisBackfill {
         let clipReady = await MainActor.run { ClipModelStore.shared.isReady }
 
         let candidateIDs: [String] = (try? await queue.read { db -> [String] in
-            var ids = try staleTraitsFileIDs(db: db, limit: maxPerLaunch)
+            var ids = try staleTraitsFileIDs(db: db, limit: selectionCeiling)
             if clipReady {
-                let clipIDs = try staleClipFileIDs(db: db, limit: maxPerLaunch)
+                let clipIDs = try staleClipFileIDs(db: db, limit: selectionCeiling)
                 // A file needing only ONE of the two still gets scanned once —
                 // the shared decode covers both.
                 var seen = Set(ids)
                 for id in clipIDs where seen.insert(id).inserted { ids.append(id) }
             }
-            return Array(ids.prefix(maxPerLaunch))
+            return Array(ids.prefix(selectionCeiling))
         }) ?? []
         guard !candidateIDs.isEmpty else { return }
 
@@ -117,10 +168,18 @@ nonisolated enum DeepAnalysisBackfill {
             return map
         }) ?? [:]
 
+        // Off the serial queue and before any decode: rows can outlive the file
+        // they name, and re-attempting those every launch is a loop that cannot
+        // converge. This is also where the per-launch budget is applied, so an
+        // absent row costs a `stat` and nothing else. See `scanList`.
+        let scanIDs = scanList(candidateIDs: candidateIDs, context: context,
+                               limit: maxPerLaunch)
+        guard !scanIDs.isEmpty else { return }
+
         var pending: [ScanResult] = []
 
         await withTaskGroup(of: ScanResult?.self) { group in
-            var iterator = candidateIDs.makeIterator()
+            var iterator = scanIDs.makeIterator()
             var inFlight = 0
 
             /// Throttle and cancellation are consulted per SPAWN, not per
