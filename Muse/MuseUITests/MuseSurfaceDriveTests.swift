@@ -697,6 +697,92 @@ final class MuseSurfaceDriveTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["SPLIT TONE"].exists, "re-checking did not restore the card")
     }
 
+    /// The Customize card must not CLIP its last row — at a normal window
+    /// height OR at the smallest one the app allows.
+    ///
+    /// It shipped with no padding at all: the presenter sizes a card to
+    /// whatever its content reports, so a card that asks to be exactly as tall
+    /// as its rows gets exactly that, and the bottom row sat flush against the
+    /// edge. Owner caught it on screen; this is the guard.
+    ///
+    /// It does NOT check scrolling, deliberately. The presenter caps a card at
+    /// the window height and enables scrolling past that, but the numbers say
+    /// this card can never reach it: the cap at the app's 480pt minimum window
+    /// height is 432pt (480 − 2×24 margin) and twelve rows plus the heading
+    /// come to roughly 411. A first attempt DID assert a scroll and passed
+    /// while proving nothing — the shrunk card still showed every row, so the
+    /// "last row still reachable" assertion was true for the wrong reason.
+    /// That is the vacuous pass this suite exists to avoid, so the assertion
+    /// is gone and the reason is written here instead. If the module list ever
+    /// grows past about a thirteenth row, scrolling becomes reachable and this
+    /// test should grow a real check for it.
+    func testCustomizeCardDoesNotClipItsLastRow() throws {
+        guard openEditor() else { return }
+        defer { closeEditor() }
+
+        guard menu("View", "Customize Modules…", submenu: "Editor Workspace") else {
+            XCTFail("Customize Modules… was not reachable")
+            return
+        }
+        Thread.sleep(forTimeInterval: 2)
+        snap("24-customize-full-height")
+        assertNoRowIsClipped(context: "at the default window height")
+        app.typeKey(.escape, modifierFlags: [])
+        Thread.sleep(forTimeInterval: 1.5)
+
+        // Again at the smallest window the app permits, which is where a
+        // content-sized card is most likely to be squeezed.
+        let before = app.windows.firstMatch.frame
+        let corner = app.windows.firstMatch.coordinate(
+            withNormalizedOffset: CGVector(dx: 1, dy: 1))
+        corner.press(forDuration: 0.4,
+                     thenDragTo: corner.withOffset(CGVector(dx: 0, dy: -420)))
+        Thread.sleep(forTimeInterval: 2)
+        let shrunk = app.windows.firstMatch.frame
+        guard shrunk.height < before.height - 100 else {
+            XCTFail("could not shrink the window (\(before.height) -> "
+                    + "\(shrunk.height)); the short-window half did not run")
+            return
+        }
+
+        guard menu("View", "Customize Modules…", submenu: "Editor Workspace") else { return }
+        Thread.sleep(forTimeInterval: 2)
+        snap("24-customize-short-window")
+        assertNoRowIsClipped(context: "at the minimum window height")
+
+        app.typeKey(.escape, modifierFlags: [])
+        Thread.sleep(forTimeInterval: 1.5)
+        // Put the window back, so the next test starts where it expected to.
+        let c2 = app.windows.firstMatch.coordinate(
+            withNormalizedOffset: CGVector(dx: 1, dy: 1))
+        c2.press(forDuration: 0.4, thenDragTo: c2.withOffset(CGVector(dx: 0, dy: 420)))
+        Thread.sleep(forTimeInterval: 2)
+    }
+
+    /// Every module row present, reachable, and clear of the card's edge.
+    ///
+    /// The bottom margin is measured against the row PITCH rather than an
+    /// absolute inset, so it survives a font or spacing change: a clipped card
+    /// leaves the last row flush, which is less than half a row of space.
+    private func assertNoRowIsClipped(context: String,
+                                      file: StaticString = #filePath,
+                                      line: UInt = #line) {
+        for module in EditorModuleTitles.all {
+            let box = app.checkBoxes[module]
+            XCTAssertTrue(box.exists, "'\(module)' row is missing \(context)",
+                          file: file, line: line)
+            XCTAssertTrue(box.isHittable, "'\(module)' row is not reachable \(context)",
+                          file: file, line: line)
+        }
+        let first = app.checkBoxes[EditorModuleTitles.all.first!].frame
+        let last = app.checkBoxes[EditorModuleTitles.all.last!].frame
+        let pitch = (last.midY - first.midY) / CGFloat(EditorModuleTitles.all.count - 1)
+        let window = app.windows.firstMatch.frame
+        XCTAssertGreaterThan(window.maxY - last.maxY, pitch,
+                             "the last row is flush with the card's bottom edge \(context)",
+                             file: file, line: line)
+    }
+
     /// Reorder mode is a MODE: every card collapses to a bar, so no adjustment
     /// control is reachable, and Escape cancels the mode rather than the viewer.
     ///
@@ -808,4 +894,13 @@ final class MuseSurfaceDriveTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["TOOLS"].exists, "TOOLS missing after Default Layout")
         XCTAssertTrue(app.staticTexts["STYLES"].exists, "STYLES missing after Default Layout")
     }
+}
+
+/// The twelve card headings, in default panel order — the labels the Customize
+/// list publishes. Kept beside the drive tests rather than read from the app so
+/// a rename has to be noticed here too.
+enum EditorModuleTitles {
+    static let all = ["TOOLS", "HISTOGRAM", "INSIGHTS", "SNAPSHOTS",
+                      "STYLES", "LIGHT", "TONE ZONES", "COLOR",
+                      "COLOR MIX", "SPLIT TONE", "EFFECTS", "CROP & STRAIGHTEN"]
 }

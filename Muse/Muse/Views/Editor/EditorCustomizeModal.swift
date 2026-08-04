@@ -52,8 +52,18 @@ struct EditorCustomizeModal: View {
                         row(module)
                     }
                 }
+                .padding(.bottom, 4)
             }
         }
+        // Every card in the app ends here, and this one shipped without it —
+        // so the title sat against the top edge and the last row was clipped by
+        // the bottom one. The presenter sizes the card to whatever this content
+        // reports, so a card with no padding asks to be exactly as tall as its
+        // rows and gets it.
+        .padding(28)
+        // Width and the height cap come from the modal presenter. `ModalScroll`
+        // deliberately does NOT scroll — the presenter decides that, because it
+        // is the only thing that knows how much room the window has.
     }
 
     private func row(_ module: EditorModule) -> some View {
@@ -98,7 +108,11 @@ extension View {
                               onPresentationChange: @escaping (Bool) -> Void) -> some View {
         museModal(isPresented: Binding(get: { store.customizeShown },
                                        set: { store.customizeShown = $0 }),
-                  width: 420, palette: palette) {
+                  // 460, matching ImageLayoutSheet — the other card with this
+                  // exact shape (24pt title, wrapping subtitle, a list). At 420
+                  // the subtitle wrapped to three lines and the rows crowded
+                  // the edges.
+                  width: 460, palette: palette) {
             EditorCustomizeModal(isPresented: Binding(get: { store.customizeShown },
                                                       set: { store.customizeShown = $0 }))
         }
