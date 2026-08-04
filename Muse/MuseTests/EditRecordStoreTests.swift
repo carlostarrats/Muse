@@ -184,39 +184,6 @@ final class EditRecordStoreTests: XCTestCase {
         XCTAssertFalse(carried.contains { $0.id == "v1" || $0.id == "v2" })
     }
 
-    func testCarryAllMovesEveryScope() throws {
-        let queue = try makeQueue()
-        try queue.write { db in
-            try EditRecordStore.write(stackJSON: "{\"a\":1}", hash: "a", processVersion: 1,
-                                      fileID: "f1", parentDir: "/a", updatedAt: 1, db: db)
-            try EditRecordStore.write(stackJSON: "{\"b\":1}", hash: "b", processVersion: 1,
-                                      fileID: "f1", parentDir: "/b", updatedAt: 1, db: db)
-            try EditRecordStore.carryAll(fromFileID: "f1", toFileID: "f2", db: db)
-        }
-        try queue.read { db in
-            XCTAssertEqual(try EditRecordStore.read(fileID: "f2", parentDir: "/a", db: db)?.stack,
-                           "{\"a\":1}")
-            XCTAssertEqual(try EditRecordStore.read(fileID: "f2", parentDir: "/b", db: db)?.stack,
-                           "{\"b\":1}")
-            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM edits WHERE file_id = 'f1'"), 0)
-        }
-    }
-
-    /// A reset clears the stack but keeps its versions, so `carryAll` has to
-    /// sweep version rows in scopes the `edits` table no longer mentions.
-    func testCarryAllMovesVersionsWithNoCurrentStack() throws {
-        let queue = try makeQueue()
-        try queue.write { db in
-            try EditRecordStore.addVersion(
-                EditVersionRow(id: "v1", file_id: "f1", parent_dir: "/orphan", kind: "version",
-                               name: "Kept", stack: "{}", created_at: 1), db: db)
-            try EditRecordStore.carryAll(fromFileID: "f1", toFileID: "f2", db: db)
-        }
-        let carried = try queue.read { db in
-            try EditRecordStore.versions(fileID: "f2", parentDir: "/orphan", db: db)
-        }
-        XCTAssertEqual(carried.map(\.name), ["Kept"])
-    }
 
     // MARK: - Folder rename
 

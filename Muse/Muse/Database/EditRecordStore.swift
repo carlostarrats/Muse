@@ -249,28 +249,8 @@ nonisolated enum EditRecordStore {
         }
     }
 
-    /// MOVE every scope of one identity onto another (all parent_dirs), for
-    /// the sole-alive-path collision where the old identity is done. Mirrors
-    /// `NoteStore.carryAll`.
-    static func carryAll(fromFileID: String, toFileID: String,
-                         db: GRDB.Database) throws {
-        let dirs = try String.fetchAll(db, sql:
-            "SELECT parent_dir FROM edits WHERE file_id = ?", arguments: [fromFileID])
-        for dir in dirs {
-            try carry(fromFileID: fromFileID, fromDir: dir,
-                      toFileID: toFileID, toDir: dir, deleteOriginal: true, db: db)
-        }
-        // Versions can exist in scopes the current stack no longer does (a
-        // reset clears the stack but keeps its versions), so sweep them too.
-        try db.execute(sql: """
-            INSERT OR IGNORE INTO edit_versions
-                (id, file_id, parent_dir, kind, name, stack, created_at)
-            SELECT lower(hex(randomblob(16))), ?, parent_dir, kind, name, stack, created_at
-            FROM edit_versions WHERE file_id = ?
-            """, arguments: [toFileID, fromFileID])
-        try db.execute(sql: "DELETE FROM edit_versions WHERE file_id = ?",
-                       arguments: [fromFileID])
-    }
+    // `carryAll` was deleted with the hash-collision branch it served (per-file
+    // identity, 2026-08-03) — see the matching note in `NoteStore`.
 
     /// Rewrite `parent_dir` for a renamed folder, for both tables — the same
     /// stale-target pre-clear + SUBSTR-prefix UPDATE tags and notes get. The

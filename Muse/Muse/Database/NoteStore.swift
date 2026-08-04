@@ -105,18 +105,11 @@ nonisolated enum NoteStore {
         }
     }
 
-    /// MOVE every note of one identity onto another (all parent_dirs), for the
-    /// sole-alive-path collision where the old identity is done. Mirrors the
-    /// unscoped `Indexer.unionTags` carry (which deletes its source rows), so the
-    /// source notes don't linger orphaned after the union. Never clobbers a
-    /// destination note (INSERT OR IGNORE), then drops the source rows.
-    static func carryAll(fromFileID: String, toFileID: String, db: GRDB.Database) throws {
-        try db.execute(sql: """
-            INSERT OR IGNORE INTO notes (file_id, parent_dir, body, updated_at)
-            SELECT ?, parent_dir, body, updated_at FROM notes WHERE file_id = ?
-            """, arguments: [toFileID, fromFileID])
-        try db.execute(sql: "DELETE FROM notes WHERE file_id = ?", arguments: [fromFileID])
-    }
+    // `carryAll` — MOVE every scope of one identity onto another — was deleted
+    // with the hash-collision branch it served (per-file identity, 2026-08-03).
+    // Two rows may now legally share a content_hash, so an edit whose new bytes
+    // match another file is an ordinary in-place edit: no identity is retired,
+    // and nothing has to be swept off it.
 
     /// Escape LIKE metacharacters so a user query is matched literally.
     private static func likeEscape(_ s: String) -> String {

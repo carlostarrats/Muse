@@ -176,170 +176,36 @@ actor Indexer {
                 return false
             }
 
-            // Hash changed — edit-in-place
-            if let target = existingFileByHash, target.id != file.id {
-                // Hash collision: the edited path's new bytes match a DIFFERENT
-                // existing row — re-link the path to it. The old row may be
-                // SHARED (other alive paths in other folders): unioning ALL its
-                // tags would strip the untouched siblings' tags off their
-                // identity (same defect class the split branch below guards
-                // against), so when the row is shared, scope the carry to THIS
-                // path's folder — copy-vs-move by the same same-dir-sibling
-                // rule as the split branch.
-                let dir = TagScope.parentDir(ofPath: absPath)
-                let otherAlive = try PathRow
-                    .filter(PathRow.Columns.file_id == file.id)
-                    .filter(PathRow.Columns.is_alive == 1)
-                    .filter(PathRow.Columns.absolute_path != absPath)
-                    .fetchAll(db)
-                if otherAlive.isEmpty {
-                    // Sole alive path — the old identity is done for; union
-                    // everything as before.
-                    try unionTags(db: db, fromFileID: file.id, toFileID: target.id)
-                    // Notes follow tags: copy every note onto the target; the old
-                    // row's remaining note rows cascade-delete when it's pruned.
-                    try NoteStore.carryAll(fromFileID: file.id, toFileID: target.id, db: db)
-                    // Edits ride with notes at every one of these seams: an
-                    // edit stack is per (file_id, parent_dir) too, so an
-                    // identity rewrite that forgets it silently discards the
-                    // user's adjustments.
-                    try EditRecordStore.carryAll(fromFileID: file.id, toFileID: target.id, db: db)
-                } else {
-                    let keepsSiblingInDir = otherAlive
-                        .contains { TagScope.parentDir(ofPath: $0.absolute_path) == dir }
-                    try unionTags(db: db, fromFileID: file.id, toFileID: target.id,
-                                  parentDir: dir, deleteOriginals: !keepsSiblingInDir)
-                    try NoteStore.carry(fromFileID: file.id, fromDir: dir,
-                                        toFileID: target.id, toDir: dir,
-                                        deleteOriginal: !keepsSiblingInDir, db: db)
-                    try EditRecordStore.carry(fromFileID: file.id, fromDir: dir,
-                                              toFileID: target.id, toDir: dir,
-                                              deleteOriginal: !keepsSiblingInDir, db: db)
-                }
-                // Manual collection membership is precious user data keyed on
-                // the old identity — copy it to the new one, mirroring the
-                // split branch (COPY, not move: a surviving sibling still
-                // resolves via the old file_id and legitimately stays a member).
-                try db.execute(sql: """
-                    INSERT OR IGNORE INTO collection_members (collection_id, file_id, added_by)
-                    SELECT collection_id, ?, added_by FROM collection_members
-                    WHERE file_id = ? AND added_by = 'manual'
-                    """, arguments: [target.id, file.id])
-                path.file_id = target.id
-                try path.update(db)
-                try pruneIfOrphaned(db: db, fileID: file.id)
-
-                var refreshed = target
-                refreshed.last_seen_at = now
-                try refreshed.update(db)
-
-                // The path now answers to `target`'s FTS row, which carries the
-                // OTHER copy's basename (or none, for a row dead at v9-backfill
-                // time) — so this file became unfindable by its own name in
-                // "All folders" search. Same rule as the new-path branch below:
-                // refresh the name only when this is the target's SOLE alive
-                // path, since one FTS row can't represent two basenames.
-                try ensureBasenameFTS(db: db, fileID: target.id, absPath: absPath)
-                let targetAlive = try PathRow
-                    .filter(PathRow.Columns.file_id == target.id)
-                    .filter(PathRow.Columns.is_alive == 1)
-                    .fetchCount(db)
-                if targetAlive == 1 {
-                    try db.execute(sql: "UPDATE files_fts SET basename = ? WHERE file_id = ?",
-                                   arguments: [(absPath as NSString).lastPathComponent, target.id])
-                }
-            } else {
-                // The new content is genuinely new (no existing row has this
-                // hash). But this files row may be SHARED by more than one alive
-                // path: two byte-identical files in different folders dedupe onto
-                // a single content_hash row (the "brand-new path pointing at known
-                // content" branch below). Editing ONE copy must not rewrite the
-                // shared row — that welds the new hash/size/dims onto the untouched
-                // sibling and marks it unanalyzed, and on the sibling's next index
-                // pass its real (old) bytes hash differently again, flipping the
-                // row's content_hash back: the two copies then ping-pong the shared
-                // row and re-hash/re-Vision forever.
-                let aliveCount = try PathRow
-                    .filter(PathRow.Columns.file_id == file.id)
-                    .filter(PathRow.Columns.is_alive == 1)
-                    .fetchCount(db)
-                if aliveCount > 1 {
-                    // SPLIT: move only this edited path onto a fresh row for the new
-                    // content, carrying its location's tags (manual tags are
-                    // precious; vision tags regenerate since analyzed_hash is nil).
-                    // The original row, its other paths, and their tags are left
-                    // intact for the unedited sibling(s).
-                    var newFile = makeFile(hash: hash, kind: kind, size: sizeBytes,
-                                           created: createdAt, modified: modifiedAt, now: now)
-                    try newFile.insert(db)
-                    try insertBasenameFTS(db: db, fileID: newFile.id, absPath: absPath)
-                    let dir = TagScope.parentDir(ofPath: absPath)
-                    // Tags are keyed (file_id, parent_dir). If the original row KEEPS
-                    // another alive path in THIS SAME folder (a byte-identical
-                    // same-folder copy), its (file_id, dir) tag rows are shared with
-                    // that still-present sibling — COPY them to the new identity so
-                    // neither copy loses them. Otherwise the original no longer
-                    // surfaces this folder's tags (its remaining paths are in other
-                    // folders), so MOVE them, which also avoids orphan rows.
-                    let keepsSiblingInDir = try PathRow
-                        .filter(PathRow.Columns.file_id == file.id)
-                        .filter(PathRow.Columns.is_alive == 1)
-                        .filter(PathRow.Columns.absolute_path != absPath)
-                        .fetchAll(db)
-                        .contains { TagScope.parentDir(ofPath: $0.absolute_path) == dir }
-                    if keepsSiblingInDir {
-                        try db.execute(sql: """
-                            INSERT OR IGNORE INTO tags (id, file_id, parent_dir, label, source, confidence, model_version)
-                            SELECT lower(hex(randomblob(16))), ?, parent_dir, label, source, confidence, model_version
-                            FROM tags WHERE file_id = ? AND parent_dir = ?
-                            """, arguments: [newFile.id, file.id, dir])
-                    } else {
-                        try db.execute(sql:
-                            "UPDATE tags SET file_id = ? WHERE file_id = ? AND parent_dir = ?",
-                            arguments: [newFile.id, file.id, dir])
-                    }
-                    // The (file_id, dir) note follows its tags onto the new
-                    // identity — COPY when a same-folder sibling still surfaces
-                    // it, MOVE otherwise. Skipping this dropped the edited copy's
-                    // note when a shared row split.
-                    try NoteStore.carry(fromFileID: file.id, fromDir: dir,
-                                        toFileID: newFile.id, toDir: dir,
-                                        deleteOriginal: !keepsSiblingInDir, db: db)
-                    // A pure edit-in-place KEEPS its stack: the parameters are
-                    // normalized, so they still apply to the new bytes, and
-                    // discarding a user's adjustments because a file changed
-                    // is the worse of the two failures.
-                    try EditRecordStore.carry(fromFileID: file.id, fromDir: dir,
-                                              toFileID: newFile.id, toDir: dir,
-                                              deleteOriginal: !keepsSiblingInDir, db: db)
-                    // Manual collection membership is content-identity (file_id)
-                    // keyed and is precious user data — carry it to the edited
-                    // copy's new identity so an edit doesn't silently eject the
-                    // file from collections the user added it to. COPY (not move):
-                    // the unedited sibling still resolves via the old file_id and
-                    // legitimately stays a member. Auto membership is regenerated by
-                    // the recluster, so it's intentionally left alone.
-                    try db.execute(sql: """
-                        INSERT OR IGNORE INTO collection_members (collection_id, file_id, added_by)
-                        SELECT collection_id, ?, added_by FROM collection_members
-                        WHERE file_id = ? AND added_by = 'manual'
-                        """, arguments: [newFile.id, file.id])
-                    path.file_id = newFile.id
-                    try path.update(db)
-                } else {
-                    // Pure edit-in-place: update hash on the existing file row.
-                    // Reset analyzed_hash so the analyze pass re-runs Vision — a
-                    // crop/edit can change colors, dimensions, and OCR'd text, so
-                    // the old tags/palette must not stick. (analyzed_hash != the
-                    // new content_hash also makes analyzePending pick it up.)
-                    file.content_hash = hash
-                    file.size_bytes = sizeBytes
-                    file.modified_at = modifiedAt
-                    file.last_seen_at = now
-                    file.analyzed_hash = nil
-                    try file.update(db)
-                }
-            }
+            // Hash changed — edit in place. That is the ONLY thing that can
+            // happen here now.
+            //
+            // This used to be two more branches, both of which existed purely
+            // because a `files` row could be SHARED by several byte-identical
+            // paths:
+            //
+            //   * a hash-COLLISION branch, when the new bytes matched a
+            //     different existing row, which re-linked the path and carried
+            //     tags/notes/edits/memberships across — with a same-folder
+            //     sibling rule deciding copy-vs-move;
+            //   * a SPLIT branch, when the row had other alive paths, which
+            //     forked a fresh row so editing one copy did not corrupt its
+            //     untouched twin.
+            //
+            // Under per-file identity a row has at most one alive path, so
+            // there is nothing to split, and two rows may legally share a
+            // content_hash, so a collision is not a conflict. Both branches are
+            // deleted; this is what is left.
+            //
+            // analyzed_hash is reset because a crop or an edit changes colours,
+            // dimensions and OCR'd text — the old tags and palette must not
+            // stick. Clearing it is also what makes `analyzePending` pick the
+            // file up.
+            file.content_hash = hash
+            file.size_bytes = sizeBytes
+            file.modified_at = modifiedAt
+            file.last_seen_at = now
+            file.analyzed_hash = nil
+            try file.update(db)
             return true
         }
 
@@ -349,54 +215,63 @@ actor Indexer {
             .filter(PathRow.Columns.is_alive == 0)
             .fetchAll(db)
 
-        if let target = existingFileByHash {
-            // New alive path of known content — copy/hardlink
-            if var deadPath = deadPaths.first(where: { $0.file_id == target.id }) {
-                // Path-resurrection: same hash matches the dead row's file.
-                deadPath.is_alive = 1
-                try deadPath.update(db)
-                var refreshed = target
-                refreshed.last_seen_at = now
-                try refreshed.update(db)
-                try inheritVisionTags(db: db, fileID: target.id,
-                                      toDir: TagScope.parentDir(ofPath: absPath))
-                // A file that was dead at v9-backfill time has no FTS row —
-                // seed the basename one now so it's name-searchable again.
-                try ensureBasenameFTS(db: db, fileID: target.id, absPath: absPath)
-                return false
-            }
-            // Otherwise: brand-new path pointing at known content
-            var newPath = PathRow(
-                id: UUID().uuidString,
-                file_id: target.id,
-                absolute_path: absPath,
-                bookmark_data: nil,
-                is_alive: 1
-            )
-            try newPath.insert(db)
+        // Path-resurrection: THIS exact path is back with the same bytes, so
+        // its own row is still sitting there. Revive it; nothing is inherited
+        // because nothing was ever lost.
+        if let target = existingFileByHash,
+           var deadPath = deadPaths.first(where: { $0.file_id == target.id }) {
+            deadPath.is_alive = 1
+            try deadPath.update(db)
             var refreshed = target
             refreshed.last_seen_at = now
             try refreshed.update(db)
-            try inheritVisionTags(db: db, fileID: target.id,
-                                  toDir: TagScope.parentDir(ofPath: absPath))
-            // An external RENAME lands here (old path dies, same content
-            // reappears under a new name). The FTS basename was written at
-            // analyze time and content didn't change, so it would keep the OLD
-            // name forever — "everywhere" search then misses the file by its
-            // current name. Refresh it when this is now the file's sole alive
-            // path (with several paths the one FTS basename is ambiguous —
-            // leave it).
-            let aliveNow = try PathRow
-                .filter(PathRow.Columns.file_id == target.id)
-                .filter(PathRow.Columns.is_alive == 1)
-                .fetchCount(db)
-            if aliveNow == 1 {
-                try db.execute(sql: "UPDATE files_fts SET basename = ? WHERE file_id = ?",
-                               arguments: [(absPath as NSString).lastPathComponent, target.id])
-            }
-            // The UPDATE above no-ops when the row is missing (a file dead at
-            // v9-backfill time) — make sure a basename row exists either way.
+            // A file that was dead at v9-backfill time has no FTS row —
+            // seed the basename one now so it's name-searchable again.
             try ensureBasenameFTS(db: db, fileID: target.id, absPath: absPath)
+            return false
+        }
+
+        // RENAME or MOVE: some row already holds these bytes and has NO alive
+        // path — its file left the name it used to have. Adopt that row rather
+        // than minting a new one, so the edit stack, tags, note and collection
+        // memberships follow the file to its new name. This is the distinction
+        // that makes renaming safe under per-file identity: an orphaned
+        // identity is the SAME file, an identity that is still alive elsewhere
+        // is a COPY.
+        if let orphanID = try orphanedFileID(db: db, hash: hash) {
+            var newPath = PathRow(id: UUID().uuidString, file_id: orphanID,
+                                  absolute_path: absPath, bookmark_data: nil, is_alive: 1)
+            try newPath.insert(db)
+            if var orphan = try FileRow.filter(FileRow.Columns.id == orphanID).fetchOne(db) {
+                orphan.last_seen_at = now
+                try orphan.update(db)
+            }
+            // The FTS basename was written under the OLD name; refresh it or
+            // "everywhere" search misses the file by the name it now has.
+            try db.execute(sql: "UPDATE files_fts SET basename = ? WHERE file_id = ?",
+                           arguments: [(absPath as NSString).lastPathComponent, orphanID])
+            try ensureBasenameFTS(db: db, fileID: orphanID, absPath: absPath)
+            return false
+        }
+
+        // A genuine COPY: these bytes are already alive somewhere else. It gets
+        // its OWN row — that is the whole point of per-file identity — and
+        // inherits the donor's edits, tags, note and memberships, then
+        // diverges. Before this change the path was simply attached to the
+        // existing row, which is what made twelve copies share one edit stack.
+        if existingFileByHash != nil {
+            var newFile = makeFile(hash: hash, kind: kind, size: sizeBytes,
+                                   created: createdAt, modified: modifiedAt, now: now)
+            try newFile.insert(db)
+            var newPath = PathRow(id: UUID().uuidString, file_id: newFile.id,
+                                  absolute_path: absPath, bookmark_data: nil, is_alive: 1)
+            try newPath.insert(db)
+            try insertBasenameFTS(db: db, fileID: newFile.id, absPath: absPath)
+            let dir = TagScope.parentDir(ofPath: absPath)
+            if let donorID = try pickDonor(db: db, hash: hash,
+                                           excluding: newFile.id, targetDir: dir) {
+                try inherit(db: db, from: donorID, to: newFile.id, targetDir: dir)
+            }
             return false
         }
 
@@ -416,6 +291,145 @@ actor Indexer {
         try newPath.insert(db)
         try insertBasenameFTS(db: db, fileID: newFile.id, absPath: absPath)
         return false
+    }
+
+    // MARK: - Per-file identity
+
+    /// A row holding these bytes that has NO alive path — an identity whose
+    /// file left the name it used to have. Adopting it is what makes a rename
+    /// or a move carry its edits along instead of forking a blank copy.
+    ///
+    /// Deterministic (`ORDER BY id`) so two orphans of the same content can't
+    /// be adopted in a different order on a different run.
+    static func orphanedFileID(db: GRDB.Database, hash: String) throws -> String? {
+        try String.fetchOne(db, sql: """
+            SELECT f.id FROM files f
+            WHERE f.content_hash = ?
+              AND NOT EXISTS (SELECT 1 FROM paths p
+                              WHERE p.file_id = f.id AND p.is_alive = 1)
+            ORDER BY f.id LIMIT 1
+            """, arguments: [hash])
+    }
+
+    /// The already-alive copy a NEW copy should inherit from. See
+    /// `InheritDonor` for the ordering and why it has to be total.
+    static func pickDonor(db: GRDB.Database, hash: String,
+                          excluding newID: String, targetDir: String) throws -> String? {
+        let rows = try Row.fetchAll(db, sql: """
+            SELECT f.id AS fid, p.absolute_path AS path, e.updated_at AS edited
+            FROM files f
+            JOIN paths p ON p.file_id = f.id AND p.is_alive = 1
+            LEFT JOIN edits e ON e.file_id = f.id
+            WHERE f.content_hash = ? AND f.id <> ?
+            """, arguments: [hash, newID])
+        let candidates = rows.compactMap { row -> InheritDonor.Candidate? in
+            guard let fid: String = row["fid"], let path: String = row["path"] else { return nil }
+            return InheritDonor.Candidate(fileID: fid,
+                                          parentDir: TagScope.parentDir(ofPath: path),
+                                          absolutePath: path,
+                                          editUpdatedAt: row["edited"])
+        }
+        return InheritDonor.pick(candidates: candidates, targetDir: targetDir)
+    }
+
+    /// Give a brand-new row the donor's analysis AND user data.
+    ///
+    /// The derived half is copied rather than recomputed because identical
+    /// bytes give identical answers — re-running Vision per duplicate would
+    /// cost N passes over the same pixels, and leaving it out would make every
+    /// copy look unanalyzed and queue exactly that work.
+    ///
+    /// The user half is copied because the owner's rule is that a copy
+    /// INHERITS: duplicating a photo that already carries edits starts from
+    /// those edits and diverges.
+    ///
+    /// **Keep in sync with migration `v24_per_file_identity`**, which does the
+    /// same copying for rows that already existed. A migration is frozen at its
+    /// historical shape so the two cannot share code; each is covered by its
+    /// own test (`testDerivedAnalysisIsCopiedToEveryRow` there,
+    /// `testNewCopyIsNotMarkedUnanalyzed` here).
+    static func inherit(db: GRDB.Database, from donorID: String,
+                        to newID: String, targetDir: String) throws {
+        // Analysis columns on the row itself — including analyzed_hash, which
+        // is what stops the copy being queued for a redundant Vision pass.
+        try db.execute(sql: """
+            UPDATE files SET
+                width = d.width, height = d.height, caption = d.caption,
+                dominant_color = d.dominant_color, feature_print = d.feature_print,
+                palette = d.palette, analyzed_hash = d.analyzed_hash,
+                intent = d.intent, intent_model_version = d.intent_model_version,
+                lat = d.lat, lon = d.lon, coords_scanned_hash = d.coords_scanned_hash
+            FROM (SELECT * FROM files WHERE id = ?) AS d
+            WHERE files.id = ?
+            """, arguments: [donorID, newID])
+
+        try db.execute(sql: """
+            INSERT OR IGNORE INTO photo_meta SELECT ?, exif_scanned_hash, capture_date,
+                capture_md, camera_make, camera_model, lens, iso, f_number,
+                exposure_seconds, focal_length, focal_length_35mm, flash_fired
+            FROM photo_meta WHERE file_id = ?
+            """, arguments: [newID, donorID])
+        try db.execute(sql: """
+            INSERT OR IGNORE INTO photo_traits SELECT ?, traits_scanned_hash, traits_version,
+                face_count, largest_face_frac, face_quality, pet_count, sharpness,
+                clip_high_r, clip_high_g, clip_high_b, clip_low, noise_sigma
+            FROM photo_traits WHERE file_id = ?
+            """, arguments: [newID, donorID])
+        try db.execute(sql: """
+            INSERT OR IGNORE INTO places SELECT ?, geocoded_hash, dataset_version,
+                city, admin, country, place_key
+            FROM places WHERE file_id = ?
+            """, arguments: [newID, donorID])
+        try db.execute(sql: """
+            INSERT OR IGNORE INTO embeddings SELECT ?, vector, model_version, updated_at
+            FROM embeddings WHERE file_id = ?
+            """, arguments: [newID, donorID])
+        try db.execute(sql: """
+            INSERT OR IGNORE INTO clip_embeddings SELECT ?, embedded_hash, model_generation, vector
+            FROM clip_embeddings WHERE file_id = ?
+            """, arguments: [newID, donorID])
+
+        // The OCR text and caption the donor's analysis produced. The basename
+        // row was already seeded from THIS path, so keep that name and only
+        // fill in the content-derived columns.
+        try db.execute(sql: """
+            UPDATE files_fts SET
+                ocr_text = (SELECT ocr_text FROM files_fts WHERE file_id = ?),
+                caption = (SELECT caption FROM files_fts WHERE file_id = ?)
+            WHERE file_id = ?
+            """, arguments: [donorID, donorID, newID])
+
+        // User-authored data. Tags and the note and the edit stack are stored
+        // per (file_id, parent_dir); the new row's folder is the target dir, so
+        // take the donor's rows for ITS folder and re-key them to this one.
+        try db.execute(sql: """
+            INSERT OR IGNORE INTO tags (id, file_id, parent_dir, label, source, confidence, model_version)
+            SELECT lower(hex(randomblob(16))), ?, ?, label, source, confidence, model_version
+            FROM tags WHERE file_id = ?
+            """, arguments: [newID, targetDir, donorID])
+        try db.execute(sql: """
+            INSERT OR IGNORE INTO notes (file_id, parent_dir, body, updated_at)
+            SELECT ?, ?, body, updated_at FROM notes WHERE file_id = ?
+            """, arguments: [newID, targetDir, donorID])
+        try db.execute(sql: """
+            INSERT OR IGNORE INTO edits (file_id, parent_dir, stack, stack_hash,
+                                         process_version, updated_at)
+            SELECT ?, ?, stack, stack_hash, process_version, updated_at
+            FROM edits WHERE file_id = ?
+            """, arguments: [newID, targetDir, donorID])
+        try db.execute(sql: """
+            INSERT OR IGNORE INTO edit_versions (id, file_id, parent_dir, kind, name, stack, created_at)
+            SELECT lower(hex(randomblob(16))), ?, ?, kind, name, stack, created_at
+            FROM edit_versions WHERE file_id = ?
+            """, arguments: [newID, targetDir, donorID])
+
+        // Manual membership only — auto membership is regenerated by the
+        // recluster, and copying it would fight the engine.
+        try db.execute(sql: """
+            INSERT OR IGNORE INTO collection_members (collection_id, file_id, added_by)
+            SELECT collection_id, ?, added_by FROM collection_members
+            WHERE file_id = ? AND added_by = 'manual'
+            """, arguments: [newID, donorID])
     }
 
     /// Seed a basename-only FTS row for a NEW file identity, whatever its
@@ -466,66 +480,19 @@ actor Indexer {
         )
     }
 
-    /// Q32: manual beats vision on conflict. Union semantics: copy tags from
-    /// `from` to `to`; on (file_id, label) conflict keep the existing row if
-    /// it's manual, or replace it with the manual incoming row, otherwise
-    /// ignore the incoming.
-    // internal (not private) so MuseTests can exercise the per-folder merge.
-    /// `parentDir` scopes the union to one folder's tag rows (nil = all —
-    /// correct only when the source identity has no other alive paths).
-    /// `deleteOriginals: false` copies instead of moving, for when a
-    /// same-folder sibling still surfaces the source rows.
-    static func unionTags(db: GRDB.Database, fromFileID: String, toFileID: String,
-                          parentDir: String? = nil, deleteOriginals: Bool = true) throws {
-        var query = TagRow.filter(TagRow.Columns.file_id == fromFileID)
-        if let parentDir { query = query.filter(TagRow.Columns.parent_dir == parentDir) }
-        let fromTags = try query.fetchAll(db)
-        for var t in fromTags {
-            // Conflict is per (file_id, parent_dir): the same physical file at
-            // the same path keeps its folder scope when it re-links to `to`.
-            if let existing = try TagRow
-                .filter(TagRow.Columns.file_id == toFileID)
-                .filter(TagRow.Columns.parent_dir == t.parent_dir)
-                .filter(TagRow.Columns.label == t.label)
-                .fetchOne(db) {
-                if t.source == "manual" && existing.source != "manual" {
-                    // Replace with manual
-                    var updated = existing
-                    updated.source = "manual"
-                    updated.confidence = nil
-                    updated.model_version = nil
-                    try updated.update(db)
-                }
-                // Else keep existing
-            } else {
-                t.id = UUID().uuidString
-                t.file_id = toFileID
-                // parent_dir preserved — the folder didn't change.
-                try t.insert(db)
-            }
-        }
-        // Delete the originals once unioned (scoped the same way as the read).
-        if deleteOriginals {
-            var doomed = TagRow.filter(TagRow.Columns.file_id == fromFileID)
-            if let parentDir { doomed = doomed.filter(TagRow.Columns.parent_dir == parentDir) }
-            try doomed.deleteAll(db)
-        }
-        // A rating IS a manual tag, and the conflict check above keys on the
-        // EXACT label — so unioning a scope rated "★★" into one already rated
-        // "★★★★" inserts both (different labels, no UNIQUE clash), doubling the
-        // rating and breaking StarRating.resolution. Collapse to one per
-        // (file_id, parent_dir), the same rule Sidecar.collapsingRatings applies
-        // at the sidecar seam.
-        try collapseRatings(db: db, fileID: toFileID, parentDir: parentDir)
-    }
 
-    /// Enforce one-rating-per-(file_id, parent_dir) after a tag merge. Ratings
-    /// are manual tags with distinct labels ("★★" vs "★★★★"), so a merge that
-    /// keys conflicts on the exact label leaves two of them. TagRow carries no
-    /// timestamp, so the tiebreak is the same deterministic one the sidecar seam
-    /// uses (Sidecar.collapsingRatings): the highest run wins. `parentDir` nil
-    /// scopes across every folder the identity touches (a nil-scoped union), so
-    /// the collapse groups by parent_dir internally.
+    /// Enforce one-rating-per-(file_id, parent_dir) after rows from two scopes
+    /// land on one. Ratings are manual tags with distinct labels ("★★" vs
+    /// "★★★★"), so a merge that keys conflicts on the exact label leaves two of
+    /// them. TagRow carries no timestamp, so the tiebreak is the same
+    /// deterministic one the sidecar seam uses (Sidecar.collapsingRatings): the
+    /// highest run wins. `parentDir` nil scopes across every folder the
+    /// identity touches, so the collapse groups by parent_dir internally.
+    ///
+    /// Its other caller, `Indexer.unionTags`, went with the hash-collision
+    /// branch under per-file identity (2026-08-03); `FileMoveMigration` — an
+    /// in-app move, where one file's rows genuinely change folder — is what
+    /// still needs it.
     static func collapseRatings(db: GRDB.Database, fileID: String, parentDir: String?) throws {
         var query = TagRow.filter(TagRow.Columns.file_id == fileID)
         if let parentDir { query = query.filter(TagRow.Columns.parent_dir == parentDir) }
@@ -536,32 +503,6 @@ actor Indexer {
         }
     }
 
-    /// A brand-new path of already-known content inherits the file's VISION
-    /// tags for ITS folder (identical pixels → identical vision tags), so a
-    /// duplicate copied into a new folder isn't blank even though the file is
-    /// already analyzed (the analyze pass skips it on analyzed_hash). Manual
-    /// tags are per-folder and are NOT inherited. No-op if this folder already
-    /// has tags, or if the content was never analyzed (the analyze pass will
-    /// then write to every alive folder).
-    // internal (not private) so MuseTests can exercise the inheritance rule.
-    static func inheritVisionTags(db: GRDB.Database, fileID: String, toDir: String) throws {
-        let hasHere = try TagRow
-            .filter(TagRow.Columns.file_id == fileID)
-            .filter(TagRow.Columns.parent_dir == toDir)
-            .fetchCount(db)
-        if hasHere > 0 { return }
-        let visionTags = try TagRow
-            .filter(TagRow.Columns.file_id == fileID)
-            .filter(TagRow.Columns.source != "manual")
-            .fetchAll(db)
-        var seen = Set<String>()
-        for var t in visionTags {
-            guard seen.insert(t.label).inserted else { continue }
-            t.id = UUID().uuidString
-            t.parent_dir = toDir
-            try t.insert(db)
-        }
-    }
 
     private static func pruneIfOrphaned(db: GRDB.Database, fileID: String) throws {
         let aliveCount = try PathRow

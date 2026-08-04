@@ -6,10 +6,15 @@
 //  (measured peak concurrency was 1 before). That only stays correct because
 //  GRDB's DatabaseQueue serializes every read AND write on one connection, so
 //  the whole identity-reconcile matrix still runs as an atomic, totally-ordered
-//  transaction. These tests attack that assumption directly: if the queue did
-//  NOT serialize, two byte-identical files reconciling concurrently would both
-//  see "no row with this hash" and both insert, tripping the content_hash
-//  UNIQUE constraint and silently dropping a file from the index.
+//  transaction. These tests attack that assumption directly.
+//
+//  What "correct" means here CHANGED with per-file identity (2026-08-03).
+//  Before, 32 byte-identical files had to collapse onto ONE row, and the risk
+//  under concurrency was two of them both seeing "no row with this hash", both
+//  inserting, and tripping the `content_hash` UNIQUE constraint — silently
+//  dropping a file from the index. Now every file gets its own row by design,
+//  so the constraint is gone and the risk inverts: the danger is a lost or
+//  duplicated PATH row, and each file inheriting from a half-built neighbour.
 //
 
 import XCTest
@@ -30,10 +35,10 @@ final class IndexerConcurrencyTests: XCTestCase {
         return q
     }
 
-    /// 32 concurrent reconciles of the SAME content in 32 different folders must
-    /// dedupe onto exactly one files row, with 32 alive paths — no UNIQUE
-    /// violation, no lost path.
-    func testConcurrentIdenticalContentDedupesToOneRow() async throws {
+    /// 32 concurrent reconciles of the SAME content in 32 different folders
+    /// must produce 32 independent rows, one alive path each — nothing merged,
+    /// nothing lost, and no row left holding two paths.
+    func testConcurrentIdenticalContentGetsOneRowPerFile() async throws {
         let q = try migrated()
         let n = 32
         await withTaskGroup(of: Void.self) { group in
@@ -52,8 +57,19 @@ final class IndexerConcurrencyTests: XCTestCase {
         }
         let files = try count(q, "SELECT COUNT(*) FROM files")
         let alive = try count(q, "SELECT COUNT(*) FROM paths WHERE is_alive = 1")
-        XCTAssertEqual(files, 1, "identical content must share ONE row even under concurrency")
-        XCTAssertEqual(alive, n, "every path survived — none lost to a constraint failure")
+        XCTAssertEqual(files, n, "every file on disk is its own row, even under concurrency")
+        XCTAssertEqual(alive, n, "every path survived — none lost, none duplicated")
+        // The invariant that replaced content_hash UNIQUE. Serialization is what
+        // keeps it true: two reconciles interleaving could otherwise both attach
+        // to the same row.
+        let worst = try count(q, """
+            SELECT COALESCE(MAX(n), 0) FROM
+              (SELECT COUNT(*) AS n FROM paths WHERE is_alive = 1 GROUP BY file_id)
+            """)
+        XCTAssertEqual(worst, 1, "no row may end up holding two alive paths")
+        // Each got its OWN basename row rather than sharing one name.
+        let fts = try count(q, "SELECT COUNT(*) FROM files_fts")
+        XCTAssertEqual(fts, n)
     }
 
     /// 32 concurrent reconciles of DISTINCT content must produce 32 rows and 32
