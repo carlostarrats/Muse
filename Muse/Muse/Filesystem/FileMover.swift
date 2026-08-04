@@ -53,8 +53,10 @@ nonisolated enum FileMover {
             try FileManager.default.moveItem(at: url, to: target)
             return target
         } catch {
-            NSLog("[Muse] file rename failed %@ -> %@: %@",
-                  url.path, target.path, String(describing: error))
+            // Paths deliberately omitted: `NSLog` arguments are public in the
+            // unified system log, readable by other processes and captured in
+            // every sysdiagnose. See `FolderOps.createSubfolder`.
+            NSLog("[Muse] file rename failed: %@", String(describing: error))
             return nil
         }
     }

@@ -41,8 +41,15 @@ extension AppState {
                 let archive = try await BackupBuilder.build(
                     queue: queue, roots: roots,
                     createdAt: Int64(Date().timeIntervalSince1970), appVersion: version)
-                let data = try BackupDocument.encode(archive)
-                try data.write(to: dest, options: .atomic)
+                // Encode + write OFF the main actor. This `Task` inherits
+                // AppState's MainActor isolation, so the JSON encode of a whole
+                // library — tens of MB for a real collection — and the disk
+                // write both landed on the main thread, freezing the app after
+                // the save panel had already closed.
+                try await Task.detached(priority: .userInitiated) {
+                    let data = try BackupDocument.encode(archive)
+                    try data.write(to: dest, options: .atomic)
+                }.value
             } catch {
                 print("[Backup] export failed: \(error)")
                 backupError = String(localized: "The backup couldn’t be saved. Check that the location is writable and has enough free space, then try again.")
@@ -60,14 +67,24 @@ extension AppState {
         }
         panel.message = String(localized: "Choose the Muse backup file you exported on your other Mac.")
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            let data = try Data(contentsOf: url)
-            let archive = try BackupDocument.decode(data)
-            reconnectModel = ReconnectModel(archive: archive)
-            reconnectShown = true
-        } catch {
-            print("[Backup] restore load failed: \(error)")
-            backupError = String(localized: "That file couldn’t be opened as a Muse backup. It may be the wrong file, or damaged.")
+        // Read + JSON-decode OFF the main actor. A `.muselibrary` describes a
+        // whole library — every file's tags, note, edit stack, versions and the
+        // LUT blobs — so it is tens of MB of JSON for a real collection, and
+        // decoding it inline froze the app between the panel closing and the
+        // wizard appearing, which reads as a hang with nothing on screen.
+        Task { [weak self] in
+            do {
+                let archive = try await Task.detached(priority: .userInitiated) {
+                    let data = try Data(contentsOf: url)
+                    return try BackupDocument.decode(data)
+                }.value
+                guard let self else { return }
+                self.reconnectModel = ReconnectModel(archive: archive)
+                self.reconnectShown = true
+            } catch {
+                print("[Backup] restore load failed: \(error)")
+                self?.backupError = String(localized: "That file couldn’t be opened as a Muse backup. It may be the wrong file, or damaged.")
+            }
         }
     }
 }

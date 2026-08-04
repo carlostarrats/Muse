@@ -390,7 +390,12 @@ final class AnalyzePipeline: ObservableObject {
                                                   tagsAuthoritative: tagsAuthoritative)
                 try SidecarStore.write(out, forAsset: url)
             }
-            catch { print("[AnalyzePipeline] sidecar write failed for \(url.lastPathComponent): \(error)") }
+            catch {
+                // Filename omitted on purpose — this print reaches the unified
+                // log, and a user's filenames don't belong there. See
+                // `FolderOps.createSubfolder`.
+                print("[AnalyzePipeline] sidecar write failed: \(error)")
+            }
         }.value
     }
 

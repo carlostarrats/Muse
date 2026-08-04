@@ -2,7 +2,12 @@ import Foundation
 import CoreGraphics
 import ImageIO
 
-enum PaletteExtractor {
+// `nonisolated`: pure arithmetic over pixels, called from the analysis pass.
+// Without the marker it inherits the module's default MainActor isolation, and
+// `weightedPalette(image:)` — which resamples the whole decoded raster down to
+// 32×32 before clustering — measured 22 ms per 4096×2731 image ON THE MAIN
+// THREAD, once per analyzed photo.
+nonisolated enum PaletteExtractor {
     /// Deterministic k-means over RGB pixels; returns hex strings sorted by
     /// cluster size, capped at 6.
     static func kmeansHex(pixels: [(Double, Double, Double)], k: Int, seed: UInt64) -> [String] {

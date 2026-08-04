@@ -143,6 +143,7 @@ are the load-bearing reference artifacts.
 | Polish 32 — **HDR gain maps** (one `HDRDecode` seam; 10-bit PQ HEIC thumbnail cache; headroom through the edit chain; headroom-aware histogram/clipping; byte-copy unedited exports + gain-map HEIC on macOS 15+; audit check HDR-1) | ✅ built + tested (2,002), **runtime OPEN** — needs a real gain-map HEIC on an EDR display, plan in `FEATURE-LEDGER.md` | `feat/next-153` |
 | Polish 33 — **editor workspace** (the 12 cards become a persisted per-column ordered list + hidden set; View ▸ Editor Workspace ▸ Default Layout / Customize Modules / Reorder Modules; drag-reorder within and across columns reusing the sidebar's `ReorderMath`, plus VoiceOver move actions; **single column is NOT a mode** — it's the state where a column is empty; canvas insets follow the cards while the chrome row stays pinned; `EditorView` 1,682 → 665 lines across 6 new siblings) | ✅ built + tested (2,097), audit 15/15, 17 drive tests; **reviewed round 12** — 7 findings in its own work incl. a hand-stepped animator that stepped an already-settled value (the promised glide did nothing) and a clipping guard that would have passed on its own bug. **The DRAG is still unverified — XCUITest can't drive a SwiftUI DragGesture**; see `FEATURE-LEDGER.md` Part 4 | `feat/next-155` |
 | Polish 35 — **per-file identity** (v24 + v25; a file on disk is the unit, not its bytes — `content_hash` loses UNIQUE, every alive path gets its own row, copies INHERIT and then diverge; `InheritDonor`, `AnalysisReuse`, per-file sidecar names, per-occurrence backup membership; the split/collision/`unionTags`/`inheritVisionTags`/`carryAll` machinery deleted) | ✅ built + tested, audit 17/17; **runtime CONFIRMED in the real library** — v24+v25 applied on launch, the twelve `.ARW` copies are twelve rows each searchable by its own name, library-wide max-alive-paths-per-file is 1. Still unwatched by a human: editing one copy and seeing the other eleven hold still | `feat/next-155` |
+| **Review round 15 — whole-codebase QA** (2026-08-04; ran the lens registry + 6 new lenses). 12 findings fixed: default-MainActor isolation silently pinning the analysis tail (**22 ms/image, measured**) and the backup codec to the main thread; `.atomic` export/import writes that could overwrite a user's file; unvalidated `edit_luts` `(size, blob)` from a restored archive reaching Core Image; the geometry render stage never clamping; `NSPhotoLibraryUsageDescription` on the wrong target; user paths in the unified system log; a 64 MB `.cube` parse on main. 4 Part 2 lenses closed. | ✅ audit **20/20** (3 new checks, negative-tested), suite **2,167**, Release warning-free | `feat/next-155` |
 | Polish 34 — **leaving the editor** (closing from Edit FLIES home from the editor's own rect instead of cutting — `HeroStage.closeTakeoff` + a named coordinate space; the editor's flat backdrop fades rather than revealing the Preview wash; the grid keeps its staggered converge, and `AppState.editorActive`/`viewerCutOut` are deleted with it. Plus the bug that blocked it: **Preview showed pre-edit pixels** because the mounted stage's decode was keyed on the URL alone) | ✅ built + tested (2,097), audit 15/15, Release warning-free; **owner-confirmed in the running app** (both the stale-pixel fix and the motion). Close-from-Edit straight after a CROP flies the uncropped photo and it resizes on landing — owner reviewed and ACCEPTED as normal-feeling, don't re-file (`FEATURE-LEDGER.md` Part 5) | `feat/next-155` |
 
 > **Polish 29 + 30 were MERGED TO `main` on 2026-08-02** (fast-forward from
@@ -232,11 +233,12 @@ are the load-bearing reference artifacts.
 > `docs/new-build/REVIEW-LENSES.md` before starting any review**: it lists every
 > lens ever run plus the ones not yet run, so a round means "run the registry",
 > and static review is DONE when the unrun list is empty and the audit is green.
-> **Run `./scripts/audit-invariants.sh` (15 checks, all negative-tested) before
+> **Run `./scripts/audit-invariants.sh` (20 checks, all negative-tested) before
 > any commit** — it mechanizes the durable rules a grep can enforce (AV
 > no-network, QuickLook exclusion, the four network paths, remote-body bounds,
 > `Int(exactly:)`, trash-not-unlink, the `OutputRender` choke point, decode
-> budgets, Debug entitlements, `Editing/` neutrality, `Float16` arch guard, HDR hard-clip). It
+> budgets, Debug entitlements, `Editing/` neutrality, `Float16` arch guard, HDR hard-clip,
+> per-file identity, overwrite-safe export writes, PhotoKit purpose string). It
 > is a shell script, NOT an XCTest, on purpose: an in-suite grep test SKIPS here,
 > since the test host is the sandboxed app and this checkout is in `~/Documents`.
 > Round 7's one real finding: **Spec 03 §5 "region similarity" was specified and
@@ -310,7 +312,7 @@ must-not-break rules distilled from those sessions live in
 
 ### Durable constraints & gotchas (DO NOT BREAK)
 
-**The full set of 187 rules lives in `docs/durable-constraints.md`. READ THE
+**The full set of 198 rules lives in `docs/durable-constraints.md`. READ THE
 RELEVANT SECTION BEFORE ANY NON-TRIVIAL CHANGE** — each one is hard-won, and
 re-introducing it re-introduces a shipped bug. Sections there:
 

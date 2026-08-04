@@ -505,6 +505,66 @@ report "PFI-2" "content_hash is not UNIQUE outside the frozen v1 migration" "$v"
     "identity is the file on disk; a UNIQUE content_hash re-welds copies together"
 
 echo
+echo "Writes that could destroy a user's file"
+echo "----------------------------------------------------------------------"
+
+# ---------------------------------------------------------------------------
+# EXP-1 — a file Muse writes INTO A FOLDER THE USER CHOSE must not be written
+#         with `.atomic`.
+#
+# THE BUG: `ExportPipeline.collisionSafeURL` promises in its own comment that
+# "an export can never overwrite a file the user already has — the one way this
+# feature could destroy data". It picks a name that did not exist WHEN IT
+# LOOKED; the write happens later, and `.atomic` replaces whatever is at the
+# path by then without a word. `.withoutOverwriting` fails that one file
+# instead, which every one of these call sites already reports.
+#
+# Scoped to Export/ and Import/ — the paths that write into a user-chosen
+# destination. Muse's own container (sidecars, caches, the trace file, the
+# archive the save panel just named) is a different case and legitimately
+# atomic.
+# ---------------------------------------------------------------------------
+v="$(scan 'write\(to:[^)]*options:[^)]*\.atomic' Muse/Muse/Export Muse/Muse/Import)"
+report "EXP-1" "no .atomic write into a user-chosen destination" "$v" \
+    "collisionSafeURL's name is a moment old; .atomic silently replaces the file that landed there"
+
+# ---------------------------------------------------------------------------
+# EXP-2 — `.atomic` and `.withoutOverwriting` must never be combined.
+#
+# Foundation TRAPS on the pair ("withoutOverwriting is not supported with
+# atomic") — verified by running it. So the obvious way to "harden" an atomic
+# write, by adding the exclusive flag beside it, crashes the app instead. This
+# check exists because EXP-1 actively invites that edit.
+# ---------------------------------------------------------------------------
+v="$(scan '\[\s*\.atomic\s*,\s*\.withoutOverwriting|\[\s*\.withoutOverwriting\s*,\s*\.atomic' Muse/Muse)"
+report "EXP-2" ".atomic is never combined with .withoutOverwriting" "$v" \
+    "Foundation fatalErrors on the combination — this would crash, not harden"
+
+echo
+echo "Privacy-sensitive APIs vs. their purpose strings"
+echo "----------------------------------------------------------------------"
+
+# ---------------------------------------------------------------------------
+# TCC-1 — if the app calls PhotoKit, the APP's Info.plist must carry
+#         NSPhotoLibraryUsageDescription.
+#
+# THE BUG: the string was set as an INFOPLIST_KEY_ build setting on
+# MuseShareExtension — a target containing no Photos code at all — while the
+# app that calls `PHPhotoLibrary.requestAuthorization` (File ▸ Import ▸ Apple
+# Photos) shipped without one. A purpose string on the wrong target looks
+# present in a project-wide grep, which is exactly why this checks the two
+# things TOGETHER rather than either alone.
+# ---------------------------------------------------------------------------
+v=""
+if grep -rq --include='*.swift' -E 'PHPhotoLibrary|PHAsset' Muse/Muse 2>/dev/null; then
+    if ! grep -qE '<key>NSPhotoLibraryUsageDescription</key>' Muse/Info.plist 2>/dev/null; then
+        v="Muse/Muse calls PhotoKit but Muse/Info.plist has no NSPhotoLibraryUsageDescription"
+    fi
+fi
+report "TCC-1" "PhotoKit use is matched by a purpose string on the APP target" "$v" \
+    "a usage string on a target that never calls the API protects nothing"
+
+echo
 echo "======================================================================"
 if [ "$FAILURES" -eq 0 ]; then
     green "$CHECKS checks, all green."

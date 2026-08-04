@@ -10,7 +10,7 @@ struct IntelTag: Equatable {
 /// The raster-derived scalars that land in `photo_traits`. Carried through
 /// `TaggerOutput` so the analyze pass writes them inside its own guarded
 /// transaction rather than re-decoding the file.
-struct TraitFields {
+nonisolated struct TraitFields {
     var faceCount: Int
     var largestFaceFrac: Double?
     var faceQuality: Double?
@@ -51,7 +51,7 @@ struct TaggerOutput {
     var decodedImage: CGImage?
 }
 
-protocol Tagger {
+nonisolated protocol Tagger {
     var modelVersion: String { get }
     func analyze(url: URL) async -> TaggerOutput?
 }

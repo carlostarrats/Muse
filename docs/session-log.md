@@ -6,6 +6,67 @@ the durable rules + a compact index live in `CLAUDE.md`. Nothing here is
 load-bearing for a fresh session beyond what that index already surfaces;
 read an entry when you need the full "why" behind a specific change.
 
+### Review round 15 — a whole-codebase QA pass — 2026-08-04 (on `feat/next-155`)
+
+Owner asked for a broad review — "health, architecture, security, structure,
+best practice, speed, bugs, leakage" — and to loop until green. Ran the standing
+protocol from `docs/new-build/REVIEW-LENSES.md`: audit first (17/17 green,
+suite 2,146), then the unrun lenses, then whatever new ones the work suggested.
+
+Six new lenses, twelve findings, all fixed. The full narrative is in the
+registry's Round 15 section; three things belong here.
+
+**The expensive one was invisible to reading.** This project sets
+`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, so a declaration that forgets
+`nonisolated` is main-actor isolated — with no `await` at the call site to
+notice, no warning, and no test that can see it. `VisionServices` is carefully
+`nonisolated` and its Vision work genuinely runs off-main. `VisionTagger`, which
+calls it, was never marked, so everything AFTER the `await` came back to the main
+thread: the palette k-means, the classification curation, the colour naming, the
+style classify. Measured at **22 ms per 4096×2731 image, once per analyzed
+photo**. `BackupDocument` — a pure JSON codec — had the same gap, pinning both
+the export encode and the restore decode of a whole-library archive to main.
+Since there is no runtime symptom to assert on, the regression guard is
+COMPILE-TIME (`AnalysisIsolationTests`): the helpers are called from a
+`nonisolated` context with no `await`, so a regression stops the file compiling.
+
+**Two findings were data-safety, and one of them had a trap in the fix.**
+`collisionSafeURL` promises "an export can never overwrite a file the user
+already has — the one way this feature could destroy data", and then wrote with
+`.atomic`, which overwrites. Rather than argue about the window, all three flag
+combinations were RUN: `.atomic` replaces the file, `.withoutOverwriting`
+refuses, and `[.atomic, .withoutOverwriting]` **fatalErrors**. That last one is
+the trap — the intuitive way to harden an atomic write crashes the app — so it
+got its own audit check (`EXP-2`) aimed at the fix people will reach for.
+Separately, `edit_luts` rows restored from a `.muselibrary` reach
+`CIColorCubeWithColorSpace`, which reads `size³ × 4` floats and validates
+neither the size nor the blob; a mismatched pair is an out-of-bounds read inside
+Core Image. Refused at `LutRegistry` (the render choke point) and dropped at the
+restore boundary.
+
+**And one check passed on its own violation.** `TCC-1` greps for
+`NSPhotoLibraryUsageDescription`; the negative test renamed the key to
+`…DescriptionXX`, which still contains the substring, and the check stayed
+green. Caught only because the negative test was actually run rather than
+assumed. Re-aimed at `<key>…</key>` and re-injected by deleting the key. Round
+12 already recorded that knowing about vacuous assertions doesn't prevent
+writing them — this is the third round in a row to demonstrate it.
+
+Also fixed: the geometry render stage, the only one of eleven that never called
+`.clamped()` (a degenerate crop from a foreign preset renders an EMPTY extent);
+`NSPhotoLibraryUsageDescription` set on the share extension, which has no Photos
+code, while the app that calls PhotoKit had none; three `NSLog`/`print` sites
+publishing user folder and file names into the unified system log, where `%@`
+arguments are public and every sysdiagnose captures them; and
+`LutStore.importCubes`, which parsed up to 64 MB of `.cube` text on the main
+actor. Two Part 2 lenses closed — TOCTOU on user paths (swept all 34
+`fileExists` sites) and the two-instance GUI-testing hazard, which is now a
+mechanical guard in the drive suites, negative-tested live against a second
+running Muse.
+
+**Ended at:** audit 20/20 (three new checks, each negative-tested), unit suite
+2,167 green, Release build warning-free.
+
 ### Leaving the editor — 2026-08-03 (on `feat/next-155`)
 
 Started as a question, not a task: *"can closing out from edit borrow the closing

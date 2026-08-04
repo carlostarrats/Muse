@@ -278,3 +278,31 @@ the tone equalizer.
 
 **Suggested trigger, if any:** post-release usage showing people editing in Muse
 rather than forking out. Until then this stays parked.
+
+---
+
+## `ClipEngine.embedImage` preprocesses on the main actor (found 2026-08-04, round 15)
+
+**Measured**, not suspected: `ClipPreprocess.pixelBuffer(from:side:)` takes
+**6 ms per 4096×2731 image**, and CLIP indexing runs it once per photo across a
+whole library. `ClipPreprocess` is already `nonisolated`; what keeps the work on
+main is `ClipEngine` itself, which is main-actor isolated because it holds the
+loaded `MLModel` encoders and the tokenizer.
+
+**Why it wasn't just fixed in round 15.** Wrapping only the preprocess in a
+`Task.detached` compiles, but `CVPixelBuffer` is not `Sendable`, so it produces
+five Swift-6 concurrency warnings — trading a measured 6 ms for a real hole in
+the "Release build is warning-free" rule. That is the wrong trade to make
+silently.
+
+**What a real fix looks like:** move preprocess AND prediction together behind
+an actor, so the non-Sendable buffer never crosses an isolation boundary — it is
+created and consumed on the same executor. `MLModel` is non-Sendable too, which
+is the same reason `ClipEngine` is main-isolated today, so the actor has to own
+both the encoders and the buffer.
+
+**Scale first.** 6 ms × library size is only worth an actor refactor if CLIP
+indexing is actually slow in practice; a 2,000-photo library is ~12 s of
+cumulative main-thread time spread across a background pass. Measure the real
+pass before spending the change. The generalised lens is in `REVIEW-LENSES.md`
+Part 2: *a non-Sendable type that wants to move off-main*.

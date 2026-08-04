@@ -7,7 +7,11 @@
 
 import Foundation
 
-enum BackupDocument {
+// `nonisolated`: a pure codec with no UI. Without this it inherits the module's
+// default MainActor isolation, which silently pins every encode/decode of a
+// whole-library archive — tens of MB of JSON — to the main thread, however far
+// off-main the caller thought it was.
+nonisolated enum BackupDocument {
     static let fileExtension = "muselibrary"
 
     enum DocError: Error { case unreadable, unsupportedSchema(Int) }

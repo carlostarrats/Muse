@@ -2,7 +2,9 @@ import Foundation
 
 /// Coarse "what kind of image is this" from Vision labels + metadata.
 /// Deterministic rule ladder — first match wins.
-enum StyleKind {
+// `nonisolated`: pure classification over values already in hand, called
+// from the analysis pass. See `PaletteExtractor` for why the marker matters.
+nonisolated enum StyleKind {
     static let screenAspects: [Double] = [16.0/10, 16.0/9, 4.0/3, 19.5/9]
 
     static func classify(labels: [String: Float], width: Int?, height: Int?,

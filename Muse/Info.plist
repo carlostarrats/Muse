@@ -35,6 +35,14 @@
 			</array>
 		</dict>
 	</array>
+	<!-- Required by TCC for the File ▸ Import ▸ Apple Photos source, which calls
+	     PHPhotoLibrary.requestAuthorization. This key MUST live on the target
+	     that calls PhotoKit — it was previously set only as an
+	     INFOPLIST_KEY_ build setting on MuseShareExtension, which contains no
+	     Photos code at all, so the app that actually asks for the library
+	     shipped without a purpose string. -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Muse reads your Photos library only to copy the photos you choose into a folder you choose.</string>
 	<key>NSUbiquitousContainers</key>
 	<dict>
 		<key>iCloud.com.tarrats.Muse</key>

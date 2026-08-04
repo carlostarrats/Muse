@@ -40,6 +40,17 @@ nonisolated enum LutRegistry {
               let row = try? queue.read({ db in try EditLutRow.fetchOne(db, key: id) }) ?? nil
         else { return nil }
 
+        // The stored size and blob are handed to `CIColorCubeWithColorSpace` as
+        // an unchecked pair, and it reads size³ × 4 floats out of the buffer. A
+        // restored `.muselibrary` writes `edit_luts` rows with a plain INSERT,
+        // so a hand-edited or corrupt archive can declare a size its blob does
+        // not cover — an out-of-bounds read inside Core Image. Refusing here
+        // makes the referencing stack UNRENDERABLE by the same route a missing
+        // row does (`EditRenderer.canRender` calls this), which means the
+        // ORIGINAL renders — never a partial stack.
+        guard CubeLUT.isRenderableStoredCube(size: row.size, byteCount: row.data.count)
+        else { return nil }
+
         let rgb: [Float] = row.data.withUnsafeBytes { raw in
             Array(raw.bindMemory(to: Float.self))
         }

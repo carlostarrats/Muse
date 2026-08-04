@@ -278,6 +278,16 @@ final class BackupEditRoundTripTests: XCTestCase {
 
     // MARK: - Edit assets
 
+    /// A blob that really is `size³ × 3` float32s, which is what an imported
+    /// `.cube` produces and what `CIColorCubeWithColorSpace` will read. These
+    /// fixtures used to pass 2–3 loose bytes alongside `size: 2`; the applier
+    /// now drops a pair that can't describe a cube, and a fixture that could
+    /// never exist is a poor place to assert restore behaviour from.
+    private static func cube(size: Int, fill: Float) -> Data {
+        let floats = [Float](repeating: fill, count: size * size * size * 3)
+        return floats.withUnsafeBufferPointer { Data(buffer: $0) }
+    }
+
     /// LUT rows are content-addressed and IMMUTABLE — a re-restore can never
     /// rewrite their bytes, and presets conflict only on their own UUID.
     func testApplyEditAssetsIsIdempotentAndNeverRewritesLutBytes() async throws {
@@ -285,7 +295,7 @@ final class BackupEditRoundTripTests: XCTestCase {
         try Database.makeMigrator().migrate(q)
         try await q.write { db in
             try db.execute(sql: "INSERT INTO edit_luts (id, name, size, data, created_at) VALUES ('lh', 'Local Name', 2, ?, 1)",
-                           arguments: [Data([1, 1, 1])])
+                           arguments: [Self.cube(size: 2, fill: 1)])
         }
         let archive = BackupArchive(
             schema: 1, created_at: 0, app_version: nil, roots: [], files: [],
@@ -293,7 +303,7 @@ final class BackupEditRoundTripTests: XCTestCase {
             edit_presets: [BackupEditPreset(id: "p1", name: "Warm", stack: "{}",
                                             created_at: 1, updated_at: 2)],
             edit_luts: [BackupLut(id: "lh", name: "Archive Name", size: 2,
-                                  data: Data([9, 9, 9]))])
+                                  data: Self.cube(size: 2, fill: 9))])
 
         let ids = try await ReconnectApplier.applyEditAssets(archive, queue: q)
         XCTAssertEqual(ids, ["lh"])
@@ -304,7 +314,7 @@ final class BackupEditRoundTripTests: XCTestCase {
             XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM edit_presets"), 1)
             XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM edit_luts"), 1)
             let lut = try XCTUnwrap(EditLutRow.fetchOne(db))
-            XCTAssertEqual(lut.data, Data([1, 1, 1]))      // local bytes stand
+            XCTAssertEqual(lut.data, Self.cube(size: 2, fill: 1))   // local bytes stand
             XCTAssertEqual(lut.name, "Local Name")
         }
     }
@@ -317,11 +327,12 @@ final class BackupEditRoundTripTests: XCTestCase {
             collections: [], stars: [],
             edit_presets: [BackupEditPreset(id: "p1", name: "Warm", stack: "{}",
                                             created_at: 1, updated_at: 2)],
-            edit_luts: [BackupLut(id: "lh", name: "Kodak", size: 2, data: Data([4, 5]))])
+            edit_luts: [BackupLut(id: "lh", name: "Kodak", size: 2,
+                                  data: Self.cube(size: 2, fill: 4))])
         _ = try await ReconnectApplier.applyEditAssets(archive, queue: q)
         try await q.read { db in
             XCTAssertEqual(try EditPresetRow.fetchOne(db)?.name, "Warm")
-            XCTAssertEqual(try EditLutRow.fetchOne(db)?.data, Data([4, 5]))
+            XCTAssertEqual(try EditLutRow.fetchOne(db)?.data, Self.cube(size: 2, fill: 4))
         }
     }
 
@@ -333,5 +344,30 @@ final class BackupEditRoundTripTests: XCTestCase {
                                     files: [], collections: [], stars: [])
         let ids = try await ReconnectApplier.applyEditAssets(archive, queue: q)
         XCTAssertTrue(ids.isEmpty)
+    }
+
+    /// A `.muselibrary` is a file the user picked off disk, and its `edit_luts`
+    /// entries go into the table by a plain INSERT — so it is the one way a
+    /// `(size, blob)` pair that does NOT describe a cube can enter. The render
+    /// path hands that pair to `CIColorCubeWithColorSpace`, which reads
+    /// size³ × 4 floats out of the buffer on trust.
+    func testApplyEditAssetsDropsALutWhoseSizeDoesNotMatchItsBlob() async throws {
+        let q = try DatabaseQueue()
+        try Database.makeMigrator().migrate(q)
+        let archive = BackupArchive(
+            schema: 1, created_at: 0, app_version: nil, roots: [], files: [],
+            collections: [], stars: [],
+            edit_presets: nil,
+            // Blob for a 2³ cube, row claiming 16³.
+            edit_luts: [BackupLut(id: "bad", name: "Bad", size: 16,
+                                  data: Self.cube(size: 2, fill: 0)),
+                        BackupLut(id: "good", name: "Good", size: 2,
+                                  data: Self.cube(size: 2, fill: 0.5))])
+        let ids = try await ReconnectApplier.applyEditAssets(archive, queue: q)
+        XCTAssertEqual(ids, ["good"])
+        try await q.read { db in
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM edit_luts"), 1)
+            XCTAssertEqual(try EditLutRow.fetchOne(db)?.id, "good")
+        }
     }
 }

@@ -70,6 +70,15 @@ actor ClipEngine {
     /// 512-d, L2-normalized. nil when the model isn't installed or encode fails.
     func embedImage(_ cgImage: CGImage) async -> [Float]? {
         guard ensureLoaded(), let model = imageEncoder else { return nil }
+        // NOTE: this preprocess runs ON THE MAIN ACTOR — `ClipEngine` holds the
+        // loaded encoders, so the class is main-isolated, and this is a pure
+        // resample of the full raster into a 224×224 buffer measured at 6 ms
+        // per 4096×2731 image, once per photo across a whole-library index.
+        // It is deliberately NOT wrapped in a `Task.detached`: `CVPixelBuffer`
+        // is not `Sendable`, so hopping just this step off-main trades a
+        // measured 6 ms for a real concurrency warning. Fixing it properly
+        // means moving preprocess AND prediction together behind an actor —
+        // see `docs/possible-updates.md`.
         guard let buffer = ClipPreprocess.pixelBuffer(from: cgImage,
                                                       side: ClipModel.current.imageInputSide)
         else { return nil }

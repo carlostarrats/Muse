@@ -107,6 +107,13 @@ Rounds 1–3 are recorded in `REVIEW-FINDINGS.md` and `FEATURE-LEDGER.md`; round
 | **Order dependence introduced by a change** | **13** | Clean, but newly load-bearing: an external rename is only adopted (rather than forked) because `PathReconciler.reconcile` marks the old path dead BEFORE `scheduleIndexing` runs. Verified. Degrades safely if that ever inverts — the edits still inherit, leaving a transient orphan row that `pruneUnreachable` collects after its 180-day window. |
 | **A DELETE whose safety lives only in a comment** | **14** (2026-08-03) | 3 claims untested on v24's stranded-row sweep. All hold — but running the negative **falsified the stated reason**: removing the `parent_dir IS NOT NULL` guard changes nothing, because SQL's three-valued logic already spares NULL rows (`NULL <> '/A'` is NULL, not true). The comment credited the guard; the comment was wrong. Corrected, guard kept as belt-and-braces, and the test re-aimed at the rewrite that WOULD destroy tags (`COALESCE(parent_dir,'')`), verified to fail against it. **A negative test checks your explanation, not just your code.** |
 | Strings orphaned by the round's own edit | 12 | 1 finding — a reworded accessibility hint left its old key in the catalog |
+| **A stored pair the consumer reads as ONE unit** | **15** (2026-08-04) | 1 finding — `edit_luts` hands `(size, blob)` to `CIColorCubeWithColorSpace`, which reads size³ × 4 floats and checks neither. The importer guarantees the pair; a restored `.muselibrary` writes the row by plain INSERT and does not |
+| **Clamp coverage at the RENDER STAGE, not the param struct** | **15** | 1 finding — every stage called `.clamped()` except geometry, which took its params raw. Crop, `quarterTurns` and `straightenDegrees` all reached the renderer unbounded; a degenerate crop renders an EMPTY extent |
+| **Default-actor isolation on a pure helper** | **15** | 4 findings. `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` means a helper that just forgets `nonisolated` is main-isolated with nothing at the call site to show it. `VisionServices` did its decode off-main and then the whole tail of `VisionTagger.analyze` resumed ON MAIN — **measured 22 ms per 4096×2731 image, once per analyzed photo**. Same for `BackupDocument`, so both the export encode and the restore decode of a whole-library archive were pinned to main |
+| **The write FLAG behind a no-overwrite promise** | **15** | 1 finding — `collisionSafeURL` promises "an export can never overwrite a file the user already has"; the write used `.atomic`, which does. Verified by running all three flag combinations: `.atomic` replaces, `.withoutOverwriting` refuses, and **the pair fatalErrors** — so the obvious hardening edit crashes the app |
+| **A purpose string on the wrong TARGET** | **15** | 1 finding — `NSPhotoLibraryUsageDescription` was an `INFOPLIST_KEY_` on MuseShareExtension, which contains no Photos code, while the app that calls `PHPhotoLibrary.requestAuthorization` shipped without one. A project-wide grep finds it and says nothing is wrong |
+| **User paths in the unified system log** | **15** | 3 findings — `NSLog`'s `%@` arguments are PUBLIC in the unified log, readable by other processes and captured in every sysdiagnose. Folder and file names were going there on every rename/create failure, from an app whose privacy label is "Data Not Collected" |
+| Can this assertion fail? (run the negative), on the ROUND'S OWN audit checks | 15 | 1 finding, caught in the act — `TCC-1` matched the purpose string as a SUBSTRING, and the injected violation renamed the key to `…DescriptionXX`, which still contains it. The check passed on its own violation. Re-aimed at `<key>…</key>` and re-injected by DELETING the key |
 
 ## Part 2 — lenses NOT yet run
 
@@ -115,13 +122,14 @@ an unrun lens on the list is worth more than a good idea that evaporates.
 
 | Lens | Why it might matter |
 |---|---|
-| Sparkle update path integrity on THIS branch | The appcast/EdDSA path has not been re-reviewed since Spec 01 added `Commerce/`. |
-| TOCTOU on user paths | A file swapped between the `fileExists` check and the read. Round 5 covered prefixes, not timing. |
-| Long-session memory growth (retain cycles, not allocation shape) | Round 6 checked allocation *shape*; SwiftUI/Combine retain cycles are a different failure. |
-| Preference-key lifecycle (renamed/removed ids left in a stored set) | `editorExpandedSections2` keeps whatever ids a user has stored; removing a section leaves a dead id there forever. Harmless today, but nothing prunes. **Round 12 ran this against the NEW `editorWorkspace` key and it is clean by construction** — the DTO can only ever write ids that exist in the enum, and the loader drops unknown ones, so a stale id is read once and gone. The older key is still unpruned. |
+| ~~Sparkle update path integrity on THIS branch~~ | **RUN, round 15 — clean.** Feed is HTTPS, `SUPublicEDKey` present, `SUEnableInstallerLauncherService` paired with the two mach-lookup entitlements the sandboxed installer needs, and there is **no `NSAppTransportSecurity` override anywhere** — so ATS is enforced and the feed cannot silently downgrade. `Commerce/` adds no updater surface. |
+| ~~TOCTOU on user paths~~ | **RUN, round 15.** All 34 `fileExists` sites swept. The `fileExists` → `moveItem`/`copyItem` pairs (FolderOps, FileMover, AppState+FileOps, the export passthrough) are SAFE by construction — those APIs refuse an existing destination, so the race loses to an error, never to data. The `fileExists` → `write(to:.atomic)` pairs were NOT: three sites fixed, see the write-flag lens above. `ApplePhotosImportModel.collisionName` consults only an in-memory set and never the disk, but its suffix branch is unreachable behind the `fileExists` check above it — left alone, noted here so it isn't re-derived. |
+| ~~Long-session memory growth (retain cycles, not allocation shape)~~ | **RUN, round 15 — clean.** Every Combine `sink` on `AppState` and `WorkThrottleStore` captures `[weak self]`; the one `Timer.scheduledTimer` does too; both `ToolbarFade` `NotificationCenter` observers are static and install-once (as round 7 found), and the three `AppState` observers are `[weak self]` on a singleton that lives for the process anyway. |
+| A non-Sendable type that WANTS to move off-main | `ClipEngine.embedImage` runs a 6 ms-per-image preprocess on the main actor (measured). It can't simply be wrapped in a `Task.detached` because `CVPixelBuffer` isn't `Sendable` — moving it needs preprocess and prediction to go behind an actor together. Recorded in `docs/possible-updates.md`; the shape generalises to any main-isolated holder of non-Sendable resources. |
+| ~~Preference-key lifecycle (renamed/removed ids left in a stored set)~~ | **RUN, round 15 — harmless by construction, closing it.** `editorExpandedSections2` is read ONLY as `expanded.contains(<a known id>)` — at the disclosure bindings and in `updateStatsVisibility`. Nothing ever iterates the set, so a stale id is never queried and costs a few bytes in UserDefaults, nothing more. Round 12 had already shown the newer `editorWorkspace` key clean for a different reason (its loader drops unknown ids). Neither key needs a pruner. |
 | A re-key that orphans data instead of migrating it | **Round 11 found one.** Changing a cache/derived-data KEY makes the old entries unreachable, not gone — and unreachable data still counts against a cap. Any key or format version bump needs something that deletes the old shape. **Round 13 re-ran this against the sidecar rename (`<hash>.json` → `<hash>__<basename>.json`) and it does NOT apply: the legacy name is still READ as a fallback, so the old shape stays reachable by design, and nothing enumerates or parses `.muse` filenames. Deliberately not deleted — see the durable-constraints note.** |
 | Data staged outside what the cap measures | **Round 11 found one.** A directory renamed aside for background deletion is a SIBLING of the cache root, so `enforceDiskCap` — which measures only inside the root — can never reclaim it if a crash strands it. |
-| Two-instance runs during GUI testing | The 2026-08-02 round hit a 21-failure suite caused by a developer-launched instance racing the test's own; GRDB's `.immediateError` means the loser gets no window. Worth a mechanical guard rather than a note. |
+| ~~Two-instance runs during GUI testing~~ | **CLOSED, round 15.** `MuseUITests/SingleInstanceGuard.swift` fails in `setUp` — before `app.launch()` — naming the offending pid and saying outright that this is a test-environment problem, not a defect in whatever fails next. Wired into all three drive suites. **Negative-tested live**: with a second Muse running it failed with exactly that message; with none, the same test passed. |
 
 **Round 9 — the drive suites' own fragility has now cost three rounds.** Every
 photo-opening test aimed itself with a fixed window fraction, `(0.55, 0.5)`.
@@ -301,7 +309,7 @@ wolf until they are ignored. These stay human:
 
 ## Appendix — the mechanized checks
 
-`scripts/audit-invariants.sh`, 14 checks. Each was a rule broken once, shipped,
+`scripts/audit-invariants.sh`, 20 checks. Each was a rule broken once, shipped,
 and paid for. Run it from the repo root; exit 0 means green.
 
 | ID | Rule |
@@ -320,6 +328,12 @@ and paid for. Run it from the repo root; exit 0 means green.
 | `ARCH-1` | `Float16` stays inside `#if arch(arm64)` — Intel must compile |
 | `DOC-1` | CLAUDE.md never claims work is unmerged that git says IS merged |
 | `DOC-2` | CLAUDE.md's named release tag is the newest real tag in git |
+| `HDR-1` | No sRGB render path that can't tone-map an HDR source |
+| `PFI-1` | The one-alive-path-per-file tests still exist |
+| `PFI-2` | `content_hash` is not UNIQUE outside the frozen v1 migration |
+| `EXP-1` | No `.atomic` write into a user-chosen destination (it overwrites) |
+| `EXP-2` | `.atomic` is never combined with `.withoutOverwriting` (Foundation traps) |
+| `TCC-1` | PhotoKit use is matched by a purpose string on the APP target |
 
 **Every check has been negative-tested**: verified green on a clean tree, then
 verified to FAIL when its violation is injected. A checker that has never failed
@@ -395,3 +409,71 @@ two per-frame allocations on the canvas and drag paths; reorder mode being
 mouse-only while its VoiceOver hint promised a drag; a window-resizing test that
 restored the frame only when it passed; and a localization key orphaned by
 rewording that same hint.
+
+---
+
+## Round 15 (2026-08-04) — the standing registry, plus six new lenses
+
+Ran against `feat/next-155`. The audit was green at 17/17 going in, and the
+unit suite at 2,146; both are the starting point, not the result.
+
+**The one worth remembering: `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` makes
+a forgotten keyword a performance bug with no visible cause.** This project
+opts every declaration into main-actor isolation unless it says `nonisolated`.
+The codebase knows that and marks its hot paths carefully — `VisionServices` is
+`nonisolated`, its Vision work genuinely runs off-main, and
+`HybridClusterer.cluster` is both `nonisolated func` AND wrapped in a
+`Task.detached` at the call site. But `VisionTagger`, which *calls*
+`VisionServices`, was never marked. So the decode, classify and OCR ran
+off-main exactly as designed, and then every line after the `await` — the
+palette k-means, the classification curation, the colour naming, the style
+classify — resumed on the main thread. Measured: **22 ms per 4096×2731 image,
+once per analyzed photo.**
+
+Nothing in the source shows it. There is no `await` at the call site to notice,
+no warning, no test that can observe it. It is invisible to reading and to the
+suite alike, which is why the fix is pinned by **compile-time** tests
+(`AnalysisIsolationTests`): each body calls the helpers from a `nonisolated`
+context with no `await`, so a regression stops the file compiling rather than
+failing an assertion. The same lens found `BackupDocument` — a pure JSON codec
+— main-isolated, which pinned both the export encode and the restore decode of
+a whole-library archive to the main thread no matter how far off-main the
+caller believed it had moved them.
+
+**The second: verify the flag, don't reason about it.** `collisionSafeURL`
+carries an unusually clear promise in its own comment — "an export can never
+overwrite a file the user already has — the one way this feature could destroy
+data" — and then the write used `.atomic`. Rather than argue about how narrow
+the window is, all three combinations were run:
+
+| flag | result |
+|---|---|
+| `.atomic` | no throw, existing file **replaced** |
+| `.withoutOverwriting` | throws, existing file intact |
+| `[.atomic, .withoutOverwriting]` | **fatalError** — "withoutOverwriting is not supported with atomic" |
+
+That third row is why `EXP-2` exists. The intuitive way to harden an atomic
+write is to add the exclusive flag beside it, and that edit crashes the app.
+A check that fires on the fix people will reach for is worth more than one that
+fires on the bug.
+
+**The third: a check can pass on its own violation, and mine did.** `TCC-1`
+greps for `NSPhotoLibraryUsageDescription`. The negative test renamed the key to
+`NSPhotoLibraryUsageDescriptionXX` — which still contains the string — and the
+check stayed green. Caught only because the negative test was actually run
+rather than assumed. Re-aimed at `<key>…</key>` and re-injected by deleting the
+key outright. Round 12 recorded that knowing about vacuous assertions does not
+prevent writing them; this is the third round in a row to prove it.
+
+**Also fixed:** the `edit_luts` `(size, blob)` pair, trusted from a restored
+archive into a Core Image filter that reads `size³ × 4` floats without checking
+either (refused at `LutRegistry`, the render choke point, AND filtered at the
+restore boundary); the geometry render stage, the only one of eleven that never
+called `.clamped()`; `NSPhotoLibraryUsageDescription` set on the share
+extension — which contains no Photos code — while the app that calls PhotoKit
+had none; three `NSLog`/`print` sites publishing user folder and file names to
+the unified system log; and `LutStore.importCubes`, which parsed up to 64 MB of
+`.cube` text on the main actor.
+
+**Ended at:** audit 20/20 (three new checks, all negative-tested), unit suite
+2,167 green, Release build warning-free.

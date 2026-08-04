@@ -361,7 +361,11 @@ nonisolated enum VisionServices {
     }
 }
 
-extension VisionResult {
+// `nonisolated` on the EXTENSION, not just the type: `VisionResult` is already
+// `nonisolated`, but an extension takes the module's default MainActor
+// isolation on its own, so `caption()` was main-actor-isolated while the struct
+// it extends was not.
+nonisolated extension VisionResult {
     /// Build a single caption string from all signals. Non-empty even when
     /// classification is sparse: falls back to "(no caption)" only if literally
     /// everything is empty.

@@ -62,8 +62,15 @@ enum FolderOps {
                 return .success(target)
             } catch {
                 let writable = FileManager.default.isWritableFile(atPath: parent.path)
-                NSLog("[Muse] createSubfolder failed at %@ (parent writable: %@): %@",
-                      target.path, writable ? "true" : "false", String(describing: error))
+                // No PATH in the message. `NSLog` writes to the unified system
+                // log, where its `%@` arguments are public — any other process,
+                // and every sysdiagnose, can read them. An app whose privacy
+                // label is "Data Not Collected" should not be publishing the
+                // names of a user's folders there. Which operation failed, and
+                // whether the parent was writable, is what makes this
+                // actionable; the path never was.
+                NSLog("[Muse] createSubfolder failed (parent writable: %@): %@",
+                      writable ? "true" : "false", String(describing: error))
                 if !writable { return .failure(.parentNotWritable) }
                 let ns = error as NSError
                 return .failure(.ioError(ns.localizedFailureReason ?? ns.localizedDescription))
@@ -99,8 +106,9 @@ enum FolderOps {
                 return .success(target)
             } catch {
                 let writable = FileManager.default.isWritableFile(atPath: parent.path)
-                NSLog("[Muse] rename failed %@ → %@ (parent writable: %@): %@",
-                      folder.path, target.path, writable ? "true" : "false", String(describing: error))
+                // Paths deliberately omitted — see createSubfolder above.
+                NSLog("[Muse] folder rename failed (parent writable: %@): %@",
+                      writable ? "true" : "false", String(describing: error))
                 if !writable || isPermissionDenied(error) { return .failure(.parentNotWritable) }
                 let ns = error as NSError
                 return .failure(.ioError(ns.localizedFailureReason ?? ns.localizedDescription))

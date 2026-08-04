@@ -195,7 +195,14 @@ final class ApplePhotosImportModel: ObservableObject {
             used.insert(name.lowercased())
             let finalURL = destination.appendingPathComponent(name)
             do {
-                try payload.data.write(to: finalURL, options: .atomic)
+                // `.withoutOverwriting`: the `fileExists` check above is a
+                // moment old, and an import writes into a folder the user
+                // chose — quite possibly one another app is also writing to.
+                // An atomic write would silently replace whatever landed there
+                // in between; this one fails that single photo instead, which
+                // the report already knows how to say. (Never pair this flag
+                // with `.atomic` — Foundation traps on the combination.)
+                try payload.data.write(to: finalURL, options: .withoutOverwriting)
                 return .written(finalURL)
             } catch {
                 return .failed

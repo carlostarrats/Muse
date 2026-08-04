@@ -39,6 +39,27 @@ nonisolated struct CubeLUT: Equatable, Sendable {
     static func hash(_ lut: CubeLUT) -> String {
         SHA256.hash(data: lut.canonicalData).map { String(format: "%02x", $0) }.joined()
     }
+
+    /// Does a STORED `(size, blob)` pair describe a cube that can actually be
+    /// rendered?
+    ///
+    /// `CIColorCubeWithColorSpace` is handed `inputCubeDimension` and
+    /// `inputCubeData` as an unchecked pair and reads `size³ × 4` floats out of
+    /// the buffer — so a row whose declared size outruns its blob is an
+    /// out-of-bounds read inside Core Image, not a bad-looking grade.
+    /// `CubeLUTParser` guarantees the pair matches for anything it imports, but
+    /// a `.muselibrary` archive is a file the user chose off disk and its
+    /// `edit_luts` entries land in the table by a plain INSERT. This is the
+    /// predicate that keeps the render path from trusting them.
+    ///
+    /// Deliberately expressed over BYTE COUNT rather than a `[Float]`, because
+    /// both callers hold the blob, not the decoded array. Overflow-safe: the
+    /// size ceiling is checked before the cube is ever taken.
+    static func isRenderableStoredCube(size: Int, byteCount: Int) -> Bool {
+        guard size >= 2, size <= CubeLUTParser.maxSize else { return false }
+        let entries = size * size * size * 3
+        return byteCount == entries * MemoryLayout<Float>.size
+    }
 }
 
 nonisolated enum CubeLUTParser {

@@ -211,7 +211,17 @@ nonisolated enum ReconnectApplier {
     static func applyEditAssets(_ archive: BackupArchive,
                                 queue: DatabaseQueue) async throws -> [String] {
         let presets = archive.edit_presets ?? []
-        let luts = archive.edit_luts ?? []
+        // A `.muselibrary` is a file the user picked off disk, and these rows go
+        // in by a plain INSERT — so the archive is the one place a `(size, blob)`
+        // pair that does NOT describe a real cube can enter the table. The render
+        // path hands the pair to `CIColorCubeWithColorSpace`, which reads
+        // size³ × 4 floats out of the buffer without checking. `LutRegistry`
+        // refuses such a row too, so this is belt-and-braces; the reason to do it
+        // HERE as well is that a row nobody can render is dead weight the user
+        // sees in the Looks browser and cannot explain.
+        let luts = (archive.edit_luts ?? []).filter {
+            CubeLUT.isRenderableStoredCube(size: $0.size, byteCount: $0.data.count)
+        }
         guard !presets.isEmpty || !luts.isEmpty else { return [] }
         let now = Int64(Date().timeIntervalSince1970)
         try await queue.write { db in

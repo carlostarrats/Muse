@@ -448,6 +448,35 @@ nonisolated struct CropRect: Codable, Equatable, Sendable {
     }
     static let full = CropRect(x: 0, y: 0, w: 1, h: 1)
     var isFull: Bool { self == .full }
+
+    /// The rect confined to the unit square, or nil when it does not describe a
+    /// usable crop.
+    ///
+    /// Every other parameter on a stack passes through a `clamped()` before it
+    /// reaches the renderer, because a stack is not always something this app
+    /// just produced — it also arrives decoded from a `.muselibrary` preset and
+    /// from a sidecar. The crop was the one field `GeometryParams.clamped()`
+    /// forwarded untouched, on the reasonable assumption that `CropDragMath`
+    /// wrote it. A zero or negative width survives that assumption into
+    /// `EditRenderer.applyGeometry`, where `cropped(to:)` yields an EMPTY
+    /// extent and the photo renders as nothing, and into
+    /// `appliedDisplaySize`, which is what the grid and the hero flight size
+    /// themselves from.
+    ///
+    /// Legitimate crops (inside 0…1, positive extent) are returned unchanged,
+    /// so this cannot re-key a single existing `stack_hash`.
+    func clampedToUnitSquare() -> CropRect? {
+        let x = min(max(x, 0), 1)
+        let y = min(max(y, 0), 1)
+        // Non-finite values can't survive JSON, but they CAN be built in
+        // memory; `min`/`max` propagate NaN rather than clamping it, so reject
+        // explicitly rather than letting one through as a "clamped" value.
+        guard x.isFinite, y.isFinite, w.isFinite, h.isFinite else { return nil }
+        let w = min(w, 1 - x)
+        let h = min(h, 1 - y)
+        guard w > 0, h > 0 else { return nil }
+        return CropRect(x: x, y: y, w: w, h: h)
+    }
 }
 
 nonisolated struct GeometryParams: Codable, Equatable, Sendable {
@@ -465,7 +494,8 @@ nonisolated struct GeometryParams: Codable, Equatable, Sendable {
     }
 
     func clamped() -> GeometryParams {
-        GeometryParams(crop: crop, quarterTurns: ((quarterTurns % 4) + 4) % 4,
+        GeometryParams(crop: crop?.clampedToUnitSquare(),
+                       quarterTurns: ((quarterTurns % 4) + 4) % 4,
                        flipH: flipH, flipV: flipV,
                        straightenDegrees: min(max(straightenDegrees, -45), 45))
     }

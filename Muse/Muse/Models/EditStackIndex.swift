@@ -106,7 +106,13 @@ nonisolated enum EditStackIndex {
         let decoded = EditStackCodec.decode(stackJSON)
         return Entry(hash: hash,
                      stack: decoded,
-                     geometry: decoded?.geometryParams,
+                     // Clamped for the same reason `EditRenderer` clamps it:
+                     // this geometry is what `croppedSize` hands the grid and
+                     // the hero flight, and a crop from a foreign preset or
+                     // sidecar need not sit inside the unit square. Doing it
+                     // once here keeps the LAYOUT's idea of the cropped size
+                     // and the RENDERER's identical.
+                     geometry: decoded?.geometryParams.map { $0.clamped() },
                      renderable: decoded.map(EditRenderer.canRender) ?? false)
     }
 

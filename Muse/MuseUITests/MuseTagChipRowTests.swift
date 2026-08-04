@@ -23,6 +23,9 @@ final class MuseTagChipRowTests: XCTestCase {
     private var app: XCUIApplication!
 
     override func setUpWithError() throws {
+        // Fail here, with the reason, rather than let a second instance
+        // manufacture failures that accuse the app. See SingleInstanceGuard.
+        SingleInstanceGuard.assertNoOtherInstance()
         continueAfterFailure = true
         app = XCUIApplication()
         app.launch()

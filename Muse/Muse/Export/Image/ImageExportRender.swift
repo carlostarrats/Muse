@@ -172,7 +172,18 @@ nonisolated enum ImageExportRender {
             base: stem,
             ext: job.settings.format.fileExtension(for: job.sourceURL),
             in: directory)
-        try data.write(to: dest, options: .atomic)
+        // `.withoutOverwriting`, NOT `.atomic`. `collisionSafeURL` picks a name
+        // that did not exist a moment ago, but "a moment ago" is not a
+        // guarantee — anything that lands at that path in between (a sync
+        // client, another app, a second export into the same folder) would be
+        // silently destroyed by an atomic write, which is precisely what
+        // `collisionSafeURL`'s own comment promises can never happen. With this
+        // flag the racing export FAILS and the user's existing file survives.
+        //
+        // Do NOT "improve" this to `[.atomic, .withoutOverwriting]` — Foundation
+        // traps on that combination ("withoutOverwriting is not supported with
+        // atomic"), so it would crash the app rather than harden it.
+        try data.write(to: dest, options: .withoutOverwriting)
         return Result(url: dest,
                       pixelSize: CGSize(width: cgImage.width, height: cgImage.height),
                       bytes: data.count)

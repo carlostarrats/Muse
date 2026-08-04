@@ -10,7 +10,9 @@ import Foundation
 /// occasionally alarming. This layer: drops noise + sensitive labels, remaps
 /// known-ugly ones to friendly words, replaces remaining underscores with
 /// spaces, applies a confidence floor, dedupes, and caps the count.
-enum ClassificationCuration {
+// `nonisolated`: pure classification over values already in hand, called
+// from the analysis pass. See `PaletteExtractor` for why the marker matters.
+nonisolated enum ClassificationCuration {
     /// Minimum Vision confidence to surface a label as a tag.
     static let confidenceFloor: Double = 0.45
     /// Most classification tags to keep per image (most-confident first).

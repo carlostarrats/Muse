@@ -6,7 +6,9 @@ import Foundation
 /// minor accent (or a portrait's skin tone in the 3rd cluster) tagged the whole
 /// image. Here a color only becomes a tag if its cluster actually covers a
 /// meaningful share of the image; the single dominant cluster is always named.
-enum ColorTagger {
+// `nonisolated`: pure classification over values already in hand, called
+// from the analysis pass. See `PaletteExtractor` for why the marker matters.
+nonisolated enum ColorTagger {
     /// Color tags from a weighted palette (hex + share 0…1, sorted descending).
     /// Always names the dominant cluster; names others only if they cover at
     /// least `minShare`. Deduped by name, capped at `maxTags`.

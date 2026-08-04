@@ -124,7 +124,13 @@ nonisolated enum EditRenderer {
         -> (image: CIImage, radiusScale: CGFloat) {
         var current = image
         if let geo = stack.geometryParams, !geo.isNeutral {
-            current = applyGeometry(geo, to: current)
+            // `.clamped()` like every other stage — geometry was the one that
+            // took its params raw. A stack is not always something this app just
+            // built: it also arrives decoded from a `.muselibrary` preset or a
+            // sidecar, where `straightenDegrees` need not be within ±45,
+            // `quarterTurns` need not be 0…3, and the crop need not sit inside
+            // the unit square (which renders an EMPTY extent).
+            current = applyGeometry(geo.clamped(), to: current)
         }
         // Radii scale with the POST-geometry frame: a crop changes what "1% of
         // the long edge" means on screen, and the user tunes clarity against

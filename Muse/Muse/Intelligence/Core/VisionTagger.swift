@@ -1,6 +1,11 @@
 import Foundation
 
-final class VisionTagger: Tagger {
+// `nonisolated`: everything after the `await VisionServices.analyze` — the
+// palette k-means, the curation, the colour naming, the style classify — is
+// pure post-processing over an in-hand raster. Default MainActor isolation put
+// all of it back on the main thread the moment Vision returned, which is the
+// one place the bounded-decode work had carefully avoided.
+nonisolated final class VisionTagger: Tagger {
     let modelVersion = "vision-v1"
 
     func analyze(url: URL) async -> TaggerOutput? {

@@ -58,8 +58,16 @@ final class LutStore: ObservableObject {
         var failures: [String: Error] = [:]
         for url in urls {
             do {
-                let text = try String(contentsOf: url, encoding: .utf8)
-                let parsed = try CubeLUTParser.parse(text)
+                // Read and parse OFF the main actor. `LutStore` is `@MainActor`,
+                // and a `.cube` is allowed up to `CubeLUTParser.maxFileBytes`
+                // (64 MB) — a 128³ cube is 2,097,152 data lines, each split and
+                // parsed into three Floats. Doing that inline froze the whole UI
+                // for the duration of the import, on a file the user picked in a
+                // panel that stays on screen while it happens.
+                let parsed = try await Task.detached(priority: .userInitiated) {
+                    let text = try String(contentsOf: url, encoding: .utf8)
+                    return try CubeLUTParser.parse(text)
+                }.value
                 let id = CubeLUT.hash(parsed.lut)
                 let name = parsed.title ?? url.deletingPathExtension().lastPathComponent
                 let blob = parsed.lut.canonicalData

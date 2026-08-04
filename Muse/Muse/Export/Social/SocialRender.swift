@@ -232,7 +232,10 @@ nonisolated enum SocialRender {
         }
         let stem = job.sourceURL.deletingPathExtension().lastPathComponent
         let destURL = Self.collisionSafeURL(base: "\(stem)-\(job.preset.id)", ext: "jpg", in: directory)
-        try data.write(to: destURL, options: .atomic)
+        // `.withoutOverwriting`, not `.atomic` — see the same write in
+        // `ImageExportRender` for why, including why the two flags must never
+        // be combined (Foundation traps on it).
+        try data.write(to: destURL, options: .withoutOverwriting)
         return Result(url: destURL, pixelSize: pixelSize, bytes: data.count)
     }
 
