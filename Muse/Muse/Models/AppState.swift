@@ -172,6 +172,23 @@ final class AppState: ObservableObject {
     /// Currently selected file (drives preview/detail).
     @Published var selectedFile: FileNode?
 
+    /// A one-shot request from the grid's right-click ▸ Edit: open this file's
+    /// viewer and go straight to Edit mode.
+    ///
+    /// A URL rather than a Bool so a request can never arm the WRONG file — the
+    /// viewer only honours it when it matches the file it actually opened, and
+    /// consumes it on appear either way. Edit mode itself is `HeroImageViewer`'s
+    /// local state and stays that way; this is only the door-opening signal.
+    ///
+    /// Deliberately NOT `@Published`, and that is a performance decision, not a
+    /// style one. Every publish here re-evaluates `ContentView` — sidebar and
+    /// grid included — and this flag is only ever read in the same body pass
+    /// that `selectedFile` triggers. As a `@Published` it cost three whole
+    /// updates per open (set the flag, set the file, clear the flag on appear)
+    /// against a double-click's one, and measured 190 ms from click to the
+    /// flight's first frame versus 40 ms. Nothing observes it; nothing should.
+    var openInEditor: URL?
+
     /// Multi-selection in the grid (standardized file paths). Separate from
     /// `selectedFile`, which is the image OPEN in the hero viewer.
     @Published var selectedFiles: Set<String> = []

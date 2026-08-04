@@ -159,6 +159,19 @@ struct HeroStage: View {
     /// a photo cropped in the editor letterboxes inside the box rather than
     /// stretching to fill a shape its pixels no longer have.
     var closeTakeoff: CGRect? = nil
+    /// Fit the photo into THIS box instead of the whole viewport.
+    ///
+    /// The mirror of `closeTakeoff`, for an open that is not heading to the
+    /// Preview page: the grid's right-click ▸ Edit flies the photo from its
+    /// tile straight to where the EDITOR will draw it, so the flip into Edit
+    /// mode is a cut with the picture already in its final place. Landing at
+    /// Preview's rect first and cutting from there showed a page the user never
+    /// asked for, and moved the photo twice.
+    ///
+    /// Cleared once the editor is mounted, which re-fits this (hidden) stage to
+    /// the viewport so every later path — leaving Edit, closing, resizing — is
+    /// the ordinary case again.
+    var fitBox: CGRect? = nil
 
     @Binding var zoom: CGFloat
     @Binding var pan: CGSize
@@ -207,8 +220,16 @@ struct HeroStage: View {
     @State private var shadowVisible = true
 
     private var fitRect: CGRect {
-        ViewerGeometry.fitRect(imageSize: image?.size ?? sourceFrame.size,
-                               viewport: viewport)
+        // Same fit rule either way — only the box differs. The header size is
+        // preferred over the decoded image for the same reason `sourceRect`
+        // prefers it: at flight start nothing has decoded yet, and falling
+        // through to the tile's size would fit the photo to the wrong shape.
+        if let fitBox, fitBox.width > 1, fitBox.height > 1 {
+            return ViewerGeometry.fitWithin(
+                imageSize: image?.size ?? headerSize ?? sourceFrame.size, frame: fitBox)
+        }
+        return ViewerGeometry.fitRect(imageSize: image?.size ?? sourceFrame.size,
+                                      viewport: viewport)
     }
 
     /// Where the tile actually draws the image inside its frame (tiles
@@ -345,6 +366,21 @@ struct HeroStage: View {
             var t = Transaction()
             t.disablesAnimations = true
             withTransaction(t) { displayRect = takeoffRect(in: box) }
+        }
+        .onChange(of: fitBox) { _, box in
+            // The box going away means the editor has taken over and this stage
+            // is hidden behind it. Re-fit to the viewport NOW and un-animated:
+            // `displayRect` is still the editor's rect, and leaving it there
+            // would show the photo in the editor's spot the moment Preview came
+            // back. Hidden, so there is nothing to animate anyway.
+            //
+            // Never while closing, for the same reason `loadFullRes`'s writes
+            // are guarded: an un-animated `displayRect` write during the return
+            // flight jumps the photo out of the motion it is in.
+            guard box == nil, !isClosing else { return }
+            var t = Transaction()
+            t.disablesAnimations = true
+            withTransaction(t) { displayRect = fitRect }
         }
         .onChange(of: zoom) { _, _ in syncHoverCursor() }
         .onChange(of: sourceFrame) { _, newFrame in

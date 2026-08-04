@@ -835,3 +835,58 @@ rect doesn't change, the global origin does) — now a named coordinate space.
   lands in the grid. Raised with the owner as a known gap and **accepted as
   correct-feeling**: *"not a big deal once it's on grid it resizes — it feels
   normal that it would do this."* Cancelled, not deferred; don't re-file it.
+
+---
+
+## Part 6 — entering the editor from the grid (2026-08-04)
+
+Branch: `feat/next-155`. No spec — an owner question ("can right-click have
+Edit, and still keep the closing animation?"). The close flight from Part 5 is
+untouched by all of this; this is its mirror.
+
+### P6.1 — right-click ▸ Edit opens straight into the editor
+
+| Automated | Static | Runtime |
+|---|---|---|
+| 2,186 unit tests green — `EditEntryGateTests` pins the menu/editor gate | audit 21/21, Release warning-free; 1 review round, 1 finding fixed | ✅ **owner-confirmed** — "it looks good. im ookay with this" |
+
+The menu item is gated to the kinds Path A can edit, through
+`HeroImageViewer.isEditableKind` — the same predicate `editModeAvailable` uses,
+so the item can never be a dead end on a PSD or a video. `AppState.openInEditor`
+carries the request as a URL (a Bool could arm the wrong file) and is consumed
+on the viewer's appear.
+
+**Version 1 was rejected and is a dead end: don't route it through Preview.**
+Opening normally and flipping once the flight settled meant the photo flew to
+Preview's rect, the info column and the switch appeared, and then all of it was
+replaced. The shipped version flies to the EDITOR's rect (`HeroStage.fitBox`,
+the mirror of `closeTakeoff`) with the whole Preview page suppressed.
+
+### P6.2 — the motion, and what measuring it actually found
+
+Four rounds of "still not smooth", none of which were solved by reasoning about
+the code. Recorded because the conclusions are reusable:
+
+| Round | Believed cause | What measurement showed |
+|---|---|---|
+| 1 | the flip was abrupt | — (my own `PhaseTrace` in a `body`-called function; withdrawn) |
+| 2 | the flight drops frames | it does NOT: Edit `mean 5.9 ms / max 69.6` vs Preview `9.2 / 160`. The photo lands at `646×776` in both — identical size. The 69 ms was the editor being BUILT at the landing |
+| 3 | extra `@Published` writes cause the entry delay | they don't. Removing them is right anyway (3 `ContentView` updates → 1), but click→first-frame stayed ~240 ms |
+| 4 | the ~250 ms is the app | it is `NSMenu`: **Rename… in the same menu measured 320 ms**, slower than Edit's 250 |
+
+Fix that mattered: mount the editor at TAKEOFF, hidden (`editorWarming`), so
+Metal setup, the session and the first proxy render happen during the flight
+instead of in the frame it ends. Worst frame gap 285 ms → 46 ms.
+
+**Review finding, fixed before commit.** Escape and Delete are both reachable
+during the 300 ms the editor is warming, and the reveal fired anyway — a whole
+editor page appearing on top of a photo already flying home or fading out. It
+now bails and drops the warm session. The first version of that bail also
+cleared `flyingToEditor`, which was worse: that flag keeps `fitBox` alive, and
+dropping it mid-close re-fits the stage to the viewport un-animated, teleporting
+the photo out of its own close flight. Both halves are now durable rules.
+
+**Still open (nobody has watched it):** entering Edit this way on a RAW, and on
+a photo that already carries a crop — the landing box is computed from the
+image's fitted aspect, and a cropped photo's decoded aspect differs from its
+header's. Both are ordinary paths, neither was driven.

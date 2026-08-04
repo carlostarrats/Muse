@@ -45,6 +45,20 @@ struct EditorView: View {
     /// close that simply revealed the Preview page would move and resize the
     /// picture in the frame before the flight even started.
     var onCanvasRect: ((CGRect) -> Void)? = nil
+    /// Hold the panels back — this editor is mounted but not yet on screen.
+    ///
+    /// The grid's right-click ▸ Edit mounts this view WHILE the photo is still
+    /// flying, hidden behind the stage, so the expensive part of arriving (the
+    /// Metal view, the session, the first proxy render) happens during the
+    /// flight instead of in the frame it lands. Measured: doing that work at the
+    /// landing cost a 69 ms stall — four dropped frames, right at the end of an
+    /// otherwise smooth motion.
+    ///
+    /// The panels are the exception, and they are cheap (solid fills, no
+    /// materials): they slide in when this goes false, which is the reveal. The
+    /// CANVAS never animates — the photo is already exactly where it belongs,
+    /// and fading over Metal re-composites every frame.
+    var panelsHidden: Bool = false
     @Environment(\.theme) var theme
 
     @AppStorage(AppSettings.editorBackdropKey) var backdropRaw =
@@ -180,7 +194,7 @@ struct EditorView: View {
                 // The LEFT column stops drawing when the workspace has moved
                 // everything off it — an empty panel would leave a dead strip
                 // beside the photo instead of giving the space back.
-                if !session.uiHidden && !workspace.active.isEmpty(.left) {
+                if !panelsHidden && !session.uiHidden && !workspace.active.isEmpty(.left) {
                     // No chrome on this side, so its cards start on the line
                     // the RIGHT column's first card lands on (below its chrome
                     // row) — and clear of the window's traffic lights.
@@ -198,7 +212,7 @@ struct EditorView: View {
                 // all-cards-left layout coherent. With nothing on it this
                 // renders the chrome row alone over the canvas, exactly what
                 // the hide-UI eye already produces.
-                if !session.uiHidden {
+                if !panelsHidden && !session.uiHidden {
                     EditorPanel(topInset: ViewerGeometry.chromeTop, ink: ink,
                                 backingVisible: isZoomed || workspace.reorderMode, chrome: { chromeRow }) {
                         columnContent(.right)
@@ -206,6 +220,10 @@ struct EditorView: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
+            // The columns' own `.move` transitions, driven by the reveal at the
+            // end of a flight. Scoped to `panelsHidden` so nothing else about
+            // the editor picks up an animation it never had.
+            .animation(.easeOut(duration: Self.chromeFade), value: panelsHidden)
             // The Preview column's margin exactly: its cards sit
             // `columnMargin` from the window edge, and 12 of that is the
             // column's own inset — so the buttons don't shift when you switch

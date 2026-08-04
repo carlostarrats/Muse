@@ -483,7 +483,12 @@ struct ContentView: View {
             // Hero (image) viewers mount instantly: the prototype's stage is
             // opaque from the first frame — only its backdrop fades in.
             // Fading the whole subtree made the flight semi-transparent.
-            ViewerRouter(file: selected)
+            // Read here rather than inside the viewer: the request has to be
+            // known when the view is CONSTRUCTED (the stage's flight departs
+            // from its own onAppear, before the viewer's). The viewer clears
+            // the request on appear, so this reads true for exactly one mount.
+            ViewerRouter(file: selected,
+                         openInEditor: appState.openInEditor == selected.url)
                 .transition(selected.kind == .image || selected.kind == .raw
                             || selected.kind == .psd ? .identity : .opacity)
         }

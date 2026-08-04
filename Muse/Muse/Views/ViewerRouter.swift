@@ -12,12 +12,16 @@ import SwiftUI
 
 struct ViewerRouter: View {
     let file: FileNode
+    /// Opened by the grid's right-click ▸ Edit — the hero viewer flies straight
+    /// to the editor instead of landing on the Preview page. Meaningless for
+    /// every other kind, which have no editor.
+    var openInEditor: Bool = false
 
     var body: some View {
         switch file.kind {
         case .image, .raw, .psd:
             // NSImage handles RAW + PSD flat composite via ImageIO.
-            HeroImageViewer(file: file)
+            HeroImageViewer(file: file, openInEditor: openInEditor)
                 .id(file.url)
 
         case .pdf:

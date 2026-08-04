@@ -16,6 +16,12 @@ import ImageIO
 struct HeroImageViewer: View {
     @EnvironmentObject var appState: AppState
     let file: FileNode
+    /// This viewer was opened by the grid's right-click ▸ Edit — see
+    /// `flyingToEditor`. Passed in rather than read from `AppState` in `body`
+    /// because it has to be true on the very FIRST frame: the stage's open
+    /// flight departs from its own `onAppear`, which SwiftUI runs before this
+    /// view's, so a flag set in `onAppear` would arrive after takeoff.
+    var openInEditor: Bool = false
 
     @State private var currentURL: URL
     @State private var details: ViewerFileDetails?
@@ -85,19 +91,61 @@ struct HeroImageViewer: View {
     /// `enterEditMode` reads it, at the moment of the click. Mutating the box's
     /// contents changes no SwiftUI state, so nothing re-renders.
     @State private var heroImage = HeroImageBox()
+    /// This open is flying STRAIGHT to the editor, and hasn't landed yet.
+    ///
+    /// While it's true the viewer is not the Preview page at all: the backdrop
+    /// is the editor's flat field rather than the photo's wash, the info column
+    /// and the Preview | Edit switch never mount, and the stage fits the photo
+    /// into the editor's rect (`editorFitBox`) rather than the viewport. It
+    /// goes false once `EditorView` is mounted, at which point everything is
+    /// the ordinary in-the-editor state.
+    @State private var flyingToEditor = false
+    /// The editor is MOUNTED but must not be seen yet: it is warming up behind
+    /// the photo while that photo is still flying to it. See `EditorView`'s
+    /// `panelsHidden` for the measurement that put it there.
+    @State private var editorWarming = false
 
-    /// Edit is on screen. Mounting both and hiding one costs a compositing
-    /// no-op; unmounting either costs a reload.
-    private var editing: Bool { editMode && editSession != nil }
+    /// Edit is on screen — which a WARMING editor is not, so the stage stays
+    /// visible and keeps flying while the editor builds itself underneath.
+    private var editing: Bool { editMode && editSession != nil && !editorWarming }
 
     /// Read only so the Preview | Edit switch can stay legible over whichever
     /// editor backdrop is set — the editor owns this preference.
     @AppStorage(AppSettings.editorBackdropKey) private var editorBackdropRaw =
         EditorBackdropLevel.default.rawValue
 
-    init(file: FileNode) {
+    init(file: FileNode, openInEditor: Bool = false) {
         self.file = file
+        self.openInEditor = openInEditor
         _currentURL = State(initialValue: file.url)
+        // Seeded here, not in `onAppear`, for the reason given on `openInEditor`
+        // — the stage takes off first. Gated on the kind so a request that
+        // somehow reaches a file the editor can't open degrades to a normal
+        // Preview open rather than a flight to a rect nothing will fill.
+        _flyingToEditor = State(initialValue: openInEditor && Self.isEditableKind(file.url))
+    }
+
+    /// Where the editor will draw this photo, computed BEFORE the editor
+    /// exists.
+    ///
+    /// The same two functions `EditorView` itself lays the canvas out with, fed
+    /// the state the editor mounts in: `stepColumnFit(animated: false)` runs on
+    /// its appear, so an emptied column is already emptied on frame one, and
+    /// `chromeProgress` starts at 1. Reusing them is the point — a hand-rolled
+    /// copy of the panel geometry here would be a second calculation to keep in
+    /// step with the first.
+    private func editorFitBox(viewport: CGSize) -> CGRect {
+        let workspace = EditorWorkspaceStore.shared.active
+        let insets = EditorCanvasGeometry.panelInsets(
+            leftEmptied: workspace.isEmpty(.left) ? 1 : 0,
+            rightEmptied: workspace.isEmpty(.right) ? 1 : 0,
+            chromeProgress: 1)
+        // NO tracing in here. This is called from `body`, so it runs on every
+        // frame of the flight — a `PhaseTrace.mark` here took a lock and queued
+        // a file write per frame, and made the very animation it was measuring
+        // jagged (owner-reported, 2026-08-04). Instrument the decode rungs
+        // instead; they fire three times, not sixty times a second.
+        return EditorCanvasGeometry.freeRect(canvas: viewport, insets: insets)
     }
 
     var body: some View {
@@ -105,7 +153,7 @@ struct HeroImageViewer: View {
             let overlayGlobal = geo.frame(in: .global)
             ZStack {
                 if !lingering {
-                    if closingFromEditor {
+                    if closingFromEditor || flyingToEditor {
                         // The editor's flat field, held for the flight and faded
                         // on the same curve the wash uses.
                         //
@@ -118,6 +166,12 @@ struct HeroImageViewer: View {
                         // the wash has to not be the thing underneath. Keeping
                         // the neutral field means the background the editor had
                         // is the background that fades away.
+                        //
+                        // The OPEN half (`flyingToEditor`) uses it for the
+                        // mirror-image reason: an open heading straight for Edit
+                        // must never show the photo's wash, or the editor
+                        // arriving would swap the whole background out from
+                        // under a photo that has just finished moving.
                         Color(white: EditorBackdropLevel.resolve(editorBackdropRaw).brightness)
                             .ignoresSafeArea()
                             .opacity(isClosing ? 0 : 1)
@@ -154,6 +208,7 @@ struct HeroImageViewer: View {
                               onImageReady: { heroImage.store($1, for: $0) },
                               editRevision: editRevision,
                               closeTakeoff: editorCloseTakeoff,
+                              fitBox: flyingToEditor ? editorFitBox(viewport: geo.size) : nil,
                               zoom: $zoom,
                               pan: $pan,
                               isClosing: $isClosing)
@@ -166,16 +221,28 @@ struct HeroImageViewer: View {
                         // is the thing on screen.
                         .accessibilityHidden(editing)
 
-                    if !editing && !closingFromEditor { rightRail }
+                    // The info column belongs to the Preview page. It is out of
+                    // both editor flights for the same reason: mounting it for
+                    // the 0.3s the photo is in the air is a panel sliding in
+                    // beside a picture on its way somewhere else.
+                    if !editing && !closingFromEditor && !flyingToEditor { rightRail }
 
                     if let editSession, editMode {
                         EditorView(session: editSession,
                                    onClose: closeFromEditor,
-                                   onCanvasRect: { editorCanvasRect.rect = $0 })
+                                   onCanvasRect: { editorCanvasRect.rect = $0 },
+                                   panelsHidden: editorWarming)
+                            // Invisible and inert while warming: what the user
+                            // is watching is still the STAGE's photo, and this
+                            // view is quietly building the same picture at the
+                            // same rect underneath it.
+                            .opacity(editorWarming ? 0 : 1)
+                            .allowsHitTesting(!editorWarming)
+                            .accessibilityHidden(editorWarming)
                     }
                     // Hidden along with the rest of the chrome when Edit's
                     // eye is on: "only the image" has to include this too.
-                    if editModeAvailable {
+                    if editModeAvailable && !flyingToEditor {
                         if let editSession, editMode {
                             EditChromeGate(session: editSession) { zoomed in
                                 editModeToggle(zoomed: zoomed)
@@ -224,6 +291,7 @@ struct HeroImageViewer: View {
         .onAppear {
             installScrollMonitor()
             installKeyMonitor()
+            armAutoEdit()
             // The wash is at full strength from frame one — there is no
             // fade-in state to set here any more.
             //
@@ -236,7 +304,14 @@ struct HeroImageViewer: View {
             // nothing and only delayed the open, and the opacity fade-in was
             // removed outright (ViewerBackdrop now animates only its tint, and
             // its `closing` flag drives the one fade that remains).
-            withAnimation(.easeOut(duration: 0.4).delay(0.15)) { chromeVisible = true }
+            // …but NOT while flying to the editor. The chrome this fades in is
+            // the Preview page's, and the editor brings its own; raising it
+            // here would put the Preview | Edit switch on screen for a third of
+            // a second in the middle of a flight that never visits Preview.
+            // `armAutoEdit` raises it on the far side instead.
+            if !flyingToEditor {
+                withAnimation(.easeOut(duration: 0.4).delay(0.15)) { chromeVisible = true }
+            }
         }
         .onDisappear {
             removeScrollMonitor()
@@ -291,7 +366,11 @@ struct HeroImageViewer: View {
             // Edit mode consumes Escape FIRST and returns: one press leaves
             // the editor, a second closes the viewer. The rest of the close
             // sequence never runs for that first press.
-            if editMode {
+            //
+            // A WARMING editor is not edit mode as far as the user is concerned
+            // — the photo is still in the air — so Escape during the flight has
+            // to close the viewer, not "leave" an editor never seen.
+            if editMode && !editorWarming {
                 // Target mode is a mode INSIDE edit mode, so Escape unwinds it
                 // one layer at a time: targeting, then the editor, then the
                 // viewer.
@@ -505,7 +584,15 @@ struct HeroImageViewer: View {
     /// discard the layers. Editing a PSD is Edit-a-Copy's job.
     private var editModeAvailable: Bool {
         guard !isClosing, !burning, burnProgress <= 0, !lingering else { return false }
-        let kind = AssetKind.detect(at: currentURL)
+        return Self.isEditableKind(currentURL)
+    }
+
+    /// The KIND half of `editModeAvailable`, without the viewer-state half.
+    /// Exposed so the grid's right-click ▸ Edit offers the item on exactly the
+    /// files the editor will actually open — one rule, two call sites, rather
+    /// than a second copy of the image/RAW list that can drift from this one.
+    static func isEditableKind(_ url: URL) -> Bool {
+        let kind = AssetKind.detect(at: url)
         return kind == .image || kind == .raw
     }
 
@@ -574,6 +661,62 @@ struct HeroImageViewer: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(active ? [.isButton, .isSelected] : .isButton)
+    }
+
+    /// Honour a grid right-click ▸ Edit, if this open is one.
+    ///
+    /// The request is consumed unconditionally: it is a one-shot edge ("open
+    /// THAT file in Edit"), not durable state, and a `true` left lying around
+    /// would arm the next viewer the user opened by ordinary double-click.
+    private func armAutoEdit() {
+        // Consumed unconditionally: it is a one-shot edge ("open THAT file in
+        // Edit"), not durable state, and a value left lying around would arm
+        // the next viewer the user opened by ordinary double-click. The FLIGHT
+        // is already running off `flyingToEditor`, seeded in `init` — this only
+        // clears the request and schedules the landing.
+        appState.openInEditor = nil
+        guard flyingToEditor else { return }
+        // Build the editor NOW, hidden, while the photo flies. Everything
+        // expensive about arriving — the Metal view, the session, the first
+        // proxy render — then happens during the 0.3s of flight instead of in
+        // the frame it ends, which is where a measured 69 ms stall used to sit.
+        editorWarming = true
+        enterEditMode()
+        // And reveal it when the flight lands.
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(HeroFlightMotion.openDuration))
+            revealEditor()
+        }
+    }
+
+    /// The flight has landed: show the editor that has been warming behind it.
+    ///
+    /// Nothing expensive happens here by design — the picture is already drawn,
+    /// at the same rect, by a view that has been alive for 300 ms. All that
+    /// changes is which of the two is visible, plus the panels sliding in.
+    private func revealEditor() {
+        guard flyingToEditor else { return }
+        // The viewer may have LEFT during the flight — Escape closes it, Delete
+        // burns it, and both are reachable in those 300 ms because the warming
+        // editor takes no input. Revealing then would put a whole editor page on
+        // top of a photo already flying home or fading out. Drop it instead: the
+        // session is untouched (nothing can have edited it), so there is nothing
+        // to save and no state to unwind.
+        guard !isClosing, !burning, burnProgress <= 0, !lingering else {
+            // `flyingToEditor` deliberately STAYS true here. It is what keeps
+            // `fitBox` alive, and clearing it mid-close would re-fit the stage
+            // to the viewport un-animated — teleporting the photo out of its
+            // own close flight. It also keeps the flat editor backdrop, which
+            // is the field this close is fading out of.
+            editorWarming = false
+            editMode = false
+            editSession = nil
+            return
+        }
+        flyingToEditor = false
+        editorWarming = false
+        // The Preview | Edit switch is the editor's now, so it can come up.
+        withAnimation(.easeOut(duration: 0.2)) { chromeVisible = true }
     }
 
     private func enterEditMode() {

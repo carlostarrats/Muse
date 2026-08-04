@@ -6,6 +6,66 @@ the durable rules + a compact index live in `CLAUDE.md`. Nothing here is
 load-bearing for a fresh session beyond what that index already surfaces;
 read an entry when you need the full "why" behind a specific change.
 
+### Right-click ▸ Edit — opening straight into the editor — 2026-08-04 (on `feat/next-155`)
+
+A grid context-menu **Edit** that opens the photo in the editor rather than in
+Preview, keeping the close-from-Edit flight that landed the day before. The
+feature is small; four of the five rounds it took were about MOTION, and every
+one of them was settled by measurement after opinion had failed.
+
+**The first version went through Preview and was rejected.** It opened the
+viewer normally and flipped to Edit once the flight settled — which meant the
+photo flew to Preview's rect, the info column and the Preview | Edit switch
+appeared, and then all of it was replaced. Owner: *"forcing the path through
+preview is not a great experience."* Correct: the photo moved twice and a page
+the user never asked for was on screen for a third of a second.
+
+**The second version is the close flight run backwards.** `HeroStage.fitBox` is
+the mirror of `closeTakeoff`: fit the photo into THIS box instead of the
+viewport, so the flight departs from the tile and lands where the EDITOR draws
+the picture. The landing box is computed before the editor exists, out of the
+editor's own `panelInsets`/`freeRect` fed the state it mounts in — not a copy of
+the panel geometry, which would be a second calculation to keep in step. During
+the flight the viewer is not the Preview page at all: flat editor backdrop, no
+info column, no switch.
+
+**Then three rounds of "still not smooth", each answered with a number.**
+
+*Round one — my own instrument was the defect.* A `PhaseTrace.mark` inside the
+function that computes the landing box, which `body` calls. I told the owner
+that was the jank; that claim was too confident (the flight animates through a
+`GeometryEffect`, which does not re-run `body` per frame) and it was withdrawn
+in the same session. It came out regardless.
+
+*Round two — the flight was never the problem.* A frame sampler in
+`FlightEffect.effectValue` (in memory, reported once, because the previous
+instrument had to be ruled out as a cause) measured both flights on the same
+photo: Preview `mean 9.2 ms, max 160`, Edit `mean 5.9 ms, max 69.6`. Edit was
+already the smoother of the two. The geometry log said why the end still felt
+wrong: the photo lands at `646×776` in BOTH cases — identical size, only the x
+differs — so nothing was moving at the handoff. The 69 ms was the editor being
+BUILT in the frame the flight ended: Metal view, session, first proxy render.
+Fix: mount the editor at takeoff, invisible behind the flying stage
+(`editorWarming`), and let the landing be a pure reveal. Worst frame gap
+afterwards: 46 ms.
+
+*Round three — the delay before the motion, and the assumption that wasn't.*
+Click → first frame measured 190 ms for Edit against 40 ms for a double-click.
+The first fix attempt (dropping `@Published` from `AppState.openInEditor`, which
+was costing three whole `ContentView` updates per open against a double-click's
+one) is right on its own terms and **did not move that number** — it stayed
+~240 ms. Reported as such rather than claimed as a win. The owner's call was
+*"we should know and not assume"*, so the question got a controlled probe: the
+same empty main-actor hop scheduled from two actions in the SAME menu on the
+SAME tile. Edit 250 ms; **Rename… — which does nothing but raise a sheet flag —
+320 ms.** The lag is `NSMenu`'s dismissal, shared by every context-menu action
+in the app, and Edit is faster than one that has been shipping for months. Not
+a Muse bug; not chased further.
+
+What the rounds left behind, beyond the feature: an instrument that runs inside
+`body` is part of the thing it measures, and a fix that isn't confirmed by the
+number that motivated it doesn't get reported as a fix.
+
 ### Review round 16 — a whole-codebase QA pass — 2026-08-04 (on `feat/next-155`)
 
 Same ask as round 15, same day, same protocol: audit first (20/20, suite 2,167),

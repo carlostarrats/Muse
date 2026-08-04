@@ -558,6 +558,27 @@ struct GridView: View {
                             similarityMenuSection(for: file, path: p, single: single)
                             Divider()
                             if single {
+                                // Straight to the editor, and the Preview page
+                                // is never on screen: the photo flies from this
+                                // tile to the rect the EDITOR draws it in, which
+                                // mounts during the flight and is simply
+                                // revealed at the end — see
+                                // `HeroImageViewer.armAutoEdit`. Gated to the
+                                // kinds Path A can edit (image/RAW), the same
+                                // rule `editModeAvailable` applies, so the item
+                                // is never a dead end on a PSD or a video.
+                                if HeroImageViewer.isEditableKind(file.url) {
+                                    Button {
+                                        // Order matters: the flag is a plain
+                                        // var, so it must be set BEFORE the
+                                        // publish that opens the viewer — that
+                                        // one body pass is where it is read.
+                                        appState.openInEditor = file.url
+                                        appState.selectedFile = file
+                                    } label: {
+                                        Label("Edit", systemImage: "slider.horizontal.3")
+                                    }
+                                }
                                 OpenWithMenu(url: file.url)
                                 Button {
                                     appState.requestRenameFile(file)
