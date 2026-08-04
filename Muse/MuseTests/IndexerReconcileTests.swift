@@ -292,6 +292,92 @@ final class IndexerReconcileTests: XCTestCase {
         }
     }
 
+    // MARK: - Rename and move (orphan adoption)
+
+    /// The distinction per-file identity turns on: an ORPHANED row — holds
+    /// these bytes, has no alive path — is the SAME file under a new name, so
+    /// it is adopted rather than forked. Without this a rename would mint a
+    /// fresh row and strand the original.
+    func testExternalRenameAdoptsTheOrphanedRowAndKeepsItsEdit() throws {
+        let q = try freshQueue()
+        try q.write { db in
+            try index(db, "/a/before.jpg", hash: "h1")
+            let fid = try self.fileID(db, forPath: "/a/before.jpg")
+            try db.execute(sql: """
+                INSERT INTO edits (file_id, parent_dir, stack, stack_hash, process_version, updated_at)
+                VALUES (?, '/a', '{"warm":1}', 'sh', 1, 7)
+                """, arguments: [fid])
+            // The folder pass marks the vanished name dead BEFORE indexing the
+            // new one (PathReconciler.reconcile runs ahead of scheduleIndexing).
+            try db.execute(sql: "UPDATE paths SET is_alive = 0 WHERE absolute_path = '/a/before.jpg'")
+            try index(db, "/a/after.jpg", hash: "h1", now: 9)
+        }
+        try q.read { db in
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM files"), 1,
+                           "a rename must not fork a second row")
+            let fid = try fileID(db, forPath: "/a/after.jpg")
+            XCTAssertEqual(try String.fetchOne(db, sql:
+                "SELECT stack FROM edits WHERE file_id = ?", arguments: [fid]), "{\"warm\":1}")
+            // Searchable under the name it has NOW, not the one it had.
+            XCTAssertEqual(try String.fetchOne(db, sql:
+                "SELECT basename FROM files_fts WHERE file_id = ?", arguments: [fid]), "after.jpg")
+        }
+    }
+
+    /// A move across folders is the same case — the row travels with the file.
+    func testExternalMoveAdoptsTheOrphanedRow() throws {
+        let q = try freshQueue()
+        try q.write { db in
+            try index(db, "/a/x.jpg", hash: "h1")
+            try db.execute(sql: "UPDATE paths SET is_alive = 0 WHERE absolute_path = '/a/x.jpg'")
+            try index(db, "/b/x.jpg", hash: "h1", now: 9)
+        }
+        try q.read { db in
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM files"), 1)
+            XCTAssertEqual(try Int.fetchOne(db, sql:
+                "SELECT COUNT(*) FROM paths WHERE is_alive = 1"), 1)
+        }
+    }
+
+    /// The contrast that makes adoption safe: while the original is still
+    /// ALIVE, the same bytes appearing elsewhere are a COPY, not a rename — so
+    /// they must NOT take over its row.
+    func testLiveOriginalMeansCopyNotAdoption() throws {
+        let q = try freshQueue()
+        try q.write { db in
+            try index(db, "/a/x.jpg", hash: "h1")
+            try index(db, "/b/x.jpg", hash: "h1")
+        }
+        try q.read { db in
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM files"), 2)
+            XCTAssertNotEqual(try fileID(db, forPath: "/a/x.jpg"),
+                              try fileID(db, forPath: "/b/x.jpg"))
+        }
+    }
+
+    /// Several orphans can hold the same bytes (two copies deleted, one file
+    /// restored). The choice must be deterministic, or the same restore adopts
+    /// a different identity — and a different edit stack — run to run.
+    func testAdoptionIsDeterministicAmongSeveralOrphans() throws {
+        func run() throws -> String {
+            let q = try freshQueue()
+            return try q.write { db in
+                try db.execute(sql: """
+                    INSERT INTO files (id, content_hash, kind, last_seen_at)
+                    VALUES ('bbb', 'h1', 'image', 0), ('aaa', 'h1', 'image', 0)
+                    """)
+                try db.execute(sql: """
+                    INSERT INTO paths (id, file_id, absolute_path, is_alive)
+                    VALUES ('p1', 'bbb', '/a/gone1.jpg', 0), ('p2', 'aaa', '/a/gone2.jpg', 0)
+                    """)
+                try self.index(db, "/a/back.jpg", hash: "h1", now: 9)
+                return try self.fileID(db, forPath: "/a/back.jpg")
+            }
+        }
+        XCTAssertEqual(try run(), "aaa", "lowest id wins")
+        XCTAssertEqual(try run(), try run(), "and does so every time")
+    }
+
     /// A file that comes back at the same path is revived on its dead path,
     /// not forked into a second row.
     func testResurrectedPathReusesItsOwnRow() throws {

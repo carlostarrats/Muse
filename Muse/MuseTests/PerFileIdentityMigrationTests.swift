@@ -252,14 +252,21 @@ final class PerFileIdentityMigrationTests: XCTestCase {
             // Exactly one note and one tag per file, each in its own folder.
             XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM notes"), 2)
             XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tags"), 2)
-            let stranded = try Int.fetchOne(db, sql: """
-                SELECT COUNT(*) FROM notes n
+            // Every surviving row sits in ITS OWN file's folder. Checked in
+            // Swift rather than SQL: the first draft of this assertion did the
+            // dirname in SQLite and then excluded '/A' and '/B', which is every
+            // folder in the fixture — so it counted zero by construction and
+            // could not have failed.
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT n.parent_dir AS dir, p.absolute_path AS path FROM notes n
                 JOIN paths p ON p.file_id = n.file_id AND p.is_alive = 1
-                WHERE n.parent_dir <> rtrim(p.absolute_path, replace(p.absolute_path, '/', ''))
-                       || ''
-                  AND n.parent_dir NOT IN ('/A', '/B')
                 """)
-            XCTAssertEqual(stranded, 0)
+            XCTAssertEqual(rows.count, 2)
+            for row in rows {
+                let dir: String = row["dir"]
+                let path: String = row["path"]
+                XCTAssertEqual(dir, (path as NSString).deletingLastPathComponent)
+            }
             // Each file's note matches its own folder.
             for (path, body) in [("/A/x.jpg", "note A"), ("/B/x.jpg", "note B")] {
                 XCTAssertEqual(try String.fetchOne(db, sql: """
@@ -326,22 +333,60 @@ final class PerFileIdentityMigrationTests: XCTestCase {
     /// v24's table rebuild dropped v13's partial coordinate index. v25 restores
     /// it for databases that already ran the intermediate migration.
     func testCoordinateIndexIsRestoredWhenMissing() throws {
-        let queue = try seededQueue(paths: ["/A/only.jpg"])
-        try migrate(queue)
+        // Stop at v24 and drop the index — exactly the state a database
+        // migrated by the intermediate build is in. Then let v25 run.
+        //
+        // The first draft of this test dropped the index and ran the CREATE
+        // statement by hand, which asserted that SQLite works, not that the
+        // MIGRATION repairs anything. Stopping at v24 is what makes it able
+        // to fail.
+        let queue = try DatabaseQueue()
+        try Database.makeMigrator().migrate(queue, upTo: "v24_per_file_identity")
         try queue.write { db in
-            // Simulate a database migrated by the intermediate build.
             try db.execute(sql: "DROP INDEX IF EXISTS files_coords_idx")
         }
-        // Re-running the migrator is a no-op (v25 is recorded), so assert the
-        // repair statement itself is idempotent and restores the index.
+        try queue.read { db in
+            XCTAssertFalse(try db.indexes(on: "files").contains { $0.name == "files_coords_idx" },
+                           "precondition: the index really is gone before v25 runs")
+        }
+
+        try migrate(queue)
+
+        try queue.read { db in
+            XCTAssertTrue(try db.indexes(on: "files").contains { $0.name == "files_coords_idx" },
+                          "v25 must restore the index v24's table rebuild destroyed")
+        }
+    }
+
+    /// A split whose ORIGINAL had no FTS row must still end up searchable.
+    ///
+    /// v24 copies the FTS entry with INSERT…SELECT, which yields nothing when
+    /// there is nothing to select — and `backfillBasenameFTS` runs only inside
+    /// v9, so nothing would ever heal it. Every copy would be unfindable by
+    /// name, permanently and silently.
+    func testSplitOfAnFTSlessRowStillGetsSearchableNames() throws {
+        let queue = try DatabaseQueue()
+        try Database.makeMigrator().migrate(queue, upTo: "v23_edit_luts")
         try queue.write { db in
             try db.execute(sql: """
-                CREATE INDEX IF NOT EXISTS files_coords_idx
-                ON files(lat, lon) WHERE lat IS NOT NULL
+                INSERT INTO files (id, content_hash, kind, last_seen_at, analyzed_hash)
+                VALUES ('F', 'h', 'image', 0, 'h')
                 """)
+            try db.execute(sql: """
+                INSERT INTO paths (id, file_id, absolute_path, is_alive)
+                VALUES ('p1', 'F', '/A/a.jpg', 1), ('p2', 'F', '/A/b.jpg', 1)
+                """)
+            // Deliberately NO files_fts row — the v9-era gap.
         }
+        try migrate(queue)
         try queue.read { db in
-            XCTAssertTrue(try db.indexes(on: "files").contains { $0.name == "files_coords_idx" })
+            for (path, name) in [("/A/a.jpg", "a.jpg"), ("/A/b.jpg", "b.jpg")] {
+                let fid = try String.fetchOne(db, sql:
+                    "SELECT file_id FROM paths WHERE absolute_path = ?", arguments: [path])!
+                XCTAssertEqual(try String.fetchOne(db, sql:
+                    "SELECT basename FROM files_fts WHERE file_id = ?", arguments: [fid]),
+                    name, "\(path) has no searchable name")
+            }
         }
     }
 

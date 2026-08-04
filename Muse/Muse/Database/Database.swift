@@ -886,6 +886,23 @@ final class Database {
                 SELECT file_id, absolute_path FROM paths
                 WHERE is_alive = 1 AND file_id IS NOT NULL
                 """)
+            //    INSERT-if-missing, not just UPDATE. v24 copied each split
+            //    row's FTS entry with `INSERT … SELECT … FROM files_fts`, which
+            //    yields NOTHING when the source row has none — and a source can
+            //    lack one (`ensureBasenameFTS` exists precisely because a file
+            //    dead at the v9 backfill has no row). `backfillBasenameFTS`
+            //    runs only inside v9, so nothing would ever heal it: those
+            //    copies would be unfindable by name forever, silently. An
+            //    UPDATE alone no-ops on a missing row and would miss exactly
+            //    that case.
+            //
+            //    NOTE: this insert branch was added to v25 AFTER v25 had
+            //    already been applied to the development library. Editing an
+            //    applied migration is normally forbidden; it is safe here only
+            //    because v25 is unreleased and that one database was verified
+            //    to have zero alive files missing an FTS row. Anyone upgrading
+            //    from v23 runs v24 and v25 together and gets the complete
+            //    version.
             for row in alive {
                 guard let fid: String = row["file_id"],
                       let path: String = row["absolute_path"] else { continue }
@@ -894,6 +911,11 @@ final class Database {
                     UPDATE files_fts SET basename = ?
                     WHERE file_id = ? AND basename <> ?
                     """, arguments: [base, fid, base])
+                try db.execute(sql: """
+                    INSERT INTO files_fts (file_id, basename, ocr_text, caption)
+                    SELECT ?, ?, '', ''
+                    WHERE NOT EXISTS (SELECT 1 FROM files_fts WHERE file_id = ?)
+                    """, arguments: [fid, base, fid])
             }
         }
 

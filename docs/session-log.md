@@ -8842,3 +8842,42 @@ Verified in the running app: v25 applied within a second of launch, wrong
 basenames **7 → 0**, `files_coords_idx` present again, all twelve `.ARW` copies
 matched by their own filenames, and library-wide max alive paths per file = 1
 across 5,360 files. Suite 2,124, audit 17/17.
+
+### Review round 13 — the round's own diff
+
+Ran the registry against this session's work (`REVIEW-LENSES.md` Part 1 now
+carries the six new lenses). Audit green first, as the protocol requires.
+
+**Two real defects, both silent by nature.**
+
+The FTS copy in v24 is `INSERT … SELECT … FROM files_fts`, which yields nothing
+when the source row is missing — and a source CAN be missing (`ensureBasenameFTS`
+exists precisely because a file dead at the v9 backfill has none), while
+`backfillBasenameFTS` runs only inside v9. Those split copies would have been
+unfindable by name forever, with nothing to heal them. INSERT-if-missing added to
+v25. The general lens: **`INSERT…SELECT` is a no-op on an empty source, so it is a
+branch you did not write a test for.**
+
+And the **rename/move orphan-adoption branch had no tests at all** — the thing
+that keeps a photo's edits attached when you rename it in Finder. Four added,
+then negative-tested by disabling the branch and watching them fail.
+
+**Two of this round's own tests could not have failed.** A "stranded rows" count
+excluded `'/A'` and `'/B'`, which is every folder in its own fixture, so it was
+zero by construction. And the index-restore test dropped the index and then ran
+the `CREATE` by hand — asserting that SQLite works, not that the migration
+repairs anything; it now stops at v24 and lets v25 do the work. Same lens that
+caught round 12's clipping guard, same result.
+
+**Clean, but worth recording:** `DROP TABLE files` has no triggers or views to
+destroy (only the index, already fixed). And the sidecar rename is NOT the
+"re-key that orphans data" failure — the legacy name is still read, so the old
+shape stays reachable on purpose.
+
+**One newly load-bearing ordering.** An external rename is adopted rather than
+forked only because `PathReconciler.reconcile` marks the old path dead BEFORE
+`scheduleIndexing` runs. Verified. It degrades safely if that ever inverts: the
+edits still inherit, leaving a transient orphan row that `pruneUnreachable`
+collects after its 180-day window.
+
+Suite **2,129**, audit 17/17, Release warning-free.

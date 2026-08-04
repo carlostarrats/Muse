@@ -183,7 +183,13 @@ Muse/Muse/
     HashService.swift              streaming SHA-256; nil on dataless iCloud reads
     Indexer.swift                  identity reconciliation matrix (§4); size+mtime fast path;
                                    skips not-downloaded iCloud items. reconcile/indexFile/
-                                   indexBatch report content-changed (re-hash for edits + iCloud verify)
+                                   indexBatch report content-changed (re-hash for edits + iCloud verify).
+                                   Per-file identity: a new path of known bytes is a COPY (own row +
+                                   inherit), unless an ORPHANED row holds them — that is a rename/move,
+                                   so adopt it
+    InheritDonor.swift             pure: which existing copy a new copy inherits from — same folder,
+                                   then most recently edited, then lowest path (a TOTAL order, so row
+                                   order cannot change the outcome); unit-tested
   Intelligence/
     Vision/
       VisionServices.swift         classify/OCR/faces/feature print/dom color + CaptionBuilder
@@ -208,6 +214,9 @@ Muse/Muse/
       IntentCollections.swift      pure: which intent buckets qualify (≥3 members)
       CollectionSort.swift         pure Collections-page ordering (Name/Date Created/Date
                                    Modified + reverse); unit-tested
+    AnalysisReuse.swift            adopt an already-analyzed twin's results instead of re-running
+                                   Vision on identical bytes; the analyze-time half of the guarantee
+                                   whose index-time half is Indexer.inherit
     AnalyzePipeline.swift          AUTOMATIC after indexing — analyzes only stale
                                    analyzed_hash files; writes FileRow, tags, FTS5; classifies
                                    intent (gated). Passes serialize via acquirePass()/passClaimed
