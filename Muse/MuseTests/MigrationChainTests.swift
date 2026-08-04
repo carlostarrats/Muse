@@ -8,7 +8,7 @@
 //  reordering or renaming one silently changes what an existing library
 //  becomes on its next launch — a class of bug no single-migration test can
 //  see. DECISIONS' "Current state" block states the chain ends at v23 and the
-//  next spec starts at v25; this is that claim, executable.
+//  next spec starts at v26; this is that claim, executable.
 //
 
 import XCTest
@@ -26,16 +26,17 @@ final class MigrationChainTests: XCTestCase {
         "v15_places", "v16_rediscovery", "v17_stacks", "v18_clip_embeddings",
         "v19_photo_traits", "v20_edits", "v21_edit_presets", "v22_photo_stats",
         "v23_edit_luts", "v24_per_file_identity",
+        "v25_per_file_identity_repair",
     ]
 
     func testChainOrderIsExactlyAsRecorded() {
         XCTAssertEqual(Database.makeMigrator().migrations, Self.expectedOrder)
     }
 
-    /// The chain's endpoint. A new spec adds v25 and updates this line — which
+    /// The chain's endpoint. A new spec adds v26 and updates this line — which
     /// is the point: the change is deliberate and reviewed, not incidental.
-    func testChainEndsAtV24() {
-        XCTAssertEqual(Database.makeMigrator().migrations.last, "v24_per_file_identity")
+    func testChainEndsAtV25() {
+        XCTAssertEqual(Database.makeMigrator().migrations.last, "v25_per_file_identity_repair")
     }
 
     /// A fresh database must run the whole chain and land on the same schema

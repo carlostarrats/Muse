@@ -8808,3 +8808,37 @@ do we have to have about the fucking test suite. you are abusing it."* The
 loophole was reading "checkpoint before a commit" as making a commit a TRIGGER.
 It isn't — the blast radius decides. Memory updated: when no test covers the
 changed code, the build IS the verification.
+
+### v25 — the two defects v24 introduced, found by querying the real library
+
+Running the migration against the owner's actual database, rather than reading
+it again, produced two findings that no unit test had asked for. Both come from
+the same blind spot: **rebuilding a table is not a neutral operation.**
+
+1. **`DROP TABLE files` took every index with it** — including `files_coords_idx`,
+   the partial GPS index created by v13, a LATER migration than the one that
+   built the table. Nothing fails when it disappears; every `near:` / `in:` /
+   `.location` query just quietly becomes a full scan.
+2. **The KEPT row never had its FTS basename corrected.** v24 wrote each NEW
+   row's name from its own path but left the surviving row carrying whatever
+   name the shared row had been analyzed under — its own only by luck. In this
+   library `RAW_SONY_ILCA-77M2 copy 2 2 2.ARW` (which sorts first, so it kept the
+   row) was searchable only as `RAW_SONY_ILCA-77M2.ARW`. **Seven files
+   library-wide** had a searchable name that was not their name — and the drift
+   predates per-file identity, since an external rename left the old basename
+   behind whenever a row had several paths.
+
+Fixed in **v25**, not by editing v24: migrations are append-only, and v24 was
+already applied on this machine, so an in-place fix would have skipped exactly
+the database that needed it. Both repairs are idempotent.
+
+**How the test-host detail mattered.** `MuseTests`' test host IS the app, so
+every `xcodebuild test` run opens the real container database and runs pending
+migrations against the owner's live library. v24 therefore shipped into that
+library during an ordinary test run, hours before anyone chose to apply it —
+which is also why the repair had to be a new migration.
+
+Verified in the running app: v25 applied within a second of launch, wrong
+basenames **7 → 0**, `files_coords_idx` present again, all twelve `.ARW` copies
+matched by their own filenames, and library-wide max alive paths per file = 1
+across 5,360 files. Suite 2,124, audit 17/17.

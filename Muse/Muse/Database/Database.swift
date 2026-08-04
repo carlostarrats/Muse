@@ -852,6 +852,51 @@ final class Database {
             try db.execute(sql: "DELETE FROM duplicate_groups")
         }
 
+        migrator.registerMigration("v25_per_file_identity_repair") { db in
+            // Two things v24 got wrong, found by querying a real library after
+            // it ran rather than by reading the migration again.
+            //
+            // Both are repairs, not new schema, and both are idempotent — which
+            // is the point: v24 is append-only and already applied on machines
+            // that ran the intermediate build, so fixing v24 in place would
+            // silently skip exactly the databases that need it.
+
+            // 1. `DROP TABLE files` takes every index with it, including ones
+            //    created by LATER migrations than the one that made the table.
+            //    v13's partial coordinate index was collateral, and losing it
+            //    turns every `near:` / `in:` / `.location` query into a full
+            //    scan with nothing failing loudly to say so.
+            try db.execute(sql: """
+                CREATE INDEX IF NOT EXISTS files_coords_idx
+                ON files(lat, lon) WHERE lat IS NOT NULL
+                """)
+
+            // 2. v24 wrote each NEW row's FTS basename from its own path, but
+            //    left the KEPT row's alone — and the kept row carried whatever
+            //    name the shared row had been analyzed under, which is only by
+            //    luck its own. In the owner's library the file
+            //    `RAW_SONY_ILCA-77M2 copy 2 2 2.ARW` was searchable only as
+            //    `RAW_SONY_ILCA-77M2.ARW`; seven files were affected.
+            //
+            //    Repaired for EVERY alive path, not just split ones: the same
+            //    drift predates per-file identity (an external rename left the
+            //    old name in FTS whenever a row had several paths), so this
+            //    sweeps that too.
+            let alive = try Row.fetchAll(db, sql: """
+                SELECT file_id, absolute_path FROM paths
+                WHERE is_alive = 1 AND file_id IS NOT NULL
+                """)
+            for row in alive {
+                guard let fid: String = row["file_id"],
+                      let path: String = row["absolute_path"] else { continue }
+                let base = (path as NSString).lastPathComponent
+                try db.execute(sql: """
+                    UPDATE files_fts SET basename = ?
+                    WHERE file_id = ? AND basename <> ?
+                    """, arguments: [base, fid, base])
+            }
+        }
+
         return migrator
     }
 

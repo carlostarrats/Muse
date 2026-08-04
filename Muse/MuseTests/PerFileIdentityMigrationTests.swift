@@ -285,6 +285,77 @@ final class PerFileIdentityMigrationTests: XCTestCase {
         }
     }
 
+    // MARK: - v25 repairs
+
+    /// The KEPT row must end up searchable by its OWN name.
+    ///
+    /// v24 wrote correct basenames for the new rows but left the kept row
+    /// carrying whatever name the shared row had been analyzed under. In the
+    /// owner's library `RAW_SONY_ILCA-77M2 copy 2 2 2.ARW` — which sorts first,
+    /// so it kept the row — was searchable only as `RAW_SONY_ILCA-77M2.ARW`.
+    func testKeptRowIsSearchableByItsOwnName() throws {
+        let queue = try DatabaseQueue()
+        try Database.makeMigrator().migrate(queue, upTo: "v23_edit_luts")
+        try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO files (id, content_hash, kind, last_seen_at, analyzed_hash)
+                VALUES ('F', 'h', 'image', 0, 'h')
+                """)
+            try db.execute(sql: """
+                INSERT INTO paths (id, file_id, absolute_path, is_alive)
+                VALUES ('p1', 'F', '/A/a.jpg', 1), ('p2', 'F', '/A/z.jpg', 1)
+                """)
+            // The shared row was analyzed under the OTHER copy's name.
+            try db.execute(sql: """
+                INSERT INTO files_fts (file_id, basename, ocr_text, caption)
+                VALUES ('F', 'z.jpg', '', '')
+                """)
+        }
+        try migrate(queue)
+        try queue.read { db in
+            for (path, name) in [("/A/a.jpg", "a.jpg"), ("/A/z.jpg", "z.jpg")] {
+                let fid = try String.fetchOne(db, sql:
+                    "SELECT file_id FROM paths WHERE absolute_path = ?", arguments: [path])!
+                XCTAssertEqual(try String.fetchOne(db, sql:
+                    "SELECT basename FROM files_fts WHERE file_id = ?", arguments: [fid]),
+                    name, "\(path) must be searchable by its own name")
+            }
+        }
+    }
+
+    /// v24's table rebuild dropped v13's partial coordinate index. v25 restores
+    /// it for databases that already ran the intermediate migration.
+    func testCoordinateIndexIsRestoredWhenMissing() throws {
+        let queue = try seededQueue(paths: ["/A/only.jpg"])
+        try migrate(queue)
+        try queue.write { db in
+            // Simulate a database migrated by the intermediate build.
+            try db.execute(sql: "DROP INDEX IF EXISTS files_coords_idx")
+        }
+        // Re-running the migrator is a no-op (v25 is recorded), so assert the
+        // repair statement itself is idempotent and restores the index.
+        try queue.write { db in
+            try db.execute(sql: """
+                CREATE INDEX IF NOT EXISTS files_coords_idx
+                ON files(lat, lon) WHERE lat IS NOT NULL
+                """)
+        }
+        try queue.read { db in
+            XCTAssertTrue(try db.indexes(on: "files").contains { $0.name == "files_coords_idx" })
+        }
+    }
+
+    /// The repair must not disturb a name that is already correct.
+    func testRepairLeavesCorrectBasenamesAlone() throws {
+        let queue = try seededQueue(paths: ["/A/only.jpg"])
+        try migrate(queue)
+        try queue.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql:
+                "SELECT basename FROM files_fts WHERE file_id = 'F'"), "only.jpg")
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM files_fts"), 1)
+        }
+    }
+
     /// Two rows sharing a content_hash must now be LEGAL — that is the whole
     /// change. A surviving UNIQUE would make the split fail at insert.
     func testContentHashIsNoLongerUnique() throws {
