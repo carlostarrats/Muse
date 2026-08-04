@@ -565,6 +565,18 @@ final class AnalyzePipeline: ObservableObject {
         }) ?? nil
         guard let analyzedHash else { return }
 
+        // Another file on disk may already hold exactly these bytes, fully
+        // analyzed. Identical pixels give identical answers, so adopt its
+        // results and skip the pass entirely — otherwise twelve byte-identical
+        // RAWs each pay for classify + OCR + palette + CLIP over the same
+        // image. `Indexer.inherit` closes the same hole at index time, for a
+        // copy found while its original was already analyzed; this closes it
+        // for a copy that was queued while its twin was still pending.
+        let adopted = (try? await queue.write { db in
+            try AnalysisReuse.adopt(db: db, fileID: fileID, hash: analyzedHash)
+        }) ?? false
+        if adopted { return }
+
         // Header-only GPS + EXIF read, concurrent with the Vision pass below —
         // it's a few hundred bytes off the front of the file, not a decode, so
         // it must not serialize behind classify/OCR/palette. One header pass
