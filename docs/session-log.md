@@ -6,6 +6,91 @@ the durable rules + a compact index live in `CLAUDE.md`. Nothing here is
 load-bearing for a fresh session beyond what that index already surfaces;
 read an entry when you need the full "why" behind a specific change.
 
+### Editor workspace — 2026-08-03 (on `feat/next-155`)
+
+The editor's twelve control cards stop being two hard-coded `@ViewBuilder` lists
+and become a persisted **workspace**: an ordered list per column plus the set the
+user has hidden. Owner asked for three things — a one-column layout, a way to
+hide modules, and drag-reorder — and they collapse into that one model.
+
+**Single column is not a mode, and the rejected design is the interesting part.**
+A `View ▸ Editor Workspace ▸ Single Column` toggle was designed and dropped:
+restoring "your last two-column arrangement" on uncheck forces two arrangements
+to exist at once, one of them always invisible, plus rules for which one a reset
+applies to. Single column is now just the state where a column's list is empty,
+reached by dragging (or by All Left / All Right in the reorder bar). The menu
+carries three items and no shortcuts: Default Layout, Customize Modules…,
+Reorder Modules.
+
+**The chrome row is not a module.** Zoom, the hide-UI eye, Share and ✕ stay
+pinned top-right whatever happens to the cards. That is what makes an
+all-cards-LEFT layout coherent — it is reachable by dragging whether or not a
+button offers it, so it needed a rule regardless. Canvas insets then follow the
+cards while the top stays with the chrome; all-cards-right lands on Preview's
+exact geometry, so switching Preview ⇄ Edit does not move the photo.
+
+**Reorder mode renders a different view, not a card with its content hidden.**
+That is what makes "nothing inside a card is reachable" structurally true rather
+than a guard on every slider, and it leaves `editorExpandedSections2` untouched
+so every card comes back the way it was. The drag is deliberately the SIDEBAR's
+— same part-and-insert, same `ReorderMath`. Only the column decision is new, and
+it is a midpoint split rather than a hit-test, because a column can be EMPTY and
+an empty column has no frames to hit.
+
+**`EditorView` went 1,682 → 665 lines** on the way past, into six siblings
+(`EditorCards{Left,Right,Crop}`, `EditorCardBuilder`, `EditorCanvasGestures`,
+`EditorSampling`) plus the workspace files. The pass rewrote every card
+declaration anyway, and the health list already flagged the file.
+
+**Driving the running app found two bugs no unit test could**, both about
+layering and key routing. The Customize card opened BEHIND the editor — attached
+to the split view with the shell's other modals, which the hero viewer's overlay
+draws on top of — so every checkbox was unclickable and the menu item read as
+doing nothing. The comments on `editPromptRequest` and `alertRequest` already
+spelled out this exact trap from being bitten twice; I put it in the wrong place
+anyway. And Escape closed the whole viewer instead of cancelling the reorder:
+`HeroImageViewer.installKeyMonitor` takes Escape ahead of SwiftUI and was gated
+only on `modalPresented`, and a reorder is a MODE, not a card.
+
+**Owner review found the Customize card clipping its last row** — it shipped with
+no padding at all, and the presenter sizes a card to whatever its content
+reports, so a card that asks to be exactly as tall as its rows gets it.
+
+**Review round 12** (see `REVIEW-LENSES.md`) found seven more, two worth
+remembering. `stepCanvasRefit` walked `chromeProgress` to make the photo glide
+into a freed column — but that value had already settled by the time a column
+emptied, so thirteen frames recomputed an identical inset. It animated nothing
+while the code, the commit message and the spec all said "glides"; the
+emptiedness is continuous now and that is what gets walked. And the clipping
+guard written for the owner's bug compared the last row to the WINDOW, hundreds
+of points taller than the card, so it would have passed on the very bug it
+existed for — rewritten against the card's own frame and **proven by removing
+the padding and watching it go red**. Also: dead code from the round's own diff,
+two per-frame allocations, reorder being mouse-only while its VoiceOver hint
+promised a drag, and a pre-existing test still aiming at tiles by window fraction
+that failed saying "Compare is broken" when compare was fine.
+
+**The session's real lesson was about verification, not the feature.** Roughly
+100 minutes went on re-running things that were already green — four full UI
+drive suites, ten unit-target runs, ten Release builds — for a feature whose code
+was correct for most of it. Owner: *"your automation testing is out of control…
+it should not take that long."* The tier rule in `durable-constraints.md`
+already existed and I had read it. It now carries a ten-minute budget, a
+one-checkpoint rule, "never re-run to confirm a pass", "never two builds at
+once", and the drive suites are **`ask`-gated** in `.claude/settings.local.json`
+so a sixteen-minute run cannot start silently. A companion rule went in too: a
+drive test may not mutate global UI state it cannot put back — a window-resizing
+test "restored" the frame with a RELATIVE drag, which is not a restore, and broke
+an unrelated test two positions away.
+
+**Verification.** 2,097 `MuseTests` green; `audit-invariants.sh` 15/15; Release
+build warning-free; 1,117 keys, 0 untranslated. The five new workspace drive
+tests passed individually and the full 17-test suite passed before round 12's
+fixes — but it has **not** had a clean end-to-end pass since them, and the
+**drag itself remains unverified**: XCUITest cannot drive a SwiftUI
+`DragGesture`, and the parting, the wiggle and the cursor are not assertable from
+an element tree. The open checks are listed in `FEATURE-LEDGER.md` Part 4.
+
 ### Tone-zone dragging, crop handles, ⌘U — 2026-08-03 (on `feat/next-153`)
 
 Three owner reports from driving the editor, plus one thing the QA pass turned up.
