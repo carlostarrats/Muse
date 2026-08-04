@@ -29,13 +29,28 @@ nonisolated struct MaterializedCollection: Equatable, Sendable {
 }
 
 nonisolated enum CollectionMaterializer {
+    /// `fileIDForPath` maps an archived occurrence path to the row it
+    /// reconnected to. When the archive carries per-occurrence membership it
+    /// WINS: hash-keyed membership cannot distinguish two byte-identical
+    /// copies, so restoring by hash put every copy in the collection. An
+    /// archive taken before per-file identity has no path fields and falls back
+    /// to the hash view, which is the correct reading of what it recorded.
     static func materialize(_ collections: [BackupCollection],
-                            fileIDForHash: [String: String]) -> [MaterializedCollection] {
+                            fileIDForHash: [String: String],
+                            fileIDForPath: [String: String] = [:]) -> [MaterializedCollection] {
         var out: [MaterializedCollection] = []
         for c in collections {
-            let members = c.members.compactMap { m -> MaterializedMember? in
-                guard let fid = fileIDForHash[m.content_hash] else { return nil }
-                return MaterializedMember(fileID: fid, addedBy: m.added_by)
+            let members: [MaterializedMember]
+            if let paths = c.member_paths {
+                members = paths.compactMap { m in
+                    guard let fid = fileIDForPath[m.original_path] else { return nil }
+                    return MaterializedMember(fileID: fid, addedBy: m.added_by)
+                }
+            } else {
+                members = c.members.compactMap { m -> MaterializedMember? in
+                    guard let fid = fileIDForHash[m.content_hash] else { return nil }
+                    return MaterializedMember(fileID: fid, addedBy: m.added_by)
+                }
             }
             // Drop a dead AUTO collection (zero reconnected members) — UNLESS it's
             // a hand-made one (preserved even empty) or a hidden one (a durable
@@ -47,9 +62,11 @@ nonisolated enum CollectionMaterializer {
             out.append(MaterializedCollection(
                 id: c.id, name: c.name, sortOrder: c.sort_order,
                 modelVersion: c.model_version, isHidden: c.is_hidden,
-                coverFileID: c.cover_hash.flatMap { fileIDForHash[$0] },
+                coverFileID: c.cover_path.flatMap { fileIDForPath[$0] }
+                    ?? c.cover_hash.flatMap { fileIDForHash[$0] },
                 memberFileIDs: members,
-                excludedFileIDs: c.excluded_hashes.compactMap { fileIDForHash[$0] },
+                excludedFileIDs: c.excluded_paths.map { $0.compactMap { fileIDForPath[$0] } }
+                    ?? c.excluded_hashes.compactMap { fileIDForHash[$0] },
                 icon: c.icon, color: c.color, smartRules: c.smart_rules))
         }
         return out

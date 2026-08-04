@@ -140,10 +140,27 @@ nonisolated enum ReconnectApplier {
         }
     }
 
+    /// `diskPathForOriginal` maps each archived occurrence path to where that
+    /// file actually landed — a restore may reconnect a library at a new
+    /// location. Resolving those to row ids is what lets membership be restored
+    /// per FILE; without it two byte-identical copies both join every
+    /// collection either was in.
     static func applyCollections(_ archive: BackupArchive, fileIDForHash: [String: String],
+                                 diskPathForOriginal: [String: String] = [:],
                                  queue: DatabaseQueue) async throws {
+        let fileIDForPath = try await queue.read { db -> [String: String] in
+            var map: [String: String] = [:]
+            for (original, disk) in diskPathForOriginal {
+                guard let fid = try String.fetchOne(db, sql: """
+                    SELECT file_id FROM paths WHERE absolute_path = ? AND is_alive = 1
+                    """, arguments: [disk]) else { continue }
+                map[original] = fid
+            }
+            return map
+        }
         let materialized = CollectionMaterializer.materialize(archive.collections,
-                                                              fileIDForHash: fileIDForHash)
+                                                              fileIDForHash: fileIDForHash,
+                                                              fileIDForPath: fileIDForPath)
         let now = Int64(Date().timeIntervalSince1970)
         try await queue.write { db in
             for c in materialized {

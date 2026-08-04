@@ -122,6 +122,14 @@ enum BackupBuilder {
                 guard let h = hashByFileID[fid], backedUp.contains(h) else { return nil }
                 return h
             }
+            // The occurrence a file_id names. Under per-file identity that is
+            // exactly one alive path, which is what makes path-keyed membership
+            // unambiguous; `min` keeps it deterministic if the invariant is ever
+            // violated. A hash can't do this job — two copies share it.
+            func backupPath(forFileID fid: String) -> String? {
+                guard backupHash(forFileID: fid) != nil else { return nil }
+                return pathsByFileID[fid]?.map(\.absolute_path).min()
+            }
 
             // Collections, members/cover/exclusions re-keyed to content_hash.
             let collRows = try CollectionRow.fetchAll(db)
@@ -137,11 +145,23 @@ enum BackupBuilder {
                     "SELECT file_id FROM collection_exclusions WHERE collection_id = ?",
                     arguments: [c.id]).compactMap { backupHash(forFileID: $0) }
                 let coverHash = c.cover_file_id.flatMap { backupHash(forFileID: $0) }
+                // The same three facts keyed on the occurrence instead of the
+                // content — the view that can tell two byte-identical copies
+                // apart. Sorted so an archive is byte-stable.
+                let memberPaths = memberRows.compactMap { m -> BackupPathMember? in
+                    guard let p = backupPath(forFileID: m.file_id) else { return nil }
+                    return BackupPathMember(original_path: p, added_by: m.added_by)
+                }.sorted { $0.original_path < $1.original_path }
+                let excludedPaths = try String.fetchAll(db, sql:
+                    "SELECT file_id FROM collection_exclusions WHERE collection_id = ?",
+                    arguments: [c.id]).compactMap { backupPath(forFileID: $0) }.sorted()
                 collections.append(BackupCollection(
                     id: c.id, name: c.name, sort_order: c.sort_order,
                     model_version: c.model_version, is_hidden: c.is_hidden,
                     cover_hash: coverHash, members: members, excluded_hashes: excluded,
-                    icon: c.icon, color: c.color, smart_rules: c.smart_rules))
+                    icon: c.icon, color: c.color, smart_rules: c.smart_rules,
+                    member_paths: memberPaths, excluded_paths: excludedPaths,
+                    cover_path: c.cover_file_id.flatMap { backupPath(forFileID: $0) }))
             }
 
             let starRows = try StarredFolderRow.fetchAll(db)

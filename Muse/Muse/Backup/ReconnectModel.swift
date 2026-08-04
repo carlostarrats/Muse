@@ -179,8 +179,17 @@ final class ReconnectModel: ObservableObject {
         // reload the live engine so the sidebar/Collections page actually show
         // them — the early addRoot→reload fired before these writes landed.
         if let map = try? await ReconnectApplier.currentFileIDForHash(queue: queue) {
+            // Where each archived occurrence actually landed. Collection
+            // membership is restored through this rather than through the hash,
+            // which cannot tell two byte-identical copies apart.
+            var diskPathForOriginal: [String: String] = [:]
+            for matches in byFile.values {
+                for m in matches { diskPathForOriginal[m.occurrence.original_path] = m.diskPath }
+            }
             do {
-                try await ReconnectApplier.applyCollections(archive, fileIDForHash: map, queue: queue)
+                try await ReconnectApplier.applyCollections(
+                    archive, fileIDForHash: map,
+                    diskPathForOriginal: diskPathForOriginal, queue: queue)
             } catch { applyFailed = true }
             try? await ReconnectApplier.applyStars(archive, queue: queue)
             await CollectionsEngine.shared.reload()

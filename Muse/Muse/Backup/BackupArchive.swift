@@ -57,6 +57,18 @@ nonisolated struct BackupMember: Codable, Equatable, Sendable {
     var added_by: String        // "auto" | "manual"
 }
 
+/// Membership keyed on the OCCURRENCE rather than the content.
+///
+/// `BackupMember` identifies a member by `content_hash`, which under per-file
+/// identity is lossy: two byte-identical files are two different photos, and
+/// "this one is in the collection, its twin is not" cannot be said at all —
+/// restoring put every copy of those bytes in the collection. A path names
+/// exactly one occurrence.
+nonisolated struct BackupPathMember: Codable, Equatable, Sendable {
+    var original_path: String
+    var added_by: String        // "auto" | "manual"
+}
+
 nonisolated struct BackupCollection: Codable, Equatable, Sendable {
     var id: String
     var name: String
@@ -71,6 +83,16 @@ nonisolated struct BackupCollection: Codable, Equatable, Sendable {
     var color: String? = nil
     // Smart-collection rules (v12). Optional so pre-smart archives decode.
     var smart_rules: String? = nil
+    /// Membership per occurrence path — the per-file-identity view, preferred
+    /// on restore. The hash-keyed `members` / `excluded_hashes` / `cover_hash`
+    /// above are still written so an older build can read a newer archive, and
+    /// are the fallback when these are nil (an archive taken before the change).
+    ///
+    /// Optional-with-nil-default, the archive's standing compatibility
+    /// mechanism — `currentSchema` deliberately stays 1.
+    var member_paths: [BackupPathMember]? = nil
+    var excluded_paths: [String]? = nil
+    var cover_path: String? = nil
 }
 
 nonisolated struct BackupStar: Codable, Equatable, Sendable {
