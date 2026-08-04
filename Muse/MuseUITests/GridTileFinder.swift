@@ -41,13 +41,36 @@ extension XCUIApplication {
     /// the window is a different size — landing in a gap, which CLEARS the
     /// selection, or on the tile already selected, which toggles it off. Both
     /// then fail reporting that the feature is broken.
+    /// Visibility is decided by the tile's own CENTRE being inside the window,
+    /// not by `isHittable`.
+    ///
+    /// `isHittable` was the filter until 2026-08-04, when every photo-opening
+    /// test began failing with "no photo tile found in the grid". A probe found
+    /// 35 correctly-labelled tiles and `isHittable == false` on all of them,
+    /// including ones sitting in plain view inside the window. The suite
+    /// already knew not to trust that mechanism here — `hit()` exists, and says
+    /// in its own comment, because "XCUITest's hit-point resolution fails
+    /// inside the grid's transparent ScrollView". The finder then gated on the
+    /// very thing the clicker was written to work around, so the two disagreed
+    /// about whether the same tile was clickable.
+    ///
+    /// The centre test is what the click actually needs: `hit()` clicks a
+    /// normalized coordinate on the element, which succeeds wherever that point
+    /// lands inside the window, `isHittable` notwithstanding. It also keeps out
+    /// the tiles the masonry has scrolled far below the viewport (frames at
+    /// y≈1659 in a 922pt window), which the old filter happened to exclude for
+    /// the wrong reason.
     func photoTiles(limit: Int) -> [XCUIElement] {
+        let bounds = awaitMainWindow(5).frame
         var found: [XCUIElement] = []
         for i in 0..<buttons.count where found.count < limit {
             let button = buttons.element(boundBy: i)
             let label = button.label.lowercased()
             guard Self.photoExtensions.contains(where: { label.hasSuffix($0) }) else { continue }
-            guard button.exists, button.isHittable else { continue }
+            guard button.exists else { continue }
+            let frame = button.frame
+            guard frame.width > 1, frame.height > 1 else { continue }
+            guard bounds.contains(CGPoint(x: frame.midX, y: frame.midY)) else { continue }
             found.append(button)
         }
         return found

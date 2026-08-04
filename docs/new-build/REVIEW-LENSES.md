@@ -117,6 +117,7 @@ Rounds 1–3 are recorded in `REVIEW-FINDINGS.md` and `FEATURE-LEDGER.md`; round
 | **Non-finite floats (NaN/∞) reaching an integer conversion** | **16** (2026-08-04) | 1 crash — `min(max(x, 0), 1)` handles the infinities and passes NaN straight through, so the editor's float stats tap trapped in `UInt8(_:)`. Reproduced as a test that CRASHED the test process before the fix. Distinct from round 6's `INT-1`, which is about magnitude on file-DECLARED numbers; this is about NaN on COMPUTED ones, and the clamp that reads like a sanitizer is what hides it |
 | **What can PUT a NaN into the render?** (the same finding, walked upstream) | **16** | 2 findings — `Float("nan")` and `Float("1e40")` both parse, so the `.cube` importer accepted either; and a restored `.muselibrary` writes `edit_luts` by plain INSERT, so its floats never see the importer at all. Refused at both boundaries |
 | **Does the REDACTION redact?** (what an error object carries) | **16** | 1 finding, and the second time at the same three call sites. Round 15 removed the paths interpolated into `NSLog` and left `String(describing: error)` beside them under a comment reading "paths deliberately omitted". A Foundation filesystem error prints its whole `userInfo` — source path, destination path, file name. Proven by running a real failing `moveItem`, not by reading. Now `ErrorRedaction.summary(of:)`, mechanized as **`LOG-1`** |
+| **Does the TEST HARNESS still agree with the platform?** | **16** (2026-08-04) | 3 findings, 2 fixed. Running the drive suite found 23 tests red — none of them the app's fault. The main window is now published with the AXDialog subrole (`windows=0 dialogs=1 buttons=258`), and every grid tile reports `isHittable == false` including ones in plain view. Both were asserted-on as if fixed properties of the platform. Present at the previous commit, so not caused by the round's own work — proven by re-running at `d3d3bd8` in a worktree. Third layer (a coordinate double-click no longer opening the hero) is still open. **A UI test that names an element TYPE, or trusts `isHittable`, is asserting about AppKit, not about Muse** |
 | **A claim about WHICH THREAD ran something** | **16** | 1 finding, in round 15's own output — `ClipEngine` was recorded as main-isolated "because it holds the encoders", in a source comment, a backlog item and an unrun lens. It is declared `actor` and always has been. `SWIFT_DEFAULT_ACTOR_ISOLATION` isolates declarations that don't say what they are. The 6 ms was measured correctly and attributed to the wrong thread; a thread claim is testable in four lines and this one never was |
 
 ## Part 2 — lenses NOT yet run
@@ -577,3 +578,57 @@ inside a `@Sendable` GRDB read closure, so nothing heavy runs on main.
 **Ended at:** audit 21/21 (one new check, negative-tested in both the
 single-line and multi-line forms), unit suite 2,181 green, Release build
 warning-free.
+
+---
+
+## Round 16b (2026-08-04) — running the drive suite, and what it found
+
+The owner asked whether a UI-driven automation pass was worth doing. It was, but
+not for the reason either of us expected: **it found the harness broken, not the
+app.**
+
+Worth being precise, because the failure mode is the one this file has already
+recorded twice — *these tests fail in ways that accuse the app*. 23 tests failed
+saying "no main window", including `testAppLaunchesWithPopulatedSidebar`, which
+does nothing but wait for one. Read at face value that is a catastrophic app
+regression on the commit that had just been made.
+
+It was none of those things:
+
+- Launched directly and queried through `CGWindowListCopyWindowInfo`, the app
+  has exactly **one on-screen window, layer 0, 1489×922** — with and without the
+  suite's launch arguments.
+- `MuseTagChipRowTests`, same launch and same guard, **passed in the same run**,
+  reading 258 buttons and their frames out of that window.
+- The same single test **fails identically at `d3d3bd8`**, the commit before the
+  round's work, run from a clean worktree.
+
+A probe settled the cause: `PROBE windows=0 dialogs=1 sheets=0 groups=11
+buttons=258`. The window is published with the AXDialog subrole, so
+`app.windows` matches nothing while every descendant stays reachable. `MuseApp`
+asks for a plain `WindowGroup` and sets no window style.
+
+Fixing that exposed a second layer: 35 correctly-labelled tiles, `isHittable ==
+false` on **all** of them, including ones sitting in plain view. The suite
+already knew not to trust that mechanism here — `hit()` exists, and says so in
+its own comment, because "XCUITest's hit-point resolution fails inside the
+grid's transparent ScrollView". The finder then gated on exactly the thing the
+clicker was written to work around. `GridTileFinder` now tests the tile's centre
+against the window's frame, which is what clicking by coordinate actually needs.
+
+And a third, still **OPEN**: with tiles found and clicked, the double-click no
+longer opens the hero viewer. That gates most of the remaining tests.
+
+**The lens, and it belongs in Part 1 permanently:** *a UI test that names an
+element TYPE, or trusts `isHittable`, is asserting about AppKit rather than
+about Muse.* Round 9 made these tests locate the tile they click instead of
+computing its position; the same reasoning reaches the window itself and the
+notion of hittability. Anything the platform is free to reclassify is not a
+thing to assert on.
+
+**Status: the automated GUI regression net does not currently exist.** Two of
+three layers are repaired and `testAppLaunchesWithPopulatedSidebar` is green
+again in 11s, but the suite as a whole is red for reasons that have nothing to
+do with the app. Recorded in the ledger's G1. Whether to keep repairing this
+harness or to rely on manual GUI verification is an owner decision, and until it
+is made **a green drive suite must not be claimed as evidence for anything**.

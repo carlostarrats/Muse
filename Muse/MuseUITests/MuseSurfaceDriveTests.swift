@@ -142,7 +142,7 @@ final class MuseSurfaceDriveTests: XCTestCase {
     /// Select the first grid tile. The grid publishes tiles as images inside the
     /// content group; clicking the group's centre is what a user does.
     private func selectFirstTile() {
-        let window = app.windows.firstMatch
+        let window = app.awaitMainWindow(uiTimeout)
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
         // The TILE, not a window fraction — see `firstPhotoTile`. A fraction is
         // aimed by whatever size the window was restored at.
@@ -156,7 +156,7 @@ final class MuseSurfaceDriveTests: XCTestCase {
         // it renders only once AppState has published root nodes, which means
         // the DB opened and the migrations ran. (A bare "the window exists"
         // assertion would pass while the app did nothing.)
-        let window = app.windows.firstMatch
+        let window = app.awaitMainWindow(uiTimeout)
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
         XCTAssertTrue(app.staticTexts["FOLDERS"].waitForExistence(timeout: uiTimeout),
                       "sidebar did not render — DB or AppState did not publish")
@@ -172,7 +172,7 @@ final class MuseSurfaceDriveTests: XCTestCase {
     /// exists". That is the exact "compiles, passes, does nothing" failure this
     /// suite is meant to catch, so the assertion is now a hero-ONLY control.
     func testHeroViewerOpensAndEscapeCloses() throws {
-        let window = app.windows.firstMatch
+        let window = app.awaitMainWindow(uiTimeout)
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
         guard openPhoto(in: app) else { return }
         snap("03-hero-open")
@@ -198,7 +198,7 @@ final class MuseSurfaceDriveTests: XCTestCase {
     /// exercised. The hero viewer carries a (Preview | Edit) pair; switching to
     /// Edit must bring up adjustment controls, not just re-label the toggle.
     func testEditorOpensFromHero() throws {
-        let window = app.windows.firstMatch
+        let window = app.awaitMainWindow(uiTimeout)
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
         guard openPhoto(in: app) else { return }
 
@@ -227,7 +227,7 @@ final class MuseSurfaceDriveTests: XCTestCase {
     /// (before this the editor could only ever show a fitted image), and the
     /// eye hides every control including the hero's Preview | Edit switch.
     func testEditorZoomAndHideControls() throws {
-        let window = app.windows.firstMatch
+        let window = app.awaitMainWindow(uiTimeout)
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
         guard openPhoto(in: app) else { return }
 
@@ -314,7 +314,7 @@ final class MuseSurfaceDriveTests: XCTestCase {
     /// row behind, and the delete affordance is hover-only. The save itself was
     /// confirmed by screenshot when the bug was fixed (2026-08-01).
     func testEditorNamePromptOpensAboveTheEditor() throws {
-        let window = app.windows.firstMatch
+        let window = app.awaitMainWindow(uiTimeout)
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
         guard openPhoto(in: app) else { return }
         let editToggle = app.buttons["Edit"]
@@ -378,7 +378,7 @@ final class MuseSurfaceDriveTests: XCTestCase {
     /// only — "Before" and "After" floating over one unchanged canvas — which
     /// is why it read as a toggle that does nothing.
     func testSideBySideDrawsTwoImages() throws {
-        let window = app.windows.firstMatch
+        let window = app.awaitMainWindow(uiTimeout)
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
         guard openPhoto(in: app) else { return }
         let editToggle = app.buttons["Edit"]
@@ -411,7 +411,7 @@ final class MuseSurfaceDriveTests: XCTestCase {
     /// The Styles browser: its sections collapse, it switches between grid and
     /// list, and "Original" exists as a thing you can pick.
     func testStylesBrowserModesAndOriginal() throws {
-        let window = app.windows.firstMatch
+        let window = app.awaitMainWindow(uiTimeout)
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
         guard openPhoto(in: app) else { return }
         let editToggle = app.buttons["Edit"]
@@ -462,7 +462,7 @@ final class MuseSurfaceDriveTests: XCTestCase {
     /// Compare needs a MULTI-selection, so this also exercises cmd-click
     /// multi-select in the grid (P10) on the way.
     func testCompareSideBySideOpens() throws {
-        let window = app.windows.firstMatch
+        let window = app.awaitMainWindow(uiTimeout)
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
         // Plain-click the first tile, then CMD-click a DIFFERENT one to extend.
         // Getting this wrong is easy and silent: cmd-clicking the tile that is
@@ -599,7 +599,7 @@ final class MuseSurfaceDriveTests: XCTestCase {
     /// Every workspace test needs the same three steps first.
     @discardableResult
     private func openEditor() -> Bool {
-        let window = app.windows.firstMatch
+        let window = app.awaitMainWindow(uiTimeout)
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
         guard openPhoto(in: app) else { return false }
         let editToggle = app.buttons["Edit"]
@@ -629,7 +629,7 @@ final class MuseSurfaceDriveTests: XCTestCase {
     /// The submenu exists, and every item is DISABLED outside Edit mode — the
     /// same contextual gate the hide-UI item uses.
     func testEditorWorkspaceMenuIsOffOutsideTheEditor() throws {
-        let window = app.windows.firstMatch
+        let window = app.awaitMainWindow(uiTimeout)
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
 
         app.menuBars.menuBarItems["View"].click()
@@ -801,7 +801,7 @@ final class MuseSurfaceDriveTests: XCTestCase {
     /// "Images per row" toolbar slider is still published behind the viewer —
     /// asserting zero failed against a perfectly collapsed panel.
     func testReorderModeCollapsesEveryCardAndCancelRestores() throws {
-        let window = app.windows.firstMatch
+        let window = app.awaitMainWindow(uiTimeout)
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
         let baseline = app.sliders.count
 

@@ -88,7 +88,7 @@ final class MuseExportDriveTests: XCTestCase {
 
     /// Single-click the grid to select a tile (double-click would open it).
     private func selectFirstTile() {
-        let window = app.windows.firstMatch
+        let window = app.awaitMainWindow(uiTimeout)
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
         guard openPhoto(in: app, doubleClick: false, settle: 1.5) else { return }
     }
@@ -166,7 +166,7 @@ final class MuseExportDriveTests: XCTestCase {
     /// "In front" is asserted by hit-testability: a card behind the viewer's
     /// full-window overlay cannot be hit, however much of it exists.
     func testExportCardOpensInFrontOfTheHeroViewer() throws {
-        let window = app.windows.firstMatch
+        let window = app.awaitMainWindow(uiTimeout)
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
         guard openPhoto(in: app, settle: 3) else { return }
         snap("02-hero-open")
@@ -190,7 +190,7 @@ final class MuseExportDriveTests: XCTestCase {
     /// Same again from EDIT mode, which replaces the viewer's whole right rail
     /// and so is a different layer from Preview.
     func testExportCardOpensInFrontOfTheEditor() throws {
-        let window = app.windows.firstMatch
+        let window = app.awaitMainWindow(uiTimeout)
         XCTAssertTrue(window.waitForExistence(timeout: uiTimeout), "no main window")
         guard openPhoto(in: app, settle: 3) else { return }
 
