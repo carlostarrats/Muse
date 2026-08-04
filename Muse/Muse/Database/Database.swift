@@ -827,9 +827,18 @@ final class Database {
             // and at that moment two rows differing only by `parent_dir`
             // collapse onto one primary key and the migration fails.
             //
-            // Rows on a file with NO alive path are left alone: that is v7's
-            // deliberate NULL-scope orphan case, whose lifecycle belongs to
-            // housekeeping.
+            // Two things this must NOT delete, both tested rather than trusted:
+            //
+            //   * rows on a file with NO alive path — v7's deliberate
+            //     NULL-scope orphan, whose lifecycle belongs to housekeeping.
+            //     The loop only visits alive paths, so they are never reached.
+            //   * NULL-scoped rows on a file that IS alive. `parent_dir IS NOT
+            //     NULL` is belt-and-braces, NOT the mechanism: SQL's
+            //     three-valued logic already spares them, because `NULL <> '/A'`
+            //     evaluates to NULL rather than true and the DELETE never
+            //     matches. Proven by removing the clause and watching the test
+            //     still pass. It stays because relying on 3VL silently is how
+            //     someone later "simplifies" this into a data-loss bug.
             let alive = try Row.fetchAll(db, sql: """
                 SELECT file_id, absolute_path FROM paths
                 WHERE is_alive = 1 AND file_id IS NOT NULL

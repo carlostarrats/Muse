@@ -8881,3 +8881,29 @@ edits still inherit, leaving a transient orphan row that `pruneUnreachable`
 collects after its 180-day window.
 
 Suite **2,129**, audit 17/17, Release warning-free.
+
+### Review round 14 — the DELETE, and an explanation that was wrong
+
+One shape left unexamined: v24 ends by DELETEing per-location rows whose
+`parent_dir` is not the folder their file occupies. Its safety rested on two
+claims made only in a comment, and a DELETE is the worst place to leave a claim
+untested. Three tests added — a file with no alive path keeps its rows, a
+NULL-scoped row survives on a live file, and the sweep still removes a row for a
+folder the file does not occupy.
+
+All three hold. But running the negative **falsified the stated reason.**
+Deleting the `parent_dir IS NOT NULL` guard leaves the tests passing, because
+SQL's three-valued logic already spares those rows: `NULL <> '/A'` evaluates to
+NULL, not true, so the DELETE never matches them. The comment credited the
+guard. The guard is belt-and-braces; 3VL is the mechanism.
+
+The guard stays — relying on 3VL silently is how someone later "simplifies" this
+into a data-loss bug — and the test was re-aimed at the rewrite that would
+actually destroy tags (`COALESCE(parent_dir, '')`), confirmed to fail against it.
+
+**The lens worth keeping: a negative test checks your EXPLANATION, not just your
+code.** Round 14 found no behavioural defect; the finding was that a correct
+piece of code was correct for a different reason than documented.
+
+Static review of this session's diff is done: two rounds, the second finding no
+behaviour bug. Suite **2,132**, audit 17/17, Release warning-free.

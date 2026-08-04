@@ -390,6 +390,101 @@ final class PerFileIdentityMigrationTests: XCTestCase {
         }
     }
 
+    // MARK: - What the stranded-row sweep must NOT delete
+
+    /// v24 ends by DELETEing per-location rows whose `parent_dir` is not the
+    /// folder their file occupies. Its safety rested on two claims made only in
+    /// a comment, and a DELETE is the worst place to leave a claim untested.
+    ///
+    /// Claim 1: a file with NO alive path is skipped entirely — that is v7's
+    /// deliberate NULL-scope orphan, whose lifecycle belongs to housekeeping.
+    func testSweepLeavesRowsOnAFileWithNoAlivePath() throws {
+        let queue = try DatabaseQueue()
+        try Database.makeMigrator().migrate(queue, upTo: "v23_edit_luts")
+        try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO files (id, content_hash, kind, last_seen_at)
+                VALUES ('ghost', 'gh', 'image', 0)
+                """)
+            try db.execute(sql: """
+                INSERT INTO tags (id, file_id, parent_dir, label, source)
+                VALUES ('t1', 'ghost', '/somewhere', 'precious', 'manual')
+                """)
+        }
+        try migrate(queue)
+        try queue.read { db in
+            XCTAssertEqual(try Int.fetchOne(db, sql:
+                "SELECT COUNT(*) FROM tags WHERE file_id = 'ghost'"), 1,
+                "a file with no alive path must keep its rows")
+        }
+    }
+
+    /// Claim 2: a NULL `parent_dir` row survives even on a file that IS alive.
+    /// v7 stores orphaned tags with a NULL scope on purpose.
+    ///
+    /// This pins the BEHAVIOUR, not the mechanism — and the distinction was
+    /// found by running the negative. Deleting the sweep's `parent_dir IS NOT
+    /// NULL` clause leaves this test passing, because SQL's three-valued logic
+    /// already spares the row: `NULL <> '/A'` is NULL, not true, so the DELETE
+    /// never matches it. The clause is deliberate belt-and-braces. What this
+    /// test would actually catch is a rewrite that reaches for `IS NOT` or
+    /// `COALESCE` and starts matching NULLs — which is the failure worth
+    /// guarding, since it silently destroys user tags.
+    func testSweepLeavesNullScopedRowsAlone() throws {
+        let queue = try DatabaseQueue()
+        try Database.makeMigrator().migrate(queue, upTo: "v23_edit_luts")
+        try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO files (id, content_hash, kind, last_seen_at, analyzed_hash)
+                VALUES ('F', 'h', 'image', 0, 'h')
+                """)
+            try db.execute(sql: """
+                INSERT INTO paths (id, file_id, absolute_path, is_alive)
+                VALUES ('p1', 'F', '/A/x.jpg', 1)
+                """)
+            try db.execute(sql: """
+                INSERT INTO tags (id, file_id, parent_dir, label, source)
+                VALUES ('own', 'F', '/A', 'kept', 'manual'),
+                       ('nul', 'F', NULL, 'unscoped', 'manual')
+                """)
+        }
+        try migrate(queue)
+        try queue.read { db in
+            let labels = try String.fetchAll(db, sql:
+                "SELECT label FROM tags WHERE file_id = 'F' ORDER BY label")
+            XCTAssertEqual(labels, ["kept", "unscoped"],
+                           "the NULL-scoped tag must survive the sweep")
+        }
+    }
+
+    /// And the sweep must still do its job: a row for a folder the file does
+    /// not occupy is removed, so `parent_dir` can be dropped later without two
+    /// rows collapsing onto one primary key.
+    func testSweepDoesRemoveARowForAFolderTheFileDoesNotOccupy() throws {
+        let queue = try DatabaseQueue()
+        try Database.makeMigrator().migrate(queue, upTo: "v23_edit_luts")
+        try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO files (id, content_hash, kind, last_seen_at, analyzed_hash)
+                VALUES ('F', 'h', 'image', 0, 'h')
+                """)
+            try db.execute(sql: """
+                INSERT INTO paths (id, file_id, absolute_path, is_alive)
+                VALUES ('p1', 'F', '/A/x.jpg', 1)
+                """)
+            try db.execute(sql: """
+                INSERT INTO notes (file_id, parent_dir, body, updated_at)
+                VALUES ('F', '/A', 'mine', 1), ('F', '/GONE', 'stale', 1)
+                """)
+        }
+        try migrate(queue)
+        try queue.read { db in
+            let dirs = try String.fetchAll(db, sql:
+                "SELECT parent_dir FROM notes WHERE file_id = 'F'")
+            XCTAssertEqual(dirs, ["/A"])
+        }
+    }
+
     /// The repair must not disturb a name that is already correct.
     func testRepairLeavesCorrectBasenamesAlone() throws {
         let queue = try seededQueue(paths: ["/A/only.jpg"])
