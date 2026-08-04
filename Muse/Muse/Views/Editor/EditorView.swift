@@ -34,6 +34,17 @@ struct EditorView: View {
     /// flight, so it hands the action down rather than the editor reaching for
     /// AppState and skipping the choreography.
     var onClose: () -> Void = {}
+    /// Where the photo is on screen right now, in the hero overlay's coordinate
+    /// space (`ViewerGeometry.overlaySpace`).
+    ///
+    /// Reported upward rather than recomputed by the hero, because the rect is
+    /// a function of state only this view has — which columns are empty, how
+    /// far the hide-UI animation has run, the canvas zoom and pan. The hero
+    /// needs it to close from Edit without the photo jumping: Preview fits the
+    /// photo beside ONE info column and Edit fits it between TWO panels, so a
+    /// close that simply revealed the Preview page would move and resize the
+    /// picture in the frame before the flight even started.
+    var onCanvasRect: ((CGRect) -> Void)? = nil
     @Environment(\.theme) var theme
 
     @AppStorage(AppSettings.editorBackdropKey) var backdropRaw =
@@ -526,8 +537,16 @@ struct EditorView: View {
                     .position(x: content.midX, y: content.midY)
             }
             .frame(width: geo.size.width, height: geo.size.height)
-            .onAppear { canvasSize = geo.size }
+            .onAppear {
+                canvasSize = geo.size
+                reportCanvasRect(content, in: geo)
+            }
             .onChange(of: geo.size) { _, size in canvasSize = size }
+            // Every input to `content` — zoom, pan, the panel insets, the
+            // image's own aspect, and a window resize through all of them —
+            // folded into one observation, so the hero's copy can never be a
+            // layout behind the picture.
+            .onChange(of: content) { _, rect in reportCanvasRect(rect, in: geo) }
             .gesture(panGesture(canvas: geo.size))
             .simultaneousGesture(magnifyGesture(canvas: geo.size))
             .onHover { hovering in
@@ -541,6 +560,18 @@ struct EditorView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// `content` is in the canvas reader's own space; the hero's flight works in
+    /// the overlay's. Converted here, via the overlay's NAMED space rather than
+    /// `.global` — see `ViewerGeometry.overlaySpace` for why the two are not
+    /// interchangeable. (The editor has one call site, inside that space; drawn
+    /// anywhere else this offset is meaningless and the report should be left
+    /// unwired.)
+    private func reportCanvasRect(_ content: CGRect, in geo: GeometryProxy) {
+        guard let onCanvasRect else { return }
+        let origin = geo.frame(in: .named(ViewerGeometry.overlaySpace)).origin
+        onCanvasRect(content.offsetBy(dx: origin.x, dy: origin.y))
     }
 
     /// The width ÷ height the canvas view takes, from the image being shown.

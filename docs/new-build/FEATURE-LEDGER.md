@@ -756,3 +756,80 @@ frame-based — so a visual glitch there cannot corrupt a layout.
   invisible. See the spec's §9.
 * **No reordering in the Customize modal**, and no visibility in reorder mode.
   Two ways to do one thing in two places drift apart.
+
+## Part 5 — leaving the editor (2026-08-03)
+
+Branch: `feat/next-155`. No spec — this came out of an owner question about
+whether closing from Edit could borrow Preview's closing motion.
+
+Two things, and the first one is a shipped bug the second one depended on.
+
+### P5.1 — Preview showed the photo as it was on OPEN, not the edit (FIXED)
+
+| Automated | Static | Runtime |
+|---|---|---|
+| none — view-level state, no unit seam | code-read to root cause | ✅ **owner-confirmed, both directions** |
+
+Blow a photo out in Edit, tap Preview: the photo was normal again. The edit was
+saved and correct, just invisible until the viewer was closed and reopened.
+
+A one-day regression from `03462ff`, which kept `HeroStage` MOUNTED behind the
+editor so the Preview ⇄ Edit flip would be instant. `loadFullRes` renders the
+saved stack but was driven by `.task(id: url)`, and the URL doesn't change on
+the way out of Edit — so the decode could never re-fire. Nothing else could
+invalidate it: `EditStackIndex` is a plain `nonisolated` cache with no
+observation. Fix: key the task on `(url, editRevision)`; `exitEditMode` bumps
+the revision after the save resolves, and only when the saved stack hash
+differs from the one captured when Edit opened.
+
+**How it was verified matters more than the fix.** An XCUITest was written to
+prove it and COULD NOT: `adjust(toNormalizedSliderPosition:)` fails on a
+SwiftUI `Slider` ("Unable to get expected orientation attribute"), and a
+press-drag along the track moves nothing — measured luma came back
+byte-identical before and after. Its own guard assertion caught that, so it
+failed honestly instead of passing while proving nothing. **Add to the list of
+things XCUITest cannot drive in this app, beside `DragGesture`: SwiftUI sliders
+don't jump-to-click, so the knob has to be grabbed where it already is.** The
+test was deleted rather than left red, and the owner confirmed the fix by hand
+in four steps (open → Edit → +5 EV → Preview).
+
+### P5.2 — closing from Edit flies home
+
+| Automated | Static | Runtime |
+|---|---|---|
+| 2,097 unit tests still green (no new seam) | 2 review passes, 5 findings fixed | ✅ **owner-confirmed** — "that's pretty good", then two follow-ups, both fixed |
+
+Was an instant cut for exactly one day. See the durable constraint for the
+mechanism and the three approaches that remain dead ends. The short version:
+the previously-rejected "leave Edit, then run the normal close" only failed
+because the stage used to be UNMOUNTED while editing, and it hasn't been since
+`03462ff`.
+
+Two follow-ups the owner caught by looking, neither of which a test would have:
+
+1. **A flash of the Preview backdrop colour.** The wash sits behind the editor
+   at full strength, so unmounting the editor REVEALED it for the frame before
+   the close fade could start. Retiming cannot fix that; closing from Edit now
+   holds the editor's own flat field and fades that instead.
+2. **The grid didn't bounce.** Entering Edit used to converge the parting field
+   ("let the tiles come back together while they're hidden") because the cut
+   had no flight for the converge to belong to. Deleted, along with
+   `AppState.editorActive` and `AppState.viewerCutOut` — three flags that all
+   existed only to compensate for Edit closing without a flight.
+
+**Review findings (mine, fixed before commit):** the editor's rect was
+published as `@State`, re-rendering the whole hero body on every frame of a
+canvas zoom/pan/hide-UI animation (now a reference box, same pattern and same
+reason as `HeroImageBox`); a leftover Preview zoom multiplied the takeoff rect,
+because `.scaleEffect(zoom)` sits INSIDE `FlightEffect`; the rect was handed
+over in `.global`, which goes stale when the window is DRAGGED (the content
+rect doesn't change, the global origin does) — now a named coordinate space.
+
+### Still open on this path
+
+* **Crop, then close from Edit.** The stage holds pre-edit pixels on this path
+  — there is no re-decode on the way out, deliberately, since the viewer is
+  leaving — so closing straight after a crop flies the UNCROPPED photo home.
+  The takeoff fits the image into the editor's box rather than filling it, so
+  it letterboxes instead of stretching, but the pixels are still the old ones.
+  Not seen by anyone yet; the honest state is "known, unverified, unfixed."

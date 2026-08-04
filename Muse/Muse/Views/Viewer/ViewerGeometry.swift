@@ -51,6 +51,17 @@ enum ViewerGeometry {
     /// Enough for the chrome row, a card or two, and a picture between them.
     static let minWindowHeight: CGFloat = 480
 
+    /// The hero overlay's own coordinate space.
+    ///
+    /// Exists so the EDITOR can report where it is drawing the photo in the
+    /// space the hero's flight works in, without either side going through
+    /// `.global`. Global coordinates looked equivalent and are not: the editor
+    /// reports its rect when the CONTENT changes, and dragging the window by
+    /// its title bar moves the global origin while the content rect stands
+    /// still — so a close after a window move would take off from where the
+    /// window used to be.
+    static let overlaySpace = "museHeroOverlay"
+
     /// Centered in the true viewable space: between the left edge and the info column.
     static func fitRect(imageSize: CGSize, viewport: CGSize) -> CGRect {
         let usableRight = viewport.width - columnWidth - columnMargin

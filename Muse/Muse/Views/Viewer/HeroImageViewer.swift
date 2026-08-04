@@ -65,6 +65,15 @@ struct HeroImageViewer: View {
     /// so "did the index change while I was in the editor?" answers no on
     /// exactly the sessions where the stage is most stale.
     @State private var renderedStackHash: String?
+    /// The editor's photo rect in the overlay's coordinate space, kept live by
+    /// `EditorView` so the close flight can depart from exactly where the
+    /// picture already is. A box, NOT @State — see `EditorCanvasRectBox`.
+    @State private var editorCanvasRect = EditorCanvasRectBox()
+    /// This close started in Edit mode. Only used to keep the Preview page's
+    /// info column OUT of a flight it was never part of — the editor has no
+    /// such column, so mounting one for the 0.34s return would be a panel
+    /// sliding in as the photo leaves.
+    @State private var closingFromEditor = false
     /// The pixels the Preview stage is showing right now — already decoded and
     /// already rendered through the saved edit stack. Handed to a new
     /// `EditSession` as its opening canvas so Edit doesn't mount empty.
@@ -96,16 +105,36 @@ struct HeroImageViewer: View {
             let overlayGlobal = geo.frame(in: .global)
             ZStack {
                 if !lingering {
-                    ViewerBackdrop(hexColor: details?.dominantColor ?? computedPalette.first,
-                                   closing: isClosing)
-                        // Asymmetric on purpose: the fade-OUT must finish before
-                        // the viewer unmounts (0.36s after close starts) — a 0.4s
-                        // fade left the material/wash at ~1–2% opacity when the
-                        // subtree was removed, and that near-invisible app-wide
-                        // layer vanishing in one frame read as a subtle whole-
-                        // window flicker on every close.
-                        .contentShape(Rectangle())
-                        .onTapGesture { startClose() }
+                    if closingFromEditor {
+                        // The editor's flat field, held for the flight and faded
+                        // on the same curve the wash uses.
+                        //
+                        // The Preview wash has been sitting behind the editor all
+                        // along, so simply letting the editor unmount REVEALED it
+                        // — a full-strength tint of the photo's dominant colour,
+                        // on screen for the frame before the close fade could
+                        // start (owner-reported "a flash of the preview
+                        // background colour"). No amount of retiming hides that;
+                        // the wash has to not be the thing underneath. Keeping
+                        // the neutral field means the background the editor had
+                        // is the background that fades away.
+                        Color(white: EditorBackdropLevel.resolve(editorBackdropRaw).brightness)
+                            .ignoresSafeArea()
+                            .opacity(isClosing ? 0 : 1)
+                            .animation(.easeOut(duration: 0.3), value: isClosing)
+                            .accessibilityHidden(true)
+                    } else {
+                        ViewerBackdrop(hexColor: details?.dominantColor ?? computedPalette.first,
+                                       closing: isClosing)
+                            // Asymmetric on purpose: the fade-OUT must finish before
+                            // the viewer unmounts (0.36s after close starts) — a 0.4s
+                            // fade left the material/wash at ~1–2% opacity when the
+                            // subtree was removed, and that near-invisible app-wide
+                            // layer vanishing in one frame read as a subtle whole-
+                            // window flicker on every close.
+                            .contentShape(Rectangle())
+                            .onTapGesture { startClose() }
+                    }
 
                     // The stage stays MOUNTED while editing, hidden behind the
                     // editor. Unmounting it is what made the return to Preview
@@ -124,6 +153,7 @@ struct HeroImageViewer: View {
                               onCloseFinished: finishClose,
                               onImageReady: { heroImage.store($1, for: $0) },
                               editRevision: editRevision,
+                              closeTakeoff: editorCloseTakeoff,
                               zoom: $zoom,
                               pan: $pan,
                               isClosing: $isClosing)
@@ -136,10 +166,12 @@ struct HeroImageViewer: View {
                         // is the thing on screen.
                         .accessibilityHidden(editing)
 
-                    if !editing { rightRail }
+                    if !editing && !closingFromEditor { rightRail }
 
                     if let editSession, editMode {
-                        EditorView(session: editSession, onClose: closeFromEditor)
+                        EditorView(session: editSession,
+                                   onClose: closeFromEditor,
+                                   onCanvasRect: { editorCanvasRect.rect = $0 })
                     }
                     // Hidden along with the rest of the chrome when Edit's
                     // eye is on: "only the image" has to include this too.
@@ -156,6 +188,9 @@ struct HeroImageViewer: View {
                 ViewerToast(toast: $toast)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Named so the EDITOR can report where it is drawing the photo in
+            // the same space the flight uses — see ViewerGeometry.overlaySpace.
+            .coordinateSpace(name: ViewerGeometry.overlaySpace)
             // Delete: the image fades first; then, as it's finishing, the whole
             // page (right-side info + backdrop) fades out behind it, landing
             // back on the grid. Animatable so the curve is sampled every frame.
@@ -204,7 +239,6 @@ struct HeroImageViewer: View {
             withAnimation(.easeOut(duration: 0.4).delay(0.15)) { chromeVisible = true }
         }
         .onDisappear {
-            appState.editorActive = false
             removeScrollMonitor()
             removeKeyMonitor()
             appState.viewerClosing = false
@@ -563,8 +597,6 @@ struct HeroImageViewer: View {
             // moment later is an invisible swap.
             session.seedCanvas(with: heroImage.image(for: url))
             editSession = session
-            // Let the grid come back together while it's hidden.
-            appState.editorActive = true
             // A CUT, not a cross-fade. The two pages fit the photo into
             // different rects (Preview to the whole viewport, Edit to the free
             // space between the panels), so fading one into the other now that
@@ -574,52 +606,78 @@ struct HeroImageViewer: View {
         }
     }
 
-    /// Closing the viewer from EDIT mode: an INSTANT CUT. No flight, no fade,
-    /// no shrink. This is the owner's decision (2026-08-02) after four animated
-    /// versions were built and rejected — leave it alone:
+    /// The box the editor is drawing the photo in, already in this overlay's
+    /// coordinates (`EditorView` converts through `ViewerGeometry.overlaySpace`).
+    /// Nil unless a close from Edit is actually in flight, so the normal Preview
+    /// close is untouched by any of this.
+    private var editorCloseTakeoff: CGRect? {
+        let box = editorCanvasRect.rect
+        guard closingFromEditor, box.width > 1 else { return nil }
+        return box
+    }
+
+    /// Closing the viewer from EDIT mode: the photo flies home from where the
+    /// EDITOR had it.
     ///
-    ///  1. Leave the editor, then run the normal close: the Preview page is on
-    ///     screen for the whole flight, and the stage plays its OPEN flight
-    ///     from the tile before shrinking back.
-    ///  2. Cross-fade the whole surface: jagged, because the canvas is an
-    ///     MTKView and animating opacity over it re-composites Metal every
-    ///     frame — the same trap as the material fade documented above.
-    ///  3. Fly a copy of the photo over the still-mounted editor.
-    ///  4. Mount the stage for the return leg only, over the editor's grey.
+    /// This was an instant cut from 2026-08-02 until 2026-08-03, after four
+    /// animated versions were built and rejected. Three of those four are still
+    /// dead ends and must not be retried:
     ///
-    /// Edit is not the Preview page and does not fly home from it.
+    ///  * Cross-fade the whole surface: jagged, because the canvas is an
+    ///    MTKView and animating opacity over it re-composites Metal every frame
+    ///    — the same trap as the material fade documented above.
+    ///  * Fly a COPY of the photo over the still-mounted editor.
+    ///  * Mount the stage for the return leg only, over the editor's grey.
+    ///
+    /// The fourth — leave the editor, then run the normal close — was rejected
+    /// because "the stage plays its OPEN flight from the tile before shrinking
+    /// back". That was true of a stage that got UNMOUNTED while editing, since
+    /// a remount fires `HeroStage.open()`. It hasn't been true since 03462ff
+    /// kept the stage mounted, so this is that version, made to work:
+    ///
+    ///  1. The stage is already alive, holding this photo, and (since 7b643ec)
+    ///     holding the EDITED pixels.
+    ///  2. `closeTakeoff` moves it to where the editor has the picture, one
+    ///     runloop turn before the flight starts. Preview fits the photo beside
+    ///     one info column and Edit fits it between two panels, so without this
+    ///     the reveal frame would jump the photo bigger and ~140pt sideways.
+    ///  3. The normal close then runs — same curve, same landing, and the grid
+    ///     gets its staggered converge back instead of the cut's hard snap.
     private func closeFromEditor() {
         guard !isClosing else { return }
         // Save first: leaving is the moment work has to be safe, and the
         // session is about to be dropped.
         if let session = editSession { Task { await session.save() } }
-        appState.clearSelection()
-        // NOT viewerDismissing: that flag and the `selectedFile == nil` change
-        // BOTH call ToolbarFade.show(), and firing them in one transaction
-        // starts two overlapping opacity animations on the toolbar — the
-        // flicker on the way out. Clearing selectedFile alone brings it back.
-        // The grid parted (tiles pushed aside, dimmed to 15%) when this opened,
-        // and normally converges back across the return flight. There is no
-        // flight here, so that converge and its stagger are exactly the delay
-        // and the wash of dimmed neighbours that made the cut feel wrong.
-        appState.viewerCutOut = true
-        appState.editorActive = false
+        // Before the editor goes: the Preview | Edit switch and the chrome row
+        // must not be on screen for the frame between the two pages.
         chromeVisible = false
-        // NOTE: editMode/editSession are deliberately left alone. Clearing them
-        // here reveals the Preview page — un-hiding the stage and mounting the
-        // info column — for the frame before `selectedFile` clears, which is
-        // the flicker. The whole subtree is about to be torn down anyway.
-        reallyFinish()
+        // The stage applies `zoom`/`pan` INSIDE the flight transform
+        // (`.scaleEffect(zoom)` under `FlightEffect`), so a Preview zoom left
+        // over from before the trip into Edit would multiply the takeoff rect
+        // and the photo would leap to zoom× the editor's size at the cut. Edit
+        // keeps its own zoom — which is already baked into the rect the editor
+        // reports — so Preview's has to be neutral here, un-animated and before
+        // the seed. `exitEditMode` resets these for the same reason.
+        zoom = 1
+        pan = .zero
+        closingFromEditor = true
+        // Reveals the stage — which is showing this photo, at Preview's fitted
+        // rect. It is on screen for exactly one turn before `closeTakeoff`
+        // lands, and nothing paints in between.
+        editMode = false
+        editSession = nil
         Task { @MainActor in
-            // One frame is enough for the tiles to land un-animated; clearing
-            // it restores the normal open/close motion for the next time.
-            try? await Task.sleep(for: .milliseconds(80))
-            appState.viewerCutOut = false
+            // One frame, so the stage RENDERS at the takeoff rect. SwiftUI
+            // animates from the last presented value, so starting the flight in
+            // the same turn would interpolate from `fitRect` and throw the
+            // takeoff away — the jump this exists to remove.
+            try? await Task.sleep(for: .milliseconds(16))
+            guard !isClosing else { return }
+            startClose()
         }
     }
 
     private func exitEditMode() {
-        appState.editorActive = false
         let session = editSession
         // Preview comes back FITTED. The two modes keep their own zoom, and a
         // trip through the editor leaving the Preview stage silently zoomed —
@@ -926,6 +984,20 @@ final class HeroImageBox {
 
     /// The stored image, but only if it is this file's.
     func image(for url: URL) -> NSImage? { self.url == url ? latest : nil }
+}
+
+/// Where the editor has the photo, in the hero overlay's coordinate space.
+///
+/// A reference BOX for the same reason `HeroImageBox` is one, and it matters
+/// more here: `EditorView` reports this from an `.onChange` on its content
+/// rect, which moves EVERY FRAME of a canvas zoom, a pan, and the hide-UI
+/// animation. As `@State` on the hero viewer, each of those frames invalidated
+/// the whole hero body — backdrop, stage, editor, chrome — to update a value no
+/// part of the body reads until the ✕ is pressed. Mutating a box changes no
+/// SwiftUI state, so nothing re-renders; `closingFromEditor` is the @State that
+/// does the one invalidation this needs.
+final class EditorCanvasRectBox {
+    var rect: CGRect = .zero
 }
 
 /// Shows its content only while the editor's controls are visible.

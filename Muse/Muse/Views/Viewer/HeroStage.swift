@@ -149,6 +149,16 @@ struct HeroStage: View {
     /// running app, 2026-08-03). Part of the identity of what to decode, so it
     /// belongs in the task id rather than in an onChange that races it.
     var editRevision: Int = 0
+    /// The box the photo occupies on screen RIGHT NOW, when that isn't where
+    /// this stage has it — i.e. closing out of Edit mode, where the editor has
+    /// been drawing the picture between its two panels while this stage sat
+    /// hidden behind it at `fitRect`.
+    ///
+    /// Set before `isClosing`, and the flight departs from here instead. A box
+    /// rather than a rect: the image is FITTED into it (see `takeoffRect`), so
+    /// a photo cropped in the editor letterboxes inside the box rather than
+    /// stretching to fill a shape its pixels no longer have.
+    var closeTakeoff: CGRect? = nil
 
     @Binding var zoom: CGFloat
     @Binding var pan: CGSize
@@ -325,6 +335,17 @@ struct HeroStage: View {
         .onDisappear { resetCursorState() }
         .onChange(of: image) { _, new in if let new { onImageReady?(url, new) } }
         .onChange(of: isClosing) { _, closing in if closing { close() } }
+        .onChange(of: closeTakeoff) { _, box in
+            // Un-animated, and a runloop turn BEFORE `isClosing` flips (the
+            // caller sequences that). Both halves matter: SwiftUI animates from
+            // the last value it PRESENTED, so seeding and animating in one pass
+            // would interpolate from `fitRect` and ignore this entirely — the
+            // photo would jump to the Preview position and only then fly.
+            guard let box, box.width > 1, box.height > 1 else { return }
+            var t = Transaction()
+            t.disablesAnimations = true
+            withTransaction(t) { displayRect = takeoffRect(in: box) }
+        }
         .onChange(of: zoom) { _, _ in syncHoverCursor() }
         .onChange(of: sourceFrame) { _, newFrame in
             // The toolbar returns as the close flight starts, shifting the
@@ -449,6 +470,15 @@ struct HeroStage: View {
     private static func quickThumbnail(for url: URL) -> NSImage? {
         ThumbnailCache.shared.cachedThumbnail(for: url, size: CGSize(width: 320, height: 320))
             ?? ThumbnailCache.shared.cachedThumbnail(for: url, size: CGSize(width: 160, height: 160))
+    }
+
+    /// This stage's image, fitted into a box another view was drawing it in.
+    ///
+    /// Uses the DECODED image rather than the header size: after a crop the two
+    /// disagree, and the thing being positioned is the picture on screen.
+    private func takeoffRect(in box: CGRect) -> CGRect {
+        ViewerGeometry.fitWithin(imageSize: image?.size ?? headerSize ?? box.size,
+                                 frame: box)
     }
 
     private func close() {

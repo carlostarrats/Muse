@@ -220,17 +220,6 @@ final class AppState: ObservableObject {
     /// flight (animated) instead of snapping it in after selectedFile clears.
     @Published var viewerDismissing = false
 
-    /// The EDITOR is open. The grid parts around the clicked tile while the
-    /// hero viewer is up; Edit covers the window completely, so the parting is
-    /// pointless there — and snapping it back on the way out is a visible flash
-    /// across every tile. Converge on the way in instead.
-    @Published var editorActive = false
-
-    /// The viewer is being CUT away, not flown away — the grid must be back to
-    /// normal in the same frame, with no parting converge and no fade back up
-    /// from the parted opacity. Set only by the Edit-mode close, which has no
-    /// flight for that motion to belong to; cleared as soon as it lands.
-    @Published var viewerCutOut = false
 
     // MARK: - Modes
 

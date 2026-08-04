@@ -6,6 +6,84 @@ the durable rules + a compact index live in `CLAUDE.md`. Nothing here is
 load-bearing for a fresh session beyond what that index already surfaces;
 read an entry when you need the full "why" behind a specific change.
 
+### Leaving the editor — 2026-08-03 (on `feat/next-155`)
+
+Started as a question, not a task: *"can closing out from edit borrow the closing
+motion from preview, as that is already saved? since switching back and forth is
+instant now, wonder if that can be used."*
+
+The answer was yes, and the reason is worth recording, because it is a case of a
+documented decision going stale in ONE DAY. `closeFromEditor` carried a comment
+listing four animated closes that had been built and rejected on 2026-08-02.
+Rejected option 1 was exactly what the owner was proposing, and its stated
+failure was "the stage replays its OPEN flight from the tile before shrinking
+back". That was true of a stage that got UNMOUNTED while editing — a remount
+fires `HeroStage.open()`. The very next commit (`03462ff`, "Preview ↔ Edit is
+instant in both directions") kept the stage mounted, which silently invalidated
+the rejection. `git log -L` on the two comment blocks is what established the
+order; the comment itself read as settled doctrine.
+
+**The lesson is not "read the git log". It is that a rejection is only as good as
+the premise underneath it, and premises move.** The comment recorded the verdict
+and the symptom but not the mechanism, so nothing about it looked stale.
+
+**A bug found on the way, and it blocked the feature.** Before flying the photo
+home from Edit, the thing being flown has to be the right photo — and it was not.
+`HeroStage` renders the saved edit stack in `loadFullRes`, driven by
+`.task(id: url)`; leaving Edit doesn't change the URL, so it could never re-fire.
+Edit a photo, tap Preview, and you saw the photo as it was when the viewer
+OPENED. Same root cause as the feature: the stage stays mounted, so nothing
+remounts it. Keyed on `(url, editRevision)` now, bumped after the save resolves
+and only when the stack hash actually changed.
+
+**The verification attempt is the more useful record.** An XCUITest was written
+to prove the stale pixels and could not drive the app: `adjust(toNormalizedSlider
+Position:)` throws on a SwiftUI `Slider` (no orientation attribute), and a
+press-drag along the track moved nothing — the measured luma was byte-identical
+before and after, because SwiftUI sliders don't jump-to-click. **Add sliders to
+the list of things XCUITest cannot drive here, next to `DragGesture`.** The test
+had a guard assertion that caught its own failure, so it failed honestly rather
+than passing while proving nothing; it was deleted rather than left red, and the
+owner confirmed by hand in four steps. Two runs, ~2.5 minutes, no result — which
+is exactly when to stop, and the owner said so mid-session: *"if it's taking
+longer than 10 minutes you need to review if it's actually solving a problem or
+just doing it for its own sake, and if it's not helpful stop it."* That is now in
+the verification-budget memory.
+
+**The close itself** is the rejected option 4 with three additions, all of which
+came from the owner looking at it rather than from a test:
+
+1. `HeroStage.closeTakeoff` seeds `displayRect` to the editor's rect, un-animated,
+   one runloop turn before `isClosing`. SwiftUI animates from the last PRESENTED
+   value, so seeding and flying in one pass throws the seed away.
+2. *"I see a flash of the preview background colour."* The wash sits behind the
+   editor at full strength, so unmounting the editor revealed it. No retiming
+   fixes that — closing from Edit now holds the editor's flat field and fades
+   THAT, so nothing new is ever revealed.
+3. *"When preview closes the images bounce back to their original place; in edit
+   they're already in their spot."* Entering Edit converged the parting field on
+   purpose, because the cut had no flight to converge behind. Deleted.
+
+**Three flags died here** — `AppState.editorActive`, `AppState.viewerCutOut`, and
+the guard between them — all of which existed only to compensate for Edit closing
+without a flight. That is the shape of this session: one motion added, and the
+scaffolding around its absence removed.
+
+**Review found five things in my own work**, three of them real: the editor's
+rect was `@State`, so every frame of a canvas zoom/pan re-rendered the whole hero
+body for a value nothing reads until ✕ (now a reference box, the same pattern
+`HeroImageBox` already established two commits earlier); a leftover Preview zoom
+multiplied the takeoff rect, since `.scaleEffect(zoom)` sits INSIDE `FlightEffect`;
+and the rect was handed over in `.global`, which goes stale when the window is
+DRAGGED — the content rect doesn't move, the global origin does. The last one is
+the kind a test would never have caught and a demo never reproduces.
+
+Left open and written down rather than quietly shipped: closing from Edit
+straight after a CROP flies the uncropped photo home, because this path
+deliberately doesn't re-decode on the way out. See `FEATURE-LEDGER.md` Part 5.
+
+Suite 2,097 · audit 15/15 · Release warning-free.
+
 ### Editor workspace — 2026-08-03 (on `feat/next-155`)
 
 The editor's twelve control cards stop being two hard-coded `@ViewBuilder` lists

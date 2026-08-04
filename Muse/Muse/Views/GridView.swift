@@ -364,8 +364,15 @@ struct GridView: View {
             guard let hero = appState.selectedFile,
                   hero.kind == .image || hero.kind == .raw || hero.kind == .psd,
                   !appState.viewerDismissing,
-                  // Edit covers the grid entirely — see AppState.editorActive.
-                  !appState.editorActive,
+                  // Edit mode used to converge the tiles here ("it covers the
+                  // grid entirely, so let them come back together while they're
+                  // hidden"). That was for the CUT close, which needed the grid
+                  // already home. Closing from Edit now flies, so the tiles stay
+                  // parted behind the editor and converge across that flight —
+                  // the same motion as closing from Preview, which is the point
+                  // (owner: "when preview closes the images bounce back to
+                  // their original place; in edit they're already in their
+                  // spot").
                   let i = files.firstIndex(where: { $0.url == hero.url }),
                   i < frames.count else { return nil }
             return frames[i]
@@ -462,13 +469,13 @@ struct GridView: View {
                     // (owner-reported "i see the bounce but it's not smooth").
                     // Only geometry should bounce; brightness has nothing to
                     // overshoot toward.
-                    // A CUT close (leaving Edit) gets no converge at all: the
-                    // tiles are simply home. The staggered spring belongs to a
-                    // return flight, and without one it reads as the grid
-                    // lagging behind the click.
-                    .animation(appState.viewerCutOut
-                               ? nil
-                               : partingClicked == nil
+                    // There used to be a third case here: leaving Edit mode was
+                    // an instant CUT with no return flight, and a staggered
+                    // converge behind it read as the grid lagging the click, so
+                    // `viewerCutOut` suppressed it. Closing from Edit now flies
+                    // home like any other close, so there is always a flight for
+                    // the converge to belong to.
+                    .animation(partingClicked == nil
                                    ? .spring(response: PartingField.convergeResponse,
                                              dampingFraction: PartingField.convergeDamping)
                                        .delay(PartingField.closeDelay(
