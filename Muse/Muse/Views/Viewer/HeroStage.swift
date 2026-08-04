@@ -116,6 +116,13 @@ private struct FlightRoundedRect: Shape {
     }
 }
 
+/// What the hero decode is a function of: the file, and the revision of the
+/// edit stack applied to it. A plain `URL` id could not express the second.
+private struct DecodeKey: Equatable {
+    let url: URL
+    let editRevision: Int
+}
+
 struct HeroStage: View {
     let url: URL
     let sourceFrame: CGRect          // tile frame, global coords
@@ -129,6 +136,19 @@ struct HeroStage: View {
     /// file before the new decode lands, so an untagged image would let the
     /// editor open on the PREVIOUS photo.
     var onImageReady: ((URL, NSImage) -> Void)? = nil
+    /// Bumped by the parent when the file's SAVED edit stack has changed since
+    /// this stage last decoded — the only thing that makes the pixels on screen
+    /// wrong without the URL changing.
+    ///
+    /// `loadFullRes` renders the saved stack (see `sharpStack`), and it is
+    /// driven by `.task(id:)`. Keyed on the URL alone, leaving the editor could
+    /// never re-run it: the file is the same file. That is not theoretical —
+    /// the stage is deliberately kept MOUNTED behind the editor so flipping
+    /// Preview ↔ Edit is instant, so an edit made in Edit mode was invisible in
+    /// Preview until the viewer was closed and reopened (owner-confirmed in the
+    /// running app, 2026-08-03). Part of the identity of what to decode, so it
+    /// belongs in the task id rather than in an onChange that races it.
+    var editRevision: Int = 0
 
     @Binding var zoom: CGFloat
     @Binding var pan: CGSize
@@ -386,7 +406,7 @@ struct HeroStage: View {
                 withTransaction(t) { displayRect = fitRect }
             }
         }
-        .task(id: url) { await loadFullRes() }
+        .task(id: DecodeKey(url: url, editRevision: editRevision)) { await loadFullRes() }
     }
 
     private func open() {

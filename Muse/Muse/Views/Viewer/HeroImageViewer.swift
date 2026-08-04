@@ -53,6 +53,18 @@ struct HeroImageViewer: View {
     /// are all untouched by it.
     @State private var editMode = false
     @State private var editSession: EditSession?
+    /// Bumped to make the Preview stage re-decode after an edit — see
+    /// `HeroStage.editRevision`.
+    @State private var editRevision = 0
+    /// The saved stack hash the Preview stage's CURRENT pixels were rendered
+    /// with, captured when Edit opens.
+    ///
+    /// Compared against — rather than re-reading the index at exit and calling
+    /// any change a change — because the editor AUTOSAVES on a debounce. An
+    /// autosave that fired mid-session already wrote the new hash to the index,
+    /// so "did the index change while I was in the editor?" answers no on
+    /// exactly the sessions where the stage is most stale.
+    @State private var renderedStackHash: String?
     /// The pixels the Preview stage is showing right now — already decoded and
     /// already rendered through the saved edit stack. Handed to a new
     /// `EditSession` as its opening canvas so Edit doesn't mount empty.
@@ -111,6 +123,7 @@ struct HeroImageViewer: View {
                               burnProgress: burnProgress,
                               onCloseFinished: finishClose,
                               onImageReady: { heroImage.store($1, for: $0) },
+                              editRevision: editRevision,
                               zoom: $zoom,
                               pan: $pan,
                               isClosing: $isClosing)
@@ -532,6 +545,10 @@ struct HeroImageViewer: View {
     private func enterEditMode() {
         let url = currentURL
         let isRaw = AssetKind.detect(at: url) == .raw
+        // What the stage behind the editor is currently SHOWING. Nothing else
+        // writes this file's stack while Preview is up, so the index's value
+        // now is the value those pixels were rendered with.
+        renderedStackHash = EditStackIndex.stackHash(for: url)
         Task {
             let stack = await EditStore.shared.stack(for: url)
             guard currentURL == url else { return }
@@ -617,7 +634,26 @@ struct HeroImageViewer: View {
         // Save on exit as well as on the debounce: leaving the editor is the
         // moment a user expects their work to be safe, and the pending
         // autosave may not have fired yet.
-        if let session { Task { await session.save() } }
+        //
+        // The re-decode is bumped AFTER the save resolves, not beside it: the
+        // stage re-renders from `EditStackIndex`, so bumping first would
+        // re-render the stack the editor had just replaced — the same stale
+        // frame, at the cost of a full decode.
+        if let session {
+            let url = currentURL
+            let wasRendered = renderedStackHash
+            Task {
+                await session.save()
+                let saved = EditStackIndex.stackHash(for: url)
+                // Only when the pixels are actually wrong. An open-and-leave
+                // (or an edit undone back to where it started) would otherwise
+                // pay a full-resolution decode — ~600 ms on a 115 MP file — to
+                // replace the image with an identical one.
+                guard saved != wasRendered, url == currentURL else { return }
+                renderedStackHash = saved
+                editRevision += 1
+            }
+        }
     }
 
     // MARK: - Close flight
