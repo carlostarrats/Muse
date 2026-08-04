@@ -22,10 +22,14 @@ struct OpenWithMenu: View {
         // Every external hand-off routes through the fork check — a file with
         // Muse edits opened externally would otherwise silently be the
         // unedited original.
+        // NAMED, not a bare "Open". Sitting under "Edit" — which opens INSIDE
+        // Muse — a row reading "Open" reads like "open it here"; it actually
+        // hands the file to another app. The default app's own name says where
+        // it goes, and pairs with the "Open With" submenu below.
         Button {
             OpenWithFork.open(url: url, appURL: nil, appState: appState)
         } label: {
-            Label("Open", systemImage: "arrow.up.forward.app")
+            Label(Self.openTitle(for: url), systemImage: "arrow.up.forward.app")
         }
         Button {
             NSWorkspace.shared.activateFileViewerSelecting([url])
@@ -41,6 +45,18 @@ struct OpenWithMenu: View {
         } label: {
             Label("Open With", systemImage: "app.badge")
         }
+    }
+
+    /// "Open in Preview" when LaunchServices knows the default app, falling
+    /// back to "Open in Default App" when it doesn't (an unregistered type).
+    /// Built from a runtime variable, so it can't be a `Text` literal — the
+    /// two keys are localized here.
+    static func openTitle(for url: URL) -> String {
+        guard let app = NSWorkspace.shared.urlForApplication(toOpen: url) else {
+            return String(localized: "Open in Default App")
+        }
+        let name = app.deletingPathExtension().lastPathComponent
+        return String(localized: "Open in \(name)")
     }
 
     static func applications(for url: URL) -> [URL] {

@@ -415,8 +415,14 @@ struct LooksBrowserView: View {
                     style: .continuous))
                 .frame(width: Self.thumbLongEdge, height: Self.thumbLongEdge)
                 if isActive {
+                    // PALETTE, not monochrome: `checkmark.circle.fill` punches
+                    // the tick out of the disc, so a single foregroundStyle
+                    // leaves the check TRANSPARENT and the thumbnail shows
+                    // through it — invisible over a dark photo. Two layers =
+                    // white tick on the accent disc, readable over anything.
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(theme.controlAccent)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, theme.controlAccent)
                         .padding(3)
                 }
             }
@@ -439,7 +445,11 @@ struct LooksBrowserView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(name))
-        .accessibilityAddTraits(.isButton)
+        // `.isSelected` like the list row does — the grid cell announced only
+        // `.isButton`, so which style was applied was carried ENTIRELY by the
+        // corner checkmark: unreadable to VoiceOver, and (until the palette
+        // fix above) very nearly unreadable by eye too.
+        .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
     }
 
     /// A stack whose LUT isn't on this Mac renders the ORIGINAL everywhere, so

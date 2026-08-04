@@ -6859,6 +6859,26 @@
         }
       }
     },
+    "Open in %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir dans %@"
+          }
+        }
+      }
+    },
+    "Open in Default App": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir dans l’app par défaut"
+          }
+        }
+      }
+    },
     "Open in Finder": {
       "localizations": {
         "fr": {
