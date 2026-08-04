@@ -43,10 +43,6 @@ struct SidebarView: View {
     @AppStorage(AppSettings.showCollectionsInSidebarKey) private var showCollectionsInSidebar = true
     @AppStorage(AppSettings.showICloudFolderInSidebarKey) private var showICloudFolder = true
     @ObservedObject private var collectionsEngine = CollectionsEngine.shared
-    /// Observed directly — these stores have zero AppState integration.
-    @ObservedObject private var analysisStatus = AnalysisStatusStore.shared
-    @ObservedObject private var throttle = WorkThrottleStore.shared
-    @ObservedObject private var analyzePipeline = AnalyzePipeline.shared
     // Plain @State (seeded from + persisted to UserDefaults) rather than
     // @AppStorage so the collapse can animate via `withAnimation` — a
     // withAnimation transaction doesn't carry into an @AppStorage publish, which
@@ -611,11 +607,12 @@ struct SidebarView: View {
     /// folder exists. The menu replaced two side-by-side pills, which had to
     /// split the sidebar's 220pt minimum and truncate both labels.
     @ViewBuilder private var bottomBar: some View {
-        // Analysis progress, above the create pill and only while there's a
-        // backlog actually moving (or deliberately paused). This is NOT the
-        // status pill — that reports whether background work is happening right
-        // now; this reports how much of the library has been through it.
-        analysisFooter
+        // NO analysis-progress row here. Spec 06 put an "N of M analyzed" line
+        // with a pause/resume toggle above the create pill; the owner removed it
+        // 2026-08-03 — the sidebar is folders and collections, and background
+        // work reporting on itself there is not this app's UI. The same readout
+        // and toggle still live in Settings, which is where they belong.
+        //
         // Offer "Add Collection" only when a real folder holds reachable images to
         // collect; first run / empty library gets just "Add Folder" (the real next
         // step — a collection with nothing behind it is a dead end), matching the
@@ -631,35 +628,6 @@ struct SidebarView: View {
             AddFolderPillButton { appState.pickAndAddRoot() }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-        }
-    }
-
-    @ViewBuilder private var analysisFooter: some View {
-        if analysisStatus.pending > 0
-            && (analyzePipeline.isRunning || throttle.userPaused) {
-            HStack(spacing: 6) {
-                Text("\(analysisStatus.analyzed) of \(analysisStatus.analyzableTotal) analyzed")
-                    .font(.system(size: 11).monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Spacer(minLength: 4)
-                Button {
-                    throttle.userPaused.toggle()
-                } label: {
-                    Image(systemName: throttle.userPaused ? "play.circle" : "pause.circle")
-                        .font(.system(size: 12))
-                }
-                .buttonStyle(.plain)
-                .help(throttle.userPaused
-                      ? String(localized: "Resume analyzing")
-                      : String(localized: "Pause analyzing"))
-                .accessibilityLabel(throttle.userPaused
-                                    ? String(localized: "Resume analyzing")
-                                    : String(localized: "Pause analyzing"))
-            }
-            .padding(.horizontal, 16)
-            .frame(height: Self.childRowHeight)
         }
     }
 

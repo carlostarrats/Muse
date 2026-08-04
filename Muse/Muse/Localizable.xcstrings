@@ -7132,22 +7132,22 @@
         }
       }
     },
-    "Pause analyzing": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Suspendre l’analyse"
-          }
-        }
-      }
-    },
     "Paused": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "En pause"
+          }
+        }
+      }
+    },
+    "Paused to cool down": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En pause, le temps de refroidir"
           }
         }
       }

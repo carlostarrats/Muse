@@ -23,6 +23,8 @@ struct ContentView: View {
     @EnvironmentObject private var announcementStore: AnnouncementStore
     @ObservedObject private var indexProgress = IndexProgress.shared
     @ObservedObject private var analyzePipeline = AnalyzePipeline.shared
+    /// Why the bar might be sitting still — the pill says so in words.
+    @ObservedObject private var throttle = WorkThrottleStore.shared
     /// Unified background-progress state driving the single status pill.
     @State private var workProgress = WorkProgress()
     /// Guards against queueing a second completion hold while one is running.
@@ -701,7 +703,8 @@ struct ContentView: View {
                 if workProgress.isActive {
                     statusPill(label: "Preparing your files…",
                                progress: workProgress.fraction,
-                               percent: workProgress.percent)
+                               percent: workProgress.percent,
+                               pause: pillPause)
                 }
             }
     }
@@ -1234,16 +1237,53 @@ struct ContentView: View {
             organizing: collectionsEngine.isClustering)
     }
 
+    /// Why the bar has stopped moving, if it has.
+    ///
+    /// A paused pass keeps its claim and suspends rather than cancelling
+    /// (`WorkThrottleStore.waitUntilRunnable`), so `isRunning` stays true and
+    /// the pill stays on screen with a frozen bar. Without a word for it that
+    /// reads as a stall — the app looking broken — which is exactly what the
+    /// sidebar's "N of M analyzed" row used to disambiguate before it was
+    /// removed on 2026-08-03. The pill is the right home for it: it is already
+    /// the one place that reports background work, in the grid, in the grid's
+    /// own glass.
+    private enum PillPause: Equatable {
+        /// The bar is moving (or between batches) — say nothing.
+        case none
+        /// The user pressed Pause. Resumable from here.
+        case byUser
+        /// Thermal distress paused it (`ThrottlePolicy.mode`). NOT resumable —
+        /// offering a button that can't work is worse than no button.
+        case cooling
+    }
+
+    private var pillPause: PillPause {
+        if throttle.userPaused { return .byUser }
+        // `mode` also goes .paused when userPaused is set; the branch above
+        // already claimed that case, so reaching here means thermal.
+        if throttle.mode == .paused { return .cooling }
+        return .none
+    }
+
     /// One shared pill for every phase — same glass as the grid's column
     /// slider: ultra-thin material capsule, hairline outline, same height,
     /// same 16pt bottom seat.
     private func statusPill(label: LocalizedStringKey, progress: Double,
-                            percent: Int) -> some View {
+                            percent: Int, pause: PillPause) -> some View {
         HStack(spacing: 10) {
             ProgressView(value: min(max(progress, 0), 1))
                 .progressViewStyle(.linear)
                 .frame(width: 120)
-            Text(label)
+                // Dim the stalled bar. The word beside it says why; this makes
+                // "not moving" legible at a glance, before anyone reads.
+                .opacity(pause == .none ? 1 : 0.5)
+            Group {
+                switch pause {
+                case .none: Text(label)
+                case .byUser: Text("Paused")
+                case .cooling: Text("Paused to cool down")
+                }
+            }
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
@@ -1259,6 +1299,21 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
                 .fixedSize()
+            // Resume where the state is reported, so the pill isn't a dead end
+            // that sends you to Settings to undo something. Only for a pause
+            // the user owns — a thermal pause lifts on its own.
+            if pause == .byUser {
+                Button {
+                    throttle.userPaused = false
+                } label: {
+                    Image(systemName: "play.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Resume analyzing")
+                .accessibilityLabel("Resume analyzing")
+            }
         }
         // Hug the content — the pills now show short, stable counts (no
         // filenames), so the capsule stays compact and centered instead of
