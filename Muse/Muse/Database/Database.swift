@@ -613,6 +613,205 @@ final class Database {
             }
         }
 
+        migrator.registerMigration("v24_per_file_identity") { db in
+            // Identity becomes the FILE ON DISK, not its bytes.
+            //
+            // `files.content_hash` was UNIQUE, so N byte-identical files
+            // collapsed onto ONE row. Everything the user authors hangs off
+            // that row — the edit stack, tags, ratings, the note, collection
+            // membership — so twelve copies shared one of each. Editing one
+            // changed all twelve. That is the reported bug, from the owner's
+            // own library: twelve `RAW_SONY_ILCA-77M2*.ARW` in one folder,
+            // twelve alive paths, ONE `edits` row.
+            //
+            // Content is still COMPARED — Find Duplicates groups by it, and
+            // identical pixels must not be analyzed twelve times — but it is
+            // no longer identity.
+            //
+            // Two rules govern what gets copied to each new row:
+            //
+            //   * content-DERIVED data (EXIF, traits, place, embeddings, and
+            //     the analysis columns on `files` itself) is copied because it
+            //     is identical for identical bytes. Recomputing it per copy
+            //     would mean N Vision passes over the same pixels, and leaving
+            //     it out would make every copy look unanalyzed.
+            //   * USER-authored data is copied because the owner's rule is
+            //     that a copy INHERITS (see the design doc §3). Nothing
+            //     visible today is lost; the copies diverge from the next
+            //     edit forward.
+            //
+            // The lowest absolute_path keeps the original row, so the split is
+            // deterministic and re-runnable.
+
+            // 1. Rebuild `files` without the UNIQUE on content_hash. SQLite
+            //    cannot drop an inline constraint, and this is the standard
+            //    create/copy/drop/rename. It is SAFE here only because GRDB
+            //    runs migrations with `PRAGMA foreign_keys = OFF` by default
+            //    (ForeignKeyChecks.deferred) — with foreign keys ON, the
+            //    DROP would cascade-delete every paths, tags, notes and edits
+            //    row in the library. Do not "helpfully" mark this migration
+            //    `.immediate`.
+            try db.execute(sql: """
+                CREATE TABLE files_new (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    content_hash TEXT,
+                    kind TEXT NOT NULL,
+                    size_bytes INTEGER,
+                    width INTEGER,
+                    height INTEGER,
+                    duration_seconds REAL,
+                    created_at INTEGER,
+                    modified_at INTEGER,
+                    last_seen_at INTEGER NOT NULL,
+                    caption TEXT,
+                    dominant_color TEXT,
+                    feature_print BLOB,
+                    palette TEXT,
+                    analyzed_hash TEXT,
+                    intent TEXT,
+                    intent_model_version TEXT,
+                    lat DOUBLE,
+                    lon DOUBLE,
+                    coords_scanned_hash TEXT,
+                    last_viewed_at INTEGER
+                )
+                """)
+            try db.execute(sql: """
+                INSERT INTO files_new (id, content_hash, kind, size_bytes, width, height,
+                    duration_seconds, created_at, modified_at, last_seen_at, caption,
+                    dominant_color, feature_print, palette, analyzed_hash, intent,
+                    intent_model_version, lat, lon, coords_scanned_hash, last_viewed_at)
+                SELECT id, content_hash, kind, size_bytes, width, height,
+                    duration_seconds, created_at, modified_at, last_seen_at, caption,
+                    dominant_color, feature_print, palette, analyzed_hash, intent,
+                    intent_model_version, lat, lon, coords_scanned_hash, last_viewed_at
+                FROM files
+                """)
+            try db.execute(sql: "DROP TABLE files")
+            try db.execute(sql: "ALTER TABLE files_new RENAME TO files")
+            // content_hash keeps an index — it is still the grouping key for
+            // Find Duplicates and for analysis reuse — just not a unique one.
+            try db.execute(sql: "CREATE INDEX files_content_hash_idx ON files(content_hash)")
+
+            // 2. Split. Every alive path beyond the first, per file.
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT p.id AS path_id, p.file_id AS file_id, p.absolute_path AS path
+                FROM paths p
+                WHERE p.is_alive = 1
+                  AND p.file_id IN (SELECT file_id FROM paths
+                                    WHERE is_alive = 1 AND file_id IS NOT NULL
+                                    GROUP BY file_id HAVING COUNT(*) > 1)
+                ORDER BY p.file_id, p.absolute_path
+                """)
+
+            var kept: Set<String> = []
+            for row in rows {
+                guard let pathID: String = row["path_id"],
+                      let oldID: String = row["file_id"],
+                      let absPath: String = row["path"] else { continue }
+                // The first (lowest) path of each file keeps the original row.
+                if kept.insert(oldID).inserted { continue }
+
+                let newID = UUID().uuidString
+                let dir = (absPath as NSString).deletingLastPathComponent
+                let base = (absPath as NSString).lastPathComponent
+
+                try db.execute(sql: """
+                    INSERT INTO files (id, content_hash, kind, size_bytes, width, height,
+                        duration_seconds, created_at, modified_at, last_seen_at, caption,
+                        dominant_color, feature_print, palette, analyzed_hash, intent,
+                        intent_model_version, lat, lon, coords_scanned_hash, last_viewed_at)
+                    SELECT ?, content_hash, kind, size_bytes, width, height,
+                        duration_seconds, created_at, modified_at, last_seen_at, caption,
+                        dominant_color, feature_print, palette, analyzed_hash, intent,
+                        intent_model_version, lat, lon, coords_scanned_hash, last_viewed_at
+                    FROM files WHERE id = ?
+                    """, arguments: [newID, oldID])
+
+                // Content-derived rows.
+                try db.execute(sql: """
+                    INSERT INTO photo_meta SELECT ?, exif_scanned_hash, capture_date,
+                        capture_md, camera_make, camera_model, lens, iso, f_number,
+                        exposure_seconds, focal_length, focal_length_35mm, flash_fired
+                    FROM photo_meta WHERE file_id = ?
+                    """, arguments: [newID, oldID])
+                try db.execute(sql: """
+                    INSERT INTO photo_traits SELECT ?, traits_scanned_hash, traits_version,
+                        face_count, largest_face_frac, face_quality, pet_count, sharpness,
+                        clip_high_r, clip_high_g, clip_high_b, clip_low, noise_sigma
+                    FROM photo_traits WHERE file_id = ?
+                    """, arguments: [newID, oldID])
+                try db.execute(sql: """
+                    INSERT INTO places SELECT ?, geocoded_hash, dataset_version,
+                        city, admin, country, place_key
+                    FROM places WHERE file_id = ?
+                    """, arguments: [newID, oldID])
+                try db.execute(sql: """
+                    INSERT INTO embeddings SELECT ?, vector, model_version, updated_at
+                    FROM embeddings WHERE file_id = ?
+                    """, arguments: [newID, oldID])
+                try db.execute(sql: """
+                    INSERT INTO clip_embeddings SELECT ?, embedded_hash, model_generation, vector
+                    FROM clip_embeddings WHERE file_id = ?
+                    """, arguments: [newID, oldID])
+
+                // FTS carries THIS path's own basename. One FTS row could only
+                // hold one name, so before this migration eleven of twelve
+                // copies were unfindable by the name on disk.
+                try db.execute(sql: """
+                    INSERT INTO files_fts (file_id, basename, ocr_text, caption)
+                    SELECT ?, ?, ocr_text, caption FROM files_fts WHERE file_id = ?
+                    """, arguments: [newID, base, oldID])
+
+                // User-authored data for THIS path's folder. Same-folder copies
+                // each get their own copy of what they were sharing;
+                // cross-folder copies take only their own folder's rows.
+                try db.execute(sql: """
+                    INSERT INTO tags (id, file_id, parent_dir, label, source, confidence, model_version)
+                    SELECT lower(hex(randomblob(16))), ?, parent_dir, label, source,
+                           confidence, model_version
+                    FROM tags WHERE file_id = ? AND parent_dir = ?
+                    """, arguments: [newID, oldID, dir])
+                try db.execute(sql: """
+                    INSERT INTO notes (file_id, parent_dir, body, updated_at)
+                    SELECT ?, parent_dir, body, updated_at
+                    FROM notes WHERE file_id = ? AND parent_dir = ?
+                    """, arguments: [newID, oldID, dir])
+                try db.execute(sql: """
+                    INSERT INTO edits (file_id, parent_dir, stack, stack_hash,
+                                       process_version, updated_at)
+                    SELECT ?, parent_dir, stack, stack_hash, process_version, updated_at
+                    FROM edits WHERE file_id = ? AND parent_dir = ?
+                    """, arguments: [newID, oldID, dir])
+                try db.execute(sql: """
+                    INSERT INTO edit_versions (id, file_id, parent_dir, kind, name, stack, created_at)
+                    SELECT lower(hex(randomblob(16))), ?, parent_dir, kind, name, stack, created_at
+                    FROM edit_versions WHERE file_id = ? AND parent_dir = ?
+                    """, arguments: [newID, oldID, dir])
+
+                // Collections: every copy is a member today, so keep it one.
+                try db.execute(sql: """
+                    INSERT OR IGNORE INTO collection_members (collection_id, file_id, added_by)
+                    SELECT collection_id, ?, added_by FROM collection_members WHERE file_id = ?
+                    """, arguments: [newID, oldID])
+                try db.execute(sql: """
+                    INSERT OR IGNORE INTO collection_exclusions (collection_id, file_id)
+                    SELECT collection_id, ? FROM collection_exclusions WHERE file_id = ?
+                    """, arguments: [newID, oldID])
+
+                // Re-point the path. DEAD paths stay on the original row —
+                // they are how a re-appearing file is revived, and they have
+                // no folder of their own to reason about.
+                try db.execute(sql: "UPDATE paths SET file_id = ? WHERE id = ?",
+                               arguments: [newID, pathID])
+            }
+
+            // Derived caches keyed on the old identities. The next Find
+            // Duplicates run rebuilds them from scratch.
+            try db.execute(sql: "DELETE FROM duplicate_members")
+            try db.execute(sql: "DELETE FROM duplicate_groups")
+        }
+
         return migrator
     }
 
