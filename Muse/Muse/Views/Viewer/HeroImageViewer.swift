@@ -440,8 +440,9 @@ struct HeroImageViewer: View {
             // Catch taps in the gaps so they don't dismiss.
             .contentShape(Rectangle())
             .onTapGesture {}
-            .padding(.top, 20)
-            .padding(.bottom, 28)
+            // Top/bottom insets live INSIDE the column's scroll view now (see
+            // ViewerInfoColumn) — here they would shorten the viewport and
+            // slice the last card short of the window edge.
             .padding(.trailing, ViewerGeometry.columnMargin - 12)
             // No explicit cursor handling needed here: HeroStage's image only
             // PUSHES the open-hand cursor while its own onHover reports

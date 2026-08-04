@@ -198,7 +198,6 @@ enum DriveShareUpdateSteps {
                 // Remember the form text for next time.
                 AppSettings.driveShareName = form.name
                 AppSettings.driveShareLabel = form.label
-                AppSettings.driveShareLayout = form.layout.rawValue
                 // The share is live + public either way; if the local record
                 // didn't persist, warn so the user copies the link now (Manage
                 // can't see an untracked folder to unpublish it later).
@@ -350,7 +349,6 @@ extension DriveShareService {
 
                 AppSettings.driveShareName = form.name
                 AppSettings.driveShareLabel = form.label
-                AppSettings.driveShareLayout = form.layout.rawValue
 
                 setPhase(tracked ? .done(pageURL) : .doneUntracked(pageURL), ifCurrent: generation)
             } catch {
@@ -470,7 +468,6 @@ extension DriveShareService {
 
             AppSettings.driveShareName = form.name
             AppSettings.driveShareLabel = form.label
-            AppSettings.driveShareLayout = form.layout.rawValue
 
             setPhase(sweepFailed ? .doneWithSweepWarning(record.pageURL) : .done(record.pageURL),
                      ifCurrent: generation)

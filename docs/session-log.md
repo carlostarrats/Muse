@@ -6,6 +6,52 @@ the durable rules + a compact index live in `CLAUDE.md`. Nothing here is
 load-bearing for a fresh session beyond what that index already surfaces;
 read an entry when you need the full "why" behind a specific change.
 
+### Share form simplified; the info column stops slicing its last card — 2026-08-04 (on `feat/next-156`)
+
+Three owner-driven UI changes, all small, one of which had a real cause worth
+writing down.
+
+**Share Drive Link: one layout, and a Page Title that's already filled in.**
+The Layout picker (Grid / Contact Sheet / Essay) is gone — the three read as
+near-identical pages — so every publish sends `.grid`. Nothing about the wire
+format changed: the manifest's `y` key, `DriveShareLayout` and the page's three
+renderers stay, so a link published yesterday keeps rendering what it recorded.
+A portfolio UPDATE now converts an older essay/sheet page to grid, which is the
+intended consequence of "one layout exists". `AppSettings.driveShareLayout`
+became write-only the moment the form stopped seeding from it and was deleted
+with its three writes. Separately, `Page Title` was a `Project Name`
+PLACEHOLDER, which the owner read as text already in the field — so the form
+looked complete while Publish stayed disabled on the empty-title guard. It now
+prefills with `request.title`, which is the collection's name at both call
+sites (`ShareCollectionButton`, `CollectionSidebarRow`); the share comes from a
+collection, so that is the right first answer, and it's editable.
+
+**Why Preview's cards were sliced and Edit's weren't.** `HeroImageViewer.rightRail`
+applied `.padding(.top, 20)` / `.padding(.bottom, 28)` OUTSIDE `ViewerInfoColumn`.
+Padding around a scroll view shortens the VIEWPORT, so the column's clip line
+floated 28pt above the window edge: the INFO card was cut with a band of empty
+backdrop beneath it, which is what reads as "cut off". `EditorPanel` had always
+carried its insets as content padding INSIDE the scroll with the viewport at
+full height — hence the owner's "they are not cut off in edit, which is what I
+want". The column now does the same (`.padding(.top, chromeTop - 12)`,
+`.padding(.bottom, 24)`, `.frame(maxHeight: .infinity, alignment: .top)`), and
+both call sites (image + video hero) dropped their outer padding. Nothing moved
+on screen: chrome still lands at 32, cards still 40 from the right edge. The
+column still scrolls — with INFO expanded its content has always been taller
+than the window — but a card now leaves at the window edge, where an eye reads
+it as scrolled rather than sliced.
+
+**Margins cut 40 → 28.** `ViewerGeometry.columnMargin` and `.sidePad`, ~30% off
+on owner call to hand the picture more window. One change moves both modes,
+because `editorPanelWidth` is derived from `columnMargin`: Preview's photo gains
+24pt of width and its column sits 12pt closer to the edge; the editor's two
+panels slide 12pt outward each. `minWindowWidth` follows to 894 (was 918), same
+guarantee. `ViewerGeometryTests` had `298` written out for column+margin — now
+derived from the constants, so the next tuning pass can't leave it stale.
+
+Verified: `MuseTests` 2,185 (0 failures), `audit-invariants.sh` 21/21, Release
+build warning-free, and the owner confirmed all three in the running app.
+
 ### Right-click ▸ Edit — opening straight into the editor — 2026-08-04 (on `feat/next-155`)
 
 A grid context-menu **Edit** that opens the photo in the editor rather than in

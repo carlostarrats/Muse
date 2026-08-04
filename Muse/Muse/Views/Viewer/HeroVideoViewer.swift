@@ -106,8 +106,7 @@ struct HeroVideoViewer: View {
                          chrome: { chromeRow })
             .contentShape(Rectangle())
             .onTapGesture {}
-            .padding(.top, 20)
-            .padding(.bottom, 28)
+            // Insets live inside the column's scroll view — see ViewerInfoColumn.
             .padding(.trailing, ViewerGeometry.columnMargin - 12)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .opacity(chromeVisible ? 1 : 0)

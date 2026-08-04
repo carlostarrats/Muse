@@ -102,8 +102,20 @@ struct ViewerInfoColumn<Chrome: View>: View {
                                               : .easeOut(duration: 0.3),
                                value: backingVisible)
             )
+            // The column's top and bottom insets are CONTENT padding, not
+            // padding around the scroll view — EditorPanel's construction, and
+            // the reason Edit's cards don't look sliced. Outside the scroll
+            // they shortened the viewport, so the clip line floated ~28pt above
+            // the window edge and the last card was cut with empty space under
+            // it. Inside, the scroll runs the full height (a card leaves at the
+            // window edge, where an eye reads it as scrolled rather than cut)
+            // and scrolling to the end still lands 24pt of air below the last
+            // card.
+            .padding(.top, ViewerGeometry.chromeTop - 12)
+            .padding(.bottom, 24)
         }
-        .frame(width: 258 + 24)
+        .frame(width: ViewerGeometry.columnWidth + 24)
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     /// Analyzed palette from the DB when present, else the on-open fallback.

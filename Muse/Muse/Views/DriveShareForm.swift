@@ -20,7 +20,6 @@ struct DriveShareSheet: View {
     @State private var label: String = AppSettings.driveShareLabel
     @State private var name: String = AppSettings.driveShareName
     @State private var expiry = Calendar.current.date(byAdding: .day, value: 30, to: Date()) ?? Date()
-    @State private var layout: DriveShareLayout
     @State private var bodyText: String
     @State private var authBusy = false
 
@@ -30,14 +29,15 @@ struct DriveShareSheet: View {
         self.onClose = onClose
         switch request.mode {
         case .share, .portfolioNew:
-            _intro = State(initialValue: "")
-            _layout = State(initialValue: DriveShareLayout(rawValue: AppSettings.driveShareLayout) ?? .grid)
+            // The share always comes FROM a collection, so its name is the
+            // right first answer for the page title — a placeholder read as
+            // text that was already there, and Publish stayed disabled.
+            _intro = State(initialValue: request.title)
             _bodyText = State(initialValue: "")
         case .portfolioUpdate(let record):
             // An update pre-fills from the record so the form reads as the
             // portfolio's current state, not a blank publish.
-            _intro = State(initialValue: record.introTitle ?? "")
-            _layout = State(initialValue: DriveShareLayout(rawValue: record.layout ?? "grid") ?? .grid)
+            _intro = State(initialValue: record.introTitle ?? request.title)
             _bodyText = State(initialValue: record.bodyText ?? "")
         }
     }
@@ -120,10 +120,9 @@ struct DriveShareSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             field(String(localized: "Page Title"), text: $intro,
                   prompt: String(localized: "Project Name"))
-            layoutPicker
-            // The intro paragraph is the essay layout's header, and a portfolio
-            // always wants one (it reads as a small site) — otherwise it's noise.
-            if isPortfolioMode || layout == .essay {
+            // A portfolio always wants an intro paragraph (it reads as a small
+            // site); a one-off share doesn't.
+            if isPortfolioMode {
                 introField
             }
             field(String(localized: "Label"), text: $label,
@@ -149,10 +148,13 @@ struct DriveShareSheet: View {
                 ModalButton(title: publishButtonTitle, kind: .prominent, isDefault: true) {
                     // Today's date is automatic (used only in the Drive folder
                     // name, never shown on the page) — one less field for the user.
+                    // One layout, always: the three read as near-identical
+                    // pages and the choice earned nothing (owner call
+                    // 2026-08-04). The manifest key stays, so an already-
+                    // published page keeps rendering whatever it recorded.
                     let form = DriveShareForm(intro: intro, label: label, name: name,
                                               date: Date(), expiry: expiry,
-                                              layout: layout, bodyText: bodyText)
-                    AppSettings.driveShareLayout = layout.rawValue
+                                              layout: .grid, bodyText: bodyText)
                     switch request.mode {
                     case .share:
                         service.publish(form: form, title: request.title, urls: request.urls)
@@ -182,20 +184,6 @@ struct DriveShareSheet: View {
                 .labelsHidden()
                 .fixedSize()
                 .accessibilityLabel(Text("Expires"))
-        }
-    }
-
-    private var layoutPicker: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Layout").font(.system(size: 12)).foregroundStyle(.secondary)
-            Picker("", selection: $layout) {
-                Text("Grid").tag(DriveShareLayout.grid)
-                Text("Contact Sheet").tag(DriveShareLayout.sheet)
-                Text("Essay").tag(DriveShareLayout.essay)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .accessibilityLabel(Text("Layout"))
         }
     }
 

@@ -2,11 +2,13 @@ import XCTest
 @testable import Muse
 
 final class ViewerGeometryTests: XCTestCase {
-    // viewport 1200x800, column 298 (258 + 40 margin), pad 40, topPad 86, bottomPad 60
+    // viewport 1200x800, column = columnWidth + columnMargin, topPad 86, bottomPad 60.
+    // Derived from the constants, not spelled out: the side margins are a tuning
+    // value (cut 40 → 28 on 2026-08-04) and a literal here just goes stale.
     func testFitCentersBetweenEdgeAndColumn() {
         let r = ViewerGeometry.fitRect(imageSize: CGSize(width: 2400, height: 1600),
                                        viewport: CGSize(width: 1200, height: 800))
-        let usableRight = 1200 - 298.0
+        let usableRight = 1200 - (ViewerGeometry.columnWidth + ViewerGeometry.columnMargin)
         XCTAssertEqual(r.midX, (usableRight) / 2, accuracy: 0.5)   // centered in viewable space
         XCTAssertLessThanOrEqual(r.maxX, usableRight + 0.5)        // never under the column
         XCTAssertEqual(r.width / r.height, 1.5, accuracy: 0.01)    // aspect preserved

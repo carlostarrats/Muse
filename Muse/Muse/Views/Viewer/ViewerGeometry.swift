@@ -1,11 +1,18 @@
 import Foundation
 
-/// Pure geometry for the hero viewer. Constants mirror the approved prototype:
-/// info column 258pt + 40pt margin, 40pt side pad, 86pt top, 60pt bottom.
+/// Pure geometry for the hero viewer. Constants mirror the approved prototype,
+/// except the two side margins: info column 258pt + 28pt margin, 28pt side pad,
+/// 86pt top, 60pt bottom.
+///
+/// The margins were the prototype's 40 until 2026-08-04 — cut by ~30% on owner
+/// call, to hand the picture more of the window. Both modes read them, so one
+/// change moves Preview's photo and column and the editor's two panels
+/// together: `editorPanelWidth` is derived from `columnMargin`, so the panels
+/// slide the same 12pt toward the window edges that the info column does.
 enum ViewerGeometry {
     static let columnWidth: CGFloat = 258
-    static let columnMargin: CGFloat = 40
-    static let sidePad: CGFloat = 40
+    static let columnMargin: CGFloat = 28
+    static let sidePad: CGFloat = 28
     /// Clears the Preview | Edit switch outright: it starts at `chromeTop` and
     /// is `chromeHeight` tall, so 70 is where it ENDS — a photo fitted to 70
     /// touches it, and a tall one appeared to slide underneath on open. 16pt of
@@ -14,7 +21,8 @@ enum ViewerGeometry {
 
     /// The y of the info column's chrome row (zoom pill / Fit / ✕), and of the
     /// Preview | Edit switch: the viewer's top line.
-    /// = the right rail's 20pt top inset + the column's own 12pt card inset.
+    /// The column carries it as content padding (`chromeTop − 12`) on top of
+    /// its own 12pt card inset — see ViewerInfoColumn.
     static let chromeTop: CGFloat = 32
     /// The chrome row's height — the zoom pill's, which sets it.
     static let chromeHeight: CGFloat = 38
@@ -32,7 +40,7 @@ enum ViewerGeometry {
     /// One of the EDITOR's two panels, in points. Lives here rather than in
     /// `EditorView` because the window minimum below is derived from it — a
     /// private copy in the view is how the two silently disagreed.
-    /// = 258 column + 24 card inset + (40 − 12) margin + 20 stack spacing.
+    /// = 258 column + 24 card inset + (columnMargin − 12) margin + 20 stack spacing.
     static let editorPanelWidth: CGFloat = columnWidth + 24 + (columnMargin - 12) + 20
 
     /// The narrowest the main window may get.
