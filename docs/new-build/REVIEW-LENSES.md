@@ -92,6 +92,14 @@ Rounds 1–3 are recorded in `REVIEW-FINDINGS.md` and `FEATURE-LEDGER.md`; round
 | Architecture map vs. the filesystem (do the listed files exist?) | 9 | 1 finding in this round's own diff; 3 pre-existing, all fixed |
 | **UI-test aim: does the test depend on WINDOW SIZE?** | **9** | 6 tests failed with the app working perfectly — a magic `(0.55, 0.5)` window fraction, in 10 places across both drive suites |
 | **Accessibility STRUCTURE changed by a refactor** | **9** | 1 finding — moving the Quality row into a shared `readout()` helper gave it `children: .combine`, so `staticTexts["Quality"]` stopped existing and its test failed. The app was right; combining is correct for VoiceOver. Same trap the estimate row had already documented. |
+| **Hand-stepped animator that steps the WRONG value** | **12** (2026-08-03) | 1 finding — the column re-fit stepped `chromeProgress`, which had already settled, so all 13 frames recomputed an identical inset. It animated nothing; the photo snapped while the code and the comments claimed a glide. The thing that CHANGED has to be the thing that is walked. |
+| Dead code created by the round's OWN diff | 12 | 1 finding — `EditorWorkspace.column(of:)` existed only to be tested |
+| Allocation on a per-frame path | 12 | 2 findings — `isEmpty` built a filtered array to ask whether anything survived it, on the canvas's per-frame inset path; `rowShift` did the same once per row per drag frame |
+| **Can this assertion fail? (run the negative)** | **12** | 1 finding — the new clipping guard compared the last row to the WINDOW, which is hundreds of points taller than the card, so it would have passed on the exact bug it was written for. Rewritten against the card's own frame (the presenter's ScrollView) and **proven by removing the padding and watching it fail** |
+| Operability of a new MODE without a mouse | 12 | 1 finding — reorder was drag-only, and its VoiceOver hint promised a gesture such a user cannot perform. Move Up / Move Down / Move to Other Column actions added on the same model calls the drag uses |
+| **A test that AIMS by window fraction rather than locating** | **12** | 1 finding, pre-existing — `testCompareSideBySideOpens` still clicked two tiles at `(0.28, 0.24)` and `(0.59, 0.50)`, "measured from a real screenshot". Round 9 removed this pattern everywhere else and missed this one. Resetting the window frame re-aimed it and it failed reporting *"Compare is broken"* — compare was fine. Now uses `app.photoTiles(limit: 2)`. **A sweep for `withNormalizedOffset` in the drive suites is the mechanical form of this lens** and is worth re-running whenever a test is added |
+| **Test state that outlives the test** | **12** | 2 findings, the second caught in the act. The window-resizing test restored the frame only on the happy path — then, with a `defer` added, it STILL broke the suite: the restore was a RELATIVE drag (+420), which is not a restore when the window did not start where you assumed. It left the window at 532pt, and `testCompareSideBySideOpens` — untouched, two tests away — failed because two tiles no longer fit. **A relative undo is not an undo.** The resize was deleted: it proved nothing the constant-height padding check did not, and a drive test must not mutate global UI state it cannot reliably put back. |
+| Strings orphaned by the round's own edit | 12 | 1 finding — a reworded accessibility hint left its old key in the catalog |
 
 ## Part 2 — lenses NOT yet run
 
@@ -103,8 +111,7 @@ an unrun lens on the list is worth more than a good idea that evaporates.
 | Sparkle update path integrity on THIS branch | The appcast/EdDSA path has not been re-reviewed since Spec 01 added `Commerce/`. |
 | TOCTOU on user paths | A file swapped between the `fileExists` check and the read. Round 5 covered prefixes, not timing. |
 | Long-session memory growth (retain cycles, not allocation shape) | Round 6 checked allocation *shape*; SwiftUI/Combine retain cycles are a different failure. |
-| Preference-key lifecycle (renamed/removed ids left in a stored set) | `editorExpandedSections2` keeps whatever ids a user has stored; removing a section leaves a dead id there forever. Harmless today, but nothing prunes. |
-| A control's coordinate space vs the renderer's | Round 10's crop bug was ONE calculation in the WRONG frame of reference, so a duplication sweep could never see it. Any control that writes a value the renderer later interprets needs its space checked against the render chain's ORDER of operations. |
+| Preference-key lifecycle (renamed/removed ids left in a stored set) | `editorExpandedSections2` keeps whatever ids a user has stored; removing a section leaves a dead id there forever. Harmless today, but nothing prunes. **Round 12 ran this against the NEW `editorWorkspace` key and it is clean by construction** — the DTO can only ever write ids that exist in the enum, and the loader drops unknown ones, so a stale id is read once and gone. The older key is still unpruned. |
 | A re-key that orphans data instead of migrating it | **Round 11 found one.** Changing a cache/derived-data KEY makes the old entries unreachable, not gone — and unreachable data still counts against a cap. Any key or format version bump needs something that deletes the old shape. |
 | Data staged outside what the cap measures | **Round 11 found one.** A directory renamed aside for background deletion is a SIBLING of the cache root, so `enforceDiskCap` — which measures only inside the root — can never reclaim it if a crash strands it. |
 | Two-instance runs during GUI testing | The 2026-08-02 round hit a 21-failure suite caused by a developer-launched instance racing the test's own; GRDB's `.immediateError` means the loser gets no window. Worth a mechanical guard rather than a note. |
@@ -321,3 +328,63 @@ Two notes on scope, so they are not re-litigated:
   OAuth-authenticated, user-initiated, TLS to googleapis.com, returning small
   JSON — unlike the announcements feed, which is automatic, at every launch, and
   unauthenticated. Reasoning is in the script at the exclusion.
+
+
+---
+
+## Round 12 (2026-08-03) — the editor workspace
+
+Ran the registry against `feat/next-155`. Seven findings, all in this round's
+own work, plus two Part 2 lenses closed.
+
+**The one worth remembering: a hand-stepped animator can step the wrong value
+and look exactly like a working one.** `stepCanvasRefit` walked
+`chromeProgress` frame by frame to make the photo glide into a freed column.
+But `chromeProgress` describes the hide-UI eye, and by the time a column
+emptied it had already settled at 1 — so thirteen frames each recomputed an
+identical inset. The photo snapped. Nothing failed, no test caught it, and the
+code, the commit message and the spec all said "glides". The fix was to make
+the EMPTIEDNESS itself continuous (`panelInsets(leftEmptied:rightEmptied:)`,
+0…1) and walk that, because the emptiness is what changed.
+
+The general shape: **when hand-stepping an animation, check that the value you
+are stepping is the value the target actually reads to produce the difference
+you want.** Stepping a settled value is a no-op that costs 13 frames of work
+and reads as an animation in the source.
+
+**The second worth remembering: `assertNoRowIsClipped` would have passed on the
+bug it was written for.** It compared the last row's bottom to
+`app.windows.firstMatch` — the window, hundreds of points taller than the card
+— so any content anywhere in the card satisfied it. This was written in the
+same session that had just deleted a different vacuous assertion, which is the
+point: knowing about the failure mode does not prevent it. What does prevent it
+is **running the negative** — removing the fix and confirming the test goes red.
+That is now the standard for any guard written for a specific bug, and it is
+how this one was rewritten (against the presenter's ScrollView, which IS the
+card's rect) and confirmed.
+
+**The third worth remembering: a relative undo is not an undo.** The
+window-resizing test shrank the window by 420pt and restored it by dragging
++420 back. With a `defer` around it that looks airtight — but if the window did
+not start where the test assumed, the "restore" moves it somewhere new. It left
+the frame at 532pt, macOS persisted that, and a test two positions away
+(`testCompareSideBySideOpens`, untouched by this branch) failed because two
+grid tiles no longer fit. The failure pointed at compare; the cause was a
+padding test. Round 9 already recorded that these suites *"fail in ways that
+accuse the app"*; this is the same shape with the suite accusing itself. The
+resize is gone — it proved nothing the padding check did not.
+
+**And the pre-existing one it flushed out.** Resetting the window frame made
+`testCompareSideBySideOpens` fail — a test this branch never touched. It was
+still aiming at two tiles by window fraction, the pattern round 9 removed
+everywhere else and missed here, and it failed saying *"Compare is broken"*
+when compare was perfect. `GridTileFinder` grew `photoTiles(limit:)` and the
+test now locates both tiles. One `withNormalizedOffset` remains in the suites
+(a drag across the middle of the canvas, which needs a region rather than an
+element) and is benign.
+
+**Also fixed:** dead code created by this round's own diff (`column(of:)`);
+two per-frame allocations on the canvas and drag paths; reorder mode being
+mouse-only while its VoiceOver hint promised a drag; a window-resizing test that
+restored the frame only when it passed; and a localization key orphaned by
+rewording that same hint.

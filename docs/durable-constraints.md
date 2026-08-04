@@ -31,7 +31,7 @@ is data-loss, privacy-egress or permanent-delete class — inline it there too.
 - [SwiftUI patterns, animation & AppState](#swiftui-patterns-animation--appstate) — 15 rules
 - [Filesystem, roots & sandbox](#filesystem-roots--sandbox) — 9 rules
 - [Selection, duplicates, App Intents & accessibility](#selection-duplicates-app-intents--accessibility) — 8 rules
-- [Working practice](#working-practice) — 5 rules
+- [Working practice](#working-practice) — 7 rules
 
 ## Network egress & viewer security
 
@@ -301,6 +301,17 @@ is data-loss, privacy-egress or permanent-delete class — inline it there too.
   2. **Checkpoint (before a commit, or after a removal/refactor with wide reach)** — the whole unit target: `-only-testing:MuseTests`. ~40 s, ~1,780 tests.
   3. **`MuseUITests`** — only when the claim needs the RUNNING app and nothing cheaper proves it (launch path, a modal opening, Escape, a surface nobody has driven). Each test launches the real app and costs minutes, and they need every other Muse instance quit first (GRDB `busyMode` is `.immediateError`).
   **`xcodebuild -scheme Muse test` runs tiers 2 AND 3** — that plain command is why a "quick check" turned into a ten-minute wait. Say `-only-testing:MuseTests` unless tier 3 is actually wanted.
+
+- **Verification has a TIME BUDGET of about ten minutes, and it is not a reflex (2026-08-03, owner).** The tiers above existed and were still not enough: in one session I ran the full UI drive suite 4× (11–16 min each), the whole unit target ~10×, and a Release build ~10× — roughly **100 minutes**, almost none of which bought information. Owner: *"you are stealing money from me in tokens… it should not take that long."* The additions that make the tiers actually bind:
+  - **Release builds are a checkpoint too.** Iterate with Debug; a Release build after every edit is minutes each and proves nothing extra until the end.
+  - **ONE checkpoint at the end** — full unit target + Release + `audit-invariants.sh`, once. Not after every fix.
+  - **Never re-run to confirm a pass.** If it was green and the change didn't touch that area, it is still green.
+  - **Never two build/test commands at once.** Two `xcodebuild` UI runs mean two Muse instances on one database (GRDB `busyMode` is `.immediateError`), which manufactures failures that then get "investigated."
+  - **Debugging one failing test runs THAT test**, not the suite.
+  - **If verification will exceed ~10 minutes, stop and ask first.**
+  - The drive suites are now **`ask`-gated** in `.claude/settings.local.json` (`Bash(*MuseUITests*)` + both drive-suite names) so a 16-minute run cannot start silently. The gate is deliberately narrow — builds, unit tests and the audit stay unprompted.
+
+- **A drive test may not mutate global UI state it cannot reliably put back (2026-08-03).** A test that resized the window "restored" it with a RELATIVE drag, which is not a restore when the window didn't start where the test assumed. It left the frame 420pt short, macOS persisted that, and `testCompareSideBySideOpens` — two tests away and untouched — failed because two grid tiles no longer fit. **A relative undo is not an undo.** If a test cannot restore state exactly, it must not change it.
   And: **never re-run a suite to confirm a result you already have.** `** TEST EXECUTE SUCCEEDED **` is the answer; if the console output looked ambiguous, read the `.xcresult` or fix the grep — re-running is cost with no new information.
 
 - **A status fact in CLAUDE.md must be enforced by a check, not by memory (2026-08-01).** CLAUDE.md is loaded into context EVERY session, so a stale fact there misinforms every future reader by default — and it went stale the instant `new-product-build-1` was merged, having said "Foundation 1–7 live on `new-product-build-1` and are not on `main` yet". `DOC-1` and `DOC-2` in `scripts/audit-invariants.sh` now verify the two facts that drift on their own: any "not on `main` yet" claim is checked with `git merge-base --is-ancestor`, and the named current release tag is compared with the newest non-pre-release tag in git. If you add another volatile claim to CLAUDE.md, add the check that guards it in the same commit, or put the fact somewhere that isn't loaded every session.

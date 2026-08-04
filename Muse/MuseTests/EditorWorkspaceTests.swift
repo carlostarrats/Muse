@@ -218,12 +218,72 @@ final class EditorWorkspaceTests: XCTestCase {
         XCTAssertFalse(w.hidden.contains(survivor))
     }
 
-    // MARK: - Column lookup
+    // MARK: - Visible index (the drag's per-row lookup)
 
-    func testColumnOfFindsAModule() {
-        let w = EditorWorkspace.standard
-        XCTAssertEqual(w.column(of: .tools), .left)
-        XCTAssertEqual(w.column(of: .crop), .right)
+    func testVisibleIndexSkipsHiddenModules() {
+        var w = EditorWorkspace.standard
+        w.setHidden(.looks, true)
+        XCTAssertEqual(w.visibleIndex(of: .light, in: .right), 0)
+        XCTAssertEqual(w.visibleIndex(of: .zones, in: .right), 1)
+    }
+
+    func testVisibleIndexIsNilForAHiddenOrAbsentModule() {
+        var w = EditorWorkspace.standard
+        w.setHidden(.looks, true)
+        XCTAssertNil(w.visibleIndex(of: .looks, in: .right))
+        XCTAssertNil(w.visibleIndex(of: .tools, in: .right))
+    }
+
+    func testVisibleIndexMatchesTheArrayItReplaced() {
+        // It exists only to avoid allocating; it must agree with the obvious
+        // version everywhere, including with things hidden.
+        var w = EditorWorkspace.standard
+        w.setHidden(.zones, true)
+        w.setHidden(.tools, true)
+        for column in EditorColumn.allCases {
+            for module in EditorModule.allCases {
+                XCTAssertEqual(w.visibleIndex(of: module, in: column),
+                               w.visible(in: column).firstIndex(of: module),
+                               "\(module) in \(column)")
+            }
+        }
+    }
+
+    /// The arithmetic the VoiceOver "Move Down" action relies on. `move`
+    /// removes the module BEFORE computing slots, so moving down by one needs
+    /// no +1 — removal already shifted everything below it up. Getting this
+    /// wrong moves the card two places, or not at all.
+    func testMovingDownOnePlaceLandsExactlyOnePlaceDown() {
+        var w = EditorWorkspace(left: [], right: [.looks, .light, .zones, .color],
+                                hidden: [])
+        let index = w.visibleIndex(of: .light, in: .right)!
+        w.move(.light, toColumn: .right, visibleSlot: index + 1)
+        XCTAssertEqual(w.right, [.looks, .zones, .light, .color])
+    }
+
+    func testMovingUpOnePlaceLandsExactlyOnePlaceUp() {
+        var w = EditorWorkspace(left: [], right: [.looks, .light, .zones, .color],
+                                hidden: [])
+        let index = w.visibleIndex(of: .zones, in: .right)!
+        w.move(.zones, toColumn: .right, visibleSlot: index - 1)
+        XCTAssertEqual(w.right, [.looks, .zones, .light, .color])
+    }
+
+    func testMovingDownRepeatedlyWalksAModuleToTheEnd() {
+        var w = EditorWorkspace(left: [], right: [.looks, .light, .zones, .color],
+                                hidden: [])
+        for _ in 0..<3 {
+            guard let i = w.visibleIndex(of: .looks, in: .right) else { break }
+            guard i + 1 < w.visible(in: .right).count else { break }
+            w.move(.looks, toColumn: .right, visibleSlot: i + 1)
+        }
+        XCTAssertEqual(w.right, [.light, .zones, .color, .looks])
+    }
+
+    func testMoveClampsANegativeSlotToTheHead() {
+        var w = EditorWorkspace.standard
+        w.move(.crop, toColumn: .left, visibleSlot: -5)
+        XCTAssertEqual(w.left.first, .crop)
     }
 
     func testIsEmptyTracksVisibleModulesNotStoredOnes() {

@@ -685,12 +685,43 @@ Performance:
   presets (+ `EditClipboard`, in-memory only). `Models/EditStackIndex.swift` gains the
   live index + `LiveEditStackProvider`.
 - **`Views/Editor/`** — `EditSession` (per-file state, autosave, coalesced render),
-  `EditorView` (the two-card shell + tabs + eyedropper), `EditCanvasView` (MTKView +
-  `CIRenderDestination`), `EditorBackdrop`, `EditSlider` (+ `EditToggleRow`),
+  `EditorView` (the stage: body, canvas, chrome row, and the state the rest of
+  the editor hangs off), `EditCanvasView` (MTKView + `CIRenderDestination`),
+  `EditorBackdrop`, `EditSlider` (+ `EditToggleRow`),
   `CurveEditorView` (its `CurveHistogram` seam is filled by Spec 05),
   `EditVersionsList`, `WBEyedropperButton` (the file that held `EditPresetsTab`
   until Spec 05's browser replaced it), `OpenWithFork` + `OpenWithForkCard`
   (+ `OpenWithForkRequest`/`EditNamePrompt`).
+
+  **Split out of `EditorView` on 2026-08-03** (Polish 33), when it was 1,682
+  lines and the workspace pass was about to rewrite every card declaration in
+  it — now 665:
+  - `EditorCardsLeft` / `EditorCardsRight` / `EditorCardsCrop` — the card
+    BODIES, moved verbatim. Crop is alone because it is the largest and the
+    only one writing into a different coordinate space than it is drawn in.
+  - `EditorCardBuilder` — module → card. Its own file for a compile-time
+    reason: twelve `_ConditionalContent` branches in one `@ViewBuilder`.
+  - `EditorCanvasGestures` — pan, pinch, and the `NSCursor` push/pop discipline.
+  - `EditorSampling` — what the editor READS off the photo: the stats gate, the
+    tone-zone EV mask and its hover/scroll targeting, the Insights query, and
+    the white-balance eyedropper.
+
+  **The workspace** (Polish 33) — which cards, in what order, on which side,
+  and which are hidden, as a saved preference rather than source code:
+  - `EditorWorkspaceStore` — the Pattern B singleton the View menu, the
+    Customize card and the panels all meet at (the `EditorChromeCommand` model,
+    and for the same reason: a `@Published` on `AppState` re-renders the shell).
+    Reorder is transactional through it; everything except Save is a cancel.
+  - `EditorCustomizeModal` — the twelve checkboxes, applied live. Presented from
+    ContentView's OUTER stack, not the split view, or it draws behind the editor.
+  - `EditorReorderRow` — one collapsed, wiggling, draggable bar (+ its frame
+    `PreferenceKey`). A different view from `EditorSection`, not a card with its
+    content hidden, which is what makes the mode's controls structurally
+    unreachable. Carries the VoiceOver move actions.
+  - `EditorReorderDrag` — the drag itself: gesture, parting math, insertion
+    line, floating copy, and the keyboard/VoiceOver moves.
+  - `EditorReorderBar` — the floating All Left / All Right / Reset / Cancel /
+    Save bar.
 - **`Views/Theme/Theme.swift`** — the minimal semantic token layer (role-named colors,
   spacing, radius, fonts), injected once in `ContentView`, read by every NEW
   editor-adjacent surface only.
@@ -699,9 +730,16 @@ Performance:
   fit/zoom/pan and went with the 2026-08-02 canvas refactor — the Metal view is
   sized to the image's rect now, so the mapping is a division
   (`EditorCanvasGeometry.unitPoint`).
+- **`Components/EditorWorkspace.swift`** (2026-08-03) — the editor's panel
+  layout as a value: `EditorModule` (the twelve cards), `EditorColumn`,
+  `EditorWorkspace` (an ordered list per column plus the hidden set) and its
+  `DTO`. Pure. Single column is not a mode — it is the state where a column's
+  list is empty. The load repair lives here: unknown ids dropped, missing
+  modules appended VISIBLE, all-hidden refused.
 - **`Components/EditorCanvasGeometry.swift`** (2026-08-02) — where the editor's
   canvas view SITS, in points: content aspect, free rect, fitted size, content
-  rect, unit point. The ONLY place that geometry is computed; the renderer just
+  rect, unit point, and (2026-08-03) `panelInsets` — sides follow the cards,
+  the top stays with the chrome. The ONLY place that geometry is computed; the renderer just
   fills the drawable it is handed. Its aspect invariance is what makes a live
   resize a uniform scale rather than a re-fit.
 

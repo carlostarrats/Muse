@@ -465,14 +465,22 @@ final class MuseSurfaceDriveTests: XCTestCase {
         // Getting this wrong is easy and silent: cmd-clicking the tile that is
         // already selected toggles it back off, which is how the first version
         // of this test ended with an empty selection and blamed the app.
-        // Coordinates measured from a real screenshot at tile CENTRES. A masonry
-        // grid has ragged gaps between tiles, and a click that lands in one
-        // clears the selection instead of extending it — which is what made an
-        // earlier version of this test report a false "Compare is broken".
-        window.coordinate(withNormalizedOffset: CGVector(dx: 0.28, dy: 0.24)).click()
+        //
+        // The tiles are LOCATED, never computed. This test used two window
+        // fractions "measured from a real screenshot" — the exact pattern round
+        // 9 removed everywhere else and this one kept. macOS persists the window
+        // frame, so the moment the window was a different size those fractions
+        // aimed somewhere else; it duly failed reporting "Compare is broken"
+        // when compare was fine. Round 12 found it that way.
+        let tiles = app.photoTiles(limit: 2)
+        guard tiles.count == 2 else {
+            XCTFail("need two photo tiles in the grid, found \(tiles.count)")
+            return
+        }
+        tiles[0].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
         Thread.sleep(forTimeInterval: 1.5)
         XCUIElement.perform(withKeyModifiers: .command) {
-            window.coordinate(withNormalizedOffset: CGVector(dx: 0.59, dy: 0.50)).click()
+            tiles[1].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
         }
         Thread.sleep(forTimeInterval: 2)
         snap("10-two-selected")
@@ -697,25 +705,28 @@ final class MuseSurfaceDriveTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["SPLIT TONE"].exists, "re-checking did not restore the card")
     }
 
-    /// The Customize card must not CLIP its last row — at a normal window
-    /// height OR at the smallest one the app allows.
+    /// The Customize card must not CLIP its content.
     ///
     /// It shipped with no padding at all: the presenter sizes a card to
     /// whatever its content reports, so a card that asks to be exactly as tall
-    /// as its rows gets exactly that, and the bottom row sat flush against the
-    /// edge. Owner caught it on screen; this is the guard.
+    /// as its rows gets exactly that, and the title sat against the top edge
+    /// with the bottom row against the bottom. Owner caught it on screen.
     ///
-    /// It does NOT check scrolling, deliberately. The presenter caps a card at
-    /// the window height and enables scrolling past that, but the numbers say
-    /// this card can never reach it: the cap at the app's 480pt minimum window
-    /// height is 432pt (480 − 2×24 margin) and twelve rows plus the heading
-    /// come to roughly 411. A first attempt DID assert a scroll and passed
-    /// while proving nothing — the shrunk card still showed every row, so the
-    /// "last row still reachable" assertion was true for the wrong reason.
-    /// That is the vacuous pass this suite exists to avoid, so the assertion
-    /// is gone and the reason is written here instead. If the module list ever
-    /// grows past about a thirteenth row, scrolling becomes reachable and this
-    /// test should grow a real check for it.
+    /// This guard was PROVEN by removing `.padding(28)` and watching it go red
+    /// on every side — which matters, because its first version compared the
+    /// last row to the WINDOW (hundreds of points taller than the card) and
+    /// would have passed on the bug it was written for.
+    ///
+    /// It does NOT resize the window, deliberately, on two counts. The padding
+    /// is a constant and cannot vary with window height; and the card can never
+    /// reach the presenter's scroll cap anyway — that cap at the app's 480pt
+    /// minimum window is 432pt and twelve rows plus the heading come to about
+    /// 411. An earlier version DID resize, to check scrolling, and it (a)
+    /// asserted a scroll that never happened, and (b) left the window shrunk
+    /// when it failed, which then broke `testCompareSideBySideOpens` two tests
+    /// later. macOS persists window frames between runs; a drive test must not
+    /// mutate global UI state it cannot reliably put back. If the module list
+    /// ever passes ~13 rows, scrolling becomes reachable and needs a real check.
     func testCustomizeCardDoesNotClipItsLastRow() throws {
         guard openEditor() else { return }
         defer { closeEditor() }
@@ -725,45 +736,19 @@ final class MuseSurfaceDriveTests: XCTestCase {
             return
         }
         Thread.sleep(forTimeInterval: 2)
-        snap("24-customize-full-height")
-        assertNoRowIsClipped(context: "at the default window height")
+        snap("24-customize-card")
+        assertNoRowIsClipped(context: "in the Customize card")
         app.typeKey(.escape, modifierFlags: [])
         Thread.sleep(forTimeInterval: 1.5)
-
-        // Again at the smallest window the app permits, which is where a
-        // content-sized card is most likely to be squeezed.
-        let before = app.windows.firstMatch.frame
-        let corner = app.windows.firstMatch.coordinate(
-            withNormalizedOffset: CGVector(dx: 1, dy: 1))
-        corner.press(forDuration: 0.4,
-                     thenDragTo: corner.withOffset(CGVector(dx: 0, dy: -420)))
-        Thread.sleep(forTimeInterval: 2)
-        let shrunk = app.windows.firstMatch.frame
-        guard shrunk.height < before.height - 100 else {
-            XCTFail("could not shrink the window (\(before.height) -> "
-                    + "\(shrunk.height)); the short-window half did not run")
-            return
-        }
-
-        guard menu("View", "Customize Modules…", submenu: "Editor Workspace") else { return }
-        Thread.sleep(forTimeInterval: 2)
-        snap("24-customize-short-window")
-        assertNoRowIsClipped(context: "at the minimum window height")
-
-        app.typeKey(.escape, modifierFlags: [])
-        Thread.sleep(forTimeInterval: 1.5)
-        // Put the window back, so the next test starts where it expected to.
-        let c2 = app.windows.firstMatch.coordinate(
-            withNormalizedOffset: CGVector(dx: 1, dy: 1))
-        c2.press(forDuration: 0.4, thenDragTo: c2.withOffset(CGVector(dx: 0, dy: 420)))
-        Thread.sleep(forTimeInterval: 2)
     }
 
-    /// Every module row present, reachable, and clear of the card's edge.
+    /// Every module row present, reachable, and clear of the CARD's edges.
     ///
-    /// The bottom margin is measured against the row PITCH rather than an
-    /// absolute inset, so it survives a font or spacing change: a clipped card
-    /// leaves the last row flush, which is less than half a row of space.
+    /// Measured against the card, not the window. The first version of this
+    /// compared the last row to `app.windows.firstMatch` — which is hundreds of
+    /// points taller than the card, so it would have PASSED on the very bug it
+    /// was written to catch. The card publishes its own frame: the presenter
+    /// wraps content in a ScrollView, so that element IS the card's rect.
     private func assertNoRowIsClipped(context: String,
                                       file: StaticString = #filePath,
                                       line: UInt = #line) {
@@ -774,12 +759,34 @@ final class MuseSurfaceDriveTests: XCTestCase {
             XCTAssertTrue(box.isHittable, "'\(module)' row is not reachable \(context)",
                           file: file, line: line)
         }
-        let first = app.checkBoxes[EditorModuleTitles.all.first!].frame
-        let last = app.checkBoxes[EditorModuleTitles.all.last!].frame
-        let pitch = (last.midY - first.midY) / CGFloat(EditorModuleTitles.all.count - 1)
-        let window = app.windows.firstMatch.frame
-        XCTAssertGreaterThan(window.maxY - last.maxY, pitch,
+
+        let first = app.checkBoxes[EditorModuleTitles.all.first!]
+        let last = app.checkBoxes[EditorModuleTitles.all.last!]
+        let title = app.staticTexts["Customize Modules"]
+        // The card, found as the scroller that CONTAINS the list rather than by
+        // index — the editor's own panels are scroll views too.
+        var card: CGRect?
+        for i in 0..<app.scrollViews.count {
+            let f = app.scrollViews.element(boundBy: i).frame
+            if f.contains(first.frame.origin) { card = f; break }
+        }
+        guard let card else {
+            XCTFail("could not find the card's frame \(context)", file: file, line: line)
+            return
+        }
+
+        // A card with no padding has its content flush on every side — that is
+        // exactly what shipped. 20pt is comfortably under the real 28 and
+        // comfortably over the 0 the bug produced.
+        let minimumInset: CGFloat = 20
+        XCTAssertGreaterThan(title.frame.minY - card.minY, minimumInset,
+                             "the title is flush with the card's top edge \(context)",
+                             file: file, line: line)
+        XCTAssertGreaterThan(card.maxY - last.frame.maxY, minimumInset,
                              "the last row is flush with the card's bottom edge \(context)",
+                             file: file, line: line)
+        XCTAssertGreaterThan(first.frame.minX - card.minX, minimumInset,
+                             "the rows are flush with the card's left edge \(context)",
                              file: file, line: line)
     }
 

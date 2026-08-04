@@ -29,17 +29,34 @@ extension XCUIApplication {
     /// suites run against the developer's real library, and naming a photo
     /// would tie them to one machine's contents.
     func firstPhotoTile() -> XCUIElement? {
-        let extensions = [".jpg", ".jpeg", ".png", ".heic", ".heif",
-                          ".arw", ".cr2", ".nef", ".dng", ".tif", ".tiff", ".webp"]
-        for i in 0..<buttons.count {
+        photoTiles(limit: 1).first
+    }
+
+    /// The first `limit` photo tiles, as ELEMENTS.
+    ///
+    /// Anything needing two distinct tiles (multi-select, compare) must come
+    /// through here rather than aiming at window fractions: the grid is ragged
+    /// masonry, macOS persists the window frame between runs, and a fraction
+    /// that was "measured from a real screenshot" silently re-aims the moment
+    /// the window is a different size — landing in a gap, which CLEARS the
+    /// selection, or on the tile already selected, which toggles it off. Both
+    /// then fail reporting that the feature is broken.
+    func photoTiles(limit: Int) -> [XCUIElement] {
+        var found: [XCUIElement] = []
+        for i in 0..<buttons.count where found.count < limit {
             let button = buttons.element(boundBy: i)
             let label = button.label.lowercased()
-            guard extensions.contains(where: { label.hasSuffix($0) }) else { continue }
+            guard Self.photoExtensions.contains(where: { label.hasSuffix($0) }) else { continue }
             guard button.exists, button.isHittable else { continue }
-            return button
+            found.append(button)
         }
-        return nil
+        return found
     }
+
+    static let photoExtensions = [".jpg", ".jpeg", ".png", ".heic", ".heif",
+                                  ".arw", ".cr2", ".nef", ".dng", ".tif",
+                                  ".tiff", ".webp"]
+
 }
 
 extension XCTestCase {

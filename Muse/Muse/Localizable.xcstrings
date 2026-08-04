@@ -3286,12 +3286,12 @@
         }
       }
     },
-    "Drag to move this card. Use the buttons over the photo to save or cancel.": {
+    "Drag to move this card, or use the actions. Save or cancel with the buttons over the photo.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Faites glisser pour déplacer cette carte. Utilisez les boutons au-dessus de la photo pour enregistrer ou annuler."
+            "value": "Faites glisser pour déplacer cette carte, ou utilisez les actions. Enregistrez ou annulez avec les boutons au-dessus de la photo."
           }
         }
       }
@@ -5989,6 +5989,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Déplacer vers un dossier"
+          }
+        }
+      }
+    },
+    "Move to Other Column": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déplacer vers l’autre colonne"
           }
         }
       }

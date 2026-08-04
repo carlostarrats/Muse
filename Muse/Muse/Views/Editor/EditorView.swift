@@ -89,6 +89,13 @@ struct EditorView: View {
     /// 1 = panels shown, 0 = hidden. Stepped, so the canvas re-fits smoothly.
     @State var chromeProgress: Double = 1
     @State var chromeAnimation: Task<Void, Never>?
+    /// How far each column has been EMPTIED, 0…1. Continuous rather than a
+    /// Bool because the canvas reads its insets once per render, so this is
+    /// what makes the photo glide into a freed column instead of snapping —
+    /// see `stepColumnFit` and `EditorCanvasGeometry.panelInsets`.
+    @State var leftEmptied: Double = 0
+    @State var rightEmptied: Double = 0
+    @State var columnAnimation: Task<Void, Never>?
     static let chromeFade: Double = 0.22
     /// Styles browser: grid or list. A global working preference.
     @AppStorage(AppSettings.editorStylesListModeKey) var stylesListMode = false
@@ -245,11 +252,13 @@ struct EditorView: View {
             zoneMask = nil
         }
         .onAppear {
+            stepColumnFit(animated: false)
             updateStatsVisibility()
             chromeCommand.editorPresented(uiHidden: session.uiHidden)
         }
         .onDisappear {
             chromeAnimation?.cancel()
+            columnAnimation?.cancel()
             session.cancelCanvasAnimation()
             resetCursorState()
             session.statsVisible = false
@@ -274,9 +283,9 @@ struct EditorView: View {
         .onChange(of: expanded) { _, _ in updateStatsVisibility() }
         // A column gaining or losing its last card changes the photo's fit.
         // Stepped rather than animated, because the canvas reads the insets
-        // once per render — see stepCanvasRefit.
-        .onChange(of: workspace.active.isEmpty(.left)) { _, _ in stepCanvasRefit() }
-        .onChange(of: workspace.active.isEmpty(.right)) { _, _ in stepCanvasRefit() }
+        // once per render — see stepColumnFit.
+        .onChange(of: workspace.active.isEmpty(.left)) { _, _ in stepColumnFit() }
+        .onChange(of: workspace.active.isEmpty(.right)) { _, _ in stepColumnFit() }
         .onChange(of: session.hoveredZone) { _, zone in
             guard zone != nil else { return }
             Task { await buildZoneMaskIfNeeded() }
@@ -305,8 +314,8 @@ struct EditorView: View {
         // thing is interpolated through `chromeProgress`, so hiding the
         // controls GROWS the photo into the space instead of snapping it there
         // a frame later. See EditorCanvasGeometry.panelInsets.
-        EditorCanvasGeometry.panelInsets(leftEmpty: workspace.active.isEmpty(.left),
-                                         rightEmpty: workspace.active.isEmpty(.right),
+        EditorCanvasGeometry.panelInsets(leftEmptied: leftEmptied,
+                                         rightEmptied: rightEmptied,
                                          chromeProgress: chromeProgress)
     }
 
@@ -380,28 +389,41 @@ struct EditorView: View {
         }
     }
 
-    /// Re-fit the canvas after the COLUMNS changed shape (a Save that emptied
-    /// one, or Default Layout putting it back).
+    /// Walk the canvas into its new shape after a column gained or lost its
+    /// last card.
     ///
-    /// `fitInsets` is a value the MTKView reads once per render, so a plain
-    /// SwiftUI animation would never reach it — the same reason `toggleChrome`
-    /// steps `chromeProgress` frame by frame instead of animating it. Nothing
-    /// about the progress itself changes here; re-publishing it on each frame
-    /// for the length of the panel transition is what makes the photo GLIDE
-    /// into the freed space rather than jump there once the layout settles.
-    func stepCanvasRefit() {
-        // While the UI is hidden the insets are already bare on every side, so
-        // there is nothing to animate toward.
-        guard !session.uiHidden else { return }
-        chromeAnimation?.cancel()
+    /// This has to STEP. The insets are a value the MTKView reads once per
+    /// render, so a SwiftUI animation never reaches it — the same reason
+    /// `toggleChrome` steps `chromeProgress` by hand.
+    ///
+    /// The first version of this stepped `chromeProgress` instead, and animated
+    /// nothing at all: by the time it ran, the column's emptiness had already
+    /// flipped and progress was already 1, so all thirteen frames recomputed an
+    /// identical inset and the photo snapped. The emptiness itself is the thing
+    /// that changed, so the emptiness is the thing that has to be walked.
+    func stepColumnFit(animated: Bool = true) {
+        let targetLeft: Double = workspace.active.isEmpty(.left) ? 1 : 0
+        let targetRight: Double = workspace.active.isEmpty(.right) ? 1 : 0
+        guard targetLeft != leftEmptied || targetRight != rightEmptied else { return }
+        columnAnimation?.cancel()
+        guard animated else {
+            leftEmptied = targetLeft
+            rightEmptied = targetRight
+            return
+        }
+        let fromLeft = leftEmptied, fromRight = rightEmptied
         let frames = max(1, Int(Self.chromeFade * 60))
-        chromeAnimation = Task { @MainActor in
-            for _ in 1...frames {
+        columnAnimation = Task { @MainActor in
+            for frame in 1...frames {
                 if Task.isCancelled { return }
-                chromeProgress = 1
+                let t = Double(frame) / Double(frames)
+                let eased = 1 - pow(1 - t, 3)
+                leftEmptied = fromLeft + (targetLeft - fromLeft) * eased
+                rightEmptied = fromRight + (targetRight - fromRight) * eased
                 try? await Task.sleep(for: .milliseconds(16))
             }
-            chromeProgress = 1
+            leftEmptied = targetLeft
+            rightEmptied = targetRight
         }
     }
 
@@ -609,7 +631,10 @@ struct EditorView: View {
             ForEach(Array(modules.enumerated()), id: \.element) { index, module in
                 EditorReorderRow(module: module, ink: ink,
                                  isDragging: draggingModule == module,
-                                 wigglePhase: Double(index) * 0.037)
+                                 wigglePhase: Double(index) * 0.037,
+                                 onMoveUp: { moveModule(module, by: -1) },
+                                 onMoveDown: { moveModule(module, by: 1) },
+                                 onMoveAcross: { moveModuleAcross(module) })
                     .background(GeometryReader { geo in
                         Color.clear.preference(
                             key: EditorModuleFramePreference.self,

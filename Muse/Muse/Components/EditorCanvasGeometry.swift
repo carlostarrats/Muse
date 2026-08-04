@@ -68,20 +68,35 @@ nonisolated enum EditorCanvasGeometry {
     /// The interpolation runs toward THIS layout's targets, so hiding the UI on
     /// a single-column workspace composes correctly instead of animating from a
     /// two-column inset that is not on screen.
+    /// `leftEmptied` / `rightEmptied` are CONTINUOUS, 0 = the column is there,
+    /// 1 = it has no cards and the photo has taken its space. They are not
+    /// Bools because the transition has to be steppable: the MTKView reads
+    /// these insets once per render, so the only way the photo GLIDES into a
+    /// freed column instead of snapping is for the caller to walk this value
+    /// frame by frame. An earlier version took Bools and re-published an
+    /// unchanged `chromeProgress` alongside them, which animated nothing at all
+    /// — the emptiness had already flipped, so every frame recomputed the same
+    /// inset.
+    ///
     /// `@MainActor` only because it reads `ViewerGeometry`'s constants, which
     /// are. The rest of this enum is nonisolated and stays that way.
     @MainActor
-    static func panelInsets(leftEmpty: Bool, rightEmpty: Bool,
+    static func panelInsets(leftEmptied: Double, rightEmptied: Double,
                             chromeProgress p: Double) -> EdgeInsets {
         let column = ViewerGeometry.editorPanelWidth
         let bare = ViewerGeometry.sidePad
-        func lerp(_ hidden: CGFloat, _ shown: CGFloat) -> CGFloat {
-            hidden + (shown - hidden) * p
+        func lerp(_ from: CGFloat, _ to: CGFloat, _ t: Double) -> CGFloat {
+            from + (to - from) * t
         }
-        return EdgeInsets(top: lerp(bare, ViewerGeometry.topPad),
-                          leading: lerp(bare, leftEmpty ? bare : column),
-                          bottom: lerp(bare, ViewerGeometry.bottomPad),
-                          trailing: lerp(bare, rightEmpty ? bare : column))
+        // Two stages, composed: the side collapses from a full column to bare
+        // as its cards leave, and the whole thing collapses to bare as the
+        // hide-UI eye takes the panels away.
+        let leading = lerp(column, bare, leftEmptied.clampedUnit)
+        let trailing = lerp(column, bare, rightEmptied.clampedUnit)
+        return EdgeInsets(top: lerp(bare, ViewerGeometry.topPad, p),
+                          leading: lerp(bare, leading, p),
+                          bottom: lerp(bare, ViewerGeometry.bottomPad, p),
+                          trailing: lerp(bare, trailing, p))
     }
 
     /// The free space inside the panels, in points.

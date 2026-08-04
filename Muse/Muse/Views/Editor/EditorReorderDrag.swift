@@ -78,7 +78,7 @@ extension EditorView {
         guard let dragging = draggingModule, dragging != module,
               column == dropColumn else { return 0 }
         let pitch = EditorReorderRow.height + 14
-        guard let draggedIndex = workspace.active.visible(in: column).firstIndex(of: dragging)
+        guard let draggedIndex = workspace.active.visibleIndex(of: dragging, in: column)
         else {
             return ReorderMath.arrivingRowShift(forIndex: index, dropTarget: dropTarget,
                                                 pitch: pitch)
@@ -102,6 +102,36 @@ extension EditorView {
         var next = workspace.active
         next.move(module, toColumn: dropColumn, visibleSlot: slot)
         workspace.updateDraft(next)
+    }
+
+    /// Keyboard/VoiceOver reorder. Same model calls the drag makes, so the two
+    /// routes cannot drift — a mouse-only mode would otherwise be unusable for
+    /// anyone driving the app from the keyboard, and this mode has no other way
+    /// in or out except Cancel.
+    func moveModule(_ module: EditorModule, by delta: Int) {
+        guard let column = columnOf(module),
+              let index = workspace.active.visibleIndex(of: module, in: column) else { return }
+        let count = workspace.active.visible(in: column).count
+        let target = index + delta
+        guard target >= 0, target < count else { return }
+        var next = workspace.active
+        // The slot is measured among the OTHER visible modules, so moving DOWN
+        // needs no +1: removing this one already shifts everything below it up.
+        next.move(module, toColumn: column, visibleSlot: target)
+        withAnimation(.easeInOut(duration: 0.16)) { workspace.updateDraft(next) }
+    }
+
+    func moveModuleAcross(_ module: EditorModule) {
+        guard let column = columnOf(module) else { return }
+        var next = workspace.active
+        next.move(module, toColumn: column.other, visibleSlot: .max)
+        withAnimation(.easeInOut(duration: 0.16)) { workspace.updateDraft(next) }
+    }
+
+    private func columnOf(_ module: EditorModule) -> EditorColumn? {
+        EditorColumn.allCases.first {
+            workspace.active.visibleIndex(of: module, in: $0) != nil
+        }
     }
 
     func moveAll(to column: EditorColumn) {

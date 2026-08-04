@@ -172,7 +172,7 @@ final class EditorCanvasGeometryTests: XCTestCase {
     // MARK: - Column-aware panel insets
 
     @MainActor func testBothColumnsReserveAPanelOnEachSide() {
-        let i = EditorCanvasGeometry.panelInsets(leftEmpty: false, rightEmpty: false,
+        let i = EditorCanvasGeometry.panelInsets(leftEmptied: 0, rightEmptied: 0,
                                                  chromeProgress: 1)
         XCTAssertEqual(i.leading, ViewerGeometry.editorPanelWidth, accuracy: 0.01)
         XCTAssertEqual(i.trailing, ViewerGeometry.editorPanelWidth, accuracy: 0.01)
@@ -181,14 +181,14 @@ final class EditorCanvasGeometryTests: XCTestCase {
     @MainActor func testAllCardsRightGivesThePhotoTheLeftSide() {
         // Preview's exact geometry — content left, column right — so switching
         // Preview to Edit does not move the photo at all.
-        let i = EditorCanvasGeometry.panelInsets(leftEmpty: true, rightEmpty: false,
+        let i = EditorCanvasGeometry.panelInsets(leftEmptied: 1, rightEmptied: 0,
                                                  chromeProgress: 1)
         XCTAssertEqual(i.leading, ViewerGeometry.sidePad, accuracy: 0.01)
         XCTAssertEqual(i.trailing, ViewerGeometry.editorPanelWidth, accuracy: 0.01)
     }
 
     @MainActor func testAllCardsLeftGivesThePhotoTheRightSide() {
-        let i = EditorCanvasGeometry.panelInsets(leftEmpty: false, rightEmpty: true,
+        let i = EditorCanvasGeometry.panelInsets(leftEmptied: 0, rightEmptied: 1,
                                                  chromeProgress: 1)
         XCTAssertEqual(i.leading, ViewerGeometry.editorPanelWidth, accuracy: 0.01)
         XCTAssertEqual(i.trailing, ViewerGeometry.sidePad, accuracy: 0.01)
@@ -197,16 +197,16 @@ final class EditorCanvasGeometryTests: XCTestCase {
     @MainActor func testTheTopInsetNeverMoves() {
         // The chrome row is pinned, so a photo widening into an emptied right
         // column must still start below it.
-        for (l, r) in [(false, false), (true, false), (false, true), (true, true)] {
-            let i = EditorCanvasGeometry.panelInsets(leftEmpty: l, rightEmpty: r,
+        for (l, r) in [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (1.0, 1.0)] {
+            let i = EditorCanvasGeometry.panelInsets(leftEmptied: l, rightEmptied: r,
                                                      chromeProgress: 1)
             XCTAssertEqual(i.top, ViewerGeometry.topPad, accuracy: 0.01,
-                           "top moved for leftEmpty=\(l) rightEmpty=\(r)")
+                           "top moved for leftEmptied=\(l) rightEmptied=\(r)")
         }
     }
 
     @MainActor func testHidingTheUIStillCollapsesEverySideToBare() {
-        let i = EditorCanvasGeometry.panelInsets(leftEmpty: false, rightEmpty: false,
+        let i = EditorCanvasGeometry.panelInsets(leftEmptied: 0, rightEmptied: 0,
                                                  chromeProgress: 0)
         XCTAssertEqual(i.leading, ViewerGeometry.sidePad, accuracy: 0.01)
         XCTAssertEqual(i.trailing, ViewerGeometry.sidePad, accuracy: 0.01)
@@ -216,7 +216,7 @@ final class EditorCanvasGeometryTests: XCTestCase {
     @MainActor func testMidChromeProgressInterpolatesFromTheColumnAwareTarget() {
         // Emptying a column and hiding the UI must compose: the interpolation
         // runs toward THIS layout's inset, not the two-column one.
-        let i = EditorCanvasGeometry.panelInsets(leftEmpty: true, rightEmpty: false,
+        let i = EditorCanvasGeometry.panelInsets(leftEmptied: 1, rightEmptied: 0,
                                                  chromeProgress: 0.5)
         XCTAssertEqual(i.leading, ViewerGeometry.sidePad, accuracy: 0.01,
                        "an emptied side is already bare at any progress")
@@ -225,17 +225,45 @@ final class EditorCanvasGeometryTests: XCTestCase {
         XCTAssertEqual(i.trailing, expected, accuracy: 0.01)
     }
 
+    /// The reason `leftEmptied` is a Double and not a Bool: HALFWAY through
+    /// emptying, the inset must be halfway too. With Bools this transition had
+    /// exactly two states and the photo snapped between them.
+    @MainActor func testAColumnHalfEmptiedGivesBackHalfOfItsSpace() {
+        let full = EditorCanvasGeometry.panelInsets(leftEmptied: 0, rightEmptied: 0,
+                                                    chromeProgress: 1).leading
+        let gone = EditorCanvasGeometry.panelInsets(leftEmptied: 1, rightEmptied: 0,
+                                                    chromeProgress: 1).leading
+        let half = EditorCanvasGeometry.panelInsets(leftEmptied: 0.5, rightEmptied: 0,
+                                                    chromeProgress: 1).leading
+        XCTAssertEqual(half, (full + gone) / 2, accuracy: 0.01)
+        XCTAssertGreaterThan(half, gone)
+        XCTAssertLessThan(half, full)
+    }
+
+    @MainActor func testEmptiedProgressIsClampedSoAStoppedAnimatorCannotOvershoot() {
+        let gone = EditorCanvasGeometry.panelInsets(leftEmptied: 1, rightEmptied: 0,
+                                                    chromeProgress: 1).leading
+        let over = EditorCanvasGeometry.panelInsets(leftEmptied: 1.4, rightEmptied: 0,
+                                                    chromeProgress: 1).leading
+        let under = EditorCanvasGeometry.panelInsets(leftEmptied: -0.3, rightEmptied: 0,
+                                                     chromeProgress: 1).leading
+        let full = EditorCanvasGeometry.panelInsets(leftEmptied: 0, rightEmptied: 0,
+                                                    chromeProgress: 1).leading
+        XCTAssertEqual(over, gone, accuracy: 0.01)
+        XCTAssertEqual(under, full, accuracy: 0.01)
+    }
+
     @MainActor func testAnEmptiedColumnWidensTheFittedPhoto() {
         // The point of the whole rule: the photo actually gets the space back.
         let canvas = CGSize(width: 1600, height: 1000)
         let two = EditorCanvasGeometry.fittedSize(
             canvas: canvas,
-            insets: EditorCanvasGeometry.panelInsets(leftEmpty: false, rightEmpty: false,
+            insets: EditorCanvasGeometry.panelInsets(leftEmptied: 0, rightEmptied: 0,
                                                      chromeProgress: 1),
             aspect: 1.5)
         let one = EditorCanvasGeometry.fittedSize(
             canvas: canvas,
-            insets: EditorCanvasGeometry.panelInsets(leftEmpty: true, rightEmpty: false,
+            insets: EditorCanvasGeometry.panelInsets(leftEmptied: 1, rightEmptied: 0,
                                                      chromeProgress: 1),
             aspect: 1.5)
         XCTAssertGreaterThan(one.width, two.width)

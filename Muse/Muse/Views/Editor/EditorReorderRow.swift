@@ -31,6 +31,14 @@ struct EditorReorderRow: View {
     /// The floating copy under the cursor does not wiggle and does not claim
     /// the cursor — it is a picture of a bar, not a bar.
     var isFloatingCopy: Bool = false
+    /// Keyboard/VoiceOver equivalents of the drag. Without these the mode is
+    /// mouse-only, and the hint below promises a gesture such a user cannot
+    /// perform — the same reason `EditorToolRow`'s press-and-hold row carries
+    /// an `accessibilityAction`: VoiceOver cannot hold a button down, and it
+    /// cannot drag one either.
+    var onMoveUp: (() -> Void)? = nil
+    var onMoveDown: (() -> Void)? = nil
+    var onMoveAcross: (() -> Void)? = nil
 
     /// The bar's height. Public because the drag's parting pitch is derived
     /// from it, and a hard-coded 34 in two places would drift.
@@ -72,7 +80,10 @@ struct EditorReorderRow: View {
         .onDisappear { clearCursor() }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(module.title))
-        .accessibilityHint(Text("Drag to move this card. Use the buttons over the photo to save or cancel."))
+        .accessibilityHint(Text("Drag to move this card, or use the actions. Save or cancel with the buttons over the photo."))
+        .accessibilityAction(named: Text("Move Up")) { onMoveUp?() }
+        .accessibilityAction(named: Text("Move Down")) { onMoveDown?() }
+        .accessibilityAction(named: Text("Move to Other Column")) { onMoveAcross?() }
     }
 
     /// A small alternating tilt. The floating copy under the cursor holds

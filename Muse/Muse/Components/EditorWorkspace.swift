@@ -122,16 +122,31 @@ struct EditorWorkspace: Equatable, Sendable {
 
     var visibleCount: Int { EditorModule.allCases.count - hidden.count }
 
-    func column(of module: EditorModule) -> EditorColumn? {
-        if left.contains(module) { return .left }
-        if right.contains(module) { return .right }
-        return nil
-    }
-
     /// True when a column draws nothing — what the canvas geometry reads to
     /// give the photo that side's space back. Measured on the VISIBLE modules:
     /// a column holding only hidden cards is an empty column on screen.
-    func isEmpty(_ column: EditorColumn) -> Bool { visible(in: column).isEmpty }
+    ///
+    /// Deliberately NOT `visible(in:).isEmpty`: this sits on the canvas's
+    /// per-frame path (`fitInsets` is read inside the GeometryReader body and
+    /// again by `fittedSize`), and building a filtered array to ask whether
+    /// anything survives it allocated twice per call, several times a frame.
+    func isEmpty(_ column: EditorColumn) -> Bool {
+        !modules(in: column).contains { !hidden.contains($0) }
+    }
+
+    /// Position of `module` among the VISIBLE modules of its column, or nil.
+    ///
+    /// Also allocation-free, for the same reason: the reorder drag asks this
+    /// once per row per frame, and `visible(in:).firstIndex(of:)` built a
+    /// twelve-element array each time.
+    func visibleIndex(of module: EditorModule, in column: EditorColumn) -> Int? {
+        var index = 0
+        for candidate in modules(in: column) where !hidden.contains(candidate) {
+            if candidate == module { return index }
+            index += 1
+        }
+        return nil
+    }
 
     // MARK: - Mutating
 
@@ -248,4 +263,11 @@ extension EditorWorkspace {
 
         self.init(left: left, right: right, hidden: hidden)
     }
+}
+
+extension Double {
+    /// Clamped to 0...1. The editor's column-emptied progress is stepped by a
+    /// hand-run animator, and a cancelled-then-restarted step can otherwise
+    /// hand the geometry a value slightly outside the range it lerps across.
+    var clampedUnit: Double { min(max(self, 0), 1) }
 }
