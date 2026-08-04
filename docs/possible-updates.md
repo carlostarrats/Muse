@@ -310,3 +310,80 @@ three documents and would have justified a real refactor. The general lesson is
 round 14's, one layer up — *a negative test checks your explanation, not just
 your code*, and a claim about WHICH THREAD ran something is testable in about
 four lines.
+
+---
+
+## Web capture — where a file came from, and a browser extension — IDEA ONLY (noted 2026-08-04)
+
+**Status: an idea with structure, not a planned item.** Nothing here is approved,
+scheduled, or a gap. Written down so the shape and the costs aren't re-derived if
+demand ever shows up. It splits cleanly into two halves that should be judged
+separately — the first needs no extension and no user behaviour change; the second
+is a whole second product surface.
+
+### Half 1 — read the provenance macOS already wrote (cheap, no extension)
+
+Safari and Chrome both stamp every download with quarantine metadata:
+`com.apple.metadata:kMDItemWhereFroms` (a binary-plist array — typically
+`[direct file URL, referring page URL]`) and `kMDItemDownloadedDate`. This is
+already sitting on every file in the user's Downloads folder, retroactively, put
+there by the OS rather than by us.
+
+Muse does not read it. Verified 2026-08-04: no `getxattr` / `WhereFroms` anywhere
+in `Muse/Muse` — the only hits in the checkout are Sparkle's own vendored tests.
+
+- *What it would take:* an `getxattr` + `PropertyListSerialization` read in the
+  indexing path, a column, display in the INFO card, and an FTS contribution so
+  "that image from nytimes" is findable. Sandbox-safe — it's a read on a file the
+  user already granted access to via a bookmark root.
+- *Where it must NOT go:* the source URL is user data with the same sensitivity as
+  a path. It must never reach the unified log (`LOG-1`, round 16) and it must be
+  stripped from anything leaving the app — `ImageMetadataStripper` handles the
+  image's own metadata on the Drive path, but a URL stored in OUR database and
+  rendered into a share page would be a NEW leak with no existing guard. Any build
+  of this needs the export/publish surfaces checked before the read is written.
+- *What it does not give:* page title, alt text, surrounding caption. Only URLs.
+
+This half is worth more than it costs even with no extension, because it works on
+files nobody captured deliberately. If any part of this idea is ever built, build
+this part.
+
+### Half 2 — a Chrome/Safari extension that saves into a watched folder
+
+The plumbing is free. Muse is filesystem-native: FSEvents notices anything that
+lands in a watched root, and the indexer hashes, thumbnails and auto-analyzes it
+regardless of which process wrote the bytes. An extension that "downloads to
+Muse" is just an extension that downloads to `~/Downloads` or the iCloud "Muse"
+folder. Zero Muse-side work for the file to appear.
+
+The hard parts are all about carrying CONTEXT across the gap:
+
+- *Neither browser can write to an arbitrary path.* An extension goes through the
+  downloads API, which lands in the browser's configured download directory. So
+  "save to my Muse folder" means the user points their browser there, or a native
+  companion exists (Safari App Extension with a host app / Chrome native
+  messaging) — which is a signed, distributed, updated second binary, and Muse
+  currently ships exactly one bundled dependency on purpose.
+- *One download, one file* — so a second `.xmp` sidecar written alongside is
+  awkward (it arrives as its own download, `(1)`-suffixed half the time).
+- *The XMP seam does already exist, though.* `MetadataKeywordReader` reads
+  `dc:subject`, `xmp:Rating`, `dc:title`, `dc:description`, `dc:creator` from
+  either `IMG.xmp` or `IMG.cr2.xmp` beside the file, sidecar taking priority over
+  embedded. An extension that produced a well-formed sidecar would import through
+  a shipped, tested path with no new reader. It does NOT read `dc:source`; that
+  would be the one field to add.
+- *Embedding into the image itself* (re-encoding a JPEG in JS to inject APP1) is
+  the third option and the worst: lossy, slow, and it changes the bytes the user
+  asked to download.
+
+### The scope question, which is the real one
+
+Muse organizes and views; Finder-style file management is out of scope, and a
+browser extension is arguably further out than that — it's acquisition, not
+organization. The counter-argument is that it's the same claim the iCloud folder
+and "Send to Muse" already make (get material INTO the library from where the user
+found it), and Half 1 doesn't touch the browser at all.
+
+**Suggested trigger:** actual demand — someone asking "where did this come from"
+about a downloaded image. Half 1 answers that alone. Only build Half 2 if people
+want the page's words, not just its URL.
