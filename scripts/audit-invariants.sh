@@ -564,6 +564,53 @@ fi
 report "TCC-1" "PhotoKit use is matched by a purpose string on the APP target" "$v" \
     "a usage string on a target that never calls the API protects nothing"
 
+# ---------------------------------------------------------------------------
+# LOG-1 — no Error object may be handed to NSLog.
+#
+# THE BUG, and it is the SECOND time at these three call sites. Round 15 found
+# folder and file names being interpolated into `NSLog`, whose `%@` arguments
+# are public in the unified system log — readable by any other process, in
+# every sysdiagnose, from an app whose privacy label is "Data Not Collected".
+# It removed the paths and left `String(describing: error)` beside them, under
+# a comment reading "paths deliberately omitted".
+#
+# A Foundation filesystem error carries the paths itself. Verified by running a
+# real failing `moveItem`:
+#
+#   Error Domain=NSCocoaErrorDomain Code=4 "“Holiday in Tuscany 2019.jpg”
+#   couldn’t be moved…" UserInfo={NSSourceFilePathErrorKey=/…, NSFilePath=/…,
+#   NSDestinationFilePath=/…, NSURL=file:///…}
+#
+# `localizedDescription` is no safer — it opens with the file's name. So the
+# rule is not "don't interpolate a path", which is what a reviewer naturally
+# checks and what those comments claimed; it is "an error never reaches a
+# logger". `ErrorRedaction.summary(of:)` is the sanctioned form, and it is the
+# only thing that may sit in an NSLog argument list beside a literal.
+# ---------------------------------------------------------------------------
+#
+# Scans the whole CALL, not the line: every one of these NSLogs wraps its
+# arguments onto the next line, so a line-based grep sees only the format
+# string and reports green on the violation.
+# ---------------------------------------------------------------------------
+v="$(find Muse/Muse Muse/MuseShareExtension -name '*.swift' 2>/dev/null | while read -r f; do
+        awk -v file="$f" '
+            /NSLog\(/ { collecting = 1; call = ""; start = FNR }
+            collecting {
+                call = call " " $0
+                # The call ends at the first line whose parens balance out.
+                n = gsub(/\(/, "(", $0); m = gsub(/\)/, ")", $0)
+                depth += n - m
+                if (depth <= 0) {
+                    if (call ~ /[Ee]rror/ && call !~ /ErrorRedaction\.summary/)
+                        print file ":" start ": " call
+                    collecting = 0; depth = 0
+                }
+            }
+        ' "$f"
+     done)"
+report "LOG-1" "no raw Error (or interpolation) in an NSLog argument" "$v" \
+    "a filesystem error prints its userInfo — source path, destination path and file name"
+
 echo
 echo "======================================================================"
 if [ "$FAILURES" -eq 0 ]; then

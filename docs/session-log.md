@@ -6,6 +6,90 @@ the durable rules + a compact index live in `CLAUDE.md`. Nothing here is
 load-bearing for a fresh session beyond what that index already surfaces;
 read an entry when you need the full "why" behind a specific change.
 
+### Review round 16 — a whole-codebase QA pass — 2026-08-04 (on `feat/next-155`)
+
+Same ask as round 15, same day, same protocol: audit first (20/20, suite 2,167),
+then the unrun lenses, then whatever new ones the work turned up. Four new
+lenses, five findings. **Three of the five are in round 15's own output**, which
+is the thing worth carrying forward from this round — a review pass is a change
+like any other, and the round after it is where its mistakes surface.
+
+**A clamp is not a sanitizer.** `min(max(x, 0), 1)` looks like it makes a value
+safe. It handles the infinities — they land on 1 and 0 — and lets NaN through
+untouched, because every comparison against NaN is false and Swift's `min`/`max`
+return the other operand's comparison result. The editor's HDR statistics tap
+clamped a float pixel that way and then wrote `UInt8(normalized * 255)`, which
+does not return a wrong number: it **traps**. *"Double value cannot be converted
+to UInt8 because it is either infinite or NaN."* A crash, on opening a photo,
+from bytes the app read off disk.
+
+The test for it was written before the fix, as usual, and did not fail — it
+crashed the test process with that exact message. Worth noting because the
+negative run is normally about whether an assertion CAN fail; here it was the
+difference between a fix and a guess.
+
+Walking it upstream found the two ways a NaN gets in. `Float("nan")` parses.
+So does `Float("inf")`, and so does `Float("1e40")`, which is `+∞` with nothing
+in the source to notice — so the `.cube` importer accepted all three. And a
+restored `.muselibrary` writes `edit_luts` rows by plain INSERT, so its floats
+never see the importer at all: the same provenance argument round 15 used for
+the `(size, blob)` pair, one property further in. Both are refused now, and a
+refused cube makes the stack unrenderable, so the original renders — the failure
+mode a missing row already had. The conversion itself still had to be made
+total, because a 32-bit-float source file can contain a NaN with no LUT anywhere
+near it.
+
+**Round 15's privacy fix did not remove the paths.** It found user folder and
+file names being interpolated into `NSLog`, whose `%@` arguments are public in
+the unified log, removed them — and left `String(describing: error)` sitting
+beside them, under a comment reading *"paths deliberately omitted"*. A
+Foundation filesystem error carries the paths itself. Rather than argue about
+it, a real failing `moveItem` was run:
+
+```
+Error Domain=NSCocoaErrorDomain Code=4 "“Holiday in Tuscany 2019.jpg” couldn’t
+be moved…" UserInfo={NSSourceFilePathErrorKey=/…/Holiday in Tuscany 2019.jpg,
+NSDestinationFilePath=/…/Private Album.jpg, NSFilePath=…, NSURL=file:///…}
+```
+
+Source path, destination path, file name — out of the one argument that looked
+like a safe technical detail. `localizedDescription` is no better; it opens with
+the file's name. The rule people can actually follow is not "don't interpolate a
+path", which is what a reviewer checks for and what those comments claimed, but
+**an error never reaches a logger**: `ErrorRedaction.summary(of:)` keeps domain,
+code and the underlying POSIX code, which is enough to tell disk-full from
+permission-denied. Mechanized as `LOG-1`, and negative-tested in both call
+forms — every one of these `NSLog`s wraps its arguments onto the next line, so
+the obvious line-based grep sees only the format string and passes on the bug.
+
+**And a claim about which thread ran something, never tested.** Round 15
+recorded `ClipEngine.embedImage` as preprocessing on the main actor "because the
+class is main-isolated", and wrote it into a source comment, a
+`possible-updates.md` backlog item, and a Part 2 lens generalising it to any
+main-isolated holder of non-Sendable resources. `ClipEngine` is declared `actor`
+and has been since the commit that created it. `SWIFT_DEFAULT_ACTOR_ISOLATION =
+MainActor` isolates declarations that don't say what they are; an actor says
+what it is. Built under the project's own flag to check rather than argue: a
+`@MainActor` method reported `pthread_main_np() != 0`, an actor's isolated
+method reported the opposite — and the compiler makes the point unaided, since a
+main-isolated function cannot be called synchronously from inside an actor.
+
+The 6 ms was measured correctly and attributed to the wrong thread. That is a
+more durable mistake than a plain one: the number is real, so it carried the
+explanation into three documents and would have justified a real refactor. All
+three are withdrawn in place rather than deleted.
+
+Swept and clean: locale-dependent number parsing, float→int conversions across
+export/zoom/sampling/estimate, `LIMIT` without a total order, symlink
+traversal, localization (1,117 keys, 0 untranslated), thumbnail cache keying,
+and a re-run of round 15's isolation sweep over every pure compute helper in
+`Editing/`, `Export/`, `Intelligence/` and `Backup/` — only `BackupBuilder`
+lacks `nonisolated`, and its whole body sits inside a `@Sendable` GRDB read
+closure.
+
+**Ended at:** audit 21/21 (one new check, negative-tested in both forms), unit
+suite 2,181 green, Release build warning-free.
+
 ### Review round 15 — a whole-codebase QA pass — 2026-08-04 (on `feat/next-155`)
 
 Owner asked for a broad review — "health, architecture, security, structure,

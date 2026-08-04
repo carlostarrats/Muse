@@ -221,6 +221,7 @@ nonisolated enum ReconnectApplier {
         // sees in the Looks browser and cannot explain.
         let luts = (archive.edit_luts ?? []).filter {
             CubeLUT.isRenderableStoredCube(size: $0.size, byteCount: $0.data.count)
+                && CubeLUT.storedCubeIsFinite($0.data)
         }
         guard !presets.isEmpty || !luts.isEmpty else { return [] }
         let now = Int64(Date().timeIntervalSince1970)

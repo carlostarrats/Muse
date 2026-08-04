@@ -281,28 +281,32 @@ rather than forking out. Until then this stays parked.
 
 ---
 
-## `ClipEngine.embedImage` preprocesses on the main actor (found 2026-08-04, round 15)
+## ~~`ClipEngine.embedImage` preprocesses on the main actor~~ — WITHDRAWN (round 16, 2026-08-04)
 
-**Measured**, not suspected: `ClipPreprocess.pixelBuffer(from:side:)` takes
-**6 ms per 4096×2731 image**, and CLIP indexing runs it once per photo across a
-whole library. `ClipPreprocess` is already `nonisolated`; what keeps the work on
-main is `ClipEngine` itself, which is main-actor isolated because it holds the
-loaded `MLModel` encoders and the tokenizer.
+**There was never anything here.** Round 15 read
+`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` as making `ClipEngine`
+main-isolated "because it holds the loaded `MLModel` encoders", and wrote that
+into the source as a comment, into this file as a backlog item, and into
+`REVIEW-LENSES.md` as an unrun lens. `ClipEngine` is declared `actor
+ClipEngine` and has been since the commit that created it (`2bf7deb`,
+Spec 03) — the default-isolation setting applies to declarations that don't say
+what they are, and an actor says what it is.
 
-**Why it wasn't just fixed in round 15.** Wrapping only the preprocess in a
-`Task.detached` compiles, but `CVPixelBuffer` is not `Sendable`, so it produces
-five Swift-6 concurrency warnings — trading a measured 6 ms for a real hole in
-the "Release build is warning-free" rule. That is the wrong trade to make
-silently.
+**Verified rather than argued**, by building the shape under this project's own
+flag (`swiftc -swift-version 6 -default-isolation MainActor`): a `@MainActor`
+method reported `pthread_main_np() != 0`, an actor's isolated method reported
+the opposite. The compiler makes the same point on its own — a main-isolated
+global function cannot be called synchronously from inside the actor, which it
+could if the actor's context were main.
 
-**What a real fix looks like:** move preprocess AND prediction together behind
-an actor, so the non-Sendable buffer never crosses an isolation boundary — it is
-created and consumed on the same executor. `MLModel` is non-Sendable too, which
-is the same reason `ClipEngine` is main-isolated today, so the actor has to own
-both the encoders and the buffer.
+So `embedImage`'s preprocess runs on the ClipEngine actor's executor. The 6 ms
+per 4096×2731 image is real and correctly measured; the thread it was attributed
+to was not, and `CVPixelBuffer` never had a boundary to cross. Nothing to move,
+no actor refactor to schedule, no warnings to trade.
 
-**Scale first.** 6 ms × library size is only worth an actor refactor if CLIP
-indexing is actually slow in practice; a 2,000-photo library is ~12 s of
-cumulative main-thread time spread across a background pass. Measure the real
-pass before spending the change. The generalised lens is in `REVIEW-LENSES.md`
-Part 2: *a non-Sendable type that wants to move off-main*.
+**Kept as a withdrawal rather than deleted**, because a measurement with a wrong
+explanation attached is more durable than a plain mistake: it survived into
+three documents and would have justified a real refactor. The general lesson is
+round 14's, one layer up — *a negative test checks your explanation, not just
+your code*, and a claim about WHICH THREAD ran something is testable in about
+four lines.

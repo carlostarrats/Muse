@@ -114,6 +114,10 @@ Rounds 1–3 are recorded in `REVIEW-FINDINGS.md` and `FEATURE-LEDGER.md`; round
 | **A purpose string on the wrong TARGET** | **15** | 1 finding — `NSPhotoLibraryUsageDescription` was an `INFOPLIST_KEY_` on MuseShareExtension, which contains no Photos code, while the app that calls `PHPhotoLibrary.requestAuthorization` shipped without one. A project-wide grep finds it and says nothing is wrong |
 | **User paths in the unified system log** | **15** | 3 findings — `NSLog`'s `%@` arguments are PUBLIC in the unified log, readable by other processes and captured in every sysdiagnose. Folder and file names were going there on every rename/create failure, from an app whose privacy label is "Data Not Collected" |
 | Can this assertion fail? (run the negative), on the ROUND'S OWN audit checks | 15 | 1 finding, caught in the act — `TCC-1` matched the purpose string as a SUBSTRING, and the injected violation renamed the key to `…DescriptionXX`, which still contains it. The check passed on its own violation. Re-aimed at `<key>…</key>` and re-injected by DELETING the key |
+| **Non-finite floats (NaN/∞) reaching an integer conversion** | **16** (2026-08-04) | 1 crash — `min(max(x, 0), 1)` handles the infinities and passes NaN straight through, so the editor's float stats tap trapped in `UInt8(_:)`. Reproduced as a test that CRASHED the test process before the fix. Distinct from round 6's `INT-1`, which is about magnitude on file-DECLARED numbers; this is about NaN on COMPUTED ones, and the clamp that reads like a sanitizer is what hides it |
+| **What can PUT a NaN into the render?** (the same finding, walked upstream) | **16** | 2 findings — `Float("nan")` and `Float("1e40")` both parse, so the `.cube` importer accepted either; and a restored `.muselibrary` writes `edit_luts` by plain INSERT, so its floats never see the importer at all. Refused at both boundaries |
+| **Does the REDACTION redact?** (what an error object carries) | **16** | 1 finding, and the second time at the same three call sites. Round 15 removed the paths interpolated into `NSLog` and left `String(describing: error)` beside them under a comment reading "paths deliberately omitted". A Foundation filesystem error prints its whole `userInfo` — source path, destination path, file name. Proven by running a real failing `moveItem`, not by reading. Now `ErrorRedaction.summary(of:)`, mechanized as **`LOG-1`** |
+| **A claim about WHICH THREAD ran something** | **16** | 1 finding, in round 15's own output — `ClipEngine` was recorded as main-isolated "because it holds the encoders", in a source comment, a backlog item and an unrun lens. It is declared `actor` and always has been. `SWIFT_DEFAULT_ACTOR_ISOLATION` isolates declarations that don't say what they are. The 6 ms was measured correctly and attributed to the wrong thread; a thread claim is testable in four lines and this one never was |
 
 ## Part 2 — lenses NOT yet run
 
@@ -125,7 +129,7 @@ an unrun lens on the list is worth more than a good idea that evaporates.
 | ~~Sparkle update path integrity on THIS branch~~ | **RUN, round 15 — clean.** Feed is HTTPS, `SUPublicEDKey` present, `SUEnableInstallerLauncherService` paired with the two mach-lookup entitlements the sandboxed installer needs, and there is **no `NSAppTransportSecurity` override anywhere** — so ATS is enforced and the feed cannot silently downgrade. `Commerce/` adds no updater surface. |
 | ~~TOCTOU on user paths~~ | **RUN, round 15.** All 34 `fileExists` sites swept. The `fileExists` → `moveItem`/`copyItem` pairs (FolderOps, FileMover, AppState+FileOps, the export passthrough) are SAFE by construction — those APIs refuse an existing destination, so the race loses to an error, never to data. The `fileExists` → `write(to:.atomic)` pairs were NOT: three sites fixed, see the write-flag lens above. `ApplePhotosImportModel.collisionName` consults only an in-memory set and never the disk, but its suffix branch is unreachable behind the `fileExists` check above it — left alone, noted here so it isn't re-derived. |
 | ~~Long-session memory growth (retain cycles, not allocation shape)~~ | **RUN, round 15 — clean.** Every Combine `sink` on `AppState` and `WorkThrottleStore` captures `[weak self]`; the one `Timer.scheduledTimer` does too; both `ToolbarFade` `NotificationCenter` observers are static and install-once (as round 7 found), and the three `AppState` observers are `[weak self]` on a singleton that lives for the process anyway. |
-| A non-Sendable type that WANTS to move off-main | `ClipEngine.embedImage` runs a 6 ms-per-image preprocess on the main actor (measured). It can't simply be wrapped in a `Task.detached` because `CVPixelBuffer` isn't `Sendable` — moving it needs preprocess and prediction to go behind an actor together. Recorded in `docs/possible-updates.md`; the shape generalises to any main-isolated holder of non-Sendable resources. |
+| ~~A non-Sendable type that WANTS to move off-main~~ | **WITHDRAWN, round 16 — the premise was false.** `ClipEngine.embedImage` does not run on the main actor: `ClipEngine` is declared `actor` and has been since `2bf7deb`. Round 15 read `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` as covering it; the setting isolates declarations that don't say what they are, and an actor says what it is. Verified by building the shape under the project's own flag, and the compiler makes the point unaided — a main-isolated function cannot be called synchronously from inside an actor. The lens has no instance, and the backlog item it justified is withdrawn in `docs/possible-updates.md`. |
 | ~~Preference-key lifecycle (renamed/removed ids left in a stored set)~~ | **RUN, round 15 — harmless by construction, closing it.** `editorExpandedSections2` is read ONLY as `expanded.contains(<a known id>)` — at the disclosure bindings and in `updateStatsVisibility`. Nothing ever iterates the set, so a stale id is never queried and costs a few bytes in UserDefaults, nothing more. Round 12 had already shown the newer `editorWorkspace` key clean for a different reason (its loader drops unknown ids). Neither key needs a pruner. |
 | A re-key that orphans data instead of migrating it | **Round 11 found one.** Changing a cache/derived-data KEY makes the old entries unreachable, not gone — and unreachable data still counts against a cap. Any key or format version bump needs something that deletes the old shape. **Round 13 re-ran this against the sidecar rename (`<hash>.json` → `<hash>__<basename>.json`) and it does NOT apply: the legacy name is still READ as a fallback, so the old shape stays reachable by design, and nothing enumerates or parses `.muse` filenames. Deliberately not deleted — see the durable-constraints note.** |
 | Data staged outside what the cap measures | **Round 11 found one.** A directory renamed aside for background deletion is a SIBLING of the cache root, so `enforceDiskCap` — which measures only inside the root — can never reclaim it if a crash strands it. |
@@ -309,7 +313,7 @@ wolf until they are ignored. These stay human:
 
 ## Appendix — the mechanized checks
 
-`scripts/audit-invariants.sh`, 20 checks. Each was a rule broken once, shipped,
+`scripts/audit-invariants.sh`, 21 checks. Each was a rule broken once, shipped,
 and paid for. Run it from the repo root; exit 0 means green.
 
 | ID | Rule |
@@ -334,6 +338,7 @@ and paid for. Run it from the repo root; exit 0 means green.
 | `EXP-1` | No `.atomic` write into a user-chosen destination (it overwrites) |
 | `EXP-2` | `.atomic` is never combined with `.withoutOverwriting` (Foundation traps) |
 | `TCC-1` | PhotoKit use is matched by a purpose string on the APP target |
+| `LOG-1` | No raw `Error` in an `NSLog` argument — it prints its `userInfo` |
 
 **Every check has been negative-tested**: verified green on a clean tree, then
 verified to FAIL when its violation is injected. A checker that has never failed
@@ -477,3 +482,98 @@ the unified system log; and `LutStore.importCubes`, which parsed up to 64 MB of
 
 **Ended at:** audit 20/20 (three new checks, all negative-tested), unit suite
 2,167 green, Release build warning-free.
+
+---
+
+## Round 16 (2026-08-04) — the registry, plus four new lenses
+
+Ran against `feat/next-155`. Audit green at 20/20 going in, suite at 2,167;
+ended at 21/21 and 2,181. Five findings, in three clusters.
+
+**The one worth remembering: a clamp is not a sanitizer, and it reads exactly
+like one.** `min(max(x, 0), 1)` handles both infinities — they land on 1 and 0 —
+and passes NaN through untouched, because every comparison against NaN is false
+and Swift's `min`/`max` return the other operand's comparison result. The
+editor's HDR statistics tap clamped a float pixel that way and then wrote
+`UInt8(normalized * 255)`, which **traps**: *"Double value cannot be converted
+to UInt8 because it is either infinite or NaN."* Not a bad number — a crash, on
+opening a photo.
+
+The test was written before the fix and did not fail; it **crashed the test
+process**, with that exact message. That is the strongest form of the negative
+run this registry keeps asking for, and it is worth noting that the assertion
+which merely *checks* a value could not have distinguished the bug from a
+missing feature.
+
+Then the same finding walked upstream: what can put a NaN in the render?
+
+- `Float("nan")` parses. So does `Float("inf")`, and so does `Float("1e40")`,
+  which is `+∞` with nothing to notice. The `.cube` importer accepted all three.
+- A restored `.muselibrary` writes `edit_luts` rows by plain INSERT, so its
+  floats never pass the importer at all — the same provenance argument round 15
+  used for the `(size, blob)` pair, one property further in.
+- And a 32-bit-float source file can simply contain NaN pixels with no LUT
+  involved, which is why the conversion itself had to be made total rather than
+  only its inputs policed.
+
+**The second: round 15's log-privacy fix did not remove the paths.** It found
+folder and file names being interpolated into `NSLog` — whose `%@` arguments are
+public in the unified log, readable by any process and captured in every
+sysdiagnose — removed them, and left `String(describing: error)` beside them
+under a comment reading *"paths deliberately omitted"*. A Foundation filesystem
+error carries the paths itself. Run, not reasoned about:
+
+```
+Error Domain=NSCocoaErrorDomain Code=4 "“Holiday in Tuscany 2019.jpg” couldn’t
+be moved…" UserInfo={NSSourceFilePathErrorKey=/…/Holiday in Tuscany 2019.jpg,
+NSDestinationFilePath=/…/Private Album.jpg, NSFilePath=…, NSURL=file:///…}
+```
+
+Source path, destination path and file name, from the one argument that looked
+like a safe technical detail. `localizedDescription` is no better — it opens
+with the file's name. So the rule cannot be "don't interpolate a path", which is
+what a reviewer naturally checks and what those three comments claimed; it has
+to be **"an error never reaches a logger"**. `ErrorRedaction.summary(of:)` keeps
+domain, code and the underlying POSIX code — enough to tell disk-full from
+permission-denied — and mechanized as `LOG-1`.
+
+`LOG-1` was negative-tested in **both** forms, which mattered: every one of
+these calls wraps its arguments onto the next line, so the obvious line-based
+grep sees only the format string and reports green on the violation. The check
+scans the whole call.
+
+**The third: a claim about which thread ran something, never tested.** Round 15
+recorded `ClipEngine.embedImage` as running its preprocess on the main actor
+"because the class is main-isolated", and wrote that into a source comment, a
+`possible-updates.md` backlog item, and a Part 2 lens generalising it. It is
+declared `actor ClipEngine` and has been since the commit that created it.
+`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` isolates declarations that don't say
+what they are; an actor says what it is. Built under the project's own flag: a
+`@MainActor` method reported `pthread_main_np() != 0`, an actor's isolated
+method reported the opposite — and the compiler makes the point unaided, since a
+main-isolated function cannot be called synchronously from inside an actor.
+
+The 6 ms was measured correctly and attributed to the wrong thread. That
+combination is more durable than a plain mistake, because the number is real and
+carries the explanation into three documents with it. Round 14's rule holds one
+layer up: **a negative test checks your explanation, not just your code** — and
+a thread claim is testable in four lines.
+
+**Swept and clean this round:** locale-dependent number parsing (`Double(String)`
+is C-locale; every `DateFormatter` that parses uses `en_US_POSIX`); float→int
+conversions across export, hero zoom, sampling and estimate paths (all guarded
+by an explicit `> 0` on their denominators); `SQL LIMIT` without a total order
+(the two ranked queries order, the backfills are order-indifferent by
+construction); symlink traversal (`FileManager`'s enumerator does not follow
+directory symlinks, and the one archive unpack checks `isSymbolicLink`
+explicitly); localization (1,117 keys, 0 untranslated, the only two "missing"
+being the empty string and a single space); thumbnail cache keying (the stack
+hash is in the key, and content changes invalidate through
+`markContentChanged`); and the heavy-helper isolation sweep round 15 introduced
+— of every pure compute helper in `Editing/`, `Export/`, `Intelligence/` and
+`Backup/`, only `BackupBuilder` lacks `nonisolated`, and its whole body is
+inside a `@Sendable` GRDB read closure, so nothing heavy runs on main.
+
+**Ended at:** audit 21/21 (one new check, negative-tested in both the
+single-line and multi-line forms), unit suite 2,181 green, Release build
+warning-free.

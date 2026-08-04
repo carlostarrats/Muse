@@ -55,8 +55,10 @@ nonisolated enum FileMover {
         } catch {
             // Paths deliberately omitted: `NSLog` arguments are public in the
             // unified system log, readable by other processes and captured in
-            // every sysdiagnose. See `FolderOps.createSubfolder`.
-            NSLog("[Muse] file rename failed: %@", String(describing: error))
+            // every sysdiagnose. See `FolderOps.createSubfolder`. The error is
+            // redacted because it carries both paths in its `userInfo` — a
+            // rename error names the source AND the destination.
+            NSLog("[Muse] file rename failed: %@", ErrorRedaction.summary(of: error))
             return nil
         }
     }

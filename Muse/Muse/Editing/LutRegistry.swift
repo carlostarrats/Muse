@@ -54,13 +54,12 @@ nonisolated enum LutRegistry {
         let rgb: [Float] = row.data.withUnsafeBytes { raw in
             Array(raw.bindMemory(to: Float.self))
         }
-        var rgba = [Float]()
-        rgba.reserveCapacity(rgb.count / 3 * 4)
-        var i = 0
-        while i + 2 < rgb.count {
-            rgba.append(rgb[i]); rgba.append(rgb[i + 1]); rgba.append(rgb[i + 2]); rgba.append(1)
-            i += 3
-        }
+        // Same reasoning as the size/byte-count pair above, one property
+        // further in: `CubeLUTParser` refuses a non-finite value, an archive's
+        // plain INSERT does not, and a NaN in the table comes back out in the
+        // rendered pixels — where the stats tap's float→UInt8 conversion traps.
+        // Refusing makes the stack unrenderable, so the ORIGINAL renders.
+        guard let rgba = rgbaWithAlpha(rgb) else { return nil }
         let entry = (size: row.size, data: rgba.withUnsafeBufferPointer { Data(buffer: $0) })
 
         lock.lock()
@@ -85,13 +84,12 @@ nonisolated enum LutRegistry {
     /// pure waste. Takes the RGB floats the `.cube` declared (what the hash
     /// covers); the alpha is appended here, exactly as on the read path.
     static func preload(id: String, size: Int, rgb: [Float]) {
-        var rgba = [Float]()
-        rgba.reserveCapacity(rgb.count / 3 * 4)
-        var i = 0
-        while i + 2 < rgb.count {
-            rgba.append(rgb[i]); rgba.append(rgb[i + 1]); rgba.append(rgb[i + 2]); rgba.append(1)
-            i += 3
-        }
+        // The importer has already refused a non-finite cube, so this can only
+        // decline something that never gets here — but seeding the cache is the
+        // one way to reach the render path WITHOUT passing the read path's
+        // check, and a cache that can hold what the reader would reject is a
+        // hole waiting for a second caller.
+        guard let rgba = rgbaWithAlpha(rgb) else { return }
         let entry = (size: size, data: rgba.withUnsafeBufferPointer { Data(buffer: $0) })
         lock.lock()
         cache[id] = entry
@@ -102,6 +100,23 @@ nonisolated enum LutRegistry {
             cache.removeValue(forKey: evicted)
         }
         lock.unlock()
+    }
+
+    /// RGB triples → RGBA quads, or nil if any value is non-finite. The two
+    /// callers hold their floats from different places (a database blob, a
+    /// freshly parsed file) and both must arrive at the same answer, so the
+    /// check lives with the conversion rather than beside each call.
+    private static func rgbaWithAlpha(_ rgb: [Float]) -> [Float]? {
+        var rgba = [Float]()
+        rgba.reserveCapacity(rgb.count / 3 * 4)
+        var i = 0
+        while i + 2 < rgb.count {
+            let r = rgb[i], g = rgb[i + 1], b = rgb[i + 2]
+            guard r.isFinite, g.isFinite, b.isFinite else { return nil }
+            rgba.append(r); rgba.append(g); rgba.append(b); rgba.append(1)
+            i += 3
+        }
+        return rgba
     }
 
     /// Called on delete. A row is immutable, so this is only ever about the

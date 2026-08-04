@@ -69,8 +69,13 @@ enum FolderOps {
                 // names of a user's folders there. Which operation failed, and
                 // whether the parent was writable, is what makes this
                 // actionable; the path never was.
+                //
+                // The error goes through `ErrorRedaction` for the same reason:
+                // a Foundation filesystem error prints its whole `userInfo`,
+                // which is where the paths this message carefully leaves out
+                // came straight back in.
                 NSLog("[Muse] createSubfolder failed (parent writable: %@): %@",
-                      writable ? "true" : "false", String(describing: error))
+                      writable ? "true" : "false", ErrorRedaction.summary(of: error))
                 if !writable { return .failure(.parentNotWritable) }
                 let ns = error as NSError
                 return .failure(.ioError(ns.localizedFailureReason ?? ns.localizedDescription))
@@ -106,9 +111,10 @@ enum FolderOps {
                 return .success(target)
             } catch {
                 let writable = FileManager.default.isWritableFile(atPath: parent.path)
-                // Paths deliberately omitted — see createSubfolder above.
+                // Paths deliberately omitted — see createSubfolder above, and
+                // note that the ERROR carries them too unless redacted.
                 NSLog("[Muse] folder rename failed (parent writable: %@): %@",
-                      writable ? "true" : "false", String(describing: error))
+                      writable ? "true" : "false", ErrorRedaction.summary(of: error))
                 if !writable || isPermissionDenied(error) { return .failure(.parentNotWritable) }
                 let ns = error as NSError
                 return .failure(.ioError(ns.localizedFailureReason ?? ns.localizedDescription))

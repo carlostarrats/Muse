@@ -373,6 +373,11 @@ Muse/Muse/
     ReorderMath.swift              pure sidebar live-drag reorder arithmetic shared by the folder AND
                                    collection reorders. SidebarView keeps the @State + gestures + the
                                    SYNCHRONOUS commit; delegates the math here. Unit-tested
+    ErrorRedaction.swift           what an Error is allowed to say in the unified system log: domain +
+                                   code + the underlying POSIX code, never `userInfo` (which holds the
+                                   source path, the destination path and the file's name) and never
+                                   `localizedDescription` (which opens with the file's name). The one
+                                   sanctioned form for an NSLog argument; enforced by audit LOG-1
     EscapeAction.swift             pure Escape priority resolver: peel one focused layer per press —
                                    viewer → search → tags → collection → Collections page → grid.
                                    ContentView's hidden Escape button maps the result onto AppState calls;

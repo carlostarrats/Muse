@@ -370,4 +370,29 @@ final class BackupEditRoundTripTests: XCTestCase {
             XCTAssertEqual(try EditLutRow.fetchOne(db)?.id, "good")
         }
     }
+
+    /// The size check's sibling: a RIGHT-SIZED blob can still hold a NaN, which
+    /// Core Image propagates into the rendered pixels rather than refusing —
+    /// and the editor's statistics tap traps converting those pixels to bytes.
+    /// Dropped here as well as at the render path so the Looks browser doesn't
+    /// list a look that silently never applies.
+    func testApplyEditAssetsDropsALutHoldingANonFiniteValue() async throws {
+        let q = try DatabaseQueue()
+        try Database.makeMigrator().migrate(q)
+        var floats = [Float](repeating: 0.5, count: 2 * 2 * 2 * 3)
+        floats[11] = .nan
+        let nanBlob = floats.withUnsafeBufferPointer { Data(buffer: $0) }
+        let archive = BackupArchive(
+            schema: 1, created_at: 0, app_version: nil, roots: [], files: [],
+            collections: [], stars: [],
+            edit_presets: nil,
+            edit_luts: [BackupLut(id: "nan", name: "NaN", size: 2, data: nanBlob),
+                        BackupLut(id: "good", name: "Good", size: 2,
+                                  data: Self.cube(size: 2, fill: 0.5))])
+        let ids = try await ReconnectApplier.applyEditAssets(archive, queue: q)
+        XCTAssertEqual(ids, ["good"])
+        try await q.read { db in
+            XCTAssertEqual(try EditLutRow.fetchOne(db)?.id, "good")
+        }
+    }
 }

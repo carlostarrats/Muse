@@ -60,6 +60,22 @@ nonisolated struct CubeLUT: Equatable, Sendable {
         let entries = size * size * size * 3
         return byteCount == entries * MemoryLayout<Float>.size
     }
+
+    /// The second thing a stored blob has to be: FINITE.
+    ///
+    /// A right-sized cube can still hold a NaN, and Core Image propagates it
+    /// into the rendered pixels rather than rejecting it — where the editor's
+    /// statistics tap converts float pixels to bytes and TRAPS. Same provenance
+    /// argument as the size check above: `CubeLUTParser` refuses one, a
+    /// restored archive's plain INSERT does not.
+    ///
+    /// Separate from `isRenderableStoredCube` because it costs a pass over
+    /// several MB, and the cheap structural check should get to say no first.
+    static func storedCubeIsFinite(_ data: Data) -> Bool {
+        data.withUnsafeBytes { raw in
+            raw.bindMemory(to: Float.self).allSatisfy(\.isFinite)
+        }
+    }
 }
 
 nonisolated enum CubeLUTParser {
@@ -123,8 +139,17 @@ nonisolated enum CubeLUTParser {
             }
 
             let parts = line.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
+            // `.isFinite` is load-bearing, not belt-and-braces. `Float("nan")`
+            // and `Float("inf")` both PARSE, and so does any literal that
+            // overflows — `Float("1e40")` is `+∞` with no failure to notice. A
+            // cube carrying one of those is handed to
+            // `CIColorCubeWithColorSpace`, and the NaN comes back out in the
+            // rendered pixels, where the stats tap's float→UInt8 conversion
+            // traps. Refusing the file is the only honest answer: there is no
+            // sensible colour to substitute for "not a number".
             guard parts.count == 3,
-                  let r = Float(parts[0]), let g = Float(parts[1]), let b = Float(parts[2])
+                  let r = Float(parts[0]), let g = Float(parts[1]), let b = Float(parts[2]),
+                  r.isFinite, g.isFinite, b.isFinite
             else { throw ParseError.badValue(line: lineNumber) }
             values.append(r); values.append(g); values.append(b)
             dataRowCount += 1
@@ -146,9 +171,15 @@ nonisolated enum CubeLUTParser {
         return (CubeLUT(size: resolvedSize, data: values), title)
     }
 
+    /// Non-finite entries are DROPPED rather than returned, which makes the
+    /// caller's `count == 3` guard reject the line. The domain check would
+    /// refuse a NaN anyway (every comparison against it is false, so it can't
+    /// look default) — but by accident of three-valued arithmetic rather than
+    /// by intent, and that is not a thing to leave load-bearing.
     private static func numbers(after keyword: String, in line: String) -> [Double] {
         line.dropFirst(keyword.count)
             .split(whereSeparator: { $0 == " " || $0 == "\t" })
             .compactMap { Double($0) }
+            .filter(\.isFinite)
     }
 }

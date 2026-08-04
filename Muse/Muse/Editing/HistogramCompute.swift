@@ -174,6 +174,18 @@ nonisolated enum HistogramCompute {
         let ceiling = max(Double(headroom), 1.0)
         let scaled: [UInt8] = rgbaFloat.map { value in
             let normalized = min(max(Double(value) / ceiling, 0), 1)
+            // The clamp above is NOT a sanitizer, and reads exactly like one.
+            // Swift's `min`/`max` return the other operand's comparison result,
+            // and every comparison against NaN is false — so `max(NaN, 0)` is
+            // NaN, `min(NaN, 1)` is NaN, and `UInt8(_:)` TRAPS on it: "Double
+            // value cannot be converted to UInt8 because it is either infinite
+            // or NaN". This buffer is raw `CIContext` output at `.RGBAf`, so a
+            // NaN anywhere in the render — a hand-made LUT, a 32-bit-float
+            // source file that simply contains one — crashed the app on
+            // opening a photo. Infinities are fine: they clamp to 0 and 1
+            // before they get here. NaN has no place on the scale at all, so it
+            // reads as black rather than pretending to be a measurement.
+            guard normalized.isFinite else { return 0 }
             return UInt8(normalized * 255.0)
         }
         return compute(rgba8: scaled, width: width, height: height,
