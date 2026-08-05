@@ -985,10 +985,10 @@ struct ContentView: View {
             Button {
                 appState.infoShown = true
             } label: {
-                toolbarGlyph("info.circle", "About Muse")
+                toolbarGlyph("info.circle", "Muse FAQs")
             }
-            .help("About Muse — how indexing, analysis, collections, and tags work")
-            .accessibilityLabel("About Muse")
+            .help("Muse FAQs — quick answers, and a link to the full guide")
+            .accessibilityLabel("Muse FAQs")
         }
     }
 

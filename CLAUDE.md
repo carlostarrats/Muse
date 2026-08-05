@@ -22,6 +22,18 @@ local-first and Apple-Intelligence-native.
   so quote it as a leaning, never as the price. Gift codes = Apple promo codes.
   Still true and still worth saying: **no ads, no telemetry, no data
   collection, local-first, Data Not Collected.** Don't conflate those with free.
+- Licensing: **PROPRIETARY. Muse is NOT open source.** The shipped `LICENSE` is
+  "proprietary and confidential… All rights reserved" (foundation §44 records the
+  intent as PolyForm Shield, with GitHub going private). **Never describe Muse as
+  open source, MIT-licensed, or free**, and never add a GitHub-source link to
+  user-facing copy — `InfoSheet` carried an "open source under the MIT license"
+  line for months and it was simply false. Copyright is set in all four build
+  configs via `INFOPLIST_KEY_NSHumanReadableCopyright`, which is what the native
+  About panel shows; the ⓘ modal is "Muse FAQs" and stays silent on licensing,
+  pricing and distribution. Third-party notices (GeoNames CC BY 4.0 — attribution
+  is REQUIRED — plus GRDB, libwebp, fflate, the fonts) live at
+  muse-photo.com/acknowledgements. This has been re-derived and re-litigated
+  repeatedly; treat it as settled.
 - Distribution: **Mac App Store EXCLUSIVELY** (foundation §11, decision #33) —
   no GitHub download, no Sparkle, no direct distribution. The rationale is
   discoverability: "photo library" is a term people search in the App Store,
@@ -164,6 +176,7 @@ are the load-bearing reference artifacts.
 | **Review round 16 — whole-codebase QA** (2026-08-04; the registry + 4 new lenses). 5 findings, 3 of them in round 15's own output. **A crash**: the editor's float stats tap trapped in `UInt8(_:)` on a NaN pixel — `min(max(x,0),1)` clamps the infinities and passes NaN straight through — reproduced by a test that CRASHED the test process before the fix; the `.cube` importer and the restore boundary both accepted non-finite floats that could produce one. **A privacy regression**: round 15's log fix removed the interpolated paths and left `String(describing: error)`, which prints the error's `userInfo` — source path, destination path, file name (proven by running a real failing `moveItem`); now `ErrorRedaction` + `LOG-1`. **A false claim withdrawn**: `ClipEngine` was recorded as main-isolated in a comment, a backlog item and an unrun lens — it is an `actor` and always was. | ✅ audit **21/21** (1 new check, negative-tested in both call forms), suite **2,181**, Release warning-free | `feat/next-155` |
 | Polish 36 — **right-click ▸ Edit** (grid context menu opens straight into the editor: the close flight run backwards — `HeroStage.fitBox` lands the photo in the EDITOR's rect, Preview never appears, and the editor mounts DURING the flight so the landing is a pure reveal. Four motion rounds, each settled by measurement: a 69 ms build-at-landing stall removed, worst frame gap 285 → 46 ms; the residual ~250 ms click delay proven to be `NSMenu` by probing Rename… in the same menu at 320 ms) | ✅ built + tested (2,186), audit 21/21, Release warning-free; reviewed (1 finding: the reveal firing into a close); **owner-confirmed in the running app** | `feat/next-155` |
 | Polish 34 — **leaving the editor** (closing from Edit FLIES home from the editor's own rect instead of cutting — `HeroStage.closeTakeoff` + a named coordinate space; the editor's flat backdrop fades rather than revealing the Preview wash; the grid keeps its staggered converge, and `AppState.editorActive`/`viewerCutOut` are deleted with it. Plus the bug that blocked it: **Preview showed pre-edit pixels** because the mounted stage's decode was keyed on the URL alone) | ✅ built + tested (2,097), audit 15/15, Release warning-free; **owner-confirmed in the running app** (both the stale-pixel fix and the motion). Close-from-Edit straight after a CROP flies the uncropped photo and it resizes on landing — owner reviewed and ACCEPTED as normal-feeling, don't re-file (`FEATURE-LEDGER.md` Part 5) | `feat/next-155` |
+| Polish 37 — **the ⓘ modal becomes "Muse FAQs" + the /info hub** (17 sections of prose → a short intro and 8 collapsible questions, with the manual moved to muse-photo.com/info; `FAQRow` pins its list height so expanding scrolls instead of resizing the card; privacy + terms MOVED off the share domain to muse-photo.com and a new /acknowledgements page carries the GeoNames CC BY 4.0 attribution the deleted Places section used to hold; `NSHumanReadableCopyright` finally set in all four configs) | ✅ built + tested (2,185), audit 21/21, 0 untranslated; **owner-reviewed in the running app** over ~8 rounds of layout fixes | `feat/next-157` |
 
 > **Polish 29 + 30 were MERGED TO `main` on 2026-08-02** (fast-forward from
 > `feat/next-150`, tip `c2e5f95`) and are **not in any release** — `v1.5` still

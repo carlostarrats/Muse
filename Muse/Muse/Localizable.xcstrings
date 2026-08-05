@@ -7,63 +7,12 @@
     " ": {
       "shouldTranslate": false
     },
-    ",": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": ","
-          }
-        }
-      }
-    },
-    "…or create a new one": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "…ou en créer une nouvelle"
-          }
-        }
-      }
-    },
-    "· %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "· %@"
-          }
-        }
-      }
-    },
     "\"%@\" couldn't be prepared for sharing. Remove it from the collection and try again.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "« %@ » n'a pas pu être préparé pour le partage. Retirez-le de la collection et réessayez."
-          }
-        }
-      }
-    },
-    "(%lld groups)": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "(%lld groupes)"
-          }
-        }
-      }
-    },
-    "(click date to customize)": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "(cliquez sur la date pour modifier)"
           }
         }
       }
@@ -99,22 +48,6 @@
         }
       }
     },
-    "%@ — %lld files": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "new",
-            "value": "%1$@ — %2$lld files"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ — %lld fichiers"
-          }
-        }
-      }
-    },
     "%@ couldn't be read.": {
       "localizations": {
         "fr": {
@@ -141,6 +74,72 @@
           "stringUnit": {
             "state": "translated",
             "value": "disposition %@"
+          }
+        }
+      }
+    },
+    "%@ — %lld files": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@ — %2$lld files"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ — %lld fichiers"
+          }
+        }
+      }
+    },
+    "%@%% of pixels are clipped in the %@ channel — those areas have lost detail.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %% des pixels sont écrêtés dans le canal %@ — ces zones ont perdu leur détail."
+          }
+        }
+      }
+    },
+    "%@%% of pixels are clipped — those areas have lost detail.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %% des pixels sont écrêtés — ces zones ont perdu leur détail."
+          }
+        }
+      }
+    },
+    "%@%% of pixels are clipped, mostly %@.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %% des pixels sont écrêtés, surtout %@."
+          }
+        }
+      }
+    },
+    "%@%% of pixels are clipping in the %@ channel, mostly %@.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %% des pixels sont écrêtés dans le canal %@, surtout %@."
+          }
+        }
+      }
+    },
+    "%@%% of pixels are clipping in the %@ channel.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %% des pixels sont écrêtés dans le canal %@."
           }
         }
       }
@@ -224,94 +223,12 @@
         }
       }
     },
-    "%@%% of pixels are clipped — those areas have lost detail.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %% des pixels sont écrêtés — ces zones ont perdu leur détail."
-          }
-        }
-      }
-    },
-    "%@%% of pixels are clipped in the %@ channel — those areas have lost detail.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %% des pixels sont écrêtés dans le canal %@ — ces zones ont perdu leur détail."
-          }
-        }
-      }
-    },
-    "%@%% of pixels are clipped, mostly %@.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %% des pixels sont écrêtés, surtout %@."
-          }
-        }
-      }
-    },
-    "%@%% of pixels are clipping in the %@ channel, mostly %@.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %% des pixels sont écrêtés dans le canal %@, surtout %@."
-          }
-        }
-      }
-    },
-    "%@%% of pixels are clipping in the %@ channel.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %% des pixels sont écrêtés dans le canal %@."
-          }
-        }
-      }
-    },
     "%lld": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "%lld"
-          }
-        }
-      }
-    },
-    "%lld “%@” labels — skipped": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "new",
-            "value": "%1$lld “%2$@” labels — skipped"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld libellés « %@ » — ignorés"
-          }
-        }
-      }
-    },
-    "%lld “%@” labels → %@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "new",
-            "value": "%1$lld “%2$@” labels → %3$@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld libellés « %@ » → %@"
           }
         }
       }
@@ -328,16 +245,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$lld / %2$lld rétablis · %3$lld%%"
-          }
-        }
-      }
-    },
-    "%lld ★": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld ★"
           }
         }
       }
@@ -522,6 +429,59 @@
         }
       }
     },
+    "%lld “%@” labels — skipped": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$lld “%2$@” labels — skipped"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld libellés « %@ » — ignorés"
+          }
+        }
+      }
+    },
+    "%lld “%@” labels → %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$lld “%2$@” labels → %3$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld libellés « %@ » → %@"
+          }
+        }
+      }
+    },
+    "%lld ★": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld ★"
+          }
+        }
+      }
+    },
+    "%lld%%": {
+      "comment": "Export quality, as a percentage",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld %%"
+          }
+        }
+      }
+    },
     "%lld-star rating": {
       "comment": "VoiceOver: star rating of a photo",
       "localizations": {
@@ -549,13 +509,22 @@
         }
       }
     },
-    "%lld%%": {
-      "comment": "Export quality, as a percentage",
+    "(%lld groups)": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld %%"
+            "value": "(%lld groupes)"
+          }
+        }
+      }
+    },
+    "(click date to customize)": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(cliquez sur la date pour modifier)"
           }
         }
       }
@@ -571,52 +540,13 @@
         }
       }
     },
-    "×": {
+    ",": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "×"
-          }
-        }
-      }
-    },
-    "=": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "="
-          }
-        }
-      }
-    },
-    "≤": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "≤"
-          }
-        }
-      }
-    },
-    "≥": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "≥"
-          }
-        }
-      }
-    },
-    "8-bit": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "8 bits"
+            "value": ","
           }
         }
       }
@@ -641,12 +571,22 @@
         }
       }
     },
-    "A → Z": {
+    "8-bit": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "A → Z"
+            "value": "8 bits"
+          }
+        }
+      }
+    },
+    "=": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "="
           }
         }
       }
@@ -691,12 +631,12 @@
         }
       }
     },
-    "A local-first viewer and organizer for the folders you already have. Point it at a folder — Downloads, Documents, a pile of screenshots — and browse everything in one place. Nothing is imported or copied: Muse reads your files where they live and never moves or changes them.": {
+    "A local-first viewer and organizer for the folders you already have. Point Muse at a folder and browse everything in one place — nothing is imported, copied, or moved. Your files stay exactly where they are, exactly as they are.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un visualiseur et organiseur local d'abord pour les dossiers que vous possédez déjà. Indiquez-lui un dossier — Téléchargements, Documents, un tas de captures d'écran — et parcourez tout au même endroit. Rien n'est importé ni copié : Muse lit vos fichiers là où ils se trouvent et ne les déplace ni ne les modifie jamais."
+            "value": "Une visionneuse et un organiseur locaux pour les dossiers que vous avez déjà. Pointez Muse vers un dossier et parcourez tout au même endroit — rien n'est importé, copié ni déplacé. Vos fichiers restent exactement où ils sont, exactement tels qu'ils sont."
           }
         }
       }
@@ -764,6 +704,16 @@
         }
       }
     },
+    "A → Z": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A → Z"
+          }
+        }
+      }
+    },
     "A3 (297 × 420 mm)": {
       "localizations": {
         "fr": {
@@ -790,26 +740,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Environ %@ restant"
-          }
-        }
-      }
-    },
-    "About Muse": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "À propos de Muse"
-          }
-        }
-      }
-    },
-    "About Muse — how indexing, analysis, collections, and tags work": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "À propos de Muse — fonctionnement de l'indexation, de l'analyse, des collections et des étiquettes"
           }
         }
       }
@@ -844,26 +774,6 @@
         }
       }
     },
-    "Add a note…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajouter une note…"
-          }
-        }
-      }
-    },
-    "Add as tags": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajouter comme mots-clés"
-          }
-        }
-      }
-    },
     "Add Collection": {
       "localizations": {
         "fr": {
@@ -880,16 +790,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ajouter un dossier"
-          }
-        }
-      }
-    },
-    "Add folders with the + Folder button at the bottom of the sidebar — Muse indexes them automatically (the status pills at the bottom show progress). Drag folders up or down to reorder them. Right-click a folder to make a New Subfolder, Rename it, Reveal it in Finder, or — for a buried subfolder — Pin it to the top. Right-click a top-level folder to Remove it from Muse. Your files are never modified; deleting means moving to the Trash, and it's undoable.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajoutez des dossiers avec le bouton + Dossier en bas de la barre latérale — Muse les indexe automatiquement (les pastilles d'état en bas indiquent la progression). Faites glisser les dossiers vers le haut ou le bas pour les réordonner. Cliquez avec le bouton droit sur un dossier pour créer un Nouveau sous-dossier, le Renommer, l'Afficher dans le Finder ou — pour un sous-dossier enfoui — l'Épingler en haut. Cliquez avec le bouton droit sur un dossier de premier niveau pour le Retirer de Muse. Vos fichiers ne sont jamais modifiés ; supprimer revient à déplacer vers la corbeille, et l'opération est réversible."
           }
         }
       }
@@ -920,6 +820,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ajouter une étiquette"
+          }
+        }
+      }
+    },
+    "Add a note…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter une note…"
+          }
+        }
+      }
+    },
+    "Add as tags": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter comme mots-clés"
           }
         }
       }
@@ -994,12 +914,12 @@
         }
       }
     },
-    "After indexing, Muse automatically analyzes new or changed images with Apple's on-device Vision: tags, dominant colors, dimensions, and readable text. This powers the tag chips, the Color and Shape sorts, the viewer's color swatches, and collections. There's no button to press — images already analyzed are never redone, and your own tag edits always win over the machine's.": {
+    "After indexing, Muse analyzes new images with Apple's on-device Vision — tags, dominant colors, dimensions, and any readable text. There's no button to press. Your own tag edits always win over the machine's, and you can turn the automatic work off in Settings.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Après l'indexation, Muse analyse automatiquement les images nouvelles ou modifiées avec Vision, en local sur l'appareil Apple : tags, couleurs dominantes, dimensions et texte lisible. C'est ce qui alimente les pastilles de tags, les tris par Couleur et par Forme, les échantillons de couleur du visualiseur et les collections. Il n'y a aucun bouton à presser — les images déjà analysées ne le sont jamais à nouveau, et vos propres modifications de tags l'emportent toujours sur celles de la machine."
+            "value": "Après l'indexation, Muse analyse les nouvelles images avec Vision d'Apple, en local — tags, couleurs dominantes, dimensions et tout texte lisible. Aucun bouton à presser. Vos propres modifications de tags l'emportent toujours sur celles de la machine, et vous pouvez désactiver le traitement automatique dans les Réglages."
           }
         }
       }
@@ -1096,6 +1016,7 @@
       }
     },
     "Analysis": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -1152,17 +1073,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Analyse…"
-          }
-        }
-      }
-    },
-    "and": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "et"
           }
         }
       }
@@ -1428,12 +1338,12 @@
         }
       }
     },
-    "Back to all collections": {
+    "Back Up Muse…": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Retour à toutes les collections"
+            "value": "Sauvegarder Muse…"
           }
         }
       }
@@ -1448,22 +1358,12 @@
         }
       }
     },
-    "Back Up & Restore": {
+    "Back to all collections": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sauvegarde et restauration"
-          }
-        }
-      }
-    },
-    "Back Up Muse…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sauvegarder Muse…"
+            "value": "Retour à toutes les collections"
           }
         }
       }
@@ -1578,16 +1478,6 @@
         }
       }
     },
-    "blue": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "bleu"
-          }
-        }
-      }
-    },
     "Blue": {
       "localizations": {
         "fr": {
@@ -1688,22 +1578,83 @@
         }
       }
     },
+    "COLLECTION": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "COLLECTION"
+          }
+        }
+      }
+    },
+    "COLLECTIONS": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "COLLECTIONS"
+          }
+        }
+      }
+    },
+    "COLOR": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "COULEUR"
+          }
+        }
+      }
+    },
+    "COLOR MIX": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MÉLANGE DE COULEURS"
+          }
+        }
+      }
+    },
+    "COLORS": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "COULEURS"
+          }
+        }
+      }
+    },
+    "CROP": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RECADRAGE"
+          }
+        }
+      }
+    },
+    "CROP & STRAIGHTEN": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RECADRAGE ET REDRESSEMENT"
+          }
+        }
+      }
+    },
     "Calendar": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Calendrier"
-          }
-        }
-      }
-    },
-    "camera": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "appareil"
           }
         }
       }
@@ -1724,6 +1675,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Format d'appareil photo"
+          }
+        }
+      }
+    },
+    "Can I edit photos in Muse?": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puis-je retoucher des photos dans Muse ?"
           }
         }
       }
@@ -1818,22 +1779,22 @@
         }
       }
     },
-    "Choose how images are arranged. Every mode draws each image at its own shape — nothing is cropped. Applies to every grid.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choisissez la disposition des images. Chaque mode affiche l'image à sa forme naturelle — rien n'est rogné. S'applique à toutes les grilles."
-          }
-        }
-      }
-    },
     "Choose Library": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Choisir la bibliothèque"
+          }
+        }
+      }
+    },
+    "Choose how images are arranged. Every mode draws each image at its own shape — nothing is cropped. Applies to every grid.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choisissez la disposition des images. Chaque mode affiche l'image à sa forme naturelle — rien n'est rogné. S'applique à toutes les grilles."
           }
         }
       }
@@ -1898,16 +1859,6 @@
         }
       }
     },
-    "city or country": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ville ou pays"
-          }
-        }
-      }
-    },
     "Clarity": {
       "localizations": {
         "fr": {
@@ -1918,7 +1869,7 @@
         }
       }
     },
-    "Clear all": {
+    "Clear All": {
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -1928,7 +1879,27 @@
         }
       }
     },
-    "Clear All": {
+    "Clear Rating": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effacer l’évaluation"
+          }
+        }
+      }
+    },
+    "Clear Tag Filter": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effacer le filtre d'étiquettes"
+          }
+        }
+      }
+    },
+    "Clear all": {
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -1948,27 +1919,7 @@
         }
       }
     },
-    "Clear Rating": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Effacer l’évaluation"
-          }
-        }
-      }
-    },
     "Clear tag filter": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Effacer le filtre d'étiquettes"
-          }
-        }
-      }
-    },
-    "Clear Tag Filter": {
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -1988,6 +1939,16 @@
         }
       }
     },
+    "Clipping Zebras (J)": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zébrures d’écrêtage (J)"
+          }
+        }
+      }
+    },
     "Clipping zebras": {
       "extractionState": "stale",
       "localizations": {
@@ -2001,16 +1962,6 @@
     },
     "Clipping zebras (J)": {
       "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zébrures d’écrêtage (J)"
-          }
-        }
-      }
-    },
-    "Clipping Zebras (J)": {
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -2080,16 +2031,6 @@
         }
       }
     },
-    "Collapse section": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Réduire la section"
-          }
-        }
-      }
-    },
     "Collapse Stack": {
       "extractionState": "stale",
       "localizations": {
@@ -2101,7 +2042,18 @@
         }
       }
     },
+    "Collapse section": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réduire la section"
+          }
+        }
+      }
+    },
     "Collapsed": {
+      "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -2117,16 +2069,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Collection"
-          }
-        }
-      }
-    },
-    "COLLECTION": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "COLLECTION"
           }
         }
       }
@@ -2147,16 +2089,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Collections"
-          }
-        }
-      }
-    },
-    "COLLECTIONS": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "COLLECTIONS"
           }
         }
       }
@@ -2182,16 +2114,6 @@
         }
       }
     },
-    "color": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "couleur"
-          }
-        }
-      }
-    },
     "Color": {
       "localizations": {
         "fr": {
@@ -2202,42 +2124,12 @@
         }
       }
     },
-    "COLOR": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "COULEUR"
-          }
-        }
-      }
-    },
     "Color Labels": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Étiquettes de couleur"
-          }
-        }
-      }
-    },
-    "COLOR MIX": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "MÉLANGE DE COULEURS"
-          }
-        }
-      }
-    },
-    "COLORS": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "COULEURS"
           }
         }
       }
@@ -2262,6 +2154,26 @@
         }
       }
     },
+    "Compare Against This": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comparer avec celui-ci"
+          }
+        }
+      }
+    },
+    "Compare Side by Side": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comparer côte à côte"
+          }
+        }
+      }
+    },
     "Compare against": {
       "localizations": {
         "fr": {
@@ -2279,26 +2191,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Comparer avec celui-ci"
-          }
-        }
-      }
-    },
-    "Compare Against This": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Comparer avec celui-ci"
-          }
-        }
-      }
-    },
-    "Compare Side by Side": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Comparer côte à côte"
           }
         }
       }
@@ -2325,21 +2217,12 @@
       }
     },
     "Contact Sheet": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Planche-contact"
-          }
-        }
-      }
-    },
-    "contains": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "contient"
           }
         }
       }
@@ -2404,13 +2287,22 @@
         }
       }
     },
-    "copy all": {
-      "extractionState": "stale",
+    "Copy Link": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "tout copier"
+            "value": "Copier le lien"
+          }
+        }
+      }
+    },
+    "Copy Portfolio Link": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copier le lien du portfolio"
           }
         }
       }
@@ -2435,32 +2327,12 @@
         }
       }
     },
-    "Copy Link": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Copier le lien"
-          }
-        }
-      }
-    },
     "Copy note": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Copier la note"
-          }
-        }
-      }
-    },
-    "Copy Portfolio Link": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Copier le lien du portfolio"
           }
         }
       }
@@ -2501,26 +2373,6 @@
         }
       }
     },
-    "Couldn’t %@ the folder — Muse needs access to the folder that contains it.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible de %@ le dossier — Muse a besoin d’accéder au dossier qui le contient."
-          }
-        }
-      }
-    },
-    "Couldn’t %@ the folder.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible de %@ le dossier."
-          }
-        }
-      }
-    },
     "Couldn't create the copy": {
       "localizations": {
         "fr": {
@@ -2537,36 +2389,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Impossible de créer le dossier du modèle."
-          }
-        }
-      }
-    },
-    "Couldn’t Export the PDF": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible d’exporter le PDF"
-          }
-        }
-      }
-    },
-    "Couldn’t finish renaming the folder.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible de terminer le changement de nom du dossier."
-          }
-        }
-      }
-    },
-    "Couldn’t move some files": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible de déplacer certains fichiers"
           }
         }
       }
@@ -2601,42 +2423,12 @@
         }
       }
     },
-    "Couldn’t rename the file.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible de renommer le fichier."
-          }
-        }
-      }
-    },
     "Couldn't restore — file is in the Trash": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Restauration impossible — le fichier est dans la corbeille"
-          }
-        }
-      }
-    },
-    "couldn't save": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "échec de l'enregistrement"
-          }
-        }
-      }
-    },
-    "Couldn’t save": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Échec de l'enregistrement"
           }
         }
       }
@@ -2651,6 +2443,36 @@
         }
       }
     },
+    "Couldn’t %@ the folder — Muse needs access to the folder that contains it.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de %@ le dossier — Muse a besoin d’accéder au dossier qui le contient."
+          }
+        }
+      }
+    },
+    "Couldn’t %@ the folder.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de %@ le dossier."
+          }
+        }
+      }
+    },
+    "Couldn’t Export the PDF": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible d’exporter le PDF"
+          }
+        }
+      }
+    },
     "Couldn’t Unpublish": {
       "localizations": {
         "fr": {
@@ -2661,12 +2483,42 @@
         }
       }
     },
-    "create": {
+    "Couldn’t finish renaming the folder.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "créer"
+            "value": "Impossible de terminer le changement de nom du dossier."
+          }
+        }
+      }
+    },
+    "Couldn’t move some files": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de déplacer certains fichiers"
+          }
+        }
+      }
+    },
+    "Couldn’t rename the file.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de renommer le fichier."
+          }
+        }
+      }
+    },
+    "Couldn’t save": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Échec de l'enregistrement"
           }
         }
       }
@@ -2677,16 +2529,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Créer"
-          }
-        }
-      }
-    },
-    "created": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "créé"
           }
         }
       }
@@ -2748,27 +2590,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Recadrer"
-          }
-        }
-      }
-    },
-    "CROP": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "RECADRAGE"
-          }
-        }
-      }
-    },
-    "CROP & STRAIGHTEN": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "RECADRAGE ET REDRESSEMENT"
           }
         }
       }
@@ -2954,22 +2775,22 @@
         }
       }
     },
-    "Default color": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couleur par défaut"
-          }
-        }
-      }
-    },
     "Default Layout": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Disposition par défaut"
+          }
+        }
+      }
+    },
+    "Default color": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couleur par défaut"
           }
         }
       }
@@ -2984,16 +2805,6 @@
         }
       }
     },
-    "Delete “%@”?": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer « %@ » ?"
-          }
-        }
-      }
-    },
     "Delete All": {
       "localizations": {
         "fr": {
@@ -3004,32 +2815,12 @@
         }
       }
     },
-    "Delete all tags in this view?": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer toutes les étiquettes de cette vue ?"
-          }
-        }
-      }
-    },
     "Delete All Tags…": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Supprimer toutes les étiquettes…"
-          }
-        }
-      }
-    },
-    "Delete collection": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer la collection"
           }
         }
       }
@@ -3104,6 +2895,37 @@
         }
       }
     },
+    "Delete Version": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer la version"
+          }
+        }
+      }
+    },
+    "Delete all tags in this view?": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer toutes les étiquettes de cette vue ?"
+          }
+        }
+      }
+    },
+    "Delete collection": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer la collection"
+          }
+        }
+      }
+    },
     "Delete this preset": {
       "localizations": {
         "fr": {
@@ -3124,13 +2946,12 @@
         }
       }
     },
-    "Delete Version": {
-      "extractionState": "stale",
+    "Delete “%@”?": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Supprimer la version"
+            "value": "Supprimer « %@ » ?"
           }
         }
       }
@@ -3232,6 +3053,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Documents"
+          }
+        }
+      }
+    },
+    "Does Muse move or change my files?": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muse déplace-t-il ou modifie-t-il mes fichiers ?"
+          }
+        }
+      }
+    },
+    "Does anything get uploaded?": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quelque chose est-il envoyé en ligne ?"
           }
         }
       }
@@ -3338,34 +3179,12 @@
         }
       }
     },
-    "e.g. Leslie-Ann Thomson ALDO MUAH 2025": {
-      "extractionState": "stale",
+    "EFFECTS": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "p. ex. Leslie-Ann Thomson ALDO MUAH 2025"
-          }
-        }
-      }
-    },
-    "e.g. Sent by": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "p. ex. Envoyé par"
-          }
-        }
-      }
-    },
-    "e.g. The Project": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "p. ex. The Project"
+            "value": "EFFETS"
           }
         }
       }
@@ -3410,16 +3229,6 @@
         }
       }
     },
-    "Edit a Copy": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Modifier une copie"
-          }
-        }
-      }
-    },
     "Edit Original": {
       "localizations": {
         "fr": {
@@ -3450,6 +3259,16 @@
         }
       }
     },
+    "Edit a Copy": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifier une copie"
+          }
+        }
+      }
+    },
     "Edited": {
       "localizations": {
         "fr": {
@@ -3471,16 +3290,6 @@
         }
       }
     },
-    "Editor backdrop": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Arrière-plan de l’éditeur"
-          }
-        }
-      }
-    },
     "Editor Workspace": {
       "localizations": {
         "fr": {
@@ -3491,12 +3300,12 @@
         }
       }
     },
-    "EFFECTS": {
+    "Editor backdrop": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "EFFETS"
+            "value": "Arrière-plan de l’éditeur"
           }
         }
       }
@@ -3542,6 +3351,7 @@
       }
     },
     "Essay": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -3567,16 +3377,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Événements"
-          }
-        }
-      }
-    },
-    "Everything happens on this Mac. Muse collects nothing — no analytics, no telemetry; nothing about you or your files is ever sent to its makers. It uses the network for only two things: checking for and downloading app updates, and the Google Drive sharing you opt into — signing in, uploading a collection to your own Drive, and later managing or expiring those links. That sharing uses the narrow drive.file permission, so Muse can only ever touch the files it created in your Drive, never the rest of it; sign out anytime. (iCloud sync and iCloud links, if you use them, are handled by the system.) If you remove a folder from the sidebar, its index data is kept for 180 days — so re-adding it restores everything instantly — then deleted automatically.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tout se passe sur ce Mac. Muse ne collecte rien — aucune statistique, aucune télémétrie ; rien vous concernant ni concernant vos fichiers n'est jamais envoyé à ses créateurs. Muse n'utilise le réseau que pour deux choses : rechercher et télécharger les mises à jour de l'app, et le partage via Google Drive auquel vous adhérez — connexion, téléversement d'une collection vers votre propre Drive, puis gestion ou expiration de ces liens. Ce partage utilise l'autorisation restreinte drive.file, de sorte que Muse ne peut jamais accéder qu'aux fichiers qu'il a créés dans votre Drive, jamais au reste ; déconnectez-vous quand vous voulez. (La synchronisation iCloud et les liens iCloud, si vous les utilisez, sont gérés par le système.) Si vous retirez un dossier de la barre latérale, ses données d'index sont conservées pendant 180 jours — ainsi, le rajouter restaure tout instantanément — puis supprimées automatiquement."
           }
         }
       }
@@ -3621,16 +3421,6 @@
         }
       }
     },
-    "Expand section": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Développer la section"
-          }
-        }
-      }
-    },
     "Expand Stack": {
       "extractionState": "stale",
       "localizations": {
@@ -3642,7 +3432,18 @@
         }
       }
     },
+    "Expand section": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Développer la section"
+          }
+        }
+      }
+    },
     "Expanded": {
+      "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -3702,6 +3503,16 @@
         }
       }
     },
+    "FOLDERS": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DOSSIERS"
+          }
+        }
+      }
+    },
     "Facebook": {
       "extractionState": "stale",
       "localizations": {
@@ -3709,16 +3520,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Facebook"
-          }
-        }
-      }
-    },
-    "faces": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "visages"
           }
         }
       }
@@ -3809,16 +3610,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rechercher les doublons dans le dossier"
-          }
-        }
-      }
-    },
-    "Find Duplicates in the File menu surfaces copies — byte-for-byte identical files, visually similar images, and matching filenames — so you can review and clear them out to the Trash.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rechercher les doublons, dans le menu Fichier, fait remonter les copies — fichiers identiques octet par octet, images visuellement similaires et noms de fichiers correspondants — afin que vous puissiez les examiner et les envoyer dans la corbeille."
           }
         }
       }
@@ -3943,16 +3734,6 @@
         }
       }
     },
-    "FOLDERS": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "DOSSIERS"
-          }
-        }
-      }
-    },
     "Forest": {
       "localizations": {
         "fr": {
@@ -4044,22 +3825,22 @@
         }
       }
     },
+    "GIF": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GIF"
+          }
+        }
+      }
+    },
     "Game Controller": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Manette de jeu"
-          }
-        }
-      }
-    },
-    "Get started by adding a folder": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Commencez par ajouter un dossier"
           }
         }
       }
@@ -4074,12 +3855,12 @@
         }
       }
     },
-    "GIF": {
+    "Get started by adding a folder": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "GIF"
+            "value": "Commencez par ajouter un dossier"
           }
         }
       }
@@ -4144,16 +3925,6 @@
         }
       }
     },
-    "Google may show an “unverified app” step while Muse's verification is in review — choose Advanced → Continue to proceed.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Google peut afficher une étape « application non vérifiée » tant que la vérification de Muse est en cours d’examen — choisissez Avancé → Continuer pour poursuivre."
-          }
-        }
-      }
-    },
     "Google Photos edits are already baked into the edited files; the originals are unmodified. The individual adjustments live on Google's servers and can't be recovered.": {
       "localizations": {
         "fr": {
@@ -4170,6 +3941,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Google Takeout"
+          }
+        }
+      }
+    },
+    "Google may show an “unverified app” step while Muse's verification is in review — choose Advanced → Continue to proceed.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google peut afficher une étape « application non vérifiée » tant que la vérification de Muse est en cours d’examen — choisissez Avancé → Continuer pour poursuivre."
           }
         }
       }
@@ -4236,16 +4017,6 @@
         }
       }
     },
-    "green": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "vert"
-          }
-        }
-      }
-    },
     "Green": {
       "localizations": {
         "fr": {
@@ -4266,16 +4037,6 @@
         }
       }
     },
-    "Grid & appearance": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Grille et apparence"
-          }
-        }
-      }
-    },
     "Group photo": {
       "localizations": {
         "fr": {
@@ -4286,12 +4047,33 @@
         }
       }
     },
-    "Groupings that span your whole library, suggested automatically from what Vision finds, plus any you build by hand in the viewer. Screenshots get their own smart collections by what they're of — recipes, receipts, places, articles, and more. Open the Collections page from the toolbar to browse them. They track your files: delete images or remove a folder and collections shrink to match — empty ones disappear. Open one to rename or delete it from its header. Right-click a collection in the sidebar and choose Change Symbol & Color… to give it its own icon — either a symbol with a color, or an emoji.": {
+    "HEIC": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Des regroupements qui couvrent toute votre bibliothèque, suggérés automatiquement à partir de ce que Vision détecte, ainsi que ceux que vous créez à la main dans le visualiseur. Les captures d'écran obtiennent leurs propres collections intelligentes selon leur contenu — recettes, reçus, lieux, articles, et plus encore. Ouvrez la page Collections depuis la barre d'outils pour les parcourir. Elles suivent vos fichiers : supprimez des images ou retirez un dossier et les collections rétrécissent en conséquence — les collections vides disparaissent. Ouvrez-en une pour la renommer ou la supprimer depuis son en-tête. Cliquez avec le bouton droit sur une collection dans la barre latérale et choisissez Symbole et couleur… pour lui donner sa propre icône — soit un symbole avec une couleur, soit un emoji."
+            "value": "HEIC"
+          }
+        }
+      }
+    },
+    "HISTOGRAM": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HISTOGRAMME"
+          }
+        }
+      }
+    },
+    "HISTORY": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HISTORIQUE"
           }
         }
       }
@@ -4302,28 +4084,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "À main levée au 1/%lld s — un flou de bougé est probable."
-          }
-        }
-      }
-    },
-    "has": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "a"
-          }
-        }
-      }
-    },
-    "has no": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "n’a pas"
           }
         }
       }
@@ -4360,16 +4120,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cœur"
-          }
-        }
-      }
-    },
-    "HEIC": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "HEIC"
           }
         }
       }
@@ -4505,16 +4255,6 @@
         }
       }
     },
-    "HISTOGRAM": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "HISTOGRAMME"
-          }
-        }
-      }
-    },
     "History": {
       "extractionState": "stale",
       "localizations": {
@@ -4522,17 +4262,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Historique"
-          }
-        }
-      }
-    },
-    "HISTORY": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "HISTORIQUE"
           }
         }
       }
@@ -4568,6 +4297,26 @@
         }
       }
     },
+    "How do I share a collection?": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment partager une collection ?"
+          }
+        }
+      }
+    },
+    "How do photos get tagged and sorted?": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment les photos sont-elles taguées et classées ?"
+          }
+        }
+      }
+    },
     "Hue": {
       "localizations": {
         "fr": {
@@ -4578,22 +4327,32 @@
         }
       }
     },
-    "iCloud isn't set up, so the folder isn't in the sidebar. It'll appear here when iCloud is available.": {
+    "INFO": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "iCloud n'est pas configuré, le dossier n'apparaît donc pas dans la barre latérale. Il s'affichera ici lorsque iCloud sera disponible."
+            "value": "INFOS"
           }
         }
       }
     },
-    "iCloud sync": {
+    "INSIGHTS": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Synchronisation iCloud"
+            "value": "ANALYSES"
+          }
+        }
+      }
+    },
+    "ISO": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ISO"
           }
         }
       }
@@ -4658,6 +4417,79 @@
         }
       }
     },
+    "Import Here": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer ici"
+          }
+        }
+      }
+    },
+    "Import Keywords & Ratings": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer les mots-clés et notes"
+          }
+        }
+      }
+    },
+    "Import Keywords & Ratings…": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer les mots-clés et notes…"
+          }
+        }
+      }
+    },
+    "Import LUTs": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer des LUT"
+          }
+        }
+      }
+    },
+    "Import LUTs…": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer des LUT…"
+          }
+        }
+      }
+    },
+    "Import Lightroom Presets": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer des préréglages Lightroom"
+          }
+        }
+      }
+    },
+    "Import Metadata & Lightroom Edits": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer les métadonnées et retouches Lightroom"
+          }
+        }
+      }
+    },
     "Import complete": {
       "localizations": {
         "fr": {
@@ -4698,89 +4530,6 @@
         }
       }
     },
-    "Import Here": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Importer ici"
-          }
-        }
-      }
-    },
-    "Import Keywords & Ratings": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Importer les mots-clés et notes"
-          }
-        }
-      }
-    },
-    "Import Keywords & Ratings…": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Importer les mots-clés et notes…"
-          }
-        }
-      }
-    },
-    "Import Lightroom Presets": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Importer des préréglages Lightroom"
-          }
-        }
-      }
-    },
-    "Import LUTs": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Importer des LUT"
-          }
-        }
-      }
-    },
-    "Import LUTs…": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Importer des LUT…"
-          }
-        }
-      }
-    },
-    "Import Metadata & Lightroom Edits": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Importer les métadonnées et retouches Lightroom"
-          }
-        }
-      }
-    },
-    "Import…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Importer…"
-          }
-        }
-      }
-    },
     "Imported": {
       "localizations": {
         "fr": {
@@ -4802,22 +4551,22 @@
         }
       }
     },
-    "in": {
+    "Import…": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "en"
+            "value": "Importer…"
           }
         }
       }
     },
-    "in the middle of the frame": {
+    "In Muse's own database on this Mac — not inside your files. That's why moving to a new Mac needs a backup: Muse ▸ Back Up Muse… saves it all as one file, and Restore from Backup… reconnects it by matching each file's contents, even if you renamed things along the way.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "au centre de l’image"
+            "value": "Dans la base de données de Muse sur ce Mac — pas dans vos fichiers. C'est pourquoi changer de Mac nécessite une sauvegarde : Muse ▸ Sauvegarder Muse… enregistre le tout dans un seul fichier, et Restaurer depuis une sauvegarde… reconnecte l'ensemble en comparant le contenu de chaque fichier, même si vous avez renommé des éléments entre-temps."
           }
         }
       }
@@ -4874,26 +4623,6 @@
         }
       }
     },
-    "INFO": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "INFOS"
-          }
-        }
-      }
-    },
-    "INSIGHTS": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ANALYSES"
-          }
-        }
-      }
-    },
     "Instagram": {
       "extractionState": "stale",
       "localizations": {
@@ -4942,36 +4671,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Introduction"
-          }
-        }
-      }
-    },
-    "ISO": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ISO"
-          }
-        }
-      }
-    },
-    "item": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "élément"
-          }
-        }
-      }
-    },
-    "items": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "éléments"
           }
         }
       }
@@ -5026,16 +4725,6 @@
         }
       }
     },
-    "Kept — last copy, can't delete": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conservé — dernière copie, suppression impossible"
-          }
-        }
-      }
-    },
     "Kept only to compare against — switching to one leaves this photo as it is.": {
       "extractionState": "stale",
       "localizations": {
@@ -5043,6 +4732,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Conservés uniquement pour la comparaison — en choisir un ne modifie pas cette photo."
+          }
+        }
+      }
+    },
+    "Kept — last copy, can't delete": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conservé — dernière copie, suppression impossible"
           }
         }
       }
@@ -5067,22 +4766,74 @@
         }
       }
     },
-    "kind": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "type"
-          }
-        }
-      }
-    },
     "Kind": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Type"
+          }
+        }
+      }
+    },
+    "LIBRARY": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BIBLIOTHÈQUE"
+          }
+        }
+      }
+    },
+    "LIGHT": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LUMIÈRE"
+          }
+        }
+      }
+    },
+    "LOOKS": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "STYLES"
+          }
+        }
+      }
+    },
+    "LUT Strength": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intensité de la LUT"
+          }
+        }
+      }
+    },
+    "LUT name": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nom de la LUT"
+          }
+        }
+      }
+    },
+    "LUTs": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LUT"
           }
         }
       }
@@ -5127,6 +4878,16 @@
         }
       }
     },
+    "Last 24 hours": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dernières 24 heures"
+          }
+        }
+      }
+    },
     "Last 3 days": {
       "localizations": {
         "fr": {
@@ -5153,16 +4914,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "6 derniers mois"
-          }
-        }
-      }
-    },
-    "Last 24 hours": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dernières 24 heures"
           }
         }
       }
@@ -5208,6 +4959,7 @@
       }
     },
     "Layout": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -5247,16 +4999,6 @@
         }
       }
     },
-    "lens": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "objectif"
-          }
-        }
-      }
-    },
     "Lens": {
       "extractionState": "stale",
       "localizations": {
@@ -5288,27 +5030,6 @@
         }
       }
     },
-    "LIBRARY": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BIBLIOTHÈQUE"
-          }
-        }
-      }
-    },
-    "Library & folders": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bibliothèque et dossiers"
-          }
-        }
-      }
-    },
     "Library holds Places, On This Day, Rarely Seen and Shuffle.": {
       "extractionState": "stale",
       "localizations": {
@@ -5326,16 +5047,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Clair"
-          }
-        }
-      }
-    },
-    "LIGHT": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "LUMIÈRE"
           }
         }
       }
@@ -5360,16 +5071,6 @@
         }
       }
     },
-    "Lightroom adjustments are approximated — Muse maps crop, white balance, exposure, contrast, vibrance, saturation and tone curves. Everything else is listed above and was not translated.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les réglages Lightroom sont approximés — Muse convertit le recadrage, la balance des blancs, l’exposition, le contraste, la vibrance, la saturation et les courbes de tonalité. Tout le reste est listé ci-dessus et n’a pas été converti."
-          }
-        }
-      }
-    },
     "Lightroom Presets": {
       "localizations": {
         "fr": {
@@ -5386,6 +5087,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Préréglages Lightroom…"
+          }
+        }
+      }
+    },
+    "Lightroom adjustments are approximated — Muse maps crop, white balance, exposure, contrast, vibrance, saturation and tone curves. Everything else is listed above and was not translated.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les réglages Lightroom sont approximés — Muse convertit le recadrage, la balance des blancs, l’exposition, le contraste, la vibrance, la saturation et les courbes de tonalité. Tout le reste est listé ci-dessus et n’a pas été converti."
           }
         }
       }
@@ -5533,13 +5244,22 @@
         }
       }
     },
-    "LOOKS": {
-      "extractionState": "stale",
+    "Looks Like": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "STYLES"
+            "value": "Ressemble à"
+          }
+        }
+      }
+    },
+    "Looks Like These": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ressemble à celles-ci"
           }
         }
       }
@@ -5560,26 +5280,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rendus importés"
-          }
-        }
-      }
-    },
-    "Looks Like": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ressemble à"
-          }
-        }
-      }
-    },
-    "Looks Like These": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ressemble à celles-ci"
           }
         }
       }
@@ -5624,32 +5324,12 @@
         }
       }
     },
-    "LUT name": {
+    "MB": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nom de la LUT"
-          }
-        }
-      }
-    },
-    "LUT Strength": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Intensité de la LUT"
-          }
-        }
-      }
-    },
-    "LUTs": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "LUT"
+            "value": "Mo"
           }
         }
       }
@@ -5784,16 +5464,6 @@
         }
       }
     },
-    "MB": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mo"
-          }
-        }
-      }
-    },
     "Medium": {
       "localizations": {
         "fr": {
@@ -5840,16 +5510,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Point médian"
-          }
-        }
-      }
-    },
-    "modified": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "modifié"
           }
         }
       }
@@ -5983,6 +5643,16 @@
         }
       }
     },
+    "Move Up": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déplacer vers le haut"
+          }
+        }
+      }
+    },
     "Move to Folder": {
       "localizations": {
         "fr": {
@@ -6013,16 +5683,6 @@
         }
       }
     },
-    "Move Up": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Déplacer vers le haut"
-          }
-        }
-      }
-    },
     "Moved to Trash": {
       "localizations": {
         "fr": {
@@ -6043,22 +5703,42 @@
         }
       }
     },
+    "Muse FAQs": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FAQ Muse"
+          }
+        }
+      }
+    },
+    "Muse FAQs — quick answers, and a link to the full guide": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FAQ Muse — réponses rapides et lien vers le guide complet"
+          }
+        }
+      }
+    },
+    "Muse File": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fichier Muse"
+          }
+        }
+      }
+    },
     "Muse analyzes new photos in the background so search, colors and looks keep getting better. Pausing only changes when that work runs — nothing is skipped.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Muse analyse les nouvelles photos en arrière-plan pour améliorer la recherche, les couleurs et les rendus. La pause ne change que le moment où ce travail s’exécute — rien n’est ignoré."
-          }
-        }
-      }
-    },
-    "Muse can keep one folder in your iCloud Drive, synced across your Macs. Each image carries a small sidecar of its tags, colors, and analysis, so a second Mac restores everything without re-analyzing. This rides Apple's iCloud sync — Muse itself still makes no network calls.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Muse peut conserver un dossier dans votre iCloud Drive, synchronisé entre vos Mac. Chaque image embarque un petit fichier annexe contenant ses tags, ses couleurs et son analyse, de sorte qu'un second Mac restaure tout sans nouvelle analyse. Cela s'appuie sur la synchronisation iCloud d'Apple — Muse lui-même n'effectue toujours aucun appel réseau."
           }
         }
       }
@@ -6143,72 +5823,12 @@
         }
       }
     },
-    "Muse File": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fichier Muse"
-          }
-        }
-      }
-    },
-    "Muse is distributed directly (not via the App Store) and keeps itself up to date with Sparkle. It checks quietly in the background, or choose Muse ▸ Check for Updates… any time. New versions are downloaded over HTTPS and cryptographically verified before installing.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Muse est distribué directement (pas via l'App Store) et se maintient à jour grâce à Sparkle. Il vérifie discrètement en arrière-plan, ou choisissez Muse ▸ Rechercher des mises à jour… à tout moment. Les nouvelles versions sont téléchargées via HTTPS et vérifiées cryptographiquement avant l'installation."
-          }
-        }
-      }
-    },
-    "Muse is open source under the MIT license. The code lives at github.com/carlostarrats/Muse.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Muse est open source sous licence MIT. Le code se trouve sur github.com/carlostarrats/Muse."
-          }
-        }
-      }
-    },
-    "Muse keeps your collections, tags, and folder list on this Mac — not inside your files. Before moving to a new Mac, choose Muse ▸ Back Up Muse… to save one backup file; keep it somewhere safe and carry it over with your files. On the new Mac, choose Muse ▸ Restore from Backup…, point Muse at your folders, and it reconnects everything by matching each file's contents — even if you renamed or rearranged them. Collections with no files on the new Mac simply don't appear; nothing is ever left broken.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Muse conserve vos collections, vos tags et votre liste de dossiers sur ce Mac — pas à l'intérieur de vos fichiers. Avant de passer à un nouveau Mac, choisissez Muse ▸ Sauvegarder Muse… pour enregistrer un fichier de sauvegarde ; conservez-le en lieu sûr et emportez-le avec vos fichiers. Sur le nouveau Mac, choisissez Muse ▸ Restaurer depuis une sauvegarde…, indiquez à Muse vos dossiers, et il reconnecte tout en faisant correspondre le contenu de chaque fichier — même si vous les avez renommés ou réorganisés. Les collections sans fichiers sur le nouveau Mac n'apparaissent tout simplement pas ; rien n'est jamais laissé dans un état défectueux."
-          }
-        }
-      }
-    },
     "Muse maps crop, white balance, exposure, contrast, vibrance, saturation and tone curves. Adaptive sliders like Highlights, Shadows and Clarity are listed in the report instead — they can't be translated honestly.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Muse convertit le recadrage, la balance des blancs, l’exposition, le contraste, la vibrance, la saturation et les courbes de tonalité. Les curseurs adaptatifs comme Hautes lumières, Ombres et Clarté figurent plutôt dans le rapport — ils ne peuvent pas être convertis honnêtement."
-          }
-        }
-      }
-    },
-    "Muse opens almost anything in place: images, PDFs, video, audio, fonts, Markdown, and code or text. Click an image for a full-screen view with zoom, pan, and a details panel; its Share button also offers Open With. Select images in the grid with a click, ⌘-click, or Shift-click, then right-click for actions — move to a folder, add to a collection, add a tag, share, or Open With. Anything without a dedicated viewer falls back to Quick Look. A few uncommon formats won't preview here, or won't show on a shared web page, because that depends on what Apple and Google can render — not on Muse.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Muse ouvre presque tout sur place : images, PDF, vidéo, audio, polices, Markdown, ainsi que code ou texte. Cliquez sur une image pour une vue plein écran avec zoom, déplacement et un panneau de détails ; son bouton Partager propose aussi Ouvrir avec. Sélectionnez des images dans la grille par un clic, un ⌘-clic ou un Maj-clic, puis cliquez avec le bouton droit pour accéder aux actions — déplacer vers un dossier, ajouter à une collection, ajouter un tag, partager ou Ouvrir avec. Tout ce qui n'a pas de visualiseur dédié bascule sur Coup d'œil. Certains formats peu courants ne s'affichent pas ici, ou n'apparaissent pas sur une page web partagée, car cela dépend de ce qu'Apple et Google peuvent afficher — pas de Muse."
-          }
-        }
-      }
-    },
-    "Muse organizes automatically, but you're in control: in Settings — the gear in the toolbar, or ⌘, — you can turn off automatic tagging or automatic collections. Existing tags and collections stay; only future automatic work is paused, and the manual commands still work. Settings is also where you sign in to Google Drive for collection links — and sign out to switch accounts.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Muse organise automatiquement, mais vous gardez le contrôle : dans les Réglages — la roue dentée dans la barre d'outils, ou ⌘, — vous pouvez désactiver l'ajout automatique de tags ou les collections automatiques. Les tags et collections existants demeurent ; seul le travail automatique futur est suspendu, et les commandes manuelles fonctionnent toujours. Les Réglages sont aussi l'endroit où vous vous connectez à Google Drive pour les liens de collection — et où vous vous déconnectez pour changer de compte."
           }
         }
       }
@@ -6243,6 +5863,16 @@
         }
       }
     },
+    "NOTE": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "REMARQUE"
+          }
+        }
+      }
+    },
     "Name": {
       "localizations": {
         "fr": {
@@ -6269,36 +5899,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bleu marine"
-          }
-        }
-      }
-    },
-    "near": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "près de"
-          }
-        }
-      }
-    },
-    "near the bottom of the frame": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "vers le bas de l’image"
-          }
-        }
-      }
-    },
-    "near the top of the frame": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "vers le haut de l’image"
           }
         }
       }
@@ -6413,6 +6013,36 @@
         }
       }
     },
+    "No Drive shares yet.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun partage Drive pour l’instant."
+          }
+        }
+      }
+    },
+    "No LUTs imported": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune LUT importée"
+          }
+        }
+      }
+    },
+    "No Rating": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune note"
+          }
+        }
+      }
+    },
     "No adjustments": {
       "extractionState": "stale",
       "localizations": {
@@ -6440,16 +6070,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Aucune collection pour l'instant"
-          }
-        }
-      }
-    },
-    "No Drive shares yet.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucun partage Drive pour l’instant."
           }
         }
       }
@@ -6484,16 +6104,6 @@
         }
       }
     },
-    "No LUTs imported": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucune LUT importée"
-          }
-        }
-      }
-    },
     "No places yet — photos with a location appear here as analysis runs.": {
       "extractionState": "stale",
       "localizations": {
@@ -6511,16 +6121,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Aucun préréglage"
-          }
-        }
-      }
-    },
-    "No Rating": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucune note"
           }
         }
       }
@@ -6543,6 +6143,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Aucune étiquette"
+          }
+        }
+      }
+    },
+    "No. Muse reads your files where they live and never writes over them. Photo edits are stored as instructions, not baked into the file, so the original is always intact. Deleting means moving to the Trash, and it's undoable.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non. Muse lit vos fichiers là où ils se trouvent et ne les écrase jamais. Les retouches sont enregistrées sous forme d'instructions, et non intégrées au fichier : l'original reste toujours intact. Supprimer signifie mettre à la corbeille, et c'est annulable."
           }
         }
       }
@@ -6578,6 +6188,16 @@
         }
       }
     },
+    "Not Now": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pas maintenant"
+          }
+        }
+      }
+    },
     "Not downloaded": {
       "localizations": {
         "fr": {
@@ -6608,16 +6228,6 @@
         }
       }
     },
-    "Not Now": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pas maintenant"
-          }
-        }
-      }
-    },
     "Not signed in": {
       "localizations": {
         "fr": {
@@ -6638,12 +6248,12 @@
         }
       }
     },
-    "NOTE": {
+    "Not unless you ask. Muse collects nothing — no analytics, no telemetry, no accounts — and nothing about you or your files ever reaches its makers. Sharing a collection uploads to your own Google Drive, only when you press Publish, and only ever touches the files it created there.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "REMARQUE"
+            "value": "Pas sans votre accord. Muse ne collecte rien — aucune analyse, aucune télémétrie, aucun compte — et rien vous concernant, vous ou vos fichiers, ne parvient à ses créateurs. Le partage d'une collection téléverse vers votre propre Google Drive, uniquement lorsque vous appuyez sur Publier, et ne touche jamais que les fichiers qu'il y a créés."
           }
         }
       }
@@ -6678,6 +6288,16 @@
         }
       }
     },
+    "Nothing on disk changes — it just leaves the sidebar. Its index data is kept for 180 days, so re-adding it restores your tags, ratings and collections instantly, then it's cleaned up automatically.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rien ne change sur le disque — le dossier quitte simplement la barre latérale. Ses données d'index sont conservées 180 jours : le rajouter restaure instantanément vos tags, notes et collections, puis elles sont effacées automatiquement."
+          }
+        }
+      }
+    },
     "Nothing to export.": {
       "localizations": {
         "fr": {
@@ -6708,6 +6328,16 @@
         }
       }
     },
+    "OK": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        }
+      }
+    },
     "Ocean": {
       "localizations": {
         "fr": {
@@ -6718,32 +6348,12 @@
         }
       }
     },
-    "of the following rules": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "des règles suivantes"
-          }
-        }
-      }
-    },
     "Off": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Désactivé"
-          }
-        }
-      }
-    },
-    "OK": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "OK"
           }
         }
       }
@@ -6819,26 +6429,6 @@
         }
       }
     },
-    "Open a collection and use the share button in its header. Save to… lays the images out as a PDF at the paper size you pick, and Share sends that PDF on by AirDrop, Mail, or Messages. Share Drive Link signs you into your own Google Drive, uploads the images there, and creates a clean web page anyone can open in a browser — they can switch the background and print it to a PDF at any size. Muse asks Google for the narrowest permission, so it can only ever touch the files it creates in your Drive — never the rest of it — and the captions you type ride inside the link itself, not on any server. Nothing reaches Muse's makers: the Drive copy goes to your own Drive. Take a link down later from the View menu — Manage Drive Shares…. [Read exactly how a share link works.](https://muse-share.pages.dev/privacy#how-it-works)": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrez une collection et utilisez le bouton de partage de son en-tête. Enregistrer sous… dispose les images sous forme de PDF au format de papier que vous choisissez, et Partager transmet ce PDF par AirDrop, Mail ou Messages. Partager le lien Drive vous connecte à votre propre Google Drive, y téléverse les images et crée une page web soignée que tout le monde peut ouvrir dans un navigateur — chacun peut changer l'arrière-plan et l'imprimer en PDF au format de son choix. Muse demande à Google l'autorisation la plus restreinte : il ne peut accéder qu'aux fichiers qu'il crée dans votre Drive — jamais au reste — et les légendes que vous saisissez sont contenues dans le lien lui-même, pas sur un serveur. Rien ne parvient aux créateurs de Muse : la copie Drive va dans votre propre Drive. Retirez un lien plus tard depuis le menu Présentation — Gérer les partages Drive…. [Découvrez précisément comment fonctionne un lien de partage.](https://muse-share.pages.dev/privacy#how-it-works)"
-          }
-        }
-      }
-    },
-    "Open a specific folder in Muse.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrir un dossier spécifique dans Muse."
-          }
-        }
-      }
-    },
     "Open Folder": {
       "localizations": {
         "fr": {
@@ -6855,6 +6445,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ouvrir le dossier dans Muse"
+          }
+        }
+      }
+    },
+    "Open Link": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir le lien"
+          }
+        }
+      }
+    },
+    "Open With": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir avec"
+          }
+        }
+      }
+    },
+    "Open a collection and use the share button in its header. Save it as a PDF at the paper size you pick, or publish a web page through your own Google Drive that anyone can open in a browser. Every image is stripped of its metadata first, and take a link down anytime from View ▸ Manage Drive Shares…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrez une collection et utilisez le bouton de partage dans son en-tête. Enregistrez-la en PDF au format papier de votre choix, ou publiez via votre propre Google Drive une page web que n'importe qui peut ouvrir dans un navigateur. Chaque image est d'abord dépouillée de ses métadonnées, et vous pouvez retirer un lien à tout moment depuis Présentation ▸ Gérer les partages Drive…"
+          }
+        }
+      }
+    },
+    "Open a specific folder in Muse.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir un dossier spécifique dans Muse."
           }
         }
       }
@@ -6899,16 +6529,6 @@
         }
       }
     },
-    "Open Link": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrir le lien"
-          }
-        }
-      }
-    },
     "Open location in Google Maps": {
       "localizations": {
         "fr": {
@@ -6929,12 +6549,12 @@
         }
       }
     },
-    "Open source": {
+    "Open the Full Guide": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Open source"
+            "value": "Ouvrir le guide complet"
           }
         }
       }
@@ -6945,16 +6565,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ouvrir le lien de %@"
-          }
-        }
-      }
-    },
-    "Open With": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrir avec"
           }
         }
       }
@@ -7050,13 +6660,32 @@
         }
       }
     },
-    "Page intro": {
-      "extractionState": "stale",
+    "PDFs": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Intro de la page"
+            "value": "PDF"
+          }
+        }
+      }
+    },
+    "PNG": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PNG"
+          }
+        }
+      }
+    },
+    "PSD": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PSD"
           }
         }
       }
@@ -7067,6 +6696,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Titre de la page"
+          }
+        }
+      }
+    },
+    "Page intro": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intro de la page"
           }
         }
       }
@@ -7192,16 +6832,6 @@
         }
       }
     },
-    "PDFs": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "PDF"
-          }
-        }
-      }
-    },
     "People named in Google Photos": {
       "localizations": {
         "fr": {
@@ -7222,16 +6852,6 @@
         }
       }
     },
-    "pets": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "animaux"
-          }
-        }
-      }
-    },
     "Photo": {
       "localizations": {
         "fr": {
@@ -7242,12 +6862,12 @@
         }
       }
     },
-    "Photos that carry a location get a place name — city, region and country — worked out entirely on this Mac from a bundled list of towns and cities. Nothing is looked up online. Place names come from GeoNames (geonames.org), used under CC BY 4.0.": {
+    "Photos and RAW, PDFs, video, audio, fonts, 3D models, Markdown, code and plain text all open in place. Anything without a dedicated viewer falls back to Quick Look, and File ▸ Open With hands a file to another app.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les photos géolocalisées reçoivent un nom de lieu — ville, région et pays — déterminé entièrement sur ce Mac à partir d’une liste de villes intégrée. Aucune recherche en ligne. Les noms de lieux proviennent de GeoNames (geonames.org), sous licence CC BY 4.0."
+            "value": "Photos et RAW, PDF, vidéo, audio, polices, modèles 3D, Markdown, code et texte brut s'ouvrent directement. Tout ce qui n'a pas de visionneuse dédiée passe par Coup d'œil, et Fichier ▸ Ouvrir avec confie un fichier à une autre application."
           }
         }
       }
@@ -7338,16 +6958,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Prune"
-          }
-        }
-      }
-    },
-    "PNG": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "PNG"
           }
         }
       }
@@ -7502,16 +7112,6 @@
         }
       }
     },
-    "Privacy & retention": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Confidentialité et conservation"
-          }
-        }
-      }
-    },
     "Process: RAW decoder %@": {
       "localizations": {
         "fr": {
@@ -7538,16 +7138,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nom du projet"
-          }
-        }
-      }
-    },
-    "PSD": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "PSD"
           }
         }
       }
@@ -7602,16 +7192,6 @@
         }
       }
     },
-    "px": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "px"
-          }
-        }
-      }
-    },
     "Quality": {
       "localizations": {
         "fr": {
@@ -7652,12 +7232,22 @@
         }
       }
     },
-    "radius rule": {
+    "RATING": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "règle de rayon"
+            "value": "NOTE"
+          }
+        }
+      }
+    },
+    "RAW": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RAW"
           }
         }
       }
@@ -7743,16 +7333,6 @@
         }
       }
     },
-    "RATING": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "NOTE"
-          }
-        }
-      }
-    },
     "Rating removed": {
       "localizations": {
         "fr": {
@@ -7769,16 +7349,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Évaluations"
-          }
-        }
-      }
-    },
-    "RAW": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "RAW"
           }
         }
       }
@@ -7880,16 +7450,6 @@
         }
       }
     },
-    "red": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "rouge"
-          }
-        }
-      }
-    },
     "Red": {
       "localizations": {
         "fr": {
@@ -7940,22 +7500,22 @@
         }
       }
     },
-    "Regenerate tags in this view?": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Régénérer les étiquettes de cette vue ?"
-          }
-        }
-      }
-    },
     "Regenerate Tags…": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Régénérer les étiquettes…"
+          }
+        }
+      }
+    },
+    "Regenerate tags in this view?": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Régénérer les étiquettes de cette vue ?"
           }
         }
       }
@@ -8011,53 +7571,12 @@
         }
       }
     },
-    "Remove every edit from this photo": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer toutes les retouches de cette photo"
-          }
-        }
-      }
-    },
     "Remove Folder": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Retirer le dossier"
-          }
-        }
-      }
-    },
-    "Remove from Collection “%@”": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retirer de la collection « %@ »"
-          }
-        }
-      }
-    },
-    "Remove from filter": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retirer du filtre"
-          }
-        }
-      }
-    },
-    "Remove from Stack": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retirer de la pile"
           }
         }
       }
@@ -8073,22 +7592,22 @@
         }
       }
     },
-    "Remove rule": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer la règle"
-          }
-        }
-      }
-    },
     "Remove Selection from Collection": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Retirer la sélection de la collection"
+          }
+        }
+      }
+    },
+    "Remove Tag from Selection": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retirer l'étiquette de la sélection"
           }
         }
       }
@@ -8103,12 +7622,53 @@
         }
       }
     },
-    "Remove Tag from Selection": {
+    "Remove every edit from this photo": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Retirer l'étiquette de la sélection"
+            "value": "Supprimer toutes les retouches de cette photo"
+          }
+        }
+      }
+    },
+    "Remove from Collection “%@”": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retirer de la collection « %@ »"
+          }
+        }
+      }
+    },
+    "Remove from Stack": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retirer de la pile"
+          }
+        }
+      }
+    },
+    "Remove from filter": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retirer du filtre"
+          }
+        }
+      }
+    },
+    "Remove rule": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer la règle"
           }
         }
       }
@@ -8143,32 +7703,12 @@
         }
       }
     },
-    "rename": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "renommer"
-          }
-        }
-      }
-    },
     "Rename": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Renommer"
-          }
-        }
-      }
-    },
-    "Rename collection": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Renommer la collection"
           }
         }
       }
@@ -8253,22 +7793,12 @@
         }
       }
     },
-    "Rename…": {
+    "Rename collection": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Renommer…"
-          }
-        }
-      }
-    },
-    "Renames “%@” on every image in the library.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Renomme « %@ » sur toutes les images de la bibliothèque."
+            "value": "Renommer la collection"
           }
         }
       }
@@ -8304,12 +7834,22 @@
         }
       }
     },
-    "Reorder controls": {
+    "Renames “%@” on every image in the library.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Commandes de réorganisation"
+            "value": "Renomme « %@ » sur toutes les images de la bibliothèque."
+          }
+        }
+      }
+    },
+    "Rename…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renommer…"
           }
         }
       }
@@ -8320,6 +7860,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Réorganiser les modules"
+          }
+        }
+      }
+    },
+    "Reorder controls": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commandes de réorganisation"
           }
         }
       }
@@ -8364,34 +7914,12 @@
         }
       }
     },
-    "Reset all adjustments": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Réinitialiser tous les réglages"
-          }
-        }
-      }
-    },
     "Reset All Adjustments": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Réinitialiser tous les réglages"
-          }
-        }
-      }
-    },
-    "Reset all zones": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Réinitialiser toutes les zones"
           }
         }
       }
@@ -8477,6 +8005,38 @@
         }
       }
     },
+    "Reset Tone Zones": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réinitialiser les zones de tons"
+          }
+        }
+      }
+    },
+    "Reset all adjustments": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réinitialiser tous les réglages"
+          }
+        }
+      }
+    },
+    "Reset all zones": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réinitialiser toutes les zones"
+          }
+        }
+      }
+    },
     "Reset to Default": {
       "localizations": {
         "fr": {
@@ -8487,12 +8047,22 @@
         }
       }
     },
-    "Reset Tone Zones": {
+    "Restore Purchases": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Réinitialiser les zones de tons"
+            "value": "Restaurer les achats"
+          }
+        }
+      }
+    },
+    "Restore These Settings": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rétablir ces réglages"
           }
         }
       }
@@ -8517,27 +8087,7 @@
         }
       }
     },
-    "Restore Purchases": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Restaurer les achats"
-          }
-        }
-      }
-    },
     "Restore these settings": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rétablir ces réglages"
-          }
-        }
-      }
-    },
-    "Restore These Settings": {
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -8677,6 +8227,57 @@
         }
       }
     },
+    "SCOPES": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ANALYSEURS"
+          }
+        }
+      }
+    },
+    "SNAPSHOTS": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "INSTANTANÉS"
+          }
+        }
+      }
+    },
+    "SPLIT TONE": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VIRAGE PARTIEL"
+          }
+        }
+      }
+    },
+    "STYLES": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "STYLES"
+          }
+        }
+      }
+    },
+    "SVG": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SVG"
+          }
+        }
+      }
+    },
     "Same as original": {
       "localizations": {
         "fr": {
@@ -8713,6 +8314,47 @@
           "stringUnit": {
             "state": "translated",
             "value": "Enregistrer"
+          }
+        }
+      }
+    },
+    "Save Crop as Version": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrer le recadrage comme version"
+          }
+        }
+      }
+    },
+    "Save Settings as Preset…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrer les réglages comme préréglage…"
+          }
+        }
+      }
+    },
+    "Save Snapshot": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrer un instantané"
+          }
+        }
+      }
+    },
+    "Save Snapshot…": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrer un instantané…"
           }
         }
       }
@@ -8770,53 +8412,12 @@
         }
       }
     },
-    "Save Crop as Version": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enregistrer le recadrage comme version"
-          }
-        }
-      }
-    },
     "Save current adjustments as a preset": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Enregistrer les réglages actuels comme préréglage"
-          }
-        }
-      }
-    },
-    "Save Settings as Preset…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enregistrer les réglages comme préréglage…"
-          }
-        }
-      }
-    },
-    "Save Snapshot": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enregistrer un instantané"
-          }
-        }
-      }
-    },
-    "Save Snapshot…": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enregistrer un instantané…"
           }
         }
       }
@@ -8947,17 +8548,6 @@
         }
       }
     },
-    "SCOPES": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ANALYSEURS"
-          }
-        }
-      }
-    },
     "Scopes arrive in a later update.": {
       "extractionState": "stale",
       "localizations": {
@@ -8975,46 +8565,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Recherche"
-          }
-        }
-      }
-    },
-    "Search & sort": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recherche et tri"
-          }
-        }
-      }
-    },
-    "Search by name, tags, captions, and text found inside images. The magnifier menu scopes the search to the current folder or your whole library. Sort by date, name, size, color, or shape. The arrow beside the sort menu sets the direction and spells out what it means for whatever you're sorting by — newest or oldest first, largest or smallest, A→Z or Z→A.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recherchez par nom, tags, légendes et texte trouvé à l'intérieur des images. Le menu de la loupe limite la recherche au dossier courant ou à toute votre bibliothèque. Triez par date, nom, taille, couleur ou forme. La flèche à côté du menu de tri définit le sens et précise ce qu'il signifie pour le critère choisi — du plus récent ou du plus ancien, du plus grand ou du plus petit, de A→Z ou de Z→A."
-          }
-        }
-      }
-    },
-    "Search files, captions, and tags in Muse's indexed library.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recherche dans les fichiers, légendes et étiquettes de la bibliothèque indexée de Muse."
-          }
-        }
-      }
-    },
-    "Search files, tags, captions…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rechercher fichiers, étiquettes, légendes…"
           }
         }
       }
@@ -9039,6 +8589,26 @@
         }
       }
     },
+    "Search files, captions, and tags in Muse's indexed library.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recherche dans les fichiers, légendes et étiquettes de la bibliothèque indexée de Muse."
+          }
+        }
+      }
+    },
+    "Search files, tags, captions…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechercher fichiers, étiquettes, légendes…"
+          }
+        }
+      }
+    },
     "Search text": {
       "localizations": {
         "fr": {
@@ -9055,6 +8625,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "La recherche comprend le contenu de vos photos. Le modèle s’exécute entièrement sur ce Mac — aucune de vos recherches n’en sort jamais."
+          }
+        }
+      }
+    },
+    "Select Lightroom preset files. They're imported as Muse looks — approximated, and yours to adjust.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sélectionnez des fichiers de préréglages Lightroom. Ils sont importés comme rendus Muse — approximés, et à vous d’ajuster."
           }
         }
       }
@@ -9086,16 +8666,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sélectionnez une bibliothèque Eagle. Muse en copie les images vers un dossier de votre choix — la bibliothèque elle-même n’est jamais modifiée."
-          }
-        }
-      }
-    },
-    "Select Lightroom preset files. They're imported as Muse looks — approximated, and yours to adjust.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sélectionnez des fichiers de préréglages Lightroom. Ils sont importés comme rendus Muse — approximés, et à vous d’ajuster."
           }
         }
       }
@@ -9137,16 +8707,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Définir comme image de la pile"
-          }
-        }
-      }
-    },
-    "Set the grid density with the slider at the bottom right, and turn on file names under tiles in Settings. The palette button sets the background: Light, Dark, Auto (light by day, dark at night), or a custom color.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Réglez la densité de la grille avec le curseur en bas à droite, et activez les noms de fichiers sous les vignettes dans les Réglages. Le bouton palette définit l'arrière-plan : Clair, Sombre, Auto (clair le jour, sombre la nuit), ou une couleur personnalisée."
           }
         }
       }
@@ -9221,12 +8781,12 @@
         }
       }
     },
-    "Share an image from the viewer — AirDrop, Mail, Messages, or Save to Files. From Finder, right-click any file and choose Share → Muse to send it into your iCloud folder.": {
+    "Share Drive Link": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Partagez une image depuis le visualiseur — AirDrop, Mail, Messages ou Enregistrer dans Fichiers. Depuis le Finder, cliquez avec le bouton droit sur un fichier et choisissez Partager → Muse pour l'envoyer dans votre dossier iCloud."
+            "value": "Partager le lien Drive"
           }
         }
       }
@@ -9241,32 +8801,12 @@
         }
       }
     },
-    "Share Drive Link": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Partager le lien Drive"
-          }
-        }
-      }
-    },
     "Share, export, or open this photo": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Partager, exporter ou ouvrir cette photo"
-          }
-        }
-      }
-    },
-    "Share…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Partager…"
           }
         }
       }
@@ -9281,7 +8821,18 @@
         }
       }
     },
+    "Share…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partager…"
+          }
+        }
+      }
+    },
     "Sharing": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -9292,6 +8843,7 @@
       }
     },
     "Sharing a collection": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -9307,16 +8859,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Netteté"
-          }
-        }
-      }
-    },
-    "sharpest here": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "la plus nette ici"
           }
         }
       }
@@ -9341,16 +8883,6 @@
         }
       }
     },
-    "Shot at f/%@ — a thin focus plane; check the eyes.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pris à f/%@ — profondeur de champ très courte ; vérifiez les yeux."
-          }
-        }
-      }
-    },
     "Shot at f/%@ — a thin focus plane.": {
       "localizations": {
         "fr": {
@@ -9361,12 +8893,12 @@
         }
       }
     },
-    "Show announcements": {
+    "Shot at f/%@ — a thin focus plane; check the eyes.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Afficher les annonces"
+            "value": "Pris à f/%@ — profondeur de champ très courte ; vérifiez les yeux."
           }
         }
       }
@@ -9377,6 +8909,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "Afficher les collections dans la barre latérale"
+          }
+        }
+      }
+    },
+    "Show Library in the Sidebar": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher la bibliothèque dans la barre latérale"
+          }
+        }
+      }
+    },
+    "Show Photos": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher les photos"
+          }
+        }
+      }
+    },
+    "Show announcements": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher les annonces"
           }
         }
       }
@@ -9482,17 +9046,6 @@
         }
       }
     },
-    "Show Library in the Sidebar": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Afficher la bibliothèque dans la barre latérale"
-          }
-        }
-      }
-    },
     "Show note": {
       "localizations": {
         "fr": {
@@ -9520,17 +9073,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Afficher l’original"
-          }
-        }
-      }
-    },
-    "Show Photos": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Afficher les photos"
           }
         }
       }
@@ -9577,8 +9119,7 @@
         }
       }
     },
-    "Side by side": {
-      "extractionState": "stale",
+    "Side by Side": {
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -9588,7 +9129,8 @@
         }
       }
     },
-    "Side by Side": {
+    "Side by side": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -9618,6 +9160,16 @@
         }
       }
     },
+    "Sign Out": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se déconnecter"
+          }
+        }
+      }
+    },
     "Sign in to publish a collection as a shareable Drive web page. Sign out to switch to a different Google account.": {
       "extractionState": "stale",
       "localizations": {
@@ -9639,12 +9191,12 @@
         }
       }
     },
-    "Sign Out": {
+    "Signed in to Google": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Se déconnecter"
+            "value": "Connecté à Google"
           }
         }
       }
@@ -9659,32 +9211,12 @@
         }
       }
     },
-    "Signed in to Google": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connecté à Google"
-          }
-        }
-      }
-    },
     "Signing in to Google…": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Connexion à Google…"
-          }
-        }
-      }
-    },
-    "similar": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "similaire"
           }
         }
       }
@@ -9810,32 +9342,12 @@
         }
       }
     },
-    "SNAPSHOTS": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "INSTANTANÉS"
-          }
-        }
-      }
-    },
     "Social": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Réseaux sociaux"
-          }
-        }
-      }
-    },
-    "softer here": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "plus floue ici"
           }
         }
       }
@@ -9860,22 +9372,22 @@
         }
       }
     },
-    "Some files couldn't be moved to the Trash.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Certains fichiers n’ont pas pu être placés dans la corbeille."
-          }
-        }
-      }
-    },
     "Some LUTs Couldn’t Be Imported": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Certaines LUT n’ont pas pu être importées"
+          }
+        }
+      }
+    },
+    "Some files couldn't be moved to the Trash.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Certains fichiers n’ont pas pu être placés dans la corbeille."
           }
         }
       }
@@ -9896,6 +9408,27 @@
           "stringUnit": {
             "state": "translated",
             "value": "Trier"
+          }
+        }
+      }
+    },
+    "Sort Direction": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sens du tri"
+          }
+        }
+      }
+    },
+    "Sort Places": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trier les lieux"
           }
         }
       }
@@ -9921,16 +9454,6 @@
       }
     },
     "Sort direction": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sens du tri"
-          }
-        }
-      }
-    },
-    "Sort Direction": {
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -9970,17 +9493,6 @@
         }
       }
     },
-    "Sort Places": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Trier les lieux"
-          }
-        }
-      }
-    },
     "Sort: %@": {
       "localizations": {
         "fr": {
@@ -10011,8 +9523,7 @@
         }
       }
     },
-    "Split compare": {
-      "extractionState": "stale",
+    "Split Compare": {
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -10022,7 +9533,8 @@
         }
       }
     },
-    "Split Compare": {
+    "Split compare": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -10038,16 +9550,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Position de la séparation"
-          }
-        }
-      }
-    },
-    "SPLIT TONE": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "VIRAGE PARTIEL"
           }
         }
       }
@@ -10072,6 +9574,17 @@
         }
       }
     },
+    "Stack Selection": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empiler la sélection"
+          }
+        }
+      }
+    },
     "Stack of %lld photos": {
       "comment": "stack badge VoiceOver label",
       "extractionState": "stale",
@@ -10080,17 +9593,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pile de %lld photos"
-          }
-        }
-      }
-    },
-    "Stack Selection": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Empiler la sélection"
           }
         }
       }
@@ -10145,16 +9647,6 @@
         }
       }
     },
-    "STYLES": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "STYLES"
-          }
-        }
-      }
-    },
     "Subfolders": {
       "localizations": {
         "fr": {
@@ -10185,17 +9677,7 @@
         }
       }
     },
-    "SVG": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "SVG"
-          }
-        }
-      }
-    },
-    "Switch to these settings": {
+    "Switch to These Settings": {
       "extractionState": "stale",
       "localizations": {
         "fr": {
@@ -10206,7 +9688,7 @@
         }
       }
     },
-    "Switch to These Settings": {
+    "Switch to these settings": {
       "extractionState": "stale",
       "localizations": {
         "fr": {
@@ -10237,6 +9719,46 @@
         }
       }
     },
+    "TAGS": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ÉTIQUETTES"
+          }
+        }
+      }
+    },
+    "TIFF": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TIFF"
+          }
+        }
+      }
+    },
+    "TONE ZONES": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ZONES DE TONS"
+          }
+        }
+      }
+    },
+    "TOOLS": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OUTILS"
+          }
+        }
+      }
+    },
     "Tabloid (11 × 17 in)": {
       "localizations": {
         "fr": {
@@ -10247,22 +9769,22 @@
         }
       }
     },
-    "tag": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "étiquette"
-          }
-        }
-      }
-    },
     "Tag": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Étiquette"
+          }
+        }
+      }
+    },
+    "Tag Order": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ordre des étiquettes"
           }
         }
       }
@@ -10297,16 +9819,6 @@
         }
       }
     },
-    "Tag Order": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ordre des étiquettes"
-          }
-        }
-      }
-    },
     "Tag order: %@": {
       "localizations": {
         "fr": {
@@ -10327,12 +9839,12 @@
         }
       }
     },
-    "TAGS": {
+    "Tags %@.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "ÉTIQUETTES"
+            "value": "Ajoute une étiquette à %@."
           }
         }
       }
@@ -10344,16 +9856,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Étiquette « %@ »."
-          }
-        }
-      }
-    },
-    "Tags %@.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajoute une étiquette à %@."
           }
         }
       }
@@ -10399,16 +9901,6 @@
         }
       }
     },
-    "text": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "texte"
-          }
-        }
-      }
-    },
     "Texture": {
       "localizations": {
         "fr": {
@@ -10449,12 +9941,32 @@
         }
       }
     },
-    "The “%@” extension is kept.": {
+    "The Drive folder couldn’t be deleted — you may be offline or signed out. The share is still live; try again, or remove it from Google Drive directly.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "L’extension « %@ » est conservée."
+            "value": "Le dossier Drive n’a pas pu être supprimé — vous êtes peut-être hors ligne ou déconnecté. Le partage est toujours actif ; réessayez, ou supprimez-le directement depuis Google Drive."
+          }
+        }
+      }
+    },
+    "The LUT’s data is unchanged — only its name.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les données de la LUT sont inchangées — seul son nom l’est."
+          }
+        }
+      }
+    },
+    "The PDF couldn’t be prepared — some images may be unreadable — or the location couldn’t be written. Check the images and that the location is writable with enough free space.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le PDF n’a pas pu être préparé — certaines images sont peut-être illisibles — ou l’emplacement n’a pas pu être écrit. Vérifiez les images et que l’emplacement est accessible en écriture avec suffisamment d’espace libre."
           }
         }
       }
@@ -10465,16 +9977,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "La sauvegarde n’a pas pu être enregistrée. Vérifiez que l’emplacement est accessible en écriture et dispose de suffisamment d’espace libre, puis réessayez."
-          }
-        }
-      }
-    },
-    "The chip row shows the tags of the folder you're viewing. Click a chip to filter; hover for its count. Whatever tags are active appear in a bar beneath the chips that you can clear one at a time or all at once. Right-click a chip to rename or delete the tag everywhere. To tag an image, right-click it and choose New Tag… — the card completes against tags you already use, so you pick the one you have instead of making a near-duplicate, and it offers tags from images that look like this one. Your most-used tags sit right in that menu, and the viewer's Tags card does the same job. Coming from Lightroom, Bridge, or Capture One? File > Import Keywords & Ratings reads the keywords and stars already written into your files and turns them into Muse tags and ratings — files are only read, never modified, and a rating you set in Muse is never overwritten.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La rangée de pastilles affiche les tags du dossier que vous consultez. Cliquez sur une pastille pour filtrer ; survolez-la pour voir son décompte. Les tags actifs apparaissent dans une barre sous les pastilles que vous pouvez effacer un à un ou tous d'un coup. Cliquez avec le bouton droit sur une pastille pour renommer ou supprimer le tag partout. Pour taguer une image, cliquez dessus avec le bouton droit et choisissez Nouvelle étiquette… — la fiche complète ce que vous tapez à partir des tags que vous utilisez déjà, pour que vous choisissiez celui que vous avez plutôt que d'en créer un presque identique, et elle propose des tags issus d'images qui ressemblent à celle-ci. Vos tags les plus utilisés figurent directement dans ce menu, et la fiche Tags du visualiseur fait la même chose. Vous venez de Lightroom, Bridge ou Capture One ? Fichier > Importer les mots-clés et notes lit les mots-clés et les étoiles déjà écrits dans vos fichiers et les convertit en tags et notes Muse — les fichiers sont uniquement lus, jamais modifiés, et une note définie dans Muse n'est jamais écrasée."
           }
         }
       }
@@ -10515,16 +10017,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "La vérification du modèle téléchargé a échoué."
-          }
-        }
-      }
-    },
-    "The Drive folder couldn’t be deleted — you may be offline or signed out. The share is still live; try again, or remove it from Google Drive directly.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le dossier Drive n’a pas pu être supprimé — vous êtes peut-être hors ligne ou déconnecté. Le partage est toujours actif ; réessayez, ou supprimez-le directement depuis Google Drive."
           }
         }
       }
@@ -10580,32 +10072,12 @@
         }
       }
     },
-    "The LUT’s data is unchanged — only its name.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les données de la LUT sont inchangées — seul son nom l’est."
-          }
-        }
-      }
-    },
     "The model failed to load after install.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Le modèle n’a pas pu être chargé après l’installation."
-          }
-        }
-      }
-    },
-    "The PDF couldn’t be prepared — some images may be unreadable — or the location couldn’t be written. Check the images and that the location is writable with enough free space.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le PDF n’a pas pu être préparé — certaines images sont peut-être illisibles — ou l’emplacement n’a pas pu être écrit. Vérifiez les images et que l’emplacement est accessible en écriture avec suffisamment d’espace libre."
           }
         }
       }
@@ -10620,12 +10092,32 @@
         }
       }
     },
+    "The “%@” extension is kept.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’extension « %@ » est conservée."
+          }
+        }
+      }
+    },
     "These files carry color labels from another app. In Muse, colors describe what a photo LOOKS like, so labels are kept separate unless you say otherwise.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Ces fichiers portent des étiquettes de couleur provenant d’une autre app. Dans Muse, les couleurs décrivent l’ASPECT d’une photo ; les étiquettes sont donc conservées séparément, sauf indication contraire."
+          }
+        }
+      }
+    },
+    "This Folder": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce dossier"
           }
         }
       }
@@ -10646,16 +10138,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cette retouche utilise une LUT absente de ce Mac (%@). La photo reste non retouchée jusqu’à son importation."
-          }
-        }
-      }
-    },
-    "This Folder": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ce dossier"
           }
         }
       }
@@ -10710,16 +10192,6 @@
         }
       }
     },
-    "TIFF": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "TIFF"
-          }
-        }
-      }
-    },
     "Tint": {
       "localizations": {
         "fr": {
@@ -10751,16 +10223,6 @@
         }
       }
     },
-    "Tone curve": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Courbe des tons"
-          }
-        }
-      }
-    },
     "Tone Zones": {
       "extractionState": "stale",
       "localizations": {
@@ -10772,22 +10234,12 @@
         }
       }
     },
-    "TONE ZONES": {
+    "Tone curve": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "ZONES DE TONS"
-          }
-        }
-      }
-    },
-    "TOOLS": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "OUTILS"
+            "value": "Courbe des tons"
           }
         }
       }
@@ -10802,22 +10254,22 @@
         }
       }
     },
-    "Trial — %lld days left": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Essai — %lld jours restants"
-          }
-        }
-      }
-    },
     "Trial expired": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Essai expiré"
+          }
+        }
+      }
+    },
+    "Trial — %lld days left": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Essai — %lld jours restants"
           }
         }
       }
@@ -10902,22 +10354,22 @@
         }
       }
     },
-    "Unpublish — delete this share's Drive folder now": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dépublier — supprimer maintenant le dossier Drive de ce partage"
-          }
-        }
-      }
-    },
     "Unpublish the Drive share for %@": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Dépublier le partage Drive de %@"
+          }
+        }
+      }
+    },
+    "Unpublish — delete this share's Drive folder now": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dépublier — supprimer maintenant le dossier Drive de ce partage"
           }
         }
       }
@@ -10939,16 +10391,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mettre à jour"
-          }
-        }
-      }
-    },
-    "Update from This Photo": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mettre à jour depuis cette photo"
           }
         }
       }
@@ -10984,7 +10426,18 @@
         }
       }
     },
+    "Update from This Photo": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettre à jour depuis cette photo"
+          }
+        }
+      }
+    },
     "Updates": {
+      "extractionState": "stale",
       "localizations": {
         "fr": {
           "stringUnit": {
@@ -11091,16 +10544,6 @@
         }
       }
     },
-    "Viewing & selecting": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Affichage et sélection"
-          }
-        }
-      }
-    },
     "Vignette": {
       "localizations": {
         "fr": {
@@ -11131,6 +10574,17 @@
         }
       }
     },
+    "WHY IT LOOKS THIS WAY": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "POURQUOI ELLE REND AINSI"
+          }
+        }
+      }
+    },
     "Waiting for permission to read your Photos library…": {
       "localizations": {
         "fr": {
@@ -11151,12 +10605,32 @@
         }
       }
     },
-    "What Muse is": {
+    "What files can Muse open?": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce qu'est Muse"
+            "value": "Quels fichiers Muse peut-il ouvrir ?"
+          }
+        }
+      }
+    },
+    "What happens when I remove a folder?": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Que se passe-t-il quand je retire un dossier ?"
+          }
+        }
+      }
+    },
+    "Where do my tags, ratings and collections live?": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Où sont stockés mes tags, mes notes et mes collections ?"
           }
         }
       }
@@ -11211,17 +10685,6 @@
         }
       }
     },
-    "WHY IT LOOKS THIS WAY": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "POURQUOI ELLE REND AINSI"
-          }
-        }
-      }
-    },
     "Wide → tall": {
       "localizations": {
         "fr": {
@@ -11238,37 +10701,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Largeur"
-          }
-        }
-      }
-    },
-    "with": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "avec"
-          }
-        }
-      }
-    },
-    "within %lld days": {
-      "extractionState": "stale",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "depuis %lld jours"
-          }
-        }
-      }
-    },
-    "without": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "sans"
           }
         }
       }
@@ -11300,6 +10732,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Jaune"
+          }
+        }
+      }
+    },
+    "Yes — open a photo and switch to Edit. Tone, color, curves, crop, HSL, split toning, grain and LUTs, all non-destructive, with snapshots you can jump between. Export writes a new file and never overwrites an existing one.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oui — ouvrez une photo et passez en mode Retouche. Tonalité, couleur, courbes, recadrage, TSL, virage partiel, grain et LUT, le tout non destructif, avec des instantanés entre lesquels naviguer. L'exportation écrit un nouveau fichier et n'écrase jamais un fichier existant."
           }
         }
       }
@@ -11400,6 +10842,504 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zoom arrière"
+          }
+        }
+      }
+    },
+    "[Privacy](https://muse-photo.com/privacy) · [Terms](https://muse-photo.com/terms) · [Acknowledgements](https://muse-photo.com/acknowledgements)": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "[Confidentialité](https://muse-photo.com/privacy) · [Conditions](https://muse-photo.com/terms) · [Remerciements](https://muse-photo.com/acknowledgements)"
+          }
+        }
+      }
+    },
+    "and": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "et"
+          }
+        }
+      }
+    },
+    "blue": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bleu"
+          }
+        }
+      }
+    },
+    "camera": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "appareil"
+          }
+        }
+      }
+    },
+    "city or country": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ville ou pays"
+          }
+        }
+      }
+    },
+    "color": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "couleur"
+          }
+        }
+      }
+    },
+    "contains": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "contient"
+          }
+        }
+      }
+    },
+    "copy all": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tout copier"
+          }
+        }
+      }
+    },
+    "couldn't save": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "échec de l'enregistrement"
+          }
+        }
+      }
+    },
+    "create": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "créer"
+          }
+        }
+      }
+    },
+    "created": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "créé"
+          }
+        }
+      }
+    },
+    "e.g. Leslie-Ann Thomson ALDO MUAH 2025": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "p. ex. Leslie-Ann Thomson ALDO MUAH 2025"
+          }
+        }
+      }
+    },
+    "e.g. Sent by": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "p. ex. Envoyé par"
+          }
+        }
+      }
+    },
+    "e.g. The Project": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "p. ex. The Project"
+          }
+        }
+      }
+    },
+    "faces": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "visages"
+          }
+        }
+      }
+    },
+    "green": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "vert"
+          }
+        }
+      }
+    },
+    "has": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a"
+          }
+        }
+      }
+    },
+    "has no": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "n’a pas"
+          }
+        }
+      }
+    },
+    "iCloud isn't set up, so the folder isn't in the sidebar. It'll appear here when iCloud is available.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud n'est pas configuré, le dossier n'apparaît donc pas dans la barre latérale. Il s'affichera ici lorsque iCloud sera disponible."
+          }
+        }
+      }
+    },
+    "iCloud sync": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Synchronisation iCloud"
+          }
+        }
+      }
+    },
+    "in": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "en"
+          }
+        }
+      }
+    },
+    "in the middle of the frame": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "au centre de l’image"
+          }
+        }
+      }
+    },
+    "item": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "élément"
+          }
+        }
+      }
+    },
+    "items": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "éléments"
+          }
+        }
+      }
+    },
+    "kind": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "type"
+          }
+        }
+      }
+    },
+    "lens": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "objectif"
+          }
+        }
+      }
+    },
+    "modified": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "modifié"
+          }
+        }
+      }
+    },
+    "near": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "près de"
+          }
+        }
+      }
+    },
+    "near the bottom of the frame": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "vers le bas de l’image"
+          }
+        }
+      }
+    },
+    "near the top of the frame": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "vers le haut de l’image"
+          }
+        }
+      }
+    },
+    "of the following rules": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "des règles suivantes"
+          }
+        }
+      }
+    },
+    "pets": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "animaux"
+          }
+        }
+      }
+    },
+    "px": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "px"
+          }
+        }
+      }
+    },
+    "radius rule": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "règle de rayon"
+          }
+        }
+      }
+    },
+    "red": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "rouge"
+          }
+        }
+      }
+    },
+    "rename": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "renommer"
+          }
+        }
+      }
+    },
+    "sharpest here": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "la plus nette ici"
+          }
+        }
+      }
+    },
+    "similar": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "similaire"
+          }
+        }
+      }
+    },
+    "softer here": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "plus floue ici"
+          }
+        }
+      }
+    },
+    "tag": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "étiquette"
+          }
+        }
+      }
+    },
+    "text": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "texte"
+          }
+        }
+      }
+    },
+    "with": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "avec"
+          }
+        }
+      }
+    },
+    "within %lld days": {
+      "extractionState": "stale",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "depuis %lld jours"
+          }
+        }
+      }
+    },
+    "without": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sans"
+          }
+        }
+      }
+    },
+    "· %@": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "· %@"
+          }
+        }
+      }
+    },
+    "×": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "×"
+          }
+        }
+      }
+    },
+    "…or create a new one": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "…ou en créer une nouvelle"
+          }
+        }
+      }
+    },
+    "≤": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≤"
+          }
+        }
+      }
+    },
+    "≥": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≥"
           }
         }
       }

@@ -89,15 +89,17 @@
   </div>
 
   <!-- Static legal links. Plain <a> navigations (allowed under default-src
-       'none' — CSP restricts resource loads, not link clicks). Cloudflare Pages
-       serves privacy.html / terms.html at the clean /privacy and /terms paths.
+       'none' — CSP restricts resource loads, not link clicks). These point at
+       muse-photo.com, which is where the privacy policy and terms now live;
+       the local privacy.html / terms.html are redirect stubs kept only so
+       links already in the wild still land somewhere real.
        Hidden in print so they don't bleed into the recipient's PDF. -->
   <footer class="legal">
     <span id="expires" class="expires"></span>
     <span class="legal-links">
-      <a href="/privacy">Privacy</a>
+      <a href="https://muse-photo.com/privacy">Privacy</a>
       <span class="sep" aria-hidden="true">·</span>
-      <a href="/terms">Terms</a>
+      <a href="https://muse-photo.com/terms">Terms</a>
     </span>
   </footer>
 

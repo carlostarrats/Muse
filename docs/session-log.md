@@ -6,6 +6,74 @@ the durable rules + a compact index live in `CLAUDE.md`. Nothing here is
 load-bearing for a fresh session beyond what that index already surfaces;
 read an entry when you need the full "why" behind a specific change.
 
+### The ⓘ modal becomes "Muse FAQs"; the manual moves to muse-photo.com/info — 2026-08-04 (on `feat/next-157`)
+
+`InfoSheet` was seventeen sections of prose in a 600pt card — a manual in the one
+place nobody reads a manual — and it had gone stale without anyone noticing:
+it still described Muse as **open source under the MIT license**, still described
+Sparkle self-updates, and never mentioned the editor, export, import, HDR or
+semantic search. The MIT line was simply false; `LICENSE` reads "proprietary and
+confidential… All rights reserved".
+
+**The split.** What a user needs offline and right now stays in the app: a
+three-sentence intro plus eight collapsible questions. Everything else moved to a
+new documentation hub at **muse-photo.com/info** — 31 topics in 8 groups, a
+sticky tree, and a search box. The test for putting something back in the modal:
+would someone ask this in the first five minutes, with no network?
+
+**Content accuracy.** Every claim on the hub was grepped out of
+`Muse/Muse/`, not taken from a spec: the ~28 shortcuts and 7 menus from
+`MuseApp.swift`, the 13 token keys from `SearchToken.swift:151`, formats from
+`AssetKind`, export formats from `ExportFormat`, the 9 rule types from
+`SmartRule`, panes from `SettingsView`. Nothing about portfolio mode, Places,
+rediscovery, near-duplicate stacks, culling or the reference pane — all cut.
+
+**Legal pages moved domains.** `privacy.html` and `terms.html` lived on
+`muse-share.pages.dev` — the domain named after one optional feature — while
+being app-wide policy that the About modal linked to. Both now live on
+muse-photo.com; the originals became meta-refresh + canonical stubs, kept rather
+than deleted because those URLs shipped inside the app and sit in every share
+page's footer. **The privacy policy was also wrong, not just misplaced**: it said
+Muse touches the network in "only two cases" when there are four (updates, the
+Drive publish, `announcements.json`, the search-model download). A new
+`/acknowledgements` page carries the **GeoNames CC BY 4.0** attribution, which is
+legally required and whose only home had been the About section being deleted.
+
+**Two things the layout work taught.**
+
+1. The presenter sizes a card to its content (`ModalPresenter.card`), so every
+   expand/collapse resized *and re-centred* the modal under the cursor. `FAQRow`'s
+   list is pinned to a fixed height and scrolls internally; because the card's
+   total height is now constant and under the window cap, the presenter's own
+   scroller stays disabled and there is no nested scrolling. The footer lives
+   *inside* that scroller — pinned, an answer opening near the bottom slid under
+   the button and looked truncated.
+2. A hover wash that bleeds past its container with negative padding gets its
+   corners sheared off by the scroller's clip, so a `RoundedRectangle` renders as
+   a square band. Keep the shape inside the bounds and inset the text instead.
+   `FAQRow.indent` / `FAQRow.inset` are named constants with the wash derived
+   from them, because the first version hardcoded the same 8 in two places and
+   they drifted.
+
+Also: `NSHumanReadableCopyright` was empty in all four build configurations, so
+the native About panel showed no copyright at all. Set to
+"Copyright © 2026 Carlos Tarrats. All rights reserved." The modal is retitled
+**Muse FAQs** (toolbar label, tooltip and VoiceOver label too) because the app
+menu already has a native "About Muse" and two different things shared a name.
+
+**Process notes, recorded because they cost the owner time.** Four separate
+rounds were spent undoing design decisions that were invented rather than
+inherited: Instrument Serif for headings (a `--serif` token declared in
+`:root` that `styles.css` applies **zero** times — the site sets everything in
+Bagel Fat One), a dark-mode scheme nobody asked for on a deliberately flat-white
+site, a restyled header that stripped the glass pills and shrank the logo, and a
+centred legal-page column that sat 164px right of every other page. The rule
+this leaves: on an existing site, **inherit the chrome and verify a token is
+actually applied before using it.** Separately, several rounds were wasted
+judging *stale builds* — rebuilding without relaunching. Relaunch and check the
+running process's start time against the dylib's mtime before saying anything
+about what is on screen.
+
 ### Share form simplified; the info column stops slicing its last card — 2026-08-04 (on `feat/next-156`)
 
 Three owner-driven UI changes, all small, one of which had a real cause worth
