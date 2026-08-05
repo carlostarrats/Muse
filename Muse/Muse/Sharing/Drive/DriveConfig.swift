@@ -22,7 +22,13 @@ enum DriveConfig {
 
     /// Cloudflare Pages deployment serving web/share/index.html. The manifest
     /// rides the URL fragment, so the page link is `<shareBaseURL>#<payload>`.
-    nonisolated static let shareBaseURL = "https://muse-share.pages.dev"
+    ///
+    /// Changing this only affects links minted from here on. Every link already
+    /// sent is `https://muse-share.pages.dev/#…`, and it keeps working because
+    /// Cloudflare serves a project's `.pages.dev` subdomain alongside any custom
+    /// domain — so **the muse-share Pages project must never be deleted**, or
+    /// every share anyone has ever sent dies with it.
+    nonisolated static let shareBaseURL = "https://share.muse-photo.com"
 
     static let scope = "https://www.googleapis.com/auth/drive.file"
 
