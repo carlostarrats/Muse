@@ -21,6 +21,7 @@ struct ContentView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject private var googleAuth: GoogleOAuth
     @EnvironmentObject private var announcementStore: AnnouncementStore
+    @EnvironmentObject private var welcomeStore: WelcomeOnboardingStore
     @ObservedObject private var indexProgress = IndexProgress.shared
     @ObservedObject private var analyzePipeline = AnalyzePipeline.shared
     /// Why the bar might be sitting still — the pill says so in words.
@@ -40,6 +41,12 @@ struct ContentView: View {
     /// Tags from visually similar photos, for the Add Tag card's offer row.
     @State private var similarTags: [TagSuggest.Candidate] = []
     @State private var filterPopoverShown = false
+
+    private var effectiveModalPresented: Bool {
+        WelcomePresentationRules.effectiveModalPresented(
+            appModalPresented: appState.modalPresented,
+            welcomePresented: welcomeStore.isPresented)
+    }
 
     /// Close whichever modal is up. Only one is ever presented at a time, so
     /// this is a deterministic sweep rather than a real stack.
@@ -80,9 +87,10 @@ struct ContentView: View {
     /// arrow keys) doing nothing at all while it is open. Specs 03/04/07 added
     /// five flags to `modalPresented` and none of them here.
     private func dismissTopModal() {
-        // Confirms/errors first: they're presented outermost, so one raised
-        // from inside another card (a delete confirm over Duplicates) is the
-        // one on top — Escape has to peel it before its host.
+        // Peel in visual stacking order. Welcome is attached outermost so it
+        // comes first; confirms/errors raised by another card precede their
+        // host for the same reason.
+        if welcomeStore.isPresented { welcomeStore.dismiss(); return }
         if let a = announcementStore.pending { announcementStore.dismiss(a.id); return }
         if appState.alertRequest != nil { appState.alertRequest = nil; return }
         if !appState.moveFailureNames.isEmpty { appState.moveFailureNames = []; return }
@@ -419,6 +427,12 @@ struct ContentView: View {
             .onChange(of: announcementStore.pending) { _, pending in
                 appState.announcementPresented = pending != nil
             }
+            // Kept in its own modifier because this shell's modal chain is at
+            // Swift's type-check limit (same pattern as editorCustomizeModal).
+            .welcomeOnboardingModal(store: welcomeStore,
+                                    palette: appState.moodPalette) { presented in
+                appState.welcomeOnboardingPresented = presented
+            }
             .environment(\.theme, Theme.resolve(palette: appState.moodPalette))
             // Transparent title bar so the sidebar card flows continuously up
             // to the top and curves with the window corner (Lineform-style).
@@ -579,7 +593,7 @@ struct ContentView: View {
                     isSearchActive: appState.isSearchActive,
                     queryIsEmpty: appState.searchQuery.isEmpty && searchText.isEmpty)
                 switch EscapeResolver.action(
-                    modalPresented: appState.modalPresented,
+                    modalPresented: effectiveModalPresented,
                     editorReorderActive: editorWorkspace.reorderMode,
                     hasSelectedFile: selected != nil,
                     selectedFileIsHero: isHero,

@@ -48,6 +48,9 @@ enum AppSettings {
     /// The one-time "Smarter Search" offer has been shown. Set on ANY dismissal
     /// — declining once must never nag again.
     static let clipOfferSeenKey = "clipOfferSeen"
+    /// Versioned completion flag for the first-run welcome. A new onboarding
+    /// flow can deliberately use a new key without reviving an older one.
+    static let welcomeOnboardingSeenKey = "welcomeOnboardingSeen1"
     static let announcementsEnabledKey = "announcementsEnabled"
     /// Remembered color-label mapping choices, keyed by the RAW source value.
     /// A JSON blob of `[String: LabelMapping.Choice]`.

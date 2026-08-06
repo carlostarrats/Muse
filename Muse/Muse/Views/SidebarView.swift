@@ -600,12 +600,10 @@ struct SidebarView: View {
 
     // MARK: - Bottom bar
 
-    /// One "Add Folder" pill when off (or on first run, before any folder
-    /// exists — a collection with nothing behind it is a dead end, so Add
-    /// Collection isn't offered yet); a single "+ Add New" MENU pill (Add
-    /// Folder / Add Collection) once the Collections section is shown AND a
-    /// folder exists. The menu replaced two side-by-side pills, which had to
-    /// split the sidebar's 220pt minimum and truncate both labels.
+    /// Hide the sidebar action while the main library is showing its add-folder
+    /// empty state; two add buttons for the same first step are distracting.
+    /// Once content exists, show the normal Add New menu (or the folder-only
+    /// pill when Collections are disabled).
     @ViewBuilder private var bottomBar: some View {
         // NO analysis-progress row here. Spec 06 put an "N of M analyzed" line
         // with a pause/resume toggle above the create pill; the owner removed it
@@ -613,21 +611,18 @@ struct SidebarView: View {
         // work reporting on itself there is not this app's UI. The same readout
         // and toggle still live in Settings, which is where they belong.
         //
-        // Offer "Add Collection" only when a real folder holds reachable images to
-        // collect; first run / empty library gets just "Add Folder" (the real next
-        // step — a collection with nothing behind it is a dead end), matching the
-        // content-gated COLLECTIONS section above (both a root AND content).
-        if showCollectionsInSidebar && !appState.rootNodes.isEmpty
-            && collectionsEngine.hasReachableContent {
-            AddNewMenuButton(
-                addFolder: { appState.pickAndAddRoot() },
-                addCollection: { appState.requestNewCollection() })
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-        } else {
-            AddFolderPillButton { appState.pickAndAddRoot() }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+        if !appState.rootNodes.isEmpty && collectionsEngine.hasReachableContent {
+            if showCollectionsInSidebar {
+                AddNewMenuButton(
+                    addFolder: { appState.pickAndAddRoot() },
+                    addCollection: { appState.requestNewCollection() })
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+            } else {
+                AddFolderPillButton { appState.pickAndAddRoot() }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+            }
         }
     }
 

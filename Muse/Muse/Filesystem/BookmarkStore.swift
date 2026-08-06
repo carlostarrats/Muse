@@ -21,6 +21,14 @@ final class BookmarkStore: ObservableObject {
     private var accessedURLs: [UUID: URL] = [:]
 
     init() {
+        #if DEBUG
+        // Volatile first-run preview/test seam. It never deletes or rewrites
+        // the user's real saved roots; this store simply starts empty.
+        if WelcomeDefaultsSuiteArgument.usesEmptyStoredFolders(
+                in: ProcessInfo.processInfo.arguments) {
+            return
+        }
+        #endif
         load()
     }
 

@@ -897,6 +897,7 @@ struct GridView: View {
                 AddFolderPillButton { appState.pickAndAddRoot() }
                     .fixedSize()
             }
+            .offset(y: -20)
             // `.padding` must come BEFORE `.frame(minHeight:)`, not after —
             // padding applied after adds its own inset on TOP of the already-
             // viewport-tall frame (80pt total, 40 top + 40 bottom), so the
@@ -907,6 +908,21 @@ struct GridView: View {
             // minHeight is what actually determines the total size.
             .padding(40)
             .frame(maxWidth: .infinity, minHeight: viewportHeight)
+            .background(alignment: .bottom) {
+                Image("MuseEmptyStateLogo")
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .foregroundStyle(appState.moodPalette.scheme == .dark
+                                     ? Color.white.opacity(0.03)
+                                     : Color.black.opacity(0.025))
+                    .frame(maxWidth: .infinity)
+                    .scaleEffect(1.02, anchor: .bottomLeading)
+                    .offset(y: 60)
+                    .accessibilityHidden(true)
+                    .allowsHitTesting(false)
+            }
+            .clipped()
         }
     }
 }

@@ -567,6 +567,7 @@ final class AppState: ObservableObject {
             || newSubfolderRequest != nil || folderRenameRequest != nil
             || tagRenameRequest != nil
             || announcementPresented
+            || welcomeOnboardingPresented
             || editorWorkspaceModalShown
             || clipOfferShown
             || editPromptRequest != nil || openWithForkRequest != nil
@@ -600,6 +601,11 @@ final class AppState: ObservableObject {
     /// body that reads `modalPresented` is already re-evaluating when this
     /// changes. `ContentView` is the only writer.
     var announcementPresented = false
+
+    /// Mirror of `WelcomeOnboardingStore.isPresented` for the shell's keyboard
+    /// gate. Deliberately not published: ContentView observes the owning store
+    /// directly and is the only writer, matching `announcementPresented`.
+    var welcomeOnboardingPresented = false
 
     /// Mirror of `EditorWorkspaceStore.customizeShown`, so the key-catcher gate
     /// and the Escape resolver see the Customize card like any other modal.

@@ -6,6 +6,51 @@ the durable rules + a compact index live in `CLAUDE.md`. Nothing here is
 load-bearing for a fresh session beyond what that index already surfaces;
 read an entry when you need the full "why" behind a specific change.
 
+### Welcome onboarding and empty-library guidance accepted — 2026-08-06 (on `feat/next-160`)
+
+Muse now has a three-page first-open card for the useful workflows hidden behind
+Smart Collections, right-click menus, and a collection's Share button. The copy
+stays deliberately basic: it names PDF/image export, portfolio publishing,
+Compare, Muse FAQs, and the Full Guide without turning first launch into a
+manual. Each page uses a detailed, animated native SwiftUI representation of
+the relevant Muse workflow rather than the rejected abstract illustrations.
+Only the incoming demonstration fades upward and in; copy and buttons switch
+immediately, hover changes tint without movement, and Reduce Motion holds each
+demonstration at a useful completed state. English and French ship together.
+
+The lifecycle is isolated in `WelcomeOnboardingStore`. An unseen user with no
+saved folder sees the card automatically; a saved user folder seeds the
+versioned preference without showing it. Every automatic dismissal marks it
+seen, while **Help ▸ Welcome to Muse** always opens a manual presentation that
+does not rewrite the preference. Automatic presentation skips the announcement
+fetch for that launch, rather than fetching an announcement behind the card.
+The Full Guide URL is shared with `InfoSheet` through `AppLinks.guide`.
+
+The empty library now has one Add Folder action: the duplicate sidebar action
+is hidden until the library has usable roots. The rejected arrow is gone. The
+user-supplied Muse wordmark sits behind the grid prompt only in the empty state,
+with a very low semantic tint, bottom/right clipping, no hit testing, and no
+accessibility exposure.
+
+The review loop removed stale prototype assets and localization keys, made the
+decorative logo ignore pointer input, added an explicit Full Guide focus ring,
+and fixed the new UI test's two platform assumptions: macOS may restore a test
+app with only its menu bar, and static text is published as a value rather than
+a label. The final drive test creates a standard window only when restoration
+provides none and asserts semantic onboarding/empty-library controls.
+
+Final evidence: Debug and universal Release builds succeeded; the focused
+lifecycle suite passed **16/16**; the full XCTest suite executed **2,206** with
+2 intentional skips and 0 failures; the separate Swift Testing smoke passed;
+the isolated first-launch/relaunch XCUITest passed **1/1**; and the invariant
+audit passed **21/21**. The French localization export completed and the
+onboarding entries are translated. The owner approved the final UI,
+demonstration motion, copy layout, and empty-state wordmark in the running app.
+
+Design: `docs/superpowers/specs/2026-08-05-welcome-onboarding-design.md`
+
+Plan: `docs/superpowers/plans/2026-08-05-welcome-onboarding.md`
+
 ### The ⓘ modal becomes "Muse FAQs"; the manual moves to muse-photo.com/info — 2026-08-04 (on `feat/next-157`)
 
 `InfoSheet` was seventeen sections of prose in a 600pt card — a manual in the one

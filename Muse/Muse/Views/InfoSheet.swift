@@ -29,9 +29,6 @@ import SwiftUI
 struct InfoSheet: View {
     @Binding var isPresented: Bool
 
-    /// The full guide. Also reachable from the site's header on every page.
-    private static let guideURL = URL(string: "https://muse-photo.com/info")!
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
@@ -131,7 +128,7 @@ struct InfoSheet: View {
                     HStack(spacing: 14) {
                         ModalButton(title: String(localized: "Open the Full Guide"),
                                     kind: .prominent) {
-                            NSWorkspace.shared.open(Self.guideURL)
+                            NSWorkspace.shared.open(AppLinks.guide)
                         }
                         // Markdown links inside a Text open in the default
                         // browser on their own — no button plumbing, and they

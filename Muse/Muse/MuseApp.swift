@@ -26,6 +26,10 @@ struct MuseApp: App {
     /// googleAuth above.
     @StateObject private var commerceStore = CommerceStore()
     @StateObject private var announcementStore = AnnouncementStore()
+    @StateObject private var welcomeStore: WelcomeOnboardingStore
+    /// Observed so Help ▸ Welcome to Muse disables itself while Compare owns
+    /// the window, rather than opening a content-column card underneath it.
+    @StateObject private var compareStore = CompareStore.shared
     /// Observed so the View menu's hide-UI item can title and enable itself
     /// from the editor's state. See `EditorChromeCommand`.
     ///
@@ -110,6 +114,21 @@ struct MuseApp: App {
         return appState.sidebarCollections.firstIndex { $0.collection.id == id }
     }
 
+    init() {
+        #if DEBUG
+        if let suiteName = WelcomeDefaultsSuiteArgument.suiteName(
+                in: ProcessInfo.processInfo.arguments),
+           let defaults = UserDefaults(suiteName: suiteName) {
+            _welcomeStore = StateObject(
+                wrappedValue: WelcomeOnboardingStore(defaults: defaults))
+        } else {
+            _welcomeStore = StateObject(wrappedValue: WelcomeOnboardingStore())
+        }
+        #else
+        _welcomeStore = StateObject(wrappedValue: WelcomeOnboardingStore())
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -122,8 +141,14 @@ struct MuseApp: App {
                 .environmentObject(googleAuth)
                 .environmentObject(commerceStore)
                 .environmentObject(announcementStore)
+                .environmentObject(welcomeStore)
                 .onAppear { appDelegate.appState = appState }
                 .task {
+                    // Decide before every other launch effect. An automatic
+                    // welcome is the only launch modal and skips the
+                    // announcement request entirely for this run.
+                    let welcomeEffects = welcomeStore.prepareForLaunch(
+                        hasStoredUserFolder: !appState.bookmarks.roots.isEmpty)
                     PhaseTrace.begin()
                     ThumbnailCache.shared.enforceDiskCap()
                     // Rendered export temps: bounded by age, not size. The
@@ -190,7 +215,9 @@ struct MuseApp: App {
                     }
                     // Announcements: one GET of a static file per launch,
                     // off-able in Settings (which disables the fetch itself).
-                    Task { await announcementStore.fetchIfNeeded() }
+                    if welcomeEffects.shouldFetchAnnouncements {
+                        Task { await announcementStore.fetchIfNeeded() }
+                    }
                     // Hard-delete any Drive shares past their expiry (no-op if
                     // not signed in or nothing is due).
                     await DriveExpirySweeper.sweep(auth: googleAuth)
@@ -654,39 +681,63 @@ struct MuseApp: App {
                 .disabled(appState.activeCollectionID == nil)
             }
 
-            // Menu-bar equivalent of the tile's Rating context menu so rating
-            // isn't mouse/right-click-only (keyboard + VoiceOver). Targets the
-            // current selection, mirroring "New Collection from Selection…".
-            // ⌘0 clears, ⌘1–⌘5 set (Apple Photos convention).
-            CommandMenu("Rating") {
-                Button {
-                    appState.setRating(nil, forSelectionFallback: "")
-                } label: {
-                    Label("No Rating", systemImage: "star.slash")
-                }
-                .keyboardShortcut("0", modifiers: .command)
-                .disabled(appState.selectedFiles.isEmpty)
-
-                Divider()
-
-                ForEach(1...StarRating.maxStars, id: \.self) { n in
-                    // The star run IS the label here — a text glyph, not an
-                    // icon — so these carry `star.fill` as their menu image.
-                    Button {
-                        appState.setRating(n, forSelectionFallback: "")
-                    } label: {
-                        Label(StarRating.label(for: n) ?? "", systemImage: "star.fill")
-                    }
-                    .keyboardShortcut(KeyEquivalent(Character("\(n)")), modifiers: .command)
-                    .disabled(appState.selectedFiles.isEmpty)
-                    .accessibilityLabel(Text(String(format: NSLocalizedString(
-                        "%lld-star rating",
-                        comment: "VoiceOver: star rating of a photo"), n)))
-                }
-            }
+            // Bundled into one Commands value to stay below the CommandsBuilder
+            // top-level arity limit while still placing each item in its native
+            // menu.
+            RatingAndWelcomeCommands(appState: appState,
+                                     welcomeStore: welcomeStore,
+                                     compareStore: compareStore)
         }
         // Settings is presented as an in-app modal sheet from ContentView
         // (see AppState.settingsShown), not the native Preferences window.
+    }
+}
+
+/// The Rating menu plus the welcome item in Help. Keeping these in one Commands
+/// value avoids growing MuseApp's already-wide top-level commands builder.
+private struct RatingAndWelcomeCommands: Commands {
+    @ObservedObject var appState: AppState
+    @ObservedObject var welcomeStore: WelcomeOnboardingStore
+    @ObservedObject var compareStore: CompareStore
+
+    var body: some Commands {
+        // Menu-bar equivalent of the tile's Rating context menu so rating isn't
+        // mouse/right-click-only (keyboard + VoiceOver). ⌘0 clears, ⌘1–⌘5 set.
+        CommandMenu("Rating") {
+            Button {
+                appState.setRating(nil, forSelectionFallback: "")
+            } label: {
+                Label("No Rating", systemImage: "star.slash")
+            }
+            .keyboardShortcut("0", modifiers: .command)
+            .disabled(appState.selectedFiles.isEmpty)
+
+            Divider()
+
+            ForEach(1...StarRating.maxStars, id: \.self) { n in
+                Button {
+                    appState.setRating(n, forSelectionFallback: "")
+                } label: {
+                    Label(StarRating.label(for: n) ?? "", systemImage: "star.fill")
+                }
+                .keyboardShortcut(KeyEquivalent(Character("\(n)")), modifiers: .command)
+                .disabled(appState.selectedFiles.isEmpty)
+                .accessibilityLabel(Text(String(format: NSLocalizedString(
+                    "%lld-star rating",
+                    comment: "VoiceOver: star rating of a photo"), n)))
+            }
+        }
+
+        CommandGroup(after: .help) {
+            Button("Welcome to Muse") {
+                welcomeStore.presentManually()
+            }
+            .disabled(!WelcomePresentationRules.canPresentManually(
+                appModalPresented: appState.modalPresented,
+                welcomePresented: welcomeStore.isPresented,
+                viewerPresented: appState.selectedFile != nil,
+                comparePresented: compareStore.isActive))
+        }
     }
 }
 
