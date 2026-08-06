@@ -181,6 +181,16 @@
         }
       }
     },
+    "%@, %lld images, created %@, never expires": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@, %2$lld images, créé le %3$@, n’expire jamais"
+          }
+        }
+      }
+    },
     "%@, %lld of %lld files reconnected": {
       "localizations": {
         "en": {
@@ -1819,6 +1829,16 @@
         }
       }
     },
+    "Choose the layout recipients see when they open this link": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choisissez la disposition que les destinataires voient à l’ouverture de ce lien"
+          }
+        }
+      }
+    },
     "Choose where the imported images should live.": {
       "localizations": {
         "fr": {
@@ -2463,6 +2483,16 @@
         }
       }
     },
+    "Couldn’t Change Layout": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de modifier la disposition"
+          }
+        }
+      }
+    },
     "Couldn’t Export the PDF": {
       "localizations": {
         "fr": {
@@ -2791,6 +2821,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Couleur par défaut"
+          }
+        }
+      }
+    },
+    "Default layout": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disposition par défaut"
           }
         }
       }
@@ -3306,6 +3346,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Arrière-plan de l’éditeur"
+          }
+        }
+      }
+    },
+    "Editorial": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Éditorial"
           }
         }
       }
@@ -4969,6 +5019,16 @@
         }
       }
     },
+    "Layout Changed": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disposition modifiée"
+          }
+        }
+      }
+    },
     "Leaf": {
       "localizations": {
         "fr": {
@@ -5779,6 +5839,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Muse n’a pas pu ajouter ce partage à votre liste — copiez le lien maintenant, sinon vous ne pourrez plus le gérer ni le dépublier depuis Muse."
+          }
+        }
+      }
+    },
+    "Muse couldn't confirm whether the portfolio update finished. The existing link is still safe; refresh it before trying again.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muse n’a pas pu confirmer si la mise à jour du portfolio s’est terminée. Le lien existant reste sûr ; actualisez-le avant de réessayer."
           }
         }
       }
@@ -7168,6 +7238,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Publier le portfolio…"
+          }
+        }
+      }
+    },
+    "Publish this share again to make its default layout editable": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publiez de nouveau ce partage pour pouvoir modifier sa disposition par défaut"
           }
         }
       }
@@ -10001,6 +10081,16 @@
         }
       }
     },
+    "The default layout couldn’t be updated. The share is still live and unchanged; check your connection and try again.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La disposition par défaut n’a pas pu être mise à jour. Le partage est toujours actif et inchangé ; vérifiez votre connexion et réessayez."
+          }
+        }
+      }
+    },
     "The downloaded model couldn't be unpacked.": {
       "localizations": {
         "fr": {
@@ -10082,12 +10172,42 @@
         }
       }
     },
+    "The portfolio was updated, but Muse couldn't save its latest details to the local Manage Shares list.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le portfolio a été mis à jour, mais Muse n’a pas pu enregistrer ses dernières informations dans la liste locale Gérer les partages."
+          }
+        }
+      }
+    },
+    "The portfolio was updated, but its default layout couldn't be changed. You can try again in Manage Drive Shares.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le portfolio a été mis à jour, mais sa disposition par défaut n’a pas pu être modifiée. Vous pouvez réessayer dans Gérer les partages Drive."
+          }
+        }
+      }
+    },
     "The quick brown fox jumps over the lazy dog.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Portez ce vieux whisky au juge blond qui fume."
+          }
+        }
+      }
+    },
+    "The share’s default layout changed, but Muse couldn’t save that choice to its local Manage Shares list.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La disposition par défaut du partage a été modifiée, mais Muse n’a pas pu enregistrer ce choix dans sa liste locale Gérer les partages."
           }
         }
       }

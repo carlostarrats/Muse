@@ -2,9 +2,9 @@
 //  DriveShareManifest.swift
 //  Muse
 //
-//  The entire personalization payload for a share, baked (base64url JSON) into
-//  the page URL's FRAGMENT so it never reaches the host. Mirrors what share.js
-//  decodes. Pure value type.
+//  The complete share payload uploaded as manifest.json in the user's Drive.
+//  New links put only that file's id in the URL fragment; the legacy
+//  base64url/DEFLATE codec remains so links made by older builds still render.
 //
 
 import Foundation
@@ -26,11 +26,17 @@ struct DriveShareManifest: Codable, Equatable {
     var layout: String? = nil        // key "y" — DriveShareLayout.rawValue; absent = grid
     var bodyText: String? = nil      // key "s" — intro paragraph (essay header / portfolio intro)
     var manifestID: String? = nil    // key "m" — Drive file id of the live manifest.json (portfolio only)
+    // A tiny, live layout.json lets the sender change ONLY the page's default
+    // layout after sharing. Images/text/expiry remain in manifest.json;
+    // recipients can still switch locally without writing anything back.
+    var layoutSettingsID: String? = nil // key "u" — Drive file id of layout.json
+    var kind: String? = nil          // key "k" — "portfolio" only; absent = expiring share
 
     enum CodingKeys: String, CodingKey {
         case intro = "i", label = "l", name = "n", date = "d",
              expiry = "e", imageIDs = "g", filenames = "f", pdfID = "p",
-             layout = "y", bodyText = "s", manifestID = "m"
+             layout = "y", bodyText = "s", manifestID = "m",
+             layoutSettingsID = "u", kind = "k"
     }
 
     /// App-side caps mirroring the page's own validator (share.js MAX_FIELD /
@@ -75,9 +81,16 @@ struct DriveShareManifest: Codable, Equatable {
 
     func pageURL(base: String) -> String { "\(base)#\(encoded())" }
 
+    /// New links are deliberately short: `r:` plus the public manifest.json
+    /// Drive id rides the fragment. The page fetches and validates that manifest; the
+    /// file remains a child of the share folder, so Unpublish removes it with
+    /// the images and layout.json in one folder deletion.
+    static func remotePageURL(manifestID: String, base: String) -> String {
+        "\(base)#r:\(manifestID)"
+    }
+
     /// The plain, uncompressed, un-base64'd JSON encoding — the bytes uploaded
-    /// as `manifest.json` for a portfolio share. The fragment keeps using
-    /// `encoded()` (base64url + optional DEFLATE) untouched.
+    /// as `manifest.json` for every new share.
     func jsonData() -> Data {
         (try? JSONEncoder().encode(self)) ?? Data()
     }
@@ -112,5 +125,33 @@ struct DriveShareManifest: Codable, Equatable {
 /// contract; pinned by tests on both sides). An unknown/absent value renders
 /// grid on the page, never a rejection.
 enum DriveShareLayout: String, CaseIterable, Codable {
-    case grid, sheet, essay
+    case grid, sheet, essay, stack
+
+    /// The two sender/viewer choices. `sheet` and `essay` stay decodable so a
+    /// link made by an intermediate development build still renders safely.
+    static let selectable: [DriveShareLayout] = [.grid, .stack]
+
+    var displayName: String {
+        switch self {
+        case .grid: return String(localized: "Grid")
+        case .stack: return String(localized: "Editorial")
+        case .sheet: return String(localized: "Contact Sheet")
+        case .essay: return String(localized: "Essay")
+        }
+    }
+
+}
+
+/// The complete contents of the public layout.json sidecar. Deliberately tiny:
+/// Manage Shares can change presentation without touching the image manifest.
+struct DriveShareLayoutSettings: Codable, Equatable {
+    var layout: String
+
+    enum CodingKeys: String, CodingKey { case layout = "y" }
+
+    init(_ layout: DriveShareLayout) { self.layout = layout.rawValue }
+
+    func jsonData() -> Data {
+        (try? JSONEncoder().encode(self)) ?? Data()
+    }
 }

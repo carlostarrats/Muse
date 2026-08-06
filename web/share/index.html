@@ -11,7 +11,7 @@
        (which also sets frame-ancestors / Referrer-Policy, not expressible in a
        meta tag). This mirrors it so the page is never left with NO CSP if it's
        ever served somewhere _headers doesn't apply (preview host, renamed file). -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' https://drive.google.com https://*.googleusercontent.com; script-src 'self'; style-src 'self'; connect-src https://www.googleapis.com; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' https://drive.google.com https://*.googleusercontent.com; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
   <title>Shared Collection</title>
   <!-- Favicons (same set as the marketing site). favicon.ico at the root is
        what link-unfurlers (Slack/iMessage) probe — without it they get the
@@ -39,8 +39,8 @@
 </head>
 <body>
   <!-- All text nodes are filled by share.js via textContent (never innerHTML).
-       The manifest rides the URL fragment, so nothing personal reaches the
-       server. data-state drives which UI shows (live / expired / unavailable). -->
+       The URL fragment carries only a public Drive manifest id, so nothing
+       personal reaches this host. data-state drives the visible UI. -->
   <div id="app" data-state="loading">
     <header class="bar">
       <div class="sig">
@@ -54,6 +54,13 @@
           <button class="dot" type="button" data-bg="light" aria-label="White background"></button>
           <button class="dot" type="button" data-bg="grey" aria-label="Grey background"></button>
           <button class="dot" type="button" data-bg="dark" aria-label="Dark background"></button>
+        </div>
+
+        <!-- The sender chooses the initial/default layout; this screen-only
+             control lets each recipient switch locally without changing it. -->
+        <div class="layout-switcher" role="group" aria-label="Page layout">
+          <button type="button" data-layout-choice="grid" aria-pressed="false">Grid</button>
+          <button type="button" data-layout-choice="stack" aria-pressed="false">Editorial</button>
         </div>
       </div>
 

@@ -3005,3 +3005,41 @@ this section wins.
   against extractor output** — a key that doesn't match falls back to the English source
   at runtime, so this degrades gracefully, but fix `ClipVectors` before trusting the
   French build.
+
+## Share links and editable layouts — current amendment (2026-08-05)
+
+This section supersedes the Spec 07 share-fragment and portfolio-fetch snapshots
+above; old inline links remain supported but are no longer minted.
+
+- Every new classic share and portfolio uploads `manifest.json` plus `layout.json`
+  beside the images, then mints `https://share.muse-photo.com#r:<manifest-id>`.
+  The URL contains no names, image ids, or inline snapshot. Classic manifests keep
+  a required strict `e`; new portfolios identify themselves with `k: "portfolio"`.
+  Optional wire fields are now `y`/`s`/`m`/`u`/`k`; `m` is legacy-only and fetched
+  copies have it stripped to prohibit chaining.
+- The page reads the public JSON through the credential-free, non-storing Pages
+  Function at `/drive-json/<id>`: 512 KB response cap, six-second timeout, strict
+  Drive-id/schema validation and no API key. `layout.json` is capped to 4 KB and may
+  contain only `grid` or `stack`. Its per-load numeric revision is forwarded to the
+  upstream Drive URL so a sender's PATCH is visible after refresh.
+- Grid and Editorial (`stack`) are the only sender/viewer choices. `sheet` and
+  `essay` remain decodable for intermediate-build links. The sender's choice is the
+  initial default; Manage Shares PATCHes only `layout.json`, while a recipient's tab
+  switch is local. Editorial's desktop phrase is normal-left + small-right,
+  small-left + normal-right, then centered; mobile wraps every frame to its own row.
+- App-side text caps use UTF-16 code units to match JavaScript `String.length`.
+  Classic expiry is day-inclusive in both implementations: the page and Muse-local
+  folder sweep expire at the start of the following local day, and impossible dates
+  fail validation. Portfolios retain the non-optional 2100 sentinel for backward
+  decoding and are also excluded from `DriveExpiry` explicitly.
+- Portfolio update order is upload → manifest PATCH → layout PATCH → paginated old-
+  child sweep. Cancellation before the manifest PATCH rolls back new files; once the
+  PATCH is in flight, an error is outcome-ambiguous and both image sets are retained
+  so a committed manifest can never point at rolled-back files. Layout, sweep, and
+  local-record failures after a confirmed swap are non-fatal, specifically reported,
+  and retryable. Child listing follows `nextPageToken` because 1,000 images plus two
+  sidecars exceed Drive's one-page maximum.
+- Drive ids loaded from `driveShares.json` are validated before REST path/query use,
+  and Manage Shares opens only the exact HTTPS `share.muse-photo.com` origin (not a
+  string-prefix lookalike). Deleting/expiry removes the whole share folder, including
+  images and both JSON targets.

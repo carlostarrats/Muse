@@ -63,10 +63,10 @@ final class DriveMultipartTests: XCTestCase {
 
     // MARK: portfolio (Spec 07)
 
-    // uploadManifest is the ONLY non-image upload path. Its mime is pinned
-    // inside the implementation rather than taken from the caller, so it can
-    // never become a bypass around uploadFile's metadata strip — this pins the
-    // body shape that pinning produces.
+    // JSON sidecars are the ONLY non-image upload path. Their mime is pinned
+    // inside the implementation rather than taken from the caller, so neither
+    // manifest.json nor layout.json can become a bypass around uploadFile's
+    // metadata strip — this pins the body shape that pinning produces.
     @MainActor
     func testManifestUploadBodyUsesJSONMimeAndCorrectMetadata() {
         let json = Data(#"{"i":"x"}"#.utf8)
@@ -81,17 +81,29 @@ final class DriveMultipartTests: XCTestCase {
         XCTAssertTrue(DriveClient.isValidMIME("application/json"))
     }
 
-    // listChildren builds its GET via URLComponents; a folder id with characters
-    // that must be escaped can't be allowed to break the query.
-    func testListChildrenQueryIsWellFormedAndEscaped() throws {
-        var comps = try XCTUnwrap(URLComponents(string: "https://www.googleapis.com/drive/v3/files"))
-        comps.queryItems = [
-            URLQueryItem(name: "q", value: "'abc DEF-123' in parents and trashed=false"),
-            URLQueryItem(name: "fields", value: "files(id,name)"),
-            URLQueryItem(name: "pageSize", value: "1000"),
-        ]
-        let url = try XCTUnwrap(comps.url)
-        XCTAssertTrue(url.absoluteString.contains("pageSize=1000"))
+    // Test the production URL builder, including the pagination fields required
+    // now that 1,000 images + two JSON sidecars exceed one Drive result page.
+    @MainActor
+    func testListChildrenQueryIsWellFormedEscapedAndPaginated() throws {
+        let url = try DriveClient.listChildrenURL(
+            of: "abcDEF_12345678901234567890", pageToken: "next page/token")
+        let comps = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        let items = Dictionary(uniqueKeysWithValues:
+            (comps.queryItems ?? []).map { ($0.name, $0.value ?? "") })
+        XCTAssertEqual(items["q"], "'abcDEF_12345678901234567890' in parents and trashed=false")
+        XCTAssertEqual(items["fields"], "nextPageToken,files(id,name)")
+        XCTAssertEqual(items["pageSize"], "1000")
+        XCTAssertEqual(items["pageToken"], "next page/token")
         XCTAssertFalse(url.absoluteString.contains(" "), "spaces must be percent-encoded")
+    }
+
+    @MainActor
+    func testDriveFileIDValidationRejectsPathAndQueryInjection() {
+        XCTAssertTrue(DriveClient.isValidFileID("abcDEF_12345678901234567890"))
+        for id in ["short", "abcDEF_123456789012345/../../x",
+                   "abcDEF_123456789012345' or '1'='1", "abc DEF_12345678901234567890"] {
+            XCTAssertFalse(DriveClient.isValidFileID(id), id)
+            XCTAssertThrowsError(try DriveClient.listChildrenURL(of: id))
+        }
     }
 }

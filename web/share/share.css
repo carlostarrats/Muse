@@ -186,7 +186,7 @@ html, body {
    Three page layouts off ONE `data-layout` attribute on #app. There is a single
    tile-builder DOM path in share.js — everything below is presentation only, so
    captions, the lightbox, the download deterrents and the print flow are shared
-   by all three. `grid` is the pre-Spec-07 rendering and is what a legacy link
+   by every layout. `grid` is the pre-Spec-07 rendering and is what a legacy link
    (no `y` key) resolves to, so those pages are unchanged.
 
    The optional intro paragraph (manifest `s`) sits above the grid in every
@@ -266,6 +266,102 @@ html, body {
   #app[data-layout="essay"] .tile { width: 100%; margin: 0 0 24px; }
 }
 
+/* Editorial — a repeating five-frame photographic phrase: normal-left with a
+   small-right counterpoint, then the inverse, then one normal centred frame. */
+#app[data-layout="stack"] .grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-items: center;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  column-gap: 0;
+  row-gap: clamp(76px, 10vw, 152px);
+}
+#app[data-layout="stack"] .tile {
+  aspect-ratio: auto;
+  width: 100%;
+  grid-row: var(--editorial-row);
+  overflow: visible;
+  justify-content: flex-start;
+  gap: 9px;
+}
+/* Give the shimmer a real canvas before the image reports its natural size;
+   once loaded, the photograph itself owns the height. */
+#app[data-layout="stack"] .tile:not(.loaded) {
+  min-height: clamp(240px, 48vw, 620px);
+}
+#app[data-layout="stack"] .tile img {
+  width: 100%;
+  max-height: none;
+  object-fit: contain;
+}
+#app[data-layout="stack"] .tile::before { inset: 0; }
+#app[data-layout="stack"] .tile-name {
+  align-self: stretch;
+  text-align: center;
+  font-size: 11px;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+/* Seven tracks = the shared normal width; four tracks = the shared small
+   width. One empty track between paired frames creates real negative space
+   rather than an arbitrary margin. Outside frames touch the gallery edges. */
+#app[data-layout="stack"] .tile:nth-child(5n + 1) {
+  grid-column: 1 / 8;
+  justify-self: start;
+}
+#app[data-layout="stack"] .tile:nth-child(5n + 2) {
+  grid-column: 9 / 13;
+  justify-self: end;
+}
+#app[data-layout="stack"] .tile:nth-child(5n + 3) {
+  grid-column: 1 / 5;
+  justify-self: start;
+}
+#app[data-layout="stack"] .tile:nth-child(5n + 4) {
+  grid-column: 6 / 13;
+  justify-self: end;
+}
+#app[data-layout="stack"] .tile:nth-child(5n + 5) {
+  grid-column: 4 / 11;
+  justify-self: center;
+}
+/* Small counterpoints are already reduced. Only tall normal/centre frames need
+   the additional portrait reduction, anchored to their assigned edge. */
+#app[data-layout="stack"] .tile.tile--tall:nth-child(5n + 1),
+#app[data-layout="stack"] .tile.tile--tall:nth-child(5n + 4),
+#app[data-layout="stack"] .tile.tile--tall:nth-child(5n + 5) { width: 78%; }
+#app[data-layout="stack"] .grid-sizer { display: none !important; }
+
+@media (max-width: 700px) {
+  #app[data-layout="stack"] .grid {
+    row-gap: clamp(58px, 16vw, 92px);
+  }
+  /* Paired desktop frames wrap into their own rows on narrow screens. The
+     smaller counterpoints grow to 75% of the gallery, so they still read as a
+     deliberate scale change without becoming thumbnail-sized. */
+  #app[data-layout="stack"] .tile { grid-row: auto; }
+  #app[data-layout="stack"] .tile:nth-child(5n + 1) { grid-column: 1 / 11; }
+  #app[data-layout="stack"] .tile:nth-child(5n + 2) { grid-column: 4 / 13; }
+  #app[data-layout="stack"] .tile:nth-child(5n + 3) { grid-column: 1 / 10; }
+  #app[data-layout="stack"] .tile:nth-child(5n + 4) { grid-column: 3 / 13; }
+  #app[data-layout="stack"] .tile:nth-child(5n + 5) { grid-column: 2 / 12; }
+}
+
+@media print {
+  #app[data-layout="stack"] .grid { display: block; max-width: none; }
+  #app[data-layout="stack"] .tile,
+  #app[data-layout="stack"] .tile:nth-child(n),
+  #app[data-layout="stack"] .tile.tile--tall {
+    grid-row: auto;
+    grid-column: auto;
+    width: 100%;
+    margin: 0 0 24px;
+  }
+}
+
 /* State machine: show only what matches data-state. */
 .notice {
   display: none;
@@ -307,6 +403,34 @@ html, body {
 /* Visible keyboard focus (the transparent base outline otherwise hides the UA
    ring). A 2px ring reads distinctly from the 1px pressed outline. */
 .bg-switcher .dot:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* Layout switcher — deliberately quiet text tabs. No pill, icon, or raised
+   selected state competing with the photographs. */
+.layout-switcher {
+  display: none;
+  align-items: center;
+  gap: 16px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#app[data-state="live"] .layout-switcher { display: flex; }
+.layout-switcher button {
+  min-height: 24px;
+  padding: 2px 0 5px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  color: var(--muted);
+  background: transparent;
+  font: 500 11px/1 Helvetica, Arial, sans-serif;
+  cursor: pointer;
+}
+.layout-switcher button:hover { color: var(--ink); }
+.layout-switcher button[aria-pressed="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+.layout-switcher button:focus-visible { outline: 1px solid var(--ink); outline-offset: 3px; }
 
 /* Grid sizer — floats bottom-right (live state only, like the app's resizer).
    Sets the column count (1–6, default 4); the choice persists. Floats
@@ -500,6 +624,7 @@ html.sizer-dragging, html.sizer-dragging * {
 @media (max-width: 600px) {
   .bar { flex-direction: column; gap: 12px; }
   .intro { font-size: 17px; }
+  .layout-switcher button { min-height: 28px; }
 }
 
 /* Print = the PDF. A clean reflection of the page: the signature line, then
@@ -513,7 +638,7 @@ html.sizer-dragging, html.sizer-dragging * {
   html { --bg: #fff !important; --ink: #1c1c1e !important; --muted: #6a6a6a !important; --tile: #e2e2e2 !important; --caption: #5a5a5a !important; }
   html, body { background: #fff; }
   #app { padding: 0; min-height: 0; }
-  .save, .expires, .bg-switcher, .grid-sizer, .legal, .lightbox { display: none !important; }
+  .save, .expires, .bg-switcher, .layout-switcher, .grid-sizer, .legal, .lightbox { display: none !important; }
   .bar { margin-bottom: 18px; }
   .intro, .name { font-size: 14px; }
   .label { font-size: 10px; }

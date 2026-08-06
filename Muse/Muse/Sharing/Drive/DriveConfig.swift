@@ -21,7 +21,7 @@ enum DriveConfig {
     static var redirectURI: String { "\(redirectScheme):/oauth2redirect" }
 
     /// Cloudflare Pages deployment serving web/share/index.html. The manifest
-    /// rides the URL fragment, so the page link is `<shareBaseURL>#<payload>`.
+    /// is addressed by a short fragment, so the link is `<shareBaseURL>#r:<id>`.
     ///
     /// Changing this only affects links minted from here on. Every link already
     /// sent is `https://muse-share.pages.dev/#…`, and it keeps working because
@@ -29,6 +29,24 @@ enum DriveConfig {
     /// domain — so **the muse-share Pages project must never be deleted**, or
     /// every share anyone has ever sent dies with it.
     nonisolated static let shareBaseURL = "https://share.muse-photo.com"
+
+    /// Validate a locally stored Manage-Shares URL before handing it to
+    /// NSWorkspace. A string-prefix check would also accept lookalike hosts such
+    /// as `share.muse-photo.com.evil.example` or an `@evil.example` user-info
+    /// URL. Both new short links and legacy inline fragments are allowed, but
+    /// only on the exact HTTPS share origin.
+    nonisolated static func openableShareURL(_ raw: String) -> URL? {
+        guard let url = URL(string: raw),
+              let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              parts.scheme?.lowercased() == "https",
+              parts.host?.lowercased() == "share.muse-photo.com",
+              parts.user == nil, parts.password == nil, parts.port == nil,
+              parts.query == nil,
+              parts.path.isEmpty || parts.path == "/",
+              let fragment = parts.fragment, fragment.isEmpty == false
+        else { return nil }
+        return url
+    }
 
     static let scope = "https://www.googleapis.com/auth/drive.file"
 

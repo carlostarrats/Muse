@@ -2,7 +2,10 @@
 import assert from 'node:assert';
 import { deflateSync, strToU8 } from './fflate.module.js';
 import { decodeManifest, validateManifest, isExpired, thumbURL, VALID_ID, sanitizeText,
-         layoutOf, manifestFetchURL, acceptFetchedManifest, readCapped, SIZER_BY_LAYOUT } from './share.js';
+         layoutOf, manifestFetchURL, acceptFetchedManifest, acceptFetchedLayoutSettings,
+         readCapped, SIZER_BY_LAYOUT, remoteManifestID, isPortfolioManifest,
+         isTallEditorialImage, editorialRowForIndex, isValidDateOnly } from './share.js';
+import { driveDownloadURL } from '../../functions/drive-json/[id].js';
 
 // Decompression-bomb guard: the fragment is attacker-suppliable, so a tiny
 // compressed payload that inflates past the cap must NOT allocate unbounded
@@ -25,6 +28,14 @@ const b64url = Buffer.from(JSON.stringify(sample)).toString('base64')
 // still decode. The first byte is JSON's '{' (0x7B), never the 0x01 marker.
 assert.deepStrictEqual(decodeManifest(b64url), sample, 'legacy uncompressed round-trip decode');
 assert.strictEqual(decodeManifest('!!!notbase64'), null, 'garbage → null');
+
+// New URLs are unambiguous, short pointers. The `r:` marker prevents an old
+// base64url manifest (same alphabet as Drive ids) being mistaken for an id.
+const remoteID = 'r:' + 'a'.repeat(33);
+assert.strictEqual(remoteManifestID(remoteID), 'a'.repeat(33), 'short pointer id extracted');
+assert.strictEqual(remoteManifestID('a'.repeat(33)), null, 'unprefixed legacy fragment is not a pointer');
+assert.strictEqual(remoteManifestID('r:short'), null, 'malformed pointer rejected');
+assert.strictEqual(remoteManifestID(b64url), null, 'legacy manifest remains on legacy decode path');
 
 // Compressed links: [0x01 marker][raw deflate of the JSON], base64url. Mirrors
 // what the Swift app emits (verified cross-language: Swift COMPRESSION_ZLIB ↔
@@ -76,6 +87,11 @@ assert.ok(validateManifest({ ...sample, g: maxGrid }), 'grid at the cap accepted
 assert.ok(!validateManifest({ ...sample, e:'2026-04-04T12:00:00' }), 'datetime e rejected (no fail-open)');
 assert.ok(!validateManifest({ ...sample, e:'2026/04/04' }), 'non-ISO date rejected');
 assert.ok(!validateManifest({ ...sample, e:'not-a-date' }), 'garbage date rejected');
+assert.ok(isValidDateOnly('2028-02-29'), 'real leap day accepted');
+assert.ok(!isValidDateOnly('2026-02-29'), 'impossible non-leap day rejected');
+assert.ok(!isValidDateOnly('2026-02-31'), 'normalized overflow day rejected');
+assert.ok(!isValidDateOnly('2026-13-01'), 'month 13 rejected');
+assert.ok(!validateManifest({ ...sample, e:'2026-02-31' }), 'manifest rejects impossible date');
 assert.ok(isExpired({ ...sample, e:'2020-01-01' }, new Date('2026-01-01')), 'past → expired');
 assert.ok(!isExpired(sample, new Date('2026-04-02')), 'before expiry → live');
 assert.ok(VALID_ID.test('aaaaaaaaaaaaaaaaaaaa'), 'id regex ok');
@@ -114,6 +130,7 @@ assert.ok(isExpired(sample, new Date('2026-04-05T01:00:00')), 'expired the day a
 // forward-compat (layoutOf falls back to grid), not a rejection.
 assert.ok(validateManifest({ ...sample, y: 'sheet' }), 'known layout accepted');
 assert.ok(validateManifest({ ...sample, y: 'essay' }), 'essay layout accepted');
+assert.ok(validateManifest({ ...sample, y: 'stack' }), 'editorial stack layout accepted');
 assert.ok(validateManifest({ ...sample, y: 'future-layout' }), 'unknown layout tolerated (forward-compat)');
 assert.ok(!validateManifest({ ...sample, y: 123 }), 'non-string layout rejected');
 assert.ok(!validateManifest({ ...sample, y: 'x'.repeat(17) }), 'over-long layout rejected');
@@ -127,12 +144,32 @@ assert.strictEqual(layoutOf({}), 'grid', 'absent layout → grid');
 assert.strictEqual(layoutOf({ y: 'grid' }), 'grid');
 assert.strictEqual(layoutOf({ y: 'sheet' }), 'sheet');
 assert.strictEqual(layoutOf({ y: 'essay' }), 'essay');
+assert.strictEqual(layoutOf({ y: 'stack' }), 'stack');
 assert.strictEqual(layoutOf({ y: 'unknown-future-value' }), 'grid', 'unknown layout → grid');
+
+// Editorial keeps one width except for distinctly tall portrait frames.
+assert.ok(!isTallEditorialImage(1600, 1200), 'landscape keeps the standard width');
+assert.ok(!isTallEditorialImage(1200, 1500), '4:5 portrait keeps the standard width');
+assert.ok(isTallEditorialImage(1000, 1500), '2:3 portrait steps down');
+assert.ok(!isTallEditorialImage(0, 1500), 'missing dimensions never classify as tall');
+assert.deepStrictEqual(Array.from({ length: 10 }, (_, i) => editorialRowForIndex(i)),
+  [1, 1, 2, 2, 3, 4, 4, 5, 5, 6], 'five-image Editorial phrase repeats over three rows');
 
 // The essay layout has no density control; grid keeps its shipped 1–6 range.
 assert.strictEqual(SIZER_BY_LAYOUT.grid.min, 1);
 assert.strictEqual(SIZER_BY_LAYOUT.grid.max, 6);
 assert.ok(SIZER_BY_LAYOUT.essay.max <= SIZER_BY_LAYOUT.essay.min, 'essay sizer disabled');
+assert.ok(SIZER_BY_LAYOUT.stack.max <= SIZER_BY_LAYOUT.stack.min, 'editorial sizer disabled');
+
+// `u` points only at a public, Muse-created layout.json sidecar.
+assert.ok(validateManifest({ ...sample, u: 'u'.repeat(20) }), 'layout sidecar id accepted');
+assert.ok(!validateManifest({ ...sample, u: 'short' }), 'bad layout sidecar id rejected');
+assert.strictEqual(acceptFetchedLayoutSettings('{"y":"grid"}'), 'grid');
+assert.strictEqual(acceptFetchedLayoutSettings('{"y":"stack"}'), 'stack');
+assert.strictEqual(acceptFetchedLayoutSettings('{"y":"essay"}'), null, 'hidden layout rejected');
+assert.strictEqual(acceptFetchedLayoutSettings('{"y":"stack","extra":true}'), 'stack');
+assert.strictEqual(acceptFetchedLayoutSettings('not json'), null);
+assert.strictEqual(acceptFetchedLayoutSettings('x'.repeat(4097)), null, 'layout settings bounded');
 
 // `e` stays REQUIRED for classic (non-portfolio) manifests — the fail-open guard.
 {
@@ -148,6 +185,17 @@ assert.ok(SIZER_BY_LAYOUT.essay.max <= SIZER_BY_LAYOUT.essay.min, 'essay sizer d
   assert.ok(validateManifest({ ...portfolio, e: 'ignored' }), 'portfolio tolerates a junk e');
   assert.ok(!validateManifest({ ...sample, m: 'too-short' }), 'malformed manifest id rejected');
   assert.ok(!validateManifest({ ...sample, m: 123 }), 'non-string manifest id rejected');
+  assert.ok(isPortfolioManifest(portfolio), 'legacy m marks a portfolio');
+}
+
+// New fetched portfolios identify themselves with `k`; classic remote
+// manifests remain expiry-strict.
+{
+  const portfolio = { ...sample, e: '', k: 'portfolio' };
+  assert.ok(validateManifest(portfolio), 'portfolio kind permits no expiry');
+  assert.ok(isPortfolioManifest(portfolio), 'k marks a portfolio');
+  assert.ok(!validateManifest({ ...sample, k: 'unknown' }), 'unknown kind rejected');
+  assert.ok(!isPortfolioManifest(sample), 'classic manifest is not a portfolio');
 }
 
 // opts.portfolio waives `e` for manifests fetched FROM Drive (they never carry
@@ -159,19 +207,35 @@ assert.ok(SIZER_BY_LAYOUT.essay.max <= SIZER_BY_LAYOUT.essay.min, 'essay sizer d
 }
 
 assert.match(manifestFetchURL('a'.repeat(20)),
-  /^https:\/\/www\.googleapis\.com\/drive\/v3\/files\/a{20}\?alt=media&key=/,
+  /^\/drive-json\/a{20}$/,
   'manifest fetch URL shape');
+assert.match(manifestFetchURL('a'.repeat(20), 123), /\?v=123$/, 'cache revision appended');
+{
+  const upstream = new URL(driveDownloadURL('a'.repeat(20), '1722912345678'));
+  assert.strictEqual(upstream.hostname, 'drive.usercontent.google.com');
+  assert.strictEqual(upstream.searchParams.get('id'), 'a'.repeat(20));
+  assert.strictEqual(upstream.searchParams.get('v'), '1722912345678',
+                     'layout cache revision reaches the upstream Drive URL');
+  const untrustedRevision = new URL(driveDownloadURL('a'.repeat(20), 'x&confirm=no'));
+  assert.strictEqual(untrustedRevision.searchParams.get('v'), null,
+                     'untrusted revision is not reflected upstream');
+}
 
 // acceptFetchedManifest: bounded, validated, and never chains.
 {
-  const ok = JSON.stringify({ ...sample, e: '' });
+  const ok = JSON.stringify(sample);
   assert.strictEqual(acceptFetchedManifest(ok).i, sample.i, 'valid fetched body accepted');
+  assert.strictEqual(acceptFetchedManifest(JSON.stringify({ ...sample, e: '' })), null,
+                     'fetched classic remains expiry-strict');
+  assert.strictEqual(acceptFetchedManifest(JSON.stringify({ ...sample, e: '', k: 'portfolio' })).k,
+                     'portfolio', 'fetched portfolio kind accepted');
   assert.strictEqual(acceptFetchedManifest('{not json'), null, 'invalid JSON rejected');
   assert.strictEqual(acceptFetchedManifest(JSON.stringify({ i: 'x' })), null, 'structurally invalid rejected');
   const huge = JSON.stringify({ i: 'x'.repeat(600 * 1024) });
   assert.strictEqual(acceptFetchedManifest(huge), null, 'oversized body rejected (bounded read)');
   const chained = JSON.stringify({ ...sample, e: '', m: 'z'.repeat(20) });
-  assert.strictEqual(acceptFetchedManifest(chained).m, undefined, 'fetched m stripped — exactly one fetch');
+  assert.strictEqual(acceptFetchedManifest(chained, { portfolio: true }).m, undefined,
+                     'fetched m stripped — exactly one fetch');
 }
 
 // readCapped: the byte cap has to bite BEFORE the body is buffered, since the

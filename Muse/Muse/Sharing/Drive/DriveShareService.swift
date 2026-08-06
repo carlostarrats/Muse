@@ -3,8 +3,8 @@
 //  Muse
 //
 //  Orchestrates a Drive publish: ensure sign-in → ensure Muse root → create the
-//  share folder → upload images → set link-sharing → assemble the page URL
-//  (manifest in the fragment) → record it. The recipient's PDF is the printed
+//  share folder → upload images + JSON sidecars → set link-sharing → assemble
+//  the short manifest-pointer URL → record it. The recipient's PDF is the printed
 //  page, so nothing is generated/uploaded here.
 //  Network happens ONLY here and in the sweeper, always behind a user action.
 //
@@ -48,8 +48,11 @@ enum DriveSharePublishGuard {
         if urls.count > DriveShareManifest.maxImages {
             return .unshareableTooManyImages(urls.count)
         }
+        // JavaScript's String.length counts UTF-16 code units, not Swift
+        // grapheme clusters. Mirror that exact unit so (for example) emoji-heavy
+        // text accepted here cannot be rejected by share.js after publishing.
         for field in [form.intro, form.label, form.name, form.bodyText]
-        where field.count > DriveShareManifest.maxFieldLength {
+        where field.utf16.count > DriveShareManifest.maxFieldLength {
             return .fieldTooLong
         }
         return nil
@@ -61,19 +64,19 @@ enum DriveSharePublishGuard {
 /// images are already gone. A pure `[Step]` so the ordering invariant itself is
 /// unit-testable without a live Drive round trip.
 enum DriveShareUpdateSteps {
-    enum Step: Equatable { case uploadImages, swapManifest, sweepOldChildren }
-    static let order: [Step] = [.uploadImages, .swapManifest, .sweepOldChildren]
+    enum Step: Equatable { case uploadImages, swapManifest, updateLayout, sweepOldChildren }
+    static let order: [Step] = [.uploadImages, .swapManifest, .updateLayout, .sweepOldChildren]
 }
 
 @MainActor final class DriveShareService: ObservableObject {
     enum Phase: Equatable {
         case idle, preparing, signingIn, uploading(Int, Int), finalizing, done(String), doneUntracked(String)
-        /// A portfolio update whose manifest swapped cleanly but whose sweep of
-        /// the replaced images partly failed. The share is correct; the leftovers
-        /// are retried by the next update's sweep. A phase rather than an
-        /// `AppState.alertRequest` so the service keeps owning no AppState
-        /// reference at all.
-        case doneWithSweepWarning(String)
+        /// A portfolio update whose manifest swapped cleanly but one or more
+        /// non-destructive follow-up steps failed. The new images are live; the
+        /// booleans let the result explain exactly what still needs attention.
+        /// A phase rather than `AppState.alertRequest` keeps the service from
+        /// owning an AppState reference.
+        case doneWithUpdateWarnings(String, layout: Bool, sweep: Bool, local: Bool)
         case failed(String)
     }
     /// A per-file failure surfaced with its filename — the generic "check your
@@ -82,6 +85,7 @@ enum DriveShareUpdateSteps {
         case unshareableImage(String)
         case unshareableTooManyImages(Int)
         case fieldTooLong
+        case updateOutcomeUnknown
     }
     @Published private(set) var phase: Phase = .idle
 
@@ -175,26 +179,34 @@ enum DriveShareUpdateSteps {
                     setPhase(.uploading(i + 1, urls.count), ifCurrent: generation)
                 }
 
-                setPhase(.finalizing, ifCurrent: generation)
-                try await client.setAnyoneReader(fileID: folderID)
-
                 // No app-side PDF: the share page prints itself (a clean
                 // reflection of the image grid) so the RECIPIENT picks the
                 // paper size in their own print dialog — what the spec asked for.
-                let manifest = DriveShareManifest(
+                var manifest = DriveShareManifest(
                     intro: form.intro, label: form.label, name: form.name,
                     date: iso.string(from: form.date), expiry: iso.string(from: form.expiry),
                     imageIDs: imageIDs, filenames: filenames, pdfID: nil,
-                    // nil when grid / empty keeps a plain share's fragment the
-                    // exact shape it had before Spec 07.
+                    // Grid is the wire default, so omit `y` when selected.
                     layout: form.layout == .grid ? nil : form.layout.rawValue,
                     bodyText: form.bodyText.isEmpty ? nil : form.bodyText)
-                let pageURL = manifest.pageURL(base: DriveConfig.shareBaseURL)
+                let layoutSettingsID = try await client.uploadLayoutSettings(
+                    DriveShareLayoutSettings(form.layout).jsonData(), parent: folderID)
+                manifest.layoutSettingsID = layoutSettingsID
+                let manifestID = try await client.uploadManifest(
+                    manifest.jsonData(), parent: folderID)
+
+                setPhase(.finalizing, ifCurrent: generation)
+                try await client.setAnyoneReader(fileID: folderID)
+                let pageURL = DriveShareManifest.remotePageURL(
+                    manifestID: manifestID, base: DriveConfig.shareBaseURL)
 
                 let tracked = store.add(DriveShareRecord(id: UUID().uuidString, collectionName: title,
                                            folderID: folderID, pageURL: pageURL,
                                            itemCount: imageIDs.count, createdAt: Date(),
-                                           expiry: form.expiry))
+                                           expiry: form.expiry,
+                                           manifestFileID: manifestID,
+                                           layoutSettingsFileID: layoutSettingsID,
+                                           layout: manifest.layout))
                 // Remember the form text for next time.
                 AppSettings.driveShareName = form.name
                 AppSettings.driveShareLabel = form.label
@@ -237,6 +249,8 @@ enum DriveShareUpdateSteps {
             return String(localized: "Shares are limited to 1,000 images. This view has \(count).")
         case PublishError.fieldTooLong:
             return String(localized: "One of the share's text fields is too long.")
+        case PublishError.updateOutcomeUnknown:
+            return String(localized: "Muse couldn't confirm whether the portfolio update finished. The existing link is still safe; refresh it before trying again.")
         case DriveAuthError.notSignedIn, DriveAuthError.refreshFailed:
             return String(localized: "Couldn't sign in to Google. Please try again.")
         case DriveClient.DriveError.http(let code) where code == 403:
@@ -254,12 +268,10 @@ enum DriveShareUpdateSteps {
 
 // MARK: - Portfolio mode
 //
-// A portfolio share = a Drive folder (images + manifest.json) + a page URL whose
-// fragment carries the manifest file's id AND a full inline snapshot. The
-// Drive-hosted manifest is the live truth; the page fetches it and falls back to
-// the snapshot on any failure. Updates rewrite that manifest via files.update,
-// so the file id — and therefore the URL — never changes. There is no
-// server-side share state anywhere: it all lives in the user's own Drive.
+// A portfolio share = a Drive folder (images + manifest.json + layout.json) + a
+// page URL whose fragment carries only the manifest file id. The Drive-hosted
+// manifest is the live truth. Updates rewrite it via files.update, so the file
+// id — and therefore the URL — never changes. All state lives in the user's Drive.
 
 extension DriveShareService {
     func publishPortfolio(form: DriveShareForm, title: String, collectionID: String?, urls: [URL]) {
@@ -317,34 +329,34 @@ extension DriveShareService {
                     setPhase(.uploading(i + 1, urls.count), ifCurrent: generation)
                 }
 
-                // The LIVE manifest carries no `m` of its own (exactly one
-                // fetch, never a chain) and no expiry — a portfolio doesn't
-                // expire, which is the whole point of the mode.
+                // Both sidecars are children of this share folder. Deleting the
+                // link deletes images + manifest.json + layout.json together.
+                let layoutSettingsID = try await client.uploadLayoutSettings(
+                    DriveShareLayoutSettings(form.layout).jsonData(), parent: folderID)
                 let liveManifest = DriveShareManifest(
                     intro: form.intro, label: form.label, name: form.name,
                     date: DateFormatter.driveDay.string(from: form.date), expiry: "",
                     imageIDs: imageIDs, filenames: filenames, pdfID: nil,
                     layout: form.layout == .grid ? nil : form.layout.rawValue,
-                    bodyText: form.bodyText.isEmpty ? nil : form.bodyText)
+                    bodyText: form.bodyText.isEmpty ? nil : form.bodyText,
+                    layoutSettingsID: layoutSettingsID, kind: "portfolio")
                 let manifestID = try await client.uploadManifest(liveManifest.jsonData(), parent: folderID)
 
                 setPhase(.finalizing, ifCurrent: generation)
-                // Children inherit the folder's permission — the shipped single
-                // permission call. manifest.json becomes world-readable the same
-                // way, which the page fetch needs and which leaks nothing the
-                // fragment didn't already carry.
+                // Children inherit the folder's permission. Publish only after
+                // every image and sidecar exists, so nothing is public mid-run.
                 try await client.setAnyoneReader(fileID: folderID)
 
-                var fragmentManifest = liveManifest
-                fragmentManifest.manifestID = manifestID
-                let pageURL = fragmentManifest.pageURL(base: DriveConfig.shareBaseURL)
+                let pageURL = DriveShareManifest.remotePageURL(
+                    manifestID: manifestID, base: DriveConfig.shareBaseURL)
 
                 let tracked = store.add(DriveShareRecord(
                     id: UUID().uuidString, collectionName: title, folderID: folderID,
                     pageURL: pageURL, itemCount: imageIDs.count, createdAt: Date(),
                     expiry: DriveShareRecord.neverExpires, kind: "portfolio",
-                    manifestFileID: manifestID, collectionID: collectionID,
-                    layout: fragmentManifest.layout, introTitle: form.intro,
+                    manifestFileID: manifestID, layoutSettingsFileID: layoutSettingsID,
+                    collectionID: collectionID,
+                    layout: liveManifest.layout, introTitle: form.intro,
                     bodyText: form.bodyText))
 
                 AppSettings.driveShareName = form.name
@@ -432,45 +444,88 @@ extension DriveShareService {
                 setPhase(.uploading(i + 1, urls.count), ifCurrent: generation)
             }
 
-            // Step 2: swapManifest — the ATOMIC cutover.
+            // Step 2: swapManifest — the ATOMIC content cutover. layout.json is
+            // deliberately patched only AFTER this succeeds. Updating it first
+            // could leave a new default layout behind when the manifest swap
+            // failed and the UI reported the portfolio unchanged.
             setPhase(.finalizing, ifCurrent: generation)
+            if Task.isCancelled {
+                // No PATCH has started, so the new files are definitely unused.
+                await Self.rollback(imageIDs, client: client)
+                setPhase(.idle, ifCurrent: generation)
+                return
+            }
             let newManifest = DriveShareManifest(
                 intro: form.intro, label: form.label, name: form.name,
                 date: DateFormatter.driveDay.string(from: form.date), expiry: "",
                 imageIDs: imageIDs, filenames: filenames, pdfID: nil,
                 layout: form.layout == .grid ? nil : form.layout.rawValue,
-                bodyText: form.bodyText.isEmpty ? nil : form.bodyText)
+                bodyText: form.bodyText.isEmpty ? nil : form.bodyText,
+                layoutSettingsID: record.layoutSettingsFileID, kind: "portfolio")
             do {
                 try await client.updateManifest(id: manifestFileID, json: newManifest.jsonData())
             } catch {
-                await Self.rollback(imageIDs, client: client)
-                setPhase(.failed(Self.message(for: error)), ifCurrent: generation)
+                // Once the PATCH is in flight, an error is ambiguous: Drive may
+                // have committed it and only the response was lost. Deleting the
+                // new files here could therefore leave the live manifest pointing
+                // at missing images. Preserve both sets; a later successful update
+                // lists the whole folder and sweeps whichever set is not current.
+                setPhase(.failed(Self.message(for: PublishError.updateOutcomeUnknown)),
+                         ifCurrent: generation)
                 return
             }
 
-            // Step 3: sweepOldChildren — list-driven; per-file delete failures
+            // Step 3: updateLayout. A failure here cannot roll back the manifest:
+            // it already points at the new images, so deleting them would break
+            // the live page. Keep the prior default and finish with a warning;
+            // Manage Shares can retry the same layout-only PATCH later.
+            var layoutFailed = false
+            if let layoutSettingsFileID = record.layoutSettingsFileID {
+                do {
+                    try await client.updateLayoutSettings(
+                        id: layoutSettingsFileID,
+                        json: DriveShareLayoutSettings(form.layout).jsonData())
+                } catch {
+                    layoutFailed = true
+                }
+            }
+
+            // Step 4: sweepOldChildren — list-driven; per-file delete failures
             // are NON-fatal and are retried by the next update's sweep.
             var sweepFailed = false
-            let keep = Set(imageIDs + [manifestFileID])
-            if let children = try? await client.listChildren(of: record.folderID) {
+            let keep = Set(imageIDs + [manifestFileID] + [record.layoutSettingsFileID].compactMap { $0 })
+            do {
+                let children = try await client.listChildren(of: record.folderID)
                 for child in children where keep.contains(child.id) == false {
                     do { try await client.deleteFolder(id: child.id) }
                     catch { sweepFailed = true }
                 }
+            } catch {
+                sweepFailed = true
             }
 
             var updated = record
             updated.itemCount = imageIDs.count
-            updated.layout = newManifest.layout
+            // With no sidecar (a legacy portfolio), the manifest is the layout
+            // truth. With a sidecar PATCH failure, it still overrides the
+            // manifest, so retain the locally recorded prior default.
+            if record.layoutSettingsFileID == nil || layoutFailed == false {
+                updated.layout = newManifest.layout
+            }
             updated.introTitle = form.intro
             updated.bodyText = form.bodyText
-            store.add(updated)   // upserts by folderID — same pageURL/manifestFileID/createdAt
+            let localSaveFailed = store.add(updated) == false
+            // Upserts by folderID — same pageURL/manifestFileID/createdAt.
 
             AppSettings.driveShareName = form.name
             AppSettings.driveShareLabel = form.label
 
-            setPhase(sweepFailed ? .doneWithSweepWarning(record.pageURL) : .done(record.pageURL),
-                     ifCurrent: generation)
+            let warned = layoutFailed || sweepFailed || localSaveFailed
+            setPhase(warned
+                ? .doneWithUpdateWarnings(record.pageURL, layout: layoutFailed,
+                                          sweep: sweepFailed, local: localSaveFailed)
+                : .done(record.pageURL),
+                ifCurrent: generation)
         } catch is CancellationError {
             setPhase(.idle, ifCurrent: generation)
         } catch DriveAuthError.cancelled {

@@ -457,25 +457,25 @@ Muse/Muse/
     TokenStore.swift                 DriveTokens + TokenStoring; Keychain (device-only) + in-memory double
     DriveConfig.swift                owner placeholders: clientID, reverse-client-id scheme, shareBaseURL
     GoogleOAuth.swift                Auth-Code+PKCE via ASWebAuthenticationSession; exchange/refresh/revoke
-    DriveClient.swift                Drive v3 REST (ensureMuseRoot/createFolder/uploadFile multipart/
-                                     setAnyoneReader/deleteFolder); uploadFile strips metadata first;
-                                     pure multipartBody is unit-tested
+    DriveClient.swift                Drive v3 REST (folders, stripped image multipart, JSON sidecars,
+                                     media PATCH, exact-id validation, anyone-reader/delete); paginated
+                                     child listing + pure URL/multipart helpers are unit-tested
     ImageMetadataStripper.swift      strips GPS/EXIF/camera/IPTC/XMP/maker-notes/thumbnail before upload
                                      (single-frame re-encodes from pixels = clean by construction;
                                      multi-frame stays lossless; every output re-verified via isClean;
                                      fail-closed). Adversarial-tested per format (HEIC/PNG/TIFF/GIF/…)
-    DriveShareManifest.swift         base64url URL-FRAGMENT payload (mirrors share.js keys) + v2 keys
-                                     y/s/m (layout, body text, portfolio manifest id, all nil-default) +
-                                     jsonData() (the uploaded manifest.json) + DriveShareLayout +
+    DriveShareManifest.swift         manifest.json wire payload + short `#r:<id>` URL; legacy base64url
+                                     fragment codec retained; optional y/s/m/u/k +
+                                     JSON encoders for manifest.json/layout.json + DriveShareLayout +
                                      maxImages/maxFieldLength. Unit-tested
-    DriveShareRecord.swift           DriveShareRecord + DriveShareStore (JSON, App Support) + DriveExpiry;
-                                     portfolio fields (kind/manifestFileID/collectionID/layout/introTitle/
-                                     bodyText, all optional) + the neverExpires sentinel +
+    DriveShareRecord.swift           DriveShareRecord + DriveShareStore (JSON, App Support) + day-inclusive
+                                     DriveExpiry; portfolio fields (kind/manifestFileID/layoutSettingsFileID/
+                                     collectionID/layout/introTitle/bodyText, all optional) + sentinel +
                                      portfolio(forCollectionID:)
     DriveShareService.swift          @MainActor publish orchestrator (Phase signingIn/uploading/…/done);
                                      DriveShareForm/Mode/Request, DriveSharePublishGuard (pure caps),
                                      DriveShareUpdateSteps (the pinned update order), publishPortfolio +
-                                     updatePortfolio (upload → swap manifest → sweep)
+                                     updatePortfolio (upload → swap manifest → layout PATCH → paged sweep)
     DriveExpirySweeper.swift         launch sweep: delete folders past expiry (only if signed-in + due)
   Export/Social/                   social export — platform-neutral (no AppKit)
     SocialPreset.swift               the 12-preset platform table as pure data; pinned by SocialPresetTests
@@ -490,13 +490,13 @@ Muse/Muse/
                                    never a ThumbnailCache entry)
   Commerce/SharingTier.swift       pure portfolio tier seam; computes, never blocks, until Spec 09
   web/share/                       static Cloudflare page (NOT in the app target)
-    index.html · share.css           shell + styles matching the mockups; three layouts off one
-                                     data-layout attribute (grid / contact sheet / essay)
-    share.js                         decode/validate/expiry/render (textContent only) + layoutOf,
-                                     SIZER_BY_LAYOUT, manifestFetchURL/acceptFetchedManifest and the
-                                     bounded portfolio manifest.json fetch; + share.test.mjs
-    _headers · README.md             strict CSP/hardening (connect-src googleapis.com for that one
-                                     fetch); deploy + OAuth-setup docs
+    index.html · share.css           shell + styles matching the mockups; Grid + staggered Editorial
+                                     are selectable; legacy contact-sheet/essay links still render
+    share.js                         decode/validate/expiry/render (textContent only) + layout switcher,
+                                     bounded public manifest.json/layout.json fetches; legacy inline
+                                     fragments/fallback remain supported; + share.test.mjs
+    _headers · README.md             strict CSP/hardening (same-origin JSON reads); deploy + OAuth-setup docs
+  functions/drive-json/[id].js       bounded, credential-free, non-storing bridge to public Drive JSON
   Effects/                         (was Fluid/; water + burn shaders removed — NO Metal shaders remain)
     FadeOutModifier.swift          animatable staggered opacity fade for the delete sequence
   Settings/

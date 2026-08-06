@@ -24,6 +24,27 @@ final class DriveShareManifestTests: XCTestCase {
         XCTAssertEqual(DriveShareManifest.decode(String(url.split(separator: "#")[1])), sample)
     }
 
+    func testRemotePageURLContainsOnlyManifestID() {
+        let id = "manifest-file-id-1234567890"
+        let url = DriveShareManifest.remotePageURL(
+            manifestID: id, base: "https://share.example.com")
+        XCTAssertEqual(url, "https://share.example.com#r:\(id)")
+        XCTAssertLessThan(url.count, 100)
+    }
+
+    func testManageShareURLRequiresTheExactShareOrigin() {
+        XCTAssertNotNil(DriveConfig.openableShareURL(
+            "https://share.muse-photo.com#r:manifest-file-id-1234567890"))
+        XCTAssertNotNil(DriveConfig.openableShareURL(
+            "https://share.muse-photo.com/#legacy-inline-fragment"))
+        XCTAssertNil(DriveConfig.openableShareURL(
+            "https://share.muse-photo.com.evil.example/#r:manifest-file-id-1234567890"))
+        XCTAssertNil(DriveConfig.openableShareURL(
+            "https://share.muse-photo.com@evil.example/#r:manifest-file-id-1234567890"))
+        XCTAssertNil(DriveConfig.openableShareURL(
+            "http://share.muse-photo.com/#r:manifest-file-id-1234567890"))
+    }
+
     func testDecodeRejectsGarbage() {
         XCTAssertNil(DriveShareManifest.decode("not-valid-base64url!!"))
     }
@@ -58,13 +79,15 @@ final class DriveShareManifestTests: XCTestCase {
         XCTAssertEqual(DriveShareManifest.decode(legacy), sample)
     }
 
-    // MARK: v2 (Spec 07) — layout / bodyText / manifestID
+    // MARK: optional wire fields
 
     func testV2FieldsRoundTrip() {
         var m = sample
         m.layout = DriveShareLayout.essay.rawValue
         m.bodyText = "An intro paragraph."
         m.manifestID = "dddddddddddddddddddd"
+        m.layoutSettingsID = "ffffffffffffffffffff"
+        m.kind = "portfolio"
         XCTAssertEqual(DriveShareManifest.decode(m.encoded()), m)
     }
 
@@ -76,15 +99,19 @@ final class DriveShareManifestTests: XCTestCase {
         XCTAssertNil(obj["y"])
         XCTAssertNil(obj["s"])
         XCTAssertNil(obj["m"])
+        XCTAssertNil(obj["u"])
+        XCTAssertNil(obj["k"])
     }
 
     func testPortfolioManifestWithEmptyExpiryRoundTrips() {
         var m = sample
         m.expiry = ""
         m.manifestID = "eeeeeeeeeeeeeeeeeeee"
+        m.kind = "portfolio"
         let decoded = DriveShareManifest.decode(m.encoded())
         XCTAssertEqual(decoded?.expiry, "")
         XCTAssertEqual(decoded?.manifestID, "eeeeeeeeeeeeeeeeeeee")
+        XCTAssertEqual(decoded?.kind, "portfolio")
     }
 
     func testJSONDataParsesAsSameObject() throws {
@@ -106,6 +133,16 @@ final class DriveShareManifestTests: XCTestCase {
         XCTAssertEqual(DriveShareLayout.grid.rawValue, "grid")
         XCTAssertEqual(DriveShareLayout.sheet.rawValue, "sheet")
         XCTAssertEqual(DriveShareLayout.essay.rawValue, "essay")
-        XCTAssertEqual(DriveShareLayout.allCases.count, 3)
+        XCTAssertEqual(DriveShareLayout.stack.rawValue, "stack")
+        XCTAssertEqual(DriveShareLayout.allCases.count, 4)
+        XCTAssertEqual(DriveShareLayout.selectable, [.grid, .stack])
+    }
+
+    func testLayoutSettingsContainsOnlyWireLayout() throws {
+        let data = DriveShareLayoutSettings(.stack).jsonData()
+        let obj = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(obj as NSDictionary, ["y": "stack"] as NSDictionary)
+        XCTAssertEqual(try JSONDecoder().decode(DriveShareLayoutSettings.self, from: data),
+                       DriveShareLayoutSettings(.stack))
     }
 }

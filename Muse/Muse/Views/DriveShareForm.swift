@@ -20,6 +20,7 @@ struct DriveShareSheet: View {
     @State private var label: String = AppSettings.driveShareLabel
     @State private var name: String = AppSettings.driveShareName
     @State private var expiry = Calendar.current.date(byAdding: .day, value: 30, to: Date()) ?? Date()
+    @State private var layout: DriveShareLayout
     @State private var bodyText: String
     @State private var authBusy = false
 
@@ -33,11 +34,15 @@ struct DriveShareSheet: View {
             // right first answer for the page title — a placeholder read as
             // text that was already there, and Publish stayed disabled.
             _intro = State(initialValue: request.title)
+            _layout = State(initialValue: .grid)
             _bodyText = State(initialValue: "")
         case .portfolioUpdate(let record):
             // An update pre-fills from the record so the form reads as the
             // portfolio's current state, not a blank publish.
             _intro = State(initialValue: record.introTitle ?? request.title)
+            let savedLayout = DriveShareLayout(rawValue: record.layout ?? "grid") ?? .grid
+            _layout = State(initialValue:
+                DriveShareLayout.selectable.contains(savedLayout) ? savedLayout : .grid)
             _bodyText = State(initialValue: record.bodyText ?? "")
         }
     }
@@ -98,8 +103,9 @@ struct DriveShareSheet: View {
                 doneView(url, tracked: true)
             case .doneUntracked(let url):
                 doneView(url, tracked: false)
-            case .doneWithSweepWarning(let url):
-                doneView(url, tracked: true, sweepWarning: true)
+            case .doneWithUpdateWarnings(let url, let layout, let sweep, let local):
+                doneView(url, tracked: true, layoutWarning: layout,
+                         sweepWarning: sweep, localWarning: local)
             case .failed(let message):
                 failedView(message)
             }
@@ -120,6 +126,7 @@ struct DriveShareSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             field(String(localized: "Page Title"), text: $intro,
                   prompt: String(localized: "Project Name"))
+            layoutPicker
             // A portfolio always wants an intro paragraph (it reads as a small
             // site); a one-off share doesn't.
             if isPortfolioMode {
@@ -148,13 +155,9 @@ struct DriveShareSheet: View {
                 ModalButton(title: publishButtonTitle, kind: .prominent, isDefault: true) {
                     // Today's date is automatic (used only in the Drive folder
                     // name, never shown on the page) — one less field for the user.
-                    // One layout, always: the three read as near-identical
-                    // pages and the choice earned nothing (owner call
-                    // 2026-08-04). The manifest key stays, so an already-
-                    // published page keeps rendering whatever it recorded.
                     let form = DriveShareForm(intro: intro, label: label, name: name,
                                               date: Date(), expiry: expiry,
-                                              layout: .grid, bodyText: bodyText)
+                                              layout: layout, bodyText: bodyText)
                     switch request.mode {
                     case .share:
                         service.publish(form: form, title: request.title, urls: request.urls)
@@ -168,6 +171,26 @@ struct DriveShareSheet: View {
                 .disabled(intro.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .padding(.top, 6)
+        }
+    }
+
+    /// A deliberately small choice: the familiar responsive grid, or the
+    /// staggered, natural-ratio Editorial sequence. This sets the recipient's
+    /// starting view; the page itself lets them switch without changing it.
+    private var layoutPicker: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Default Layout")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            Picker("Default Layout", selection: $layout) {
+                ForEach(DriveShareLayout.selectable, id: \.self) { choice in
+                    Text(choice.displayName)
+                        .tag(choice)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .accessibilityLabel(Text("Default layout"))
         }
     }
 
@@ -258,14 +281,29 @@ struct DriveShareSheet: View {
         .padding(.vertical, 24)
     }
 
-    private func doneView(_ url: String, tracked: Bool, sweepWarning: Bool = false) -> some View {
+    private func doneView(_ url: String, tracked: Bool,
+                          layoutWarning: Bool = false,
+                          sweepWarning: Bool = false,
+                          localWarning: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Your share is live.").font(.system(size: 15, weight: .semibold))
+            if layoutWarning {
+                Text("The portfolio was updated, but its default layout couldn't be changed. You can try again in Manage Drive Shares.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if sweepWarning {
                 // The manifest swapped cleanly, so the page is correct — only
                 // the leftover Drive files failed to delete, and the next
                 // update's sweep retries them.
                 Text("Some previous images couldn't be removed from Drive. They'll be cleaned up the next time you update.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if localWarning {
+                Text("The portfolio was updated, but Muse couldn't save its latest details to the local Manage Shares list.")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -327,4 +365,3 @@ struct DriveShareSheet: View {
         picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
     }
 }
-

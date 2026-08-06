@@ -39,16 +39,29 @@ final class DriveSharePublishGuardTests: XCTestCase {
         let atCap = String(repeating: "x", count: DriveShareManifest.maxFieldLength)
         XCTAssertNil(DriveSharePublishGuard.validate(urls: urls, form: makeForm(intro: atCap)))
     }
+
+    func testFieldCapUsesJavaScriptUTF16Units() {
+        let urls = [URL(fileURLWithPath: "/tmp/a.jpg")]
+        // 😀 is one Swift Character but two UTF-16 code units. share.js uses
+        // String.length, so the app must use the same unit at the wire boundary.
+        let atCap = String(repeating: "😀", count: DriveShareManifest.maxFieldLength / 2)
+        let over = atCap + "😀"
+        XCTAssertEqual(atCap.count, DriveShareManifest.maxFieldLength / 2)
+        XCTAssertEqual(atCap.utf16.count, DriveShareManifest.maxFieldLength)
+        XCTAssertNil(DriveSharePublishGuard.validate(urls: urls, form: makeForm(intro: atCap)))
+        XCTAssertNotNil(DriveSharePublishGuard.validate(urls: urls, form: makeForm(intro: over)))
+    }
 }
 
 /// Pins the portfolio update ORDER as a value, not just as prose: whatever
 /// future refactor touches the update, it still has to emit
-/// upload → swap manifest → sweep, in that order. Reordering would show
+/// upload → swap manifest → update layout → sweep, in that order. Reordering
+/// the destructive sweep would show
 /// recipients a manifest whose images are already gone.
 final class DriveShareUpdateOrderTests: XCTestCase {
-    func testStepOrderIsUploadThenSwapThenSweep() {
+    func testStepOrderIsUploadThenSwapThenLayoutThenSweep() {
         XCTAssertEqual(DriveShareUpdateSteps.order,
-                       [.uploadImages, .swapManifest, .sweepOldChildren])
+                       [.uploadImages, .swapManifest, .updateLayout, .sweepOldChildren])
     }
 }
 

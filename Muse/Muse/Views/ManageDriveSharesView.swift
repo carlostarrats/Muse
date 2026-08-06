@@ -27,6 +27,7 @@ struct ManageDriveSharesView: View {
     private let store = DriveShareStore.default
     @State private var records: [DriveShareRecord] = []
     @State private var deleting: Set<String> = []
+    @State private var changingLayout: Set<String> = []
     @State private var didPrune = false
     // Always open on "Expires · Earliest" so the soonest-to-expire shares are at
     // the top every time (not persisted — resets on each open).
@@ -187,44 +188,47 @@ struct ManageDriveSharesView: View {
     private func row(_ record: DriveShareRecord) -> some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Text(record.collectionName).font(.system(size: 15, weight: .semibold))
-                    if record.isPortfolio {
-                        Text("Portfolio")
-                            .font(.system(size: 10, weight: .semibold))
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(Capsule().fill(Color.secondary.opacity(0.15)))
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Text(record.collectionName).font(.system(size: 15, weight: .semibold))
+                        if record.isPortfolio {
+                            Text("Portfolio")
+                                .font(.system(size: 10, weight: .semibold))
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(Capsule().fill(Color.secondary.opacity(0.15)))
+                        }
                     }
+                    // `.formatted()` (a String) rather than "\(count)": an
+                    // interpolated Int in a Text literal becomes a "%lld"
+                    // localization key, which is a key nothing should own.
+                    metaColumns(pipes: true,
+                                Text(record.itemCount.formatted()),
+                                Text(record.createdAt.formatted(date: .abbreviated, time: .omitted)),
+                                // A portfolio uses the `neverExpires` sentinel — show
+                                // what it means, not the year 2100. A share that is
+                                // already past its expiry says so in red: the launch
+                                // sweeper hard-deletes it, but until the next launch
+                                // (or while signed out/offline) the row is still here,
+                                // and a bare past date read as "expires then", not
+                                // "gone".
+                                expiryCell(record))
+                        .font(.system(size: 13)).foregroundStyle(.secondary)
                 }
-                // `.formatted()` (a String) rather than "\(count)": an
-                // interpolated Int in a Text literal becomes a "%lld"
-                // localization key, which is a key nothing should own.
-                metaColumns(pipes: true,
-                            Text(record.itemCount.formatted()),
-                            Text(record.createdAt.formatted(date: .abbreviated, time: .omitted)),
-                            // A portfolio uses the `neverExpires` sentinel — show
-                            // what it means, not the year 2100. A share that is
-                            // already past its expiry says so in red: the launch
-                            // sweeper hard-deletes it, but until the next launch
-                            // (or while signed out/offline) the row is still here,
-                            // and a bare past date read as "expires then", not
-                            // "gone".
-                            expiryCell(record))
-                    .font(.system(size: 13)).foregroundStyle(.secondary)
+                // Collapse only the read-only metadata into one useful sentence.
+                // The layout Picker below stays a separate, operable VoiceOver
+                // element rather than being swallowed by children: .ignore.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(metadataAccessibilityLabel(record))
+                defaultLayoutControl(record)
             }
-            // The values are bare now (the words are in the header), so VoiceOver
-            // gets an explicit sentence instead of "Shopping 10 Jun 29 Jun 29".
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(isExpired(record)
-                ? Text("\(record.collectionName), \(record.itemCount) images, created \(record.createdAt.formatted(date: .abbreviated, time: .omitted)), expired")
-                : Text("\(record.collectionName), \(record.itemCount) images, created \(record.createdAt.formatted(date: .abbreviated, time: .omitted)), expires \(record.expiry.formatted(date: .abbreviated, time: .omitted))"))
             Spacer()
             OpenLinkButton(shareName: record.collectionName) {
                 // driveShares.json is plaintext in App Support — don't hand an
                 // arbitrary (possibly tampered/corrupted) scheme to NSWorkspace;
                 // only open URLs that are actually ours.
-                if record.pageURL.hasPrefix(DriveConfig.shareBaseURL),
-                   let url = URL(string: record.pageURL) { NSWorkspace.shared.open(url) }
+                if let url = DriveConfig.openableShareURL(record.pageURL) {
+                    NSWorkspace.shared.open(url)
+                }
             }
             if deleting.contains(record.id) {
                 ProgressView().controlSize(.small).frame(width: 18)
@@ -234,10 +238,93 @@ struct ManageDriveSharesView: View {
         }
     }
 
+    /// Changes only layout.json. The image ids, filenames, expiry and public
+    /// page URL are deliberately untouched, so this is safe to use after the
+    /// link has been sent.
+    @ViewBuilder
+    private func defaultLayoutControl(_ record: DriveShareRecord) -> some View {
+        HStack(spacing: 8) {
+            Text("Default Layout")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+            if changingLayout.contains(record.id) {
+                ProgressView().controlSize(.small).frame(height: 20)
+            } else {
+                Picker("Default Layout", selection: Binding(
+                    get: { selectableLayout(record) },
+                    set: { choice in
+                        guard choice != selectableLayout(record) else { return }
+                        Task { await changeDefaultLayout(record, to: choice) }
+                    })) {
+                        ForEach(DriveShareLayout.selectable, id: \.self) { choice in
+                            Text(choice.displayName)
+                                .tag(choice)
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    .controlSize(.small)
+                    .disabled(record.layoutSettingsFileID == nil)
+                    .help(Text(record.layoutSettingsFileID == nil
+                        ? String(localized: "Publish this share again to make its default layout editable")
+                        : String(localized: "Choose the layout recipients see when they open this link")))
+                }
+        }
+    }
+
+    private func selectableLayout(_ record: DriveShareRecord) -> DriveShareLayout {
+        guard let raw = record.layout,
+              let layout = DriveShareLayout(rawValue: raw),
+              DriveShareLayout.selectable.contains(layout) else { return .grid }
+        return layout
+    }
+
+    private func changeDefaultLayout(_ record: DriveShareRecord,
+                                     to layout: DriveShareLayout) async {
+        guard let settingsID = record.layoutSettingsFileID else { return }
+        changingLayout.insert(record.id)
+        defer { changingLayout.remove(record.id) }
+        do {
+            let client = DriveClient(auth: googleAuth)
+            try await client.updateLayoutSettings(
+                id: settingsID, json: DriveShareLayoutSettings(layout).jsonData())
+            var updated = record
+            updated.layout = layout == .grid ? nil : layout.rawValue
+            if store.add(updated) {
+                records = store.all()
+            } else {
+                // Drive is already authoritative at this point. Reflect the
+                // successful remote change in this open window and describe the
+                // local persistence failure truthfully instead of claiming the
+                // share stayed unchanged.
+                records = records.map { $0.id == updated.id ? updated : $0 }
+                appState.alertRequest = .message(
+                    title: String(localized: "Layout Changed"),
+                    message: String(localized: "The share’s default layout changed, but Muse couldn’t save that choice to its local Manage Shares list."))
+            }
+        } catch {
+            appState.alertRequest = .message(
+                title: String(localized: "Couldn’t Change Layout"),
+                message: String(localized: "The default layout couldn’t be updated. The share is still live and unchanged; check your connection and try again."))
+        }
+    }
+
     /// Past its expiry. Portfolios are excluded explicitly rather than relying on
     /// the 2100 sentinel outliving the app.
     private func isExpired(_ record: DriveShareRecord) -> Bool {
-        !record.isPortfolio && record.expiry < openedAt
+        DriveExpiry.hasExpired(record, now: openedAt)
+    }
+
+    private func metadataAccessibilityLabel(_ record: DriveShareRecord) -> Text {
+        let created = record.createdAt.formatted(date: .abbreviated, time: .omitted)
+        if record.isPortfolio {
+            return Text("\(record.collectionName), \(record.itemCount) images, created \(created), never expires")
+        }
+        if isExpired(record) {
+            return Text("\(record.collectionName), \(record.itemCount) images, created \(created), expired")
+        }
+        let expiry = record.expiry.formatted(date: .abbreviated, time: .omitted)
+        return Text("\(record.collectionName), \(record.itemCount) images, created \(created), expires \(expiry)")
     }
 
     /// The Expires column: "Never" for a portfolio, a red "Expired" once the date
@@ -257,7 +344,9 @@ struct ManageDriveSharesView: View {
         deleting.insert(record.id)
         defer { deleting.remove(record.id) }
         let client = DriveClient(auth: googleAuth)
-        // Drop the local record ONLY if the folder is definitively gone.
+        // Drop the local record ONLY if the folder is definitively gone. Both
+        // manifest.json and layout.json are children of this same folder, so
+        // deleting it removes the short-link target and live layout setting too.
         // `deleteFolder` treats 404 as success (already gone), so a genuinely
         // missing folder still clears the row; but a real failure (offline / 5xx
         // / auth / token-refresh throw) must KEEP the record — the share folder

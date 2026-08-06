@@ -1,12 +1,18 @@
 # Muse — Drive share page
 
-A single static page that renders a shared Muse collection. It is **stateless**:
-the entire payload (signature text, expiry, ordered Drive image ids, per-image
-filenames, optional PDF id) is encoded into the URL **fragment**
-(`https://<domain>/#<payload>`), so it never reaches the server. Images load from Drive's
-public thumbnail endpoint; the page holds no secrets and no API key.
+A single static page that renders a shared Muse collection. New links are short:
+the fragment is only `#r:<manifest.json Drive id>`. The manifest contains the
+signature text, expiry, ordered image ids, and filenames. A separate public
+`layout.json` contains only the sender's Grid/Editorial default, so Manage Shares
+can change that default without changing the link or republishing images.
 
-The fragment is base64url of either the raw JSON manifest **or** (when smaller)
+Both JSON files and all images are children of the share's Drive folder. Deleting
+the link or expiring it deletes that folder, including both link targets. The page
+holds no OAuth token, API key, secret, or server-side share data. A bounded,
+credential-free Pages Function bridges the anyone-readable Drive JSON to the
+browser without storing it.
+
+Older links remain supported. Their fragment is base64url of either raw JSON or
 `[0x01 marker][raw-DEFLATE of the JSON]` — the app picks whichever is shorter, so
 adding filenames doesn't bloat the link. DEFLATE is raw RFC-1951 (Swift
 `COMPRESSION_ZLIB` ⇄ fflate `inflateSync`, verified cross-language). Legacy
@@ -23,16 +29,19 @@ share.css          matches the Muse mockups
 fflate.module.js   vendored DEFLATE decompressor (MIT; pure-compute, no network) — see fflate.LICENSE.txt
 _headers           Cloudflare strict CSP + hardening
 share.test.mjs     pure-logic unit tests (incl. compression + bomb guard) — run: node share.test.mjs
+../../functions/drive-json/[id].js  capped, credential-free public-Drive JSON bridge
 ```
 
 ## Deploy to Cloudflare Pages
 
-1. Create a Pages project from this `web/share/` directory (or upload it).
+1. Create a Pages project using `web/share/` as the static assets directory.
+   Deploy from the repository root with Wrangler so the root `functions/`
+   directory is compiled: `wrangler pages deploy web/share --project-name=muse-share`.
 2. Add a **custom domain** (e.g. `share.yourdomain.com`). The page is served at
-   that domain's root; Muse builds links as `https://<domain>/#<payload>`
+   that domain's root; Muse builds links as `https://<domain>/#r:<Drive-id>`
    (`DriveConfig.shareBaseURL` is the bare root — no `/s` route needed). The
    `_headers` file applies the CSP automatically.
-3. Verify: open `https://<domain>/#<payload>` with a real manifest — the
+3. Verify: open a newly published link with a real manifest — the
    signature renders, the grid fills from Drive, and **Save PDF** opens the
    browser print dialog (the recipient picks the paper size and prints to PDF).
 
@@ -56,5 +65,7 @@ share.test.mjs     pure-logic unit tests (incl. compression + bomb guard) — ru
 
 Publishing uploads the selected images + the form text to **the user's own
 Google Drive** under their Google account. Muse (the developer) receives no
-data. This is the only Muse network path besides Sparkle updates, and it only
-runs when the user explicitly presses Publish / Manage / signs in.
+data. This is one of Muse's sanctioned network paths, and its app-side requests
+run only when the user explicitly presses Publish / Manage / signs in. The
+recipient page's bridge reads only the anyone-readable JSON file named by the
+link, caps it at 512 KB, stores nothing, and uses no credential.

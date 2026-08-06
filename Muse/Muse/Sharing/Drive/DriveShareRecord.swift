@@ -21,6 +21,7 @@ struct DriveShareRecord: Codable, Identifiable, Equatable {
     // Spec 07 — all optional so a pre-existing driveShares.json decodes unchanged.
     var kind: String? = nil             // "portfolio"; nil/anything else = classic share
     var manifestFileID: String? = nil   // the stable pointer (files.update target)
+    var layoutSettingsFileID: String? = nil // live layout.json; default layout only
     var collectionID: String? = nil     // binds "Update Portfolio…" to its collection
     var layout: String? = nil           // prefill for the update form
     var introTitle: String? = nil       // prefill
@@ -32,14 +33,28 @@ struct DriveShareRecord: Codable, Identifiable, Equatable {
     /// would make new-format records undecodable by the previous build's
     /// non-optional field, and that build's failed `load()` silently drops the
     /// WHOLE share list on its next save. The sentinel keeps older builds fully
-    /// working, and the sweeper needs no portfolio special case — `expiry < now`
-    /// is simply never true.
+    /// working; DriveExpiry also excludes portfolios explicitly so semantics do
+    /// not depend on the current year being before 2100.
     static let neverExpires = Date(timeIntervalSince1970: 4_102_444_800)
 }
 
 enum DriveExpiry {
-    static func expired(_ records: [DriveShareRecord], now: Date) -> [DriveShareRecord] {
-        records.filter { $0.expiry < now }
+    /// Expiry is a displayed calendar DAY, not an instant. Keep the folder live
+    /// through that whole day, matching share.js, then delete from the start of
+    /// the following local day. A portfolio is excluded explicitly rather than
+    /// relying only on the 2100 sentinel.
+    static func hasExpired(_ record: DriveShareRecord, now: Date,
+                           calendar: Calendar = .autoupdatingCurrent) -> Bool {
+        guard record.isPortfolio == false,
+              let cutoff = calendar.date(byAdding: .day, value: 1,
+                                         to: calendar.startOfDay(for: record.expiry))
+        else { return false }
+        return now >= cutoff
+    }
+
+    static func expired(_ records: [DriveShareRecord], now: Date,
+                        calendar: Calendar = .autoupdatingCurrent) -> [DriveShareRecord] {
+        records.filter { hasExpired($0, now: now, calendar: calendar) }
     }
 }
 

@@ -55,10 +55,16 @@ final class DriveShareStoreTests: XCTestCase {
     }
 
     func testExpiredSelectsOnlyPastRecords() {
-        let now = Date(timeIntervalSince1970: 100)
-        let past = rec("p", folder: "P", expiry: Date(timeIntervalSince1970: 50))
-        let future = rec("f", folder: "F", expiry: Date(timeIntervalSince1970: 150))
-        XCTAssertEqual(DriveExpiry.expired([past, future], now: now).map(\.id), ["p"])
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(secondsFromGMT: 0)!
+        let expiryDay = Date(timeIntervalSince1970: 86_400) // 1970-01-02
+        let record = rec("p", folder: "P", expiry: expiryDay)
+        XCTAssertTrue(DriveExpiry.expired(
+            [record], now: expiryDay.addingTimeInterval(86_399), calendar: utc).isEmpty,
+            "the share stays live through its displayed expiry day")
+        XCTAssertEqual(DriveExpiry.expired(
+            [record], now: expiryDay.addingTimeInterval(86_400), calendar: utc).map(\.id), ["p"],
+            "the share expires at the start of the following local day")
     }
 
     // MARK: portfolio records (Spec 07)
@@ -68,7 +74,8 @@ final class DriveShareStoreTests: XCTestCase {
                          pageURL: "https://muse-share.pages.dev#xyz", itemCount: 5,
                          createdAt: Date(timeIntervalSince1970: 0),
                          expiry: DriveShareRecord.neverExpires,
-                         kind: "portfolio", manifestFileID: "m1", collectionID: collectionID,
+                         kind: "portfolio", manifestFileID: "m1",
+                         layoutSettingsFileID: "u1", collectionID: collectionID,
                          layout: "essay", introTitle: "My Work", bodyText: "About this work.")
     }
 
@@ -87,6 +94,7 @@ final class DriveShareStoreTests: XCTestCase {
         let all = DriveShareStore(fileURL: url).all()
         XCTAssertEqual(all.count, 1)
         XCTAssertNil(all.first?.kind)
+        XCTAssertNil(all.first?.layoutSettingsFileID)
         XCTAssertFalse(all.first!.isPortfolio)
     }
 
@@ -96,6 +104,7 @@ final class DriveShareStoreTests: XCTestCase {
         store.add(record)
         let loaded = DriveShareStore(fileURL: url).all().first
         XCTAssertEqual(loaded, record)
+        XCTAssertEqual(loaded?.layoutSettingsFileID, "u1")
         XCTAssertTrue(loaded!.isPortfolio)
     }
 
@@ -117,12 +126,13 @@ final class DriveShareStoreTests: XCTestCase {
         XCTAssertEqual(store.portfolio(forCollectionID: "col1").map(\.id), ["p2", "p1"])
     }
 
-    // The sentinel, not an optional Date: the sweeper needs no portfolio special
-    // case because `expiry < now` is simply never true in any real present.
+    // The sentinel preserves backward decoding; DriveExpiry also excludes the
+    // portfolio explicitly so even a clock beyond 2100 cannot sweep it.
     func testTheNeverExpiresSentinelIsNeverSwept() {
         let record = portfolioRec("p1", folder: "F1", collectionID: "col1")
         XCTAssertTrue(DriveExpiry.expired([record], now: Date(timeIntervalSince1970: 4_102_444_700)).isEmpty)
-        XCTAssertFalse(DriveExpiry.expired([record], now: Date(timeIntervalSince1970: 4_102_444_900)).isEmpty)
+        XCTAssertTrue(DriveExpiry.expired([record], now: Date(timeIntervalSince1970: 4_102_444_900)).isEmpty,
+                      "portfolio exclusion is explicit, not only a far-future timestamp")
     }
 
     func testUpsertByFolderIDReplacesAPortfolioRecordInPlace() {

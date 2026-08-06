@@ -38,6 +38,7 @@ import Foundation
     }
 
     func folderExists(id: String) async throws -> Bool {
+        guard Self.isValidFileID(id) else { throw DriveError.badResponse }
         var req = try await authed("\(filesEndpoint)/\(id)?fields=id,trashed")
         req.httpMethod = "GET"
         let (data, resp) = try await URLSession.shared.data(for: req)
@@ -50,6 +51,7 @@ import Foundation
     }
 
     func deleteFolder(id: String) async throws {
+        guard Self.isValidFileID(id) else { throw DriveError.badResponse }
         var req = try await authed("\(filesEndpoint)/\(id)")
         req.httpMethod = "DELETE"
         let (_, resp) = try await URLSession.shared.data(for: req)
@@ -87,18 +89,28 @@ import Foundation
         return id
     }
 
-    /// Upload a portfolio's `manifest.json`. NEVER for images — image bytes go
+    /// Upload a share's `manifest.json`. NEVER for images — image bytes go
     /// through `uploadFile`'s metadata strip, fail-closed. That's enforced by
     /// the shape of this signature, not by convention: it takes `Data` the
     /// caller already JSON-encoded (there is no file to strip) and pins the mime
     /// internally rather than accepting one.
     func uploadManifest(_ json: Data, parent: String) async throws -> String {
+        try await uploadJSON(json, name: "manifest.json", parent: parent)
+    }
+
+    /// Upload the tiny live presentation sidecar used by every new share. It
+    /// contains only `{ "y": <layout> }`; changing it never touches images.
+    func uploadLayoutSettings(_ json: Data, parent: String) async throws -> String {
+        try await uploadJSON(json, name: "layout.json", parent: parent)
+    }
+
+    private func uploadJSON(_ json: Data, name: String, parent: String) async throws -> String {
         let boundary = "muse-\(UUID().uuidString)"
         var req = try await authed(uploadEndpoint)
         req.httpMethod = "POST"
         req.setValue("multipart/related; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         req.httpBody = Self.multipartBody(
-            metadata: ["name": "manifest.json", "parents": [parent]],
+            metadata: ["name": name, "parents": [parent]],
             fileData: json, mime: "application/json", boundary: boundary)
         let (respData, resp) = try await URLSession.shared.data(for: req)
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
@@ -113,6 +125,7 @@ import Foundation
     /// therefore the portfolio's URL — never changes, which is what makes this
     /// call the ATOMIC cutover of a portfolio update.
     func updateManifest(id: String, json: Data) async throws {
+        guard Self.isValidFileID(id) else { throw DriveError.badResponse }
         var req = try await authed("https://www.googleapis.com/upload/drive/v3/files/\(id)?uploadType=media")
         req.httpMethod = "PATCH"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -122,32 +135,65 @@ import Foundation
         guard code == 200 else { throw DriveError.http(code) }
     }
 
-    /// Children of a folder Muse created (drive.file sees only its own files).
-    /// Used by the portfolio update to sweep replaced images. One page suffices:
-    /// shares are capped at `DriveShareManifest.maxImages` plus the manifest.
-    func listChildren(of folderID: String) async throws -> [(id: String, name: String)] {
-        guard var comps = URLComponents(string: filesEndpoint) else { throw DriveError.badResponse }
+    /// Same media PATCH as a manifest rewrite, named separately at the call
+    /// site so a layout-only Manage action cannot be mistaken for image/content
+    /// replacement.
+    func updateLayoutSettings(id: String, json: Data) async throws {
+        try await updateManifest(id: id, json: json)
+    }
+
+    /// Build one paginated child-list request. Kept pure so the escaping, fields,
+    /// and page-token contract are unit-testable without a live Drive account.
+    static func listChildrenURL(of folderID: String, pageToken: String? = nil) throws -> URL {
+        guard isValidFileID(folderID) else { throw DriveError.badResponse }
+        guard var comps = URLComponents(string: "https://www.googleapis.com/drive/v3/files")
+        else { throw DriveError.badResponse }
         comps.queryItems = [
             URLQueryItem(name: "q", value: "'\(folderID)' in parents and trashed=false"),
-            URLQueryItem(name: "fields", value: "files(id,name)"),
+            URLQueryItem(name: "fields", value: "nextPageToken,files(id,name)"),
             URLQueryItem(name: "pageSize", value: "1000"),
         ]
-        guard let url = comps.url else { throw DriveError.badResponse }
-        var req = try await authed(url.absoluteString)
-        req.httpMethod = "GET"
-        let (data, resp) = try await URLSession.shared.data(for: req)
-        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
-        guard code == 200,
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let files = obj["files"] as? [[String: Any]]
-        else { throw DriveError.http(code) }
-        return files.compactMap { f in
-            guard let id = f["id"] as? String, let name = f["name"] as? String else { return nil }
-            return (id, name)
+        if let pageToken, pageToken.isEmpty == false {
+            comps.queryItems?.append(URLQueryItem(name: "pageToken", value: pageToken))
         }
+        guard let url = comps.url else { throw DriveError.badResponse }
+        return url
+    }
+
+    /// Children of a folder Muse created (drive.file sees only its own files).
+    /// Used by the portfolio update to sweep replaced images. A maximum-size
+    /// share has 1,000 images plus manifest.json and layout.json, so it exceeds
+    /// Drive's 1,000-item page size and MUST follow `nextPageToken`.
+    func listChildren(of folderID: String) async throws -> [(id: String, name: String)] {
+        var result: [(id: String, name: String)] = []
+        var pageToken: String?
+        var seenTokens: Set<String> = []
+        repeat {
+            let url = try Self.listChildrenURL(of: folderID, pageToken: pageToken)
+            var req = try await authed(url.absoluteString)
+            req.httpMethod = "GET"
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            guard code == 200,
+                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let files = obj["files"] as? [[String: Any]]
+            else { throw DriveError.http(code) }
+            result.append(contentsOf: files.compactMap { file in
+                guard let id = file["id"] as? String,
+                      let name = file["name"] as? String else { return nil }
+                return (id, name)
+            })
+            let next = (obj["nextPageToken"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            if let next, seenTokens.insert(next).inserted == false {
+                throw DriveError.badResponse // defensive: never loop on a repeated token
+            }
+            pageToken = next
+        } while pageToken != nil
+        return result
     }
 
     func setAnyoneReader(fileID: String) async throws {
+        guard Self.isValidFileID(fileID) else { throw DriveError.badResponse }
         var req = try await authed("\(filesEndpoint)/\(fileID)/permissions")
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -193,6 +239,20 @@ import Foundation
         guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else { return false }
         return parts.allSatisfy { part in
             part.unicodeScalars.allSatisfy { token.contains($0) }
+        }
+    }
+
+    /// Drive ids are interpolated into REST paths and the child-list query. All
+    /// ids returned by Drive use this URL-safe alphabet; validating records read
+    /// from local JSON prevents a corrupted/tampered id from changing the path or
+    /// query that a destructive Manage/portfolio action targets.
+    static func isValidFileID(_ id: String) -> Bool {
+        guard (20...200).contains(id.utf8.count) else { return false }
+        return id.unicodeScalars.allSatisfy { scalar in
+            switch scalar.value {
+            case 45, 48...57, 65...90, 95, 97...122: return true // - 0-9 A-Z _ a-z
+            default: return false
+            }
         }
     }
 

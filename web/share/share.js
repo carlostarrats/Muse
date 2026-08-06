@@ -61,15 +61,30 @@ export function decodeManifest(fragment) {
   } catch { return null; }
 }
 
+// New links are `#r:<Drive id>` — no image ids, filenames, or signature text in
+// the URL. The tiny prefix makes the pointer unambiguous from old base64url
+// manifests, which use the same URL-safe alphabet as Drive ids.
+export function remoteManifestID(fragment) {
+  if (typeof fragment !== 'string' || !fragment.startsWith('r:')) return null;
+  const id = fragment.slice(2);
+  return VALID_ID.test(id) ? id : null;
+}
+
 export const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
-// Portfolio manifests (Spec 07 §2) live in the user's own Drive so a share can
-// be updated in place without its URL changing. This browser API key is
-// quota-only and API-restricted to the Drive API; it grants access to nothing
-// that isn't already public (the files it reads are anyone-readable by design).
-// It is NOT a secret — the binding invariant is that no secret and no OAuth
-// credential ever ships on this page.
-const DRIVE_API_KEY = 'REPLACE_AT_DEPLOY';
+/// Strict calendar-date validation. Date.parse normalizes impossible values
+/// such as 2026-02-31 into March, so regex + parse alone is not fail-closed.
+export function isValidDateOnly(value) {
+  if (typeof value !== 'string' || !DATE_ONLY.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !isNaN(parsed) && parsed.getUTCFullYear() === year &&
+         parsed.getUTCMonth() + 1 === month && parsed.getUTCDate() === day;
+}
+
+// Manifests live in the user's own Drive. A same-origin Pages Function performs
+// a bounded, credential-free read of the anyone-readable file. It stores no
+// share data and removes browser-specific cross-origin behavior from this path.
 // Bounded read, same guard class as MAX_INFLATED: the fetched body is remote
 // and attacker-influenceable in the same way the fragment is.
 const MAX_MANIFEST_BYTES = 512 * 1024;
@@ -100,6 +115,8 @@ export function validateManifest(m, opts = {}) {
   if (m.y != null && (typeof m.y !== 'string' || m.y.length > 16)) return false;
   if (m.s != null && (typeof m.s !== 'string' || m.s.length > MAX_FIELD)) return false;
   if (m.m != null && !VALID_ID.test(m.m)) return false;
+  if (m.u != null && !VALID_ID.test(m.u)) return false;
+  if (m.k != null && m.k !== 'portfolio') return false;
   // Require a strict date-only `e` (YYYY-MM-DD). isExpired/formatDate append a
   // local time component; a value that already carried a time would yield an
   // Invalid Date and make isExpired fail OPEN (never expire). Reject it here.
@@ -107,9 +124,9 @@ export function validateManifest(m, opts = {}) {
   // meaningful `e`; opts.portfolio covers manifests fetched from Drive, which
   // never ride a fragment and so have no `m` of their own. The strict branch is
   // never loosened for anything else — that's the fail-open guard.
-  const portfolio = opts.portfolio === true || m.m != null;
+  const portfolio = opts.portfolio === true || m.m != null || m.k === 'portfolio';
   if (!portfolio) {
-    if (typeof m.e !== 'string' || !DATE_ONLY.test(m.e) || isNaN(Date.parse(m.e))) return false;
+    if (!isValidDateOnly(m.e)) return false;
   } else if (m.e != null && m.e !== '') {
     if (typeof m.e !== 'string' || m.e.length > 32) return false;   // tolerated, ignored
   }
@@ -117,19 +134,38 @@ export function validateManifest(m, opts = {}) {
   return true;
 }
 
+export function isPortfolioManifest(m) {
+  return !!m && (m.m != null || m.k === 'portfolio');
+}
+
+// Editorial uses one width for the sequence. Only distinctly tall portraits
+// step down so their vertical presence stays in balance with landscape frames.
+export function isTallEditorialImage(width, height) {
+  return Number.isFinite(width) && Number.isFinite(height) &&
+         width > 0 && height > 0 && height / width > 1.3;
+}
+
+// Editorial composes five images into three rows, then repeats:
+// normal-left + small-right / small-left + normal-right / normal-centre.
+export function editorialRowForIndex(index) {
+  if (!Number.isInteger(index) || index < 0) return 1;
+  const position = index % 5;
+  return Math.floor(index / 5) * 3 + (position < 2 ? 1 : position < 4 ? 2 : 3);
+}
+
 /// Resolve the page layout from a manifest. Wire values must match
 /// DriveShareManifest.swift's DriveShareLayout.rawValue exactly.
 export function layoutOf(m) {
-  return (m && (m.y === 'sheet' || m.y === 'essay')) ? m.y : 'grid';
+  return (m && (m.y === 'sheet' || m.y === 'essay' || m.y === 'stack')) ? m.y : 'grid';
 }
 
-/// A portfolio's live manifest lives in the owner's Drive; the fragment carries
-/// its file id (`m`) plus a full inline snapshot. This is the ONLY fetch this
-/// page ever makes.
-export function manifestFetchURL(id) {
+/// Public JSON sidecars live in the owner's Drive. A portfolio uses this URL
+/// for its live manifest (`m`); every newly published share also uses it for the
+/// tiny live layout setting (`u`). IDs are validated before interpolation.
+export function manifestFetchURL(id, revision = null) {
   // VALID_ID-gated by the caller; the charset makes interpolation URL-safe
   // (the thumbURL rule class).
-  return `https://www.googleapis.com/drive/v3/files/${id}?alt=media&key=${DRIVE_API_KEY}`;
+  return `/drive-json/${id}${revision == null ? '' : `?v=${encodeURIComponent(revision)}`}`;
 }
 
 /// Read a response body with a HARD byte cap, streaming.
@@ -164,14 +200,25 @@ export async function readCapped(resp, limit) {
   return new TextDecoder().decode(buf);
 }
 
-/// Pure: parse + bound + validate a fetched manifest body. null → the caller
-/// falls back to the inline snapshot. Exported for tests.
-export function acceptFetchedManifest(text) {
+/// Pure: parse + bound + validate a fetched manifest body. `opts.portfolio`
+/// exists only for legacy portfolio links whose older manifest.json lacks `k`.
+export function acceptFetchedManifest(text, opts = {}) {
   if (typeof text !== 'string' || text.length > MAX_MANIFEST_BYTES) return null;
   try {
     const obj = JSON.parse(text);
     if (obj && typeof obj === 'object') delete obj.m;   // exactly one fetch — never chain
-    return validateManifest(obj, { portfolio: true }) ? obj : null;
+    return validateManifest(obj, opts) ? obj : null;
+  } catch { return null; }
+}
+
+/// Pure: accept the complete contents of layout.json. Only the two choices the
+/// current sender/viewer UI exposes are allowed; a malformed public file cannot
+/// inject an arbitrary data-layout selector into the page.
+export function acceptFetchedLayoutSettings(text) {
+  if (typeof text !== 'string' || text.length > 4096) return null;
+  try {
+    const obj = JSON.parse(text);
+    return obj && (obj.y === 'grid' || obj.y === 'stack') ? obj.y : null;
   } catch { return null; }
 }
 
@@ -200,15 +247,39 @@ export const SIZER_BY_LAYOUT = {
   grid:  { min: 1, max: 6, default: 4 },   // the pre-Spec-07 behavior, made explicit
   sheet: { min: 3, max: 10, default: 6 },
   essay: { min: 0, max: 0, default: 0 },   // sizer hidden; values unused
+  stack: { min: 0, max: 0, default: 0 },   // natural-ratio editorial sequence
 };
 
 // Browser-only render glue (skipped under node).
 if (typeof document !== 'undefined') {
-  const inline = decodeManifest(location.hash.slice(1));
+  // Every share is the same document with a different hash. Browsers may treat
+  // opening another share as same-document navigation, which does not rerun this
+  // module; without this, an expired/unavailable state from the previous hash can
+  // remain painted for a perfectly live next link. Reload only on an actual hash
+  // change—the initial load is untouched.
+  window.addEventListener('hashchange', () => location.reload());
+
+  const fragment = location.hash.slice(1);
+  const remoteID = remoteManifestID(fragment);
+  const inline = remoteID == null ? decodeManifest(fragment) : null;
   const root = document.getElementById('app');
   const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = sanitizeText(text); };
+  let manifestLayout = 'grid';
+  let liveLayout = null;
+  let viewerLayout = null;
+  let requestedLayoutID = null;
+  let controlsInstalled = false;
 
-  // One tile-builder DOM path serves all three layouts — the layout itself is
+  const effectiveLayout = () => viewerLayout || liveLayout || manifestLayout;
+  const paintLayout = () => {
+    root.dataset.layout = effectiveLayout();
+    document.querySelectorAll('.layout-switcher [data-layout-choice]').forEach((button) => {
+      button.setAttribute('aria-pressed', String(button.dataset.layoutChoice === root.dataset.layout));
+    });
+    setupGridSizer();
+  };
+
+  // One tile-builder DOM path serves every layout — the layout itself is
   // pure CSS off `data-layout`. Clearing and rebuilding is what makes the
   // portfolio re-fetch a plain second call rather than a second code path.
   const buildGrid = (m) => {
@@ -225,6 +296,7 @@ if (typeof document !== 'undefined') {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'tile';
+      btn.style.setProperty('--editorial-row', String(editorialRowForIndex(idx)));
       const img = document.createElement('img');
       img.loading = 'lazy'; img.alt = '';
       img.draggable = false;   // casual-download deterrent (see installImageDownloadDeterrents)
@@ -234,7 +306,11 @@ if (typeof document !== 'undefined') {
       // synchronously still clears the skeleton, and `img.complete` covers the
       // same race for good measure. `error` reveals too, so a thumbnail that
       // fails (404/expired Drive file) doesn't leave a perpetual shimmer.
-      const reveal = () => btn.classList.add('loaded');
+      const reveal = () => {
+        btn.classList.add('loaded');
+        btn.classList.toggle('tile--tall',
+          isTallEditorialImage(img.naturalWidth, img.naturalHeight));
+      };
       img.addEventListener('load', reveal);
       img.addEventListener('error', reveal);
       img.src = thumbURL(id);
@@ -254,57 +330,127 @@ if (typeof document !== 'undefined') {
 
   const renderLive = (m) => {
     root.dataset.state = 'live';
-    root.dataset.layout = layoutOf(m);
+    manifestLayout = layoutOf(m);
+    paintLayout();
     set('intro', m.i); set('label', m.l); set('name', m.n);
     set('body', m.s ?? '');
-    // A portfolio never expires, so it says so rather than showing a date.
-    set('expires', m.m != null ? '' : `Expires ${formatDate(m.e)}`);
+    set('expires', isPortfolioManifest(m) ? '' : `Expires ${formatDate(m.e)}`);
     buildGrid(m);
     setupGridSizer();
   };
 
-  if (!inline || !validateManifest(inline)) {
-    root.dataset.state = 'unavailable';
-  } else if (inline.m == null && isExpired(inline, new Date())) {
-    root.dataset.state = 'expired';
-    set('intro', inline.i); set('label', inline.l); set('name', inline.n);
-  } else {
-    // "Save PDF" = print the page. The recipient's print dialog chooses the
-    // paper size and Save-as-PDF; the print stylesheet lays out just the images.
+  const installLiveControls = () => {
+    if (controlsInstalled) return;
+    controlsInstalled = true;
     const save = document.getElementById('save');
     if (save) save.addEventListener('click', () => window.print());
-    // Render the INLINE snapshot immediately — no blank waiting state, ever.
-    renderLive(inline);
     setupBackdropSwitcher();
+    setupLayoutSwitcher();
     setupLightbox();
     installImageDownloadDeterrents();
-    // Only a portfolio consults Drive, and only to replace what's already on
-    // screen. Any failure (offline, quota, API change) keeps the snapshot.
+  };
+
+  const requestLiveLayout = (m) => {
+    if (m.u == null || !VALID_ID.test(m.u) || requestedLayoutID === m.u) return;
+    requestedLayoutID = m.u;
+    resolveLayoutSettings(m.u).then((layout) => {
+      if (layout == null) return;
+      liveLayout = layout;
+      if (viewerLayout == null) paintLayout();
+    });
+  };
+
+  const presentManifest = (m) => {
+    if (!m || !validateManifest(m)) {
+      root.dataset.state = 'unavailable';
+      return false;
+    }
+    if (!isPortfolioManifest(m) && isExpired(m, new Date())) {
+      root.dataset.state = 'expired';
+      set('intro', m.i); set('label', m.l); set('name', m.n);
+      return false;
+    }
+    renderLive(m);
+    installLiveControls();
+    requestLiveLayout(m);
+    return true;
+  };
+
+  if (remoteID != null) {
+    // New short link: the fragment is only `r:` + manifest.json's Drive id.
+    // It stays in loading state until that one bounded fetch resolves.
+    fetchRemoteManifest(remoteID).then((manifest) => presentManifest(manifest));
+  } else if (presentManifest(inline)) {
+    // Legacy portfolios render their inline snapshot first, then refresh it.
     if (inline.m != null && VALID_ID.test(inline.m)) {
       resolveManifest(inline).then((resolved) => {
-        if (resolved !== inline) renderLive(resolved);
+        if (resolved !== inline) {
+          renderLive(resolved);
+          requestLiveLayout(resolved);
+        }
       });
     }
   }
+
+  function setupLayoutSwitcher() {
+    const switcher = document.querySelector('.layout-switcher');
+    if (!switcher) return;
+    paintLayout();
+    if (switcher.dataset.wired === '1') return;
+    switcher.dataset.wired = '1';
+    switcher.querySelectorAll('[data-layout-choice]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const choice = button.dataset.layoutChoice;
+        if (choice !== 'grid' && choice !== 'stack') return;
+        viewerLayout = choice;
+        paintLayout();
+      });
+    });
+  }
 }
 
-/// Fetch a portfolio's live manifest.json, bounded and time-limited. Returns
-/// the inline snapshot unchanged on ANY failure — the page must never end up
-/// blank because Drive was slow.
-async function resolveManifest(inline) {
+/// The one bounded fetch behind a new short link. Classic manifests validate
+/// with a required expiry; portfolios identify themselves with `k: portfolio`.
+async function fetchRemoteManifest(id, opts = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), MANIFEST_FETCH_TIMEOUT_MS);
   try {
-    const resp = await fetch(manifestFetchURL(inline.m), { signal: controller.signal });
-    if (!resp.ok) return inline;
+    const resp = await fetch(manifestFetchURL(id), { signal: controller.signal, cache: 'no-store' });
+    if (!resp.ok) return null;
     const body = await readCapped(resp, MAX_MANIFEST_BYTES);
-    if (body === null) return inline;
-    const fetched = acceptFetchedManifest(body);
-    // Keep the pointer so the page still knows it's a portfolio (the fetched
-    // copy has had its own `m` stripped — exactly one fetch, no chaining).
-    return fetched ? { ...fetched, m: inline.m } : inline;
+    return body == null ? null : acceptFetchedManifest(body, opts);
   } catch {
-    return inline;   // offline / API change / quota — degrade to last-published state
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/// Legacy portfolio links keep their inline fallback and use `m` as the old
+/// manifest pointer. New links use fetchRemoteManifest directly.
+async function resolveManifest(inline) {
+  const fetched = await fetchRemoteManifest(inline.m, { portfolio: true });
+  return fetched ? { ...fetched, m: inline.m } : inline;
+}
+
+/// Fetch the sender-controlled default layout. Failure simply keeps the default
+/// baked into the manifest, so the gallery remains usable if this read fails.
+async function resolveLayoutSettings(id) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), MANIFEST_FETCH_TIMEOUT_MS);
+  try {
+    // Drive's public media endpoint may cache a file after Manage Shares PATCHes
+    // it. A per-load query revision plus no-store forces the same stable link to
+    // observe the sender's latest default layout after refresh.
+    const resp = await fetch(manifestFetchURL(id, Date.now()), {
+      signal: controller.signal,
+      cache: 'no-store',
+    });
+    if (!resp.ok) return null;
+    const body = await readCapped(resp, 4096);
+    return body == null ? null : acceptFetchedLayoutSettings(body);
+  } catch {
+    return null;
   } finally {
     clearTimeout(timeout);
   }
